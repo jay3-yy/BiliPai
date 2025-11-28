@@ -2,13 +2,14 @@ package com.android.purebilibili.feature.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.exoplayer.ExoPlayer // 👈 新增导入
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.InputStream // 👈 记得导入这个
+import java.io.InputStream
 
 sealed class PlayerUiState {
     object Loading : PlayerUiState()
@@ -16,9 +17,7 @@ sealed class PlayerUiState {
         val info: ViewInfo,
         val playUrl: String,
         val related: List<RelatedVideo> = emptyList(),
-        // 👇👇👇 之前报错是因为缺了这行 👇👇👇
         val danmakuStream: InputStream? = null,
-        // 👆👆👆 补上它 👆👆👆
 
         // 清晰度相关状态
         val currentQuality: Int = 64,
@@ -36,6 +35,38 @@ class PlayerViewModel : ViewModel() {
     private var currentBvid: String = ""
     private var currentCid: Long = 0
 
+    // 👇👇👇 新增：持有 Player 引用以支持手势控制 👇👇👇
+    private var exoPlayer: ExoPlayer? = null
+
+    // 绑定 Player 实例
+    fun attachPlayer(player: ExoPlayer) {
+        this.exoPlayer = player
+    }
+
+    // 获取当前播放位置 (供手势计算初始值)
+    fun getPlayerCurrentPosition(): Long {
+        return exoPlayer?.currentPosition ?: 0L
+    }
+
+    // 获取视频总时长 (供手势计算边界)
+    fun getPlayerDuration(): Long {
+        val d = exoPlayer?.duration ?: 0L
+        return if (d < 0) 0L else d
+    }
+
+    // 跳转进度
+    fun seekTo(pos: Long) {
+        exoPlayer?.seekTo(pos)
+    }
+
+    // 清理引用防止泄漏
+    override fun onCleared() {
+        super.onCleared()
+        exoPlayer = null
+    }
+    // 👆👆👆 新增结束 👆👆👆
+
+
     // 首次加载
     fun loadVideo(bvid: String) {
         if (bvid.isBlank()) return
@@ -51,7 +82,7 @@ class PlayerViewModel : ViewModel() {
                 // 并行获取推荐
                 val related = VideoRepository.getRelatedVideos(bvid)
 
-                // 👇 新增：获取弹幕流
+                // 获取弹幕流
                 val danmaku = VideoRepository.getDanmakuStream(info.cid)
 
                 // 统一走 fetchAndPlay 流程获取初始播放地址 (默认 64)
@@ -85,7 +116,7 @@ class PlayerViewModel : ViewModel() {
     private suspend fun fetchAndPlay(
         bvid: String, cid: Long, qn: Int,
         info: ViewInfo, related: List<RelatedVideo>,
-        danmaku: InputStream?, // 👈 增加参数
+        danmaku: InputStream?,
         startPos: Long
     ) {
         try {
@@ -101,7 +132,7 @@ class PlayerViewModel : ViewModel() {
                     info = info,
                     playUrl = url,
                     related = related,
-                    danmakuStream = danmaku, // 👈 填入数据
+                    danmakuStream = danmaku,
                     currentQuality = realQuality,
                     qualityIds = qualities,
                     qualityLabels = labels,
