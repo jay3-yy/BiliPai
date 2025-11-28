@@ -1,4 +1,3 @@
-// 文件路径: feature/settings/SettingsScreen.kt
 package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.clickable
@@ -14,13 +13,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-// 假设这些主题颜色是可用的
+// 引用你项目中的主题颜色
 import com.android.purebilibili.core.theme.TextPrimary
 import com.android.purebilibili.core.theme.BiliPink
 
-// 🔥 修改：GitHub 地址留空，等待你创建仓库后填入
-const val GITHUB_URL = ""
+// 🔥 已修改：配置 GitHub 仓库地址
+const val GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,7 +99,7 @@ fun SettingsScreen(
                 Divider(color = Color.LightGray.copy(alpha = 0.3f))
             }
 
-            // 开源地址 (逻辑升级)
+            // 开源地址
             item {
                 val hasUrl = GITHUB_URL.isNotBlank()
                 SettingClickableItem(
@@ -116,7 +114,7 @@ fun SettingsScreen(
             item {
                 SettingClickableItem(
                     title = "作者",
-                    value = "YangY", // 这里可以改成你的名字
+                    value = "YangY", // 已根据 GitHub 用户名调整，你也可以改为 "YangY"
                     onClick = null
                 )
             }

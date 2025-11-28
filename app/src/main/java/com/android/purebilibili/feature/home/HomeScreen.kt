@@ -1,4 +1,3 @@
-// 文件路径: feature/home/HomeScreen.kt
 package com.android.purebilibili.feature.home
 
 import android.content.Context
@@ -15,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -171,7 +169,7 @@ fun HomeScreen(
     }
 }
 
-// 🔥 新增：欢迎/声明弹窗
+// 🔥 欢迎/声明弹窗
 @Composable
 fun WelcomeDialog(githubUrl: String, onConfirm: () -> Unit) {
     val uriHandler = LocalUriHandler.current
@@ -204,7 +202,8 @@ fun WelcomeDialog(githubUrl: String, onConfirm: () -> Unit) {
                         )
                     }
                 } else {
-                    Text("开源地址：暂未配置 (请关注后续更新)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    // 这里的文本也更新为你的仓库地址，以防 GITHUB_URL 获取失败
+                    Text("开源地址：https://github.com/jay3-yy/BiliPai/", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                 }
             }
         },
@@ -318,8 +317,6 @@ fun SettingsIcon(onClick: () -> Unit) {
         )
     }
 }
-
-// ⚠️ NotificationIconWithBadge 已移除
 
 @Composable
 fun ElegantVideoCard(video: VideoItem, index: Int, onClick: (String, Long) -> Unit) {
