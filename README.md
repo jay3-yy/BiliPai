@@ -1,5 +1,5 @@
 # BiliPai ( ゜- ゜)つロ 干杯~
-
+[![Telegram Channel](https://img.shields.io/badge/Telegram-Join%20Channel-blue?logo=telegram&logoColor=white)](https://t.me/BiliPai)
 <p align="center">
   <img src="https://img.shields.io/badge/Language-Kotlin-purple.svg" alt="Kotlin">
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-blue.svg" alt="Compose">
