@@ -5,6 +5,7 @@
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose-blue.svg" alt="Compose">
   <img src="https://img.shields.io/badge/Platform-Android-green.svg" alt="Android">
   <img src="https://img.shields.io/badge/License-MIT-orange.svg" alt="License">
+  
 </p>
 
 > **"Cheers to the Pure View."**
@@ -85,7 +86,7 @@
 ---
 
 <p align="center">
-  Made with ❤️ by YangY & AI Assistants
+  Made with ❤️ by YangY 
   <br>
   ( ゜- ゜)つロ 干杯~
 </p>
