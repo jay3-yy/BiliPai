@@ -85,7 +85,7 @@
 ---
 
 <p align="center">
-  Made with ❤️ by YangY & AI Assistants
+  Made with ❤️ by YangY 
   <br>
   ( ゜- ゜)つロ 干杯~
 </p>
