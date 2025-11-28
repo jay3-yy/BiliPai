@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,13 +12,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-// 引用你项目中的主题颜色
 import com.android.purebilibili.core.theme.TextPrimary
 import com.android.purebilibili.core.theme.BiliPink
 
-// 🔥 已修改：配置 GitHub 仓库地址
 const val GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,12 +25,19 @@ const val GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
 fun SettingsScreen(
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 
-    // 本地状态用于功能开关
-    var isAutoPlayEnabled by remember { mutableStateOf(true) }
-    var isDarkModeEnabled by remember { mutableStateOf(false) }
-    var isHdModeEnabled by remember { mutableStateOf(false) }
+    // 获取 SharedPreferences
+    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+
+    // --- 读取本地配置 (带默认值) ---
+    var isAutoPlayEnabled by remember { mutableStateOf(prefs.getBoolean("auto_play", true)) }
+    var isHdModeEnabled by remember { mutableStateOf(prefs.getBoolean("hd_mode", false)) }
+    var isDarkModeEnabled by remember { mutableStateOf(prefs.getBoolean("dark_mode", false)) }
+
+    // 🔥 新增：详细统计信息开关
+    var isStatsEnabled by remember { mutableStateOf(prefs.getBoolean("show_stats", false)) }
 
     Scaffold(
         topBar = {
@@ -49,7 +56,7 @@ fun SettingsScreen(
                 .padding(padding)
                 .fillMaxSize()
         ) {
-            // --- 区域 1: 功能开关 ---
+            // --- 区域 1: 功能与体验 ---
             item {
                 Text(
                     text = "功能与体验",
@@ -60,12 +67,28 @@ fun SettingsScreen(
                 Divider(color = Color.LightGray.copy(alpha = 0.3f))
             }
 
+            // 1. 详细统计信息 (新增)
+            item {
+                SettingSwitchItem(
+                    title = "显示详细统计信息",
+                    subtitle = "在播放器显示真实分辨率 (Stats for Nerds)",
+                    checked = isStatsEnabled,
+                    onCheckedChange = {
+                        isStatsEnabled = it
+                        prefs.edit().putBoolean("show_stats", it).apply()
+                    }
+                )
+            }
+
             item {
                 SettingSwitchItem(
                     title = "视频自动播放",
                     subtitle = "在首页列表中自动播放视频",
                     checked = isAutoPlayEnabled,
-                    onCheckedChange = { isAutoPlayEnabled = it }
+                    onCheckedChange = {
+                        isAutoPlayEnabled = it
+                        prefs.edit().putBoolean("auto_play", it).apply()
+                    }
                 )
             }
 
@@ -74,7 +97,10 @@ fun SettingsScreen(
                     title = "默认高清画质",
                     subtitle = "优先加载 1080P 或更高画质",
                     checked = isHdModeEnabled,
-                    onCheckedChange = { isHdModeEnabled = it }
+                    onCheckedChange = {
+                        isHdModeEnabled = it
+                        prefs.edit().putBoolean("hd_mode", it).apply()
+                    }
                 )
             }
 
@@ -83,7 +109,10 @@ fun SettingsScreen(
                     title = "跟随系统深色模式",
                     subtitle = "根据系统设置自动切换主题",
                     checked = isDarkModeEnabled,
-                    onCheckedChange = { isDarkModeEnabled = it }
+                    onCheckedChange = {
+                        isDarkModeEnabled = it
+                        prefs.edit().putBoolean("dark_mode", it).apply()
+                    }
                 )
                 Divider(color = Color.LightGray.copy(alpha = 0.3f))
             }
@@ -105,7 +134,6 @@ fun SettingsScreen(
                 SettingClickableItem(
                     title = "开源地址",
                     value = if (hasUrl) "GitHub" else "暂未配置",
-                    // 如果没有 URL，onClick 为 null (不可点击)，否则跳转
                     onClick = if (hasUrl) { { uriHandler.openUri(GITHUB_URL) } } else null
                 )
             }
@@ -114,7 +142,7 @@ fun SettingsScreen(
             item {
                 SettingClickableItem(
                     title = "作者",
-                    value = "YangY", // 已根据 GitHub 用户名调整，你也可以改为 "YangY"
+                    value = "Jay3",
                     onClick = null
                 )
             }
@@ -123,7 +151,7 @@ fun SettingsScreen(
             item {
                 SettingClickableItem(
                     title = "应用版本",
-                    value = "1.0.0 Alpha",
+                    value = "1.0.1 Beta", // 稍微更新一下版本号提示
                     onClick = null
                 )
             }
@@ -180,7 +208,6 @@ fun SettingClickableItem(
             if (value != null) {
                 Text(text = value, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
             }
-            // 只有当 onClick 不为空时才显示箭头
             if (onClick != null) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(Icons.Default.ChevronRight, null, tint = Color.Gray)

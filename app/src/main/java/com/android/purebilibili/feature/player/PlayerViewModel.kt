@@ -1,8 +1,9 @@
+// 文件路径: feature/player/PlayerViewModel.kt
 package com.android.purebilibili.feature.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.exoplayer.ExoPlayer // 👈 新增导入
+import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.repository.VideoRepository
@@ -35,7 +36,7 @@ class PlayerViewModel : ViewModel() {
     private var currentBvid: String = ""
     private var currentCid: Long = 0
 
-    // 👇👇👇 新增：持有 Player 引用以支持手势控制 👇👇👇
+    // 持有 Player 引用以支持手势控制
     private var exoPlayer: ExoPlayer? = null
 
     // 绑定 Player 实例
@@ -64,8 +65,6 @@ class PlayerViewModel : ViewModel() {
         super.onCleared()
         exoPlayer = null
     }
-    // 👆👆👆 新增结束 👆👆👆
-
 
     // 首次加载
     fun loadVideo(bvid: String) {
@@ -77,7 +76,7 @@ class PlayerViewModel : ViewModel() {
 
             val detailResult = VideoRepository.getVideoDetails(bvid)
 
-            detailResult.onSuccess { (info, _) ->
+            detailResult.onSuccess { (info, url) -> // 注意这里接收的是 Pair(info, url) 中的 url，但实际上我们会在下面 fetchAndPlay 重新获取
                 currentCid = info.cid
                 // 并行获取推荐
                 val related = VideoRepository.getRelatedVideos(bvid)
@@ -85,8 +84,12 @@ class PlayerViewModel : ViewModel() {
                 // 获取弹幕流
                 val danmaku = VideoRepository.getDanmakuStream(info.cid)
 
-                // 统一走 fetchAndPlay 流程获取初始播放地址 (默认 64)
-                fetchAndPlay(bvid, info.cid, 64, info, related, danmaku, 0L)
+                // 统一走 fetchAndPlay 流程获取初始播放地址
+                // 这里我们不再直接使用 detailResult 中的 url，而是为了获取完整的 playUrlData (包含清晰度列表) 再请求一次
+                // 或者我们可以优化一下 Repository 的返回，但为了稳妥，这里重新请求一次 playUrlData
+                // 默认尝试请求 80 (1080P) 或更高的逻辑在 Repository 内部处理了
+                // 这里我们传入一个较高的默认值，让 Repository 自动降级
+                fetchAndPlay(bvid, info.cid, 120, info, related, danmaku, 0L)
 
             }.onFailure {
                 _uiState.value = PlayerUiState.Error(it.message ?: "加载失败")
@@ -120,11 +123,13 @@ class PlayerViewModel : ViewModel() {
         startPos: Long
     ) {
         try {
+            // 调用 Repository 获取播放数据 (带递归降级)
             val playUrlData = VideoRepository.getPlayUrlData(bvid, cid, qn)
 
             val url = playUrlData?.durl?.firstOrNull()?.url ?: ""
             val qualities = playUrlData?.accept_quality ?: emptyList()
             val labels = playUrlData?.accept_description ?: emptyList()
+            // 🔥 使用服务端实际返回的 quality，而不是我们请求的 qn
             val realQuality = playUrlData?.quality ?: qn
 
             if (url.isNotEmpty()) {

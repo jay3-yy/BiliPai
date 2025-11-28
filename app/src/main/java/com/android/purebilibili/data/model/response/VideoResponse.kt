@@ -43,6 +43,9 @@ data class Stat(
 // --- 2. 视频流地址 (升级版) ---
 @Serializable
 data class PlayUrlResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val ttl: Int = 1,
     val data: PlayUrlData? = null
 )
 
