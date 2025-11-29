@@ -31,6 +31,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".feature.video.VideoActivity"
+            android:exported="false"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.PureBiliBili" />
+
     </application>
 
 </manifest>

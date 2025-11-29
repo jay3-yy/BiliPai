@@ -1,4 +1,4 @@
-package com.android.purebilibili.feature.player
+package com.android.purebilibili.feature.video
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn

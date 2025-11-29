@@ -6,10 +6,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed // 导入这个
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -24,7 +24,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,13 +35,20 @@ import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.feature.home.VideoGridItem
 
+// 🔥 确保导入了正确的 SearchViewModel
+// 如果你的 SearchViewModel 在 com.android.purebilibili.feature.search 包下，上面已经声明了 package，不需要额外 import
+// 如果报错依然存在，请检查 SearchViewModel.kt 的 package 声明是否也是 com.android.purebilibili.feature.search
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
+    // 🔥 这里的 SearchViewModel 引用是报错的核心
+    // 如果 AS 提示红色，请尝试按 Alt+Enter 导入，或者检查文件名拼写
     viewModel: SearchViewModel = viewModel(),
     onBack: () -> Unit,
     onVideoClick: (String, Long) -> Unit
 ) {
+    // 🔥 收集 UI 状态
     val state by viewModel.uiState.collectAsState()
     val keyboardController = LocalSoftwareKeyboardController.current
 
@@ -85,7 +94,7 @@ fun SearchScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        // 修复：改用 itemsIndexed 并传入 index
+                        // 使用 itemsIndexed 确保渲染正确
                         itemsIndexed(state.searchResults) { index, video ->
                             VideoGridItem(
                                 video = video,
@@ -96,10 +105,11 @@ fun SearchScreen(
                     }
                 }
             } else {
-                // ... 历史记录部分保持不变 ...
                 if (state.hotList.isEmpty() && state.historyList.isEmpty()) {
+                    // 如果什么数据都没有，可能还没加载完成，或者真的空
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = BiliPink)
+                        // 可以选择显示 Loading 或者 空白
+                        // CircularProgressIndicator(color = BiliPink)
                     }
                 } else {
                     LazyColumn(
@@ -173,8 +183,6 @@ fun SearchScreen(
     }
 }
 
-// ... SearchTopBar 和 HistoryItem 保持不变 ...
-// (请保留原文件中的这两个函数，无需修改)
 @Composable
 fun SearchTopBar(
     query: String,
@@ -201,38 +209,49 @@ fun SearchTopBar(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.Gray)
             }
 
+            // 搜索条容器
             Row(
                 modifier = Modifier
                     .weight(1f)
                     .height(36.dp)
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFF1F2F3)),
+                    .background(Color(0xFFF1F2F3)), // 浅灰背景
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     Icons.Default.Search,
                     contentDescription = null,
                     tint = Color.Gray,
-                    modifier = Modifier.padding(start = 12.dp).size(18.dp)
+                    modifier = Modifier
+                        .padding(start = 12.dp, end = 8.dp)
+                        .size(18.dp)
                 )
 
-                TextField(
+                BasicTextField(
                     value = query,
                     onValueChange = onQueryChange,
-                    placeholder = { Text("搜索视频、UP主...", fontSize = 14.sp, color = Color.Gray) },
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = BiliPink
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 0.dp),
+                    textStyle = TextStyle(
+                        color = Color.Black,
+                        fontSize = 14.sp
                     ),
-                    textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                    singleLine = true,
+                    cursorBrush = SolidColor(BiliPink),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
-                    modifier = Modifier.weight(1f)
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (query.isEmpty()) {
+                                Text(
+                                    text = "搜索视频、UP主...",
+                                    style = TextStyle(color = Color.Gray, fontSize = 14.sp)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
                 )
 
                 if (query.isNotEmpty()) {

@@ -34,11 +34,11 @@ interface BilibiliApi {
     @GET("x/web-interface/history/cursor")
     suspend fun getHistoryList(@Query("ps") ps: Int = 20): ListResponse<HistoryData>
 
-    // 获取用户创建的所有收藏夹 (需要 up_mid)
+    // 获取用户创建的所有收藏夹
     @GET("x/v3/fav/folder/created/list-all")
     suspend fun getFavFolders(@Query("up_mid") mid: Long): FavFolderResponse
 
-    // 获取特定收藏夹的内容 (media_id)
+    // 获取特定收藏夹的内容
     @GET("x/v3/fav/resource/list")
     suspend fun getFavoriteListStub(@Query("media_id") mediaId: Long, @Query("ps") ps: Int = 20): ListResponse<FavoriteData>
 
@@ -50,7 +50,7 @@ interface BilibiliApi {
     @GET("x/web-interface/view")
     suspend fun getVideoInfo(@Query("bvid") bvid: String): VideoDetailResponse
 
-    // 🔥 播放地址接口 (使用 Wbi 签名参数)
+    // 播放地址接口
     @GET("x/player/wbi/playurl")
     suspend fun getPlayUrl(@QueryMap params: Map<String, String>): PlayUrlResponse
 
@@ -61,7 +61,22 @@ interface BilibiliApi {
     // 弹幕
     @GET("x/v1/dm/list.so")
     suspend fun getDanmakuXml(@Query("oid") cid: Long): ResponseBody
+
+    // 🔥🔥 [新增] 获取评论列表
+    @GET("x/v2/reply/main")
+    suspend fun getReplyList(
+        @Query("type") type: Int = 1, // 1表示视频
+        @Query("oid") oid: Long,      // aid (av号)
+        @Query("mode") mode: Int = 3, // 3:热度, 2:时间
+        @Query("next") next: Int = 0, // 页码
+        @Query("ps") ps: Int = 20     // 每页数量
+    ): ReplyResponse
+    @GET("x/emote/user/panel/web")
+    suspend fun getEmotes(
+        @Query("business") business: String = "reply"
+    ): EmoteResponse
 }
+
 
 interface SearchApi {
     @GET("x/web-interface/search/square")

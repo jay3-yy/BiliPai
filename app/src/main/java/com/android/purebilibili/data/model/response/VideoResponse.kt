@@ -2,79 +2,55 @@ package com.android.purebilibili.data.model.response
 
 import kotlinx.serialization.Serializable
 
-// ❌ 已删除 NavResponse, NavData, WbiImg (移至 NavModels.kt)
-
-// --- 1. 首页推荐流 ---
-@Serializable
-data class RecommendResponse(
-    val data: RecommendData? = null
-)
-
-@Serializable
-data class RecommendData(
-    val item: List<VideoItem>? = null
-)
-
-@Serializable
-data class VideoItem(
-    val id: Long = 0,
-    val bvid: String = "",
-    val title: String = "",
-    val pic: String = "",
-    val uri: String = "",
-    val owner: Owner = Owner(),
-    val stat: Stat = Stat()
-)
-
-@Serializable
-data class Owner(
-    val name: String = "",
-    val face: String = "",
-    val mid: Long = 0
-)
-
-@Serializable
-data class Stat(
-    val view: Long = 0,
-    val danmaku: Long = 0,
-    val like: Long = 0
-)
-
-// --- 2. 视频流地址 (升级版) ---
+// --- 播放地址 Response (Wbi 接口) ---
+// 只保留这个，因为其他类（VideoDetail, Nav, Search等）在你的其他文件中已经存在了
 @Serializable
 data class PlayUrlResponse(
     val code: Int = 0,
     val message: String = "",
-    val ttl: Int = 1,
     val data: PlayUrlData? = null
 )
 
 @Serializable
 data class PlayUrlData(
-    val dash: DashData? = null,
-    val durl: List<Durl>? = null,
-    val quality: Int = 0,      // 当前清晰度 ID (如 80, 64)
+    val quality: Int = 0,
     val format: String = "",
-    // 可选清晰度列表
+    val timelength: Long = 0,
+    val accept_format: String = "",
     val accept_description: List<String> = emptyList(),
-    val accept_quality: List<Int> = emptyList()
-)
-
-@Serializable
-data class DashData(
-    val video: List<DashItem> = emptyList(),
-    val audio: List<DashItem> = emptyList()
-)
-
-@Serializable
-data class DashItem(
-    val id: Int = 0,
-    val baseUrl: String = "",
-    val bandwidth: Int = 0,
-    val codecid: Int = 0
+    val accept_quality: List<Int> = emptyList(),
+    val video_codecid: Int = 0,
+    val durl: List<Durl>? = null,
+    val dash: Dash? = null
 )
 
 @Serializable
 data class Durl(
-    val url: String = ""
+    val order: Int = 0,
+    val length: Long = 0,
+    val size: Long = 0,
+    val url: String = "",
+    val backup_url: List<String>? = null
+)
+
+@Serializable
+data class Dash(
+    val duration: Int = 0,
+    val minBufferTime: Float = 0f,
+    val video: List<DashMedia> = emptyList(),
+    val audio: List<DashMedia>? = emptyList()
+)
+
+@Serializable
+data class DashMedia(
+    val id: Int = 0,
+    val baseUrl: String = "",
+    val backupUrl: List<String>? = emptyList(),
+    val bandwidth: Int = 0,
+    val mimeType: String = "",
+    val codecs: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
+    val frameRate: String = "",
+    val sar: String = ""
 )

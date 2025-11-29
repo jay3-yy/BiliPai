@@ -11,7 +11,10 @@ import kotlinx.coroutines.launch
 data class SettingsState(
     val autoPlay: Boolean = true,
     val hwDecode: Boolean = true,
-    val darkMode: Boolean = false
+    val darkMode: Boolean = false,
+    // 预留字段，未来接入 SettingsManager
+    val bgPlay: Boolean = false,
+    val showStats: Boolean = false
 )
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
@@ -19,33 +22,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val state = _state.asStateFlow()
 
     init {
-        // 启动时监听所有设置的变化
         viewModelScope.launch {
-            SettingsManager.getAutoPlay(application).collect { val_ ->
-                _state.value = _state.value.copy(autoPlay = val_)
-            }
+            SettingsManager.getAutoPlay(application).collect { _state.value = _state.value.copy(autoPlay = it) }
         }
         viewModelScope.launch {
-            SettingsManager.getHwDecode(application).collect { val_ ->
-                _state.value = _state.value.copy(hwDecode = val_)
-            }
+            SettingsManager.getHwDecode(application).collect { _state.value = _state.value.copy(hwDecode = it) }
         }
         viewModelScope.launch {
-            SettingsManager.getDarkMode(application).collect { val_ ->
-                _state.value = _state.value.copy(darkMode = val_)
-            }
+            SettingsManager.getDarkMode(application).collect { _state.value = _state.value.copy(darkMode = it) }
         }
     }
 
-    fun toggleAutoPlay(value: Boolean) {
-        viewModelScope.launch { SettingsManager.setAutoPlay(getApplication(), value) }
-    }
-
-    fun toggleHwDecode(value: Boolean) {
-        viewModelScope.launch { SettingsManager.setHwDecode(getApplication(), value) }
-    }
-
-    fun toggleDarkMode(value: Boolean) {
-        viewModelScope.launch { SettingsManager.setDarkMode(getApplication(), value) }
-    }
+    fun toggleAutoPlay(value: Boolean) = viewModelScope.launch { SettingsManager.setAutoPlay(getApplication(), value) }
+    fun toggleHwDecode(value: Boolean) = viewModelScope.launch { SettingsManager.setHwDecode(getApplication(), value) }
+    fun toggleDarkMode(value: Boolean) = viewModelScope.launch { SettingsManager.setDarkMode(getApplication(), value) }
 }

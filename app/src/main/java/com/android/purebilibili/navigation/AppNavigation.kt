@@ -1,31 +1,40 @@
 package com.android.purebilibili.navigation
 
+import android.content.Intent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.android.purebilibili.feature.home.HomeScreen
 import com.android.purebilibili.feature.home.HomeViewModel
 import com.android.purebilibili.feature.login.LoginScreen
-import com.android.purebilibili.feature.player.VideoPlayerScreen
 import com.android.purebilibili.feature.profile.ProfileScreen
 import com.android.purebilibili.feature.search.SearchScreen
 import com.android.purebilibili.feature.settings.SettingsScreen
 import com.android.purebilibili.feature.list.CommonListScreen
 import com.android.purebilibili.feature.list.HistoryViewModel
 import com.android.purebilibili.feature.list.FavoriteViewModel
+import com.android.purebilibili.feature.video.VideoActivity // 🔥 导入新的 VideoActivity
 
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController()
 ) {
     val homeViewModel: HomeViewModel = viewModel()
+    val context = LocalContext.current // 🔥 获取 Context 用于启动 Activity
+
+    // 辅助函数：统一跳转到视频播放 Activity
+    fun navigateToVideo(bvid: String) {
+        val intent = Intent(context, VideoActivity::class.java).apply {
+            putExtra("bvid", bvid)
+        }
+        context.startActivity(intent)
+    }
 
     NavHost(
         navController = navController,
@@ -39,11 +48,9 @@ fun AppNavigation(
         ) {
             HomeScreen(
                 viewModel = homeViewModel,
-                onVideoClick = { bvid, cid ->
-                    navController.navigate(ScreenRoutes.VideoPlayer.createRoute(bvid, cid))
-                },
+                // 🔥 修改点：点击视频直接跳转 Activity
+                onVideoClick = { bvid, _ -> navigateToVideo(bvid) },
                 onSearchClick = { navController.navigate(ScreenRoutes.Search.route) },
-                // 🔥 修改点：区分未登录(去登录)和已登录(去个人中心)的跳转逻辑
                 onAvatarClick = { navController.navigate(ScreenRoutes.Login.route) },
                 onProfileClick = { navController.navigate(ScreenRoutes.Profile.route) },
                 onSettingsClick = { navController.navigate(ScreenRoutes.Settings.route) }
@@ -78,7 +85,8 @@ fun AppNavigation(
             CommonListScreen(
                 viewModel = historyViewModel,
                 onBack = { navController.popBackStack() },
-                onVideoClick = { bvid, cid -> navController.navigate(ScreenRoutes.VideoPlayer.createRoute(bvid, cid)) }
+                // 🔥 修改点
+                onVideoClick = { bvid, _ -> navigateToVideo(bvid) }
             )
         }
 
@@ -92,7 +100,8 @@ fun AppNavigation(
             CommonListScreen(
                 viewModel = favoriteViewModel,
                 onBack = { navController.popBackStack() },
-                onVideoClick = { bvid, cid -> navController.navigate(ScreenRoutes.VideoPlayer.createRoute(bvid, cid)) }
+                // 🔥 修改点
+                onVideoClick = { bvid, _ -> navigateToVideo(bvid) }
             )
         }
 
@@ -106,22 +115,9 @@ fun AppNavigation(
         ) {
             SearchScreen(
                 onBack = { navController.popBackStack() },
-                onVideoClick = { bvid, cid -> navController.navigate(ScreenRoutes.VideoPlayer.createRoute(bvid, cid)) }
+                // 🔥 修改点
+                onVideoClick = { bvid, _ -> navigateToVideo(bvid) }
             )
-        }
-
-        composable(
-            route = ScreenRoutes.VideoPlayer.route,
-            arguments = listOf(
-                navArgument("bvid") { type = NavType.StringType },
-                navArgument("cid") { type = NavType.LongType; defaultValue = 0L }
-            ),
-            enterTransition = { slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Left, tween(300)) },
-            popExitTransition = { slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Right, tween(300)) }
-        ) { backStackEntry ->
-            val bvid = backStackEntry.arguments?.getString("bvid") ?: ""
-            val cid = backStackEntry.arguments?.getLong("cid") ?: 0L
-            VideoPlayerScreen(bvid = bvid, cid = cid, onBack = { navController.popBackStack() })
         }
 
         composable(
