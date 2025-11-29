@@ -1,3 +1,4 @@
+// 文件路径: core/store/TokenManager.kt
 package com.android.purebilibili.core.store
 
 import android.content.Context
@@ -21,13 +22,11 @@ object TokenManager {
 
     @Volatile
     var sessDataCache: String? = null
-        // 🔥 核心修改：移除 private set，允许外部直接赋值，或保持 private 但通过 saveCookies 更新
-        // 这里为了安全，我们保持 set 为 private，但在 saveCookies 里必须赋值
         private set
 
+    // 🔥 [修复]：移除了 private set，允许 ApiClient 生成临时 ID 后写入
     @Volatile
     var buvid3Cache: String? = null
-        private set
 
     fun init(context: Context) {
         CoroutineScope(Dispatchers.IO).launch {
@@ -43,18 +42,14 @@ object TokenManager {
         }
     }
 
-    // 🔥 核心修改：保存时同时更新内存缓存
     suspend fun saveCookies(context: Context, sessData: String) {
-        // 1. 立即更新内存缓存，拦截器马上就能读到
         sessDataCache = sessData
-
-        // 2. 异步保存到硬盘
         context.dataStore.edit { prefs ->
             prefs[SESSDATA_KEY] = sessData
         }
     }
 
-    private suspend fun saveBuvid3(context: Context, buvid3: String) {
+    suspend fun saveBuvid3(context: Context, buvid3: String) {
         buvid3Cache = buvid3
         context.dataStore.edit { prefs ->
             prefs[BUVID3_KEY] = buvid3

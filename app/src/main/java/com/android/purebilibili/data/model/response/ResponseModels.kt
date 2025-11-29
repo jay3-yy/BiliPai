@@ -1,65 +1,84 @@
+// 文件路径: data/model/response/ResponseModels.kt
+// 1. 强制压制 InternalSerializationApi 报错
+@file:OptIn(kotlinx.serialization.InternalSerializationApi::class)
+
 package com.android.purebilibili.data.model.response
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-// 评论列表响应
 @Serializable
 data class ReplyResponse(
-    val code: Int,
-    val message: String,
-    val data: ReplyData?
+    val code: Int = 0,
+    val message: String = "",
+    val data: ReplyData? = null
 )
 
 @Serializable
 data class ReplyData(
-    val cursor: ReplyCursor,
-    val replies: List<ReplyItem>? // 可能为空
+    val cursor: ReplyCursor = ReplyCursor(),
+    val replies: List<ReplyItem>? = emptyList()
 )
 
 @Serializable
 data class ReplyCursor(
-    val all_count: Int, // 总评论数
-    val is_end: Boolean,
-    val next: Int // 下一页的游标
+    @SerialName("all_count") val allCount: Int = 0,
+    @SerialName("is_end") val isEnd: Boolean = false,
+    val next: Int = 0
 )
 
 @Serializable
 data class ReplyItem(
-    val rpid: Long,      // 评论ID
-    val oid: Long,       // 对应的稿件ID (aid)
-    val mid: Long,       // 发送者ID
-    val count: Int,      // 子评论数量
-    val rcount: Int,     // 子评论数量 (显示用)
-    val like: Int,       // 点赞数
-    val ctime: Long,     // 发布时间 (秒)
-    val member: ReplyMember, // 发送者信息
-    val content: ReplyContent, // 评论内容
-    val replies: List<ReplyItem>? = null // 子评论 (二级评论)
+    val rpid: Long = 0,
+    val oid: Long = 0,
+    val mid: Long = 0,
+    val count: Int = 0,
+    val rcount: Int = 0,
+    val like: Int = 0,
+    val ctime: Long = 0,
+
+    // 🔥🔥 核心修复：给对象类型加上默认值 = ReplyMember()
+    // 遇到被删除用户或特殊评论时，member 字段可能缺失或为 null，不加默认值会导致整个列表解析崩溃
+    val member: ReplyMember = ReplyMember(),
+    val content: ReplyContent = ReplyContent(),
+
+    val replies: List<ReplyItem>? = null
 )
 
 @Serializable
 data class ReplyMember(
-    val mid: String,
-    val uname: String,
-    val avatar: String,
-    val level_info: LevelInfo,
-    val vip: VipInfo? = null
+    val mid: String = "0",
+    val uname: String = "未知用户",
+    val avatar: String = "",
+
+    @SerialName("level_info")
+    val levelInfo: ReplyLevelInfo = ReplyLevelInfo(),
+
+    val vip: ReplyVipInfo? = null
+)
+
+@Serializable
+data class ReplyLevelInfo(
+    @SerialName("current_level")
+    val currentLevel: Int = 0
+)
+
+@Serializable
+data class ReplyVipInfo(
+    val vipType: Int = 0,
+    val vipStatus: Int = 0
 )
 
 @Serializable
 data class ReplyContent(
-    val message: String, // 评论文本
-    val device: String? = "", // 设备 (如 "Android")
-
-    // 🔥🔥 [核心补全] 新增 emote 字段
-    // B站接口会把这条评论用到的特殊表情详情（包括URL）放在这里
+    val message: String = "",
+    val device: String? = "",
     val emote: Map<String, ReplyEmote>? = null
 )
 
-// 🔥🔥 [新增] 表情详情类
 @Serializable
 data class ReplyEmote(
-    val id: Long,
-    val text: String, // 如 "[doge]"
-    val url: String   // 图片 URL
+    val id: Long = 0,
+    val text: String = "",
+    val url: String = ""
 )

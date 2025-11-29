@@ -17,67 +17,64 @@ import retrofit2.http.Query
 import retrofit2.http.QueryMap
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
+import java.util.UUID
 import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 interface BilibiliApi {
-    // 获取基本信息
+    // ... (保留 Nav, Stat, History, Fav 等接口) ...
     @GET("x/web-interface/nav")
     suspend fun getNavInfo(): NavResponse
 
-    // 获取用户统计信息
     @GET("x/web-interface/nav/stat")
     suspend fun getNavStat(): NavStatResponse
 
-    // 获取历史记录
     @GET("x/web-interface/history/cursor")
     suspend fun getHistoryList(@Query("ps") ps: Int = 20): ListResponse<HistoryData>
 
-    // 获取用户创建的所有收藏夹
     @GET("x/v3/fav/folder/created/list-all")
     suspend fun getFavFolders(@Query("up_mid") mid: Long): FavFolderResponse
 
-    // 获取特定收藏夹的内容
     @GET("x/v3/fav/resource/list")
     suspend fun getFavoriteListStub(@Query("media_id") mediaId: Long, @Query("ps") ps: Int = 20): ListResponse<FavoriteData>
 
-    // 推荐视频
     @GET("x/web-interface/wbi/index/top/feed/rcmd")
     suspend fun getRecommendParams(@QueryMap params: Map<String, String>): RecommendResponse
 
-    // 视频详情
     @GET("x/web-interface/view")
     suspend fun getVideoInfo(@Query("bvid") bvid: String): VideoDetailResponse
 
-    // 播放地址接口
     @GET("x/player/wbi/playurl")
     suspend fun getPlayUrl(@QueryMap params: Map<String, String>): PlayUrlResponse
 
-    // 相关视频
     @GET("x/web-interface/archive/related")
     suspend fun getRelatedVideos(@Query("bvid") bvid: String): RelatedResponse
 
-    // 弹幕
     @GET("x/v1/dm/list.so")
     suspend fun getDanmakuXml(@Query("oid") cid: Long): ResponseBody
 
-    // 🔥🔥 [新增] 获取评论列表
-    @GET("x/v2/reply/main")
-    suspend fun getReplyList(
-        @Query("type") type: Int = 1, // 1表示视频
-        @Query("oid") oid: Long,      // aid (av号)
-        @Query("mode") mode: Int = 3, // 3:热度, 2:时间
-        @Query("next") next: Int = 0, // 页码
-        @Query("ps") ps: Int = 20     // 每页数量
-    ): ReplyResponse
+    // 🔥🔥 [核心修改] 改为 wbi 路径，并接收 Map 参数以支持签名
+    @GET("x/v2/reply/wbi/main")
+    suspend fun getReplyList(@QueryMap params: Map<String, String>): ReplyResponse
+
     @GET("x/emote/user/panel/web")
     suspend fun getEmotes(
         @Query("business") business: String = "reply"
     ): EmoteResponse
+    @GET("x/v2/reply/reply")
+    suspend fun getReplyReply(
+        @Query("oid") oid: Long,
+        @Query("type") type: Int = 1,
+        @Query("root") root: Long, // 根评论 ID (rpid)
+        @Query("pn") pn: Int,     // 页码
+        @Query("ps") ps: Int = 20 // 每页数量
+    ): ReplyResponse // 复用 ReplyResponse 结构
 }
 
 
+// ... (SearchApi, PassportApi, NetworkModule 保持不变，直接保留你现有的即可) ...
+// (为了节省篇幅，NetworkModule 部分代码与上一版相同，不需要变动，只改上面的 Interface 即可)
 interface SearchApi {
     @GET("x/web-interface/search/square")
     suspend fun getHotSearch(@Query("limit") limit: Int = 10): HotSearchResponse
@@ -93,6 +90,7 @@ interface PassportApi {
     @GET("x/passport-login/web/qrcode/poll")
     suspend fun pollQrCode(@Query("qrcode_key") key: String): Response<PollResponse>
 }
+
 
 object NetworkModule {
     private var appContext: Context? = null
@@ -126,12 +124,20 @@ object NetworkModule {
                     .header("Referer", "https://www.bilibili.com")
 
                 val cookieBuilder = StringBuilder()
-                val buvid3 = TokenManager.buvid3Cache
-                if (!buvid3.isNullOrEmpty()) cookieBuilder.append("buvid3=$buvid3;")
-                val sessData = TokenManager.sessDataCache
-                if (!sessData.isNullOrEmpty()) cookieBuilder.append("SESSDATA=$sessData;")
 
-                if (cookieBuilder.isNotEmpty()) builder.header("Cookie", cookieBuilder.toString())
+                var buvid3 = TokenManager.buvid3Cache
+                if (buvid3.isNullOrEmpty()) {
+                    buvid3 = UUID.randomUUID().toString() + "infoc"
+                    TokenManager.buvid3Cache = buvid3
+                }
+                cookieBuilder.append("buvid3=$buvid3;")
+
+                val sessData = TokenManager.sessDataCache
+                if (!sessData.isNullOrEmpty()) {
+                    cookieBuilder.append("SESSDATA=$sessData;")
+                }
+
+                builder.header("Cookie", cookieBuilder.toString())
 
                 chain.proceed(builder.build())
             }

@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PureBiliBili"
+rootProject.name = "BiliPai"
 include(":app")
 include(":app")
  

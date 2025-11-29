@@ -1,3 +1,4 @@
+// 文件路径: feature/settings/SettingsScreen.kt
 package com.android.purebilibili.feature.settings
 
 import android.content.Context
@@ -9,7 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack // 🔥 修复：使用 AutoMirrored
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -18,7 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer // 🔥 修复：添加缺失的导入
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -26,7 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.theme.BiliPink
-import com.android.purebilibili.core.theme.TextPrimary
+// 🔥 导入新的枚举
+import com.android.purebilibili.feature.settings.AppThemeMode
 
 const val GITHUB_URL = "https://github.com/jay3-yy/BiliPai/"
 
@@ -38,16 +40,16 @@ enum class DisplayMode(val title: String, val value: Int) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = viewModel(), // 🔥 注入 ViewModel
+    viewModel: SettingsViewModel = viewModel(),
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
 
-    // 🔥 1. 从 ViewModel 获取核心状态
+    // 1. 从 ViewModel 获取核心状态 (包含 themeMode 和 cacheSize)
     val state by viewModel.state.collectAsState()
 
-    // 🔥 2. 其他 UI 状态仍暂时使用 SharedPreferences (因为 ViewModel 中还没加这些)
+    // 2. 其他 UI 状态 (SharedPreferences)
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
 
     var displayModeInt by remember { mutableIntStateOf(prefs.getInt("display_mode", 0)) }
@@ -56,9 +58,16 @@ fun SettingsScreen(
     var danmakuScale by remember { mutableFloatStateOf(prefs.getFloat("danmaku_scale", 1.0f)) }
     var useDynamicColor by remember { mutableStateOf(prefs.getBoolean("dynamic_color", true)) }
 
-    // --- 弹窗逻辑 ---
+    // --- 弹窗状态 ---
     var showModeDialog by remember { mutableStateOf(false) }
     var showCacheDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+
+    // --- 初始化逻辑 ---
+    // 每次进入页面时刷新缓存大小
+    LaunchedEffect(Unit) {
+        viewModel.refreshCacheSize()
+    }
 
     fun saveMode(mode: Int) {
         displayModeInt = mode
@@ -66,11 +75,11 @@ fun SettingsScreen(
         showModeDialog = false
     }
 
-    // 模式选择弹窗
+    // 1. 首页模式弹窗
     if (showModeDialog) {
         AlertDialog(
             onDismissRequest = { showModeDialog = false },
-            title = { Text("选择首页展示方式") },
+            title = { Text("选择首页展示方式", color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column {
                     DisplayMode.entries.forEach { mode ->
@@ -84,36 +93,84 @@ fun SettingsScreen(
                             RadioButton(
                                 selected = (displayModeInt == mode.value),
                                 onClick = { saveMode(mode.value) },
-                                colors = RadioButtonDefaults.colors(selectedColor = BiliPink)
+                                colors = RadioButtonDefaults.colors(selectedColor = BiliPink, unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant)
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = mode.title)
+                            Text(text = mode.title, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
             },
             confirmButton = { TextButton(onClick = { showModeDialog = false }) { Text("取消", color = BiliPink) } },
-            containerColor = Color.White
+            containerColor = MaterialTheme.colorScheme.surface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 
-    // 缓存清理弹窗
+    // 2. 🔥 主题模式弹窗 (适配新逻辑)
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("外观设置", color = MaterialTheme.colorScheme.onSurface) },
+            text = {
+                Column {
+                    AppThemeMode.entries.forEach { mode ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.setThemeMode(mode)
+                                    showThemeDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = (state.themeMode == mode),
+                                onClick = {
+                                    viewModel.setThemeMode(mode)
+                                    showThemeDialog = false
+                                },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = BiliPink,
+                                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = mode.label, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text("取消", color = BiliPink)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    // 3. 🔥 缓存清理弹窗 (集成 CacheUtils)
     if (showCacheDialog) {
         AlertDialog(
             onDismissRequest = { showCacheDialog = false },
-            title = { Text("清除缓存") },
-            text = { Text("确定要清除所有图片和视频缓存吗？") },
+            title = { Text("清除缓存", color = MaterialTheme.colorScheme.onSurface) },
+            text = { Text("确定要清除所有图片和视频缓存吗？", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 Button(
                     onClick = {
+                        // 🔥 调用 ViewModel 执行清理
+                        viewModel.clearCache()
                         Toast.makeText(context, "缓存已清除", Toast.LENGTH_SHORT).show()
                         showCacheDialog = false
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = BiliPink)
                 ) { Text("确认清除") }
             },
-            dismissButton = { TextButton(onClick = { showCacheDialog = false }) { Text("取消") } },
-            containerColor = Color.White
+            dismissButton = { TextButton(onClick = { showCacheDialog = false }) { Text("取消", color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+            containerColor = MaterialTheme.colorScheme.surface
         )
     }
 
@@ -123,14 +180,20 @@ fun SettingsScreen(
                 title = { Text("设置", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        // 🔥 修复：使用 AutoMirrored 图标消除警告
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                // 适配主题色
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                    actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         },
-        containerColor = Color(0xFFF9F9F9)
+        // 适配背景色
+        containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         LazyColumn(
             modifier = Modifier
@@ -161,12 +224,13 @@ fun SettingsScreen(
                         )
                         Divider()
                     }
-                    SettingSwitchItem(
+                    // 🔥 修改：改为可点击项，弹出选择框
+                    SettingClickableItem(
                         icon = Icons.Outlined.DarkMode,
                         title = "深色模式",
-                        subtitle = "跟随系统或手动开启",
-                        checked = state.darkMode, // 🔥 使用 ViewModel 状态
-                        onCheckedChange = { viewModel.toggleDarkMode(it) } // 🔥 调用 ViewModel 方法
+                        // 显示当前选中的模式名称
+                        value = state.themeMode.label,
+                        onClick = { showThemeDialog = true }
                     )
                 }
             }
@@ -179,16 +243,16 @@ fun SettingsScreen(
                         icon = Icons.Outlined.Memory,
                         title = "启用硬件解码",
                         subtitle = "减少发热和耗电 (推荐开启)",
-                        checked = state.hwDecode, // 🔥 使用 ViewModel 状态
-                        onCheckedChange = { viewModel.toggleHwDecode(it) } // 🔥 调用 ViewModel 方法
+                        checked = state.hwDecode,
+                        onCheckedChange = { viewModel.toggleHwDecode(it) }
                     )
                     Divider()
                     SettingSwitchItem(
                         icon = Icons.Outlined.SmartDisplay,
                         title = "视频自动播放",
                         subtitle = "在列表静音播放预览",
-                        checked = state.autoPlay, // 🔥 使用 ViewModel 状态
-                        onCheckedChange = { viewModel.toggleAutoPlay(it) } // 🔥 调用 ViewModel 方法
+                        checked = state.autoPlay,
+                        onCheckedChange = { viewModel.toggleAutoPlay(it) }
                     )
                     Divider()
                     SettingSwitchItem(
@@ -240,7 +304,8 @@ fun SettingsScreen(
                     SettingClickableItem(
                         icon = Icons.Outlined.DeleteOutline,
                         title = "清除缓存",
-                        value = "128 MB",
+                        // 🔥 使用动态计算的缓存大小
+                        value = state.cacheSize,
                         onClick = { showCacheDialog = true }
                     )
                     Divider()
@@ -264,14 +329,14 @@ fun SettingsScreen(
     }
 }
 
-// --- 组件封装 ---
+// --- 组件封装 (核心修复：颜色适配) ---
 
 @Composable
 fun SettingsSectionTitle(title: String) {
     Text(
         text = title,
         style = MaterialTheme.typography.labelLarge,
-        color = Color.Gray,
+        color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 20.dp, top = 20.dp, bottom = 8.dp)
     )
 }
@@ -282,7 +347,8 @@ fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White),
+            // 适配卡片背景 (深灰/纯白)
+            .background(MaterialTheme.colorScheme.surface),
         content = content
     )
 }
@@ -303,20 +369,25 @@ fun SettingSwitchItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(16.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = TextPrimary)
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             if (subtitle != null) {
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = BiliPink),
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = BiliPink,
+                uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
             modifier = Modifier.scale(0.8f)
         )
     }
@@ -337,17 +408,17 @@ fun SettingClickableItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (icon != null) {
-            Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(16.dp))
         }
-        Text(text = title, style = MaterialTheme.typography.bodyLarge, color = TextPrimary, modifier = Modifier.weight(1f))
+        Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (value != null) {
-                Text(text = value, style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
+                Text(text = value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (onClick != null) {
                 Spacer(modifier = Modifier.width(6.dp))
-                Icon(Icons.Default.ChevronRight, null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
+                Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f), modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -355,10 +426,9 @@ fun SettingClickableItem(
 
 @Composable
 fun Divider() {
-    Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(Color(0xFFF0F0F0)))
+    Box(modifier = Modifier.fillMaxWidth().height(0.5.dp).background(MaterialTheme.colorScheme.surfaceVariant))
 }
 
-// 🔥 修复：这个 Modifier 扩展需要 'import androidx.compose.ui.graphics.graphicsLayer'
 fun Modifier.scale(scale: Float): Modifier = this.then(
     Modifier.graphicsLayer(scaleX = scale, scaleY = scale)
 )

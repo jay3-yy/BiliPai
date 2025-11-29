@@ -1,6 +1,11 @@
+// 文件路径: feature/home/HomeComponents.kt
 package com.android.purebilibili.feature.home
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -11,6 +16,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,33 +38,21 @@ import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.bouncyClickable
 import com.android.purebilibili.data.model.response.VideoItem
 
-// 🔥 1. 优雅卡片 (双列) - 优化版
+// --- 卡片组件 (保持不变) ---
 @Composable
 fun ElegantVideoCard(video: VideoItem, index: Int, onClick: (String, Long) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .animateEnter(index, video.bvid)
-            // 优化阴影：更淡、更散
-            .shadow(
-                elevation = 6.dp,
-                shape = RoundedCornerShape(12.dp),
-                spotColor = Color.Black.copy(0.06f),
-                ambientColor = Color.Black.copy(0.03f)
-            )
+            .shadow(4.dp, RoundedCornerShape(12.dp), spotColor = MaterialTheme.colorScheme.onSurface.copy(0.06f))
             .bouncyClickable(scaleDown = 0.97f) { onClick(video.bvid, 0) },
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(0.dp) // 禁用默认阴影，使用 shadow Modifier
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column {
-            // 封面区
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.65f) // 16:10 黄金比例
-                    .clip(RoundedCornerShape(12.dp))
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().aspectRatio(1.65f).clip(RoundedCornerShape(12.dp))) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(FormatUtils.fixImageUrl(if (video.pic.startsWith("//")) "https:${video.pic}" else video.pic))
@@ -67,68 +61,35 @@ fun ElegantVideoCard(video: VideoItem, index: Int, onClick: (String, Long) -> Un
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-
-                // 渐变遮罩 (更自然)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.5f))))
-                )
-
-                // 播放数据
-                Row(
-                    modifier = Modifier.align(Alignment.BottomStart).padding(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Box(modifier = Modifier.fillMaxWidth().height(48.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.5f)))))
+                Row(modifier = Modifier.align(Alignment.BottomStart).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("▶ ${FormatUtils.formatStat(video.stat.view.toLong())}", color = Color.White.copy(0.9f), fontSize = 10.sp)
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(FormatUtils.formatDuration(video.duration), color = Color.White.copy(0.9f), fontSize = 10.sp)
                 }
             }
-
-            // 内容区
             Column(modifier = Modifier.padding(10.dp)) {
-                Text(
-                    text = video.title,
-                    maxLines = 2,
-                    minLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 13.5.sp,
-                        lineHeight = 19.sp,
-                        color = TextPrimary // 使用 Theme 中定义的深色
-                    )
-                )
+                Text(text = video.title, maxLines = 2, minLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium, fontSize = 13.5.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurface))
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = video.owner.name,
-                        fontSize = 11.sp,
-                        color = TextTertiary, // 使用浅灰
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1
-                    )
-                    Icon(Icons.Default.MoreVert, null, tint = TextTertiary.copy(0.5f), modifier = Modifier.size(14.dp))
+                    Text(text = video.owner.name, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f), maxLines = 1)
+                    Icon(Icons.Default.MoreVert, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f), modifier = Modifier.size(14.dp))
                 }
             }
         }
     }
 }
 
-// 🔥 2. 沉浸卡片 (单列) - 优化版
 @Composable
 fun ImmersiveVideoCard(video: VideoItem, index: Int, onClick: (String, Long) -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .animateEnter(index, video.bvid)
-            .shadow(8.dp, RoundedCornerShape(16.dp), spotColor = Color.Black.copy(0.08f))
+            .shadow(6.dp, RoundedCornerShape(16.dp), spotColor = MaterialTheme.colorScheme.onSurface.copy(0.08f))
             .bouncyClickable(scaleDown = 0.98f) { onClick(video.bvid, 0) },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
         Column {
@@ -141,109 +102,177 @@ fun ImmersiveVideoCard(video: VideoItem, index: Int, onClick: (String, Long) -> 
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
-                // 时长胶囊
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .background(Color.Black.copy(0.5f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
+                Box(modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(Color.Black.copy(0.5f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp)) {
                     Text(FormatUtils.formatDuration(video.duration), color = Color.White, fontSize = 11.sp)
                 }
             }
-
             Row(modifier = Modifier.padding(12.dp)) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current).data(FormatUtils.fixImageUrl(video.owner.face)).crossfade(true).build(),
-                    contentDescription = null,
-                    modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFFF0F0F0))
-                )
+                AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(FormatUtils.fixImageUrl(video.owner.face)).crossfade(true).build(), contentDescription = null, modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant))
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
-                    Text(
-                        text = video.title,
-                        maxLines = 2,
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                    )
+                    Text(text = video.title, maxLines = 2, style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface))
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${video.owner.name} · ${FormatUtils.formatStat(video.stat.view.toLong())}播放",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = TextSecondary
-                    )
+                    Text(text = "${video.owner.name} · ${FormatUtils.formatStat(video.stat.view.toLong())}播放", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
     }
 }
 
-// 🔥 3. 悬浮顶部栏
+// 🔥🔥🔥 全新设计的 HomeTopBar - 集成搜索栏（优化防闪烁）
 @Composable
-fun FloatingHomeHeader(user: UserState, onAvatarClick: () -> Unit, onSearchClick: () -> Unit, onSettingsClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .height(56.dp) // 降低高度，更精致
+fun HomeTopBar(
+    user: UserState,
+    isScrolled: Boolean,
+    onAvatarClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onSearchClick: () -> Unit
+) {
+    // 动态背景色 - 未滚动时使用半透明surface，滚动后显示完全不透明
+    val containerColor by animateColorAsState(
+        targetValue = if (isScrolled)
+            MaterialTheme.colorScheme.surface
+        else
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+        animationSpec = tween(durationMillis = 300),
+        label = "TopBarBg"
+    )
+
+    // 动态阴影 - 使用更平滑的过渡
+    val elevation by animateDpAsState(
+        targetValue = if (isScrolled) 4.dp else 0.dp,
+        animationSpec = tween(durationMillis = 300),
+        label = "TopBarElevation"
+    )
+
+    Surface(
+        color = containerColor,
+        shadowElevation = elevation,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        // 毛玻璃效果模拟 (半透明白底 + 阴影)
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            shape = RoundedCornerShape(28.dp),
-            color = Color.White.copy(alpha = 0.92f), // 稍微透明一点
-            shadowElevation = 3.dp,
-            tonalElevation = 0.dp
-        ) {
-            Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        Column {
+            // 状态栏占位
+            Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+
+            // 顶部栏内容区域
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                // 头像
-                Box(
+                // 第一行：头像、标题、设置
+                Row(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .clickable { onAvatarClick() }
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (user.isLogin && user.face.isNotEmpty()) {
-                        AsyncImage(model = ImageRequest.Builder(LocalContext.current).data(FormatUtils.fixImageUrl(user.face)).crossfade(true).build(), contentDescription = "Avatar", modifier = Modifier.fillMaxSize())
-                    } else {
-                        Box(Modifier.fillMaxSize().background(Color(0xFFE0E0E0)), contentAlignment = Alignment.Center) { Text("未", fontSize = 10.sp, color = Color.Gray) }
+                    // 左侧：头像
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (user.isLogin)
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                                else
+                                    Color.LightGray.copy(0.5f)
+                            )
+                            .clickable { onAvatarClick() }
+                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(0.2f), CircleShape)
+                    ) {
+                        if (user.isLogin && user.face.isNotEmpty()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(FormatUtils.fixImageUrl(user.face))
+                                    .crossfade(true).build(),
+                                contentDescription = "Avatar",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("未", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // 中间：标题
+                    Text(
+                        text = "BiliPai",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Black,
+                            letterSpacing = (-0.5).sp,
+                            fontSize = 22.sp
+                        ),
+                        color = BiliPink
+                    )
+
+                    // 右侧：设置按钮
+                    IconButton(
+                        onClick = onSettingsClick,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                CircleShape
+                            )
+                    ) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // 搜索框
-                Row(
+                // 第二行：搜索栏（优化阴影效果）
+                Surface(
                     modifier = Modifier
-                        .weight(1f)
-                        .height(32.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0xFFF2F3F5)) // 更淡的灰
-                        .clickable { onSearchClick() }
-                        .padding(horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .shadow(
+                            elevation = 3.dp,
+                            shape = RoundedCornerShape(24.dp),
+                            spotColor = Color.Black.copy(0.08f)
+                        )
+                        .clip(RoundedCornerShape(24.dp))
+                        .clickable { onSearchClick() },
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                    tonalElevation = 1.dp
                 ) {
-                    Icon(Icons.Default.Search, null, tint = Color(0xFFA0A4A9), modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(text = if (user.isLogin) "Hi, ${user.name}" else "搜索...", color = Color(0xFFA0A4A9), fontSize = 13.sp, maxLines = 1)
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // 设置
-                IconButton(onClick = onSettingsClick, modifier = Modifier.size(34.dp)) {
-                    Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color(0xFF757575), modifier = Modifier.size(20.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            tint = BiliPink,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            "搜索视频、UP主...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.7f)
+                        )
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
 
-// 🔥 4. 其他组件
 @Composable
 fun ErrorState(msg: String, onRetry: () -> Unit) {
     Column(
@@ -251,9 +280,24 @@ fun ErrorState(msg: String, onRetry: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Text("加载失败", style = MaterialTheme.typography.titleMedium)
-        Text(msg, color = TextSecondary, fontSize = 12.sp)
-        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = BiliPink)) { Text("重试") }
+        Text(
+            "加载失败",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            msg,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontSize = 12.sp
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onRetry,
+            colors = ButtonDefaults.buttonColors(containerColor = BiliPink)
+        ) {
+            Text("重试")
+        }
     }
 }
 
@@ -262,17 +306,35 @@ fun WelcomeDialog(githubUrl: String, onConfirm: () -> Unit) {
     val uriHandler = LocalUriHandler.current
     AlertDialog(
         onDismissRequest = {},
-        title = { Text("欢迎", fontWeight = FontWeight.Bold) },
-        text = { Text("本应用仅供学习使用。", style = MaterialTheme.typography.bodyMedium) },
-        confirmButton = { Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = BiliPink)) { Text("好的") } },
-        containerColor = Color.White
+        title = { Text("欢迎") },
+        text = {
+            Column {
+                Text("本应用仅供学习使用。")
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = { uriHandler.openUri(githubUrl) }) {
+                    Text(
+                        "开源地址: $githubUrl",
+                        fontSize = 12.sp,
+                        color = BiliPink
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = BiliPink)
+            ) {
+                Text("好的")
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
+        textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }
 
-// 🔥 5. [新增] 修复报错：通用 VideoGridItem
-// SearchScreen 和 CommonListScreen 会调用这个函数
 @Composable
 fun VideoGridItem(video: VideoItem, index: Int, onClick: (String, Long) -> Unit) {
-    // 默认使用双列优雅卡片
     ElegantVideoCard(video = video, index = index, onClick = onClick)
 }

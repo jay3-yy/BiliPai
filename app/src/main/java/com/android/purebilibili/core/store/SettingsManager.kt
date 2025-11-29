@@ -3,42 +3,55 @@ package com.android.purebilibili.core.store
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.purebilibili.feature.settings.AppThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-// 独立的 DataStore，避免和 User Token 混在一起
-val Context.settingsDataStore by preferencesDataStore(name = "settings_prefs")
+// 🔥 1. 声明 DataStore 扩展属性 (设为 private 防止冲突)
+private val Context.settingsDataStore by preferencesDataStore(name = "settings_prefs")
 
 object SettingsManager {
-    // 定义 Key
+    // 键定义
     private val KEY_AUTO_PLAY = booleanPreferencesKey("auto_play")
     private val KEY_HW_DECODE = booleanPreferencesKey("hw_decode")
-    private val KEY_DARK_MODE = booleanPreferencesKey("dark_mode")
+    private val KEY_THEME_MODE = intPreferencesKey("theme_mode_v2")
 
-    // --- 读取 (Get) ---
-    // 默认开启自动播放
+    // --- Auto Play ---
     fun getAutoPlay(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { it[KEY_AUTO_PLAY] ?: true }
+        .map { preferences ->
+            preferences[KEY_AUTO_PLAY] ?: true
+        }
 
-    // 默认开启硬解
-    fun getHwDecode(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { it[KEY_HW_DECODE] ?: true }
-
-    // 默认跟随系统 (这里默认关，由 UI 层决定初始值)
-    fun getDarkMode(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { it[KEY_DARK_MODE] ?: false }
-
-    // --- 写入 (Set) ---
     suspend fun setAutoPlay(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { it[KEY_AUTO_PLAY] = value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_AUTO_PLAY] = value
+        }
     }
+
+    // --- HW Decode ---
+    fun getHwDecode(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[KEY_HW_DECODE] ?: true
+        }
 
     suspend fun setHwDecode(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { it[KEY_HW_DECODE] = value }
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HW_DECODE] = value
+        }
     }
 
-    suspend fun setDarkMode(context: Context, value: Boolean) {
-        context.settingsDataStore.edit { it[KEY_DARK_MODE] = value }
+    // --- Theme Mode ---
+    fun getThemeMode(context: Context): Flow<AppThemeMode> = context.settingsDataStore.data
+        .map { preferences ->
+            val modeInt = preferences[KEY_THEME_MODE] ?: AppThemeMode.FOLLOW_SYSTEM.value
+            AppThemeMode.fromValue(modeInt)
+        }
+
+    suspend fun setThemeMode(context: Context, mode: AppThemeMode) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_THEME_MODE] = mode.value
+        }
     }
 }
