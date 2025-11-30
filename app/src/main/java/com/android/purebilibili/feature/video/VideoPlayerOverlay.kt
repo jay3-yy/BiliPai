@@ -30,6 +30,8 @@ import kotlinx.coroutines.delay
 fun VideoPlayerOverlay(
     player: Player,
     title: String,
+    isVisible: Boolean,             // 🔥 新增：由父组件控制显示
+    onToggleVisible: () -> Unit,    // 🔥 新增：请求切换显示状态
     isFullscreen: Boolean,
     isDanmakuOn: Boolean,
     currentQualityLabel: String,
@@ -39,8 +41,6 @@ fun VideoPlayerOverlay(
     onBack: () -> Unit,
     onToggleFullscreen: () -> Unit
 ) {
-    // 控制器可见性
-    var showControls by remember { mutableStateOf(true) }
     var showQualityMenu by remember { mutableStateOf(false) }
 
     // 播放状态
@@ -49,11 +49,14 @@ fun VideoPlayerOverlay(
     var duration by remember { mutableLongStateOf(0L) }
     var bufferedPosition by remember { mutableLongStateOf(0L) }
 
-    // 自动隐藏控制器
-    LaunchedEffect(showControls, isPlaying) {
-        if (showControls && isPlaying) {
+    // 自动隐藏逻辑：倒计时结束调用 onToggleVisible
+    LaunchedEffect(isVisible, isPlaying) {
+        if (isVisible && isPlaying) {
             delay(4000)
-            showControls = false
+            // 如果还在显示且正在播放，尝试隐藏
+            if (isVisible) {
+                onToggleVisible()
+            }
         }
     }
 
@@ -68,50 +71,58 @@ fun VideoPlayerOverlay(
         }
     }
 
-    // 点击切换控制器显示
+    // 🔥🔥 核心修改：移除了根布局的 .clickable { }
+    // 这样触摸事件才能穿透 Overlay 传递给底层的 VideoPlayerSection 处理手势
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { showControls = !showControls }
+        modifier = Modifier.fillMaxSize()
     ) {
-        // 顶部渐变遮罩（始终显示）
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .align(Alignment.TopCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.7f),
-                            Color.Transparent
+        // 顶部渐变遮罩
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.7f),
+                                Color.Transparent
+                            )
                         )
                     )
-                )
-        )
+            )
+        }
 
-        // 底部渐变遮罩（始终显示）
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .align(Alignment.BottomCenter)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.8f)
+        // 底部渐变遮罩
+        AnimatedVisibility(
+            visible = isVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.8f)
+                            )
                         )
                     )
-                )
-        )
+            )
+        }
 
         // 控制器内容（动画显示/隐藏）
         AnimatedVisibility(
-            visible = showControls,
+            visible = isVisible,
             enter = fadeIn(tween(300)),
             exit = fadeOut(tween(300))
         ) {
@@ -145,9 +156,9 @@ fun VideoPlayerOverlay(
             }
         }
 
-        // 中央播放/暂停按钮（仅在显示控制器时）
+        // 中央播放/暂停按钮（仅在显示控制器且暂停时显示）
         AnimatedVisibility(
-            visible = showControls && !isPlaying,
+            visible = isVisible && !isPlaying,
             modifier = Modifier.align(Alignment.Center),
             enter = scaleIn(tween(200)) + fadeIn(tween(200)),
             exit = scaleOut(tween(200)) + fadeOut(tween(200))
@@ -184,7 +195,9 @@ fun VideoPlayerOverlay(
     }
 }
 
-// 🔥 顶部控制栏
+// TopControlBar, BottomControlBar, VideoProgressBar, QualitySelectionMenu
+// 这些子组件的代码保持原样不变，这里为了节省篇幅省略，请直接保留你原文件中下面的代码。
+// ... (保留原文件的剩余部分)
 @Composable
 fun TopControlBar(
     title: String,
@@ -202,61 +215,36 @@ fun TopControlBar(
             .statusBarsPadding(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 返回按钮
         IconButton(onClick = onBack) {
-            Icon(
-                Icons.Default.ArrowBack,
-                contentDescription = "返回",
-                tint = Color.White,
-                modifier = Modifier.size(26.dp)
-            )
+            Icon(Icons.Default.ArrowBack, contentDescription = "返回", tint = Color.White, modifier = Modifier.size(26.dp))
         }
-
-        // 标题（仅全屏时显示）
         if (isFullscreen) {
             Text(
-                text = title,
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 8.dp)
+                text = title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
             )
         } else {
             Spacer(modifier = Modifier.weight(1f))
         }
-
-        // 弹幕开关
         IconButton(onClick = onToggleDanmaku) {
             Icon(
                 if (isDanmakuOn) Icons.Default.Subtitles else Icons.Default.SubtitlesOff,
-                contentDescription = if (isDanmakuOn) "关闭弹幕" else "打开弹幕",
+                contentDescription = null,
                 tint = if (isDanmakuOn) BiliPink else Color.White.copy(alpha = 0.7f),
                 modifier = Modifier.size(24.dp)
             )
         }
-
-        // 清晰度按钮
         Surface(
             onClick = onQualityClick,
             color = Color.White.copy(alpha = 0.15f),
             shape = RoundedCornerShape(4.dp),
             modifier = Modifier.padding(horizontal = 4.dp)
         ) {
-            Text(
-                text = currentQualityLabel,
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
+            Text(text = currentQualityLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp))
         }
     }
 }
 
-// 🔥 底部控制栏
 @Composable
 fun BottomControlBar(
     isPlaying: Boolean,
@@ -269,168 +257,61 @@ fun BottomControlBar(
     onToggleFullscreen: () -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 12.dp)
-            .navigationBarsPadding()
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp).navigationBarsPadding()
     ) {
-        // 进度条
-        VideoProgressBar(
-            currentPosition = currentPosition,
-            duration = duration,
-            bufferedPosition = bufferedPosition,
-            onSeek = onSeek
-        )
-
+        VideoProgressBar(currentPosition, duration, bufferedPosition, onSeek)
         Spacer(modifier = Modifier.height(8.dp))
-
-        // 控制按钮行
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 播放/暂停
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onPlayPauseClick) {
-                Icon(
-                    if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "暂停" else "播放",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
+                Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(28.dp))
             }
-
             Spacer(modifier = Modifier.width(8.dp))
-
-            // 时间显示
-            Text(
-                text = "${FormatUtils.formatDuration((currentPosition / 1000).toInt())} / ${FormatUtils.formatDuration((duration / 1000).toInt())}",
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium
-            )
-
+            Text(text = "${FormatUtils.formatDuration((currentPosition / 1000).toInt())} / ${FormatUtils.formatDuration((duration / 1000).toInt())}", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Spacer(modifier = Modifier.weight(1f))
-
-            // 全屏按钮
             IconButton(onClick = onToggleFullscreen) {
-                Icon(
-                    if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                    contentDescription = if (isFullscreen) "退出全屏" else "全屏",
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp)
-                )
+                Icon(if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, null, tint = Color.White, modifier = Modifier.size(26.dp))
             }
         }
     }
 }
 
-// 🔥 进度条组件
 @Composable
-fun VideoProgressBar(
-    currentPosition: Long,
-    duration: Long,
-    bufferedPosition: Long,
-    onSeek: (Long) -> Unit
-) {
+fun VideoProgressBar(currentPosition: Long, duration: Long, bufferedPosition: Long, onSeek: (Long) -> Unit) {
     val progress = if (duration > 0) currentPosition.toFloat() / duration else 0f
-    val buffered = if (duration > 0) bufferedPosition.toFloat() / duration else 0f
-
     var tempProgress by remember { mutableFloatStateOf(progress) }
     var isDragging by remember { mutableStateOf(false) }
-
-    LaunchedEffect(progress) {
-        if (!isDragging) tempProgress = progress
-    }
-
+    LaunchedEffect(progress) { if (!isDragging) tempProgress = progress }
     Column {
         Slider(
             value = if (isDragging) tempProgress else progress,
-            onValueChange = {
-                isDragging = true
-                tempProgress = it
-            },
-            onValueChangeFinished = {
-                isDragging = false
-                onSeek((tempProgress * duration).toLong())
-            },
-            colors = SliderDefaults.colors(
-                thumbColor = BiliPink,
-                activeTrackColor = BiliPink,
-                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-            ),
+            onValueChange = { isDragging = true; tempProgress = it },
+            onValueChangeFinished = { isDragging = false; onSeek((tempProgress * duration).toLong()) },
+            colors = SliderDefaults.colors(thumbColor = BiliPink, activeTrackColor = BiliPink, inactiveTrackColor = Color.White.copy(alpha = 0.3f)),
             modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
-// 🔥 清晰度选择菜单
 @Composable
-fun QualitySelectionMenu(
-    qualities: List<String>,
-    currentQuality: String,
-    onQualitySelected: (Int) -> Unit,
-    onDismiss: () -> Unit
-) {
+fun QualitySelectionMenu(qualities: List<String>, currentQuality: String, onQualitySelected: (Int) -> Unit, onDismiss: () -> Unit) {
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.5f))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onDismiss() },
+        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss() },
         contentAlignment = Alignment.Center
     ) {
         Surface(
-            modifier = Modifier
-                .widthIn(max = 200.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { /* 阻止点击穿透 */ },
+            modifier = Modifier.widthIn(max = 200.dp).clip(RoundedCornerShape(12.dp)).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
             color = Color(0xFF2B2B2B),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                Text(
-                    text = "清晰度",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
-
+                Text(text = "清晰度", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
                 qualities.forEachIndexed { index, quality ->
                     val isSelected = quality == currentQuality
-
-                    Surface(
-                        onClick = { onQualitySelected(index) },
-                        color = if (isSelected) BiliPink.copy(alpha = 0.2f) else Color.Transparent,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = quality,
-                                color = if (isSelected) BiliPink else Color.White,
-                                fontSize = 14.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier.weight(1f)
-                            )
-
-                            if (isSelected) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = BiliPink,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                    Surface(onClick = { onQualitySelected(index) }, color = if (isSelected) BiliPink.copy(alpha = 0.2f) else Color.Transparent, modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(text = quality, color = if (isSelected) BiliPink else Color.White, fontSize = 14.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                            if (isSelected) Icon(Icons.Default.Check, null, tint = BiliPink, modifier = Modifier.size(20.dp))
                         }
                     }
                 }

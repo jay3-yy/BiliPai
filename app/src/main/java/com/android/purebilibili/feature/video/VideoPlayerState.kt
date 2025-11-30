@@ -5,13 +5,10 @@ import android.content.Context
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.*
-import androidx.media3.common.Player
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.android.purebilibili.core.network.NetworkModule
-import com.android.purebilibili.core.util.ScreenUtils
-import kotlinx.coroutines.delay
 import master.flame.danmaku.danmaku.model.android.DanmakuContext
 import master.flame.danmaku.ui.widget.DanmakuView
 import kotlin.math.abs
@@ -31,7 +28,8 @@ fun rememberVideoPlayerState(
     bvid: String
 ): VideoPlayerState {
     // 播放器初始化
-    val player = remember {
+    // 🔥 增加 context 作为 key，防止 Context 变化时复用旧实例
+    val player = remember(context) {
         val headers = mapOf(
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
@@ -43,9 +41,7 @@ fun rememberVideoPlayerState(
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build()
             .apply {
-                // 🔥🔥 核心修复 1: 必须调用 prepare() 才会开始缓冲数据！
                 prepare()
-                // 🔥🔥 核心修复 2: 开启自动播放
                 playWhenReady = true
             }
     }
@@ -59,17 +55,21 @@ fun rememberVideoPlayerState(
             setScaleTextSize(1.0f)
         }
     }
-    val danmakuView = remember { DanmakuView(context) }
+    // 🔥 增加 context 作为 key
+    val danmakuView = remember(context) { DanmakuView(context) }
 
-    // 状态保持类
-    val holder = remember { VideoPlayerState(player, danmakuView) }
+    val holder = remember(player, danmakuView) { VideoPlayerState(player, danmakuView) }
 
     // 生命周期绑定
-    DisposableEffect(Unit) {
+    DisposableEffect(player, danmakuView) {
         onDispose {
             player.release()
             danmakuView.release()
-            ScreenUtils.setFullScreen(context, false)
+            // 🔥🔥🔥 删除下面这一行！不要在组件销毁时强制退出全屏，
+            // 这会导致全屏切换逻辑冲突，或者在 Activity 重建时强制变回竖屏。
+            // ScreenUtils.setFullScreen(context, false)
+
+            // 恢复亮度是可以的
             (context as? ComponentActivity)?.window?.attributes?.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
         }
     }
@@ -91,7 +91,7 @@ fun rememberVideoPlayerState(
                     danmakuView.pause()
                 }
             }
-            delay(500)
+            kotlinx.coroutines.delay(500)
         }
     }
     LaunchedEffect(holder.isDanmakuOn) {

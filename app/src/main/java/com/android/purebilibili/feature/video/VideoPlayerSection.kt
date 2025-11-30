@@ -5,8 +5,11 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
+import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,13 +23,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
 import kotlin.math.abs
 
-enum class GestureMode { None, Brightness, Volume, Seek }
+// 🔥 修复 1: 重命名枚举类，防止与其他文件中的定义冲突
+enum class VideoGestureMode { None, Brightness, Volume, Seek }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Composable
@@ -43,13 +49,22 @@ fun VideoPlayerSection(
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
     val maxVolume = remember { audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
 
-    var gestureMode by remember { mutableStateOf(GestureMode.None) }
+    // 控制器显示状态
+    var showControls by remember { mutableStateOf(true) }
+
+    // 🔥 修复 2: 显式指定 State 类型 <VideoGestureMode>，解决 "Cannot infer type" 错误
+    var gestureMode by remember { mutableStateOf<VideoGestureMode>(VideoGestureMode.None) }
+
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var gesturePercent by remember { mutableFloatStateOf(0f) }
     var seekTargetTime by remember { mutableLongStateOf(0L) }
     var isGestureVisible by remember { mutableStateOf(false) }
 
-    // 辅助函数：获取 Activity 用于调整亮度
+    // 记录手势开始时的初始值
+    var startVolume by remember { mutableIntStateOf(0) }
+    var startBrightness by remember { mutableFloatStateOf(0f) }
+    var totalDragDistanceY by remember { mutableFloatStateOf(0f) }
+
     fun getActivity(): Activity? = when (context) {
         is Activity -> context
         is ContextWrapper -> context.baseContext as? Activity
@@ -59,60 +74,87 @@ fun VideoPlayerSection(
     // 播放器根容器
     Box(
         modifier = Modifier
-            .fillMaxSize() // 填满外层容器 (即 VideoDetailScreen 中的那个 Box)
+            .fillMaxSize()
             .background(Color.Black)
+            // 1. 点击事件：切换控制器显示
             .pointerInput(Unit) {
-                // 仅在全屏且非画中画模式下启用手势
+                detectTapGestures(
+                    onTap = { showControls = !showControls }
+                )
+            }
+            // 2. 滑动事件：调节 进度/亮度/音量
+            .pointerInput(isFullscreen, isInPipMode) {
                 if (isFullscreen && !isInPipMode) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             isGestureVisible = true
-                            gestureMode = GestureMode.None
-                            // 简单的左右分区判定
-                            if (offset.x < size.width / 2) { /* 左侧 */ }
+                            gestureMode = VideoGestureMode.None
+                            totalDragDistanceY = 0f
+
+                            // 记录初始音量
+                            startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+
+                            // 记录初始亮度
+                            val attributes = getActivity()?.window?.attributes
+                            startBrightness = attributes?.screenBrightness ?: -1f
+                            if (startBrightness < 0) startBrightness = 0.5f
                         },
                         onDragEnd = {
-                            if (gestureMode == GestureMode.Seek) {
+                            if (gestureMode == VideoGestureMode.Seek) {
                                 playerState.player.seekTo(seekTargetTime)
+                                playerState.player.play()
                             }
                             isGestureVisible = false
-                            gestureMode = GestureMode.None
+                            gestureMode = VideoGestureMode.None
                         },
                         onDragCancel = {
                             isGestureVisible = false
-                            gestureMode = GestureMode.None
+                            gestureMode = VideoGestureMode.None
                         },
                         onDrag = { change, dragAmount ->
-                            if (gestureMode == GestureMode.None) {
-                                // 判断水平还是垂直移动
+                            // 判定手势模式
+                            if (gestureMode == VideoGestureMode.None) {
                                 if (abs(dragAmount.x) > abs(dragAmount.y)) {
-                                    gestureMode = GestureMode.Seek
+                                    gestureMode = VideoGestureMode.Seek
+                                    playerState.player.pause() // 拖动进度时暂停
                                 } else {
-                                    gestureMode = if (change.position.x < size.width / 2) GestureMode.Brightness else GestureMode.Volume
+                                    // 左侧亮度，右侧音量
+                                    gestureMode = if (change.position.x < size.width / 2) {
+                                        VideoGestureMode.Brightness
+                                    } else {
+                                        VideoGestureMode.Volume
+                                    }
                                 }
                             }
 
                             when (gestureMode) {
-                                GestureMode.Seek -> {
+                                VideoGestureMode.Seek -> {
                                     val duration = playerState.player.duration.coerceAtLeast(0L)
                                     val current = playerState.player.currentPosition
-                                    // 简单的滑动比例算法
-                                    val seekDelta = (dragAmount.x * 200).toLong() // 灵敏度调节
+                                    val seekDelta = (dragAmount.x * 300).toLong()
                                     seekTargetTime = (current + seekDelta).coerceIn(0L, duration)
                                 }
-                                GestureMode.Brightness -> {
-                                    val delta = -dragAmount.y / (size.height / 2)
-                                    gesturePercent = (0.5f + delta).coerceIn(0f, 1f)
+                                VideoGestureMode.Brightness -> {
+                                    totalDragDistanceY -= dragAmount.y
+                                    val deltaPercent = totalDragDistanceY / size.height
+                                    val newBrightness = (startBrightness + deltaPercent).coerceIn(0f, 1f)
+
                                     getActivity()?.window?.attributes = getActivity()?.window?.attributes?.apply {
-                                        screenBrightness = gesturePercent
+                                        screenBrightness = newBrightness
                                     }
+
+                                    gesturePercent = newBrightness
                                     gestureIcon = Icons.Rounded.Brightness7
                                 }
-                                GestureMode.Volume -> {
-                                    val delta = -dragAmount.y / (size.height / 2)
-                                    gesturePercent = (0.5f + delta).coerceIn(0f, 1f)
-                                    val targetVol = (gesturePercent * maxVolume).toInt()
+                                VideoGestureMode.Volume -> {
+                                    totalDragDistanceY -= dragAmount.y
+                                    val deltaPercent = totalDragDistanceY / size.height
+                                    val newVolPercent = ((startVolume.toFloat() / maxVolume) + deltaPercent).coerceIn(0f, 1f)
+
+                                    val targetVol = (newVolPercent * maxVolume).toInt()
                                     audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
+
+                                    gesturePercent = newVolPercent
                                     gestureIcon = Icons.Rounded.VolumeUp
                                 }
                                 else -> {}
@@ -122,27 +164,33 @@ fun VideoPlayerSection(
                 }
             }
     ) {
-        // 1. ExoPlayer 视图
+        // 1. ExoPlayer
         AndroidView(
             factory = {
                 PlayerView(it).apply {
                     this.player = playerState.player
                     setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-                    useController = false // 禁用原生控制条，使用自定义 Overlay
+                    useController = false
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. 弹幕视图 (非画中画时显示)
+        // 2. 弹幕
         if (!isInPipMode) {
             AndroidView(
-                factory = { playerState.danmakuView },
+                factory = {
+                    val view = playerState.danmakuView
+                    if (view.parent != null) {
+                        (view.parent as ViewGroup).removeView(view)
+                    }
+                    view
+                },
                 modifier = Modifier.fillMaxSize()
             )
         }
 
-        // 3. 手势状态反馈 UI (中心弹窗)
+        // 3. 手势状态反馈 UI
         if (isGestureVisible && isFullscreen && !isInPipMode) {
             Box(
                 modifier = Modifier
@@ -152,7 +200,7 @@ fun VideoPlayerSection(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    if (gestureMode == GestureMode.Seek) {
+                    if (gestureMode == VideoGestureMode.Seek) {
                         Text(
                             text = FormatUtils.formatDuration((seekTargetTime / 1000).toInt()),
                             color = Color.White,
@@ -165,16 +213,28 @@ fun VideoPlayerSection(
                             tint = Color.White,
                             modifier = Modifier.size(48.dp)
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        // 显示百分比数值
+                        Text(
+                            text = "${(gesturePercent * 100).toInt()}%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        )
                     }
                 }
             }
         }
 
-        // 4. 控制层 Overlay (仅当数据加载成功且非画中画时显示)
+        // 4. 控制层 Overlay
         if (uiState is PlayerUiState.Success && !isInPipMode) {
             VideoPlayerOverlay(
                 player = playerState.player,
                 title = uiState.info.title,
+                isVisible = showControls,
+                onToggleVisible = { showControls = !showControls },
                 isFullscreen = isFullscreen,
                 isDanmakuOn = playerState.isDanmakuOn,
                 currentQualityLabel = uiState.qualityLabels.getOrNull(uiState.qualityIds.indexOf(uiState.currentQuality)) ?: "自动",
