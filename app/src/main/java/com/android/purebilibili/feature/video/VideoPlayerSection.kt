@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.media.AudioManager
+import android.provider.Settings // 🔥 新增导入
 import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.compose.foundation.background
@@ -31,7 +32,6 @@ import androidx.media3.ui.PlayerView
 import com.android.purebilibili.core.util.FormatUtils
 import kotlin.math.abs
 
-// 🔥 修复 1: 重命名枚举类，防止与其他文件中的定义冲突
 enum class VideoGestureMode { None, Brightness, Volume, Seek }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -52,9 +52,7 @@ fun VideoPlayerSection(
     // 控制器显示状态
     var showControls by remember { mutableStateOf(true) }
 
-    // 🔥 修复 2: 显式指定 State 类型 <VideoGestureMode>，解决 "Cannot infer type" 错误
     var gestureMode by remember { mutableStateOf<VideoGestureMode>(VideoGestureMode.None) }
-
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
     var gesturePercent by remember { mutableFloatStateOf(0f) }
     var seekTargetTime by remember { mutableLongStateOf(0L) }
@@ -94,10 +92,27 @@ fun VideoPlayerSection(
                             // 记录初始音量
                             startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
 
-                            // 记录初始亮度
+                            // 记录初始亮度 - 🔥🔥🔥【修复】平滑获取系统亮度
                             val attributes = getActivity()?.window?.attributes
-                            startBrightness = attributes?.screenBrightness ?: -1f
-                            if (startBrightness < 0) startBrightness = 0.5f
+                            val currentWindowBrightness = attributes?.screenBrightness ?: -1f
+
+                            if (currentWindowBrightness < 0) {
+                                // 如果当前是跟随系统(-1)，尝试获取系统当前的实际亮度值 (0-255)
+                                try {
+                                    val sysBrightness = Settings.System.getInt(
+                                        context.contentResolver,
+                                        Settings.System.SCREEN_BRIGHTNESS
+                                    )
+                                    // 转换为 0.0 - 1.0
+                                    startBrightness = sysBrightness / 255f
+                                } catch (e: Exception) {
+                                    // 获取失败兜底为 0.5
+                                    startBrightness = 0.5f
+                                }
+                            } else {
+                                // 如果之前已经手动调节过，直接使用当前值
+                                startBrightness = currentWindowBrightness
+                            }
                         },
                         onDragEnd = {
                             if (gestureMode == VideoGestureMode.Seek) {
@@ -116,7 +131,7 @@ fun VideoPlayerSection(
                             if (gestureMode == VideoGestureMode.None) {
                                 if (abs(dragAmount.x) > abs(dragAmount.y)) {
                                     gestureMode = VideoGestureMode.Seek
-                                    playerState.player.pause() // 拖动进度时暂停
+                                    playerState.player.pause()
                                 } else {
                                     // 左侧亮度，右侧音量
                                     gestureMode = if (change.position.x < size.width / 2) {
@@ -214,7 +229,6 @@ fun VideoPlayerSection(
                             modifier = Modifier.size(48.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        // 显示百分比数值
                         Text(
                             text = "${(gesturePercent * 100).toInt()}%",
                             color = Color.White,

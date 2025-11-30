@@ -1,3 +1,4 @@
+// 文件路径: feature/video/VideoDetailScreen.kt
 package com.android.purebilibili.feature.video
 
 import android.annotation.SuppressLint
@@ -8,6 +9,7 @@ import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.view.View
 import android.view.Window
+import android.view.WindowManager // 🔥 新增导入
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -37,7 +39,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun VideoDetailScreen(
     bvid: String,
-    coverUrl: String, // 该参数目前未使用，可根据需要处理或移除
+    coverUrl: String,
     onBack: () -> Unit,
     isInPipMode: Boolean = false,
     isVisible: Boolean = true,
@@ -48,14 +50,24 @@ fun VideoDetailScreen(
     val configuration = LocalConfiguration.current
     val uiState by viewModel.uiState.collectAsState()
 
-    // 1. 🔥 核心修复：直接通过系统配置判断是否全屏（横屏即视为全屏）
-    // 不再使用局部的 var isFullscreen = remember { mutableStateOf(false) }
+    // 1. 直接通过系统配置判断是否全屏
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     // 画中画状态
     var isPipMode by remember { mutableStateOf(isInPipMode) }
-    // 监听传入参数的变化
     LaunchedEffect(isInPipMode) { isPipMode = isInPipMode }
+
+    // 🔥🔥🔥【关键修复】退出页面时重置亮度
+    // 解决回到首页后提示“亮度被顶层应用控制”的问题
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = context.findActivity()?.window
+            val layoutParams = window?.attributes
+            // 强制重置为系统默认 (-1f)
+            layoutParams?.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            window?.attributes = layoutParams
+        }
+    }
 
     val playerState = rememberVideoPlayerState(
         context = context,
@@ -63,7 +75,7 @@ fun VideoDetailScreen(
         bvid = bvid
     )
 
-    // 2. 🔥 辅助函数：切换屏幕方向
+    // 2. 辅助函数：切换屏幕方向
     fun toggleOrientation() {
         val activity = context.findActivity() ?: return
         if (isLandscape) {
@@ -73,7 +85,7 @@ fun VideoDetailScreen(
         }
     }
 
-    // 3. 🔥 沉浸式状态栏控制 (根据 isLandscape 自动处理)
+    // 3. 沉浸式状态栏控制
     val backgroundColor = MaterialTheme.colorScheme.background
     val isLightBackground = remember(backgroundColor) { backgroundColor.luminance() > 0.5f }
 
@@ -111,9 +123,9 @@ fun VideoDetailScreen(
                 uiState = uiState,
                 isFullscreen = true,
                 isInPipMode = isPipMode,
-                onToggleFullscreen = { toggleOrientation() }, // 调用旋转逻辑
+                onToggleFullscreen = { toggleOrientation() },
                 onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
-                onBack = { toggleOrientation() } // 横屏点返回键 -> 切回竖屏
+                onBack = { toggleOrientation() }
             )
         } else {
             // === 竖屏普通模式 ===
@@ -130,9 +142,9 @@ fun VideoDetailScreen(
                         uiState = uiState,
                         isFullscreen = false,
                         isInPipMode = isPipMode,
-                        onToggleFullscreen = { toggleOrientation() }, // 调用旋转逻辑
+                        onToggleFullscreen = { toggleOrientation() },
                         onQualityChange = { qid, pos -> viewModel.changeQuality(qid, pos) },
-                        onBack = onBack // 竖屏点返回键 -> 退出 Activity
+                        onBack = onBack
                     )
                 }
 
@@ -153,7 +165,7 @@ fun VideoDetailScreen(
                             replyCount = success.replyCount,
                             emoteMap = success.emoteMap,
                             isRepliesLoading = success.isRepliesLoading,
-                            onRelatedVideoClick = { vid -> viewModel.loadVideo(vid) } // 处理点击推荐视频
+                            onRelatedVideoClick = { vid -> viewModel.loadVideo(vid) }
                         )
                     }
 
@@ -185,7 +197,6 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
-// VideoContentSection 和其他 UI 组件保持不变，直接放在下面即可
 @Composable
 fun VideoContentSection(
     info: ViewInfo,
@@ -199,11 +210,6 @@ fun VideoContentSection(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    // 评论区开始的 index（推荐视频之后）
-    // 0: Header, 1: Actions, 2: Divider, 3: Desc, 4: Divider, 5: RelatedHeader
-    // 然后是 relatedVideos.size 个推荐视频
-    // 然后是 Divider
-    // 然后是 ReplyHeader (评论区头部)
     val commentHeaderIndex = 6 + relatedVideos.size + 1
 
     LazyColumn(
@@ -218,7 +224,6 @@ fun VideoContentSection(
                 info = info,
                 onCommentClick = {
                     coroutineScope.launch {
-                        // 滚动到评论区
                         listState.animateScrollToItem(commentHeaderIndex)
                     }
                 }
@@ -245,13 +250,11 @@ fun VideoContentSection(
             RelatedVideoItem(video = video, onClick = { onRelatedVideoClick(video.bvid) })
         }
 
-        // 分隔线
         item {
             Spacer(Modifier.height(8.dp))
             HorizontalDivider(thickness = 8.dp, color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
         }
 
-        // 评论区头部
         item {
             ReplyHeader(count = replyCount)
         }
@@ -267,8 +270,8 @@ fun VideoContentSection(
                 ReplyItemView(
                     item = reply,
                     emoteMap = emoteMap,
-                    onClick = { /* 打开楼层页 */ },
-                    onSubClick = { /* 回复此人 */ }
+                    onClick = { },
+                    onSubClick = { }
                 )
             }
 
