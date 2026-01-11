@@ -58,6 +58,7 @@ private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
 private const val KEY_FIRST_LAUNCH = "first_launch_shown"
 
+@OptIn(androidx.media3.common.util.UnstableApi::class) // 解决 UnsafeOptInUsageError，因为 AppNavigation 内部使用了不稳定的 API
 class MainActivity : ComponentActivity() {
     
     //  PiP 状态

@@ -386,6 +386,7 @@ object DownloadManager {
      * 使用 Android MediaMuxer 合并音视频
      * 将分离的视频流和音频流合并为完整的 MP4 文件
      */
+    @android.annotation.SuppressLint("WrongConstant")
     private suspend fun mergeVideoAudio(video: File, audio: File, output: File) = withContext(Dispatchers.IO) {
         try {
             com.android.purebilibili.core.util.Logger.d("DownloadManager", " Starting MediaMuxer merge...")

@@ -266,8 +266,19 @@ fun VideoPlayerOverlay(
                     currentSpeed = currentSpeed,
                     currentRatio = currentAspectRatio,
                     onPlayPauseClick = {
-                        if (isPlaying) player.pause() else player.play()
-                        isPlaying = !isPlaying
+                        // 检查播放器是否处于完成状态
+                        if (player.playbackState == Player.STATE_ENDED) {
+                            // 如果播放完成，先重置到开头，再重新播放
+                            player.seekTo(0)
+                            player.play()
+                            isPlaying = true
+                        } else if (isPlaying) {
+                            player.pause()
+                            isPlaying = false
+                        } else {
+                            player.play()
+                            isPlaying = true
+                        }
                     },
                     onSeek = { position -> player.seekTo(position) },
                     onSpeedClick = { showSpeedMenu = true },

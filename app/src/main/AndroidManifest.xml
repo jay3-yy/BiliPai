@@ -302,7 +302,7 @@
             android:theme="@style/Theme.PureBiliBili" />
 
         <service
-            android:name=".feature.video.PlaybackService"
+            android:name=".feature.video.player.PlaybackService"
             android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>

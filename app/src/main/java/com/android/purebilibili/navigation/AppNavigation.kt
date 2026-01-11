@@ -51,6 +51,7 @@ object VideoRoute {
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),

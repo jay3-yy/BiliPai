@@ -8,8 +8,8 @@ buildscript {
 
 plugins {
     // 1. Android 插件 (版本号要固定)
-    id("com.android.application") version "8.9.1" apply false
-    id("com.android.library") version "8.9.1" apply false
+    id("com.android.application") version "8.13.1" apply false
+    id("com.android.library") version "8.13.1" apply false
 
     id("com.google.devtools.ksp") version "2.1.0-1.0.29" apply false
 

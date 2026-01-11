@@ -224,6 +224,7 @@ class PlayerViewModel : ViewModel() {
                     playNextPageOrRecommended()
                 } else {
                     // 自动播放关闭，只显示提示
+                    // 播放器应该保持在完成状态，这样播放按钮可以重新开始播放
                     toast(" 播放完成")
                 }
             }

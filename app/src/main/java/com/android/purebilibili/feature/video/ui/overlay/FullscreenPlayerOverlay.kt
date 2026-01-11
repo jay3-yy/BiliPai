@@ -218,7 +218,18 @@ fun FullscreenPlayerOverlay(
                         if (showControls) lastInteractionTime = System.currentTimeMillis()
                     },
                     onDoubleTap = {
-                        player?.let { if (it.isPlaying) it.pause() else it.play() }
+                        player?.let { 
+                            // 检查播放器是否处于完成状态
+                            if (it.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                                // 如果播放完成，先重置到开头，再重新播放
+                                it.seekTo(0)
+                                it.play()
+                            } else if (it.isPlaying) {
+                                it.pause()
+                            } else {
+                                it.play()
+                            }
+                        }
                     }
                 )
             }
@@ -493,7 +504,18 @@ fun FullscreenPlayerOverlay(
                             Surface(
                                 onClick = {
                                     lastInteractionTime = System.currentTimeMillis()
-                                    player?.let { if (it.isPlaying) it.pause() else it.play() }
+                                    player?.let { 
+                                        // 检查播放器是否处于完成状态
+                                        if (it.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+                                            // 如果播放完成，先重置到开头，再重新播放
+                                            it.seekTo(0)
+                                            it.play()
+                                        } else if (it.isPlaying) {
+                                            it.pause()
+                                        } else {
+                                            it.play()
+                                        }
+                                    }
                                 },
                                 shape = CircleShape,
                                 color = Color.Transparent

@@ -43,6 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@androidx.media3.common.util.UnstableApi
 @Composable
 fun StoryScreen(
     viewModel: StoryViewModel = viewModel(),
@@ -123,6 +124,7 @@ fun StoryScreen(
     }
 }
 
+@androidx.media3.common.util.UnstableApi
 @Composable
 private fun StoryPageContent(
     item: StoryItem,
