@@ -486,7 +486,14 @@ fun LevelTag(level: Int) {
 
 fun formatTime(timestamp: Long): String {
     val date = Date(timestamp * 1000)
-    val sdf = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+    val nowCalendar = Calendar.getInstance()
+    val commentCalendar = Calendar.getInstance().apply { time = date }
+    val pattern = if (commentCalendar.get(Calendar.YEAR) == nowCalendar.get(Calendar.YEAR)) {
+        "MM-dd HH:mm"
+    } else {
+        "yyyy-MM-dd HH:mm"
+    }
+    val sdf = SimpleDateFormat(pattern, Locale.getDefault())
     return sdf.format(date)
 }
 
