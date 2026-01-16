@@ -51,7 +51,6 @@ import coil.compose.AsyncImage
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.animation.doOnEnd
 import android.widget.ImageView
-import com.android.purebilibili.feature.onboarding.OnboardingBottomSheet
 import dev.chrisbanes.haze.haze
 
 private const val TAG = "MainActivity"
@@ -100,9 +99,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
             
-            //  首次启动检测
-            val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
-            var showWelcome by remember { mutableStateOf(!prefs.getBoolean(KEY_FIRST_LAUNCH, false)) }
+            //  首次启动检测已移交 AppNavigation 处理
+            // val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+            // var showWelcome by remember { mutableStateOf(!prefs.getBoolean(KEY_FIRST_LAUNCH, false)) }
 
             // 1. 获取存储的模式 (默认为跟随系统)
             val themeMode by SettingsManager.getThemeMode(context).collectAsState(initial = AppThemeMode.FOLLOW_SYSTEM)
@@ -144,6 +143,9 @@ class MainActivity : ComponentActivity() {
             
             //  全局 Haze 状态，用于实现毛玻璃效果
             val mainHazeState = remember { dev.chrisbanes.haze.HazeState() }
+            
+            //  📐 [平板适配] 计算窗口尺寸类
+            val windowSizeClass = com.android.purebilibili.core.util.calculateWindowSizeClass()
 
             // 6. 传入参数
             PureBiliBiliTheme(
@@ -154,8 +156,14 @@ class MainActivity : ComponentActivity() {
                 fontScale = fontScale,
                 uiScale = uiScale
             ) {
+                //  📐 [平板适配] 提供全局 WindowSizeClass
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.android.purebilibili.core.util.LocalWindowSizeClass provides windowSizeClass
+                ) {
                 Box(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)  // 📐 [修复] 防止平板端返回后出现黑边
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
@@ -189,14 +197,7 @@ class MainActivity : ComponentActivity() {
                             //  [关键修复] OnboardingBottomSheet 必须在 haze 源 Box 内部
                             // 这样 hazeChild 可以模糊同一个 Box 内的兄弟内容 (AppNavigation)
                             // 与 HomeScreen 中 FrostedBottomBar 的工作原理一致
-                            OnboardingBottomSheet(
-                                visible = showWelcome,
-                                onDismiss = {
-                                    prefs.edit().putBoolean(KEY_FIRST_LAUNCH, true).apply()
-                                    showWelcome = false
-                                },
-                                mainHazeState = mainHazeState
-                            )
+
                         }
                     }
                     //  小窗全屏状态
@@ -206,9 +207,13 @@ class MainActivity : ComponentActivity() {
                     MiniPlayerOverlay(
                         miniPlayerManager = miniPlayerManager,
                         onExpandClick = {
-                            //  直接显示全屏播放器（无需导航）
-                            showFullscreen = true
-                            miniPlayerManager.exitMiniMode()
+                            //  [修改] 导航回详情页，而不是只显示全屏播放器
+                            miniPlayerManager.currentBvid?.let { bvid ->
+                                val cid = miniPlayerManager.currentCid
+                                navController.navigate("video/$bvid?cid=$cid&cover=") {
+                                    launchSingleTop = true
+                                }
+                            }
                         }
                     )
                     
@@ -237,6 +242,7 @@ class MainActivity : ComponentActivity() {
                     //  护眼模式覆盖层（最顶层，应用于所有内容）
                     EyeProtectionOverlay()
                 }
+                }  // 📐 CompositionLocalProvider 结束
             }
         }
     }
@@ -384,184 +390,3 @@ class MainActivity : ComponentActivity() {
 /**
  *  首次启动欢迎弹窗 - 精美设计版
  */
-@Composable
-fun WelcomeDialog(onDismiss: () -> Unit) {
-    val uriHandler = LocalUriHandler.current
-    
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(24.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 8.dp,
-        title = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                //  应用 Logo - 使用实际应用图标
-                AsyncImage(
-                    model = R.mipmap.ic_launcher,
-                    contentDescription = "BiliPai Logo",
-                    modifier = Modifier
-                        .size(88.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    "欢迎使用 BiliPai",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Text(
-                    "简洁 · 流畅 · 开源",
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 2.sp
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState())
-            ) {
-                //  特性介绍
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    FeatureChip("", "高清播放")
-                    FeatureChip("", "弹幕评论")
-                    FeatureChip("", "隐私保护")
-                }
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                //  开源信息卡片
-                Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { uriHandler.openUri("https://github.com/jay3-yy/BiliPai") }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .background(
-                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                    shape = CircleShape
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("⭐", fontSize = 20.sp)
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "开源项目",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 14.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                "github.com/jay3-yy/BiliPai",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Text("→", fontSize = 16.sp, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                //  免责声明 - 适配深色模式
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        Text("", fontSize = 16.sp)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                "使用须知",
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                "本应用仅供学习交流，所有内容版权归 Bilibili 及原作者。",
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                ),
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-            ) {
-                Text(
-                    "开始探索",
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp
-                )
-            }
-        }
-    )
-}
-
-/**
- *  特性小标签
- */
-@Composable
-private fun FeatureChip(emoji: String, label: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .background(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = CircleShape
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(emoji, fontSize = 22.sp)
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            label,
-            fontSize = 12.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}

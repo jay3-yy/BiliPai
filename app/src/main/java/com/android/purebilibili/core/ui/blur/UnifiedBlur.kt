@@ -9,7 +9,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.SettingsManager
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeEffect
 
 /**
  *  统一的模糊Modifier
@@ -36,7 +36,8 @@ fun Modifier.unifiedBlur(
     // 根据用户选择获取对应的模糊样式
     val blurStyle = BlurStyles.getBlurStyle(blurIntensity)
     
-    this.hazeChild(
+    //  [修复] 使用正确的 Haze API: hazeEffect 替代 hazeChild
+    this.hazeEffect(
         state = hazeState,
         style = blurStyle
     )

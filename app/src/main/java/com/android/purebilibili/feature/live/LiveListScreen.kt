@@ -45,6 +45,8 @@ import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.responsiveContentWidth
 
 // 辅助函数：格式化数字
 private fun formatNumber(num: Int): String {
@@ -254,7 +256,26 @@ fun LiveListScreen(
             }
         }
     }
+
     
+    // 📐 [Tablet Adaptation] Calculate adaptive columns
+    val windowSizeClass = LocalWindowSizeClass.current
+    val contentWidth = if (windowSizeClass.isExpandedScreen) {
+        minOf(windowSizeClass.widthDp, 1000.dp)
+    } else {
+        windowSizeClass.widthDp
+    }
+    
+    val gridColumns = remember(contentWidth) {
+        if (windowSizeClass.isExpandedScreen) {
+            val minColumnWidth = 200.dp
+            val columns = (contentWidth / minColumnWidth).toInt()
+            columns.coerceIn(2, 6)
+        } else {
+            2
+        }
+    }
+
     Scaffold(
         topBar = {
             Column {
@@ -317,6 +338,7 @@ fun LiveListScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .responsiveContentWidth(maxWidth = 1000.dp) // 📐 [Tablet Adaptation] Limit content width
         ) {
             when {
                 state.isLoading -> {
@@ -354,6 +376,7 @@ fun LiveListScreen(
                         when (tabIndex) {
                             0 -> RecommendTab(
                                 items = state.recommendItems,
+                                gridColumns = gridColumns,
                                 onLiveClick = onLiveClick
                             )
                             1 -> AreaTab(
@@ -361,11 +384,13 @@ fun LiveListScreen(
                                 selectedAreaId = state.selectedAreaId,
                                 areaItems = state.areaItems,
                                 isLoading = state.isAreaLoading,
+                                gridColumns = gridColumns,
                                 onAreaSelected = { viewModel.loadAreaLive(it) },
                                 onLiveClick = onLiveClick
                             )
                             2 -> FollowTab(
                                 items = state.followItems,
+                                gridColumns = gridColumns,
                                 onLiveClick = onLiveClick
                             )
                         }
@@ -382,13 +407,14 @@ fun LiveListScreen(
 @Composable
 private fun RecommendTab(
     items: List<LiveRoomItem>,
+    gridColumns: Int,
     onLiveClick: (Long, String, String) -> Unit
 ) {
     if (items.isEmpty()) {
         EmptyState("暂无推荐直播")
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Fixed(gridColumns),
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -412,6 +438,7 @@ private fun AreaTab(
     selectedAreaId: Int,
     areaItems: List<LiveRoomItem>,
     isLoading: Boolean,
+    gridColumns: Int,
     onAreaSelected: (Int) -> Unit,
     onLiveClick: (Long, String, String) -> Unit
 ) {
@@ -463,7 +490,7 @@ private fun AreaTab(
             }
             else -> {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    columns = GridCells.Fixed(gridColumns),
                     contentPadding = PaddingValues(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -486,13 +513,14 @@ private fun AreaTab(
 @Composable
 private fun FollowTab(
     items: List<LiveRoomItem>,
+    gridColumns: Int,
     onLiveClick: (Long, String, String) -> Unit
 ) {
     if (items.isEmpty()) {
         EmptyState("暂无关注的直播\n关注的主播开播后将显示在这里")
     } else {
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Fixed(gridColumns),
             contentPadding = PaddingValues(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)

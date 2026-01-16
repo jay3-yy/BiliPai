@@ -101,6 +101,7 @@ data class FollowingUser(
 data class VideoItem(
     val id: Long = 0,
     val bvid: String = "",
+    val cid: Long = 0,  //  [新增] 明确的 CID 字段，用于播放
     val title: String = "",
     val pic: String = "",
     val owner: Owner = Owner(),
@@ -178,6 +179,7 @@ data class RecommendItem(
         return VideoItem(
             id = id,
             bvid = bvid ?: "",
+            cid = cid ?: 0L,  //  [新增] 填充 CID
             title = title ?: "",
             pic = pic ?: "",
             owner = Owner(mid = owner?.mid ?: 0, name = owner?.name ?: "", face = owner?.face ?: ""),
@@ -232,6 +234,7 @@ data class PopularItem(
         return VideoItem(
             id = cid,
             bvid = bvid,
+            cid = cid,  //  [新增] 填充 CID
             title = title,
             pic = pic,
             owner = owner,
@@ -277,10 +280,11 @@ data class DynamicRegionItem(
     val owner: Owner = Owner(),
     val stat: DynamicRegionStat = DynamicRegionStat()
 ) {
-    fun toVideoItem(): VideoItem {
+     fun toVideoItem(): VideoItem {
         return VideoItem(
             id = cid,
             bvid = bvid,
+            cid = cid,  //  [新增] 填充 CID
             title = title,
             pic = pic,
             owner = owner,

@@ -17,6 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,6 +46,8 @@ import kotlin.math.roundToInt
 
 private const val TAG = "MiniPlayerOverlay"
 private const val AUTO_HIDE_DELAY_MS = 3000L
+private val STASHED_WIDTH = 40.dp
+private val STASHED_HEIGHT = 48.dp
 
 /**
  *  小窗播放器覆盖层
@@ -68,18 +73,18 @@ fun MiniPlayerOverlay(
     com.android.purebilibili.core.util.Logger.d("MiniPlayerOverlay", 
         " Overlay: mode=$currentMode, isMiniMode=${miniPlayerManager.isMiniMode}, isActive=${miniPlayerManager.isActive}")
     
-    //  [重构] 使用新的模式判断方法，替代原来的 bgPlay 检查
-    // 小窗模式为 OFF 时不渲染
-    if (miniPlayerManager.isMiniPlayerDisabled()) {
-        return
-    }
+    //  [简化] 小窗可见性由 AnimatedVisibility 的 isMiniMode && isActive 控制
+    // 不再需要额外的模式检查
 
     
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
 
-    val miniPlayerWidth = 220.dp
-    val miniPlayerHeight = 130.dp
+    //  [适配] 平板设备增加小窗尺寸
+    val isTablet = configuration.screenWidthDp >= 600
+    // [修改] 缩小平板小窗尺寸 (360 -> 280, 202 -> 157)
+    val miniPlayerWidth = if (isTablet) 280.dp else 220.dp
+    val miniPlayerHeight = if (isTablet) 157.dp else 130.dp
     val padding = 12.dp
     val headerHeight = 28.dp // 顶部可拖动区域高度
 
@@ -89,21 +94,36 @@ fun MiniPlayerOverlay(
     val miniPlayerHeightPx = with(density) { miniPlayerHeight.toPx() }
     val paddingPx = with(density) { padding.toPx() }
 
-    //  获取入场方向（在计算初始位置前获取）
+    //  [新增] 获取卡片位置信息，用于初始落位和动画适配
+    val cardBounds = com.android.purebilibili.core.util.CardPositionManager.lastClickedCardBounds
+    val cardPosition = com.android.purebilibili.core.util.CardPositionManager.cardHorizontalPosition
     val entryFromLeft = miniPlayerManager.entryFromLeft
     
-    //  [修复] 位置状态 - 根据卡片位置决定初始位置
+    //  [修复] 位置状态 - 优先使用卡片原始位置，否则使用贴边逻辑
     // 左边视频 → 小窗在左侧，右边视频 → 小窗在右侧
-    var offsetX by remember(entryFromLeft) { 
+    var offsetX by remember(entryFromLeft, cardBounds) { 
         mutableFloatStateOf(
-            if (entryFromLeft) paddingPx else screenWidthPx - miniPlayerWidthPx - paddingPx
+            cardBounds?.left ?: if (entryFromLeft) paddingPx else screenWidthPx - miniPlayerWidthPx - paddingPx
         ) 
     }
-    var offsetY by remember { mutableFloatStateOf(screenHeightPx - miniPlayerHeightPx - paddingPx - 100.dp.value * density.density) }
+    var offsetY by remember(cardBounds) { 
+        mutableFloatStateOf(
+            cardBounds?.top ?: (screenHeightPx - miniPlayerHeightPx - paddingPx - 100.dp.value * density.density)
+        ) 
+    }
     
     // 控制按钮显示状态
     var showControls by remember { mutableStateOf(true) }
     var lastInteractionTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    // [新增] 贴边隐藏状态
+    var isStashed by remember { mutableStateOf(false) }
+    // 记录隐藏在哪一侧 (Left or Right), 默认为 Right，后续根据位置计算
+    var stashSide by remember { mutableStateOf(com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT) }
+    
+    // [新增] Stashed 状态下的 Y 轴偏移量（允许在隐藏时上下拖动）
+    var stashedOffsetY by remember { mutableFloatStateOf(offsetY) }
+
     
     // 进度拖动状态
     var isDraggingProgress by remember { mutableStateOf(false) }
@@ -114,7 +134,15 @@ fun MiniPlayerOverlay(
     var isDraggingPosition by remember { mutableStateOf(false) }
     
     // 播放器状态
-    val player = miniPlayerManager.player
+    //  [修复] 在退出动画期间保持旧 Player 引用，防止画面跳变
+    // 当 isMiniMode 为 false (正在退出) 时，不再更新 player，保持最后一帧画面
+    val rawPlayer = miniPlayerManager.player
+    var player by remember { mutableStateOf(rawPlayer) }
+    
+    if (miniPlayerManager.isMiniMode && rawPlayer != null) {
+        player = rawPlayer
+    }
+    
     var isPlaying by remember { mutableStateOf(player?.isPlaying ?: false) }
     var currentProgress by remember { mutableFloatStateOf(0f) }
     var currentPosition by remember { mutableLongStateOf(0L) }
@@ -146,39 +174,99 @@ fun MiniPlayerOverlay(
     }
 
     // 动画 - 只有在非拖动时才使用动画
+    // 如果是 Stashed 状态，TargetX 应该在屏幕边缘外只露一点，或者贴在边缘
+    val targetOffsetX = if (isStashed) {
+        if (stashSide == com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT) {
+            0f // 左侧贴边
+        } else {
+            // 右侧贴边
+            with(density) { screenWidthPx - STASHED_WIDTH.toPx() }
+        }
+    } else {
+        offsetX
+    }
+
+    val targetOffsetY = if (isStashed) stashedOffsetY else offsetY
+
     val animatedOffsetX by animateFloatAsState(
-        targetValue = offsetX,
+        targetValue = targetOffsetX,
         animationSpec = if (isDraggingPosition) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "offsetX"
     )
     val animatedOffsetY by animateFloatAsState(
-        targetValue = offsetY,
+        targetValue = targetOffsetY,
         animationSpec = if (isDraggingPosition) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "offsetY"
     )
 
-
     AnimatedVisibility(
         visible = miniPlayerManager.isMiniMode && miniPlayerManager.isActive,
-        //  根据入场方向决定动画方向
-        enter = slideInHorizontally(
-            initialOffsetX = { if (entryFromLeft) -it else it }  // 左边视频从左入，右边视频从右入
-        ) + fadeIn(),
-        exit = slideOutHorizontally(
-            targetOffsetX = { if (entryFromLeft) -it else it }
-        ) + fadeOut(),
-        modifier = modifier.zIndex(100f)
+        //  [修改] 根据卡片在屏幕中的水平分块决定动画方向
+        //  Left: 从左往右飞出 (SlideIn Left)
+        //  Right: 从右往左飞出 (SlideIn Right)
+        //  Middle: 从上往下飞出 (SlideIn Top)
+        enter = (when (cardPosition) {
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT -> 
+                slideInHorizontally(initialOffsetX = { -it }) // 从左侧滑入
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT -> 
+                slideInHorizontally(initialOffsetX = { it })  // 从右侧滑入
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE -> 
+                slideInVertically(initialOffsetY = { -it })   // 从顶部滑入
+        }) + fadeIn(),
+        
+        exit = if (miniPlayerManager.shouldAnimateExit) {
+            (when (cardPosition) {
+                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT -> 
+                    slideOutHorizontally(targetOffsetX = { -it })
+                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT -> 
+                    slideOutHorizontally(targetOffsetX = { it })
+                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE -> 
+                    slideOutVertically(targetOffsetY = { -it })
+            }) + fadeOut()
+        } else {
+            ExitTransition.None
+        },
+            modifier = modifier.zIndex(100f)
     ) {
-        Card(
-            modifier = Modifier
-                .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
-                .width(miniPlayerWidth)
-                .height(miniPlayerHeight)
-                .shadow(16.dp, RoundedCornerShape(16.dp)),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.Black),
-            elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
-        ) {
+        if (isStashed) {
+            // [新增] 贴边隐藏的小胶囊视图
+            StashedMiniPlayerView(
+                modifier = Modifier
+                    .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
+                    .zIndex(101f),
+                side = stashSide,
+                onUnstash = {
+                    isStashed = false
+                    // 恢复时，X 坐标应该弹回正常位置
+                    offsetX = if (stashSide == com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT) {
+                        paddingPx
+                    } else {
+                        screenWidthPx - miniPlayerWidthPx - paddingPx
+                    }
+                    // Y 坐标保持同步
+                    offsetY = stashedOffsetY
+                },
+                onDrag = { deltaY ->
+                    with(density) {
+                        stashedOffsetY = (stashedOffsetY + deltaY).coerceIn(
+                            paddingPx + 50.dp.toPx(),
+                            screenHeightPx - paddingPx - 100.dp.toPx()
+                        )
+                    }
+                }
+            )
+        } else {
+            // 正常播放器视图
+            Card(
+                modifier = Modifier
+                    .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
+                    .width(miniPlayerWidth)
+                    .height(miniPlayerHeight)
+                    .shadow(16.dp, RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Black),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp)
+            ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // 视频画面
                 player?.let { exoPlayer ->
@@ -305,6 +393,31 @@ fun MiniPlayerOverlay(
                             .padding(end = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
+                        // [新增] 贴边隐藏按钮
+                        Surface(
+                            onClick = {
+                                // 计算最近的边
+                                val centerX = offsetX + miniPlayerWidthPx / 2
+                                stashSide = if (centerX < screenWidthPx / 2) {
+                                    com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
+                                } else {
+                                    com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT
+                                }
+                                stashedOffsetY = offsetY
+                                isStashed = true
+                            },
+                            modifier = Modifier.size(24.dp),
+                            shape = CircleShape,
+                            color = Color.Black.copy(alpha = 0.5f)
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Default.Minus, // 使用 Minus 图标作为隐藏/最小化
+                                contentDescription = "隐藏",
+                                tint = Color.White,
+                                modifier = Modifier.padding(5.dp).size(14.dp)
+                            )
+                        }
+
                         // 展开按钮
                         Surface(
                             onClick = { onExpandClick() },
@@ -408,6 +521,53 @@ fun MiniPlayerOverlay(
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
             }
+        }
+    }
+}
+}
+
+/**
+ * [新增] 贴边隐藏的小胶囊视图
+ */
+@Composable
+private fun StashedMiniPlayerView(
+    modifier: Modifier,
+    side: com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition,
+    onUnstash: () -> Unit,
+    onDrag: (Float) -> Unit
+) {
+    val isLeft = side == com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT
+    // 形状：贴边的一侧是平的，另一侧是圆的
+    val shape = if (isLeft) {
+        RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp)
+    } else {
+        RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp)
+    }
+
+    Surface(
+        modifier = modifier
+            .width(40.dp)
+            .height(48.dp)
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.y)
+                    }
+                )
+            },
+        shape = shape,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+        shadowElevation = 8.dp,
+        onClick = onUnstash
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (isLeft) Icons.Filled.ChevronRight else Icons.Filled.ChevronLeft,
+                contentDescription = "Show",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }

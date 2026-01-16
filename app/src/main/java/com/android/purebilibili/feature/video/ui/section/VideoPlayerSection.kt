@@ -99,8 +99,15 @@ fun VideoPlayerSection(
     // 📱 [新增] 竖屏全屏模式
     isVerticalVideo: Boolean = false,
     onPortraitFullscreen: () -> Unit = {},
+    isPortraitFullscreen: Boolean = false,
     // 📲 [新增] 小窗模式
-    onPipClick: () -> Unit = {}
+    // 📲 [新增] 小窗模式
+    onPipClick: () -> Unit = {},
+    // [New] Codec & Audio Params
+    currentCodec: String = "hev1", 
+    onCodecChange: (String) -> Unit = {},
+    currentAudioQuality: Int = -1,
+    onAudioQualityChange: (Int) -> Unit = {}
 ) {
     val context = LocalContext.current
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as AudioManager }
@@ -489,7 +496,7 @@ fun VideoPlayerSection(
         
         // 2. DanmakuView (使用 ByteDance DanmakuRenderEngine - 覆盖在 PlayerView 上方)
         android.util.Log.d("VideoPlayerSection", "🔍 DanmakuView check: isInPipMode=$isInPipMode, danmakuEnabled=$danmakuEnabled")
-        if (!isInPipMode && danmakuEnabled) {
+        if (!isInPipMode && danmakuEnabled && !isPortraitFullscreen) {
             android.util.Log.d("VideoPlayerSection", " Conditions met, creating DanmakuView...")
             //  计算状态栏高度
             val statusBarHeightPx = remember(context) {
@@ -752,7 +759,15 @@ fun VideoPlayerSection(
                 isVerticalVideo = isVerticalVideo,
                 onPortraitFullscreen = onPortraitFullscreen,
                 // 📲 [新增] 小窗模式
-                onPipClick = onPipClick
+                // 📲 [新增] 小窗模式
+                onPipClick = onPipClick,
+                //  [新增] 拖动进度条开始时清除弹幕
+                onSeekStart = { danmakuManager.clear() },
+                // [New] Codec & Audio
+                currentCodec = currentCodec,
+                onCodecChange = onCodecChange,
+                currentAudioQuality = currentAudioQuality,
+                onAudioQualityChange = onAudioQualityChange
             )
         }
         

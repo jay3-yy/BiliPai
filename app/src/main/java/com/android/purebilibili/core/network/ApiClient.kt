@@ -621,11 +621,12 @@ interface BangumiApi {
     // 番剧详情 -  返回 ResponseBody 自行解析，防止 OOM
     @GET("pgc/view/web/season")
     suspend fun getSeasonDetail(
-        @Query("season_id") seasonId: Long
+        @Query("season_id") seasonId: Long? = null,
+        @Query("ep_id") epId: Long? = null
     ): ResponseBody
     
-    // 番剧播放地址
-    @GET("pgc/player/web/v2/playurl")
+    // 番剧播放地址 - 使用标准接口
+    @GET("pgc/player/web/playurl")
     suspend fun getBangumiPlayUrl(
         @Query("ep_id") epId: Long,
         @Query("qn") qn: Int = 80,
@@ -899,6 +900,73 @@ object NetworkModule {
                 chain.proceed(builder.build())
             }
             .build()
+    }
+    
+    //  [新增] Guest OkHttpClient - 不带登录凭证，用于风控时的降级
+    // 当登录用户遭遇风控 (-351) 时，可以尝试以游客身份获取视频
+    val guestOkHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .protocols(listOf(Protocol.HTTP_1_1))
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            //  CookieJar 使用全新的 buvid3，不复用可能被污染的 buvid3Cache
+            .cookieJar(object : okhttp3.CookieJar {
+                // 为 guest 模式生成独立的 buvid3，避免复用被风控的 buvid3
+                private val guestBuvid3: String by lazy { 
+                    UUID.randomUUID().toString().replace("-", "") + "infoc"
+                }
+                
+                override fun saveFromResponse(url: okhttp3.HttpUrl, cookies: List<okhttp3.Cookie>) {
+                    // 不保存任何 cookie
+                }
+                
+                override fun loadForRequest(url: okhttp3.HttpUrl): List<okhttp3.Cookie> {
+                    val cookies = mutableListOf<okhttp3.Cookie>()
+                    
+                    //  使用全新生成的 guestBuvid3，不使用 TokenManager.buvid3Cache
+                    cookies.add(okhttp3.Cookie.Builder()
+                        .domain(url.host)
+                        .name("buvid3")
+                        .value(guestBuvid3)
+                        .build())
+                    
+                    com.android.purebilibili.core.util.Logger.d(
+                        "GuestCookieJar",
+                        " ${url.encodedPath} request: guest mode with fresh buvid3=${guestBuvid3.take(15)}..."
+                    )
+                    
+                    return cookies
+                }
+            })
+            .addInterceptor { chain ->
+                val original = chain.request()
+                val url = original.url
+                var referer = "https://www.bilibili.com"
+                
+                val bvid = url.queryParameter("bvid")
+                if (!bvid.isNullOrEmpty()) {
+                    referer = "https://www.bilibili.com/video/$bvid"
+                }
+                
+                val builder = original.newBuilder()
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+                    .header("Referer", referer)
+                    .header("Origin", "https://www.bilibili.com")
+                
+                chain.proceed(builder.build())
+            }
+            .build()
+    }
+    
+    //  [新增] Guest API - 使用 guestOkHttpClient，用于风控降级
+    val guestApi: BilibiliApi by lazy {
+        Retrofit.Builder().baseUrl("https://api.bilibili.com/").client(guestOkHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType())).build()
+            .create(BilibiliApi::class.java)
     }
 
     val api: BilibiliApi by lazy {

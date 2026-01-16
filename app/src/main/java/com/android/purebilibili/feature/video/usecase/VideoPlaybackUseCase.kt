@@ -43,7 +43,10 @@ sealed class VideoLoadResult {
         val isFollowing: Boolean,
         val isFavorited: Boolean,
         val isLiked: Boolean,
-        val coinCount: Int
+        val coinCount: Int,
+        // [New] Codec Info for UI display
+        val videoCodecId: Int = 0,
+        val audioCodecId: Int = 0
     ) : VideoLoadResult()
     
     data class Error(
@@ -94,6 +97,8 @@ class VideoPlaybackUseCase(
     suspend fun loadVideo(
         bvid: String,
         defaultQuality: Int = 64,
+        audioQualityPreference: Int = -1,
+        videoCodecPreference: String = "hev1",
         onProgress: (String) -> Unit = {}
     ): VideoLoadResult {
         try {
@@ -133,8 +138,16 @@ class VideoPlaybackUseCase(
                     //  [网络感知] 使用 API 返回的画质或传入的默认画质
                     val targetQn = playData.quality.takeIf { it > 0 } ?: defaultQuality
                     
-                    val dashVideo = playData.dash?.getBestVideo(targetQn)
-                    val dashAudio = playData.dash?.getBestAudio()
+                    val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+                    val isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+                    
+                    val dashVideo = playData.dash?.getBestVideo(
+                        targetQn, 
+                        preferCodec = videoCodecPreference,
+                        isHevcSupported = isHevcSupported,
+                        isAv1Supported = isAv1Supported
+                    )
+                    val dashAudio = playData.dash?.getBestAudio(audioQualityPreference)
                     
                     val videoUrl = getValidVideoUrl(dashVideo, playData)
                     val audioUrl = dashAudio?.getValidUrl()?.takeIf { it.isNotEmpty() }
@@ -211,7 +224,7 @@ class VideoPlaybackUseCase(
                         playUrl = videoUrl,
                         audioUrl = audioUrl,
                         related = relatedVideos,
-                        quality = dashVideo?.id ?: playData.quality,
+                        quality = dashVideo?.id ?: playData.quality, // Prefer DASH quality ID
                         qualityIds = mergedQualityIds,
                         qualityLabels = mergedQualityLabels,
                         cachedDashVideos = playData.dash?.video ?: emptyList(),
@@ -228,6 +241,9 @@ class VideoPlaybackUseCase(
                 onFailure = { e ->
                     //  [风控冷却] 加载失败，记录失败
                     PlaybackCooldownManager.recordFailure(bvid, e.message ?: "unknown")
+                    // Check if rate limited
+                    val error = VideoLoadError.fromException(e)
+
                     VideoLoadResult.Error(
                         error = VideoLoadError.fromException(e),
                         canRetry = VideoLoadError.fromException(e).isRetryable()
@@ -318,7 +334,8 @@ class VideoPlaybackUseCase(
         qualityId: Int,
         cachedVideos: List<DashVideo>,
         cachedAudios: List<DashAudio>,
-        currentPos: Long
+        currentPos: Long,
+        audioQualityPreference: Int = -1 // [新增] 传入音频偏好
     ): QualitySwitchResult? {
         if (cachedVideos.isEmpty()) {
             Logger.d("VideoPlaybackUseCase", " changeQualityFromCache: cache is EMPTY, returning null")
@@ -330,19 +347,38 @@ class VideoPlaybackUseCase(
         Logger.d("VideoPlaybackUseCase", " changeQualityFromCache: target=$qualityId, available=$availableIds")
         
         //  [优先精确匹配] 先找精确匹配
-        val exactMatch = cachedVideos.find { it.id == qualityId }
-        if (exactMatch != null) {
-            Logger.d("VideoPlaybackUseCase", " Exact match found: ${exactMatch.id}")
-            val videoUrl = exactMatch.getValidUrl()
-            val dashAudio = cachedAudios.firstOrNull()
+        var match = cachedVideos.find { it.id == qualityId }
+        
+        // [新增] 如果没找到精确匹配，且 qualityId 是某些特定值（比如用户手动选择的），尝试找最接近的
+        // 防止降级逻辑直接跳过缓存去请求 API，结果 API 也没有
+        if (match == null) {
+             match = cachedVideos.minByOrNull { kotlin.math.abs(it.id - qualityId) }
+             if (match != null) {
+                 Logger.d("VideoPlaybackUseCase", " Cache exact match failed for $qualityId, using closest cached: ${match.id}")
+             }
+        }
+        
+        if (match != null) {
+            Logger.d("VideoPlaybackUseCase", " Match found in cache: ${match.id}")
+            val videoUrl = match.getValidUrl()
+            
+            // [修复] 音频也应该重新选择最佳匹配，而不是盲目取第一个
+            val dashAudio = if (audioQualityPreference != -1) {
+                // 使用 Dash.getBestAudio 逻辑的简化版 (因为这里只有 List<DashAudio>)
+                cachedAudios.find { it.id == audioQualityPreference } 
+                    ?: cachedAudios.minByOrNull { kotlin.math.abs(it.id - audioQualityPreference) }
+            } else {
+                cachedAudios.maxByOrNull { it.bandwidth }
+            }
+             
             val audioUrl = dashAudio?.getValidUrl()
             if (videoUrl.isNotEmpty()) {
                 playDashVideo(videoUrl, audioUrl, currentPos)
                 return QualitySwitchResult(
                     videoUrl = videoUrl,
                     audioUrl = audioUrl,
-                    actualQuality = exactMatch.id,
-                    wasFallback = false,
+                    actualQuality = match.id,
+                    wasFallback = match.id != qualityId,
                     cachedDashVideos = cachedVideos,
                     cachedDashAudios = cachedAudios
                 )
@@ -361,7 +397,8 @@ class VideoPlaybackUseCase(
         bvid: String,
         cid: Long,
         qualityId: Int,
-        currentPos: Long
+        currentPos: Long,
+        audioQualityPreference: Int = -1 // [新增] 传入音频偏好
     ): QualitySwitchResult? {
         Logger.d("VideoPlaybackUseCase", " changeQualityFromApi: bvid=$bvid, cid=$cid, target=$qualityId")
         
@@ -378,7 +415,8 @@ class VideoPlaybackUseCase(
         Logger.d("VideoPlaybackUseCase", " DASH videos available: $dashVideoIds")
         
         val dashVideo = playUrlData.dash?.getBestVideo(qualityId)
-        val dashAudio = playUrlData.dash?.getBestAudio()
+
+        val dashAudio = playUrlData.dash?.getBestAudio(audioQualityPreference) // [修复] 使用偏好
         
         Logger.d("VideoPlaybackUseCase", " getBestVideo selected: ${dashVideo?.id}")
         

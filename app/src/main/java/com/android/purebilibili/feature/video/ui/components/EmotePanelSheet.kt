@@ -41,11 +41,10 @@ fun EmotePanelSheet(
 ) {
     if (!visible) return
     
-    ModalBottomSheet(
+    com.android.purebilibili.core.ui.IOSModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier

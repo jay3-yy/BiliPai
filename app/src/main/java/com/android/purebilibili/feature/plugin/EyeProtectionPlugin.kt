@@ -23,6 +23,7 @@ import com.android.purebilibili.core.plugin.Plugin
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.ui.components.*
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -251,7 +252,7 @@ class EyeProtectionPlugin : Plugin {
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             // ========== 手动开关 ==========
-            com.android.purebilibili.feature.settings.SettingSwitchItem(
+            IOSSwitchItem(
                 icon = CupertinoIcons.Default.Star,
                 title = "立即开启护眼模式",
                 subtitle = "手动强制开启，不受时间段限制",
@@ -268,7 +269,7 @@ class EyeProtectionPlugin : Plugin {
             HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(0.5f))
             
             // ========== 定时护眼模式 ==========
-            com.android.purebilibili.feature.settings.SettingSwitchItem(
+            IOSSwitchItem(
                 icon = CupertinoIcons.Default.Moon,
                 title = "定时护眼模式",
                 subtitle = "${nightModeStartHour}:00 - ${nightModeEndHour}:00 自动开启",
@@ -342,7 +343,7 @@ class EyeProtectionPlugin : Plugin {
             HorizontalDivider(modifier = Modifier.padding(start = 56.dp, top = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(0.5f))
             
             // ========== 使用时长提醒 ==========
-            com.android.purebilibili.feature.settings.SettingSwitchItem(
+            IOSSwitchItem(
                 icon = CupertinoIcons.Default.Clock,
                 title = "使用时长提醒",
                 subtitle = "每 ${usageDurationMinutes} 分钟提醒休息",

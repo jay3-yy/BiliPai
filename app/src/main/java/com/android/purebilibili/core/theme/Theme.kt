@@ -26,25 +26,27 @@ private fun createDarkColorScheme(primaryColor: Color) = darkColorScheme(
     primary = primaryColor,
     onPrimary = White,
     secondary = primaryColor.copy(alpha = 0.85f),
-    background = DarkBackground,
-    surface = DarkSurface,
+    background = DarkBackground, // iOS User Interface Black
+    surface = DarkSurface, // iOS System Gray 6 (Dark)
     onSurface = TextPrimaryDark,
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = TextSecondaryDark,
-    surfaceContainer = DarkSurfaceElevated,
-    outline = Color(0xFF3D3D3D),
-    outlineVariant = Color(0xFF2A2A2A)
+    surfaceContainer = DarkSurfaceElevated, // iOS System Gray 5 (Dark)
+    outline = iOSSystemGray3Dark,
+    outlineVariant = iOSSystemGray4Dark
 )
 
 private fun createLightColorScheme(primaryColor: Color) = lightColorScheme(
     primary = primaryColor,
     onPrimary = White,
     secondary = primaryColor.copy(alpha = 0.8f),
-    background = Color(0xFFF5F5F5),  //  柔和浅灰背景
-    surface = Color(0xFFFAFAFA),     //  微灰表面，不再纯白
+    background = iOSSystemGray6, // Use iOS System Gray 6 for main background (grouped table view style)
+    surface = White, // iOS cards are usually white
     onSurface = TextPrimary,
-    surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = TextSecondary
+    surfaceVariant = iOSSystemGray5, // Separators / Higher groupings
+    onSurfaceVariant = TextSecondary,
+    outline = iOSSystemGray3,
+    outlineVariant = iOSSystemGray4
 )
 
 // 保留默认配色作为后备 (使用 iOS 系统蓝)

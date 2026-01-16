@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import com.android.purebilibili.core.util.responsiveContentWidth
 
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -166,7 +167,7 @@ fun SearchScreen(
                             com.android.purebilibili.data.model.response.SearchType.VIDEO -> {
                                 // 视频搜索结果
                                 LazyVerticalGrid(
-                                    columns = GridCells.Fixed(2),
+                                    columns = GridCells.Adaptive(minSize = 160.dp),
                                     state = resultGridState,
                                     contentPadding = PaddingValues(top = 8.dp, bottom = 16.dp, start = 8.dp, end = 8.dp),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -217,7 +218,7 @@ fun SearchScreen(
                 }
             } else {
                 LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().responsiveContentWidth(),
                     state = historyListState,
                     //  contentPadding 顶部避让搜索栏
                     contentPadding = PaddingValues(top = contentTopPadding + 16.dp, bottom = 16.dp, start = 16.dp, end = 16.dp)
@@ -305,12 +306,15 @@ fun SearchScreen(
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                             
-                            //  热搜列表 (双列布局)
+                            //  热搜列表 (动态布局)
+                            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                            val hotSearchColumns = if (configuration.screenWidthDp > 600) 4 else 2
+                            
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
-                                state.hotList.take(10).chunked(2).forEach { rowItems ->
+                                state.hotList.take(20).chunked(hotSearchColumns).forEach { rowItems ->
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -350,9 +354,9 @@ fun SearchScreen(
                                                 // "新"/"热" 标签 (如果有 icon 字段可以判断，这里简化)
                                             }
                                         }
-                                        // 如果是奇数个，补一个空位占位
-                                        if (rowItems.size < 2) {
-                                            Spacer(modifier = Modifier.weight(1f))
+                                        // 如果不足一行，补空位占位
+                                        if (rowItems.size < hotSearchColumns) {
+                                            Spacer(modifier = Modifier.weight((hotSearchColumns - rowItems.size).toFloat()))
                                         }
                                     }
                                 }
@@ -412,7 +416,7 @@ fun SearchScreen(
                 },
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
-                modifier = Modifier.align(Alignment.TopCenter)
+                modifier = Modifier.align(Alignment.TopCenter).responsiveContentWidth()
             )
             
             // ---  搜索建议下拉列表 ---
@@ -422,7 +426,8 @@ fun SearchScreen(
                         .fillMaxWidth()
                         .padding(top = contentTopPadding + 4.dp)
                         .padding(horizontal = 16.dp)
-                        .align(Alignment.TopCenter),
+                        .align(Alignment.TopCenter)
+                        .responsiveContentWidth(),
                     shape = RoundedCornerShape(12.dp),
                     shadowElevation = 8.dp,
                     color = MaterialTheme.colorScheme.surface

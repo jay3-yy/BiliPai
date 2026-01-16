@@ -28,10 +28,18 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 //  已改用 MaterialTheme.colorScheme.primary
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
+import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.*
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import com.android.purebilibili.core.util.iOSTapEffect
+import com.android.purebilibili.core.util.responsiveContentWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,29 +126,33 @@ private fun SpaceContent(
     //  当前选中的 Tab（目前只实现投稿页）
     var selectedTab by remember { mutableIntStateOf(2) }  // 默认投稿
     
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val listState = rememberLazyGridState()
     
     //  自动加载更多：当滚动接近底部时触发
     val shouldLoadMore by remember {
         derivedStateOf {
             val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val totalItems = listState.layoutInfo.totalItemsCount
-            lastVisibleItem >= totalItems - 3 && !state.isLoadingMore && state.hasMoreVideos && selectedTab == 2
+            lastVisibleItem >= totalItems - 6 && !state.isLoadingMore && state.hasMoreVideos && selectedTab == 2
         }
     }
-    
+
     LaunchedEffect(shouldLoadMore) {
         if (shouldLoadMore) {
             onLoadMore()
         }
     }
     
-    LazyColumn(
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 160.dp),
         state = listState,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().responsiveContentWidth(),
+        contentPadding = PaddingValues(bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // 用户头部信息
-        item {
+        // 用户头部信息 (跨满列)
+        item(span = { GridItemSpan(maxLineSpan) }) {
             SpaceHeader(
                 userInfo = state.userInfo,
                 relationStat = state.relationStat,
@@ -148,8 +160,8 @@ private fun SpaceContent(
             )
         }
         
-        //  Tab 导航栏
-        item {
+        //  Tab 导航栏 (跨满列)
+        item(span = { GridItemSpan(maxLineSpan) }) {
             SpaceTabRow(
                 selectedTab = selectedTab,
                 videoCount = state.totalVideos,
@@ -161,8 +173,8 @@ private fun SpaceContent(
         //  根据 Tab 显示不同内容
         when (selectedTab) {
             2 -> {  // 投稿
-                // 投稿视频标题和排序按钮
-                item {
+                // 投稿视频标题和排序按钮 (跨满列)
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -191,14 +203,43 @@ private fun SpaceContent(
                     }
                 }
                 
-                // 视频列表
+                // 视频列表 (网格)
                 items(state.videos, key = { it.bvid }) { video ->
-                    SpaceVideoItem(video = video, onClick = { onVideoClick(video.bvid) })
+                    // Map SpaceVideoItem to VideoItem
+                    val videoItem = remember(video) {
+                        VideoItem(
+                            bvid = video.bvid,
+                            title = video.title,
+                            pic = video.pic,
+                            owner = Owner(mid = state.userInfo.mid, name = state.userInfo.name, face = state.userInfo.face),
+                            stat = Stat(view = video.play, danmaku = 0, reply = video.comment, favorite = 0, coin = 0, share = 0, like = 0),
+                            pubdate = video.created,
+                            duration = try {
+                                val parts = video.length.split(":")
+                                if (parts.size == 2) {
+                                    parts[0].toInt() * 60 + parts[1].toInt()
+                                } else {
+                                    0
+                                }
+                            } catch (e: Exception) { 0 }
+                        )
+                    }
+                    
+                    Box(modifier = Modifier.padding(horizontal = 8.dp)) {
+                         ElegantVideoCard(
+                             video = videoItem,
+                             index = 0, // Not important for static card
+                             animationEnabled = false,
+                             transitionEnabled = false,
+                             showPublishTime = true,
+                             onClick = { bvid, _ -> onVideoClick(bvid) }
+                         )
+                    }
                 }
                 
-                // 加载中指示器
+                // 加载中指示器 (跨满列)
                 if (state.isLoadingMore) {
-                    item {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -209,7 +250,7 @@ private fun SpaceContent(
                         }
                     }
                 } else if (!state.hasMoreVideos && state.videos.isNotEmpty()) {
-                    item {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             contentAlignment = Alignment.Center
@@ -220,8 +261,8 @@ private fun SpaceContent(
                 }
             }
             
-            3 -> {  // 合集和系列
-                item {
+            3 -> {  // 合集和系列 (跨满列)
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         text = "合集和系列",
                         fontSize = 18.sp,
@@ -232,7 +273,7 @@ private fun SpaceContent(
                 
                 // 显示合集
                 state.seasons.forEach { season ->
-                    item(key = "season_${season.meta.season_id}") {
+                    item(key = "season_${season.meta.season_id}", span = { GridItemSpan(maxLineSpan) }) {
                         SeasonSection(
                             season = season,
                             archives = state.seasonArchives[season.meta.season_id] ?: emptyList(),
@@ -244,7 +285,7 @@ private fun SpaceContent(
                 
                 // 显示系列
                 state.series.forEach { series ->
-                    item(key = "series_${series.meta.series_id}") {
+                    item(key = "series_${series.meta.series_id}", span = { GridItemSpan(maxLineSpan) }) {
                         SeriesSection(
                             series = series,
                             archives = state.seriesArchives[series.meta.series_id] ?: emptyList(),
@@ -254,7 +295,7 @@ private fun SpaceContent(
                 }
                 
                 if (state.seasons.isEmpty() && state.series.isEmpty()) {
-                    item {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -270,13 +311,13 @@ private fun SpaceContent(
                 }
             }
             
-            else -> {  // 主页 或 动态 (暂未实现)
-                item {
+            else -> {  // 主页 或 动态 (跨满列)
+                item(span = { GridItemSpan(maxLineSpan) }) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(32.dp),
-                        contentAlignment = Alignment.Center
+                            contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = "该功能暂未开放",

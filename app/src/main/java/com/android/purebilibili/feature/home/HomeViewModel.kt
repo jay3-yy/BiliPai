@@ -26,6 +26,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var popularPage = 1  //  热门视频分页
     private var livePage = 1     //  直播分页
     private var hasMoreLiveData = true  //  是否还有更多直播数据
+    
+    //  [新增] 会话级去重集合 (避免重复推荐)
+    private val sessionSeenBvids = mutableSetOf<String>()
 
     init {
         loadData()
@@ -34,6 +37,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     //  [新增] 切换分类
     fun switchCategory(category: HomeCategory) {
         if (_uiState.value.currentCategory == category) return
+        
+        //  [修复] 标记正在切换分类，避免入场动画产生收缩效果
+        com.android.purebilibili.core.util.CardPositionManager.isSwitchingCategory = true
+        
         viewModelScope.launch {
             //  [修复] 如果切换到直播分类，未登录用户默认显示热门
             val liveSubCategory = if (category == HomeCategory.LIVE) {
@@ -55,7 +62,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             refreshIdx = 0
             popularPage = 1
             livePage = 1
+            livePage = 1
             hasMoreLiveData = true  //  重置分页标志
+            sessionSeenBvids.clear() //  [新增] 切换分类时清空去重集合
             fetchData(isLoadMore = false)
         }
     }
@@ -158,17 +167,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         
+        //  [问题15修复] 保存旧视频列表，刷新失败时恢复
+        val oldVideos = _uiState.value.videos
+        
         //  视频类分类处理
         val videoResult = when (currentCategory) {
             HomeCategory.RECOMMEND -> VideoRepository.getHomeVideos(refreshIdx)
             HomeCategory.POPULAR -> VideoRepository.getPopularVideos(popularPage)
             else -> {
-                //  [修复] 未实现的分类显示错误，但保留 previousCategory 供返回使用
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "该分类暂未实现"
-                )
-                return
+                //  Generic categories (Game, Tech, etc.)
+                if (currentCategory.tid > 0) {
+                     VideoRepository.getRegionVideos(tid = currentCategory.tid, page = refreshIdx + 1) // Using refreshIdx for pagination similar to Recommend
+                } else {
+                     Result.failure(Exception("Unknown category"))
+                }
             }
         }
         
@@ -201,22 +213,54 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(nativeFiltered)
             
             if (filteredVideos.isNotEmpty()) {
-                _uiState.value = _uiState.value.copy(
-                    videos = if (isLoadMore) _uiState.value.videos + filteredVideos else filteredVideos,
-                    liveRooms = emptyList(),  // 清空直播列表
-                    isLoading = false,
-                    error = null
-                )
+                //  [修复] 全局会话级去重逻辑：过滤掉本会话已看过的视频
+                //  如果是刷新 (isLoadMore=false)，我们仍然希望能看到新内容，所以保留去重
+                //  如果是加载更多，更不能有重复
+                val uniqueNewVideos = filteredVideos.filter { it.bvid !in sessionSeenBvids }
+                
+                if (uniqueNewVideos.size < filteredVideos.size) {
+                    com.android.purebilibili.core.util.Logger.d("HomeVM", "Filtered ${filteredVideos.size - uniqueNewVideos.size} duplicate videos (session-level)")
+                }
+                
+                //  将新视频加入去重集合
+                sessionSeenBvids.addAll(uniqueNewVideos.map { it.bvid })
+                
+                // 如果去重后为空，且原本不为空，说明全是重复内容
+                if (uniqueNewVideos.isEmpty() && filteredVideos.isNotEmpty()) {
+                     com.android.purebilibili.core.util.Logger.d("HomeVM", "⚠️ All videos were filtered as duplicates! Fetching next page...")
+                     // 可以在这里触发一次自动加载更多 (递归调用需谨慎) -> 简单处理：显示"没有更多新内容"或者直接不做任何操作(保留旧列表)
+                     // 为防止空页面，如果是在刷新操作中全被过滤了，也许应该保留 oldVideos?
+                }
+
+                if (uniqueNewVideos.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        videos = if (isLoadMore) _uiState.value.videos + uniqueNewVideos else uniqueNewVideos,
+                        liveRooms = emptyList(),  // 清空直播列表
+                        isLoading = false,
+                        error = null
+                    )
+                } else {
+                     //  全被过滤掉了
+                    _uiState.value = _uiState.value.copy(
+                        videos = if (!isLoadMore && oldVideos.isNotEmpty()) oldVideos else _uiState.value.videos,
+                        isLoading = false,
+                        error = if (!isLoadMore && oldVideos.isEmpty()) "推荐内容重复，请稍后再试" else null
+                    )
+                }
             } else {
+                //  [问题15修复] 刷新时如果没有获取到新数据，保留旧列表
                 _uiState.value = _uiState.value.copy(
+                    videos = if (!isLoadMore && oldVideos.isNotEmpty()) oldVideos else _uiState.value.videos,
                     isLoading = false,
-                    error = if (!isLoadMore && _uiState.value.videos.isEmpty()) "没有更多内容了" else null
+                    error = if (!isLoadMore && oldVideos.isEmpty()) "没有更多内容了" else null
                 )
             }
         }.onFailure { error ->
+            //  [问题15修复] 刷新失败时保留旧视频列表，不清空
             _uiState.value = _uiState.value.copy(
+                videos = if (!isLoadMore && oldVideos.isNotEmpty()) oldVideos else _uiState.value.videos,
                 isLoading = false,
-                error = if (!isLoadMore && _uiState.value.videos.isEmpty()) error.message ?: "网络错误" else null
+                error = if (!isLoadMore && oldVideos.isEmpty()) error.message ?: "网络错误" else null
             )
         }
     }

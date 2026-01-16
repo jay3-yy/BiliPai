@@ -27,6 +27,10 @@ class DanmakuConfig {
     // 显示区域比例 (0.25, 0.5, 0.75, 1.0)
     var displayAreaRatio = 0.5f
     
+    // [问题9修复] 描边设置
+    var strokeEnabled = true  // 默认开启描边
+    var strokeWidth = 3f  // 描边宽度（像素）
+    
     // 顶部边距（像素）
     var topMarginPx = 0
     
@@ -45,6 +49,14 @@ class DanmakuConfig {
             
             // 文字配置 - 字体大小 (增大基准值以提高可见性)
             text.size = 42f * fontScale
+            
+            // [问题9修复] 描边配置 - 提高弹幕可见性
+            if (strokeEnabled) {
+                text.strokeWidth = strokeWidth
+                text.strokeColor = android.graphics.Color.BLACK  // 黑色描边
+            } else {
+                text.strokeWidth = 0f
+            }
             
             // 滚动层配置
             // moveTime: 弹幕滚过屏幕的时间（毫秒），越大越慢

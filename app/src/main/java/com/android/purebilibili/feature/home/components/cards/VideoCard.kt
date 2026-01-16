@@ -1,6 +1,6 @@
-// 文件路径: feature/home/components/cards/VideoCard.kt
 package com.android.purebilibili.feature.home.components.cards
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -33,15 +33,19 @@ import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.theme.iOSSystemGray
 import com.android.purebilibili.core.theme.LocalCornerRadiusScale
 import com.android.purebilibili.core.theme.iOSCornerRadius
-import com.android.purebilibili.core.util.iOSCardTapEffect
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
-//  共享元素过渡
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.spring
 import com.android.purebilibili.core.ui.LocalSharedTransitionScope
 import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+//  [预览播放] 相关引用已移除
+
+// 显式导入 collectAsState 以避免 ambiguity 或 missing reference
+import androidx.compose.runtime.collectAsState
 
 /**
  *  官方 B 站风格视频卡片
@@ -62,14 +66,16 @@ fun ElegantVideoCard(
     animationEnabled: Boolean = true,   //  卡片进场动画开关
     transitionEnabled: Boolean = false, //  卡片过渡动画开关
     showPublishTime: Boolean = false,   //  是否显示发布时间（搜索结果用）
+    isDataSaverActive: Boolean = false, // 🚀 [性能优化] 从父级传入，避免每个卡片重复计算
     onDismiss: (() -> Unit)? = null,    //  [新增] 删除/过滤回调（长按触发）
     onClick: (String, Long) -> Unit
 ) {
     val haptic = rememberHapticFeedback()
+    val scope = rememberCoroutineScope()
     
-    //  [新增] 获取圆角缩放比例
+    //  [HIG] 动态圆角 - 12dp 标准
     val cornerRadiusScale = LocalCornerRadiusScale.current
-    val cardCornerRadius = iOSCornerRadius.Small * cornerRadiusScale  // 10.dp * scale
+    val cardCornerRadius = 12.dp * cornerRadiusScale  // HIG 标准圆角
     val smallCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale  // 4.dp * scale
     
     //  [新增] 长按删除菜单状态
@@ -96,43 +102,15 @@ fun ElegantVideoCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            //  [新增] 进场动画 - 交错缩放+滑入，支持开关控制
-            .animateEnter(index = index, key = video.bvid, animationEnabled = animationEnabled)
+            //  [修复] 进场动画 - 使用 Unit 作为 key，只在首次挂载时播放
+            // 原问题：使用 video.bvid 作为 key，分类切换时所有卡片重新触发动画（缩放收缩效果）
+            .animateEnter(index = index, key = Unit, animationEnabled = animationEnabled)
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
                 cardBounds = coordinates.boundsInRoot()
             }
-            //  [新增] 长按手势检测
-            .pointerInput(onDismiss) {
-                if (onDismiss != null) {
-                    detectTapGestures(
-                        onLongPress = {
-                            haptic(HapticType.HEAVY)
-                            showDismissMenu = true
-                        },
-                        onTap = {
-                            cardBounds?.let { bounds ->
-                                CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                            }
-                            onClick(video.bvid, 0)
-                        }
-                    )
-                }
-            }
-            .then(
-                if (onDismiss == null) {
-                    Modifier.iOSCardTapEffect(
-                        pressScale = 0.96f,
-                        pressTranslationY = 6f,
-                        hapticEnabled = true
-                    ) {
-                        cardBounds?.let { bounds ->
-                            CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
-                        }
-                        onClick(video.bvid, 0)
-                    }
-                } else Modifier
-            )
+            //  [修改] 父级容器仅处理点击跳转 (或者点击由子 View 分别处理)
+            //  为了避免冲突，我们将手势下放到子 View
             .padding(bottom = 12.dp)
     ) {
         //  尝试获取共享元素作用域
@@ -174,12 +152,15 @@ fun ElegantVideoCard(
                 )
                 .clip(RoundedCornerShape(cardCornerRadius))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                //  [交互优化] 封面区域：点击跳转
+                .clickable {
+                    cardBounds?.let { bounds ->
+                        CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
+                    }
+                    onClick(video.bvid, 0)
+                }
         ) {
-            // 📉 [省流量] 根据省流量模式动态调整图片尺寸
-            val context = LocalContext.current
-            val isDataSaverActive = remember {
-                com.android.purebilibili.core.store.SettingsManager.isDataSaverActive(context)
-            }
+            // 🚀 [性能优化] 使用从父级传入的 isDataSaverActive，避免每个卡片重复计算
             val imageWidth = if (isDataSaverActive) 240 else 360
             val imageHeight = if (isDataSaverActive) 150 else 225
             
@@ -196,6 +177,8 @@ fun ElegantVideoCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
+            
+
             
             //  底部渐变遮罩
             Box(
@@ -279,7 +262,7 @@ fun ElegantVideoCard(
         
         Spacer(modifier = Modifier.height(8.dp))
         
-        //  标题 - 2行，官方风格
+        //  [HIG] 标题 - 15sp Medium, 行高 20sp
         Text(
             text = video.title,
             maxLines = 2,
@@ -287,10 +270,39 @@ fun ElegantVideoCard(
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.Medium,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
+                fontSize = 15.sp,  // HIG body 标准
+                lineHeight = 20.sp,  // HIG 行高
                 color = MaterialTheme.colorScheme.onSurface
-            )
+            ),
+            modifier = Modifier
+                .semantics { contentDescription = "视频标题: ${video.title}" }
+                //  [交互优化] 标题区域：长按弹出惨淡，点击跳转
+                .pointerInput(onDismiss) {
+                    if (onDismiss != null) {
+                        detectTapGestures(
+                            onLongPress = {
+                                haptic(HapticType.HEAVY)
+                                showDismissMenu = true
+                            },
+                            onTap = {
+                                cardBounds?.let { bounds ->
+                                    CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
+                                }
+                                onClick(video.bvid, 0)
+                            }
+                        )
+                    } else {
+                        // 如果没有 onDismiss 回调，则只处理点击
+                        detectTapGestures(
+                            onTap = {
+                                cardBounds?.let { bounds ->
+                                    CardPositionManager.recordCardPosition(bounds, screenWidthPx, screenHeightPx, density = densityValue)
+                                }
+                                onClick(video.bvid, 0)
+                            }
+                        )
+                    }
+                }
         )
         
         Spacer(modifier = Modifier.height(6.dp))
@@ -317,7 +329,9 @@ fun ElegantVideoCard(
                         .data(FormatUtils.fixImageUrl(video.owner.face))
                         .crossfade(100)
                         .size(32, 32)
-                        .memoryCacheKey("avatar_${video.owner.mid}")
+                        //  [修复] 使用 face URL hashCode 作为缓存 key
+                        // 原因: 历史记录的 owner.mid 可能为空，导致所有头像共享同一缓存
+                        .memoryCacheKey("avatar_${video.owner.face.hashCode()}")
                         .build(),
                     contentDescription = null,
                     modifier = Modifier
@@ -328,10 +342,10 @@ fun ElegantVideoCard(
                 )
             }
             
-            //  UP主名称
+            //  [HIG] UP主名称 - 13sp footnote 标准
             Text(
                 text = video.owner.name,
-                fontSize = 11.sp,
+                fontSize = 13.sp,  // HIG footnote 标准
                 fontWeight = FontWeight.Normal,
                 color = iOSSystemGray,
                 maxLines = 1,

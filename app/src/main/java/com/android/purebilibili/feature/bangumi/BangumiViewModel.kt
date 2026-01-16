@@ -308,23 +308,26 @@ class BangumiViewModel : ViewModel() {
     /**
      * 加载番剧详情
      */
-    fun loadSeasonDetail(seasonId: Long) {
+    fun loadSeasonDetail(seasonId: Long, epId: Long = 0) {
         viewModelScope.launch {
             _detailState.value = BangumiDetailState.Loading
             
-            BangumiRepository.getSeasonDetail(seasonId).fold(
+            BangumiRepository.getSeasonDetail(seasonId, epId).fold(
                 onSuccess = { detail ->
+                    //  获取真实的 seasonId (如果传入的是 0 或错误的 ID，这里会纠正)
+                    val realSeasonId = detail.seasonId
+                    
                     //  [修复] 确定追番状态的优先级：
                     // 1. 本地缓存（用户在本次会话中点击追番/取消追番）
                     // 2. 预加载的追番列表（从"我的追番"API 获取）
                     // 3. API 返回的 userStatus.follow
                     val isFollowed = when {
-                        followStatusCache.containsKey(seasonId) -> {
-                            android.util.Log.d("BangumiVM", "📌 使用本地缓存状态: ${followStatusCache[seasonId]}")
-                            followStatusCache[seasonId]!!
+                        followStatusCache.containsKey(realSeasonId) -> {
+                            android.util.Log.d("BangumiVM", "📌 使用本地缓存状态: ${followStatusCache[realSeasonId]}")
+                            followStatusCache[realSeasonId]!!
                         }
-                        followedSeasonIds.contains(seasonId) -> {
-                            android.util.Log.d("BangumiVM", "📌 从追番列表确认已追番: seasonId=$seasonId")
+                        followedSeasonIds.contains(realSeasonId) -> {
+                            android.util.Log.d("BangumiVM", "📌 从追番列表确认已追番: seasonId=$realSeasonId")
                             true
                         }
                         else -> {

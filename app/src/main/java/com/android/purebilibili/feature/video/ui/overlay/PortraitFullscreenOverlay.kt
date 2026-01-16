@@ -59,6 +59,7 @@ fun PortraitFullscreenOverlay(
     onBack: () -> Unit,
     onPlayPause: () -> Unit,
     onSeek: (Long) -> Unit,
+    onSeekStart: () -> Unit = {},  //  [新增] 拖动进度条开始回调（清除弹幕）
     onSpeedClick: () -> Unit,
     onQualityClick: () -> Unit,
     onRatioClick: () -> Unit,
@@ -140,6 +141,7 @@ fun PortraitFullscreenOverlay(
                     onQualityClick = onQualityClick,
                     onPlayPauseClick = onPlayPause,
                     onSeek = onSeek,
+                    onSeekStart = onSeekStart,  //  传递拖动开始回调
                     onSpeedClick = onSpeedClick,
                     onRatioClick = onRatioClick,
                     onDanmakuToggle = onDanmakuToggle,

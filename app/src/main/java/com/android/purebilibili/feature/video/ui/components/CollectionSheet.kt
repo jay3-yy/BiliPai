@@ -43,13 +43,10 @@ fun CollectionSheet(
     val allEpisodes = ugcSeason.sections.flatMap { it.episodes }
     val currentIndex = allEpisodes.indexOfFirst { it.bvid == currentBvid }
     
-    ModalBottomSheet(
+    com.android.purebilibili.core.ui.IOSModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-        dragHandle = { BottomSheetDefaults.DragHandle() },
-        contentWindowInsets = { WindowInsets(0.dp) }  //  沉浸式：让 scrim 延伸到全屏
+        windowInsets = WindowInsets(0.dp)  //  沉浸式
     ) {
         Column(
             modifier = Modifier

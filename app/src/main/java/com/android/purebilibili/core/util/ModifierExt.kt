@@ -55,6 +55,82 @@ fun Modifier.shimmerEffect(): Modifier = composed {
     }
 }
 
+// =============================================================================
+//  [问题2修复] 防抖点击 - 防止快速点击导致双重导航
+// =============================================================================
+
+/**
+ *  防抖点击 Modifier
+ * 
+ * 防止快速连续点击导致多次导航，用于解决以下问题：
+ * - 快速点击动态会出现两个二级页面
+ * - 网络延迟时重复点击导致多次请求
+ * 
+ * @param debounceTime 防抖时间间隔（毫秒），默认 500ms
+ * @param onClick 点击回调
+ */
+fun Modifier.debounceClickable(
+    debounceTime: Long = 500L,
+    enabled: Boolean = true,
+    onClick: () -> Unit
+): Modifier = composed {
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    
+    this.clickable(enabled = enabled) {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastClickTime > debounceTime) {
+            lastClickTime = currentTime
+            onClick()
+        }
+    }
+}
+
+/**
+ *  防抖点击函数（用于非 Modifier 场景）
+ * 
+ * @param debounceTime 防抖时间间隔（毫秒），默认 500ms
+ * @param action 要执行的操作
+ * @return 包装后的防抖函数
+ */
+@Composable
+fun rememberDebounceClick(
+    debounceTime: Long = 500L,
+    action: () -> Unit
+): () -> Unit {
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    
+    return {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastClickTime > debounceTime) {
+            lastClickTime = currentTime
+            action()
+        }
+    }
+}
+
+/**
+ *  防抖回调函数（用于带参数的回调）
+ * 
+ * @param debounceTime 防抖时间间隔（毫秒），默认 500ms
+ * @param action 要执行的操作
+ * @return 包装后的防抖函数
+ */
+@Composable
+fun <T> rememberDebounceCallback(
+    debounceTime: Long = 500L,
+    action: (T) -> Unit
+): (T) -> Unit {
+    var lastClickTime by remember { mutableLongStateOf(0L) }
+    
+    return { param: T ->
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastClickTime > debounceTime) {
+            lastClickTime = currentTime
+            action(param)
+        }
+    }
+}
+
 /**
  * 一个假的视频卡片组件 (用于 Loading 时占位)
  */
@@ -300,12 +376,12 @@ fun Modifier.iOSCardTapEffect(
     val isPressed by interactionSource.collectIsPressedAsState()
     val haptic = rememberHapticFeedback()
     
-    //  多维度动画状态
+    // 🚀 [性能优化] 减少为 2 个动画状态（移除 alpha 动画，视觉差异小）
     val animatedScale by animateFloatAsState(
         targetValue = if (isPressed) pressScale else 1f,
         animationSpec = spring(
-            dampingRatio = if (isPressed) 0.75f else 0.55f,  // 按压快速响应，释放时弹性更强
-            stiffness = if (isPressed) 600f else 300f       // 按压快，释放慢
+            dampingRatio = if (isPressed) 0.75f else 0.55f,
+            stiffness = if (isPressed) 600f else 300f
         ),
         label = "card_tap_scale"
     )
@@ -313,19 +389,10 @@ fun Modifier.iOSCardTapEffect(
     val animatedTranslationY by animateFloatAsState(
         targetValue = if (isPressed) pressTranslationY else 0f,
         animationSpec = spring(
-            dampingRatio = if (isPressed) 0.85f else 0.5f,   // 释放时过冲效果
+            dampingRatio = if (isPressed) 0.85f else 0.5f,
             stiffness = if (isPressed) 800f else 250f
         ),
         label = "card_tap_translationY"
-    )
-    
-    val animatedAlpha by animateFloatAsState(
-        targetValue = if (isPressed) 0.92f else 1f,
-        animationSpec = tween(
-            durationMillis = if (isPressed) 80 else 200,
-            easing = FastOutSlowInEasing
-        ),
-        label = "card_tap_alpha"
     )
     
     this
@@ -333,7 +400,6 @@ fun Modifier.iOSCardTapEffect(
             scaleX = animatedScale
             scaleY = animatedScale
             translationY = animatedTranslationY
-            alpha = animatedAlpha
         }
         .clickable(
             interactionSource = interactionSource,

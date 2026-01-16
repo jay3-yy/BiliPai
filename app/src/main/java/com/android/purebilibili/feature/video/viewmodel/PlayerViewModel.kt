@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.purebilibili.feature.video.player.PlaylistManager
@@ -73,7 +74,11 @@ sealed class PlayerUiState {
         val allVideoUrls: List<String> = emptyList(),  // 所有可用视频 URL (主+备用)
         val allAudioUrls: List<String> = emptyList(),   // 所有可用音频 URL (主+备用)
         // 🖼️ [新增] 视频预览图数据（用于进度条拖动预览）
-        val videoshotData: VideoshotData? = null
+        // 🖼️ [新增] 视频预览图数据（用于进度条拖动预览）
+        val videoshotData: VideoshotData? = null,
+        // 🎞️ [New] Codec & Audio Info
+        val videoCodecId: Int = 0,
+        val audioCodecId: Int = 0
     ) : PlayerUiState() {
         val cdnCount: Int get() = allVideoUrls.size.coerceAtLeast(1)
         val currentCdnLabel: String get() = "线路${currentCdnIndex + 1}"
@@ -197,6 +202,21 @@ class PlayerViewModel : ViewModel() {
     fun initWithContext(context: android.content.Context) {
         appContext = context.applicationContext  //  [新增] 保存应用 Context
         playbackUseCase.initWithContext(context)
+        
+        // 🎧 Start observing settings preferences
+        viewModelScope.launch {
+            // Observe Video Codec
+            com.android.purebilibili.core.store.SettingsManager.getVideoCodec(context)
+                .collect { _videoCodecPreference.value = it }
+        }
+        
+        viewModelScope.launch {
+            com.android.purebilibili.core.store.SettingsManager.getAudioQuality(context)
+                .collect { 
+                    com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🎵 Audio preference updated from Settings to: $it")
+                    _audioQualityPreference.value = it 
+                }
+        }
     }
     
     fun attachPlayer(player: ExoPlayer) {
@@ -330,11 +350,37 @@ class PlayerViewModel : ViewModel() {
         }
     }
     
-    fun loadVideo(bvid: String) {
+    fun reloadVideo() {
+        val bvid = currentBvid.takeIf { it.isNotBlank() } ?: return
+        val currentPos = exoPlayer?.currentPosition ?: 0L
+
+        // 💾 [修复] 在清除状态前明确保存进度，防止 loadVideo 读取到 0
+        if (currentPos > 0) {
+            playbackUseCase.savePosition(bvid)
+            Logger.d("PlayerVM", "💾 reloadVideo: Saved position $currentPos ms")
+        }
+
+        Logger.d("PlayerVM", "🔄 Reloading video (forced)...")
+        // 设置标志位，确保 loadVideo 不会跳过
+        loadVideo(bvid, force = true)
+        
+        // 如果之前有进度，尝试恢复
+        // 注意：loadVideo 是异步的，这里只是一个兜底，主要还是靠 loadVideo 内部读取 cachedPosition
+        if (currentPos > 1000) {
+             viewModelScope.launch {
+                 delay(500)
+                 if (exoPlayer?.currentPosition ?: 0L < 1000) {
+                     seekTo(currentPos)
+                 }
+             }
+        }
+    }
+    
+    fun loadVideo(bvid: String, force: Boolean = false) {
         if (bvid.isBlank()) return
         
         //  防止重复加载：只有在正在加载同一视频时才跳过
-        if (currentBvid == bvid && _uiState.value is PlayerUiState.Loading) {
+        if (!force && currentBvid == bvid && _uiState.value is PlayerUiState.Loading) {
             Logger.d("PlayerVM", " Already loading $bvid, skip")
             return
         }
@@ -347,7 +393,7 @@ class PlayerViewModel : ViewModel() {
             player.playerError == null // 没有播放错误
         
         val currentSuccess = _uiState.value as? PlayerUiState.Success
-        if (currentSuccess != null && currentBvid == bvid && isPlayerHealthy && player != null) {
+        if (!force && currentSuccess != null && currentBvid == bvid && isPlayerHealthy && player != null) {
             Logger.d("PlayerVM", " $bvid already playing healthy, skip reload")
             //  确保音量正常
             player.volume = 1.0f
@@ -365,8 +411,14 @@ class PlayerViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = PlayerUiState.Loading.Initial
             
-            //  [网络感知] 根据网络类型选择默认清晰度
-            var defaultQuality = appContext?.let { NetworkUtils.getDefaultQualityId(it) } ?: 64
+                val defaultQuality = appContext?.let { NetworkUtils.getDefaultQualityId(it) } ?: 64
+                //  [新增] 获取音频/视频偏好
+                val audioQualityPreference = appContext?.let { 
+                    com.android.purebilibili.core.store.SettingsManager.getAudioQualitySync(it) 
+                } ?: -1
+                val videoCodecPreference = appContext?.let { 
+                    com.android.purebilibili.core.store.SettingsManager.getVideoCodecSync(it) 
+                } ?: "hev1"
             
             // 📉 [省流量] 省流量模式逻辑：
             // - ALWAYS: 任何网络都限制 480P
@@ -383,12 +435,13 @@ class PlayerViewModel : ViewModel() {
                 com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY -> isOnMobileNetwork  // 仅移动数据
             }
             
-            if (shouldLimitQuality && defaultQuality > 32) {
-                defaultQuality = 32  // 480P
+            var finalQuality = defaultQuality
+            if (shouldLimitQuality && finalQuality > 32) {
+                finalQuality = 32
                 com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "📉 省流量模式(${dataSaverMode.label}): 限制画质为480P")
             }
             
-            when (val result = playbackUseCase.loadVideo(bvid, defaultQuality)) {
+            when (val result = playbackUseCase.loadVideo(bvid, finalQuality, audioQualityPreference, videoCodecPreference)) {
                 is VideoLoadResult.Success -> {
                     currentCid = result.info.cid
                     
@@ -441,7 +494,11 @@ class PlayerViewModel : ViewModel() {
                         //  CDN 线路
                         currentCdnIndex = 0,
                         allVideoUrls = allVideoUrls,
-                        allAudioUrls = allAudioUrls
+
+                        allAudioUrls = allAudioUrls,
+                        // [New] Codec/Audio info
+                        videoCodecId = result.videoCodecId,
+                        audioCodecId = result.audioCodecId
                     )
                     
                     //  [新增] 异步加载关注列表（用于推荐视频的已关注标签）
@@ -554,24 +611,7 @@ class PlayerViewModel : ViewModel() {
      *  重载视频 - 保持当前播放位置
      * 用于设置面板的"重载视频"功能
      */
-    fun reloadVideo() {
-        val bvid = currentBvid.takeIf { it.isNotBlank() } ?: return
-        val currentPos = exoPlayer?.currentPosition ?: 0L
-        
-        // 清除缓存
-        PlayUrlCache.invalidate(bvid, currentCid)
-        PlaybackCooldownManager.clearForVideo(bvid)
-        
-        // 重新加载
-        currentBvid = ""
-        
-        viewModelScope.launch {
-            loadVideo(bvid)
-            // 等待加载完成后恢复位置
-            kotlinx.coroutines.delay(500)
-            exoPlayer?.seekTo(currentPos)
-        }
-    }
+
     
     /**
      *  切换 CDN 线路
@@ -697,7 +737,53 @@ class PlayerViewModel : ViewModel() {
                 }
                 .onFailure { toast(it.message ?: "\u64cd\u4f5c\u5931\u8d25") }
         }
+        }
+
+    
+    // ========== Settings: Codec & Audio ==========
+    
+    // ========== Settings: Codec & Audio ==========
+    
+    // Preferences StateFlows (Initialized in initWithContext)
+    private val _videoCodecPreference = MutableStateFlow("hev1")
+    val videoCodecPreference = _videoCodecPreference.asStateFlow()
+    
+    private val _audioQualityPreference = MutableStateFlow(-1)
+    val audioQualityPreference = _audioQualityPreference.asStateFlow()
+    
+    fun setVideoCodec(codec: String) {
+        _videoCodecPreference.value = codec // Optimistic update
+        viewModelScope.launch {
+            appContext?.let { 
+                com.android.purebilibili.core.store.SettingsManager.setVideoCodec(it, codec)
+                // Reload to apply changes if playing
+                reloadVideo()
+            }
+        }
     }
+
+    fun setAudioQuality(audioQuality: Int) {
+        _audioQualityPreference.value = audioQuality // Optimistic update
+        com.android.purebilibili.core.util.Logger.d("PlayerViewModel", "🎵 setAudioQuality called with: $audioQuality")
+        //  [调试] 显示 Toast 提示
+        val label = when(audioQuality) {
+            -1 -> "自动"
+            30280 -> "192K"
+            30250 -> "杜比全景声"
+            30251 -> "Hi-Res无损"
+            else -> "未知($audioQuality)"
+        }
+        toast("切换音质为: $label")
+
+        viewModelScope.launch {
+            appContext?.let { 
+                com.android.purebilibili.core.store.SettingsManager.setAudioQuality(it, audioQuality)
+                reloadVideo() // Reload to apply new audio quality
+            }
+        }
+    }
+
+    //  相互作用
     
     //  稍后再看
     fun toggleWatchLater() {
@@ -985,8 +1071,13 @@ class PlayerViewModel : ViewModel() {
         _uiState.value = current.copy(isQualitySwitching = true, requestedQuality = qualityId)
         
         viewModelScope.launch {
-            val result = playbackUseCase.changeQualityFromCache(qualityId, current.cachedDashVideos, current.cachedDashAudios, currentPos)
-                ?: playbackUseCase.changeQualityFromApi(currentBvid, currentCid, qualityId, currentPos)
+            // [新增] 获取当前音频偏好
+            val audioPref = appContext?.let { 
+                com.android.purebilibili.core.store.SettingsManager.getAudioQualitySync(it) 
+            } ?: -1
+            
+            val result = playbackUseCase.changeQualityFromCache(qualityId, current.cachedDashVideos, current.cachedDashAudios, currentPos, audioPref)
+                ?: playbackUseCase.changeQualityFromApi(currentBvid, currentCid, qualityId, currentPos, audioPref)
             
             if (result != null) {
                 _uiState.value = current.copy(
@@ -1021,8 +1112,26 @@ class PlayerViewModel : ViewModel() {
             try {
                 val playUrlData = VideoRepository.getPlayUrlData(currentBvid, page.cid, current.currentQuality)
                 if (playUrlData != null) {
-                    val dashVideo = playUrlData.dash?.getBestVideo(current.currentQuality)
-                    val dashAudio = playUrlData.dash?.getBestAudio()
+                    //  [新增] 获取音频/视频偏好
+                    val videoCodecPreference = appContext?.let { 
+                        com.android.purebilibili.core.store.SettingsManager.getVideoCodecSync(it) 
+                    } ?: "hev1"
+                    val audioQualityPreference = appContext?.let { 
+                        com.android.purebilibili.core.store.SettingsManager.getAudioQualitySync(it) 
+                    } ?: -1
+                    
+                    val isHevcSupported = com.android.purebilibili.core.util.MediaUtils.isHevcSupported()
+                    val isAv1Supported = com.android.purebilibili.core.util.MediaUtils.isAv1Supported()
+                    
+                    val dashVideo = playUrlData.dash?.getBestVideo(
+                        current.currentQuality,
+                        preferCodec = videoCodecPreference,
+                        isHevcSupported = isHevcSupported,
+                        isAv1Supported = isAv1Supported
+                    )
+                    
+                    val dashAudio = playUrlData.dash?.getBestAudio(audioQualityPreference)
+                    
                     val videoUrl = dashVideo?.getValidUrl() ?: playUrlData.durl?.firstOrNull()?.url ?: ""
                     val audioUrl = dashAudio?.getValidUrl()
                     

@@ -351,12 +351,12 @@ fun rememberVideoPlayerState(
         )
     }
 
-    //  为 MediaSession 生成唯一 ID，避免从小窗展开时冲突
-    val sessionId = remember(bvid) { "bilipai_${bvid}_${System.currentTimeMillis()}" }
-    
-    val mediaSession = remember(player, sessionActivityPendingIntent, sessionId) {
+    // 🚀 [修复] MediaSession 与 player 生命周期同步
+    val mediaSession = remember(player) {
+        val sessionId = "bilipai_${java.util.UUID.randomUUID()}"
+        com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "📺 Creating MediaSession with ID: $sessionId")
         MediaSession.Builder(context, player)
-            .setId(sessionId)  //  使用唯一 ID
+            .setId(sessionId)
             .setSessionActivity(sessionActivityPendingIntent)
             .build()
     }
@@ -499,10 +499,10 @@ fun rememberVideoPlayerState(
                 if (isNetworkError && retryCountRef.count < maxRetries) {
                     retryCountRef.count++
                     val delayMs = retryCountRef.count * 2000L  // 递增延迟：2s, 4s, 6s
-                    com.android.purebilibili.core.util.Logger.d("VideoPlayerState", " Network error, retry ${retryCountRef.count}/$maxRetries in ${delayMs}ms")
+                    com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "🔄 Network error, retry ${retryCountRef.count}/$maxRetries in ${delayMs}ms")
                     
-                    // 延迟重试
-                    kotlinx.coroutines.MainScope().launch {
+                    // 🚀 [修复] 使用受管理的 scope 避免内存泄漏
+                    scope.launch {
                         kotlinx.coroutines.delay(delayMs)
                         viewModel.retry()
                     }

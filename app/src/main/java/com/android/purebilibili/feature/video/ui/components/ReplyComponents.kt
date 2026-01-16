@@ -39,6 +39,8 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyPicture
 import androidx.compose.ui.layout.ContentScale
+import com.android.purebilibili.core.ui.common.copyOnLongPress
+import androidx.compose.foundation.text.selection.SelectionContainer
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -132,7 +134,8 @@ fun ReplyItemView(
                         fontWeight = FontWeight.Medium,
                         //  VIP 用户使用粉色，普通用户使用次要色适配深色模式
                         color = if (item.member.vip?.vipStatus == 1) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.copyOnLongPress(item.member.uname, "用户名")
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     //  优化后的等级标签
@@ -406,42 +409,46 @@ fun RichCommentText(
         }
     }
 
-    //  使用 Text + pointerInput 实现带表情的可点击文本
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
-    
-    Text(
-        text = annotatedString,
-        inlineContent = inlineContent,
-        fontSize = fontSize,
-        color = color,
-        lineHeight = (fontSize.value * 1.5).sp,
-        maxLines = maxLines,
-        onTextLayout = { textLayoutResult = it },
-        //  [修复] 添加 padding 确保点击区域足够大
-        modifier = Modifier.then(
-            if (onTimestampClick != null) {
-                Modifier.pointerInput(annotatedString) {
-                    detectTapGestures { offset ->
-                        textLayoutResult?.let { layoutResult ->
-                            val position = layoutResult.getOffsetForPosition(offset)
-                            //  [修复] 扩大搜索范围，允许一定的点击容差
-                            val searchStart = maxOf(0, position - 1)
-                            val searchEnd = minOf(annotatedString.length, position + 1)
-                            annotatedString.getStringAnnotations(
-                                tag = "TIMESTAMP", 
-                                start = searchStart, 
-                                end = searchEnd
-                            )
-                                .firstOrNull()?.let { annotation ->
-                                    val seconds = annotation.item.toLongOrNull() ?: 0L
-                                    onTimestampClick(seconds * 1000)  // 转换为毫秒
-                                }
+    // [新增] 使用 SelectionContainer 包裹文本以支持滑动选择复制
+    SelectionContainer {
+        //  使用 Text + pointerInput 实现带表情的可点击文本
+        var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+        
+        Text(
+            text = annotatedString,
+            inlineContent = inlineContent,
+            fontSize = fontSize,
+            color = color,
+            lineHeight = (fontSize.value * 1.5).sp,
+            maxLines = maxLines,
+            onTextLayout = { textLayoutResult = it },
+            //  [修复] 添加 padding 确保点击区域足够大
+            modifier = Modifier.then(
+                if (onTimestampClick != null) {
+                    Modifier.pointerInput(annotatedString) {
+                        detectTapGestures { offset ->
+                            textLayoutResult?.let { layoutResult ->
+                                val position = layoutResult.getOffsetForPosition(offset)
+                                //  [修复] 扩大搜索范围，允许一定的点击容差
+                                val searchStart = maxOf(0, position - 1)
+                                val searchEnd = minOf(annotatedString.length, position + 1)
+                                annotatedString.getStringAnnotations(
+                                    tag = "TIMESTAMP", 
+                                    start = searchStart, 
+                                    end = searchEnd
+                                )
+                                    .firstOrNull()?.let { annotation ->
+                                        val seconds = annotation.item.toLongOrNull() ?: 0L
+                                        onTimestampClick(seconds * 1000)  // 转换为毫秒
+                                    }
+                            }
                         }
                     }
-                }
-            } else Modifier
+                } else Modifier
+            )
+            // .copyOnLongPress(text, "评论内容") // 移除自定义长按复制，使用系统原生的选择复制
         )
-    )
+    }
 }
 
 /**

@@ -1,4 +1,3 @@
-// 文件路径: feature/profile/ProfileScreen.kt
 package com.android.purebilibili.feature.profile
 
 import android.app.Activity
@@ -8,7 +7,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-//  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
@@ -37,7 +35,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-//  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
@@ -50,6 +47,14 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.BiliGradientButton
+import com.android.purebilibili.core.ui.AdaptiveSplitLayout
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.ui.components.IOSGroup
+import com.android.purebilibili.core.ui.components.IOSClickableItem
+import com.android.purebilibili.core.ui.components.IOSDivider
+import com.android.purebilibili.core.ui.components.IOSSwitchItem
+import com.android.purebilibili.core.ui.components.IOSSectionTitle
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,11 +67,13 @@ fun ProfileScreen(
     onHistoryClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onFollowingClick: (Long) -> Unit = {},  //  关注列表点击
-    onDownloadClick: () -> Unit = {}  //  离线缓存点击
+    onDownloadClick: () -> Unit = {},  //  离线缓存点击
+    onWatchLaterClick: () -> Unit = {} // 稍后再看点击
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val view = LocalView.current
+    val windowSizeClass = LocalWindowSizeClass.current
 
     //  设置沉浸式状态栏和导航栏（进入时修改，离开时恢复）
     DisposableEffect(state) {
@@ -108,53 +115,188 @@ fun ProfileScreen(
     }
 
     //  未登录状态使用沉浸式全屏布局，已登录使用正常 Scaffold
-    when (val s = state) {
-        is ProfileUiState.Loading -> {
-            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
-                LoadingAnimation(size = 80.dp)
-            }
+    val currentUiState = state
+    if (currentUiState is ProfileUiState.Loading) {
+        Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), contentAlignment = Alignment.Center) {
+            LoadingAnimation(size = 80.dp)
         }
-        is ProfileUiState.LoggedOut -> {
-            //  沉浸式全屏布局
-            GuestProfileContent(
-                onGoToLogin = onGoToLogin,
-                onBack = onBack,
-                onSettingsClick = onSettingsClick
-            )
-        }
-        is ProfileUiState.Success -> {
-            Scaffold(
-                containerColor = MaterialTheme.colorScheme.background,
-                topBar = {
-                    TopAppBar(
-                        title = { },
+    } else if (currentUiState is ProfileUiState.LoggedOut) {
+        //  沉浸式全屏布局
+        GuestProfileContent(
+            onGoToLogin = onGoToLogin,
+            onBack = onBack,
+            onSettingsClick = onSettingsClick
+        )
+    } else if (currentUiState is ProfileUiState.Success) {
+        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                if (!windowSizeClass.shouldUseSplitLayout) {
+                    LargeTopAppBar(
+                        title = { Text("我的", fontWeight = FontWeight.Bold) },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
-                                Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+                                Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = MaterialTheme.colorScheme.primary)
                             }
                         },
                         actions = {
                             IconButton(onClick = onSettingsClick) {
-                                Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = MaterialTheme.colorScheme.primary)
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                        scrollBehavior = scrollBehavior,
+                        colors = TopAppBarDefaults.largeTopAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.background,
+                            scrolledContainerColor = MaterialTheme.colorScheme.surface
+                        )
                     )
                 }
-            ) { padding ->
-                Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-                    UserProfileContent(
-                        user = s.user,
+            }
+        ) { padding ->
+            Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+                if (windowSizeClass.shouldUseSplitLayout) {
+                    TabletProfileContent(
+                        user = currentUiState.user,
                         onLogout = {
                             viewModel.logout()
                             onLogoutSuccess()
                         },
                         onHistoryClick = onHistoryClick,
                         onFavoriteClick = onFavoriteClick,
-                        onFollowingClick = { onFollowingClick(s.user.mid) },  //  传递用户 mid
-                        onDownloadClick = onDownloadClick
+                        onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
+                        onDownloadClick = onDownloadClick,
+                        onSettingsClick = onSettingsClick,
+                        onBack = onBack,
+                        onWatchLaterClick = onWatchLaterClick
+                    )
+                } else {
+                    MobileProfileContent(
+                        user = currentUiState.user,
+                        onLogout = {
+                            viewModel.logout()
+                            onLogoutSuccess()
+                        },
+                        onHistoryClick = onHistoryClick,
+                        onFavoriteClick = onFavoriteClick,
+                        onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
+                        onDownloadClick = onDownloadClick,
+                        onWatchLaterClick = onWatchLaterClick
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun TabletProfileContent(
+    user: UserState,
+    onLogout: () -> Unit,
+    onHistoryClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    onFollowingClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onBack: () -> Unit,
+    onWatchLaterClick: () -> Unit
+) {
+    AdaptiveSplitLayout(
+        modifier = Modifier.fillMaxSize(),
+        primaryRatio = 0.4f,
+        primaryContent = {
+            // Left Pane: User Info & Stats & VIP
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                 Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "Back", tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(CupertinoIcons.Default.Gearshape, contentDescription = "Settings", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                
+                UserInfoSection(user, centered = true)
+                Spacer(modifier = Modifier.height(24.dp))
+                UserStatsSection(user, onFollowingClick)
+                Spacer(modifier = Modifier.height(24.dp))
+                VipBannerSection(user)
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        },
+        secondaryContent = {
+            // Right Pane: Services
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(24.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "我的服务",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    ServicesSection(onHistoryClick, onFavoriteClick, onDownloadClick, onWatchLaterClick)
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    Button(
+                        onClick = onLogout,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text("退出登录")
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun MobileProfileContent(
+    user: UserState,
+    onLogout: () -> Unit,
+    onHistoryClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    onFollowingClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onWatchLaterClick: () -> Unit
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 32.dp)
+    ) {
+        item { UserInfoSection(user) }
+        item { UserStatsSection(user, onFollowingClick) }
+        item { VipBannerSection(user) }
+        item { ServicesSection(onHistoryClick, onFavoriteClick, onDownloadClick, onWatchLaterClick) }
+        item {
+            IOSGroup {
+                IOSClickableItem(
+                    title = "退出登录",
+                    onClick = onLogout,
+                    textColor = MaterialTheme.colorScheme.error,
+                    centered = true
+                )
             }
         }
     }
@@ -274,41 +416,15 @@ fun GuestProfileContent(
 }
 
 @Composable
-fun UserProfileContent(
-    user: UserState,
-    onLogout: () -> Unit,
-    onHistoryClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onFollowingClick: () -> Unit = {},  //  关注列表点击
-    onDownloadClick: () -> Unit = {}    //  离线缓存点击
-) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp)
-    ) {
-        item { UserInfoSection(user) }
-        item { UserStatsSection(user, onFollowingClick) }
-        item { VipBannerSection(user) }
-        item { ServicesSection(onHistoryClick, onFavoriteClick, onDownloadClick) }
-        item {
-            Box(modifier = Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
-                TextButton(onClick = onLogout, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                    Text("退出登录")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun UserInfoSection(user: UserState) {
+fun UserInfoSection(user: UserState, centered: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             //  修复：背景色
             .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 24.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (centered) Arrangement.Center else Arrangement.Start
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current).data(FormatUtils.fixImageUrl(user.face)).crossfade(true).placeholder(android.R.color.darker_gray).build(),
@@ -319,28 +435,40 @@ fun UserInfoSection(user: UserState) {
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentScale = ContentScale.Crop
         )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            //  修复：用户名颜色
-            Text(
-                text = user.name,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = if (user.isVip) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LevelTag(level = user.level)
-                Spacer(modifier = Modifier.width(8.dp))
-                if (user.isVip) {
-                    Surface(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp)) {
-                        Text(user.vipLabel.ifEmpty { "大会员" }, fontSize = 10.sp, color = Color.White, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                    }
-                } else {
-                    Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
-                        Text("正式会员", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
-                    }
-                }
+        if (!centered) {
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                UserInfoText(user)
+            }
+        }
+    }
+    if (centered) {
+         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            UserInfoText(user, centered = true)
+        }
+    }
+}
+
+@Composable
+fun UserInfoText(user: UserState, centered: Boolean = false) {
+    //  修复：用户名颜色
+    Text(
+        text = user.name,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        color = if (user.isVip) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+    )
+    Spacer(modifier = Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        LevelTag(level = user.level)
+        Spacer(modifier = Modifier.width(8.dp))
+        if (user.isVip) {
+            Surface(color = MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(4.dp)) {
+                Text(user.vipLabel.ifEmpty { "大会员" }, fontSize = 10.sp, color = Color.White, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+            }
+        } else {
+            Surface(color = MaterialTheme.colorScheme.surfaceVariant, shape = RoundedCornerShape(4.dp)) {
+                Text("正式会员", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
             }
         }
     }
@@ -408,57 +536,37 @@ fun VipBannerSection(user: UserState) {
 fun ServicesSection(
     onHistoryClick: () -> Unit,
     onFavoriteClick: () -> Unit,
-    onDownloadClick: () -> Unit = {}  //  离线缓存
+    onDownloadClick: () -> Unit = {},
+    onWatchLaterClick: () -> Unit = {}
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(8.dp))
-            //  修复：卡片背景
-            .background(MaterialTheme.colorScheme.surface)
-    ) {
-        //  修复：标题颜色
-        Text(
-            "更多服务",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(16.dp)
+    IOSSectionTitle("我的服务")
+    IOSGroup {
+        IOSClickableItem(
+            icon = CupertinoIcons.Default.ArrowDownCircle,
+            title = "离线缓存",
+            onClick = onDownloadClick,
+            iconTint = MaterialTheme.colorScheme.primary
         )
-
-        ServiceItem(CupertinoIcons.Default.ArrowDownCircle, "离线缓存", MaterialTheme.colorScheme.primary, onClick = onDownloadClick)
-        Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 56.dp))
-
-        ServiceItem(CupertinoIcons.Default.Clock, "历史记录", iOSBlue, onClick = onHistoryClick)
-        Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 56.dp))
-
-        ServiceItem(CupertinoIcons.Default.Bookmark, "我的收藏", iOSYellow, onClick = onFavoriteClick)
-        Divider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.padding(start = 56.dp))
-
-        ServiceItem(CupertinoIcons.Default.Bookmark, "稍后再看", iOSGreen) { /* TODO */ }
-    }
-}
-
-@Composable
-fun ServiceItem(
-    icon: ImageVector,
-    title: String,
-    iconColor: Color,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(imageVector = icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(24.dp))
-        Spacer(modifier = Modifier.width(16.dp))
-        //  修复：文字颜色
-        Text(text = title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f))
-        //  修复：箭头颜色
-        Icon(CupertinoIcons.Default.ChevronForward, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
+        IOSDivider(startIndent = 66.dp)
+        IOSClickableItem(
+            icon = CupertinoIcons.Default.Clock,
+            title = "历史记录",
+            onClick = onHistoryClick,
+            iconTint = iOSBlue
+        )
+        IOSDivider(startIndent = 66.dp)
+        IOSClickableItem(
+            icon = CupertinoIcons.Default.Bookmark,
+            title = "我的收藏",
+            onClick = onFavoriteClick,
+            iconTint = iOSYellow
+        )
+        IOSDivider(startIndent = 66.dp)
+        IOSClickableItem(
+            icon = CupertinoIcons.Default.Bookmark,
+            title = "稍后再看",
+            onClick = onWatchLaterClick,
+            iconTint = iOSGreen
+        )
     }
 }

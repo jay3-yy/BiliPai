@@ -65,10 +65,21 @@ object BangumiRepository {
     /**
      * 获取番剧详情
      */
-    suspend fun getSeasonDetail(seasonId: Long): Result<BangumiDetail> = withContext(Dispatchers.IO) {
+    /**
+     * 获取番剧详情
+     */
+    suspend fun getSeasonDetail(seasonId: Long = 0, epId: Long = 0): Result<BangumiDetail> = withContext(Dispatchers.IO) {
         try {
             //  [修复] 使用 ResponseBody 自行解析，避免大型番剧导致 OOM
-            val responseBody = api.getSeasonDetail(seasonId)
+            // 优先使用 epId (因为历史记录中的 seasonId 可能是 AVID，而 epId 是准确的)，如果 epId 为 0 则使用 seasonId
+            val responseBody = if (epId > 0) {
+                api.getSeasonDetail(epId = epId)
+            } else if (seasonId > 0) {
+                api.getSeasonDetail(seasonId = seasonId)
+            } else {
+                return@withContext Result.failure(Exception("参数错误: seasonId 和 epId 不能同时为空"))
+            }
+
             var jsonString = responseBody.string()
             
             //  [关键修复] 在解析前预处理 JSON，限制 episodes 数组大小
@@ -88,7 +99,8 @@ object BangumiRepository {
                 val userStatus = response.result.userStatus
                 android.util.Log.w("BangumiRepo", """
                      getSeasonDetail 结果:
-                    - seasonId: $seasonId
+                    - request seasonId: $seasonId, epId: $epId
+                    - result seasonId: ${response.result.seasonId}
                     - title: ${response.result.title}
                     - userStatus: $userStatus
                     - follow: ${userStatus?.follow} (1=已追番, 0=未追番)
@@ -161,10 +173,10 @@ object BangumiRepository {
     ): Result<BangumiVideoInfo> = withContext(Dispatchers.IO) {
         try {
             val response = api.getBangumiPlayUrl(epId = epId, qn = qn)
-            android.util.Log.d("BangumiRepo", "getBangumiPlayUrl response code: ${response.code}, has result: ${response.result != null}, has videoInfo: ${response.result?.videoInfo != null}")
+            android.util.Log.d("BangumiRepo", "getBangumiPlayUrl response code: ${response.code}, has result: ${response.result != null}")
             
-            if (response.code == 0 && response.result?.videoInfo != null) {
-                Result.success(response.result.videoInfo)
+            if (response.code == 0 && response.result != null) {
+                Result.success(response.result)
             } else {
                 val errorMsg = when (response.code) {
                     -10403 -> "需要大会员才能观看"

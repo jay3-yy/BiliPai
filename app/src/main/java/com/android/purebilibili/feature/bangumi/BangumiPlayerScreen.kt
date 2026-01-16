@@ -67,14 +67,47 @@ fun BangumiPlayerScreen(
         }
     }
     
-    // 附加播放器到 ViewModel
-    LaunchedEffect(exoPlayer) {
+    // 附加播放器到 ViewModel 并加载番剧
+    // 使用同一个 LaunchedEffect 确保顺序执行，避免竞态条件
+    LaunchedEffect(exoPlayer, seasonId, epId) {
+        // 先附加播放器
         viewModel.attachPlayer(exoPlayer)
+        // 然后加载番剧
+        viewModel.loadBangumiPlay(seasonId, epId)
     }
     
-    // 加载番剧
-    LaunchedEffect(seasonId, epId) {
-        viewModel.loadBangumiPlay(seasonId, epId)
+    //  [优化] 播放错误监听 - 记录日志并触发重试
+    DisposableEffect(exoPlayer) {
+        val errorListener = object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("BangumiPlayer", "❌ 播放错误: ${error.errorCodeName} - ${error.message}", error)
+                // 可以在这里触发 Toast 或重试逻辑
+            }
+            
+            override fun onPlayerErrorChanged(error: androidx.media3.common.PlaybackException?) {
+                if (error != null) {
+                    android.util.Log.w("BangumiPlayer", "⚠️ 播放器错误变化: ${error.errorCodeName}")
+                }
+            }
+            
+            //  [调试] 新增：监听播放状态变化
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateName = when (playbackState) {
+                    androidx.media3.common.Player.STATE_IDLE -> "IDLE"
+                    androidx.media3.common.Player.STATE_BUFFERING -> "BUFFERING"
+                    androidx.media3.common.Player.STATE_READY -> "READY"
+                    androidx.media3.common.Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN"
+                }
+                android.util.Log.d("BangumiPlayer", "🎬 播放状态变化: $stateName, isPlaying=${exoPlayer.isPlaying}")
+            }
+            
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                android.util.Log.d("BangumiPlayer", "▶️ 播放状态: isPlaying=$isPlaying")
+            }
+        }
+        exoPlayer.addListener(errorListener)
+        onDispose { exoPlayer.removeListener(errorListener) }
     }
     
     //  空降助手：定期检查播放位置
@@ -274,8 +307,9 @@ fun BangumiPlayerScreen(
         //  获取清晰度数据
         val successState = uiState as? BangumiPlayerState.Success
         
-        if (isLandscape) {
-            // 全屏播放
+    //  [修复] 使用 movableContentOf 保持播放器实例跨布局移动时不被销毁
+    val playerContent = remember(successState, danmakuEnabled, currentSpeed, danmakuOpacity, danmakuFontScale, danmakuSpeed, danmakuDisplayArea) {
+        movableContentOf { isFullscreenMode: Boolean ->
             BangumiPlayerView(
                 exoPlayer = exoPlayer,
                 danmakuManager = danmakuManager,
@@ -286,12 +320,12 @@ fun BangumiPlayerScreen(
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
-                isFullscreen = true,
+                isFullscreen = isFullscreenMode,
                 currentQuality = successState?.quality ?: 0,
                 acceptQuality = successState?.acceptQuality ?: emptyList(),
                 acceptDescription = successState?.acceptDescription ?: emptyList(),
                 onQualityChange = { viewModel.changeQuality(it) },
-                onBack = { toggleOrientation() },
+                onBack = if (isFullscreenMode) { { toggleOrientation() } } else onBack,
                 onToggleFullscreen = { toggleOrientation() },
                 sponsorSegment = sponsorSegment,
                 showSponsorSkipButton = showSponsorSkipButton,
@@ -310,6 +344,14 @@ fun BangumiPlayerScreen(
                 onDanmakuSpeedChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuSpeed(context, it) } },
                 onDanmakuDisplayAreaChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuArea(context, it) } }
             )
+        }
+    }
+
+
+        
+        if (isLandscape) {
+            // 全屏播放
+            playerContent(true)
         } else {
             // 竖屏：播放器 + 内容
             Column(modifier = Modifier.fillMaxSize()) {
@@ -323,40 +365,7 @@ fun BangumiPlayerScreen(
                         .height(playerHeight)
                         .background(Color.Black)
                 ) {
-                    BangumiPlayerView(
-                        exoPlayer = exoPlayer,
-                        danmakuManager = danmakuManager,
-                        danmakuEnabled = danmakuEnabled,
-                        onDanmakuToggle = {
-                            scope.launch {
-                                com.android.purebilibili.core.store.SettingsManager.setDanmakuEnabled(context, !danmakuEnabled)
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        isFullscreen = false,
-                        currentQuality = successState?.quality ?: 0,
-                        acceptQuality = successState?.acceptQuality ?: emptyList(),
-                        acceptDescription = successState?.acceptDescription ?: emptyList(),
-                        onQualityChange = { viewModel.changeQuality(it) },
-                        onBack = onBack,
-                        onToggleFullscreen = { toggleOrientation() },
-                        sponsorSegment = sponsorSegment,
-                        showSponsorSkipButton = showSponsorSkipButton,
-                        onSponsorSkip = { viewModel.skipCurrentSponsorSegment() },
-                        onSponsorDismiss = { viewModel.dismissSponsorSkipButton() },
-                        //  倍速控制
-                        currentSpeed = currentSpeed,
-                        onSpeedChange = { currentSpeed = it },
-                        //  弹幕设置
-                        danmakuOpacity = danmakuOpacity,
-                        danmakuFontScale = danmakuFontScale,
-                        danmakuSpeed = danmakuSpeed,
-                        danmakuDisplayArea = danmakuDisplayArea,
-                        onDanmakuOpacityChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuOpacity(context, it) } },
-                        onDanmakuFontScaleChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuFontScale(context, it) } },
-                        onDanmakuSpeedChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuSpeed(context, it) } },
-                        onDanmakuDisplayAreaChange = { scope.launch { com.android.purebilibili.core.store.SettingsManager.setDanmakuArea(context, it) } }
-                    )
+                    playerContent(false)
                 }
                 
                 // 内容区域（进度条已集成到播放器控制层内）

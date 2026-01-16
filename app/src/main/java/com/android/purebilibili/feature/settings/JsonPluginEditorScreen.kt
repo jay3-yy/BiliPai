@@ -39,10 +39,10 @@ fun JsonPluginEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("编辑插件", fontWeight = FontWeight.Bold) },
+                title = { Text("编辑 JSON 插件") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                        Icon(CupertinoIcons.Default.ChevronBackward, null)
                     }
                 },
                 actions = {
@@ -53,9 +53,8 @@ fun JsonPluginEditorScreen(
                             rules = rules
                         )
                         onSave(updated)
-                        onBack()
                     }) {
-                        Icon(CupertinoIcons.Default.CheckmarkCircle, contentDescription = "保存", tint = iOSBlue)
+                        Icon(CupertinoIcons.Default.Checkmark, null)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -65,88 +64,115 @@ fun JsonPluginEditorScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 基本信息
+        JsonPluginEditorContent(
+            modifier = Modifier.padding(padding),
+            name = name,
+            onNameChange = { name = it },
+            description = description,
+            onDescriptionChange = { description = it },
+            rules = rules,
+            onRulesChange = { rules = it.toMutableList() },
+            pluginType = plugin.type
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun JsonPluginEditorContent(
+    modifier: Modifier = Modifier,
+    name: String,
+    onNameChange: (String) -> Unit,
+    description: String,
+    onDescriptionChange: (String) -> Unit,
+    rules: List<Rule>,
+    onRulesChange: (List<Rule>) -> Unit,
+    pluginType: String
+) {
+    if (pluginType != "json_rule") {
+        Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("内置插件无法编辑规则", style = MaterialTheme.typography.bodyLarge)
+        }
+        return
+    }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 基本信息
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("基本信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = onNameChange,
+                        label = { Text("插件名称") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    OutlinedTextField(
+                        value = description,
+                        onValueChange = onDescriptionChange,
+                        label = { Text("插件描述") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 2
+                    )
+                }
+            }
+        }
+        
+        // 规则列表
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("过滤规则", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                
+                TextButton(onClick = {
+                    onRulesChange(rules + Rule(field = "title", op = "contains", value = JsonPrimitive(""), action = "hide"))
+                }) {
+                    Icon(CupertinoIcons.Default.Plus, null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("添加规则")
+                }
+            }
+        }
+        
+        itemsIndexed(rules) { index, rule ->
+            RuleEditor(
+                rule = rule,
+                pluginType = pluginType,
+                onUpdate = { updatedRule ->
+                    val newRules = rules.toMutableList()
+                    newRules[index] = updatedRule
+                    onRulesChange(newRules)
+                },
+                onDelete = {
+                    val newRules = rules.toMutableList()
+                    newRules.removeAt(index)
+                    onRulesChange(newRules)
+                }
+            )
+        }
+
+        if (rules.isEmpty()) {
             item {
                 Text(
-                    text = "基本信息",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "点击 + 添加规则",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
-            
-            item {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("插件名称") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            
-            item {
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    label = { Text("描述") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            
-            // 规则列表
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "规则列表 (${rules.size})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    IconButton(onClick = {
-                        rules = (rules + Rule(
-                            field = "title",
-                            op = "contains",
-                            value = JsonPrimitive(""),
-                            action = "hide"
-                        )).toMutableList()
-                    }) {
-                        Icon(CupertinoIcons.Default.Plus, contentDescription = "添加规则", tint = iOSBlue)
-                    }
-                }
-            }
-            
-            itemsIndexed(rules) { index, rule ->
-                RuleEditor(
-                    rule = rule,
-                    pluginType = plugin.type,
-                    onUpdate = { updated ->
-                        rules = rules.toMutableList().also { it[index] = updated }
-                    },
-                    onDelete = {
-                        rules = rules.toMutableList().also { it.removeAt(index) }
-                    }
-                )
-            }
-            
-            if (rules.isEmpty()) {
-                item {
-                    Text(
-                        text = "点击 + 添加规则",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
     }

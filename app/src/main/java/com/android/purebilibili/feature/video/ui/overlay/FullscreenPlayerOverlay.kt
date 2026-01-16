@@ -59,6 +59,7 @@ import androidx.compose.runtime.collectAsState
 import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
+import com.android.purebilibili.core.ui.common.copyOnLongPress
 
 private const val AUTO_HIDE_DELAY = 4000L
 
@@ -207,11 +208,21 @@ fun FullscreenPlayerOverlay(
     // 返回键处理
     BackHandler { onNavigateToDetail() }
     
+    // [问题6修复] 弹幕设置面板打开时禁用手势
+    val gesturesEnabled = !showDanmakuSettings && !showSpeedMenu && !showRatioMenu && !showQualityMenu
+    
+    // [问题8修复] 状态栏排除区域高度（像素）
+    val statusBarExclusionZonePx = with(density) { 40.dp.toPx() }
+    
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(Unit) {
+            .pointerInput(gesturesEnabled) {
+                if (!gesturesEnabled) return@pointerInput
+                
+                val screenWidth = size.width.toFloat()
+                
                 detectTapGestures(
                     onTap = {
                         showControls = !showControls
@@ -228,17 +239,44 @@ fun FullscreenPlayerOverlay(
                                 it.pause()
                             } else {
                                 it.play()
+                    onDoubleTap = { offset ->
+                        // [问题7修复] 分区双击：左侧后退、中间暂停、右侧快进
+                        val relativeX = offset.x / screenWidth
+                        player?.let { p ->
+                            when {
+                                relativeX < 0.3f -> {
+                                    // 左侧双击：后退 10 秒
+                                    val newPos = (p.currentPosition - 10000).coerceAtLeast(0)
+                                    p.seekTo(newPos)
+                                }
+                                relativeX > 0.7f -> {
+                                    // 右侧双击：前进 10 秒
+                                    val newPos = (p.currentPosition + 10000).coerceAtMost(p.duration)
+                                    p.seekTo(newPos)
+                                }
+                                else -> {
+                                    // 中间双击：播放/暂停
+                                    if (p.isPlaying) p.pause() else p.play()
+                                }
                             }
                         }
                     }
                 )
             }
-            .pointerInput(Unit) {
+            .pointerInput(gesturesEnabled) {
+                if (!gesturesEnabled) return@pointerInput
+                
                 val screenWidth = size.width.toFloat()
                 val screenHeight = size.height.toFloat()
                 
                 detectDragGestures(
                     onDragStart = { offset ->
+                        // [问题8修复] 排除状态栏区域的手势触发
+                        if (offset.y < statusBarExclusionZonePx) {
+                            gestureMode = FullscreenGestureMode.None
+                            return@detectDragGestures
+                        }
+                        
                         showControls = true
                         lastInteractionTime = System.currentTimeMillis()
                         dragDelta = 0f
@@ -412,6 +450,12 @@ fun FullscreenPlayerOverlay(
                             com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView (RenderEngine) created for fullscreen")
                         }
                     },
+                    update = { view ->
+                        if (view.width > 0 && view.height > 0) {
+                            danmakuManager.attachView(view)
+                            com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " DanmakuView update: size=${view.width}x${view.height}")
+                        }
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -463,11 +507,20 @@ fun FullscreenPlayerOverlay(
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .copyOnLongPress(miniPlayerManager.currentTitle, "视频标题")
                         )
                         
                         //  [新增] 弹幕开关按钮
-                        IconButton(onClick = { danmakuManager.isEnabled = !danmakuManager.isEnabled }) {
+                        IconButton(
+                            onClick = {
+                                val newValue = !danmakuEnabled
+                                danmakuManager.isEnabled = newValue
+                                scope.launch { SettingsManager.setDanmakuEnabled(context, newValue) }
+                                com.android.purebilibili.core.util.Logger.d("FullscreenDanmaku", " Danmaku toggle: $newValue")
+                            }
+                        ) {
                             Icon(
                                 if (danmakuEnabled) CupertinoIcons.Default.TextBubble else CupertinoIcons.Default.TextBubble,
                                 contentDescription = "弹幕开关",
@@ -538,6 +591,9 @@ fun FullscreenPlayerOverlay(
                             Slider(
                                 value = if (isDragging) dragProgress else currentProgress,
                                 onValueChange = { newValue ->
+                                    if (!isDragging) {
+                                        danmakuManager.clear()  //  拖动开始时清除弹幕
+                                    }
                                     isDragging = true
                                     dragProgress = newValue
                                     lastInteractionTime = System.currentTimeMillis()

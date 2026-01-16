@@ -27,12 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
-import com.android.purebilibili.core.theme.iOSBlue
-import com.android.purebilibili.core.theme.iOSPink
-import com.android.purebilibili.core.theme.iOSPurple
-import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.ui.components.*
 
 /**
  *  外观设置二级页面
@@ -44,14 +42,14 @@ fun AppearanceSettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
     onBack: () -> Unit,
     onNavigateToBottomBarSettings: () -> Unit = {},  //  底栏设置导航
-    onNavigateToThemeSettings: () -> Unit = {},  //  [新增] 主题设置导航
+
     onNavigateToIconSettings: () -> Unit = {},  //  [新增] 图标设置导航
     onNavigateToAnimationSettings: () -> Unit = {}  //  [新增] 动画设置导航
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     
-    var showThemeDialog by remember { mutableStateOf(false) }
+
     val displayLevel = when (state.displayMode) {
         0 -> 0.35f
         1 -> 0.6f
@@ -81,51 +79,6 @@ fun AppearanceSettingsScreen(
         }
     }
     
-    // 主题模式弹窗
-    if (showThemeDialog) {
-        AlertDialog(
-            onDismissRequest = { showThemeDialog = false },
-            title = { Text("外观模式", color = MaterialTheme.colorScheme.onSurface) },
-            text = {
-                Column {
-                    AppThemeMode.entries.forEach { mode ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    viewModel.setThemeMode(mode)
-                                    showThemeDialog = false
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = (state.themeMode == mode),
-                                onClick = {
-                                    viewModel.setThemeMode(mode)
-                                    showThemeDialog = false
-                                },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = MaterialTheme.colorScheme.primary,
-                                    unselectedColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = mode.label, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
-                }
-            },
-            confirmButton = { 
-                TextButton(onClick = { showThemeDialog = false }) { 
-                    Text("取消", color = MaterialTheme.colorScheme.primary) 
-                } 
-            },
-            containerColor = MaterialTheme.colorScheme.surface,
-            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -145,70 +98,180 @@ fun AppearanceSettingsScreen(
         //  [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            //  [修复] 添加底部导航栏内边距，确保沉浸式效果
-            contentPadding = WindowInsets.navigationBars.asPaddingValues()
-        ) {
-            
-            //  [新增] 快速入口
-            item { SettingsSectionTitle("快速入口") }
-            item {
-                SettingsGroup {
-                    // 主题设置
-                    SettingClickableItem(
-                        icon = CupertinoIcons.Default.MoonStars,
-                        title = "主题设置",
-                        value = state.themeMode.label,
-                        onClick = onNavigateToThemeSettings,
-                        iconTint = iOSBlue
-                    )
+        AppearanceSettingsContent(
+            modifier = Modifier.padding(padding),
+            state = state,
+            onNavigateToIconSettings = onNavigateToIconSettings,
+            onNavigateToAnimationSettings = onNavigateToAnimationSettings,
+            viewModel = viewModel,
+            context = context
+        )
+    }
+}
+
+@Composable
+fun AppearanceSettingsContent(
+    modifier: Modifier = Modifier,
+    state: SettingsUiState,
+    onNavigateToIconSettings: () -> Unit,
+    onNavigateToAnimationSettings: () -> Unit,
+    viewModel: SettingsViewModel,
+    context: android.content.Context
+) {
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize(),
+        //  [修复] 添加底部导航栏内边距，确保沉浸式效果
+        contentPadding = WindowInsets.navigationBars.asPaddingValues()
+    ) {
+        
+        //  主题与颜色
+        item { IOSSectionTitle("主题与颜色") }
+        item {
+            IOSGroup {
+                // 主题模式选择 (横向卡片)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        AppThemeMode.entries.forEach { mode ->
+                            val isSelected = state.themeMode == mode
+                            val color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                            val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(color)
+                                    .clickable { viewModel.setThemeMode(mode) }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = mode.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = contentColor
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
                     Divider()
-                    // 图标设置
-                    SettingClickableItem(
-                        icon = CupertinoIcons.Default.SquareStack3dUp,
-                        title = "应用图标",
-                        value = when(state.appIcon) {
-                            // 🎀 二次元少女系列
-                            "Yuki" -> "比心少女"
-                            "Anime" -> "蓝发电视"
-                            "Tv" -> "双马尾"
-                            "Headphone" -> "耳机少女"
-                            // 经典系列
-                            "3D" -> "3D立体"
-                            "Blue" -> "经典蓝"
-                            "Retro" -> "复古怀旧"
-                            "Flat" -> "扁平现代"
-                            "Flat Material" -> "扁平材质"
-                            "Neon" -> "霓虹"
-                            "Telegram Blue" -> "纸飞机蓝"
-                            "Pink" -> "樱花粉"
-                            "Purple" -> "香芋紫"
-                            "Green" -> "薄荷绿"
-                            "Dark" -> "暗夜蓝"
-                            else -> "比心少女"  // 默认是 Yuki
-                        },
-                        onClick = onNavigateToIconSettings,
-                        iconTint = iOSPurple
-                    )
-                    Divider()
-                    // 动画设置
-                    SettingClickableItem(
-                        icon = CupertinoIcons.Default.WandAndStars,
-                        title = "动画与效果",
-                        value = if (state.cardAnimationEnabled) "已开启" else "已关闭",
-                        onClick = onNavigateToAnimationSettings,
-                        iconTint = iOSPink
-                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 动态取色开关
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                         IOSSwitchItem(
+                            icon = CupertinoIcons.Default.PaintbrushPointed,
+                            title = "Material You",
+                            subtitle = "跟随系统壁纸变换应用主题色",
+                            checked = state.dynamicColor,
+                            onCheckedChange = { viewModel.toggleDynamicColor(it) },
+                            iconTint = iOSPink
+                        )
+                    }
+
+                    // 主题色选择 (仅当动态取色关闭时显示)
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = !state.dynamicColor,
+                        enter =   androidx.compose.animation.expandVertically() +   androidx.compose.animation.fadeIn(),
+                        exit =   androidx.compose.animation.shrinkVertically() +   androidx.compose.animation.fadeOut()
+                    ) {
+                        Column(modifier = Modifier.padding(top = 16.dp)) {
+                            Text(
+                                "主题色", 
+                                style = MaterialTheme.typography.labelSmall, 
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                items(ThemeColors.size) { index ->
+                                    val color = ThemeColors[index]
+                                    val isSelected = state.themeColorIndex == index
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(color)
+                                            .clickable { viewModel.setThemeColorIndex(index) }
+                                            .then(
+                                                if (isSelected) Modifier.border(2.dp, MaterialTheme.colorScheme.onSurface, CircleShape) 
+                                                else Modifier
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                CupertinoIcons.Default.Checkmark,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
+        }
+        
+        //  个性化
+        item { IOSSectionTitle("个性化") }
+        item {
+            IOSGroup {
+                // 图标设置
+                IOSClickableItem(
+                    icon = CupertinoIcons.Default.SquareStack3dUp,
+                    title = "应用图标",
+                    value = when(state.appIcon) {
+                        // 🎀 二次元少女系列
+                        "Yuki" -> "比心少女"
+                        "Anime", "icon_anime" -> "蓝发电视"
+                        "Tv" -> "双马尾"
+                        "Headphone" -> "耳机少女"
+                        // 经典系列
+                        "3D", "icon_3d" -> "3D立体"
+                        "Blue", "icon_blue" -> "经典蓝"
+                        "Retro", "icon_retro" -> "复古怀旧"
+                        "Flat", "icon_flat" -> "扁平现代"
+                        "Flat Material" -> "扁平材质"
+                        "Neon", "icon_neon" -> "霓虹"
+                        "Telegram Blue", "icon_telegram_blue" -> "纸飞机蓝"
+                        "Pink", "icon_telegram_pink" -> "樱花粉"
+                        "Purple", "icon_telegram_purple" -> "香芋紫"
+                        "Green", "icon_telegram_green" -> "薄荷绿"
+                        "Dark", "icon_telegram_dark" -> "暗夜蓝"
+                        else -> "3D立体"  // 默认显示 3D立体 (对应默认 icon_3d)
+                    },
+                    onClick = onNavigateToIconSettings,
+                    iconTint = iOSPurple
+                )
+                Divider()
+                // 动画设置
+                IOSClickableItem(
+                    icon = CupertinoIcons.Default.WandAndStars,
+                    title = "动画与效果",
+                    value = if (state.cardAnimationEnabled) "已开启" else "已关闭",
+                    onClick = onNavigateToAnimationSettings,
+                    iconTint = iOSPink
+                )
+            }
+        }
             
             //  首页展示 - 抽屉式选择
-            item { SettingsSectionTitle("首页展示") }
+            item { IOSSectionTitle("首页展示") }
             item {
-                SettingsGroup {
+                IOSGroup {
                     val displayMode = state.displayMode
                     var isExpanded by remember { mutableStateOf(false) }
                     
@@ -309,324 +372,9 @@ fun AppearanceSettingsScreen(
                 }
             }
 
-            //  界面效果
-            item { SettingsSectionTitle("界面效果") }
+            item { IOSSectionTitle("界面自定义") }
             item {
-                val scope = rememberCoroutineScope()
-                val bottomBarVisibilityMode by com.android.purebilibili.core.store.SettingsManager
-                    .getBottomBarVisibilityMode(context).collectAsState(
-                        initial = com.android.purebilibili.core.store.SettingsManager.BottomBarVisibilityMode.ALWAYS_VISIBLE
-                    )
-                
-                SettingsGroup {
-                    //  [导航入口] 底栏管理
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToBottomBarSettings() }
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(iOSBlue.copy(alpha = 0.12f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                CupertinoIcons.Default.Menucard,
-                                contentDescription = null,
-                                tint = iOSBlue,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "底栏管理",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = "自定义底栏项目和顺序",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Icon(
-                            CupertinoIcons.Default.ChevronForward,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
-                    
-                    Divider()
-                    
-                    // ==================== 抽屉类选择器 ====================
-                    
-                    //  底栏显示模式选择（抽屉式）
-                    var visibilityModeExpanded by remember { mutableStateOf(false) }
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { visibilityModeExpanded = !visibilityModeExpanded }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                CupertinoIcons.Default.Eye,
-                                contentDescription = null,
-                                tint = com.android.purebilibili.core.theme.iOSOrange,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "底栏显示模式",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = bottomBarVisibilityMode.label,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Icon(
-                                imageVector = if (visibilityModeExpanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        
-                        // 展开后的选项
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = visibilityModeExpanded,
-                            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-                            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(top = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                com.android.purebilibili.core.store.SettingsManager.BottomBarVisibilityMode.entries.forEach { mode ->
-                                    val isSelected = mode == bottomBarVisibilityMode
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(
-                                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-                                            )
-                                            .clickable {
-                                                scope.launch {
-                                                    com.android.purebilibili.core.store.SettingsManager
-                                                        .setBottomBarVisibilityMode(context, mode)
-                                                }
-                                                visibilityModeExpanded = false
-                                            }
-                                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                mode.label,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                                color = if (isSelected) MaterialTheme.colorScheme.primary 
-                                                        else MaterialTheme.colorScheme.onSurface
-                                            )
-                                            Text(
-                                                mode.description,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                            )
-                                        }
-                                        if (isSelected) {
-                                            Icon(
-                                                CupertinoIcons.Default.Checkmark,
-                                                contentDescription = "已选择",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Divider()
-                    
-                    //  底栏标签样式（选择器）
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                CupertinoIcons.Default.Tag,
-                                contentDescription = null,
-                                tint = iOSPurple,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column {
-                                Text(
-                                    text = "底栏标签样式",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = when(state.bottomBarLabelMode) {
-                                        0 -> "图标 + 文字"
-                                        2 -> "仅文字"
-                                        else -> "仅图标"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
-                        ) {
-                            // 三种模式选择按钮
-                            listOf(
-                                Triple(0, "图标+文字", CupertinoIcons.Default.House),
-                                Triple(1, "仅图标", CupertinoIcons.Default.Heart),
-                                Triple(2, "仅文字", CupertinoIcons.Default.Character)
-                            ).forEach { (mode, label, icon) ->
-                                val isSelected = state.bottomBarLabelMode == mode
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable { viewModel.setBottomBarLabelMode(mode) }
-                                        .background(
-                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-                                            else Color.Transparent
-                                        )
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    Icon(
-                                        icon,
-                                        contentDescription = null,
-                                        tint = if (isSelected) MaterialTheme.colorScheme.primary
-                                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    Divider()
-                    
-                    // ==================== 开关类设置 ====================
-                    
-                    //  悬浮底栏开关
-                    SettingSwitchItem(
-                        icon = CupertinoIcons.Default.RectangleStack,
-                        title = "悬浮底栏",
-                        subtitle = "关闭后底栏将沉浸式贴底显示",
-                        checked = state.isBottomBarFloating,
-                        onCheckedChange = { 
-                            viewModel.toggleBottomBarFloating(it)
-                            //  [埋点] 设置变更追踪
-                            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("bottom_bar_floating", it.toString())
-                        },
-                        iconTint = iOSTeal
-                    )
-                    
-                    Divider()
-                    
-                    //  底栏磨砂效果开关
-                    SettingSwitchItem(
-                        icon = CupertinoIcons.Default.Sparkles,
-                        title = "底栏磨砂效果",
-                        subtitle = "底部导航栏的毛玻璃模糊",
-                        checked = state.bottomBarBlurEnabled,
-                        onCheckedChange = { 
-                            viewModel.toggleBottomBarBlur(it)
-                            //  [埋点] 设置变更追踪
-                            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("bottom_bar_blur", it.toString())
-                        },
-                        iconTint = iOSBlue
-                    )
-                    
-                    //  模糊强度选择（仅在磨砂开启时显示）
-                    if (state.bottomBarBlurEnabled) {
-                        Divider()
-                        BlurIntensitySelector(
-                            selectedIntensity = state.blurIntensity,
-                            onIntensityChange = { viewModel.setBlurIntensity(it) }
-                        )
-                    }
-                    
-                    Divider()
-                    
-                    //  卡片进场动画开关
-                    SettingSwitchItem(
-                        icon = CupertinoIcons.Default.WandAndStars,
-                        title = "卡片进场动画",
-                        subtitle = "首页视频卡片的入场动画效果",
-                        checked = state.cardAnimationEnabled,
-                        onCheckedChange = { 
-                            viewModel.toggleCardAnimation(it)
-                            //  [埋点] 设置变更追踪
-                            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("card_animation", it.toString())
-                        },
-                        iconTint = iOSPink
-                    )
-                    
-                    Divider()
-                    
-                    //  卡片过渡动画开关
-                    SettingSwitchItem(
-                        icon = CupertinoIcons.Default.ArrowLeftArrowRight,
-                        title = "卡片过渡动画",
-                        subtitle = "点击卡片时的共享元素过渡效果",
-                        checked = state.cardTransitionEnabled,
-                        onCheckedChange = { 
-                            viewModel.toggleCardTransition(it)
-                            //  [埋点] 设置变更追踪
-                            com.android.purebilibili.core.util.AnalyticsHelper.logSettingChange("card_transition", it.toString())
-                        },
-                        iconTint = iOSTeal
-                    )
-                }
-            }
-            
-            //  [新增] UI 自定义 - 圆角、字体、缩放
-            item { SettingsSectionTitle("界面自定义") }
-            item {
-                SettingsGroup {
-                    // 圆角大小 (0.5x - 1.5x)
-                    SliderSettingItem(
-                        title = "圆角大小",
-                        value = state.cornerRadiusScale,
-                        range = 0.5f..1.5f,
-                        onValueChange = { viewModel.setCornerRadiusScale(it) },
-                        steps = 19, // 0.05 per step
-                        icon = CupertinoIcons.Default.Crop
-                    )
-                    
-                    Divider()
-                    
+                IOSGroup {
                     // 字体大小 (0.8x - 1.4x)
                     SliderSettingItem(
                         title = "字体大小",
@@ -654,7 +402,6 @@ fun AppearanceSettingsScreen(
                     // 实时预览卡片
                     Box(modifier = Modifier.padding(16.dp)) {
                         UICustomizationPreviewCard(
-                            cornerRadiusScale = state.cornerRadiusScale,
                             fontScale = state.fontScale,
                             uiScale = state.uiScale
                         )
@@ -663,169 +410,16 @@ fun AppearanceSettingsScreen(
             }
         }
     }
-}
-/**
- *  模糊强度选择器 (可展开/收起)
- */
-@Composable
-fun BlurIntensitySelector(
-    selectedIntensity: BlurIntensity,
-    onIntensityChange: (BlurIntensity) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var isExpanded by remember { mutableStateOf(false) }
-    
-    // 获取当前选中项的显示文本
-    val currentTitle = when (selectedIntensity) {
-        BlurIntensity.THIN -> "标准"
-        BlurIntensity.THICK -> "浓郁"
-        BlurIntensity.APPLE_DOCK -> "玻璃拟态"
-    }
-    
-    Column(modifier = modifier.padding(horizontal = 16.dp)) {
-        // 标题行 - 可点击展开/收起
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .clickable { isExpanded = !isExpanded }
-                .padding(vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                CupertinoIcons.Default.Sparkles,
-                contentDescription = null,
-                tint = iOSBlue,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "模糊强度",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = currentTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            // 展开/收起箭头
-            Icon(
-                imageVector = if (isExpanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
-                contentDescription = if (isExpanded) "收起" else "展开",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                modifier = Modifier.size(24.dp)
-            )
-        }
-        
-        // 展开后的选项 - 带动画
-        androidx.compose.animation.AnimatedVisibility(
-            visible = isExpanded,
-            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut()
-        ) {
-            Column(modifier = Modifier.padding(start = 40.dp, top = 4.dp, bottom = 8.dp)) {
-                //  [调整] 顺序：标准 → 玻璃拟态 → 浓郁
-                BlurIntensityOption(
-                    icon = CupertinoIcons.Default.CheckmarkCircle,
-                    iconTint = iOSBlue,
-                    title = "标准",
-                    description = "平衡美观与性能（推荐）",
-                    isSelected = selectedIntensity == BlurIntensity.THIN,
-                    onClick = { 
-                        onIntensityChange(BlurIntensity.THIN)
-                        isExpanded = false
-                    }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                //  玻璃拟态风格 - 移到中间
-                BlurIntensityOption(
-                    icon = CupertinoIcons.Default.Desktopcomputer,
-                    iconTint = com.android.purebilibili.core.theme.iOSSystemGray,
-                    title = "玻璃拟态",
-                    description = "强烈模糊，完全遮盖背景",
-                    isSelected = selectedIntensity == BlurIntensity.APPLE_DOCK,
-                    onClick = { 
-                        onIntensityChange(BlurIntensity.APPLE_DOCK)
-                        isExpanded = false
-                    }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                //  浓郁 - 移到最后，有背景透色
-                BlurIntensityOption(
-                    icon = CupertinoIcons.Default.Sparkle,
-                    iconTint = iOSPurple,
-                    title = "浓郁",
-                    description = "背景颜色透出 + 磨砂质感",
-                    isSelected = selectedIntensity == BlurIntensity.THICK,
-                    onClick = { 
-                        onIntensityChange(BlurIntensity.THICK)
-                        isExpanded = false
-                    }
-                )
-            }
-        }
-    }
-}
 
-@Composable
-fun BlurIntensityOption(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    iconTint: Color,
-    title: String,
-    description: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .background(
-                if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                else Color.Transparent
-            )
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = isSelected,
-            onClick = onClick,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = MaterialTheme.colorScheme.primary
-            )
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(20.dp)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
+
+
 
 /**
  *  动态取色预览组件
  * 显示从壁纸提取的 Material You 颜色
  */
+
+
 @Composable
 fun DynamicColorPreview() {
     val colorScheme = MaterialTheme.colorScheme
@@ -945,19 +539,16 @@ fun SliderSettingItem(
 }
 
 /**
- *  UI 自定义预览卡片
+ *  UI 自定义预览卡片 - 简化版（固定圆角）
  */
 @Composable
 fun UICustomizationPreviewCard(
-    cornerRadiusScale: Float,
     fontScale: Float,
     uiScale: Float
 ) {
-    val cornerRadius = 12.dp * cornerRadiusScale * uiScale
+    val cornerRadius = 12.dp * uiScale  // 固定圆角，仅受 UI 缩放影响
     val padding = 16.dp * uiScale
     
-    // 使用 LocalFontScale 和 LocalUIScale 模拟效果已在 Theme 中集成
-    // 这里做个简单的视觉展示
     Surface(
         shape = RoundedCornerShape(cornerRadius),
         color = iOSTeal.copy(alpha = 0.18f),
@@ -974,14 +565,14 @@ fun UICustomizationPreviewCard(
             )
             Spacer(modifier = Modifier.height(8.dp * uiScale))
             Text(
-                text = "调整滑块查看实时变化。\n圆角：${String.format("%.1f", cornerRadius.value)}dp",
+                text = "调整滑块查看实时变化。",
                 style = MaterialTheme.typography.bodyMedium,
                 fontSize = MaterialTheme.typography.bodyMedium.fontSize * fontScale * uiScale
             )
             Spacer(modifier = Modifier.height(12.dp * uiScale))
             Button(
                 onClick = {},
-                shape = RoundedCornerShape(8.dp * cornerRadiusScale * uiScale),
+                shape = RoundedCornerShape(8.dp * uiScale),
                 modifier = Modifier.align(Alignment.End)
             ) {
                 Text(

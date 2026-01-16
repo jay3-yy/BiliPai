@@ -25,6 +25,8 @@ import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.responsiveContentWidth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -107,7 +109,25 @@ fun CategoryScreen(
         initial = HomeSettings()
     )
     val displayMode = homeSettings.displayMode
-    val gridColumns = if (displayMode == 1) 1 else 2  // 故事模式用1列，其他用2列
+    
+    // 📐 [Tablet Adaptation] Calculate adaptive columns
+    val windowSizeClass = LocalWindowSizeClass.current
+    val contentWidth = if (windowSizeClass.isExpandedScreen) {
+        minOf(windowSizeClass.widthDp, 1000.dp)
+    } else {
+        windowSizeClass.widthDp
+    }
+    
+    val gridColumns = remember(contentWidth, displayMode) {
+        if (windowSizeClass.isExpandedScreen) {
+            val minColumnWidth = if (displayMode == 1) 240.dp else 180.dp
+            val maxColumns = if (displayMode == 1) 2 else 6
+            val columns = (contentWidth / minColumnWidth).toInt()
+            columns.coerceIn(2, maxColumns) // At least 2 columns on tablet
+        } else {
+            if (displayMode == 1) 1 else 2
+        }
+    }
     
     // 首次加载
     LaunchedEffect(tid) {
@@ -167,7 +187,10 @@ fun CategoryScreen(
                     state = gridState,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .responsiveContentWidth(maxWidth = 1000.dp)
                 ) {
                     itemsIndexed(
                         items = videos,

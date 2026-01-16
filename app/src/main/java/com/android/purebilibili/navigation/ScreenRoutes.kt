@@ -39,7 +39,7 @@ sealed class ScreenRoutes(val route: String) {
     object PluginsSettings : ScreenRoutes("plugins_settings")  //  插件中心
     object BottomBarSettings : ScreenRoutes("bottom_bar_settings")  //  底栏管理
     //  [新增] 更多外观设置子页面
-    object ThemeSettings : ScreenRoutes("theme_settings")  // 主题设置
+
     object IconSettings : ScreenRoutes("icon_settings")  // 图标设置
     object AnimationSettings : ScreenRoutes("animation_settings")  // 动画设置
 
@@ -75,9 +75,9 @@ sealed class ScreenRoutes(val route: String) {
         }
     }
     
-    object BangumiDetail : ScreenRoutes("bangumi/{seasonId}") {
-        fun createRoute(seasonId: Long): String {
-            return "bangumi/$seasonId"
+    object BangumiDetail : ScreenRoutes("bangumi/{seasonId}?epId={epId}") {
+        fun createRoute(seasonId: Long, epId: Long = 0): String {
+            return "bangumi/$seasonId?epId=$epId"
         }
     }
     
@@ -97,4 +97,7 @@ sealed class ScreenRoutes(val route: String) {
             return "category/$tid?name=${android.net.Uri.encode(name)}"
         }
     }
+
+    // [新增] 新手引导页面
+    object Onboarding : ScreenRoutes("onboarding")
 }

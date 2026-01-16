@@ -278,55 +278,63 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             
             // alias 映射 - 必须与 AndroidManifest.xml 中声明的完全一致
             val allAliases = listOf(
-                // 🎀 二次元少女系列
+                // 默认系列
+                "default" to "${packageName}.MainActivityAliasYuki", // 默认使用 Yuki (兼容旧逻辑 if "default" passed)
+                "icon_3d" to "${packageName}.MainActivityAlias3D",
+                "icon_blue" to "${packageName}.MainActivityAliasBlue",
+                "icon_neon" to "${packageName}.MainActivityAliasNeon",
+                "icon_retro" to "${packageName}.MainActivityAliasRetro",
+                // 特色系列
+                "icon_anime" to "${packageName}.MainActivityAliasAnime",
+                "icon_flat" to "${packageName}.MainActivityAliasFlat",
+                "icon_telegram_blue" to "${packageName}.MainActivityAliasTelegramBlue",
+                "icon_telegram_green" to "${packageName}.MainActivityAliasGreen",
+                "icon_telegram_pink" to "${packageName}.MainActivityAliasTelegramPink",
+                "icon_telegram_purple" to "${packageName}.MainActivityAliasTelegramPurple",
+                "icon_telegram_dark" to "${packageName}.MainActivityAliasTelegramDark",
+                
+                // 兼容旧键名 (向后兼容)
                 "Yuki" to "${packageName}.MainActivityAliasYuki",
                 "Anime" to "${packageName}.MainActivityAliasAnime",
                 "Tv" to "${packageName}.MainActivityAliasTv",
                 "Headphone" to "${packageName}.MainActivityAliasHeadphone",
-                // 经典系列
                 "3D" to "${packageName}.MainActivityAlias3D",
                 "Blue" to "${packageName}.MainActivityAliasBlue",
                 "Retro" to "${packageName}.MainActivityAliasRetro",
                 "Flat" to "${packageName}.MainActivityAliasFlat",
-                "Flat Material" to "${packageName}.MainActivityAliasFlatMaterial",
-                "Neon" to "${packageName}.MainActivityAliasNeon",
-                "Telegram Blue" to "${packageName}.MainActivityAliasTelegramBlue",
-                "Pink" to "${packageName}.MainActivityAliasPink",
-                "Purple" to "${packageName}.MainActivityAliasPurple",
-                "Green" to "${packageName}.MainActivityAliasGreen",
-                "Dark" to "${packageName}.MainActivityAliasDark"
+                "Neon" to "${packageName}.MainActivityAliasNeon"
             )
             
             //  [重装检测] 检查目标alias是否可用
             // 找到需要启用的 alias
             val targetAlias = allAliases.find { it.first == currentIcon }?.second
-                ?: "${packageName}.MainActivityAliasYuki" // 默认 Yuki (比心少女)
+                ?: "${packageName}.MainActivityAlias3D" // 默认改用 3D 图标
             
             val targetAliasComponent = android.content.ComponentName(packageName, targetAlias)
             val targetState = pm.getComponentEnabledSetting(targetAliasComponent)
             
-            // 如果目标alias是disabled（说明之前被禁用了，可能是重装），强制重置为Yuki
-            if (currentIcon != "Yuki" && targetState == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
-                Logger.d(TAG, " Detected reinstall: target icon '$currentIcon' is disabled, resetting to 'Yuki'")
+            // 如果目标alias是disabled（说明之前被禁用了，可能是重装），强制重置为默认(icon_3d)
+            if (currentIcon != "icon_3d" && targetState == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                Logger.d(TAG, " Detected reinstall: target icon '$currentIcon' is disabled, resetting to 'icon_3d'")
                 runBlocking {
-                    SettingsManager.setAppIcon(this@PureApplication, "Yuki")
+                    SettingsManager.setAppIcon(this@PureApplication, "icon_3d")
                 }
-                // 确保Yuki被启用
-                val aliasYuki = android.content.ComponentName(packageName, "${packageName}.MainActivityAliasYuki")
+                // 确保 3D 图标被启用
+                val aliasDefault = android.content.ComponentName(packageName, "${packageName}.MainActivityAlias3D")
                 pm.setComponentEnabledSetting(
-                    aliasYuki,
+                    aliasDefault,
                     android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
                     android.content.pm.PackageManager.DONT_KILL_APP
                 )
                 // 禁用其他所有alias
-                allAliases.filter { it.second != "${packageName}.MainActivityAliasYuki" }.forEach { (_, aliasFullName) ->
+                allAliases.filter { it.second != "${packageName}.MainActivityAlias3D" }.forEach { (_, aliasFullName) ->
                     pm.setComponentEnabledSetting(
                         android.content.ComponentName(packageName, aliasFullName),
                         android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
                         android.content.pm.PackageManager.DONT_KILL_APP
                     )
                 }
-                Logger.d(TAG, " Reset to default Yuki icon")
+                Logger.d(TAG, " Reset to default 3D icon")
                 return
             }
             

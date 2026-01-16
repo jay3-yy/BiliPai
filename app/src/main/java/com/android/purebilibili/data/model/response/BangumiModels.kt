@@ -263,22 +263,13 @@ data class WatchProgress(
 
 /**
  * 番剧播放地址响应
- * 注意：实际 API 响应结构是 result -> video_info -> dash
+ * 标准 API /pgc/player/web/playurl 直接返回播放信息在 result 中
  */
 @Serializable
 data class BangumiPlayUrlResponse(
     val code: Int = 0,
     val message: String = "",
-    val result: BangumiPlayUrlResult? = null
-)
-
-/**
- * 番剧播放响应 result 层
- */
-@Serializable
-data class BangumiPlayUrlResult(
-    @SerialName("video_info")
-    val videoInfo: BangumiVideoInfo? = null
+    val result: BangumiVideoInfo? = null
 )
 
 /**

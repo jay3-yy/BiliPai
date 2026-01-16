@@ -12,9 +12,27 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.theme.DarkBackground
+import com.android.purebilibili.core.theme.DarkSurface
+import com.android.purebilibili.core.theme.DarkSurfaceElevated
+import com.android.purebilibili.core.theme.DarkSurfaceVariant
+import com.android.purebilibili.core.theme.TextPrimary as ThemeTextPrimary
+import com.android.purebilibili.core.theme.TextPrimaryDark as ThemeTextPrimaryDark
+import com.android.purebilibili.core.theme.TextSecondary as ThemeTextSecondary
+import com.android.purebilibili.core.theme.TextSecondaryDark as ThemeTextSecondaryDark
+import com.android.purebilibili.core.theme.TextTertiary as ThemeTextTertiary
+import com.android.purebilibili.core.theme.White
+import com.android.purebilibili.core.theme.iOSBlue
+import com.android.purebilibili.core.theme.iOSCornerRadius
+import com.android.purebilibili.core.theme.iOSGreen
+import com.android.purebilibili.core.theme.iOSOrange
+import com.android.purebilibili.core.theme.iOSPink
+import com.android.purebilibili.core.theme.iOSSystemGray4
+import com.android.purebilibili.core.theme.iOSSystemGray5
+import com.android.purebilibili.core.theme.iOSSystemGray6
+import com.android.purebilibili.core.theme.iOSYellow
 
 /**
  *  BiliPai 设计系统
@@ -25,40 +43,40 @@ object BiliDesign {
     // ==================== 品牌色 ====================
     object Colors {
         // 主品牌色 (B站粉)
-        val BiliPink = Color(0xFFFB7299)
-        val BiliPinkLight = Color(0xFFFFE4E1)
-        val BiliPinkDark = Color(0xFFE45A7B)
+        val BiliPink = iOSPink
+        val BiliPinkLight = iOSPink.copy(alpha = 0.2f)
+        val BiliPinkDark = iOSPink
         
         // 辅助色
-        val BiliBlue = Color(0xFF23ADE5)
-        val BiliGreen = Color(0xFF00C853)
-        val BiliYellow = Color(0xFFFFB300)
-        val BiliOrange = Color(0xFFFF7043)
+        val BiliBlue = iOSBlue
+        val BiliGreen = iOSGreen
+        val BiliYellow = iOSYellow
+        val BiliOrange = iOSOrange
         
         // 中性色
-        val TextPrimary = Color(0xFF212121)
-        val TextSecondary = Color(0xFF757575)
-        val TextHint = Color(0xFFBDBDBD)
-        val Divider = Color(0xFFEEEEEE)
+        val TextPrimary = ThemeTextPrimary
+        val TextSecondary = ThemeTextSecondary
+        val TextHint = ThemeTextTertiary
+        val Divider = iOSSystemGray4
         
         // 背景色
-        val Background = Color(0xFFFAFAFA)
-        val Surface = Color(0xFFFFFFFF)
-        val SurfaceVariant = Color(0xFFF5F5F5)
+        val Background = iOSSystemGray6
+        val Surface = White
+        val SurfaceVariant = iOSSystemGray5
         
         // 骨架屏色
-        val ShimmerBase = Color(0xFFE0E0E0)
-        val ShimmerHighlight = Color(0xFFF5F5F5)
+        val ShimmerBase = iOSSystemGray5
+        val ShimmerHighlight = iOSSystemGray6
         
         // 暗色模式
         object Dark {
-            val TextPrimary = Color(0xFFFFFFFF)
-            val TextSecondary = Color(0xFFB0B0B0)
-            val Background = Color(0xFF121212)
-            val Surface = Color(0xFF1E1E1E)
-            val SurfaceVariant = Color(0xFF2C2C2C)
-            val ShimmerBase = Color(0xFF2A2A2A)
-            val ShimmerHighlight = Color(0xFF3A3A3A)
+            val TextPrimary = ThemeTextPrimaryDark
+            val TextSecondary = ThemeTextSecondaryDark
+            val Background = DarkBackground
+            val Surface = DarkSurface
+            val SurfaceVariant = DarkSurfaceVariant
+            val ShimmerBase = DarkSurfaceVariant
+            val ShimmerHighlight = DarkSurfaceElevated
         }
     }
     
@@ -75,12 +93,12 @@ object BiliDesign {
     
     // ==================== 圆角 ====================
     object Radius {
-        val xs = 4.dp
-        val sm = 8.dp
-        val md = 12.dp
-        val lg = 16.dp
-        val xl = 24.dp
-        val full = 999.dp
+        val xs = iOSCornerRadius.Tiny
+        val sm = iOSCornerRadius.ExtraSmall
+        val md = iOSCornerRadius.Medium
+        val lg = iOSCornerRadius.Large
+        val xl = iOSCornerRadius.ExtraLarge
+        val full = iOSCornerRadius.Full
     }
     
     // ==================== 动画时长 ====================

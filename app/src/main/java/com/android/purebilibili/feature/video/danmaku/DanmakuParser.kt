@@ -94,8 +94,7 @@ object DanmakuParser {
             this.showAtTime = elem.progress.toLong()  // progress 已经是毫秒
             this.layerType = layerType
             this.textColor = colorWithAlpha
-            //  [修复] Bilibili 字体大小 (25) 在引擎中太小，需要放大
-            this.textSize = elem.fontsize.toFloat() * 1.8f
+            //  [修复] 不设置 textSize，让引擎使用 config.text.size（支持 fontScale 调节）
         }
     }
     
@@ -182,8 +181,7 @@ object DanmakuParser {
                 this.layerType = layerType
                 // 设置颜色（带透明度）
                 this.textColor = (colorInt.toInt() or 0xFF000000.toInt())
-                // 设置字体大小 - 需要放大以提高可见性
-                this.textSize = fontSize * 1.8f
+                //  [修复] 不设置 textSize，让引擎使用 config.text.size（支持 fontScale 调节）
             }
         } catch (e: Exception) {
             Log.w(TAG, " Failed to parse danmaku: ${e.message}")

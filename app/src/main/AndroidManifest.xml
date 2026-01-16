@@ -77,7 +77,7 @@
         <!-- Yuki 比心少女 (可在设置中切换) -->
         <activity-alias
             android:name=".MainActivityAliasYuki"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
             android:roundIcon="@mipmap/ic_launcher_round"
@@ -138,7 +138,7 @@
         <!-- 3D (默认) -->
         <activity-alias
             android:name=".MainActivityAlias3D"
-            android:enabled="false"
+            android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_3d"
             android:roundIcon="@mipmap/ic_launcher_3d_round"

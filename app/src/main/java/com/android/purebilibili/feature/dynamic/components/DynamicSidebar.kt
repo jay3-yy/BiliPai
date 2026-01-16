@@ -4,6 +4,7 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -44,6 +46,11 @@ fun DynamicSidebar(
     selectedUserId: Long?,
     isExpanded: Boolean,
     onUserClick: (Long?) -> Unit,
+    showHiddenUsers: Boolean,
+    hiddenCount: Int,
+    onToggleShowHidden: () -> Unit,
+    onTogglePin: (Long) -> Unit,
+    onToggleHidden: (Long) -> Unit,
     onToggleExpand: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -69,6 +76,44 @@ fun DynamicSidebar(
             //  [移除] 展开/收起按钮已删除，与顶栏返回按钮视觉重复
             
             //  [简化] 移除「全部」按钮，直接显示 UP 主列表
+            if (hiddenCount > 0 || showHiddenUsers) {
+                item(key = "hidden_toggle") {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onToggleShowHidden() }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (showHiddenUsers) {
+                                    CupertinoIcons.Default.Eye
+                                } else {
+                                    CupertinoIcons.Default.EyeSlash
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (isExpanded) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = if (showHiddenUsers) "隐藏中" else "显示隐藏",
+                                fontSize = 10.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+            }
             // 关注的UP主列表 - 带瀑布入场动画
             itemsIndexed(users, key = { _, u -> "sidebar_${u.uid}" }) { index, user ->
                 CascadeSidebarItem(
@@ -78,7 +123,9 @@ fun DynamicSidebar(
                             user = user,
                             isSelected = selectedUserId == user.uid,
                             showLabel = isExpanded,
-                            onClick = { onUserClick(user.uid) }
+                            onClick = { onUserClick(user.uid) },
+                            onTogglePin = { onTogglePin(user.uid) },
+                            onToggleHidden = { onToggleHidden(user.uid) }
                         )
                     }
                 )
@@ -187,79 +234,110 @@ fun SidebarUserItem(
     user: SidebarUser,
     isSelected: Boolean,
     showLabel: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onTogglePin: () -> Unit,
+    onToggleHidden: () -> Unit
 ) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp)
-    ) {
-        Box {
-            // 头像
-            val faceUrl = remember(user.face) {
-                val raw = user.face.trim()
-                when {
-                    raw.isEmpty() -> ""
-                    raw.startsWith("https://") -> raw
-                    raw.startsWith("http://") -> raw.replace("http://", "https://")
-                    raw.startsWith("//") -> "https:$raw"
-                    else -> "https://$raw"
+    var showMenu by remember { mutableStateOf(false) }
+    val displayName = if (user.isHidden) "${user.name}(隐)" else user.name
+
+    Box {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { showMenu = true }
+                )
+                .padding(vertical = 8.dp)
+                .alpha(if (user.isHidden) 0.5f else 1f)
+        ) {
+            Box {
+                // 头像
+                val faceUrl = remember(user.face) {
+                    val raw = user.face.trim()
+                    when {
+                        raw.isEmpty() -> ""
+                        raw.startsWith("https://") -> raw
+                        raw.startsWith("http://") -> raw.replace("http://", "https://")
+                        raw.startsWith("//") -> "https:$raw"
+                        else -> "https://$raw"
+                    }
                 }
-            }
-            
-            AsyncImage(
-                model = coil.request.ImageRequest.Builder(LocalContext.current)
-                    .data(faceUrl.ifEmpty { null })
-                    .crossfade(true)
-                    .build(),
-                contentDescription = user.name,
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        else MaterialTheme.colorScheme.surfaceVariant,
-                        CircleShape
-                    ),
-                contentScale = ContentScale.Crop
-            )
-            
-            //  在线状态指示器（红点）
-            if (user.isLive) {
-                Box(
+
+                AsyncImage(
+                    model = coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(faceUrl.ifEmpty { null })
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = user.name,
                     modifier = Modifier
-                        .size(12.dp)
-                        .align(Alignment.TopEnd)
-                        .background(Color.Red, CircleShape)
-                        .padding(2.dp)
-                ) {
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                            CircleShape
+                        ),
+                    contentScale = ContentScale.Crop
+                )
+
+                //  在线状态指示器（红点）
+                if (user.isLive) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.White, CircleShape)
+                            .size(12.dp)
+                            .align(Alignment.TopEnd)
+                            .background(Color.Red, CircleShape)
                             .padding(2.dp)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Red, CircleShape)
-                        )
+                                .background(Color.White, CircleShape)
+                                .padding(2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Red, CircleShape)
+                            )
+                        }
                     }
                 }
             }
+
+            if (showLabel) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = displayName,
+                    fontSize = 10.sp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+            }
         }
-        
-        if (showLabel) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = user.name,
-                fontSize = 10.sp,
-                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp)
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(if (user.isPinned) "取消置顶" else "置顶") },
+                onClick = {
+                    showMenu = false
+                    onTogglePin()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(if (user.isHidden) "取消隐藏" else "隐藏") },
+                onClick = {
+                    showMenu = false
+                    onToggleHidden()
+                }
             )
         }
     }

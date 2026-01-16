@@ -9,6 +9,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import io.github.alexzhirkevich.cupertino.icons.filled.*
@@ -197,14 +201,20 @@ fun WatchLaterScreen(
                     }
                 }
                 else -> {
-                    LazyColumn(
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 300.dp),
                         contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(state.items) { item ->
-                            WatchLaterVideoCard(
-                                item = item,
-                                onClick = { onVideoClick(item.bvid, 0L) }
+                            ElegantVideoCard(
+                                video = item,
+                                index = 0,
+                                animationEnabled = false,
+                                transitionEnabled = false,
+                                showPublishTime = true,
+                                onClick = { bvid, _ -> onVideoClick(bvid, 0L) }
                             )
                         }
                     }

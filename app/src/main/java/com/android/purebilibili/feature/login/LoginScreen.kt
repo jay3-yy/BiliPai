@@ -21,6 +21,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 //  已改用 MaterialTheme.colorScheme.primary
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.util.responsiveContentWidth
 
 // 登录方式枚举
 enum class LoginMethod {
@@ -129,7 +130,8 @@ fun LoginScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 24.dp)
+                    .responsiveContentWidth(), // 📱 平板适配：限制内容宽度
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(32.dp))

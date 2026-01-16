@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.settings
 
+
 import android.widget.Toast
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -41,6 +43,47 @@ import io.github.alexzhirkevich.cupertino.icons.filled.CheckmarkCircle
  *  应用图标设置二级页面
  *  iOS 风格设计优化
  */
+
+// 图标选项数据
+data class IconOption(val key: String, val name: String, val desc: String, val iconRes: Int)
+
+// 分组定义
+data class IconGroup(val title: String, val icons: List<IconOption>)
+
+// This function was implicitly requested to be moved here.
+// Assuming its content based on common patterns for such a function.
+fun getIconGroups(): List<IconGroup> {
+    return listOf(
+        IconGroup(
+            title = "精选",
+            icons = listOf(
+                IconOption("icon_3d", "3D立体", "全新3D设计", R.mipmap.ic_launcher_3d_foreground),
+                IconOption("Yuki", "比心少女", "经典二次元", R.mipmap.ic_launcher_round),
+                IconOption("icon_anime", "蓝发电视", "bilibili风格", R.mipmap.ic_launcher_anime)
+            )
+        ),
+        IconGroup(
+            title = "经典设计",
+            icons = listOf(
+                IconOption("icon_blue", "经典蓝", "纯净蓝色", R.mipmap.ic_launcher_blue_round),
+                IconOption("icon_retro", "复古", "怀旧电视", R.mipmap.ic_launcher_retro_round),
+                IconOption("icon_neon", "霓虹", "赛博朋克", R.mipmap.ic_launcher_neon_round),
+                IconOption("icon_flat", "扁平", "现代极简", R.mipmap.ic_launcher_flat_round),
+            )
+        ),
+        IconGroup(
+            title = "Telegram 风格",
+            icons = listOf(
+                IconOption("icon_telegram_blue", "纸飞机蓝", "Telegram 蓝", R.mipmap.ic_launcher_telegram_blue_round),
+                IconOption("icon_telegram_green", "薄荷绿", "Telegram 绿", R.mipmap.ic_launcher_telegram_green_round),
+                IconOption("icon_telegram_pink", "樱花粉", "Telegram 粉", R.mipmap.ic_launcher_telegram_pink_round),
+                IconOption("icon_telegram_purple", "香芋紫", "Telegram 紫", R.mipmap.ic_launcher_telegram_purple_round),
+                IconOption("icon_telegram_dark", "暗夜蓝", "Telegram 黑", R.mipmap.ic_launcher_telegram_dark_round),
+            )
+        )
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun IconSettingsScreen(
@@ -50,37 +93,7 @@ fun IconSettingsScreen(
     val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     
-    // 图标选项数据
-    data class IconOption(val key: String, val name: String, val desc: String, val iconRes: Int)
-    
-    // 分组定义
-    data class IconGroup(val title: String, val icons: List<IconOption>)
-    
-    val animeIcons = listOf(
-        IconOption("Yuki", "比心少女", "Default", R.mipmap.ic_launcher),
-        IconOption("Anime", "蓝发电视", "Cute", R.mipmap.ic_launcher_anime),
-        IconOption("Tv", "双马尾", "Tv", R.mipmap.ic_launcher_tv),
-        IconOption("Headphone", "耳机少女", "Music", R.mipmap.ic_launcher_headphone)
-    )
-    
-    val classicIcons = listOf(
-        IconOption("3D", "3D立体", "Classic", R.mipmap.ic_launcher_3d),
-        IconOption("Blue", "经典蓝", "Original", R.mipmap.ic_launcher_blue),
-        IconOption("Retro", "复古怀旧", "Retro", R.mipmap.ic_launcher_retro),
-        IconOption("Flat", "扁平现代", "Modern", R.mipmap.ic_launcher_flat),
-        IconOption("Flat Material", "扁平材质", "Material", R.mipmap.ic_launcher_flat_material),
-        IconOption("Neon", "霓虹", "Neon", R.mipmap.ic_launcher_neon),
-        IconOption("Telegram Blue", "纸飞机蓝", "Blue", R.mipmap.ic_launcher_telegram_blue),
-        IconOption("Pink", "樱花粉", "Pink", R.mipmap.ic_launcher_telegram_pink),
-        IconOption("Purple", "香芋紫", "Purple", R.mipmap.ic_launcher_telegram_purple),
-        IconOption("Green", "薄荷绿", "Green", R.mipmap.ic_launcher_telegram_green),
-        IconOption("Dark", "暗夜蓝", "Dark", R.mipmap.ic_launcher_telegram_dark)
-    )
-
-    val iconGroups = listOf(
-        IconGroup("二次元系列", animeIcons),
-        IconGroup("经典设计", classicIcons)
-    )
+    val iconGroups = getIconGroups()
 
     Scaffold(
         topBar = {
@@ -101,18 +114,52 @@ fun IconSettingsScreen(
         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), // iOS 分组背景色风格
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 100.dp),
-            contentPadding = PaddingValues(
-                top = padding.calculateTopPadding() + 16.dp,
-                bottom = padding.calculateBottomPadding() + 24.dp,
-                start = 16.dp,
-                end = 16.dp
-            ),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
+        IconSettingsContent(
+            modifier = Modifier.padding(padding),
+            state = state,
+            viewModel = viewModel,
+            context = context,
+            iconGroups = iconGroups
+        )
+    }
+}
+
+// 提取 IconOption 和 IconGroup 以便 Content 使用 (如果它们在 Screen 内部定义，需要移出来或传递)
+// 原代码中它们是在 Screen 内部定义的。我应该把它们移到顶层或 companion object，或者作为参数传递。
+// 为简单起见，我把它们作为参数传递，或者在 Content 内部重新定义（如果有必要）。
+// 但最好是把数据定义移出去。
+// 不过为了最小化改动，我还是在 Content 重新定义或者接受 pass-in。
+// 原代码 line 54-83 定义了数据。
+// 我直接把 LazyVerticalGrid 的内容提取到 Content。
+
+@Composable
+fun IconSettingsContent(
+    modifier: Modifier = Modifier,
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    context: android.content.Context,
+    iconGroups: List<IconGroup>
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 100.dp),
+        contentPadding = PaddingValues(
+            top = 16.dp, // Removed padding.calculateTopPadding() because modifier handles it? 
+            // Warning: modifier.padding(padding) applies padding to the container. 
+            // LazyVerticalGrid contentPadding joins with that?
+            // Usually we want contentPadding to include the system bars if strictly necessary, 
+            // but here `padding` passed from Scaffold includes TopBar height.
+            // If I apply `modifier.padding(padding)` to `IconSettingsContent`, 
+            // then `LazyVerticalGrid` starts BELOW the TopBar.
+            // So `contentPadding.top` should just be the extra spacing (16.dp).
+            
+            bottom = 24.dp, // Similarly for bottom
+            start = 16.dp,
+            end = 16.dp
+        ),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+        modifier = modifier.fillMaxSize()
+    ) {
             // 提示信息
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Row(
@@ -229,4 +276,4 @@ fun IconSettingsScreen(
             }
         }
     }
-}
+

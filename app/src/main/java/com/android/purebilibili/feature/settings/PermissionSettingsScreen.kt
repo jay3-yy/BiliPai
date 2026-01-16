@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.theme.iOSPink  // 存储权限图标色
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
@@ -40,10 +41,43 @@ import com.android.purebilibili.core.theme.iOSTeal
  *  权限管理页面
  * 显示应用所有权限的用途说明和当前状态
  */
+/**
+ *  权限管理页面内容
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PermissionSettingsScreen(
     onBack: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("权限管理", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0.dp)
+    ) { padding ->
+        PermissionSettingsContent(
+            modifier = Modifier.padding(padding)
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PermissionSettingsContent(
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     
@@ -148,33 +182,13 @@ fun PermissionSettingsScreen(
         0.2f + grantedCount.toFloat() / permissions.size.coerceAtLeast(1) * 0.8f
         ).coerceIn(0f, 1f)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("权限管理", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(CupertinoIcons.Default.ChevronBackward, contentDescription = "返回")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        //  [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            //  [修复] 添加底部导航栏内边距，确保沉浸式效果
-            contentPadding = WindowInsets.navigationBars.asPaddingValues()
-        ) {
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize(),
+        //  [修复] 添加底部导航栏内边距，确保沉浸式效果
+        contentPadding = WindowInsets.navigationBars.asPaddingValues()
+    ) {
+
             
             // 说明文字
             item {
@@ -188,10 +202,10 @@ fun PermissionSettingsScreen(
             
             // 需要运行时请求的权限
             item {
-                SettingsSectionTitle("需要授权的权限")
+                IOSSectionTitle("需要授权的权限")
             }
             item {
-                SettingsGroup {
+                IOSGroup {
                     permissions.filter { !it.isNormal }.forEachIndexed { index, info ->
                         if (index > 0) Divider()
                         PermissionItem(
@@ -207,10 +221,10 @@ fun PermissionSettingsScreen(
             
             // 普通权限（自动授予）
             item {
-                SettingsSectionTitle("自动授予的权限")
+                IOSSectionTitle("自动授予的权限")
             }
             item {
-                SettingsGroup {
+                IOSGroup {
                     permissions.filter { it.isNormal }.forEachIndexed { index, info ->
                         if (index > 0) Divider()
                         PermissionItem(
@@ -255,7 +269,7 @@ fun PermissionSettingsScreen(
             }
         }
     }
-}
+
 
 /**
  * 权限信息数据类

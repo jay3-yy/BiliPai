@@ -44,7 +44,7 @@ fun CollectionRow(
         modifier = modifier
             .fillMaxWidth(),
         shape = androidx.compose.ui.graphics.RectangleShape,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        color = Color.Transparent  // 透明背景，与周围统一
     ) {
         Row(
             modifier = Modifier

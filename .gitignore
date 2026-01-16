@@ -54,6 +54,7 @@ app/release/
 .gemini/
 .cursor/
 .claude/
+.worktrees/
 *.ai.md
 *.txt
 bilipai_log_*.txt

@@ -23,6 +23,7 @@ import com.android.purebilibili.core.plugin.PlayerPlugin
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.plugin.SkipAction
+import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.SponsorSegment
 import com.android.purebilibili.data.repository.SponsorBlockRepository
@@ -192,7 +193,7 @@ class SponsorBlockPlugin : PlayerPlugin {
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
             // 使用原设置组件 - 自动跳过
-            com.android.purebilibili.feature.settings.SettingSwitchItem(
+            IOSSwitchItem(
                 icon = CupertinoIcons.Default.Bolt,
                 title = "自动跳过",
                 subtitle = "关闭后将显示手动跳过按钮而非自动跳过",
@@ -213,7 +214,7 @@ class SponsorBlockPlugin : PlayerPlugin {
             )
             
             // 使用原设置组件 - 关于空降助手
-            com.android.purebilibili.feature.settings.SettingClickableItem(
+            IOSClickableItem(
                 icon = CupertinoIcons.Default.InfoCircle,
                 title = "关于空降助手",
                 value = "BilibiliSponsorBlock",

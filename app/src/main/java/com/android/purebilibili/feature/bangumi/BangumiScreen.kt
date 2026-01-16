@@ -40,6 +40,7 @@ import coil.compose.AsyncImage
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.theme.iOSYellow
 import com.android.purebilibili.core.util.FormatUtils
+import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.BangumiFilter
 import com.android.purebilibili.data.model.response.BangumiItem
 import com.android.purebilibili.data.model.response.BangumiSearchItem
@@ -162,6 +163,7 @@ fun BangumiScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .responsiveContentWidth()
                 //  [修复] 移除这里的底部内边距，让内容区域自己处理（如 LazyVerticalGrid 的 contentPadding）
         ) {
             // 模式切换 Tabs (时间表/索引/追番)
@@ -288,7 +290,7 @@ private fun BangumiSearchBar(
     onBack: () -> Unit
 ) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().responsiveContentWidth(),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 3.dp
     ) {
@@ -601,7 +603,7 @@ private fun BangumiGrid(
     }
     
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+        columns = GridCells.Adaptive(minSize = 100.dp),
         state = gridState,
         contentPadding = PaddingValues(
             start = 12.dp,
@@ -622,7 +624,7 @@ private fun BangumiGrid(
         
         // 加载更多指示器
         if (hasMore) {
-            item(span = { GridItemSpan(3) }) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -831,7 +833,7 @@ private fun BangumiSearchGrid(
     }
     
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
+        columns = GridCells.Adaptive(minSize = 100.dp),
         state = gridState,
         contentPadding = PaddingValues(
             start = 12.dp,
@@ -854,7 +856,7 @@ private fun BangumiSearchGrid(
         }
         
         if (hasMore) {
-            item(span = { GridItemSpan(3) }) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()

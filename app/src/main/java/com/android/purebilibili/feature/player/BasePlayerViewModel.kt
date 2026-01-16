@@ -185,15 +185,20 @@ abstract class BasePlayerViewModel : ViewModel() {
         videoUrl: String, 
         audioUrl: String?, 
         seekToMs: Long = 0L,
-        resetPlayer: Boolean = true
+        resetPlayer: Boolean = true,
+        referer: String = "https://www.bilibili.com"
     ) {
-        val player = exoPlayer ?: return
-        com.android.purebilibili.core.util.Logger.d(TAG, " playDashVideo: seekTo=${seekToMs}ms, reset=$resetPlayer, video=${videoUrl.take(50)}...")
+        val player = exoPlayer
+        if (player == null) {
+            com.android.purebilibili.core.util.Logger.e(TAG, "❌ playDashVideo: exoPlayer is NULL! Cannot play video.")
+            return
+        }
+        com.android.purebilibili.core.util.Logger.d(TAG, "▶️ playDashVideo: referer=$referer, seekTo=${seekToMs}ms, reset=$resetPlayer, video=${videoUrl.take(50)}...")
         
         player.volume = 1.0f
         
         val headers = mapOf(
-            "Referer" to "https://www.bilibili.com",
+            "Referer" to referer,
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
         val dataSourceFactory = OkHttpDataSource.Factory(NetworkModule.okHttpClient)
@@ -217,6 +222,7 @@ abstract class BasePlayerViewModel : ViewModel() {
             player.seekTo(seekToMs)
         }
         player.playWhenReady = true
+        com.android.purebilibili.core.util.Logger.d(TAG, "✅ playDashVideo: Player prepared and started, playWhenReady=true")
     }
     
     /**

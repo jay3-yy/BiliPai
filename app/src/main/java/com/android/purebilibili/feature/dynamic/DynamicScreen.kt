@@ -13,6 +13,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -25,6 +26,7 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +42,7 @@ import coil.decode.ImageDecoderDecoder
 import com.android.purebilibili.core.ui.BiliGradientButton
 import com.android.purebilibili.core.ui.EmptyState
 import com.android.purebilibili.core.ui.LoadingAnimation
+import com.android.purebilibili.core.util.responsiveContentWidth
 
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicSidebar
@@ -47,6 +50,9 @@ import com.android.purebilibili.feature.dynamic.components.DynamicTopBarWithTabs
 import com.android.purebilibili.feature.dynamic.components.DynamicDisplayMode
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentSheet
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
+import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
+import io.github.alexzhirkevich.cupertino.icons.outlined.*
+import io.github.alexzhirkevich.cupertino.icons.filled.*
 
 /**
  *  动态页面 - 支持两种布局模式
@@ -73,6 +79,8 @@ fun DynamicScreen(
     val followedUsers by viewModel.followedUsers.collectAsState()
     val selectedUserId by viewModel.selectedUserId.collectAsState()
     val isSidebarExpanded by viewModel.isSidebarExpanded.collectAsState()
+    val showHiddenUsers by viewModel.showHiddenUsers.collectAsState()
+    val hiddenUserIds by viewModel.hiddenUserIds.collectAsState()
     
     //  [新增] 评论/点赞/转发状态
     val selectedDynamicId by viewModel.selectedDynamicId.collectAsState()
@@ -172,6 +180,11 @@ fun DynamicScreen(
                             selectedUserId = selectedUserId,
                             isExpanded = isSidebarExpanded,
                             onUserClick = { viewModel.selectUser(it) },
+                            showHiddenUsers = showHiddenUsers,
+                            hiddenCount = hiddenUserIds.size,
+                            onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
+                            onTogglePin = { viewModel.togglePinUser(it) },
+                            onToggleHidden = { viewModel.toggleHiddenUser(it) },
                             onToggleExpand = { viewModel.toggleSidebar() },
                             modifier = Modifier.padding(top = statusBarHeight)
                         )
@@ -265,7 +278,12 @@ fun DynamicScreen(
                             HorizontalUserList(
                                 users = followedUsers,
                                 selectedUserId = selectedUserId,
-                                onUserClick = { viewModel.selectUser(it) }
+                                showHiddenUsers = showHiddenUsers,
+                                hiddenCount = hiddenUserIds.size,
+                                onUserClick = { viewModel.selectUser(it) },
+                                onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
+                                onTogglePin = { viewModel.togglePinUser(it) },
+                                onToggleHidden = { viewModel.toggleHiddenUser(it) }
                             )
                         }
                         
@@ -331,7 +349,7 @@ private fun DynamicList(
             top = statusBarHeight + topPaddingExtra,
             bottom = 80.dp
         ),
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().responsiveContentWidth()
     ) {
         // 空状态
         if (filteredItems.isEmpty() && !state.isLoading && state.error == null) {
@@ -395,7 +413,12 @@ private fun DynamicList(
 private fun HorizontalUserList(
     users: List<SidebarUser>,
     selectedUserId: Long?,
-    onUserClick: (Long?) -> Unit
+    showHiddenUsers: Boolean,
+    hiddenCount: Int,
+    onUserClick: (Long?) -> Unit,
+    onToggleShowHidden: () -> Unit,
+    onTogglePin: (Long) -> Unit,
+    onToggleHidden: (Long) -> Unit
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -405,64 +428,135 @@ private fun HorizontalUserList(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            //  [简化] 移除「全部」按钮，直接显示 UP 主头像列表
+            if (hiddenCount > 0 || showHiddenUsers) {
+                item(key = "hidden_toggle") {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .padding(4.dp)
+                            .combinedClickable(
+                                onClick = onToggleShowHidden,
+                                onLongClick = onToggleShowHidden
+                            )
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (showHiddenUsers) {
+                                    CupertinoIcons.Default.Eye
+                                } else {
+                                    CupertinoIcons.Default.EyeSlash
+                                },
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (showHiddenUsers) "隐藏中" else "显示隐藏",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+
             // UP 主头像列表
             items(users, key = { it.uid }) { user ->
                 val isSelected = selectedUserId == user.uid
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .clickable { onUserClick(user.uid) }
-                        .padding(4.dp)
-                ) {
-                    Box(
+                var showMenu by remember { mutableStateOf(false) }
+                val displayName = if (user.isHidden) {
+                    "${user.name.take(4)}(隐)"
+                } else {
+                    user.name.take(4)
+                }
+
+                Box {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .then(
-                                if (isSelected) 
-                                    Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                else 
-                                    Modifier
+                            .combinedClickable(
+                                onClick = { onUserClick(user.uid) },
+                                onLongClick = { showMenu = true }
                             )
+                            .padding(4.dp)
+                            .alpha(if (user.isHidden) 0.5f else 1f)
                     ) {
-                        AsyncImage(
-                            model = coil.request.ImageRequest.Builder(LocalContext.current)
-                                .data(user.face.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize().clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                        
-                        //  在线状态
-                        if (user.isLive) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .size(12.dp)
-                                    .background(androidx.compose.ui.graphics.Color.White, CircleShape)
-                                    .padding(2.dp)
-                            ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .then(
+                                    if (isSelected)
+                                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                    else
+                                        Modifier
+                                )
+                        ) {
+                            AsyncImage(
+                                model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                    .data(user.face.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+
+                            //  在线状态
+                            if (user.isLive) {
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(androidx.compose.ui.graphics.Color.Red, CircleShape)
-                                )
+                                        .align(Alignment.BottomEnd)
+                                        .size(12.dp)
+                                        .background(androidx.compose.ui.graphics.Color.White, CircleShape)
+                                        .padding(2.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(androidx.compose.ui.graphics.Color.Red, CircleShape)
+                                    )
+                                }
                             }
                         }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            displayName,  // 最多显示4个字符
+                            fontSize = 11.sp,
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                        )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        user.name.take(4),  // 最多显示4个字符
-                        fontSize = 11.sp,
-                        color = if (isSelected) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
-                    )
+
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(if (user.isPinned) "取消置顶" else "置顶") },
+                            onClick = {
+                                showMenu = false
+                                onTogglePin(user.uid)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (user.isHidden) "取消隐藏" else "隐藏") },
+                            onClick = {
+                                showMenu = false
+                                onToggleHidden(user.uid)
+                            }
+                        )
+                    }
                 }
             }
         }

@@ -37,11 +37,10 @@ fun DynamicCommentSheet(
     var commentText by remember { mutableStateOf("") }
     val context = LocalContext.current
     
-    ModalBottomSheet(
+    com.android.purebilibili.core.ui.IOSModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier

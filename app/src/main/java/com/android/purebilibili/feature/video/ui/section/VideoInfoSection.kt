@@ -28,6 +28,9 @@ import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.VideoTag
+import com.android.purebilibili.core.ui.common.copyOnLongPress
+import androidx.compose.foundation.text.selection.SelectionContainer
+import com.android.purebilibili.core.ui.common.copyOnClick
 
 /**
  * Video Info Section Components
@@ -76,6 +79,7 @@ fun VideoTitleSection(
                 modifier = Modifier
                     .weight(1f)
                     .animateContentSize()
+                    .copyOnLongPress(info.title, "视频标题")
             )
             Spacer(Modifier.width(4.dp))
             Icon(
@@ -102,6 +106,11 @@ fun VideoTitleSection(
  * Video Title with Description (Official layout: title + stats + description)
  *  Description and tags hidden by default, shown on expand
  */
+
+/**
+ * Video Title with Description (Official layout: title + stats + description)
+ *  Description and tags hidden by default, shown on expand
+ */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun VideoTitleWithDesc(
@@ -122,20 +131,21 @@ fun VideoTitleWithDesc(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            Text(
-                text = info.title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = 15.sp,
-                    lineHeight = 21.sp,
-                    fontWeight = FontWeight.SemiBold
-                ),
-                maxLines = if (expanded) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .weight(1f)
-                    .animateContentSize()
-            )
+            // [新增] 使用 SelectionContainer 支持滑动复制
+            SelectionContainer(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = info.title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 15.sp,
+                        lineHeight = 21.sp,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.animateContentSize()
+                )
+            }
             Spacer(Modifier.width(4.dp))
             Icon(
                 imageVector = if (expanded) CupertinoIcons.Default.ChevronUp else CupertinoIcons.Default.ChevronDown,
@@ -157,6 +167,14 @@ fun VideoTitleWithDesc(
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 maxLines = 1
             )
+            // [新增] 显示 BVID 并支持点击复制
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = info.bvid,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                modifier = Modifier.copyOnClick(info.bvid, "BV号")
+            )
         }
         
         //  Description - 默认隐藏，展开后显示
@@ -167,15 +185,18 @@ fun VideoTitleWithDesc(
         ) {
             Column {
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = info.desc,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    modifier = Modifier.animateContentSize()
-                )
+                // [新增] 使用 SelectionContainer 支持滑动复制
+                SelectionContainer {
+                    Text(
+                        text = info.desc,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.animateContentSize()
+                    )
+                }
             }
         }
         
@@ -200,7 +221,9 @@ fun VideoTitleWithDesc(
                                 text = tag.tag_name,
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                modifier = Modifier
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .copyOnLongPress(tag.tag_name, "标签")
                             )
                         }
                     }
@@ -252,7 +275,8 @@ fun UpInfoSection(
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.copyOnLongPress(info.owner.name, "UP主名称")
                 )
             }
             Spacer(Modifier.height(2.dp))

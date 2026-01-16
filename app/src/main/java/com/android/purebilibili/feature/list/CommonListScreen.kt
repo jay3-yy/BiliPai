@@ -24,6 +24,9 @@ import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.util.VideoGridItemSkeleton
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import com.android.purebilibili.core.util.rememberAdaptiveGridColumns
+import com.android.purebilibili.core.util.rememberResponsiveSpacing
+import com.android.purebilibili.core.util.rememberResponsiveValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +37,13 @@ fun CommonListScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val gridState = rememberLazyGridState()
+    
+    // 📱 响应式布局参数
+    // Fix: 手机端(Compact)使用较小的最小宽度以保证2列显示 (360dp / 170dp = 2.1 -> 2列)
+    // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
+    val minColWidth = rememberResponsiveValue(compact = 170.dp, medium = 170.dp, expanded = 240.dp)
+    val columns = rememberAdaptiveGridColumns(minColumnWidth = minColWidth)
+    val spacing = rememberResponsiveSpacing()
     
     //  [修复] 分页支持：收藏 + 历史记录
     val favoriteViewModel = viewModel as? FavoriteViewModel
@@ -94,13 +104,13 @@ fun CommonListScreen(
         ) {
             if (state.isLoading) {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    contentPadding = PaddingValues(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    columns = GridCells.Fixed(columns),
+                    contentPadding = PaddingValues(spacing.medium),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+                    verticalArrangement = Arrangement.spacedBy(spacing.medium),
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    items(8) { VideoGridItemSkeleton() }
+                    items(columns * 4) { VideoGridItemSkeleton() } // 根据列数生成骨架屏数量
                 }
             } else if (state.error != null) {
                 Column(
@@ -119,11 +129,11 @@ fun CommonListScreen(
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    columns = GridCells.Fixed(columns),
                     state = gridState,
-                    contentPadding = PaddingValues(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(spacing.medium),
+                    horizontalArrangement = Arrangement.spacedBy(spacing.medium),
+                    verticalArrangement = Arrangement.spacedBy(spacing.medium),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     itemsIndexed(state.items) { index, video ->

@@ -263,7 +263,8 @@ fun ActionButtonsRow(
     onFavoriteClick: () -> Unit = {},
     onLikeClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
-    onTripleClick: () -> Unit = {}
+    onTripleClick: () -> Unit = {},
+    showTripleButton: Boolean = true  // [问题12] 控制三连按钮是否显示
 ) {
     Row(
         modifier = Modifier
@@ -300,14 +301,17 @@ fun ActionButtonsRow(
             onClick = onFavoriteClick
         )
 
-        //  三连（❤心形图标）
-        BiliActionButton(
-            icon = CupertinoIcons.Filled.Heart,
-            text = "三连",
-            isActive = false,
-            activeColor = Color(0xFFE91E63),
-            onClick = onTripleClick
-        )
+        //  [问题12] 仅在 showTripleButton 为 true 时显示三连按钮
+        if (showTripleButton) {
+            //  三连（❤心形图标）
+            BiliActionButton(
+                icon = CupertinoIcons.Filled.Heart,
+                text = "三连",
+                isActive = false,
+                activeColor = Color(0xFFE91E63),
+                onClick = onTripleClick
+            )
+        }
         
         //  [删除] 评论按钮已移除，因下方已有评论区入口
     }
@@ -753,7 +757,7 @@ fun CoinDialog(
     
     val maxCoins = 2 - currentCoinCount  // 剩余可投数量
     
-    AlertDialog(
+    com.android.purebilibili.core.ui.IOSAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("投币", fontWeight = FontWeight.Bold) },
         text = {
@@ -805,15 +809,14 @@ fun CoinDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = { onConfirm(selectedCount.coerceAtMost(maxCoins), alsoLike) },
-                enabled = maxCoins > 0
+            com.android.purebilibili.core.ui.IOSDialogAction(
+                onClick = { onConfirm(selectedCount.coerceAtMost(maxCoins), alsoLike) }
             ) {
-                Text("投币")
+                Text("投币", color = if (maxCoins > 0) com.android.purebilibili.core.theme.iOSBlue else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            com.android.purebilibili.core.ui.IOSDialogAction(onClick = onDismiss) {
                 Text("取消")
             }
         }

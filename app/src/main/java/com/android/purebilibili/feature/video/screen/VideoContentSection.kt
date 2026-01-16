@@ -4,20 +4,40 @@ package com.android.purebilibili.feature.video.screen
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.common.copyOnLongPress
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.VideoTag
@@ -34,6 +54,7 @@ import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
+import kotlin.math.abs
 
 /**
  * 视频详情内容区域
@@ -74,11 +95,11 @@ fun VideoContentSection(
     onWatchLaterClick: () -> Unit = {},
     onTimestampClick: ((Long) -> Unit)? = null
 ) {
-    val listState = rememberLazyListState()
-    
-    // Tab 状态
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("简介", "评论 $replyCount")
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val scope = rememberCoroutineScope()
+    val introListState = rememberLazyListState()
+    val commentListState = rememberLazyListState()
     
     // 评论图片预览状态
     var showImagePreview by remember { mutableStateOf(false) }
@@ -113,171 +134,334 @@ fun VideoContentSection(
             )
         }
     }
-    
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 32.dp)
+
+    val onTabSelected: (Int) -> Unit = { index ->
+        scope.launch { pagerState.animateScrollToPage(index) }
+    }
+
+    // 💡 [重构] 使用简单的 Column 布局代替复杂的嵌套滚动
+    // 头部和 TabBar 固定在顶部，HorizontalPager 占据剩余空间
+    Column(
+        modifier = Modifier.fillMaxSize()
     ) {
-        // 1. UP主信息
-        item {
-            UpInfoSection(
-                info = info,
-                isFollowing = isFollowing,
-                onFollowClick = onFollowClick,
-                onUpClick = onUpClick
-            )
-        }
+        // 头部区域 (Header + TabBar)
+        VideoHeaderContent(
+            info = info,
+            videoTags = videoTags,
+            isFollowing = isFollowing,
+            isFavorited = isFavorited,
+            isLiked = isLiked,
+            coinCount = coinCount,
+            downloadProgress = downloadProgress,
+            isInWatchLater = isInWatchLater,
+            onFollowClick = onFollowClick,
+            onFavoriteClick = onFavoriteClick,
+            onLikeClick = onLikeClick,
+            onCoinClick = onCoinClick,
+            onTripleClick = onTripleClick,
+            onUpClick = onUpClick,
+            onOpenCollectionSheet = { showCollectionSheet = true },
+            onDownloadClick = onDownloadClick,
+            onWatchLaterClick = onWatchLaterClick,
+            onGloballyPositioned = { /* 不再需要测量高度用于滚动 */ }
+        )
 
-        // 2. 标题 + 统计 + 描述 + 标签
-        item {
-            VideoTitleWithDesc(
-                info = info,
-                videoTags = videoTags
-            )
-        }
+        VideoContentTabBar(
+            tabs = tabs,
+            selectedTabIndex = pagerState.currentPage,
+            onTabSelected = onTabSelected,
+            modifier = Modifier
+        )
 
-        // 3. 操作按钮行
-        item {
-            ActionButtonsRow(
-                info = info,
-                isFavorited = isFavorited,
-                isLiked = isLiked,
-                coinCount = coinCount,
-                downloadProgress = downloadProgress,
-                isInWatchLater = isInWatchLater,
-                onFavoriteClick = onFavoriteClick,
-                onLikeClick = onLikeClick,
-                onCoinClick = onCoinClick,
-                onTripleClick = onTripleClick,
-                onCommentClick = {},
-                onDownloadClick = onDownloadClick,
-                onWatchLaterClick = onWatchLaterClick
-            )
-        }
-        
-        // 4. 视频合集展示
-        info.ugc_season?.let { season ->
-            item {
-                CollectionRow(
-                    ugcSeason = season,
-                    currentBvid = info.bvid,
-                    onClick = { showCollectionSheet = true }
+        // 内容区域
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f) // 占据剩余空间
+        ) { page ->
+            when (page) {
+                0 -> VideoIntroTab(
+                    listState = introListState,
+                    modifier = Modifier,
+                    info = info,
+                    relatedVideos = relatedVideos,
+                    currentPageIndex = currentPageIndex,
+                    followingMids = followingMids,
+                    videoTags = videoTags,
+                    isFollowing = isFollowing,
+                    isFavorited = isFavorited,
+                    isLiked = isLiked,
+                    coinCount = coinCount,
+                    downloadProgress = downloadProgress,
+                    isInWatchLater = isInWatchLater,
+                    onFollowClick = onFollowClick,
+                    onFavoriteClick = onFavoriteClick,
+                    onLikeClick = onLikeClick,
+                    onCoinClick = onCoinClick,
+                    onTripleClick = onTripleClick,
+                    onPageSelect = onPageSelect,
+                    onUpClick = onUpClick,
+                    onRelatedVideoClick = onRelatedVideoClick,
+                    onOpenCollectionSheet = { showCollectionSheet = true },
+                    onDownloadClick = onDownloadClick,
+                    onWatchLaterClick = onWatchLaterClick,
+                    contentPadding = PaddingValues(bottom = 32.dp) // 不需要顶部 Padding
                 )
-            }
-        }
-
-        // 5. Tab 栏
-        item {
-            VideoContentTabBar(
-                tabs = tabs,
-                selectedTabIndex = selectedTabIndex,
-                onTabSelected = { selectedTabIndex = it }
-            )
-        }
-
-        // 6. Tab 内容
-        if (selectedTabIndex == 0) {
-            // === 简介 Tab ===
-            if (info.pages.size > 1) {
-                item {
-                    PagesSelector(
-                        pages = info.pages,
-                        currentPageIndex = currentPageIndex,
-                        onPageSelect = onPageSelect
-                    )
-                }
-            }
-
-            item { 
-                Spacer(Modifier.height(4.dp))
-                VideoRecommendationHeader() 
-            }
-
-            items(relatedVideos, key = { it.bvid }) { video ->
-                RelatedVideoItem(
-                    video = video, 
-                    isFollowed = video.owner.mid in followingMids,
-                    onClick = { onRelatedVideoClick(video.bvid) }
-                )
-            }
-            
-        } else {
-            // === 评论 Tab ===
-            item { 
-                CommentSortFilterBar(
-                    count = replyCount,
+                1 -> VideoCommentTab(
+                    listState = commentListState,
+                    modifier = Modifier,
+                    info = info,
+                    replies = replies,
+                    replyCount = replyCount,
+                    emoteMap = emoteMap,
+                    isRepliesLoading = isRepliesLoading,
+                    videoTags = videoTags,
                     sortMode = sortMode,
                     upOnlyFilter = upOnlyFilter,
                     onSortModeChange = onSortModeChange,
-                    onUpOnlyToggle = onUpOnlyToggle
+                    onUpOnlyToggle = onUpOnlyToggle,
+                    onUpClick = onUpClick,
+                    onSubReplyClick = onSubReplyClick,
+                    onLoadMoreReplies = onLoadMoreReplies,
+
+                    onImagePreview = { images, index, rect ->
+                        previewImages = images
+                        previewInitialIndex = index
+                        sourceRect = rect
+                        showImagePreview = true
+                    },
+                    onTimestampClick = onTimestampClick,
+                    contentPadding = PaddingValues(bottom = 32.dp) // 不需要顶部 Padding
                 )
             }
-            
-            if (isRepliesLoading && replies.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                        CupertinoActivityIndicator()
-                    }
+        }
+    }
+}
+
+
+
+@Composable
+private fun VideoIntroTab(
+    listState: LazyListState,
+    modifier: Modifier,
+    info: ViewInfo,
+    relatedVideos: List<RelatedVideo>,
+    currentPageIndex: Int,
+    followingMids: Set<Long>,
+    videoTags: List<VideoTag>,
+    isFollowing: Boolean,
+    isFavorited: Boolean,
+    isLiked: Boolean,
+    coinCount: Int,
+    downloadProgress: Float,
+    isInWatchLater: Boolean,
+    onFollowClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onTripleClick: () -> Unit,
+    onPageSelect: (Int) -> Unit,
+    onUpClick: (Long) -> Unit,
+    onRelatedVideoClick: (String) -> Unit,
+    onOpenCollectionSheet: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onWatchLaterClick: () -> Unit,
+    contentPadding: PaddingValues
+) {
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = contentPadding
+    ) {
+        if (info.pages.size > 1) {
+            item {
+                PagesSelector(
+                    pages = info.pages,
+                    currentPageIndex = currentPageIndex,
+                    onPageSelect = onPageSelect
+                )
+            }
+        }
+
+        item {
+            VideoRecommendationHeader()
+        }
+
+        items(relatedVideos, key = { it.bvid }) { video ->
+            RelatedVideoItem(
+                video = video,
+                isFollowed = video.owner.mid in followingMids,
+                onClick = { onRelatedVideoClick(video.bvid) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun VideoCommentTab(
+    listState: LazyListState,
+    modifier: Modifier,
+    info: ViewInfo,
+    replies: List<ReplyItem>,
+    replyCount: Int,
+    emoteMap: Map<String, String>,
+    isRepliesLoading: Boolean,
+    videoTags: List<VideoTag>,
+    sortMode: CommentSortMode,
+    upOnlyFilter: Boolean,
+    onSortModeChange: (CommentSortMode) -> Unit,
+    onUpOnlyToggle: () -> Unit,
+    onUpClick: (Long) -> Unit,
+    onSubReplyClick: (ReplyItem) -> Unit,
+    onLoadMoreReplies: () -> Unit,
+    onImagePreview: (List<String>, Int, Rect?) -> Unit,
+    onTimestampClick: ((Long) -> Unit)?,
+    contentPadding: PaddingValues
+) {
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxSize(),
+        contentPadding = contentPadding
+    ) {
+        item {
+            CommentSortFilterBar(
+                count = replyCount,
+                sortMode = sortMode,
+                upOnlyFilter = upOnlyFilter,
+                onSortModeChange = onSortModeChange,
+                onUpOnlyToggle = onUpOnlyToggle
+            )
+        }
+
+        if (isRepliesLoading && replies.isEmpty()) {
+            item {
+                Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    CupertinoActivityIndicator()
                 }
-            } else if (replies.isEmpty()) {
-                item {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = if (upOnlyFilter) "这个视频没有 UP 主的评论" else "暂无评论",
-                            color = Color.Gray
-                        )
-                    }
-                }
-            } else {
-                items(items = replies, key = { it.rpid }) { reply ->
-                    ReplyItemView(
-                        item = reply,
-                        upMid = info.owner.mid,
-                        emoteMap = emoteMap,
-                        onClick = {},
-                        onSubClick = { onSubReplyClick(reply) },
-                        onTimestampClick = onTimestampClick,
-                        onImagePreview = { images, index, rect ->
-                            previewImages = images
-                            previewInitialIndex = index
-                            sourceRect = rect
-                            showImagePreview = true
-                        }
+            }
+        } else if (replies.isEmpty()) {
+            item {
+                Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (upOnlyFilter) "这个视频没有 UP 主的评论" else "暂无评论",
+                        color = Color.Gray
                     )
                 }
-                
-                // 加载更多
-                item {
-                    val shouldLoadMore by remember(replies.size, replyCount, isRepliesLoading) {
-                        derivedStateOf {
-                            !isRepliesLoading && 
-                            replies.isNotEmpty() && 
-                            replies.size < replyCount && 
+            }
+        } else {
+            items(items = replies, key = { it.rpid }) { reply ->
+                ReplyItemView(
+                    item = reply,
+                    upMid = info.owner.mid,
+                    emoteMap = emoteMap,
+                    onClick = {},
+                    onSubClick = { onSubReplyClick(reply) },
+                    onTimestampClick = onTimestampClick,
+                    onImagePreview = { images, index, rect ->
+                        onImagePreview(images, index, rect)
+                    }
+                )
+            }
+
+            // 加载更多
+            item {
+                val shouldLoadMore by remember(replies.size, replyCount, isRepliesLoading) {
+                    derivedStateOf {
+                        !isRepliesLoading &&
+                            replies.isNotEmpty() &&
+                            replies.size < replyCount &&
                             replyCount > 0
-                        }
                     }
-                    
-                    LaunchedEffect(shouldLoadMore) {
-                        if (shouldLoadMore) {
-                            onLoadMoreReplies()
-                        }
+                }
+
+                LaunchedEffect(shouldLoadMore) {
+                    if (shouldLoadMore) {
+                        onLoadMoreReplies()
                     }
-                    
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        when {
-                            isRepliesLoading -> CupertinoActivityIndicator()
-                            replies.size >= replyCount && replyCount > 0 -> {
-                                Text("—— end ——", color = Color.Gray, fontSize = 12.sp)
-                            }
-                            replyCount > 0 -> CupertinoActivityIndicator()
+                }
+
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        isRepliesLoading -> CupertinoActivityIndicator()
+                        replies.size >= replyCount && replyCount > 0 -> {
+                            Text("—— end ——", color = Color.Gray, fontSize = 12.sp)
                         }
+                        replyCount > 0 -> CupertinoActivityIndicator()
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun VideoHeaderContent(
+    info: ViewInfo,
+    videoTags: List<VideoTag>,
+    isFollowing: Boolean,
+    isFavorited: Boolean,
+    isLiked: Boolean,
+    coinCount: Int,
+    downloadProgress: Float,
+    isInWatchLater: Boolean,
+    onFollowClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onTripleClick: () -> Unit,
+    onUpClick: (Long) -> Unit,
+    onOpenCollectionSheet: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onWatchLaterClick: () -> Unit,
+    onGloballyPositioned: (Float) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background)
+            .onGloballyPositioned { coordinates ->
+                onGloballyPositioned(coordinates.size.height.toFloat())
+            }
+    ) {
+        UpInfoSection(
+            info = info,
+            isFollowing = isFollowing,
+            onFollowClick = onFollowClick,
+            onUpClick = onUpClick
+        )
+
+        VideoTitleWithDesc(
+            info = info,
+            videoTags = videoTags
+        )
+
+        ActionButtonsRow(
+            info = info,
+            isFavorited = isFavorited,
+            isLiked = isLiked,
+            coinCount = coinCount,
+            downloadProgress = downloadProgress,
+            isInWatchLater = isInWatchLater,
+            onFavoriteClick = onFavoriteClick,
+            onLikeClick = onLikeClick,
+            onCoinClick = onCoinClick,
+            onTripleClick = onTripleClick,
+            onCommentClick = {},
+            onDownloadClick = onDownloadClick,
+            onWatchLaterClick = onWatchLaterClick
+        )
+
+        info.ugc_season?.let { season ->
+            CollectionRow(
+                ugcSeason = season,
+                currentBvid = info.bvid,
+                onClick = onOpenCollectionSheet
+            )
         }
     }
 }
@@ -289,9 +473,10 @@ fun VideoContentSection(
 private fun VideoContentTabBar(
     tabs: List<String>,
     selectedTabIndex: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column {
+    Column(modifier = modifier) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -415,7 +600,9 @@ fun VideoTagChip(tagName: String) {
             text = tagName,
             fontSize = 12.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .copyOnLongPress(tagName, "标签")
         )
     }
 }

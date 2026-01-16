@@ -4,9 +4,11 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.Modifier
 
 /**
  *  共享元素过渡作用域 Provider
@@ -36,7 +38,9 @@ val LocalAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> 
 fun SharedTransitionProvider(
     content: @Composable () -> Unit
 ) {
-    SharedTransitionLayout {
+    SharedTransitionLayout(
+        modifier = Modifier.fillMaxSize()  // 📐 [修复] 确保在平板上填充整个屏幕
+    ) {
         CompositionLocalProvider(LocalSharedTransitionScope provides this) {
             content()
         }

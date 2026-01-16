@@ -39,38 +39,21 @@ import kotlinx.coroutines.launch
  * 
  * 显示所有可用插件，支持启用/禁用和配置。
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PluginsScreen(
     onBack: () -> Unit
 ) {
+    // Top-level state for managing plugins and editing
     val plugins by PluginManager.pluginsFlow.collectAsState()
     val jsonPlugins by com.android.purebilibili.core.plugin.json.JsonPluginManager.plugins.collectAsState()
     val scope = rememberCoroutineScope()
-    val totalPlugins = plugins.size + jsonPlugins.size
-    val enabledPlugins = plugins.count { it.enabled } + jsonPlugins.count { it.enabled }
-    val pluginInteractionLevel = (
-        0.2f + enabledPlugins.toFloat() / totalPlugins.coerceAtLeast(1) * 0.8f
-        ).coerceIn(0f, 1f)
     
-    // 展开状态追踪
-    var expandedPluginId by remember { mutableStateOf<String?>(null) }
-    
-    //  导入插件对话框状态
-    var showImportDialog by remember { mutableStateOf(false) }
-    var importUrl by remember { mutableStateOf("") }
-    var isImporting by remember { mutableStateOf(false) }
-    var importError by remember { mutableStateOf<String?>(null) }
-    
-    //  [修复] 编辑插件状态移至顶层，避免在 LazyColumn 内嵌套 LazyColumn 导致闪退
+    //  编辑插件状态
     var editingPlugin by remember { mutableStateOf<com.android.purebilibili.core.plugin.json.JsonRulePlugin?>(null) }
     
-    //  测试对话框状态
-    var testingPluginId by remember { mutableStateOf<String?>(null) }
-    var testResult by remember { mutableStateOf<Triple<Int, Int, List<com.android.purebilibili.data.model.response.VideoItem>>?>(null) }
-    var testingSampleVideos by remember { mutableStateOf<List<com.android.purebilibili.data.model.response.VideoItem>>(emptyList()) }
-    
-    //  如果正在编辑插件，显示编辑器全屏覆盖
+    //  如果正在编辑插件，显示编辑器全屏覆盖 (Mobile behavior)
+    //  In Tablet, this will be handled differently.
     editingPlugin?.let { plugin ->
         JsonPluginEditorScreen(
             plugin = plugin,
@@ -81,25 +64,7 @@ fun PluginsScreen(
         )
         return
     }
-    
-    //  [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val view = androidx.compose.ui.platform.LocalView.current
-    androidx.compose.runtime.DisposableEffect(Unit) {
-        val window = (context as? android.app.Activity)?.window
-        val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
-        
-        if (window != null) {
-            window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        }
-        
-        onDispose {
-            if (window != null) {
-                window.navigationBarColor = originalNavBarColor
-            }
-        }
-    }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -117,15 +82,49 @@ fun PluginsScreen(
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
-        //  [修复] 禁用 Scaffold 默认的 WindowInsets 消耗，避免底部填充
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 16.dp)
-        ) {
+        PluginsContent(
+            modifier = Modifier.padding(padding),
+            plugins = plugins,
+            jsonPlugins = jsonPlugins,
+            onEditJsonPlugin = { editingPlugin = it }
+        )
+    }
+}
+
+@Composable
+fun PluginsContent(
+    modifier: Modifier = Modifier,
+    plugins: List<com.android.purebilibili.core.plugin.PluginInfo>,
+    jsonPlugins: List<com.android.purebilibili.core.plugin.json.LoadedJsonPlugin>,
+    onEditJsonPlugin: (com.android.purebilibili.core.plugin.json.JsonRulePlugin) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    
+    // Statistics
+    val totalPlugins = plugins.size + jsonPlugins.size
+    val enabledPlugins = plugins.count { it.enabled } + jsonPlugins.count { it.enabled }
+    
+    // Local UI states
+    var expandedPluginId by remember { mutableStateOf<String?>(null) }
+    
+    //  导入插件对话框状态
+    var showImportDialog by remember { mutableStateOf(false) }
+    var importUrl by remember { mutableStateOf("") }
+    var isImporting by remember { mutableStateOf(false) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    
+    //  测试对话框状态
+    var testingPluginId by remember { mutableStateOf<String?>(null) }
+    var testResult by remember { mutableStateOf<Triple<Int, Int, List<com.android.purebilibili.data.model.response.VideoItem>>?>(null) }
+    var testingSampleVideos by remember { mutableStateOf<List<com.android.purebilibili.data.model.response.VideoItem>>(emptyList()) }
+
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 16.dp)
+    ) {
             
             // 标题说明
             item {
@@ -277,8 +276,8 @@ fun PluginsScreen(
                                         )
                                     },
                                     onEdit = {
-                                        //  使用顶层的 editingPlugin 状态
-                                        editingPlugin = loadedPlugin.plugin
+                                        //  Callback to editing
+                                        onEditJsonPlugin(loadedPlugin.plugin)
                                     },
                                     onDelete = {
                                         com.android.purebilibili.core.plugin.json.JsonPluginManager.removePlugin(
@@ -352,10 +351,8 @@ fun PluginsScreen(
                     modifier = Modifier.padding(horizontal = 32.dp)
                 )
             }
-            
             item { Spacer(modifier = Modifier.height(32.dp)) }
         }
-    }
     
     //  导入插件对话框
     if (showImportDialog) {

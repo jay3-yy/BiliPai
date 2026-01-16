@@ -44,6 +44,7 @@ import io.github.alexzhirkevich.cupertino.icons.filled.*
 
 /**
  * 底部导航项枚举 -  使用 iOS SF Symbols 风格图标
+ * [HIG] 所有图标包含 contentDescription 用于无障碍访问
  */
 enum class BottomNavItem(
     val label: String,
@@ -52,43 +53,43 @@ enum class BottomNavItem(
 ) {
     HOME(
         "首页",
-        { Icon(CupertinoIcons.Filled.House, null) },
-        { Icon(CupertinoIcons.Outlined.House, null) }
+        { Icon(CupertinoIcons.Filled.House, contentDescription = "首页") },
+        { Icon(CupertinoIcons.Outlined.House, contentDescription = "首页") }
     ),
     DYNAMIC(
         "动态",
-        { Icon(CupertinoIcons.Filled.BellBadge, null) },
-        { Icon(CupertinoIcons.Outlined.Bell, null) }
+        { Icon(CupertinoIcons.Filled.BellBadge, contentDescription = "动态") },
+        { Icon(CupertinoIcons.Outlined.Bell, contentDescription = "动态") }
     ),
     STORY(
         "短视频",
-        { Icon(CupertinoIcons.Filled.PlayCircle, null) },
-        { Icon(CupertinoIcons.Outlined.PlayCircle, null) }
+        { Icon(CupertinoIcons.Filled.PlayCircle, contentDescription = "短视频") },
+        { Icon(CupertinoIcons.Outlined.PlayCircle, contentDescription = "短视频") }
     ),
     HISTORY(
         "历史",
-        { Icon(CupertinoIcons.Filled.Clock, null) },
-        { Icon(CupertinoIcons.Outlined.Clock, null) }
+        { Icon(CupertinoIcons.Filled.Clock, contentDescription = "历史记录") },
+        { Icon(CupertinoIcons.Outlined.Clock, contentDescription = "历史记录") }
     ),
     PROFILE(
         "我的",
-        { Icon(CupertinoIcons.Filled.PersonCircle, null) },
-        { Icon(CupertinoIcons.Outlined.Person, null) }
+        { Icon(CupertinoIcons.Filled.PersonCircle, contentDescription = "个人中心") },
+        { Icon(CupertinoIcons.Outlined.Person, contentDescription = "个人中心") }
     ),
     FAVORITE(
         "收藏",
-        { Icon(CupertinoIcons.Filled.Star, null) },
-        { Icon(CupertinoIcons.Outlined.Star, null) }
+        { Icon(CupertinoIcons.Filled.Star, contentDescription = "收藏夹") },
+        { Icon(CupertinoIcons.Outlined.Star, contentDescription = "收藏夹") }
     ),
     LIVE(
         "直播",
-        { Icon(CupertinoIcons.Filled.Video, null) },
-        { Icon(CupertinoIcons.Outlined.Video, null) }
+        { Icon(CupertinoIcons.Filled.Video, contentDescription = "直播") },
+        { Icon(CupertinoIcons.Outlined.Video, contentDescription = "直播") }
     ),
     WATCHLATER(
         "稍后看",
-        { Icon(CupertinoIcons.Filled.Bookmark, null) },
-        { Icon(CupertinoIcons.Outlined.Bookmark, null) }
+        { Icon(CupertinoIcons.Filled.Bookmark, contentDescription = "稀后再看") },
+        { Icon(CupertinoIcons.Outlined.Bookmark, contentDescription = "稀后再看") }
     )
 }
 
@@ -112,10 +113,28 @@ fun FrostedBottomBar(
     labelMode: Int = 1,  //  0=图标+文字, 1=仅图标, 2=仅文字
     onHomeDoubleTap: () -> Unit = {},  //  双击首页回到顶部
     visibleItems: List<BottomNavItem> = listOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY, BottomNavItem.PROFILE),  //  [新增] 可配置的可见项目
-    itemColorIndices: Map<String, Int> = emptyMap()  //  [新增] 项目颜色索引映射
+    itemColorIndices: Map<String, Int> = emptyMap(),  //  [新增] 项目颜色索引映射
+    onToggleSidebar: (() -> Unit)? = null  // 📱 [平板适配] 切换到侧边栏
 ) {
     val isDarkTheme = MaterialTheme.colorScheme.background.red < 0.5f
     val haptic = rememberHapticFeedback()  //  触觉反馈
+    
+    // 🔒 [防抖] 防止快速点击导致页面重复加载
+    var lastClickTime by remember { mutableStateOf(0L) }
+    val debounceClick: (BottomNavItem, () -> Unit) -> Unit = remember {
+        { item, action ->
+            val currentTime = System.currentTimeMillis()
+            // 300ms 防抖 + 已经是当前项时跳过
+            if (currentTime - lastClickTime > 300 && item != currentItem) {
+                lastClickTime = currentTime
+                action()
+            }
+        }
+    }
+    
+    // 📐 [平板适配] 检测屏幕尺寸
+    val windowSizeClass = com.android.purebilibili.core.util.LocalWindowSizeClass.current
+    val isTablet = windowSizeClass.isTablet
     
     //  读取当前模糊强度以确定背景透明度
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -123,17 +142,21 @@ fun FrostedBottomBar(
         .collectAsState(initial = com.android.purebilibili.core.ui.blur.BlurIntensity.THIN)
     val backgroundAlpha = com.android.purebilibili.core.ui.blur.BlurStyles.getBackgroundAlpha(blurIntensity)
 
-    //  根据 labelMode 动态计算高度
+    // 📐 [平板适配] 根据 labelMode 和屏幕尺寸动态计算高度
     val floatingHeight = when (labelMode) {
-        0 -> 64.dp   // 图标+文字
-        2 -> 48.dp   // 仅文字
-        else -> 56.dp // 仅图标
+        0 -> if (isTablet) 76.dp else 64.dp   // 图标+文字 (平板增大)
+        2 -> if (isTablet) 56.dp else 48.dp   // 仅文字
+        else -> if (isTablet) 68.dp else 56.dp // 仅图标 (平板增大)
     }
     val dockedHeight = when (labelMode) {
-        0 -> 60.dp   // 图标+文字
-        2 -> 44.dp   // 仅文字
-        else -> 52.dp // 仅图标
+        0 -> if (isTablet) 72.dp else 60.dp   // 图标+文字
+        2 -> if (isTablet) 52.dp else 44.dp   // 仅文字
+        else -> if (isTablet) 64.dp else 52.dp // 仅图标
     }
+    
+    // 📐 [平板适配] 图标大小
+    val iconSize = if (isTablet) 30.dp else 26.dp
+    val iconWithTextSize = if (isTablet) 28.dp else 24.dp
     
     //  根据样式计算垂直偏移以确保视觉居中
     //  正值向下偏移，负值向上偏移
@@ -147,8 +170,9 @@ fun FrostedBottomBar(
         else -> 0.dp
     }
     
-    val barHorizontalPadding = if (isFloating) 24.dp else 0.dp
-    val barBottomPadding = if (isFloating) 16.dp else 0.dp
+    // 📐 [平板适配] 水平间距
+    val barHorizontalPadding = if (isFloating) (if (isTablet) 40.dp else 24.dp) else 0.dp
+    val barBottomPadding = if (isFloating) (if (isTablet) 20.dp else 16.dp) else 0.dp
     // [新增] 获取圆角缩放比例
     val cornerRadiusScale = LocalCornerRadiusScale.current
     val floatingCornerRadius = iOSCornerRadius.Floating * cornerRadiusScale  // 28.dp * scale + 8
@@ -159,7 +183,8 @@ fun FrostedBottomBar(
             .fillMaxWidth()
             .padding(horizontal = barHorizontalPadding)
             .padding(bottom = barBottomPadding)
-            .then(if (isFloating) Modifier.navigationBarsPadding() else Modifier)
+            .then(if (isFloating) Modifier.navigationBarsPadding() else Modifier),
+        contentAlignment = Alignment.BottomCenter // 确保内容居中
     ) {
         //  主内容层
         Surface(
@@ -167,6 +192,7 @@ fun FrostedBottomBar(
                 .then(
                     if (isFloating) {
                          Modifier
+                            .widthIn(max = 640.dp) // [平板适配] 限制最大宽度，防止按钮过分疏散
                             .shadow(
                                 elevation = 8.dp,
                                 shape = barShape,
@@ -270,6 +296,69 @@ fun FrostedBottomBar(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically
             ) {
+                // 📱 [平板适配] 切换按钮集成在底栏内部 (作为第一项)
+                if (isTablet && onToggleSidebar != null) {
+                    // 追踪点击状态
+                    var isPending by remember { mutableStateOf(false) }
+                    
+                    // 颜色动画
+                    val primaryColor = MaterialTheme.colorScheme.primary
+                    val unselectedColor = if (hazeState != null) {
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) // 与其他图标一致的未选中颜色
+                    } else {
+                        BottomBarColors.UNSELECTED
+                    }
+                    
+                    val iconColor by animateColorAsState(
+                        targetValue = if (isPending) primaryColor else unselectedColor,
+                        animationSpec = spring(),
+                        label = "iconColor"
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f) // 均分宽度
+                            .fillMaxHeight()
+                            .offset(y = contentVerticalOffset)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null // 自定义动画
+                            ) {
+                                isPending = true
+                                haptic(HapticType.LIGHT)
+                                kotlinx.coroutines.MainScope().launch {
+                                    kotlinx.coroutines.delay(100)
+                                    onToggleSidebar()
+                                    isPending = false
+                                }
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier.size(iconSize) // 使用标准图标大小
+                        ) {
+                            Icon(
+                                imageVector = CupertinoIcons.Outlined.SidebarLeft,
+                                contentDescription = "侧边栏",
+                                tint = iconColor,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        
+                         if (labelMode == 0) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "侧栏", // 简洁的标签
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = iconColor
+                            )
+                        }
+                    }
+                }
+
                 visibleItems.forEach { item ->  //  [修改] 使用可配置的项目列表
                     val isSelected = item == currentItem
                     
@@ -364,14 +453,17 @@ fun FrostedBottomBar(
                                     Modifier.pointerInput(Unit) {
                                         detectTapGestures(
                                             onTap = {
-                                                isPending = true  //  立即变色
-                                                haptic(HapticType.LIGHT)
-                                                //  颜色切换完成后再播放晃动动画，然后切换页面
-                                                kotlinx.coroutines.MainScope().launch {
-                                                    kotlinx.coroutines.delay(100)  // 等待颜色动画
-                                                    wobbleAngle = 15f  //  触发晃动
-                                                    kotlinx.coroutines.delay(150)  // 等待晃动动画
-                                                    onItemClick(item)
+                                                // 🔒 [防抖] 使用防抖包装避免快速点击重复导航
+                                                debounceClick(item) {
+                                                    isPending = true  //  立即变色
+                                                    haptic(HapticType.LIGHT)
+                                                    //  颜色切换完成后再播放晃动动画，然后切换页面
+                                                    kotlinx.coroutines.MainScope().launch {
+                                                        kotlinx.coroutines.delay(100)  // 等待颜色动画
+                                                        wobbleAngle = 15f  //  触发晃动
+                                                        kotlinx.coroutines.delay(150)  // 等待晃动动画
+                                                        onItemClick(item)
+                                                    }
                                                 }
                                             },
                                             onDoubleTap = {
@@ -386,14 +478,17 @@ fun FrostedBottomBar(
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) { 
-                                        isPending = true  //  立即变色
-                                        haptic(HapticType.LIGHT)
-                                        //  颜色切换完成后再播放晃动动画，然后切换页面
-                                        kotlinx.coroutines.MainScope().launch {
-                                            kotlinx.coroutines.delay(100)  // 等待颜色动画
-                                            wobbleAngle = 15f  //  触发晃动
-                                            kotlinx.coroutines.delay(150)  // 等待晃动动画
-                                            onItemClick(item)
+                                        // 🔒 [防抖] 使用防抖包装避免快速点击重复导航
+                                        debounceClick(item) {
+                                            isPending = true  //  立即变色
+                                            haptic(HapticType.LIGHT)
+                                            //  颜色切换完成后再播放晃动动画，然后切换页面
+                                            kotlinx.coroutines.MainScope().launch {
+                                                kotlinx.coroutines.delay(100)  // 等待颜色动画
+                                                wobbleAngle = 15f  //  触发晃动
+                                                kotlinx.coroutines.delay(150)  // 等待晃动动画
+                                                onItemClick(item)
+                                            }
                                         }
                                     }
                                 }
@@ -407,7 +502,7 @@ fun FrostedBottomBar(
                                 // 图标 + 文字
                                 Box(
                                     modifier = Modifier
-                                        .size(24.dp)
+                                        .size(iconWithTextSize)  // 📐 响应式图标大小
                                         .graphicsLayer {
                                             scaleX = scale
                                             scaleY = scale
@@ -448,7 +543,7 @@ fun FrostedBottomBar(
                                 // 仅图标 (默认)
                                 Box(
                                     modifier = Modifier
-                                        .size(26.dp)
+                                        .size(iconSize)  // 📐 响应式图标大小
                                         .graphicsLayer {
                                             scaleX = scale
                                             scaleY = scale

@@ -41,6 +41,7 @@ fun LandscapeBottomControlBar(
     onQualityClick: () -> Unit = {},
     onPlayPauseClick: () -> Unit,
     onSeek: (Long) -> Unit,
+    onSeekStart: () -> Unit = {},  //  [新增] 拖动进度条开始回调（清除弹幕）
     onSpeedClick: () -> Unit = {},
     onRatioClick: () -> Unit = {},
     onDanmakuToggle: () -> Unit = {},
@@ -97,6 +98,9 @@ fun LandscapeBottomControlBar(
                 Slider(
                     value = if (isDragging) tempProgress else progressValue,
                     onValueChange = {
+                        if (!isDragging) {
+                            onSeekStart()  //  拖动开始时清除弹幕
+                        }
                         isDragging = true
                         tempProgress = it
                     },

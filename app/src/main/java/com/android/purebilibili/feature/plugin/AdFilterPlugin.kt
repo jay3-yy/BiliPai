@@ -26,6 +26,7 @@ import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.PluginStore
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.core.ui.components.*
 import io.github.alexzhirkevich.cupertino.CupertinoSwitch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -317,7 +318,7 @@ class AdFilterPlugin : FeedPlugin {
             // ========== 过滤开关 ==========
             
             // 商业合作过滤
-            com.android.purebilibili.feature.settings.SettingSwitchItem(
+            IOSSwitchItem(
                 icon = CupertinoIcons.Default.Xmark,
                 title = "过滤广告推广",
                 subtitle = "隐藏商业合作、恰饭、推广等内容",
@@ -333,7 +334,7 @@ class AdFilterPlugin : FeedPlugin {
             HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(0.5f))
             
             // 标题党过滤
-            com.android.purebilibili.feature.settings.SettingSwitchItem(
+            IOSSwitchItem(
                 icon = CupertinoIcons.Default.Star,
                 title = "过滤标题党",
                 subtitle = "隐藏震惊体、夸张标题视频",
@@ -349,7 +350,7 @@ class AdFilterPlugin : FeedPlugin {
             HorizontalDivider(modifier = Modifier.padding(start = 56.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(0.5f))
             
             // 低质量过滤
-            com.android.purebilibili.feature.settings.SettingSwitchItem(
+            IOSSwitchItem(
                 icon = CupertinoIcons.Default.Xmark,
                 title = "过滤低播放量",
                 subtitle = "隐藏播放量低于1000的视频",

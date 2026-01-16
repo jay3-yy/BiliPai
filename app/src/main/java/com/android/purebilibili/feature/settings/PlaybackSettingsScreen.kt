@@ -33,6 +33,7 @@ import com.android.purebilibili.core.theme.iOSTeal
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSSystemGray
 import kotlinx.coroutines.launch
+import com.android.purebilibili.core.ui.components.*
 
 /**
  *  播放设置二级页面
@@ -44,6 +45,7 @@ fun PlaybackSettingsScreen(
     viewModel: SettingsViewModel = viewModel(),
     onBack: () -> Unit
 ) {
+    val state by viewModel.state.collectAsState()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -63,21 +65,22 @@ fun PlaybackSettingsScreen(
         contentWindowInsets = WindowInsets(0.dp)
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-             PlaybackSettingsSheetContent(viewModel = viewModel)
+             PlaybackSettingsContent(viewModel = viewModel, state = state)
         }
     }
 }
 
 /**
- * 播放设置内容 - 可在 BottomSheet 中复用
+ * 播放设置内容 - 可在 BottomSheet 中或分栏布局中复用
  */
 @Composable
-fun PlaybackSettingsSheetContent(
+fun PlaybackSettingsContent(
     viewModel: SettingsViewModel,
+    state: SettingsUiState,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val state by viewModel.state.collectAsState()
+    // val state by viewModel.state.collectAsState() // Moved to parameter
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
     
     var isStatsEnabled by remember { mutableStateOf(prefs.getBoolean("show_stats", false)) }
@@ -91,7 +94,7 @@ fun PlaybackSettingsSheetContent(
     
     val miniPlayerMode by com.android.purebilibili.core.store.SettingsManager
         .getMiniPlayerMode(context).collectAsState(
-            initial = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY
+            initial = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF
         )
     
     // ... [保留原有逻辑: checkPipPermission, gotoPipSettings] ...
@@ -138,25 +141,23 @@ fun PlaybackSettingsSheetContent(
     
     // 权限弹窗逻辑
     if (showPipPermissionDialog) {
-        AlertDialog(
+        com.android.purebilibili.core.ui.IOSAlertDialog(
             onDismissRequest = { showPipPermissionDialog = false },
             title = { Text("权限申请", color = MaterialTheme.colorScheme.onSurface) },
             text = { Text("检测到未开启「画中画」权限。请在设置中开启该权限，否则无法使用小窗播放。", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
-                Button(
+                com.android.purebilibili.core.ui.IOSDialogAction(
                     onClick = {
                         gotoPipSettings()
                         showPipPermissionDialog = false
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    }
                 ) { Text("去设置") }
             },
             dismissButton = {
-                TextButton(onClick = { showPipPermissionDialog = false }) {
+                com.android.purebilibili.core.ui.IOSDialogAction(onClick = { showPipPermissionDialog = false }) {
                     Text("暂不开启", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-            },
-            containerColor = MaterialTheme.colorScheme.surface
+            }
         )
     }
 
@@ -166,10 +167,10 @@ fun PlaybackSettingsSheetContent(
     ) {
             
             //  解码设置
-            item { SettingsSectionTitle("解码") }
+            item { IOSSectionTitle("解码") }
             item {
-                SettingsGroup {
-                    SettingSwitchItem(
+                IOSGroup {
+                    IOSSwitchItem(
                         icon = CupertinoIcons.Default.Cpu,
                         title = "启用硬件解码",
                         subtitle = "减少发热和耗电 (推荐开启)",
@@ -185,25 +186,25 @@ fun PlaybackSettingsSheetContent(
             }
             
             //  小窗播放
-            item { SettingsSectionTitle("小窗播放") }
+            item { IOSSectionTitle("小窗播放") }
             item {
                 val scope = rememberCoroutineScope()
                 
-                // 模式选项
+                // 🔄 [简化] 只有两种模式：默认 和 画中画
                 val modeOptions = com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.entries
                 var isExpanded by remember { mutableStateOf(false) }
                 
-                SettingsGroup {
+                IOSGroup {
                     //  点击展开模式选择
-                    SettingClickableItem(
+                    IOSClickableItem(
                         icon = CupertinoIcons.Default.Pip,
-                        title = "小窗模式",
+                        title = "后台播放模式",
                         value = miniPlayerMode.label,
                         onClick = { isExpanded = !isExpanded },
                         iconTint = iOSTeal
                     )
                     
-                    //  展开的模式选择列表
+                    //  展开的模式选择列表（简化为2选项）
                     androidx.compose.animation.AnimatedVisibility(
                         visible = isExpanded,
                         enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
@@ -310,9 +311,9 @@ fun PlaybackSettingsSheetContent(
             }
             
             //  手势设置
-            item { SettingsSectionTitle("手势控制") }
+            item { IOSSectionTitle("手势控制") }
             item {
-                SettingsGroup {
+                IOSGroup {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
@@ -371,10 +372,10 @@ fun PlaybackSettingsSheetContent(
             }
             
             //  调试选项
-            item { SettingsSectionTitle("调试") }
+            item { IOSSectionTitle("调试") }
             item {
-                SettingsGroup {
-                    SettingSwitchItem(
+                IOSGroup {
+                    IOSSwitchItem(
                         icon = CupertinoIcons.Default.ChartBar,
                         title = "详细统计信息",
                         subtitle = "显示 Codec、码率等 Geek 信息",
@@ -389,7 +390,7 @@ fun PlaybackSettingsSheetContent(
             }
             
             //  交互设置
-            item { SettingsSectionTitle("交互") }
+            item { IOSSectionTitle("交互") }
             item {
                 val scope = rememberCoroutineScope()
                 val swipeHidePlayerEnabled by com.android.purebilibili.core.store.SettingsManager
@@ -399,9 +400,9 @@ fun PlaybackSettingsSheetContent(
                 val autoPlayEnabled by com.android.purebilibili.core.store.SettingsManager
                     .getAutoPlay(context).collectAsState(initial = true)
                 
-                SettingsGroup {
+                IOSGroup {
                     //  [新增] 自动播放下一个视频
-                    SettingSwitchItem(
+                    IOSSwitchItem(
                         icon = CupertinoIcons.Default.ForwardEnd,
                         title = "自动播放下一个",
                         subtitle = "视频结束后自动播放推荐视频",
@@ -415,7 +416,7 @@ fun PlaybackSettingsSheetContent(
                         iconTint = com.android.purebilibili.core.theme.iOSPurple
                     )
                     Divider()
-                    SettingSwitchItem(
+                    IOSSwitchItem(
                         icon = CupertinoIcons.Default.HeartCircle,
                         title = "双击点赞",
                         subtitle = "双击视频画面快捷点赞",
@@ -428,7 +429,7 @@ fun PlaybackSettingsSheetContent(
                         iconTint = com.android.purebilibili.core.theme.iOSPink
                     )
                     Divider()
-                    SettingSwitchItem(
+                    IOSSwitchItem(
                         icon = CupertinoIcons.Default.HandDraw,  // 手势图标
                         title = "上滑隐藏播放器",
                         subtitle = "竖屏模式下拉评论区隐藏播放器",
@@ -445,7 +446,7 @@ fun PlaybackSettingsSheetContent(
             }
             
             //  网络与画质
-            item { SettingsSectionTitle("网络与画质") }
+            item { IOSSectionTitle("网络与画质") }
             item {
                 val scope = rememberCoroutineScope()
                 val wifiQuality by com.android.purebilibili.core.store.SettingsManager
@@ -464,11 +465,11 @@ fun PlaybackSettingsSheetContent(
                 
                 fun getQualityLabel(id: Int) = qualityOptions.find { it.first == id }?.second ?: "720P"
                 
-                SettingsGroup {
+                IOSGroup {
                     // WiFi 画质选择
                     var wifiExpanded by remember { mutableStateOf(false) }
                     Column {
-                        SettingClickableItem(
+                        IOSClickableItem(
                             icon = CupertinoIcons.Default.Wifi,
                             title = "WiFi 默认画质",
                             value = getQualityLabel(wifiQuality),
@@ -537,7 +538,7 @@ fun PlaybackSettingsSheetContent(
                     val effectiveQualityLabel = getQualityLabel(effectiveQuality)
                     
                     Column {
-                        SettingClickableItem(
+                        IOSClickableItem(
                             icon = CupertinoIcons.Default.ArrowDownCircle,
                             title = "流量 默认画质",
                             value = getQualityLabel(mobileQuality) + if (isDataSaverActive && mobileQuality > 32) " → $effectiveQualityLabel" else "",
@@ -609,7 +610,7 @@ fun PlaybackSettingsSheetContent(
             }
             
             // 📉 省流量模式
-            item { SettingsSectionTitle("省流量") }
+            item { IOSSectionTitle("省流量") }
             item {
                 val scope = rememberCoroutineScope()
                 val dataSaverMode by com.android.purebilibili.core.store.SettingsManager
@@ -621,9 +622,9 @@ fun PlaybackSettingsSheetContent(
                 val modeOptions = com.android.purebilibili.core.store.SettingsManager.DataSaverMode.entries
                 var isExpanded by remember { mutableStateOf(false) }
                 
-                SettingsGroup {
+                IOSGroup {
                     //  点击展开模式选择
-                    SettingClickableItem(
+                    IOSClickableItem(
                         icon = CupertinoIcons.Default.Leaf,
                         title = "省流量模式",
                         value = dataSaverMode.label,

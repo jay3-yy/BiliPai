@@ -116,8 +116,8 @@ fun StoryVideoCard(
         modifier = cardModifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
-            //  [新增] 进场动画 - 支持开关控制
-            .animateEnter(index = index, key = video.bvid, animationEnabled = animationEnabled)
+            //  [修复] 进场动画 - 使用 Unit 作为 key，避免分类切换时重新动画
+            .animateEnter(index = index, key = Unit, animationEnabled = animationEnabled)
             //  [新增] 记录卡片位置
             .onGloballyPositioned { coordinates ->
                 cardBounds = coordinates.boundsInRoot()

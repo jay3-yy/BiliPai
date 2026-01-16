@@ -51,6 +51,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 //  Lottie 动画
 import com.airbnb.lottie.compose.*
+import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.LottieUrls
 
 /**
@@ -150,7 +151,8 @@ fun OnboardingBottomSheet(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(bottom = 24.dp),
+                        .padding(bottom = 24.dp)
+                        .responsiveContentWidth(), // 📱 平板适配：限制内容宽度
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     //  iOS 风格拖拽指示器

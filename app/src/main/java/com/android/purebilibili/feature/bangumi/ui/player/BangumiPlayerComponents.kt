@@ -225,14 +225,22 @@ fun BangumiPlayerView(
             )
     ) {
         // PlayerView
+        //  [修复] 在 factory 和 update 中都设置 player，确保 PlayerView 正确附加到 ExoPlayer
         AndroidView(
             factory = { ctx ->
+                android.util.Log.d("BangumiPlayer", "🎬 PlayerView factory: creating new view, player=${exoPlayer.hashCode()}")
                 PlayerView(ctx).apply {
-                    player = exoPlayer
+                    player = exoPlayer  // [关键] 在 factory 中也设置 player
                     useController = false
                     keepScreenOn = true
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)  // 禁用系统缓冲指示器
                     setBackgroundColor(android.graphics.Color.BLACK)
                 }
+            },
+            update = { view ->
+                //  [关键] 无条件设置 player，确保 MediaSource 变化后 PlayerView 能正确刷新
+                android.util.Log.d("BangumiPlayer", "🔗 PlayerView update: player=${exoPlayer.hashCode()}, hasMediaItems=${exoPlayer.mediaItemCount > 0}")
+                view.player = exoPlayer
             },
             modifier = Modifier.fillMaxSize()
         )
@@ -400,7 +408,7 @@ fun BangumiPlayerView(
                         )
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    // 进度条（全屏和竖屏都显示）
+                    // 进度条（全屏和竖屏都显示）- 使用细进度条样式
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
@@ -411,21 +419,19 @@ fun BangumiPlayerView(
                             fontSize = 12.sp
                         )
                         
-                        Slider(
-                            value = currentProgress,
-                            onValueChange = { 
+                        //  [优化] 使用自定义细进度条替代粗 Slider
+                        BangumiSlimProgressBar(
+                            progress = currentProgress,
+                            onProgressChange = { newProgress ->
                                 lastInteractionTime = System.currentTimeMillis()
-                                currentProgress = it 
+                                currentProgress = newProgress
                             },
-                            onValueChangeFinished = {
+                            onSeekFinished = {
                                 exoPlayer.seekTo((currentProgress * duration).toLong())
                             },
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
-                            colors = SliderDefaults.colors(
-                                thumbColor = MaterialTheme.colorScheme.primary,
-                                activeTrackColor = MaterialTheme.colorScheme.primary,
-                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                            )
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(horizontal = 8.dp)
                         )
                         
                         Text(
@@ -747,6 +753,96 @@ fun BangumiQualityMenu(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ *  [优化] 细进度条组件 - 参考普通视频播放器的 VideoProgressBar 样式
+ * 3dp 高度的细进度条，带圆角和可拖动的圆点滑块
+ */
+@Composable
+fun BangumiSlimProgressBar(
+    progress: Float,
+    onProgressChange: (Float) -> Unit,
+    onSeekFinished: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isDragging by remember { mutableStateOf(false) }
+    var tempProgress by remember { mutableFloatStateOf(progress) }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    
+    // 同步外部进度
+    LaunchedEffect(progress) {
+        if (!isDragging) {
+            tempProgress = progress
+        }
+    }
+    
+    val displayProgress = if (isDragging) tempProgress else progress
+    
+    Box(
+        modifier = modifier
+            .height(24.dp)  // 触摸区域高度
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                    onProgressChange(newProgress)
+                    onSeekFinished()
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        isDragging = true
+                        tempProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                        onProgressChange(tempProgress)
+                    },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        tempProgress = (change.position.x / size.width).coerceIn(0f, 1f)
+                        onProgressChange(tempProgress)
+                    },
+                    onDragEnd = {
+                        isDragging = false
+                        onSeekFinished()
+                    },
+                    onDragCancel = {
+                        isDragging = false
+                        tempProgress = progress
+                    }
+                )
+            },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        // 背景轨道
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .background(Color.White.copy(alpha = 0.3f), RoundedCornerShape(1.5.dp))
+        )
+        
+        // 当前进度
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(displayProgress.coerceIn(0f, 1f))
+                .height(3.dp)
+                .background(primaryColor, RoundedCornerShape(1.5.dp))
+        )
+        
+        // 滑块（圆点）- 拖动时放大
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(displayProgress.coerceIn(0f, 1f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .size(if (isDragging) 16.dp else 12.dp)
+                    .offset(x = if (isDragging) 8.dp else 6.dp)
+                    .background(primaryColor, androidx.compose.foundation.shape.CircleShape)
+            )
         }
     }
 }

@@ -98,6 +98,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
      * 绑定播放器
      */
     override fun attachPlayer(player: ExoPlayer) {
+        com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "🔗 attachPlayer called, player hashCode: ${player.hashCode()}")
         super.attachPlayer(player)
         //  [新增] 添加播放完成监听
         player.addListener(playbackEndListener)
@@ -115,7 +116,9 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
      * 加载番剧播放（从详情页进入）
      */
     fun loadBangumiPlay(seasonId: Long, epId: Long) {
+        com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "📥 loadBangumiPlay: seasonId=$seasonId, epId=$epId, exoPlayer=${exoPlayer?.hashCode()}")
         if (seasonId == currentSeasonId && epId == currentEpId && _uiState.value is BangumiPlayerState.Success) {
+            com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "⏭️ loadBangumiPlay: skipped (already loaded)")
             return // 避免重复加载
         }
         
@@ -156,26 +159,52 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
      * 获取播放地址
      */
     private suspend fun fetchPlayUrl(detail: BangumiDetail, episode: BangumiEpisode, episodeIndex: Int) {
+        com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "🎬 fetchPlayUrl: epId=${episode.id}, cid=${episode.cid}")
         val playUrlResult = BangumiRepository.getBangumiPlayUrl(episode.id)
         
         playUrlResult.onSuccess { playData ->
+            com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "📡 PlayUrl success: quality=${playData.quality}, hasDash=${playData.dash != null}, hasDurl=${!playData.durl.isNullOrEmpty()}")
+            
             // 解析播放地址
-            val videoUrl: String?
-            val audioUrl: String?
+            var videoUrl: String? = null
+            var audioUrl: String? = null
             
             if (playData.dash != null) {
                 // DASH 格式
                 val dash = playData.dash
                 val video = dash.getBestVideo(playData.quality)
                 val audio = dash.getBestAudio()
+                
+                com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "📹 DASH videos: ${dash.video.size}, audios: ${dash.audio?.size ?: 0}")
+                
+                //  [优化] 尝试主 URL，失败则使用备用 URL
                 videoUrl = video?.getValidUrl()
+                if (videoUrl.isNullOrEmpty() && video?.backupUrl?.isNotEmpty() == true) {
+                    videoUrl = video.backupUrl.firstOrNull()
+                    com.android.purebilibili.core.util.Logger.w("BangumiPlayerVM", " 主 URL 无效，使用备用 CDN: ${videoUrl?.take(60)}...")
+                }
+                
                 audioUrl = audio?.getValidUrl()
+                if (audioUrl.isNullOrEmpty() && audio?.backupUrl?.isNotEmpty() == true) {
+                    audioUrl = audio.backupUrl.firstOrNull()
+                }
+                
+                com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", " DASH: video=${videoUrl?.take(60)}..., audio=${audioUrl?.take(40)}...")
+                
             } else if (!playData.durl.isNullOrEmpty()) {
                 // FLV/MP4 格式
-                videoUrl = playData.durl.firstOrNull()?.url
+                val durl = playData.durl.first()
+                videoUrl = durl.url
+                //  [优化] durl 也有备用 URL
+                val backupUrls = durl.backup_url
+                if (videoUrl.isNullOrEmpty() && !backupUrls.isNullOrEmpty()) {
+                    videoUrl = backupUrls.firstOrNull()
+                }
                 audioUrl = null
+                com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "📹 DURL: url=${videoUrl?.take(60)}...")
             } else {
-                _uiState.value = BangumiPlayerState.Error("无法获取播放地址")
+                com.android.purebilibili.core.util.Logger.e("BangumiPlayerVM", "❌ No dash or durl in response!")
+                _uiState.value = BangumiPlayerState.Error("无法获取播放地址：服务器未返回视频流")
                 return
             }
             
@@ -195,8 +224,18 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 acceptDescription = playData.acceptDescription ?: emptyList()
             )
             
+            //  [修复] 检查播放器是否已附加，添加调试日志
+            com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "🎯 About to call playDashVideo, exoPlayer attached: ${exoPlayer != null}")
+            if (exoPlayer == null) {
+                com.android.purebilibili.core.util.Logger.e("BangumiPlayerVM", "❌ exoPlayer is NULL when trying to play! Video URL: ${videoUrl.take(50)}...")
+            }
+            
+            //  [修复] 构建番剧专用 Referer，解决 CDN 403 播放失败问题
+            val referer = "https://www.bilibili.com/bangumi/play/ep${episode.id}"
+            com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "🔗 Using Referer: $referer")
+            
             //  [重构] 使用基类方法播放视频
-            playDashVideo(videoUrl, audioUrl)
+            playDashVideo(videoUrl, audioUrl, referer = referer)
             
             //  [重构] 使用基类方法加载弹幕
             loadDanmaku(episode.cid)
@@ -279,8 +318,9 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                     quality = playData.quality
                 )
                 
-                //  [修复] 切换清晰度时使用 resetPlayer=false 减少闪烁
-                playDashVideo(videoUrl, audioUrl, currentPos, resetPlayer = false)
+                //  [修复] 切换清晰度时使用 resetPlayer=false 减少闪烁，并传入 Referer
+                val referer = "https://www.bilibili.com/bangumi/play/ep${currentState.currentEpisode.id}"
+                playDashVideo(videoUrl, audioUrl, currentPos, resetPlayer = false, referer = referer)
             }
         }
     }

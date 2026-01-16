@@ -68,7 +68,7 @@ object VideoRepository {
             put("3064", 1)
             put("39c8", "333.999.fp.risk")
             put("3c43", org.json.JSONObject().apply {
-                put("adca", "Linux")
+                put("adca", "Windows") // 与 User-Agent (Windows NT 10.0) 保持一致
                 put("bfe9", randPngEnd.takeLast(50))
             })
         }.toString()
@@ -401,12 +401,15 @@ object VideoRepository {
     }
     
     //  [新增] 以游客身份获取视频（忽略登录凭证）
+    //  [修复] 使用 guestApi 确保不携带 SESSDATA/bili_jct
     private suspend fun fetchAsGuestFallback(bvid: String, cid: Long): PlayUrlData? {
         try {
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " fetchAsGuestFallback: bvid=$bvid, cid=$cid")
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", " fetchAsGuestFallback: bvid=$bvid, cid=$cid (using guestApi)")
             
-            // 直接使用 Legacy API，这个 API 对登录状态更宽容
-            val legacyResult = api.getPlayUrlLegacy(
+            // ✅ 使用 guestApi - 不携带登录凭证
+            val guestApi = NetworkModule.guestApi
+            
+            val legacyResult = guestApi.getPlayUrlLegacy(
                 bvid = bvid, 
                 cid = cid, 
                 qn = 64,  // 降低画质要求，提高成功率
@@ -421,10 +424,12 @@ object VideoRepository {
                     com.android.purebilibili.core.util.Logger.d("VideoRepo", " Guest fallback (Legacy 64p) success")
                     return data
                 }
+            } else {
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", " Guest fallback 64p failed: code=${legacyResult.code}")
             }
             
             //  如果 64p 也失败，尝试更低画质 32p
-            val lowQualityResult = api.getPlayUrlLegacy(
+            val lowQualityResult = guestApi.getPlayUrlLegacy(
                 bvid = bvid, 
                 cid = cid, 
                 qn = 32,

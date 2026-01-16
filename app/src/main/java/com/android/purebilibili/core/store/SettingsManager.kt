@@ -274,21 +274,27 @@ object SettingsManager {
 
     //  [新增] --- 应用图标 ---
     fun getAppIcon(context: Context): Flow<String> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_APP_ICON] ?: "Yuki" }
+        .map { preferences -> preferences[KEY_APP_ICON] ?: "icon_3d" }
 
     suspend fun setAppIcon(context: Context, iconKey: String) {
+        // 1. Write to DataStore (suspends until persisted)
         context.settingsDataStore.edit { preferences -> 
             preferences[KEY_APP_ICON] = iconKey
         }
-        //  同步到 SharedPreferences，供 Application 同步读取
-        context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
-            .edit().putString("current_icon", iconKey).apply()
+        
+        // 2. Write to SharedPreferences synchronously using commit()
+        // This is critical because changing the app icon (activity-alias) often kills the process immediately.
+        // apply() is asynchronous and might not finish before the process dies.
+        val success = context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
+            .edit().putString("current_icon", iconKey).commit()
+            
+        com.android.purebilibili.core.util.Logger.d("SettingsManager", "App icon saved: $iconKey, persisted to prefs: $success")
     }
     
     //  同步读取当前图标设置（用于 Application 启动时同步）
     fun getAppIconSync(context: Context): String {
         return context.getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
-            .getString("current_icon", "Yuki") ?: "Yuki"
+            .getString("current_icon", "icon_3d") ?: "icon_3d"
     }
 
     //  [新增] --- 底部栏样式 ---
@@ -497,7 +503,11 @@ object SettingsManager {
     // ========== 🌐 网络感知画质设置 ==========
     
     private val KEY_WIFI_QUALITY = intPreferencesKey("wifi_default_quality")
+
     private val KEY_MOBILE_QUALITY = intPreferencesKey("mobile_default_quality")
+    //  [New] Video Codec & Audio Quality
+    private val KEY_VIDEO_CODEC = stringPreferencesKey("video_codec_preference")
+    private val KEY_AUDIO_QUALITY = intPreferencesKey("audio_quality_preference")
     
     // --- WiFi 默认画质 (默认 80 = 1080P) ---
     fun getWifiQuality(context: Context): Flow<Int> = context.settingsDataStore.data
@@ -534,6 +544,49 @@ object SettingsManager {
     fun getMobileQualitySync(context: Context): Int {
         return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
             .getInt("mobile_quality", 64)
+    }
+
+    // --- Video Codec Preference (Default: HEVC/hev1) ---
+    // Values: "avc1" (AVC), "hev1" (HEVC), "av01" (AV1)
+    fun getVideoCodec(context: Context): Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_VIDEO_CODEC] ?: "hev1" }
+
+    suspend fun setVideoCodec(context: Context, value: String) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_VIDEO_CODEC] = value }
+        // Sync to SharedPreferences for synchronous access
+        context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
+            .edit().putString("video_codec", value).apply()
+    }
+
+    fun getVideoCodecSync(context: Context): String {
+        return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
+            .getString("video_codec", "hev1") ?: "hev1"
+    }
+
+    // --- Audio Quality Preference (Default: 30280 = 192K) ---
+    // Special Values: -1 (Auto/Highest)
+    fun getAudioQuality(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> 
+            val value = preferences[KEY_AUDIO_QUALITY] ?: -1
+            com.android.purebilibili.core.util.Logger.d("SettingsManager", "📻 getAudioQuality Flow emitting: $value")
+            value 
+        }
+
+    suspend fun setAudioQuality(context: Context, value: Int) {
+        com.android.purebilibili.core.util.Logger.d("SettingsManager", "📻 setAudioQuality called with: $value")
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_AUDIO_QUALITY] = value 
+            com.android.purebilibili.core.util.Logger.d("SettingsManager", "📻 setAudioQuality DataStore written: $value")
+        }
+        // Sync to SharedPreferences for synchronous access - Use commit() to ensure immediate write
+        val result = context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
+            .edit().putInt("audio_quality", value).commit()
+        com.android.purebilibili.core.util.Logger.d("SettingsManager", "📻 setAudioQuality SharedPrefs committed: $value, success=$result")
+    }
+
+    fun getAudioQualitySync(context: Context): Int {
+        return context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
+            .getInt("audio_quality", -1)
     }
     
     // ==========  空降助手 (SponsorBlock) ==========
@@ -624,27 +677,29 @@ object SettingsManager {
     private val KEY_MINI_PLAYER_MODE = intPreferencesKey("mini_player_mode")
     
     /**
-     *  小窗播放模式
-     * - OFF: 关闭小窗功能
-     * - IN_APP_ONLY: 仅应用内小窗（返回首页时显示）
-     * - SYSTEM_PIP: 系统画中画（退出应用时自动进入PiP）
-     * - BACKGROUND: 后台音频（仅播放音频，无画面）
+     *  小窗播放模式（3 种）
+     * - OFF: 默认模式（官方B站行为：切到桌面后台播放，返回主页停止）
+     * - IN_APP_ONLY: 应用内小窗（返回主页时显示悬浮小窗）
+     * - SYSTEM_PIP: 系统画中画（切到桌面时自动进入画中画模式）
      */
     enum class MiniPlayerMode(val value: Int, val label: String, val description: String) {
-        OFF(0, "关闭", "不使用小窗播放"),
-        IN_APP_ONLY(1, "应用内小窗", "返回首页时显示悬浮小窗"),
-        SYSTEM_PIP(2, "系统画中画", "退出应用时自动进入画中画模式"),
-        BACKGROUND(3, "后台音频", "退出应用后仅继续播放音频");
+        OFF(0, "默认", "切到桌面后台播放，返回主页停止"),
+        IN_APP_ONLY(1, "应用内小窗", "返回主页时显示悬浮小窗"),
+        SYSTEM_PIP(2, "画中画", "切到桌面进入系统画中画");
         
         companion object {
-            fun fromValue(value: Int): MiniPlayerMode = entries.find { it.value == value } ?: IN_APP_ONLY
+            fun fromValue(value: Int): MiniPlayerMode = when(value) {
+                1 -> IN_APP_ONLY
+                2 -> SYSTEM_PIP
+                else -> OFF
+            }
         }
     }
     
     // --- 小窗模式设置 ---
     fun getMiniPlayerMode(context: Context): Flow<MiniPlayerMode> = context.settingsDataStore.data
         .map { preferences -> 
-            MiniPlayerMode.fromValue(preferences[KEY_MINI_PLAYER_MODE] ?: MiniPlayerMode.IN_APP_ONLY.value)
+            MiniPlayerMode.fromValue(preferences[KEY_MINI_PLAYER_MODE] ?: MiniPlayerMode.OFF.value)
         }
 
     suspend fun setMiniPlayerMode(context: Context, mode: MiniPlayerMode) {
@@ -659,7 +714,7 @@ object SettingsManager {
     //  同步读取小窗模式（用于 MiniPlayerManager）
     fun getMiniPlayerModeSync(context: Context): MiniPlayerMode {
         val value = context.getSharedPreferences("mini_player", Context.MODE_PRIVATE)
-            .getInt("mode", MiniPlayerMode.IN_APP_ONLY.value)
+            .getInt("mode", MiniPlayerMode.OFF.value)
         return MiniPlayerMode.fromValue(value)
     }
     
@@ -968,5 +1023,85 @@ object SettingsManager {
     fun getUIScaleSync(context: Context): Float {
         return context.getSharedPreferences("ui_customization", Context.MODE_PRIVATE)
             .getFloat("ui_scale", 1.0f)
+    }
+    
+    // ========== 📱 平板导航模式 ==========
+    
+    private val KEY_TABLET_NAVIGATION_MODE = booleanPreferencesKey("tablet_use_sidebar")
+    
+    /**
+     *  平板导航模式
+     * - false: 使用底栏（默认，与手机一致）
+     * - true: 使用侧边栏
+     */
+    fun getTabletUseSidebar(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_TABLET_NAVIGATION_MODE] ?: false }  // 默认使用底栏
+
+    suspend fun setTabletUseSidebar(context: Context, useSidebar: Boolean) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_TABLET_NAVIGATION_MODE] = useSidebar 
+        }
+    }
+    
+    // ========== [问题12] 视频操作按钮可见性 ==========
+    
+    private val KEY_HIDE_TRIPLE_BUTTON = booleanPreferencesKey("hide_triple_button")
+    private val KEY_HIDE_CACHE_BUTTON = booleanPreferencesKey("hide_cache_button")
+    
+    /**
+     *  隐藏三连按钮开关
+     * - false: 显示（默认）
+     * - true: 隐藏
+     */
+    fun getHideTripleButton(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_HIDE_TRIPLE_BUTTON] ?: false }
+
+    suspend fun setHideTripleButton(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_HIDE_TRIPLE_BUTTON] = value 
+        }
+    }
+    
+    /**
+     *  隐藏缓存按钮开关
+     * - false: 显示（默认）
+     * - true: 隐藏
+     */
+    fun getHideCacheButton(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_HIDE_CACHE_BUTTON] ?: false }
+
+    suspend fun setHideCacheButton(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_HIDE_CACHE_BUTTON] = value 
+        }
+    }
+    
+    // ========== [问题3] 动态页布局方向 ==========
+    
+    private val KEY_DYNAMIC_PAGE_LAYOUT_DIRECTION = intPreferencesKey("dynamic_page_layout_direction")
+    
+    /**
+     *  动态页布局方向
+     * - 0: 左侧（默认，适合左撇子）
+     * - 1: 右侧（适合右撇子）
+     */
+    enum class DynamicLayoutDirection(val value: Int, val label: String) {
+        LEFT(0, "左侧"),
+        RIGHT(1, "右侧");
+        
+        companion object {
+            fun fromValue(value: Int): DynamicLayoutDirection = entries.find { it.value == value } ?: LEFT
+        }
+    }
+    
+    fun getDynamicLayoutDirection(context: Context): Flow<DynamicLayoutDirection> = context.settingsDataStore.data
+        .map { preferences -> 
+            DynamicLayoutDirection.fromValue(preferences[KEY_DYNAMIC_PAGE_LAYOUT_DIRECTION] ?: 0)
+        }
+
+    suspend fun setDynamicLayoutDirection(context: Context, direction: DynamicLayoutDirection) {
+        context.settingsDataStore.edit { preferences -> 
+            preferences[KEY_DYNAMIC_PAGE_LAYOUT_DIRECTION] = direction.value 
+        }
     }
 }

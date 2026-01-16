@@ -1,89 +1,231 @@
 // 文件路径: feature/dynamic/DynamicViewModel.kt
 package com.android.purebilibili.feature.dynamic
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.data.model.response.DynamicItem
-import com.android.purebilibili.data.model.response.FollowedLiveRoom
+import com.android.purebilibili.data.model.response.LiveRoom
 import com.android.purebilibili.data.repository.DynamicRepository
-import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.data.repository.LiveRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlin.math.max
 
 /**
  *  动态页面 ViewModel
  * 支持：动态列表、侧边栏关注用户、在线状态
  */
-class DynamicViewModel : ViewModel() {
-    
+class DynamicViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val appContext = getApplication<Application>()
+    private val cachePrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_CACHE, Context.MODE_PRIVATE)
+    private val userPrefs = appContext.getSharedPreferences(PREFS_DYNAMIC_USERS, Context.MODE_PRIVATE)
+    private val json = Json { ignoreUnknownKeys = true }
+
+    private var cachedLiveRooms: List<LiveRoom> = emptyList()
+
     private val _uiState = MutableStateFlow(DynamicUiState())
     val uiState: StateFlow<DynamicUiState> = _uiState.asStateFlow()
-    
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
-    
+
     //  侧边栏相关状态
     private val _followedUsers = MutableStateFlow<List<SidebarUser>>(emptyList())
     val followedUsers: StateFlow<List<SidebarUser>> = _followedUsers.asStateFlow()
-    
+
     private val _selectedUserId = MutableStateFlow<Long?>(null)
     val selectedUserId: StateFlow<Long?> = _selectedUserId.asStateFlow()
-    
+
     private val _isSidebarExpanded = MutableStateFlow(true)
     val isSidebarExpanded: StateFlow<Boolean> = _isSidebarExpanded.asStateFlow()
-    
+
+    private val _pinnedUserIds = MutableStateFlow<Set<Long>>(emptySet())
+    val pinnedUserIds: StateFlow<Set<Long>> = _pinnedUserIds.asStateFlow()
+
+    private val _hiddenUserIds = MutableStateFlow<Set<Long>>(emptySet())
+    val hiddenUserIds: StateFlow<Set<Long>> = _hiddenUserIds.asStateFlow()
+
+    private val _showHiddenUsers = MutableStateFlow(false)
+    val showHiddenUsers: StateFlow<Boolean> = _showHiddenUsers.asStateFlow()
+
     init {
-        loadDynamicFeed(refresh = true)
-        loadFollowedUsers()
+        loadUserPreferences()
+        loadCachedDynamics()
+        rebuildFollowedUsers()
+        refreshInBackground()
     }
     
+    private fun loadUserPreferences() {
+        val pinned = userPrefs.getStringSet(KEY_PINNED_USERS, emptySet()).orEmpty()
+            .mapNotNull { it.toLongOrNull() }
+            .toSet()
+        val hidden = userPrefs.getStringSet(KEY_HIDDEN_USERS, emptySet()).orEmpty()
+            .mapNotNull { it.toLongOrNull() }
+            .toSet()
+        _pinnedUserIds.value = pinned
+        _hiddenUserIds.value = hidden
+    }
+
+    private fun saveUserPreferences(pinned: Set<Long>, hidden: Set<Long>) {
+        userPrefs.edit()
+            .putStringSet(KEY_PINNED_USERS, pinned.map { it.toString() }.toSet())
+            .putStringSet(KEY_HIDDEN_USERS, hidden.map { it.toString() }.toSet())
+            .apply()
+    }
+
+    private fun loadCachedDynamics() {
+        val cachedJson = cachePrefs.getString(KEY_DYNAMIC_CACHE, null) ?: return
+        runCatching { json.decodeFromString<List<DynamicItem>>(cachedJson) }
+            .onSuccess { items ->
+                if (items.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        items = items,
+                        isLoading = false,
+                        error = null
+                    )
+                }
+            }
+    }
+
+    private fun saveDynamicCache(items: List<DynamicItem>) {
+        if (items.isEmpty()) return
+        val payload = json.encodeToString(items.take(MAX_CACHE_ITEMS))
+        cachePrefs.edit()
+            .putString(KEY_DYNAMIC_CACHE, payload)
+            .putLong(KEY_DYNAMIC_CACHE_TIME, System.currentTimeMillis())
+            .apply()
+    }
+
+    private fun refreshInBackground() {
+        viewModelScope.launch { refreshData(showRefreshIndicator = false) }
+    }
+
+    private suspend fun refreshData(showRefreshIndicator: Boolean) {
+        if (showRefreshIndicator) {
+            _isRefreshing.value = true
+        }
+        coroutineScope {
+            val dynamicJob = async {
+                loadDynamicFeedInternal(refresh = true, showLoading = _uiState.value.items.isEmpty())
+            }
+            val liveJob = async { loadFollowedUsersInternal() }
+            dynamicJob.await()
+            liveJob.await()
+        }
+        if (showRefreshIndicator) {
+            _isRefreshing.value = false
+        }
+    }
+
     /**
      *  加载关注用户列表及其直播状态
      */
     fun loadFollowedUsers() {
-        viewModelScope.launch {
-            // 获取关注的直播用户（有 liveStatus 字段）
-            com.android.purebilibili.data.repository.LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
-                // 提取所有关注用户信息
-                val users = extractUsersFromDynamics() + extractUsersFromLive(liveRooms)
-                //  [修复] 过滤无效用户数据，避免真机崩溃
-                _followedUsers.value = users
-                    .filter { it.uid > 0 && it.name.isNotBlank() }
-                    .distinctBy { it.uid }
-            }
+        viewModelScope.launch { loadFollowedUsersInternal() }
+    }
+
+    private suspend fun loadFollowedUsersInternal() {
+        LiveRepository.getFollowedLive(page = 1).onSuccess { liveRooms ->
+            cachedLiveRooms = liveRooms
+            rebuildFollowedUsers()
         }
     }
-    
+
     /**
      * 从动态列表提取用户
      */
-    private fun extractUsersFromDynamics(): List<SidebarUser> {
-        return _uiState.value.items
-            .mapNotNull { it.modules.module_author }
-            .map { author ->
-                SidebarUser(
+    private fun extractUsersFromDynamics(items: List<DynamicItem>): List<SidebarUser> {
+        val latestByUser = mutableMapOf<Long, SidebarUser>()
+        items.mapNotNull { it.modules.module_author }.forEach { author ->
+            if (author.mid <= 0 || author.name.isBlank()) return@forEach
+            val lastActive = author.pub_ts.takeIf { it > 0 } ?: 0L
+            val existing = latestByUser[author.mid]
+            if (existing == null || lastActive > existing.lastActiveTs) {
+                latestByUser[author.mid] = SidebarUser(
                     uid = author.mid,
                     name = author.name,
                     face = author.face,
-                    isLive = false
+                    isLive = false,
+                    lastActiveTs = lastActive
                 )
             }
+        }
+        return latestByUser.values.toList()
     }
-    
+
     /**
      * 从直播列表提取用户（包含在线状态）
      */
-    private fun extractUsersFromLive(rooms: List<com.android.purebilibili.data.model.response.LiveRoom>): List<SidebarUser> {
+    private fun extractUsersFromLive(rooms: List<LiveRoom>): List<SidebarUser> {
+        val nowSeconds = System.currentTimeMillis() / 1000
         return rooms.map { room ->
             SidebarUser(
                 uid = room.uid,
                 name = room.uname,
                 face = room.face,
-                isLive = true  // 直播中
+                isLive = true,
+                lastActiveTs = nowSeconds  // 直播中视作最近活跃
             )
         }
+    }
+
+    private fun rebuildFollowedUsers() {
+        val mergedUsers = mergeUsers(
+            extractUsersFromDynamics(_uiState.value.items),
+            extractUsersFromLive(cachedLiveRooms)
+        )
+        _followedUsers.value = applyUserPreferences(mergedUsers)
+    }
+
+    private fun mergeUsers(
+        dynamicUsers: List<SidebarUser>,
+        liveUsers: List<SidebarUser>
+    ): List<SidebarUser> {
+        val merged = mutableMapOf<Long, SidebarUser>()
+        (dynamicUsers + liveUsers).forEach { user ->
+            val existing = merged[user.uid]
+            if (existing == null) {
+                merged[user.uid] = user
+            } else {
+                merged[user.uid] = existing.copy(
+                    name = if (user.name.isNotBlank()) user.name else existing.name,
+                    face = if (user.face.isNotBlank()) user.face else existing.face,
+                    isLive = existing.isLive || user.isLive,
+                    lastActiveTs = max(existing.lastActiveTs, user.lastActiveTs)
+                )
+            }
+        }
+        return merged.values.toList()
+    }
+
+    private fun applyUserPreferences(users: List<SidebarUser>): List<SidebarUser> {
+        val pinned = _pinnedUserIds.value
+        val hidden = _hiddenUserIds.value
+        val showHidden = _showHiddenUsers.value
+        return users
+            .map { user ->
+                user.copy(
+                    isPinned = pinned.contains(user.uid),
+                    isHidden = hidden.contains(user.uid)
+                )
+            }
+            .filter { showHidden || !it.isHidden }
+            .sortedWith(
+                compareByDescending<SidebarUser> { it.isPinned }
+                    .thenByDescending { it.isLive }
+                    .thenByDescending { it.lastActiveTs }
+                    .thenBy { it.name }
+            )
     }
     
     /**
@@ -99,52 +241,110 @@ class DynamicViewModel : ViewModel() {
     fun toggleSidebar() {
         _isSidebarExpanded.value = !_isSidebarExpanded.value
     }
+
+    fun togglePinUser(uid: Long) {
+        val pinned = _pinnedUserIds.value.toMutableSet()
+        if (pinned.contains(uid)) {
+            pinned.remove(uid)
+        } else {
+            pinned.add(uid)
+        }
+        _pinnedUserIds.value = pinned
+        saveUserPreferences(pinned, _hiddenUserIds.value)
+        rebuildFollowedUsers()
+    }
+
+    fun toggleHiddenUser(uid: Long) {
+        val hidden = _hiddenUserIds.value.toMutableSet()
+        val pinned = _pinnedUserIds.value.toMutableSet()
+        val isNowHidden = if (hidden.contains(uid)) {
+            hidden.remove(uid)
+            false
+        } else {
+            hidden.add(uid)
+            true
+        }
+        if (isNowHidden) {
+            pinned.remove(uid)
+            if (_selectedUserId.value == uid) {
+                _selectedUserId.value = null
+            }
+        }
+        _hiddenUserIds.value = hidden
+        _pinnedUserIds.value = pinned
+        saveUserPreferences(pinned, hidden)
+        rebuildFollowedUsers()
+    }
+
+    fun toggleShowHiddenUsers() {
+        val showHidden = !_showHiddenUsers.value
+        _showHiddenUsers.value = showHidden
+        if (!showHidden) {
+            val selected = _selectedUserId.value
+            if (selected != null && _hiddenUserIds.value.contains(selected)) {
+                _selectedUserId.value = null
+            }
+        }
+        rebuildFollowedUsers()
+    }
     
     /**
      * 加载动态列表
      */
     fun loadDynamicFeed(refresh: Boolean = false) {
-        if (_uiState.value.isLoading && !refresh) return
-        
+        if (!refresh && (_uiState.value.isLoading || _isRefreshing.value)) return
         viewModelScope.launch {
-            if (refresh) {
-                _isRefreshing.value = true
-            } else {
-                _uiState.value = _uiState.value.copy(isLoading = true)
-            }
-            
-            val result = DynamicRepository.getDynamicFeed(refresh)
-            
-            result.fold(
-                onSuccess = { items ->
-                    val currentItems = if (refresh) emptyList() else _uiState.value.items
-                    _uiState.value = _uiState.value.copy(
-                        items = currentItems + items,
-                        isLoading = false,
-                        error = null,
-                        hasMore = DynamicRepository.hasMoreData()
-                    )
-                    // 刷新后更新关注用户列表
-                    if (refresh) loadFollowedUsers()
-                },
-                onFailure = { error ->
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        error = error.message ?: "加载失败"
-                    )
-                }
+            loadDynamicFeedInternal(
+                refresh = refresh,
+                showLoading = refresh && _uiState.value.items.isEmpty()
             )
-            
-            _isRefreshing.value = false
         }
+    }
+
+    private suspend fun loadDynamicFeedInternal(
+        refresh: Boolean,
+        showLoading: Boolean = false
+    ) {
+        if (refresh) {
+            if (showLoading) {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            } else {
+                _uiState.value = _uiState.value.copy(error = null)
+            }
+        } else {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        }
+
+        val result = DynamicRepository.getDynamicFeed(refresh)
+
+        result.fold(
+            onSuccess = { items ->
+                val currentItems = if (refresh) emptyList() else _uiState.value.items
+                val mergedItems = currentItems + items
+                _uiState.value = _uiState.value.copy(
+                    items = mergedItems,
+                    isLoading = false,
+                    error = null,
+                    hasMore = DynamicRepository.hasMoreData()
+                )
+                saveDynamicCache(mergedItems)
+                rebuildFollowedUsers()
+            },
+            onFailure = { error ->
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = error.message ?: "加载失败"
+                )
+            }
+        )
     }
     
     fun refresh() {
-        loadDynamicFeed(refresh = true)
+        viewModelScope.launch { refreshData(showRefreshIndicator = true) }
     }
     
     fun loadMore() {
-        if (!_uiState.value.hasMore || _uiState.value.isLoading) return
+        if (!_uiState.value.hasMore || _uiState.value.isLoading || _isRefreshing.value) return
         loadDynamicFeed(refresh = false)
     }
     
@@ -354,6 +554,16 @@ class DynamicViewModel : ViewModel() {
             }
         }
     }
+
+    companion object {
+        private const val PREFS_DYNAMIC_CACHE = "dynamic_cache"
+        private const val PREFS_DYNAMIC_USERS = "dynamic_user_prefs"
+        private const val KEY_DYNAMIC_CACHE = "dynamic_items_cache"
+        private const val KEY_DYNAMIC_CACHE_TIME = "dynamic_cache_time"
+        private const val KEY_PINNED_USERS = "dynamic_pinned_users"
+        private const val KEY_HIDDEN_USERS = "dynamic_hidden_users"
+        private const val MAX_CACHE_ITEMS = 100
+    }
 }
 
 /**
@@ -363,7 +573,10 @@ data class SidebarUser(
     val uid: Long,
     val name: String,
     val face: String,
-    val isLive: Boolean = false
+    val isLive: Boolean = false,
+    val lastActiveTs: Long = 0L,
+    val isPinned: Boolean = false,
+    val isHidden: Boolean = false
 )
 
 /**

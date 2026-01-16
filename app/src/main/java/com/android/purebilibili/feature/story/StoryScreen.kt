@@ -2,6 +2,8 @@
 package com.android.purebilibili.feature.story
 
 import android.net.Uri
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -60,6 +62,8 @@ fun StoryScreen(
             .background(Color.Black)
             .systemBarsPadding()
     ) {
+
+
         if (uiState.isLoading && uiState.items.isEmpty()) {
             // 加载中
             CircularProgressIndicator(
@@ -253,6 +257,11 @@ private fun StoryPageContent(
                         useController = false  // 隐藏默认控制器
                         setShowBuffering(PlayerView.SHOW_BUFFERING_NEVER)
                     }
+                },
+                update = { view ->
+                    view.player = exoPlayer
+                    // 动态设置屏幕常亮：只有当前页面且正在播放时才常亮
+                    view.keepScreenOn = isCurrentPage && isPlaying
                 },
                 modifier = Modifier.fillMaxSize()
             )
@@ -545,3 +554,5 @@ private fun formatCount(count: Int): String {
         else -> count.toString()
     }
 }
+
+

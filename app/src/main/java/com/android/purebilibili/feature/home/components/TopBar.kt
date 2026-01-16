@@ -165,10 +165,11 @@ fun FluidHomeTopBar(
 }
 
 /**
- *  官方 Bilibili 风格分类标签栏
- * - 下划线指示器
- * - 选中项粉色/主题色 + 下划线
- * - 汉堡菜单图标打开分区
+ *  [HIG] iOS 风格分类标签栏
+ * - 限制可见标签为 4 个主要分类 (HIG 建议 3-5 个)
+ * - 其余分类收入"更多"下拉菜单
+ * - 圆角胶囊选中指示器
+ * - 最小触摸目标 44pt
  */
 @Composable
 fun CategoryTabRow(
@@ -180,7 +181,23 @@ fun CategoryTabRow(
     onPartitionClick: () -> Unit = {}  //  新增：分区按钮回调
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
-    val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    val unselectedColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
+    
+    //  [HIG] 限制主要可见标签数量 - 前4个为主要分类
+    val primaryCount = 4
+    val primaryCategories = categories.take(primaryCount)
+    val moreCategories = categories.drop(primaryCount)
+    
+    //  "更多"菜单展开状态
+    var showMoreMenu by remember { mutableStateOf(false) }
+    
+    //  判断当前选中项是否在"更多"菜单中
+    val isMoreSelected = selectedIndex >= primaryCount
+    val moreLabel = if (isMoreSelected && selectedIndex < categories.size) {
+        categories[selectedIndex]
+    } else {
+        "更多"
+    }
     
     Row(
         modifier = Modifier
@@ -188,84 +205,190 @@ fun CategoryTabRow(
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        //  分类标签 - 横向滚动（使用 weight 让汉堡菜单固定在右侧）
-        androidx.compose.foundation.lazy.LazyRow(
+        //  主要分类标签 - 固定显示
+        Row(
             modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(18.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(categories.size) { index ->
+            primaryCategories.forEachIndexed { index, category ->
                 val isSelected = index == selectedIndex
                 
-                //  文字颜色动画
+                //  [HIG] iOS 风格胶囊选中背景
+                val backgroundColor by animateColorAsState(
+                    targetValue = if (isSelected) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                    label = "bgColor"
+                )
+                
                 val textColor by animateColorAsState(
                     targetValue = if (isSelected) primaryColor else unselectedColor,
-                    animationSpec = spring(
-                        dampingRatio = 0.7f,
-                        stiffness = 400f
-                    ),
+                    animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
                     label = "textColor"
                 )
                 
-                //  字体大小动画
-                val fontSize by animateFloatAsState(
-                    targetValue = if (isSelected) 17f else 15f,
-                    animationSpec = spring(
-                        dampingRatio = 0.7f,
-                        stiffness = 400f
-                    ),
-                    label = "fontSize"
-                )
-                
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                Box(
                     modifier = Modifier
+                        .height(36.dp)  // HIG 触摸目标
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(backgroundColor)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
                         ) { onCategorySelected(index) }
-                        .padding(vertical = 4.dp)
+                        .padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = categories[index],
+                        text = category,
                         color = textColor,
-                        fontSize = fontSize.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        fontSize = if (isSelected) 15.sp else 14.sp,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                }
+            }
+            
+            //  "更多" 下拉菜单按钮 (只有当有额外分类时显示)
+            if (moreCategories.isNotEmpty()) {
+                Box {
+                    val isMoreActive = isMoreSelected || showMoreMenu
+                    
+                    val moreBgColor by animateColorAsState(
+                        targetValue = if (isMoreActive) primaryColor.copy(alpha = 0.12f) else Color.Transparent,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                        label = "moreBgColor"
                     )
                     
-                    Spacer(modifier = Modifier.height(4.dp))
+                    val moreTextColor by animateColorAsState(
+                        targetValue = if (isMoreActive) primaryColor else unselectedColor,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                        label = "moreTextColor"
+                    )
                     
-                    //  下划线指示器
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .width(20.dp)
-                            .height(3.dp)
-                            .clip(RoundedCornerShape(1.5.dp))
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(moreBgColor)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { showMoreMenu = true }
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = moreLabel,
+                            color = moreTextColor,
+                            fontSize = if (isMoreSelected) 15.sp else 14.sp,
+                            fontWeight = if (isMoreSelected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Icon(
+                            CupertinoIcons.Default.ChevronDown,
+                            contentDescription = "展开更多分类",
+                            tint = moreTextColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                    
+                    //  iOS 风格下拉菜单 - 毛玻璃风格
+                    DropdownMenu(
+                        expanded = showMoreMenu,
+                        onDismissRequest = { showMoreMenu = false },
+                        modifier = Modifier
+                            .width(150.dp)
                             .background(
-                                if (isSelected) primaryColor else Color.Transparent
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                                shape = RoundedCornerShape(14.dp)
                             )
-                    )
+                    ) {
+                        // 分类图标映射
+                        val categoryIcons = mapOf(
+                            "追番" to CupertinoIcons.Default.Film,
+                            "影视" to CupertinoIcons.Default.Tv,
+                            "游戏" to CupertinoIcons.Default.Gamecontroller,
+                            "知识" to CupertinoIcons.Default.Book,
+                            "科技" to CupertinoIcons.Default.Cpu
+                        )
+                        
+                        moreCategories.forEachIndexed { index, category ->
+                            val actualIndex = primaryCount + index
+                            val isThisSelected = actualIndex == selectedIndex
+                            val icon = categoryIcons[category] ?: CupertinoIcons.Default.Folder
+                            
+                            // 菜单项
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (isThisSelected) primaryColor.copy(alpha = 0.15f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable {
+                                        onCategorySelected(actualIndex)
+                                        showMoreMenu = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 图标
+                                Icon(
+                                    icon,
+                                    contentDescription = null,
+                                    tint = if (isThisSelected) primaryColor 
+                                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                
+                                Spacer(modifier = Modifier.width(10.dp))
+                                
+                                // 文字
+                                Text(
+                                    text = category,
+                                    color = if (isThisSelected) primaryColor 
+                                            else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (isThisSelected) FontWeight.SemiBold 
+                                                 else FontWeight.Normal,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                
+                                // 选中勾选
+                                if (isThisSelected) {
+                                    Icon(
+                                        CupertinoIcons.Default.Checkmark,
+                                        contentDescription = null,
+                                        tint = primaryColor,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         
         Spacer(modifier = Modifier.width(8.dp))
         
-        //  汉堡菜单按钮 - 打开分区
+        //  分区按钮 - HIG 44dp 触摸目标
         Box(
             modifier = Modifier
-                .size(32.dp)
-                .offset(y = (-4).dp)  //  向上偏移，与文字对齐（抵消下划线高度）
+                .size(36.dp)
+                .clip(RoundedCornerShape(18.dp))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { onPartitionClick() },
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "≡",  // 汉堡菜单符号
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Light,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            Icon(
+                CupertinoIcons.Default.ListBullet,
+                contentDescription = "浏览全部分区",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }

@@ -122,27 +122,53 @@ object LogCollector {
     
     /**
      *  隐私脱敏：移除敏感信息
+     * 
+     * 覆盖范围：
+     * - Cookie 值 (SESSDATA, bili_jct, DedeUserID 等)
+     * - Token / Key (access_token, refresh_token 等)
+     * - 用户标识 (mid, uid, 手机号, 邮箱)
+     * - 网络信息 (IP 地址, MAC 地址)
+     * - 文件路径 (可能包含用户名)
+     * - 其他敏感参数
      */
     private fun sanitizeMessage(message: String): String {
         var sanitized = message
         
-        // 脱敏 Cookie 值
+        // ========== Cookie 脱敏 ==========
         sanitized = sanitized.replace(Regex("SESSDATA=[^;\\s]+"), "SESSDATA=***")
         sanitized = sanitized.replace(Regex("bili_jct=[^;\\s]+"), "bili_jct=***")
         sanitized = sanitized.replace(Regex("DedeUserID=[^;\\s]+"), "DedeUserID=***")
         sanitized = sanitized.replace(Regex("DedeUserID__ckMd5=[^;\\s]+"), "DedeUserID__ckMd5=***")
         sanitized = sanitized.replace(Regex("sid=[^;\\s]+"), "sid=***")
         sanitized = sanitized.replace(Regex("buvid3=[^;\\s]+"), "buvid3=***")
+        sanitized = sanitized.replace(Regex("buvid4=[^;\\s]+"), "buvid4=***")
+        sanitized = sanitized.replace(Regex("b_nut=[^;\\s]+"), "b_nut=***")
+        sanitized = sanitized.replace(Regex("_uuid=[^;\\s]+"), "_uuid=***")
         
-        // 脱敏 Token
+        // ========== Token / Key 脱敏 ==========
         sanitized = sanitized.replace(Regex("access_token=[^&\\s]+"), "access_token=***")
         sanitized = sanitized.replace(Regex("refresh_token=[^&\\s]+"), "refresh_token=***")
+        sanitized = sanitized.replace(Regex("access_key=[^&\\s]+"), "access_key=***")
+        sanitized = sanitized.replace(Regex("appkey=[^&\\s]+"), "appkey=***")
+        sanitized = sanitized.replace(Regex("sign=[^&\\s]+"), "sign=***")
+        sanitized = sanitized.replace(Regex("csrf=[^&\\s]+"), "csrf=***")
         sanitized = sanitized.replace(Regex("\"token\":\"[^\"]+\""), "\"token\":\"***\"")
+        sanitized = sanitized.replace(Regex("\"csrf\":\"[^\"]+\""), "\"csrf\":\"***\"")
+        sanitized = sanitized.replace(Regex("Authorization:\\s*[^\\s]+"), "Authorization: ***")
+        sanitized = sanitized.replace(Regex("Bearer\\s+[^\\s]+"), "Bearer ***")
         
-        // 脱敏手机号（11位数字）
+        // ========== 用户 ID 脱敏 ==========
+        // Bilibili mid/uid (通常为 6-11 位数字，在特定上下文中)
+        sanitized = sanitized.replace(Regex("mid[=:]\\s*\\d{4,}"), "mid=***")
+        sanitized = sanitized.replace(Regex("\"mid\":\\s*\\d+"), "\"mid\":***")
+        sanitized = sanitized.replace(Regex("uid[=:]\\s*\\d{4,}"), "uid=***")
+        sanitized = sanitized.replace(Regex("\"uid\":\\s*\\d+"), "\"uid\":***")
+        sanitized = sanitized.replace(Regex("vmid[=:]\\s*\\d+"), "vmid=***")
+        
+        // ========== 手机号脱敏 (11位中国手机号) ==========
         sanitized = sanitized.replace(Regex("\\b1[3-9]\\d{9}\\b"), "1**********")
         
-        // 脱敏邮箱
+        // ========== 邮箱脱敏 ==========
         sanitized = sanitized.replace(Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")) { 
             val email = it.value
             val atIndex = email.indexOf('@')
@@ -150,6 +176,51 @@ object LogCollector {
                 email.substring(0, 2) + "***" + email.substring(atIndex)
             } else {
                 "***" + email.substring(atIndex)
+            }
+        }
+        
+        // ========== IP 地址脱敏 ==========
+        // IPv4
+        sanitized = sanitized.replace(Regex("\\b\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\b")) {
+            val parts = it.value.split(".")
+            if (parts.size == 4 && parts.all { p -> p.toIntOrNull() in 0..255 }) {
+                "${parts[0]}.***.***.*"
+            } else {
+                it.value
+            }
+        }
+        // IPv6 (简化处理)
+        sanitized = sanitized.replace(Regex("\\b[0-9a-fA-F:]{15,}\\b"), "***:***:***")
+        
+        // ========== MAC 地址脱敏 ==========
+        sanitized = sanitized.replace(Regex("([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}"), "**:**:**:**:**:**")
+        
+        // ========== 文件路径脱敏 (隐藏用户名) ==========
+        // Android 路径
+        sanitized = sanitized.replace(Regex("/data/user/\\d+/[^/]+/"), "/data/user/0/***/")
+        sanitized = sanitized.replace(Regex("/storage/emulated/\\d+/"), "/storage/emulated/0/")
+        // 通用 home 目录
+        sanitized = sanitized.replace(Regex("/home/[^/]+/"), "/home/***/")
+        sanitized = sanitized.replace(Regex("/Users/[^/]+/"), "/Users/***/")
+        
+        // ========== 设备标识脱敏 ==========
+        sanitized = sanitized.replace(Regex("device_id=[^&\\s]+"), "device_id=***")
+        sanitized = sanitized.replace(Regex("\"device_id\":\"[^\"]+\""), "\"device_id\":\"***\"")
+        sanitized = sanitized.replace(Regex("android_id=[^&\\s]+"), "android_id=***")
+        sanitized = sanitized.replace(Regex("imei=[^&\\s]+"), "imei=***")
+        
+        // ========== 敏感 JSON 字段脱敏 ==========
+        sanitized = sanitized.replace(Regex("\"face\":\"[^\"]+\""), "\"face\":\"***\"")
+        sanitized = sanitized.replace(Regex("\"tel\":\"[^\"]+\""), "\"tel\":\"***\"")
+        sanitized = sanitized.replace(Regex("\"name\":\"[^\"]{2,}\"")) {
+            // 保留名字首字符
+            val name = it.value
+            val start = name.indexOf(":\"") + 2
+            val end = name.lastIndexOf("\"")
+            if (end > start + 1) {
+                "\"name\":\"${name[start]}***\""
+            } else {
+                it.value
             }
         }
         
