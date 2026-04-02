@@ -1462,6 +1462,14 @@ class MainActivity : AppCompatActivity() {
         miniPlayerManager.clearUserLeaveHint()
         miniPlayerManager.clearPlaybackRoutePipState()
         miniPlayerManager.clearPlaybackNotificationIfIdleOnResume()
+        if (isPlaybackRouteActive(isInVideoDetail = isInVideoDetail, isInAudioMode = isInAudioModeRoute)) {
+            miniPlayerManager.resetNavigationFlag()
+            miniPlayerManager.player?.let { player ->
+                if (player.volume <= 0f) {
+                    player.volume = 1.0f
+                }
+            }
+        }
         if (!hasCompletedInitialResume) {
             hasCompletedInitialResume = true
         }
