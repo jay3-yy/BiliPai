@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <sub>Last updated: 2026-04-01 · Synced to v7.3.2 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
+  <sub>Last updated: 2026-04-03 · Synced to v7.3.3 (source of truth: <a href="CHANGELOG.md">CHANGELOG</a> + code)</sub>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-7.3.2-fb7299?style=flat-square" alt="Version">
+  <img src="https://img.shields.io/badge/Version-7.3.3-fb7299?style=flat-square" alt="Version">
   <img src="https://img.shields.io/github/stars/jay3-yy/BiliPai?style=flat-square&color=yellow" alt="Stars">
   <img src="https://img.shields.io/github/forks/jay3-yy/BiliPai?style=flat-square&color=green" alt="Forks">
   <img src="https://img.shields.io/github/last-commit/jay3-yy/BiliPai?style=flat-square&color=purple" alt="Last Commit">
@@ -305,6 +305,8 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 - 🚫 **No Ads** - Pure viewing experience, no ad injections
 - 🔐 **Minimal Permissions** - Only essential permissions (No Location/Contacts/Phone)
 - 💾 **Local Storage** - Login credentials stored locally, no privacy data upload
+- 🛡️ **More conservative telemetry defaults** - Crash tracking stays on by default, usage analytics is off by default, and player diagnostic logging remains separately available for troubleshooting
+- 🪵 **Runtime logs no longer persist by default** - Ordinary runtime logs are no longer written to disk by default, while crash snapshots and manual export remain available
 - 🔍 **Open Source** - Full source code available for review
 
 ---
@@ -386,7 +388,7 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 ## 🗺️ Roadmap
 
 > [!TIP]
-> Roadmap last refreshed on 2026-04-01 (v7.3.2). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
+> Roadmap last refreshed on 2026-04-03 (v7.3.3). For current behavior, prefer the latest release notes, `CHANGELOG.md`, and code.
 
 ### ✅ Completed
 
@@ -428,15 +430,15 @@ A lightweight plugin format requiring **no coding**, just a simple JSON file to 
 
 See full changelog: [CHANGELOG.md](CHANGELOG.md)
 
-### Latest (v7.3.2 · 2026-04-01)
+### Latest (v7.3.3 · 2026-04-02)
 
-- ⚙️ **Settings-page motion now works independently**: the settings home, appearance, playback, bottom-bar, permissions, and tips pages keep their own entrance transition even when home-card animation is disabled, and the animation page now clearly explains that home-card motion and settings-page motion are separate effects.
-- 🎬 **New automatic and fixed quality modes**: automatic quality keeps adaptive DASH candidate tracks available, while manual selection locks playback to the chosen target quality for more predictable switching.
-- 🧩 **Clearer reasons when quality switching fails**: failures now explain concrete causes such as login requirements, VIP-only quality, unsupported device capability, network timeout, or the requested quality not existing for the current video.
-- 🪵 **Failure dialog and log export on the video page**: the quality-switch failure dialog can now toggle player diagnostic logging and export logs directly, making codec and API troubleshooting much easier.
-- 🔁 **Automatic fallback when AV1 becomes unstable**: if AV1 behaves unreliably during the current playback session, later playback requests avoid AV1 and prefer a more stable codec combination instead of repeatedly retrying the same failing path.
-- 🖼️ **Smoother cover-to-player transition**: the cover now stays visible until the first frame is actually ready, then transitions more smoothly to the player surface; manual play starts, back-navigation animation, and not-yet-ready first-frame states continue to keep the cover in place.
-- 🧪 **Related tests have been expanded**: added or strengthened tests around settings-page motion, quality switching, AV1 fallback, cover visibility, and player-surface display logic.
+- 🔒 **Privacy defaults tightened further**: crash tracking stays enabled by default, usage analytics is disabled by default, and player diagnostic logging remains available for black-screen, stutter, and quality-switch troubleshooting.
+- 🪵 **Ordinary runtime logs no longer persist by default**: warnings and errors can still feed crash snapshots and manual exports, but everyday runtime logs are no longer written to `runtime.log` automatically.
+- 🕵️ **Analytics and Crashlytics are further redacted**: no more uploading video IDs, live room IDs, season IDs, target user IDs, titles, or uploader names; Crashlytics also no longer binds `mid` or stores live-room titles and anchor names.
+- 🎬 **Quality switching and playback history are more stable**: premium quality switching now shows a cooldown hint instead of walking into a dead end, and playback heartbeat reports more accurate session start time, real watch time, and final progress.
+- 🎚️ **Seek and playback-button feedback feel more natural**: scrubbing now preserves the user intent captured at interaction start, and the center play button keeps a more reasonable playing state while playback is resuming through buffering.
+- 💬 **Comment badges and long-press menus are refined**: comment level badges now use more PiliPlus-like pixel assets including a dedicated senior level-6 badge, and video-card long-press menus appear closer to the actual press location.
+- 📥 **Range-download validation is stricter**: multi-thread downloads now verify `206 Partial Content` responses and matching ranges, then fall back to single-thread download when the server responds incorrectly.
 
 ---
 

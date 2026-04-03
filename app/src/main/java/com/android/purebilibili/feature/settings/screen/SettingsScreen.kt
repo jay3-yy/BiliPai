@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
+import com.android.purebilibili.core.store.DEFAULT_CRASH_TRACKING_ENABLED
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.AnalyticsHelper
@@ -93,8 +95,10 @@ fun SettingsScreen(
     // State Collection
     val state by viewModel.state.collectAsState()
     val privacyModeEnabled by SettingsManager.getPrivacyModeEnabled(context).collectAsState(initial = false)
-    val crashTrackingEnabled by SettingsManager.getCrashTrackingEnabled(context).collectAsState(initial = true)
-    val analyticsEnabled by SettingsManager.getAnalyticsEnabled(context).collectAsState(initial = true)
+    val crashTrackingEnabled by SettingsManager.getCrashTrackingEnabled(context)
+        .collectAsState(initial = DEFAULT_CRASH_TRACKING_ENABLED)
+    val analyticsEnabled by SettingsManager.getAnalyticsEnabled(context)
+        .collectAsState(initial = DEFAULT_ANALYTICS_ENABLED)
     val easterEggEnabled by SettingsManager.getEasterEggEnabled(context).collectAsState(initial = true)
     val customDownloadPath by SettingsManager.getDownloadPath(context).collectAsState(initial = null)
     val downloadExportTreeUri by SettingsManager.getDownloadExportTreeUri(context).collectAsState(initial = null)

@@ -14,6 +14,32 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 
+private const val DEFAULT_MUXER_SAMPLE_BUFFER_SIZE_BYTES = 1024 * 1024
+private val PARTIAL_CONTENT_RANGE_REGEX = Regex("""bytes (\d+)-(\d+)/(?:\d+|\*)""")
+
+internal fun isValidPartialContentResponse(
+    responseCode: Int,
+    contentRange: String?,
+    requestedStart: Long,
+    requestedEnd: Long
+): Boolean {
+    if (responseCode != 206) return false
+    val match = PARTIAL_CONTENT_RANGE_REGEX.matchEntire(contentRange?.trim().orEmpty()) ?: return false
+    val actualStart = match.groupValues[1].toLongOrNull() ?: return false
+    val actualEnd = match.groupValues[2].toLongOrNull() ?: return false
+    return actualStart == requestedStart && actualEnd == requestedEnd
+}
+
+internal fun resolveMuxerSampleBufferSize(
+    maxInputSizes: List<Int>,
+    defaultBytes: Int = DEFAULT_MUXER_SAMPLE_BUFFER_SIZE_BYTES
+): Int {
+    val advertisedMax = maxInputSizes.filter { it > 0 }.maxOrNull() ?: 0
+    return maxOf(defaultBytes, advertisedMax)
+}
+
+private class InvalidRangeResponseException(message: String) : IllegalStateException(message)
+
 /**
  *  视频下载管理器
  * 
@@ -346,7 +372,18 @@ object DownloadManager {
             }
             
             com.android.purebilibili.core.util.Logger.d("DownloadManager", "🚀 Multi-thread download completed: ${file.name}")
+            if (totalBytes > 0L && file.length() != totalBytes) {
+                throw InvalidRangeResponseException(
+                    "Merged file size mismatch, expected=$totalBytes actual=${file.length()}"
+                )
+            }
             
+        } catch (e: InvalidRangeResponseException) {
+            com.android.purebilibili.core.util.Logger.w(
+                "DownloadManager",
+                "⚠️ Range download validation failed, fallback to single-thread: ${e.message}"
+            )
+            downloadFileSingleThread(url, file, cookieString, onProgress)
         } finally {
             // 清理临时分段文件
             segmentFiles.forEach { it.delete() }
@@ -373,10 +410,23 @@ object DownloadManager {
             .build()
         
         val response = client.newCall(request).execute()
-        if (!response.isSuccessful && response.code != 206) {
+        if (!response.isSuccessful) {
             throw Exception("HTTP ${response.code}")
         }
-        
+        if (
+            !isValidPartialContentResponse(
+                responseCode = response.code,
+                contentRange = response.header("Content-Range"),
+                requestedStart = start,
+                requestedEnd = end
+            )
+        ) {
+            response.close()
+            throw InvalidRangeResponseException(
+                "Unexpected range response: code=${response.code}, contentRange=${response.header("Content-Range")}"
+            )
+        }
+
         val body = response.body ?: throw Exception("Empty response")
         var downloadedBytes = 0L
         
@@ -454,6 +504,7 @@ object DownloadManager {
             // 提取视频轨道
             // 提取视频轨道 (仅当 video 不为空时)
             val videoExtractor = android.media.MediaExtractor()
+            var videoTrackMaxInputSize = -1
             if (video != null) {
                 videoExtractor.setDataSource(video.absolutePath)
             }
@@ -467,6 +518,9 @@ object DownloadManager {
                     videoExtractor.selectTrack(i)
                     videoMuxerTrackIndex = muxer.addTrack(format)
                     videoTrackIndex = i
+                    if (format.containsKey(android.media.MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                        videoTrackMaxInputSize = format.getInteger(android.media.MediaFormat.KEY_MAX_INPUT_SIZE)
+                    }
                     break
                 }
             }
@@ -481,6 +535,7 @@ object DownloadManager {
             audioExtractor.setDataSource(audio.absolutePath)
             var audioTrackIndex = -1
             var audioMuxerTrackIndex = -1
+            var audioTrackMaxInputSize = -1
             
             for (i in 0 until audioExtractor.trackCount) {
                 val format = audioExtractor.getTrackFormat(i)
@@ -489,6 +544,9 @@ object DownloadManager {
                     audioExtractor.selectTrack(i)
                     audioMuxerTrackIndex = muxer.addTrack(format)
                     audioTrackIndex = i
+                    if (format.containsKey(android.media.MediaFormat.KEY_MAX_INPUT_SIZE)) {
+                        audioTrackMaxInputSize = format.getInteger(android.media.MediaFormat.KEY_MAX_INPUT_SIZE)
+                    }
                     break
                 }
             }
@@ -505,12 +563,17 @@ object DownloadManager {
             // 开始合并
             muxer.start()
             
-            val buffer = java.nio.ByteBuffer.allocate(1024 * 1024)  // 1MB buffer
+            val buffer = java.nio.ByteBuffer.allocate(
+                resolveMuxerSampleBufferSize(
+                    maxInputSizes = listOf(videoTrackMaxInputSize, audioTrackMaxInputSize)
+                )
+            )
             val bufferInfo = android.media.MediaCodec.BufferInfo()
             
             // 写入视频数据 (如果有)
             if (video != null && videoTrackIndex != -1 && videoMuxerTrackIndex != -1) {
                 while (true) {
+                    buffer.clear()
                     val sampleSize = videoExtractor.readSampleData(buffer, 0)
                     if (sampleSize < 0) break
                     
@@ -526,6 +589,7 @@ object DownloadManager {
             
             // 写入音频数据
             while (true) {
+                buffer.clear()
                 val sampleSize = audioExtractor.readSampleData(buffer, 0)
                 if (sampleSize < 0) break
                 

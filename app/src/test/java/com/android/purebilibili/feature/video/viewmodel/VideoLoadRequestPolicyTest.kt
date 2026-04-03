@@ -127,6 +127,44 @@ class VideoLoadRequestPolicyTest {
     }
 
     @Test
+    fun `quality switch failure message explains app api cooldown for premium quality`() {
+        val message = resolveQualitySwitchFailureMessage(
+            requestedQualityLabel = "1080P60",
+            hasCachedDashTracks = true,
+            cacheContainsRequestedQuality = false,
+            qualityRefetchCooldownRemainingMs = 95_000L
+        )
+
+        assertContains(message, "接口风控")
+        assertContains(message, "1 分 35 秒")
+    }
+
+    @Test
+    fun `premium quality switch is blocked when cooldown active and cache misses target`() {
+        assertTrue(
+            shouldBlockPremiumQualitySwitchDuringCooldown(
+                requestedQualityId = 116,
+                cacheContainsRequestedQuality = false,
+                appApiCooldownRemainingMs = 20_000L
+            )
+        )
+        assertFalse(
+            shouldBlockPremiumQualitySwitchDuringCooldown(
+                requestedQualityId = 80,
+                cacheContainsRequestedQuality = false,
+                appApiCooldownRemainingMs = 20_000L
+            )
+        )
+        assertFalse(
+            shouldBlockPremiumQualitySwitchDuringCooldown(
+                requestedQualityId = 116,
+                cacheContainsRequestedQuality = true,
+                appApiCooldownRemainingMs = 20_000L
+            )
+        )
+    }
+
+    @Test
     fun `effective av1 support is disabled when current session has blocked av1`() {
         assertFalse(
             resolveEffectiveAv1Support(

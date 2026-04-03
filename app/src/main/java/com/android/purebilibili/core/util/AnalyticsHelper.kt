@@ -15,11 +15,33 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 private val ANALYTICS_DEDUPE_WHITESPACE_REGEX = Regex("\\s+")
+private val SENSITIVE_ANALYTICS_PARAM_KEYS = setOf(
+    "video_id",
+    "room_id",
+    "season_id",
+    "episode_id",
+    "target_user_id",
+    "title",
+    "up_name",
+    FirebaseAnalytics.Param.ITEM_ID
+)
 
 internal fun normalizeAnalyticsDedupeToken(token: String): String {
     return token.trim()
         .replace(ANALYTICS_DEDUPE_WHITESPACE_REGEX, "_")
         .take(80)
+}
+
+internal fun isSensitiveAnalyticsParamKey(key: String): Boolean {
+    return key in SENSITIVE_ANALYTICS_PARAM_KEYS
+}
+
+internal fun resolveAnalyticsUserId(mid: Long?): String? = null
+
+private inline fun maybeLogAnalyticsParam(key: String, write: () -> Unit) {
+    if (!isSensitiveAnalyticsParamKey(key)) {
+        write()
+    }
 }
 
 internal fun shouldSkipAnalyticsEvent(
@@ -138,11 +160,11 @@ object AnalyticsHelper {
      * 注意：请勿设置可识别个人身份的信息
      */
     fun setUserId(userId: String?) {
-        if (!isEnabled) return
+        val mid = userId?.toLongOrNull()
         try {
-            analytics?.setUserId(userId)
-            val mid = userId?.toLongOrNull()
             CrashReporter.syncUserContext(mid = mid, isVip = null, privacyModeEnabled = null)
+            if (!isEnabled) return
+            analytics?.setUserId(resolveAnalyticsUserId(mid))
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set user ID", e)
         }
@@ -164,9 +186,10 @@ object AnalyticsHelper {
      * 同步用户上下文到 Analytics + Crashlytics
      */
     fun syncUserContext(mid: Long?, isVip: Boolean?, privacyModeEnabled: Boolean?) {
-        if (!isEnabled) return
         try {
-            analytics?.setUserId(mid?.takeIf { it > 0 }?.toString())
+            CrashReporter.syncUserContext(mid, isVip, privacyModeEnabled)
+            if (!isEnabled) return
+            analytics?.setUserId(resolveAnalyticsUserId(mid))
             analytics?.setUserProperty(
                 "login_state",
                 if (mid != null && mid > 0) "logged_in" else "guest"
@@ -175,7 +198,6 @@ object AnalyticsHelper {
             privacyModeEnabled?.let {
                 analytics?.setUserProperty("privacy_mode", if (it) "on" else "off")
             }
-            CrashReporter.syncUserContext(mid, isVip, privacyModeEnabled)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync user context", e)
         }
@@ -294,11 +316,11 @@ object AnalyticsHelper {
         if (shouldDropByRateLimit("video_progress", "$videoId:$progress", minIntervalMs = 10_000L)) return
         try {
             analytics?.logEvent("video_progress") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("progress_percent", progress.toLong())
                 param("watch_time_sec", watchTime)
             }
-            Logger.d(TAG, " Video progress: $videoId at $progress%")
+            Logger.d(TAG, " Video progress checkpoint: $progress%")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log video progress", e)
         }
@@ -311,10 +333,10 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("video_complete") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("total_watch_time_sec", totalWatchTime)
             }
-            Logger.d(TAG, " Video complete: $videoId")
+            Logger.d(TAG, " Video complete recorded")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log video complete", e)
         }
@@ -367,7 +389,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent(if (isLiked) "video_like" else "video_unlike") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log like", e)
@@ -381,7 +403,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent(if (isFavorited) "video_favorite" else "video_unfavorite") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log favorite", e)
@@ -396,7 +418,9 @@ object AnalyticsHelper {
         try {
             analytics?.logEvent(FirebaseAnalytics.Event.SHARE) {
                 param(FirebaseAnalytics.Param.CONTENT_TYPE, "video")
-                param(FirebaseAnalytics.Param.ITEM_ID, videoId)
+                maybeLogAnalyticsParam(FirebaseAnalytics.Param.ITEM_ID) {
+                    param(FirebaseAnalytics.Param.ITEM_ID, videoId)
+                }
                 method?.let { param(FirebaseAnalytics.Param.METHOD, it) }
             }
         } catch (e: Exception) {
@@ -411,7 +435,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent(if (isFollowed) "user_follow" else "user_unfollow") {
-                param("target_user_id", userId)
+                maybeLogAnalyticsParam("target_user_id") { param("target_user_id", userId) }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log follow", e)
@@ -425,7 +449,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("video_coin") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("coin_count", coinCount.toLong())
             }
         } catch (e: Exception) {
@@ -503,9 +527,9 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("bangumi_play") {
-                param("season_id", seasonId)
-                param("episode_id", episodeId)
-                param("title", title.take(100))
+                maybeLogAnalyticsParam("season_id") { param("season_id", seasonId) }
+                maybeLogAnalyticsParam("episode_id") { param("episode_id", episodeId) }
+                maybeLogAnalyticsParam("title") { param("title", title.take(100)) }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log bangumi play", e)
@@ -540,11 +564,13 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("live_play") {
-                param("room_id", roomId.toString())
-                param("title", title.take(100))
-                upName?.let { param("up_name", it.take(50)) }
+                maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
+                maybeLogAnalyticsParam("title") { param("title", title.take(100)) }
+                upName?.let {
+                    maybeLogAnalyticsParam("up_name") { param("up_name", it.take(50)) }
+                }
             }
-            Logger.d(TAG, " Live play: roomId=$roomId")
+            Logger.d(TAG, " Live play recorded")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log live play", e)
         }
@@ -559,7 +585,7 @@ object AnalyticsHelper {
         if (shouldDropByRateLimit("live_watch_time", "$roomId:$watchBucket", minIntervalMs = 12_000L)) return
         try {
             analytics?.logEvent("live_watch_time") {
-                param("room_id", roomId.toString())
+                maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
                 param("watch_time_sec", watchBucket)
             }
         } catch (e: Exception) {
@@ -576,7 +602,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("video_error") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("error_type", errorType)
             }
             CrashReporter.setLastEvent("video_error")
@@ -592,7 +618,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("live_error") {
-                param("room_id", roomId.toString())
+                maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
                 param("error_type", errorType)
             }
             CrashReporter.setLastEvent("live_error")
@@ -610,7 +636,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("sponsorblock_skip") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("segment_type", segmentType)
             }
         } catch (e: Exception) {
@@ -625,7 +651,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("quality_change") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("from_quality", fromQuality.toLong())
                 param("to_quality", toQuality.toLong())
             }
@@ -660,10 +686,10 @@ object AnalyticsHelper {
         if (shouldDropByRateLimit("picture_in_picture", "$videoId:$action", minIntervalMs = 900L)) return
         try {
             analytics?.logEvent("picture_in_picture") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("action", action)
             }
-            Logger.d(TAG, "📱 PiP: $action for $videoId")
+            Logger.d(TAG, "📱 PiP: $action")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log PiP", e)
         }
@@ -679,10 +705,10 @@ object AnalyticsHelper {
         if (shouldDropByRateLimit("background_play", "$videoId:$action", minIntervalMs = 900L)) return
         try {
             analytics?.logEvent("background_play") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("action", action)
             }
-            Logger.d(TAG, "🔊 Background play: $action for $videoId")
+            Logger.d(TAG, "🔊 Background play: $action")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log background play", e)
         }
@@ -698,10 +724,10 @@ object AnalyticsHelper {
         if (shouldDropByRateLimit("audio_mode", "$videoId:$enabled", minIntervalMs = 900L)) return
         try {
             analytics?.logEvent("audio_mode") {
-                param("video_id", videoId)
+                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("enabled", if (enabled) "true" else "false")
             }
-            Logger.d(TAG, "🎵 Audio mode: ${if (enabled) "enabled" else "disabled"} for $videoId")
+            Logger.d(TAG, "🎵 Audio mode: ${if (enabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log audio mode", e)
         }
@@ -717,7 +743,7 @@ object AnalyticsHelper {
         if (!isEnabled) return
         try {
             analytics?.logEvent("live_quality_change") {
-                param("room_id", roomId.toString())
+                maybeLogAnalyticsParam("room_id") { param("room_id", roomId.toString()) }
                 param("from_quality", fromQuality.toLong())
                 param("to_quality", toQuality.toLong())
             }

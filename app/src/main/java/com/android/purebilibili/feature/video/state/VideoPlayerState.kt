@@ -861,6 +861,7 @@ fun rememberVideoPlayerState(
 
     DisposableEffect(player) {
         onDispose {
+            viewModel.flushPlaybackHeartbeatSnapshot(reason = "dispose")
             //  [新增] 保存播放进度到 ViewModel 缓存
             viewModel.saveCurrentPosition()
             
@@ -908,6 +909,7 @@ fun rememberVideoPlayerState(
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    viewModel.flushPlaybackHeartbeatSnapshot(reason = "pause")
                     //  [修复] 保存进度到 ViewModel 缓存（用于跨导航恢复）
                     viewModel.saveCurrentPosition()
                     

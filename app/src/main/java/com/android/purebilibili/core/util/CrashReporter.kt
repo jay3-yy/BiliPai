@@ -13,6 +13,14 @@ import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 private val LIVE_STAGE_WHITESPACE_REGEX = Regex("\\s+")
+private val SENSITIVE_CRASH_CUSTOM_KEYS = setOf(
+    "video_bvid",
+    "danmaku_cid",
+    "live_room_id",
+    "live_room_title",
+    "live_anchor_name",
+    "fatal_live_room_id"
+)
 
 internal fun sanitizeLiveTraceStage(stage: String): String {
     return stage
@@ -34,6 +42,12 @@ internal fun liveSessionDurationMs(nowElapsedMs: Long, sessionStartElapsedMs: Lo
 internal fun shouldWriteCrashCustomKey(previousValue: Any?, nextValue: Any): Boolean {
     return previousValue != nextValue
 }
+
+internal fun isSensitiveCrashCustomKey(key: String): Boolean {
+    return key in SENSITIVE_CRASH_CUSTOM_KEYS
+}
+
+internal fun resolveCrashlyticsUserId(mid: Long?): String = ""
 
 /**
  * 崩溃报告工具类
@@ -201,15 +215,10 @@ object CrashReporter {
     fun syncUserContext(mid: Long?, isVip: Boolean?, privacyModeEnabled: Boolean?) {
         if (!isEnabled) return
         try {
-            if (mid != null && mid > 0) {
-                Firebase.crashlytics.setUserId(mid.toString())
-                Firebase.crashlytics.setCustomKey("is_logged_in", true)
-            } else {
-                Firebase.crashlytics.setUserId("")
-                Firebase.crashlytics.setCustomKey("is_logged_in", false)
-            }
-            isVip?.let { Firebase.crashlytics.setCustomKey("is_vip", it) }
-            privacyModeEnabled?.let { Firebase.crashlytics.setCustomKey("privacy_mode", it) }
+            Firebase.crashlytics.setUserId(resolveCrashlyticsUserId(mid))
+            setCustomKey("is_logged_in", mid != null && mid > 0)
+            isVip?.let { setCustomKey("is_vip", it) }
+            privacyModeEnabled?.let { setCustomKey("privacy_mode", it) }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync user context", e)
         }
@@ -254,7 +263,7 @@ object CrashReporter {
     fun setUserId(userId: String) {
         if (!isEnabled) return
         try {
-            Firebase.crashlytics.setUserId(userId)
+            Firebase.crashlytics.setUserId("")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set user ID", e)
         }
@@ -265,6 +274,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: String) {
         if (!isEnabled) return
+        if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
@@ -278,6 +288,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Boolean) {
         if (!isEnabled) return
+        if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
@@ -291,6 +302,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Int) {
         if (!isEnabled) return
+        if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
@@ -304,6 +316,7 @@ object CrashReporter {
      */
     fun setCustomKey(key: String, value: Long) {
         if (!isEnabled) return
+        if (isSensitiveCrashCustomKey(key)) return
         if (!shouldCacheAndWriteCustomKey(key, value)) return
         try {
             Firebase.crashlytics.setCustomKey(key, value)
@@ -332,11 +345,17 @@ object CrashReporter {
         if (shouldDropByRateLimit(key)) return
 
         try {
-            Firebase.crashlytics.setCustomKey("video_bvid", bvid)
-            Firebase.crashlytics.setCustomKey("video_error_type", errorType)
-            Firebase.crashlytics.log(" Video Error: [$errorType] $bvid - $errorMessage")
-            Firebase.crashlytics.recordException(exception ?: VideoPlaybackException(errorType, errorMessage))
-            Logger.e(TAG, " Video error reported: [$errorType] $bvid - $errorMessage", exception)
+            setCustomKey("video_bvid", bvid.take(120))
+            setCustomKey("video_error_type", errorType)
+            exception?.let { setCustomKey("video_exception_type", it.javaClass.simpleName.take(80)) }
+            Firebase.crashlytics.log("Video Error: [$errorType] ${errorMessage.take(300)}")
+            Firebase.crashlytics.recordException(
+                buildSanitizedThrowable(
+                    VideoPlaybackException(errorType, errorMessage),
+                    exception
+                )
+            )
+            Logger.e(TAG, " Video error reported: [$errorType] $errorMessage", exception)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to report video error", e)
         }
@@ -375,14 +394,20 @@ object CrashReporter {
      */
     fun reportDanmakuError(cid: Long, errorMessage: String, exception: Throwable? = null) {
         if (!isEnabled) return
-        val key = "danmaku:$cid:${errorMessage.take(80)}"
+        val key = "danmaku:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
         try {
-            Firebase.crashlytics.setCustomKey("danmaku_cid", cid.toString())
-            Firebase.crashlytics.log(" Danmaku Error: cid=$cid - $errorMessage")
-            Firebase.crashlytics.recordException(exception ?: DanmakuException(cid, errorMessage))
-            Logger.e(TAG, " Danmaku error reported: cid=$cid - $errorMessage", exception)
+            setCustomKey("danmaku_cid", cid)
+            exception?.let { setCustomKey("danmaku_exception_type", it.javaClass.simpleName.take(80)) }
+            Firebase.crashlytics.log("Danmaku Error: ${errorMessage.take(300)}")
+            Firebase.crashlytics.recordException(
+                buildSanitizedThrowable(
+                    DanmakuException(cid, errorMessage),
+                    exception
+                )
+            )
+            Logger.e(TAG, " Danmaku error reported: $errorMessage", exception)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to report danmaku error", e)
         }
@@ -398,15 +423,21 @@ object CrashReporter {
         exception: Throwable? = null
     ) {
         if (!isEnabled) return
-        val key = "live:$roomId:$errorType:${errorMessage.take(80)}"
+        val key = "live:$errorType:${errorMessage.take(80)}"
         if (shouldDropByRateLimit(key)) return
 
         try {
-            Firebase.crashlytics.setCustomKey("live_room_id", roomId.toString())
-            Firebase.crashlytics.setCustomKey("live_error_type", errorType)
-            Firebase.crashlytics.log("Live Error: [$errorType] roomId=$roomId - $errorMessage")
-            Firebase.crashlytics.recordException(exception ?: LiveStreamException(roomId, errorType, errorMessage))
-            Logger.e(TAG, " Live error reported: [$errorType] roomId=$roomId - $errorMessage", exception)
+            setCustomKey("live_room_id", roomId)
+            setCustomKey("live_error_type", errorType)
+            exception?.let { setCustomKey("live_exception_type", it.javaClass.simpleName.take(80)) }
+            Firebase.crashlytics.log("Live Error: [$errorType] ${errorMessage.take(300)}")
+            Firebase.crashlytics.recordException(
+                buildSanitizedThrowable(
+                    LiveStreamException(roomId, errorType, errorMessage),
+                    exception
+                )
+            )
+            Logger.e(TAG, " Live error reported: [$errorType] $errorMessage", exception)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to report live error", e)
         }
@@ -476,7 +507,7 @@ object CrashReporter {
             setCustomKey("live_session_uptime_ms", duration)
             setCustomKey("live_last_stage", "session_end_$normalizedReason")
             setCustomKey("live_session_active", false)
-            log("LIVE_END:roomId=$liveSessionRoomId,reason=$normalizedReason,durationMs=$duration")
+            log("LIVE_END:reason=$normalizedReason,durationMs=$duration")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to mark live session end", e)
         } finally {
@@ -521,6 +552,12 @@ object CrashReporter {
         }
         return shouldWriteCrashCustomKey(previousValue = previous, nextValue = value)
     }
+
+    private fun <T : Throwable> buildSanitizedThrowable(sanitized: T, original: Throwable?): T {
+        if (original == null) return sanitized
+        sanitized.stackTrace = original.stackTrace
+        return sanitized
+    }
 }
 
 // ========== 自定义异常类（用于 Crashlytics 分类） ==========
@@ -548,7 +585,7 @@ class ApiException(
 class DanmakuException(
     val cid: Long,
     override val message: String
-) : Exception("Danmaku cid=$cid: $message")
+) : Exception("Danmaku error: $message")
 
 /**
  * 直播播放异常
@@ -557,4 +594,4 @@ class LiveStreamException(
     val roomId: Long,
     val errorType: String,
     override val message: String
-) : Exception("[$errorType] Live roomId=$roomId: $message")
+) : Exception("[$errorType] Live stream error: $message")

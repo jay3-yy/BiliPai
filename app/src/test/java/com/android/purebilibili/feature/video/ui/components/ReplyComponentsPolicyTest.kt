@@ -21,6 +21,28 @@ import kotlin.test.assertTrue
 class ReplyComponentsPolicyTest {
 
     @Test
+    fun `resolveReplyLevelBadgeAsset keeps pili plus mapping for normal levels`() {
+        assertEquals(
+            ReplyLevelBadgeAsset.LEVEL_4,
+            resolveReplyLevelBadgeAsset(level = 4, isSeniorMember = false)
+        )
+    }
+
+    @Test
+    fun `resolveReplyLevelBadgeAsset prefers senior level six badge when available`() {
+        assertEquals(
+            ReplyLevelBadgeAsset.LEVEL_6_SENIOR,
+            resolveReplyLevelBadgeAsset(level = 6, isSeniorMember = true)
+        )
+    }
+
+    @Test
+    fun `resolveReplyLevelBadgeAsset rejects invalid levels`() {
+        assertNull(resolveReplyLevelBadgeAsset(level = -1, isSeniorMember = false))
+        assertNull(resolveReplyLevelBadgeAsset(level = 7, isSeniorMember = false))
+    }
+
+    @Test
     fun `resolveReplySpecialLabelText prefers server label over fallback`() {
         val text = resolveReplySpecialLabelText(
             cardLabels = listOf(

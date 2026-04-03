@@ -44,13 +44,18 @@ internal fun shouldEnableVerboseRuntimeLogs(
     verboseDebugLogsEnabled: Boolean
 ): Boolean = isDebugBuild && verboseDebugLogsEnabled
 
+internal fun shouldCaptureRuntimeLogEntry(
+    level: String,
+    verboseRuntimeLogsEnabled: Boolean
+): Boolean = when (level) {
+    "W", "E" -> true
+    else -> verboseRuntimeLogsEnabled
+}
+
 internal fun shouldPersistRuntimeLogEntry(
     level: String,
     verboseRuntimeLogPersistenceEnabled: Boolean
-): Boolean = when (level) {
-    "W", "E" -> true
-    else -> verboseRuntimeLogPersistenceEnabled
-}
+): Boolean = verboseRuntimeLogPersistenceEnabled
 
 internal fun resolveLogArtifactDirsToClear(
     filesDir: File,
@@ -123,8 +128,13 @@ object Logger {
     fun d(tag: String, message: String) {
         if (!verboseRuntimeLogsEnabled) return
         Log.d(tag, message)
-        if (shouldPersistRuntimeLogEntry("D", verboseRuntimeLogPersistenceEnabled)) {
-            LogCollector.add("D", tag, message)
+        if (shouldCaptureRuntimeLogEntry("D", verboseRuntimeLogsEnabled)) {
+            LogCollector.add(
+                level = "D",
+                tag = tag,
+                message = message,
+                persistToDisk = shouldPersistRuntimeLogEntry("D", verboseRuntimeLogPersistenceEnabled)
+            )
         }
     }
 
@@ -139,8 +149,13 @@ object Logger {
     fun i(tag: String, message: String) {
         if (!verboseRuntimeLogsEnabled) return
         Log.i(tag, message)
-        if (shouldPersistRuntimeLogEntry("I", verboseRuntimeLogPersistenceEnabled)) {
-            LogCollector.add("I", tag, message)
+        if (shouldCaptureRuntimeLogEntry("I", verboseRuntimeLogsEnabled)) {
+            LogCollector.add(
+                level = "I",
+                tag = tag,
+                message = message,
+                persistToDisk = shouldPersistRuntimeLogEntry("I", verboseRuntimeLogPersistenceEnabled)
+            )
         }
     }
 
@@ -162,8 +177,13 @@ object Logger {
         } else {
             Log.w(tag, message)
         }
-        if (shouldPersistRuntimeLogEntry("W", verboseRuntimeLogPersistenceEnabled)) {
-            LogCollector.add("W", tag, fullMessage)
+        if (shouldCaptureRuntimeLogEntry("W", verboseRuntimeLogsEnabled)) {
+            LogCollector.add(
+                level = "W",
+                tag = tag,
+                message = fullMessage,
+                persistToDisk = shouldPersistRuntimeLogEntry("W", verboseRuntimeLogPersistenceEnabled)
+            )
         }
     }
     
@@ -180,8 +200,13 @@ object Logger {
         } else {
             Log.e(tag, message)
         }
-        if (shouldPersistRuntimeLogEntry("E", verboseRuntimeLogPersistenceEnabled)) {
-            LogCollector.add("E", tag, fullMessage)
+        if (shouldCaptureRuntimeLogEntry("E", verboseRuntimeLogsEnabled)) {
+            LogCollector.add(
+                level = "E",
+                tag = tag,
+                message = fullMessage,
+                persistToDisk = shouldPersistRuntimeLogEntry("E", verboseRuntimeLogPersistenceEnabled)
+            )
         }
     }
 
@@ -285,7 +310,7 @@ object LogCollector {
     /**
      * 添加日志条目（轻量路径，脱敏延后到导出）
      */
-    fun add(level: String, tag: String, message: String) {
+    fun add(level: String, tag: String, message: String, persistToDisk: Boolean = true) {
         val now = System.currentTimeMillis()
         val fingerprint = "$level|$tag|$message"
         var entryToPersist: LogEntry? = null
@@ -317,7 +342,9 @@ object LogCollector {
             }
         }
 
-        entryToPersist?.let { appendEntryToRuntimeFile(it) }
+        if (persistToDisk) {
+            entryToPersist?.let { appendEntryToRuntimeFile(it) }
+        }
     }
 
     fun init(context: Context) {

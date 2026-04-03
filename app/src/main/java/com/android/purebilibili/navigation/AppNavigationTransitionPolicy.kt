@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation
 
+import androidx.lifecycle.Lifecycle
 import com.android.purebilibili.core.ui.transition.VideoSharedTransitionProfile
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionProfile
 
@@ -331,6 +332,14 @@ internal fun shouldClearReturningStateWhenDisposingVideoDestination(
     stillInVideoRoute: Boolean
 ): Boolean {
     return stillInVideoRoute
+}
+
+internal fun shouldShareAudioModeViewModelWithPreviousEntry(
+    previousRoute: String?,
+    previousLifecycleState: Lifecycle.State?
+): Boolean {
+    return previousLifecycleState?.isAtLeast(Lifecycle.State.CREATED) == true &&
+        isVideoDetailRoute(previousRoute)
 }
 
 internal fun shouldUseTabletSeamlessBackTransition(

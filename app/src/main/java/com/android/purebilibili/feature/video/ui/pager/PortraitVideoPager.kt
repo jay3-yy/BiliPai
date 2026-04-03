@@ -82,6 +82,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackParameters
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.shouldResumePlaybackAfterUserSeek
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -1775,7 +1776,11 @@ private fun VideoPageItem(
                     )
                     seekSession = commitResult.state
                     progressState = progressState.copy(current = commitResult.committedPositionMs)
-                    seekPlayerFromUserAction(exoPlayer, commitResult.committedPositionMs)
+                    seekPlayerFromUserAction(
+                        player = exoPlayer,
+                        positionMs = commitResult.committedPositionMs,
+                        shouldResumePlaybackOverride = commitResult.shouldResumePlayback
+                    )
                     danmakuManager.seekTo(commitResult.committedPositionMs)
                 }
             },
@@ -1785,7 +1790,11 @@ private fun VideoPageItem(
             onSeekDragStart = { position ->
                 seekSession = startPlaybackSeekInteraction(
                     state = seekSession,
-                    positionMs = position
+                    positionMs = position,
+                    shouldResumePlayback = shouldResumePlaybackAfterUserSeek(
+                        playWhenReadyBeforeSeek = exoPlayer.playWhenReady,
+                        playbackStateBeforeSeek = exoPlayer.playbackState
+                    )
                 )
             },
             onSeekDragUpdate = { position ->

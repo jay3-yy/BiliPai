@@ -625,7 +625,7 @@ fun DeveloperSection(
         SettingSwitchItem(
             icon = crashTrackingIcon,
             title = "崩溃追踪",
-            subtitle = "帮助开发者发现和修复问题",
+            subtitle = "默认开启，仅用于定位崩溃与严重故障",
             checked = crashTrackingEnabled,
             onCheckedChange = onCrashTrackingChange,
             iconTint = crashTrackingTint
@@ -634,7 +634,7 @@ fun DeveloperSection(
         SettingSwitchItem(
             icon = analyticsIcon,
             title = "使用情况统计",
-            subtitle = "帮助改进应用体验，不收集个人信息",
+            subtitle = "默认关闭，开启后用于匿名统计功能使用情况",
             checked = analyticsEnabled,
             onCheckedChange = onAnalyticsChange,
             iconTint = analyticsTint
@@ -653,7 +653,7 @@ fun DeveloperSection(
             icon = exportLogsVisual.icon,
             iconPainter = exportLogsVisual.iconResId?.let { painterResource(id = it) },
             title = "导出日志",
-            value = "用于反馈问题",
+            value = "播放器诊断与问题反馈",
             onClick = onExportLogsClick,
             iconTint = exportLogsVisual.iconTint
         )

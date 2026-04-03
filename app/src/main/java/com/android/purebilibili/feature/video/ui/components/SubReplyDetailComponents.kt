@@ -442,7 +442,10 @@ private fun SubReplyDetailItem(
                             )
 
                             if (item.member.levelInfo.currentLevel > 0) {
-                                LevelTag(level = item.member.levelInfo.currentLevel)
+                                LevelTag(
+                                    level = item.member.levelInfo.currentLevel,
+                                    isSeniorMember = item.member.isSeniorMember == 1
+                                )
                             }
 
                             if (isUpComment) {

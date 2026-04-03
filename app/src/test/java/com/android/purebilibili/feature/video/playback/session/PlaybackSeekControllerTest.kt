@@ -95,6 +95,25 @@ class PlaybackSeekControllerTest {
     }
 
     @Test
+    fun finishSeek_preservesResumeIntentCapturedAtInteractionStart() {
+        val draggingState = updatePlaybackSeekInteraction(
+            state = startPlaybackSeekInteraction(
+                state = syncPlaybackSeekSession(
+                    state = PlaybackSeekSessionState(),
+                    playbackPositionMs = 8_000L
+                ),
+                shouldResumePlayback = true
+            ),
+            positionMs = 30_000L
+        )
+
+        val result = finishPlaybackSeekInteraction(draggingState)
+
+        assertTrue(result.shouldResumePlayback)
+        assertEquals(true, result.state.shouldResumePlayback)
+    }
+
+    @Test
     fun startScrubbing_entersScrubbingStateWithClampedProgress() {
         val state = startPlaybackSeekSession(progress = 1.4f)
 

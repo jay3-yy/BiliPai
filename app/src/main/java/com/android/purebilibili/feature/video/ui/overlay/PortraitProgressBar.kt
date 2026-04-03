@@ -154,8 +154,10 @@ fun ThinWigglyProgressBar(
         progress
     }
     var dragTargetPositionMs by remember { mutableLongStateOf(seekPositionMs.coerceAtLeast(0L)) }
-    LaunchedEffect(seekPositionMs) {
-        dragTargetPositionMs = seekPositionMs.coerceAtLeast(0L)
+    LaunchedEffect(seekPositionMs, isSeekScrubbing) {
+        if (!isSeekScrubbing) {
+            dragTargetPositionMs = seekPositionMs.coerceAtLeast(0L)
+        }
     }
     
     // 动画状态

@@ -36,7 +36,10 @@ object PlayerSettingsCache {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         hwDecodeEnabled = prefs.getBoolean(KEY_HW_DECODE, true)
         seekFastEnabled = prefs.getBoolean(KEY_SEEK_FAST, true)
-        playerDiagnosticLoggingEnabled = prefs.getBoolean(KEY_PLAYER_DIAGNOSTIC_LOGGING, true)
+        playerDiagnosticLoggingEnabled = prefs.getBoolean(
+            KEY_PLAYER_DIAGNOSTIC_LOGGING,
+            DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
+        )
         Logger.d(
             TAG,
             "✅ 初始化完成: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +
@@ -98,7 +101,10 @@ object PlayerSettingsCache {
     fun isPlayerDiagnosticLoggingEnabled(context: Context): Boolean {
         return playerDiagnosticLoggingEnabled ?: run {
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val value = prefs.getBoolean(KEY_PLAYER_DIAGNOSTIC_LOGGING, true)
+            val value = prefs.getBoolean(
+                KEY_PLAYER_DIAGNOSTIC_LOGGING,
+                DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
+            )
             playerDiagnosticLoggingEnabled = value
             value
         }
@@ -108,7 +114,7 @@ object PlayerSettingsCache {
      * 获取播放器诊断日志开关（仅读取内存缓存）
      */
     fun isPlayerDiagnosticLoggingEnabled(): Boolean {
-        return playerDiagnosticLoggingEnabled ?: true
+        return playerDiagnosticLoggingEnabled ?: DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
     }
 
     /**
@@ -130,7 +136,10 @@ object PlayerSettingsCache {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         hwDecodeEnabled = prefs.getBoolean(KEY_HW_DECODE, true)
         seekFastEnabled = prefs.getBoolean(KEY_SEEK_FAST, true)
-        playerDiagnosticLoggingEnabled = prefs.getBoolean(KEY_PLAYER_DIAGNOSTIC_LOGGING, true)
+        playerDiagnosticLoggingEnabled = prefs.getBoolean(
+            KEY_PLAYER_DIAGNOSTIC_LOGGING,
+            DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
+        )
         Logger.d(
             TAG,
             "🔄 缓存已刷新: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +

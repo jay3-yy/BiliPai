@@ -225,6 +225,9 @@ data class ReplyMember(
     val uname: String = "未知用户",
     @Serializable(with = FlexibleStringSerializer::class)
     val avatar: String = "",
+    @Serializable(with = FlexibleIntSerializer::class)
+    @SerialName("is_senior_member")
+    val isSeniorMember: Int = 0,
 
     @SerialName("level_info")
     val levelInfo: ReplyLevelInfo = ReplyLevelInfo(),

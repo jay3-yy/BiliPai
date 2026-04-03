@@ -55,8 +55,8 @@ fun CrashTrackingConsentDialog(
                 // 说明文字
                 Text(
                     text = "为了快速发现和修复应用问题，BiliPai 会收集崩溃报告和错误日志。\n\n" +
-                           "这些数据仅用于改善应用稳定性，不包含任何个人隐私信息。\n\n" +
-                           "你可以随时在「设置」中关闭此功能。",
+                           "默认仅启用崩溃追踪；使用情况统计默认关闭。播放器诊断日志保持可用，方便排查黑屏、卡顿等播放问题。\n\n" +
+                           "这些数据仅用于改善应用稳定性，你也可以随时在「设置」中调整相关开关。",
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Start,

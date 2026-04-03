@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,9 +26,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +44,7 @@ import coil.imageLoader
 //  已改用 MaterialTheme.colorScheme.primary
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.BilibiliUrlParser
+import com.android.purebilibili.R
 import com.android.purebilibili.data.model.response.ReplyFansDetail
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyItem
@@ -73,6 +78,34 @@ const val COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX = "comment_sub_reply_preview_"
 const val COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX = "comment_view_all_replies_"
 
 private val replyVideoTitleCache = ConcurrentHashMap<String, String>()
+
+internal enum class ReplyLevelBadgeAsset {
+    LEVEL_0,
+    LEVEL_1,
+    LEVEL_2,
+    LEVEL_3,
+    LEVEL_4,
+    LEVEL_5,
+    LEVEL_6,
+    LEVEL_6_SENIOR
+}
+
+internal fun resolveReplyLevelBadgeAsset(
+    level: Int,
+    isSeniorMember: Boolean
+): ReplyLevelBadgeAsset? {
+    return when {
+        isSeniorMember && level == 6 -> ReplyLevelBadgeAsset.LEVEL_6_SENIOR
+        level == 0 -> ReplyLevelBadgeAsset.LEVEL_0
+        level == 1 -> ReplyLevelBadgeAsset.LEVEL_1
+        level == 2 -> ReplyLevelBadgeAsset.LEVEL_2
+        level == 3 -> ReplyLevelBadgeAsset.LEVEL_3
+        level == 4 -> ReplyLevelBadgeAsset.LEVEL_4
+        level == 5 -> ReplyLevelBadgeAsset.LEVEL_5
+        level == 6 -> ReplyLevelBadgeAsset.LEVEL_6
+        else -> null
+    }
+}
 
 internal fun parseCommentTimestampSeconds(match: MatchResult): Long? {
     val first = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return null
@@ -612,7 +645,10 @@ fun ReplyItemView(
                             }
 
                             if (item.member.levelInfo.currentLevel > 0) {
-                                LevelTag(level = item.member.levelInfo.currentLevel)
+                                LevelTag(
+                                    level = item.member.levelInfo.currentLevel,
+                                    isSeniorMember = item.member.isSeniorMember == 1
+                                )
                             }
 
                             if (fansDetail != null) {
@@ -1182,9 +1218,41 @@ fun EmojiText(
     )
 }
 
-//  等级标签（改为截图同款的小矩形 LV 样式）
+private fun resolveReplyLevelBadgeResId(asset: ReplyLevelBadgeAsset): Int {
+    return when (asset) {
+        ReplyLevelBadgeAsset.LEVEL_0 -> R.drawable.lv0
+        ReplyLevelBadgeAsset.LEVEL_1 -> R.drawable.lv1
+        ReplyLevelBadgeAsset.LEVEL_2 -> R.drawable.lv2
+        ReplyLevelBadgeAsset.LEVEL_3 -> R.drawable.lv3
+        ReplyLevelBadgeAsset.LEVEL_4 -> R.drawable.lv4
+        ReplyLevelBadgeAsset.LEVEL_5 -> R.drawable.lv5
+        ReplyLevelBadgeAsset.LEVEL_6 -> R.drawable.lv6
+        ReplyLevelBadgeAsset.LEVEL_6_SENIOR -> R.drawable.lv6_s
+    }
+}
+
+//  评论等级标签（PiliPlus pixel badge with text fallback）
 @Composable
-fun LevelTag(level: Int) {
+fun LevelTag(level: Int, isSeniorMember: Boolean = false) {
+    val badgeAsset = resolveReplyLevelBadgeAsset(
+        level = level,
+        isSeniorMember = isSeniorMember
+    )
+    if (badgeAsset != null) {
+        Image(
+            bitmap = ImageBitmap.imageResource(id = resolveReplyLevelBadgeResId(badgeAsset)),
+            contentDescription = "等级$level",
+            modifier = Modifier.height(11.dp),
+            filterQuality = FilterQuality.None
+        )
+        return
+    }
+
+    LegacyLevelTag(level = level)
+}
+
+@Composable
+private fun LegacyLevelTag(level: Int) {
     val badgeColor = resolveLevelBadgeColor(level)
     Box(
         modifier = Modifier

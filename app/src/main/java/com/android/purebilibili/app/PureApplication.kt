@@ -23,6 +23,8 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.store.APP_ICON_COMPAT_ALIAS_CLASS_NAME
+import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
+import com.android.purebilibili.core.store.DEFAULT_CRASH_TRACKING_ENABLED
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.allManagedAppIconLauncherAliases
@@ -204,7 +206,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
         try {
             //  读取用户设置（默认开启）
             val prefs = getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
-            val enabled = prefs.getBoolean("enabled", true)  // 默认开启
+            val enabled = prefs.getBoolean("enabled", DEFAULT_CRASH_TRACKING_ENABLED)
             
             CrashReporter.init(this)
             CrashReporter.installGlobalExceptionHandler()
@@ -232,7 +234,7 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
             
             //  读取用户设置（默认开启）
             val prefs = getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
-            val enabled = prefs.getBoolean("enabled", true)  // 默认开启
+            val enabled = prefs.getBoolean("enabled", DEFAULT_ANALYTICS_ENABLED)
             
             //  根据用户设置启用/禁用 Analytics
             AnalyticsHelper.setEnabled(enabled)

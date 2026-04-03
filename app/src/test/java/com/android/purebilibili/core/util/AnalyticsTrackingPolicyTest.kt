@@ -2,6 +2,7 @@ package com.android.purebilibili.core.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -39,5 +40,19 @@ class AnalyticsTrackingPolicyTest {
                 minIntervalMs = 800L
             )
         )
+    }
+
+    @Test
+    fun sensitiveAnalyticsKeysAndUserIdAreBlocked() {
+        assertTrue(isSensitiveAnalyticsParamKey("video_id"))
+        assertTrue(isSensitiveAnalyticsParamKey("room_id"))
+        assertTrue(isSensitiveAnalyticsParamKey("season_id"))
+        assertTrue(isSensitiveAnalyticsParamKey("episode_id"))
+        assertTrue(isSensitiveAnalyticsParamKey("target_user_id"))
+        assertFalse(isSensitiveAnalyticsParamKey("error_type"))
+        assertFalse(isSensitiveAnalyticsParamKey("progress_percent"))
+
+        assertNull(resolveAnalyticsUserId(mid = 123456L))
+        assertNull(resolveAnalyticsUserId(mid = null))
     }
 }

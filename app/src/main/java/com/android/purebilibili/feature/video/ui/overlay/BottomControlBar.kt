@@ -999,8 +999,10 @@ fun VideoProgressBar(
     var dragOffsetX by remember { mutableFloatStateOf(0f) }
     var containerWidth by remember { mutableFloatStateOf(0f) }
     var dragTargetPositionMs by remember { mutableLongStateOf(displayPositionMs.coerceAtLeast(0L)) }
-    LaunchedEffect(displayPositionMs) {
-        dragTargetPositionMs = displayPositionMs.coerceAtLeast(0L)
+    LaunchedEffect(displayPositionMs, isSeekScrubbing) {
+        if (!isSeekScrubbing) {
+            dragTargetPositionMs = displayPositionMs.coerceAtLeast(0L)
+        }
     }
     val primaryColor = MaterialTheme.colorScheme.primary
     val resolvedSponsorMarkers = remember(duration, sponsorMarkers) {

@@ -137,6 +137,14 @@ object VideoRepository {
         subtitleCueCache.clear()
     }
 
+    internal fun getAppApiCooldownRemainingMs(nowMs: Long = System.currentTimeMillis()): Long {
+        return (appApiCooldownUntilMs - nowMs).coerceAtLeast(0L)
+    }
+
+    internal fun isAppApiCoolingDown(nowMs: Long = System.currentTimeMillis()): Boolean {
+        return getAppApiCooldownRemainingMs(nowMs) > 0L
+    }
+
     private fun isDirectedTrafficModeActive(): Boolean {
         val context = NetworkModule.appContext ?: return false
         val enabled = SettingsManager.getBiliDirectedTrafficEnabledSync(context)
@@ -523,7 +531,13 @@ object VideoRepository {
     }
     
     //  [新增] 上报播放心跳（记录到历史记录）
-    suspend fun reportPlayHeartbeat(bvid: String, cid: Long, playedTime: Long = 0) = withContext(Dispatchers.IO) {
+    suspend fun reportPlayHeartbeat(
+        bvid: String,
+        cid: Long,
+        playedTime: Long = 0,
+        realPlayedTime: Long = playedTime,
+        startTsSec: Long = System.currentTimeMillis() / 1000L
+    ) = withContext(Dispatchers.IO) {
         try {
             //  隐私无痕模式检查：如果启用则跳过上报
             val context = com.android.purebilibili.core.network.NetworkModule.appContext
@@ -532,8 +546,18 @@ object VideoRepository {
                 return@withContext true  // 返回成功但不实际上报
             }
             
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔴 Reporting heartbeat: bvid=$bvid, cid=$cid, playedTime=$playedTime")
-            val resp = api.reportHeartbeat(bvid = bvid, cid = cid, playedTime = playedTime, realPlayedTime = playedTime)
+            com.android.purebilibili.core.util.Logger.d(
+                "VideoRepo",
+                "🔴 Reporting heartbeat: bvid=$bvid, cid=$cid, " +
+                    "playedTime=$playedTime, realPlayedTime=$realPlayedTime, startTs=$startTsSec"
+            )
+            val resp = api.reportHeartbeat(
+                bvid = bvid,
+                cid = cid,
+                playedTime = playedTime,
+                realPlayedTime = realPlayedTime,
+                startTs = startTsSec
+            )
             com.android.purebilibili.core.util.Logger.d("VideoRepo", "🔴 Heartbeat response: code=${resp.code}, msg=${resp.message}")
             resp.code == 0
         } catch (e: Exception) {

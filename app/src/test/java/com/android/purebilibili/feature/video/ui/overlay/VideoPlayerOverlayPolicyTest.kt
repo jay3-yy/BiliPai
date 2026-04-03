@@ -254,6 +254,28 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
+    fun playbackButtonState_staysActiveWhilePlayerIsBufferingForResume() {
+        assertTrue(
+            resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = false,
+                playWhenReady = true,
+                playbackState = Player.STATE_BUFFERING
+            )
+        )
+    }
+
+    @Test
+    fun playbackButtonState_staysInactiveForPausedReadyPlayer() {
+        assertFalse(
+            resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = false,
+                playWhenReady = false,
+                playbackState = Player.STATE_READY
+            )
+        )
+    }
+
+    @Test
     fun bufferingIndicatorCanShowDuringScrubbingEvenWhenControlsVisible() {
         assertTrue(
             shouldShowBufferingIndicator(

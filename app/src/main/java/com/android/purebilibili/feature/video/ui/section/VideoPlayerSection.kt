@@ -134,6 +134,7 @@ import com.android.purebilibili.feature.video.subtitle.shouldRenderPrimarySubtit
 import com.android.purebilibili.feature.video.subtitle.shouldRenderSecondarySubtitle
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
+import com.android.purebilibili.feature.video.usecase.shouldResumePlaybackAfterUserSeek
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.feature.video.util.captureAndSaveVideoScreenshot
 import com.android.purebilibili.feature.video.playback.session.PlaybackSeekSessionState
@@ -1707,7 +1708,11 @@ fun VideoPlayerSection(
                                         )
                                     )
                                     sharedSeekSession = commitResult.state
-                                    seekPlayerFromUserAction(playerState.player, commitResult.committedPositionMs)
+                                    seekPlayerFromUserAction(
+                                        player = playerState.player,
+                                        positionMs = commitResult.committedPositionMs,
+                                        shouldResumePlaybackOverride = commitResult.shouldResumePlayback
+                                    )
                                     danmakuManager.seekTo(commitResult.committedPositionMs)
                                 } else {
                                     sharedSeekSession = cancelPlaybackSeekInteraction(sharedSeekSession)
@@ -1866,7 +1871,11 @@ fun VideoPlayerSection(
                                     if (!sharedSeekSession.isSliderMoving) {
                                         sharedSeekSession = startPlaybackSeekInteraction(
                                             state = sharedSeekSession,
-                                            positionMs = startPosition
+                                            positionMs = startPosition,
+                                            shouldResumePlayback = shouldResumePlaybackAfterUserSeek(
+                                                playWhenReadyBeforeSeek = playerState.player.playWhenReady,
+                                                playbackStateBeforeSeek = playerState.player.playbackState
+                                            )
                                         )
                                     }
                                     // 距离已在上方累积，直接计算目标位置
@@ -4058,7 +4067,11 @@ fun VideoPlayerSection(
                 onSeekDragStart = { position ->
                     sharedSeekSession = startPlaybackSeekInteraction(
                         state = sharedSeekSession,
-                        positionMs = position
+                        positionMs = position,
+                        shouldResumePlayback = shouldResumePlaybackAfterUserSeek(
+                            playWhenReadyBeforeSeek = playerState.player.playWhenReady,
+                            playbackStateBeforeSeek = playerState.player.playbackState
+                        )
                     )
                 },
                 onSeekDragUpdate = { position ->
@@ -4079,7 +4092,11 @@ fun VideoPlayerSection(
                         )
                     )
                     sharedSeekSession = commitResult.state
-                    seekPlayerFromUserAction(playerState.player, commitResult.committedPositionMs)
+                    seekPlayerFromUserAction(
+                        player = playerState.player,
+                        positionMs = commitResult.committedPositionMs,
+                        shouldResumePlaybackOverride = commitResult.shouldResumePlayback
+                    )
                     danmakuManager.seekTo(commitResult.committedPositionMs)
                     onUserSeek(commitResult.committedPositionMs)
                 },

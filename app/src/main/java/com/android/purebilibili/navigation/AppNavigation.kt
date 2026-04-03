@@ -1006,11 +1006,15 @@ fun AppNavigation(
             val parentEntry = androidx.compose.runtime.remember(backStackEntry) {
                 navController.previousBackStackEntry
             }
+            val sharePreviousEntry = shouldShareAudioModeViewModelWithPreviousEntry(
+                previousRoute = parentEntry?.destination?.route,
+                previousLifecycleState = parentEntry?.lifecycle?.currentState
+            )
             
             // 如果能获取到 VideoDetail 的 entry，就使用它的 ViewModel
             // 否则创建一个新的（这不应该发生，除非直接深层链接进入）
-            val viewModel: com.android.purebilibili.feature.video.viewmodel.PlayerViewModel = if (parentEntry != null) {
-                viewModel(viewModelStoreOwner = parentEntry)
+            val viewModel: com.android.purebilibili.feature.video.viewmodel.PlayerViewModel = if (sharePreviousEntry) {
+                viewModel(viewModelStoreOwner = parentEntry!!)
             } else {
                 viewModel()
             }

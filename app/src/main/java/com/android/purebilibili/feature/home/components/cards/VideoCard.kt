@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -73,6 +74,36 @@ internal fun shouldOpenLongPressMenu(
     hasPreviewAction: Boolean,
     hasMenuAction: Boolean
 ): Boolean = !hasPreviewAction && hasMenuAction
+
+internal fun resolveVideoCardMenuOffset(
+    rootBoundsInRoot: androidx.compose.ui.geometry.Rect?,
+    anchorBoundsInRoot: androidx.compose.ui.geometry.Rect?,
+    density: Float,
+    pressOffsetInAnchorPx: Offset? = null
+): DpOffset {
+    if (rootBoundsInRoot == null || anchorBoundsInRoot == null || density <= 0f) {
+        return DpOffset.Zero
+    }
+
+    val anchorPointInRoot = if (pressOffsetInAnchorPx != null) {
+        Offset(
+            x = anchorBoundsInRoot.left + pressOffsetInAnchorPx.x,
+            y = anchorBoundsInRoot.top + pressOffsetInAnchorPx.y
+        )
+    } else {
+        Offset(
+            x = anchorBoundsInRoot.left,
+            y = anchorBoundsInRoot.bottom
+        )
+    }
+
+    val localX = (anchorPointInRoot.x - rootBoundsInRoot.left).coerceAtLeast(0f)
+    val localY = (anchorPointInRoot.y - rootBoundsInRoot.top).coerceAtLeast(0f)
+    return DpOffset(
+        x = (localX / density).dp,
+        y = (localY / density).dp
+    )
+}
 
 internal fun resolveVideoCardCoverCacheKey(
     video: VideoItem,
@@ -181,6 +212,7 @@ fun ElegantVideoCard(
     
     //  [新增] 长按删除菜单状态
     var showDismissMenu by remember { mutableStateOf(false) }
+    var menuOffset by remember { mutableStateOf(DpOffset.Zero) }
     //  [新增] 确认对话框状态
     var showUnfavoriteDialog by remember { mutableStateOf(false) }
     
@@ -231,6 +263,19 @@ fun ElegantVideoCard(
     
     //  记录卡片位置（非 Compose State，避免滚动时触发高频重组）
     val cardBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val coverBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val titleBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+    val menuButtonBoundsRef = remember { object { var value: androidx.compose.ui.geometry.Rect? = null } }
+
+    val openDismissMenu: (androidx.compose.ui.geometry.Rect?, Offset?) -> Unit = { anchorBounds, pressOffset ->
+        menuOffset = resolveVideoCardMenuOffset(
+            rootBoundsInRoot = cardBoundsRef.value,
+            anchorBoundsInRoot = anchorBounds,
+            density = densityValue,
+            pressOffsetInAnchorPx = pressOffset
+        )
+        showDismissMenu = true
+    }
     
     val triggerCardClick = {
         cardBoundsRef.value?.let { bounds ->
@@ -251,7 +296,7 @@ fun ElegantVideoCard(
         )
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .then(modifier)
             .fillMaxWidth()
@@ -267,10 +312,11 @@ fun ElegantVideoCard(
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
             }
-            //  [修改] 父级容器仅处理点击跳转 (或者点击由子 View 分别处理)
-            //  为了避免冲突，我们将手势下放到子 View
             .padding(bottom = 12.dp)
     ) {
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
         //  尝试获取共享元素作用域
         val sharedTransitionScope = LocalSharedTransitionScope.current
         val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -319,13 +365,16 @@ fun ElegantVideoCard(
                     spotColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.10f),
                     clip = true
                 )
+                .onGloballyPositioned { coordinates ->
+                    coverBoundsRef.value = coordinates.boundsInRoot()
+                }
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 //  [交互优化] 封面区域：点击跳转
                 .pointerInput(onLongClick, onDismiss, onWatchLater, onUnfavorite) {
                     val hasPreviewAction = onLongClick != null
                     val hasLongPressMenu = onDismiss != null || onWatchLater != null || onUnfavorite != null
                     detectTapGestures(
-                        onLongPress = {
+                        onLongPress = { pressOffset ->
                             if (hasPreviewAction) {
                                 haptic(HapticType.HEAVY)
                                 onLongClick(video)
@@ -334,7 +383,7 @@ fun ElegantVideoCard(
                                 if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
                                     showUnfavoriteDialog = true
                                 } else {
-                                    showDismissMenu = true
+                                    openDismissMenu(coverBoundsRef.value, pressOffset)
                                 }
                             }
                         },
@@ -650,12 +699,15 @@ fun ElegantVideoCard(
                     color = MaterialTheme.colorScheme.onSurface
                 ),
                 modifier = titleModifier
+                    .onGloballyPositioned { coordinates ->
+                        titleBoundsRef.value = coordinates.boundsInRoot()
+                    }
                     //  [交互优化] 标题区域：长按弹出菜单，点击跳转
                     .pointerInput(onDismiss, onWatchLater, onUnfavorite) {
                         val hasPreviewAction = onLongClick != null
                         val hasLongPressMenu = onDismiss != null || onWatchLater != null || onUnfavorite != null
                         detectTapGestures(
-                            onLongPress = {
+                            onLongPress = { pressOffset ->
                                 if (hasPreviewAction) {
                                   haptic(HapticType.HEAVY)
                                   onLongClick(video)
@@ -664,7 +716,7 @@ fun ElegantVideoCard(
                                     if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
                                         showUnfavoriteDialog = true
                                     } else {
-                                        showDismissMenu = true
+                                        openDismissMenu(titleBoundsRef.value, pressOffset)
                                     }
                                 }
                             },
@@ -707,9 +759,12 @@ fun ElegantVideoCard(
                         modifier = Modifier
                             .padding(start = 4.dp, top = 2.dp) // 微调位置对齐第一行文字
                             .size(20.dp)
+                            .onGloballyPositioned { coordinates ->
+                                menuButtonBoundsRef.value = coordinates.boundsInRoot()
+                            }
                             .clickable { 
                                 haptic(HapticType.LIGHT)
-                                showDismissMenu = true 
+                                openDismissMenu(menuButtonBoundsRef.value, null)
                             },
                         contentAlignment = Alignment.Center
                     ) {
@@ -937,6 +992,64 @@ fun ElegantVideoCard(
         }
 
     }
+        
+        //  [新增] 长按操作菜单
+        DropdownMenu(
+            expanded = showDismissMenu,
+            onDismissRequest = { showDismissMenu = false },
+            offset = menuOffset
+        ) {
+            // 稍后再看
+            if (onWatchLater != null) {
+                DropdownMenuItem(
+                    text = { 
+                        Text(
+                            "🕐 稍后再看",
+                            color = MaterialTheme.colorScheme.onSurface
+                        ) 
+                    },
+                    onClick = {
+                        showDismissMenu = false
+                        onWatchLater.invoke()
+                    }
+                )
+            }
+            
+            
+            // 取消收藏 (仅在收藏页显示)
+            if (onUnfavorite != null) {
+                 DropdownMenuItem(
+                    text = { 
+                        Text(
+                            "💔 取消收藏",
+                            color = MaterialTheme.colorScheme.error  // 使用错误色强调删除操作
+                        ) 
+                    },
+                    onClick = {
+                        showDismissMenu = false
+                        // onUnfavorite.invoke() -> 改为弹窗确认
+                        showUnfavoriteDialog = true
+                    }
+                )
+            }
+            
+            // 不感兴趣 (放第一位，方便操作) -> 改回下方
+            if (onDismiss != null) {
+                DropdownMenuItem(
+                    text = { 
+                        Text(
+                            dismissMenuText,
+                            color = MaterialTheme.colorScheme.onSurface
+                        ) 
+                    },
+                    onClick = {
+                        showDismissMenu = false
+                        onDismiss.invoke()
+                    }
+                )
+            }
+        }
+    }
     
     
     if (showUnfavoriteDialog) {
@@ -962,61 +1075,6 @@ fun ElegantVideoCard(
         )
     }
 
-    //  [新增] 长按操作菜单
-    DropdownMenu(
-        expanded = showDismissMenu,
-        onDismissRequest = { showDismissMenu = false }
-    ) {
-        // 稍后再看
-        if (onWatchLater != null) {
-            DropdownMenuItem(
-                text = { 
-                    Text(
-                        "🕐 稍后再看",
-                        color = MaterialTheme.colorScheme.onSurface
-                    ) 
-                },
-                onClick = {
-                    showDismissMenu = false
-                    onWatchLater.invoke()
-                }
-            )
-        }
-        
-        
-        // 取消收藏 (仅在收藏页显示)
-        if (onUnfavorite != null) {
-             DropdownMenuItem(
-                text = { 
-                    Text(
-                        "💔 取消收藏",
-                        color = MaterialTheme.colorScheme.error  // 使用错误色强调删除操作
-                    ) 
-                },
-                onClick = {
-                    showDismissMenu = false
-                    // onUnfavorite.invoke() -> 改为弹窗确认
-                    showUnfavoriteDialog = true
-                }
-            )
-        }
-        
-        // 不感兴趣 (放第一位，方便操作) -> 改回下方
-        if (onDismiss != null) {
-            DropdownMenuItem(
-                text = { 
-                    Text(
-                        dismissMenuText,
-                        color = MaterialTheme.colorScheme.onSurface
-                    ) 
-                },
-                onClick = {
-                    showDismissMenu = false
-                    onDismiss.invoke()
-                }
-            )
-        }
-    }
 }
 
 @Composable

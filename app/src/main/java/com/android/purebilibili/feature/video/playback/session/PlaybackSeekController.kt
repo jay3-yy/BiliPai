@@ -11,12 +11,14 @@ internal data class PlaybackSeekSessionState(
     val sliderPositionMs: Long = 0L,
     val sliderTempPositionMs: Long = 0L,
     val isSliderMoving: Boolean = false,
-    val pendingSeekPositionMs: Long? = null
+    val pendingSeekPositionMs: Long? = null,
+    val shouldResumePlayback: Boolean? = null
 )
 
 internal data class PlaybackSeekSessionCommitResult(
     val state: PlaybackSeekSessionState,
-    val committedPositionMs: Long
+    val committedPositionMs: Long,
+    val shouldResumePlayback: Boolean
 )
 
 internal fun syncPlaybackSeekSession(
@@ -41,20 +43,23 @@ internal fun syncPlaybackSeekSession(
     return syncedState.copy(
         sliderPositionMs = safePlaybackPositionMs,
         sliderTempPositionMs = safePlaybackPositionMs,
-        pendingSeekPositionMs = null
+        pendingSeekPositionMs = null,
+        shouldResumePlayback = null
     )
 }
 
 internal fun startPlaybackSeekInteraction(
     state: PlaybackSeekSessionState,
-    positionMs: Long = state.sliderPositionMs
+    positionMs: Long = state.sliderPositionMs,
+    shouldResumePlayback: Boolean? = state.shouldResumePlayback
 ): PlaybackSeekSessionState {
     val safePositionMs = positionMs.coerceAtLeast(0L)
     return state.copy(
         sliderPositionMs = safePositionMs,
         sliderTempPositionMs = safePositionMs,
         isSliderMoving = true,
-        pendingSeekPositionMs = null
+        pendingSeekPositionMs = null,
+        shouldResumePlayback = shouldResumePlayback
     )
 }
 
@@ -81,7 +86,8 @@ internal fun finishPlaybackSeekInteraction(
             isSliderMoving = false,
             pendingSeekPositionMs = committedPositionMs
         ),
-        committedPositionMs = committedPositionMs
+        committedPositionMs = committedPositionMs,
+        shouldResumePlayback = state.shouldResumePlayback == true
     )
 }
 
@@ -93,7 +99,8 @@ internal fun cancelPlaybackSeekInteraction(
         sliderPositionMs = restoredPositionMs,
         sliderTempPositionMs = restoredPositionMs,
         isSliderMoving = false,
-        pendingSeekPositionMs = null
+        pendingSeekPositionMs = null,
+        shouldResumePlayback = null
     )
 }
 

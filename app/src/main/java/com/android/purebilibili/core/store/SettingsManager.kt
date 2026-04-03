@@ -49,6 +49,10 @@ import kotlin.math.abs
 // 声明 DataStore 扩展属性
 internal val Context.settingsDataStore by preferencesDataStore(name = "settings_prefs")
 
+internal const val DEFAULT_CRASH_TRACKING_ENABLED = true
+internal const val DEFAULT_ANALYTICS_ENABLED = false
+internal const val DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED = true
+
 /**
  *  首页设置合并类 - 减少 HomeScreen 重组次数
  * 将多个独立的设置流合并为单一流，避免每个设置变化都触发重组
@@ -2713,7 +2717,7 @@ object SettingsManager {
     
     // --- 崩溃追踪开关 ---
     fun getCrashTrackingEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_CRASH_TRACKING_ENABLED] ?: true }  // 默认开启
+        .map { preferences -> preferences[KEY_CRASH_TRACKING_ENABLED] ?: DEFAULT_CRASH_TRACKING_ENABLED }
 
     suspend fun setCrashTrackingEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_CRASH_TRACKING_ENABLED] = value }
@@ -2737,7 +2741,7 @@ object SettingsManager {
     
     // --- Analytics 开关 (与崩溃追踪共享设置) ---
     fun getAnalyticsEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_ANALYTICS_ENABLED] ?: true }  // 默认开启
+        .map { preferences -> preferences[KEY_ANALYTICS_ENABLED] ?: DEFAULT_ANALYTICS_ENABLED }
 
     suspend fun setAnalyticsEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_ANALYTICS_ENABLED] = value }
@@ -3324,7 +3328,10 @@ object SettingsManager {
     }
 
     fun getPlayerDiagnosticLoggingEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED] ?: true }
+        .map { preferences ->
+            preferences[KEY_PLAYER_DIAGNOSTIC_LOGGING_ENABLED]
+                ?: DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED
+        }
 
     suspend fun setPlayerDiagnosticLoggingEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->

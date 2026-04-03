@@ -161,6 +161,14 @@ internal fun shouldPollInlineVideoOverlayProgress(
     return playerExists && hostLifecycleStarted
 }
 
+internal fun resolveOverlayPlaybackButtonPlayingState(
+    isPlaying: Boolean,
+    playWhenReady: Boolean,
+    playbackState: Int
+): Boolean {
+    return isPlaying || (playWhenReady && playbackState == Player.STATE_BUFFERING)
+}
+
 internal fun shouldShowCenterPlayButton(
     isVisible: Boolean,
     isPlaying: Boolean,
@@ -397,7 +405,15 @@ fun VideoPlayerOverlay(
     var showPageSelectorSheet by remember { mutableStateOf(false) }
     var currentSpeed by remember(player) { mutableFloatStateOf(player.playbackParameters.speed) }
     //  使用传入的比例状态
-    var isPlaying by remember { mutableStateOf(player.isPlaying) }
+    var isPlaying by remember {
+        mutableStateOf(
+            resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState
+            )
+        )
+    }
     var isProgressScrubbing by remember { mutableStateOf(false) }
     var suppressCenterPlayButtonForSeekTransition by remember { mutableStateOf(false) }
     var wasPlayingWhenProgressScrubbingStarted by remember { mutableStateOf(false) }
@@ -688,7 +704,11 @@ fun VideoPlayerOverlay(
                 duration = duration,
                 buffered = player.bufferedPosition
             )
-            isPlaying = player.isPlaying
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState
+            )
             return@produceState
         }
         while (isActive) {
@@ -703,7 +723,11 @@ fun VideoPlayerOverlay(
                 duration = duration,
                 buffered = player.bufferedPosition
             )
-            isPlaying = player.isPlaying
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState
+            )
             val delayMs = if (isVisible && player.isPlaying) 200L else 500L
             delay(delayMs)
         }

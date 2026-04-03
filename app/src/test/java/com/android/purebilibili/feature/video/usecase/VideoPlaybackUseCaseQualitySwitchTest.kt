@@ -147,6 +147,20 @@ class VideoPlaybackUseCaseQualitySwitchTest {
     }
 
     @Test
+    fun `buildQualitySelectionState hides premium api only tiers during app cooldown`() {
+        val useCase = VideoPlaybackUseCase()
+
+        val result = useCase.buildQualitySelectionState(
+            apiQualities = listOf(120, 116, 112, 80, 64, 32),
+            dashVideoIds = listOf(80, 64, 32),
+            allowPremiumApiOnlyQualities = false
+        )
+
+        assertEquals(listOf(80, 64, 32, 16), result.qualityIds)
+        assertEquals(listOf("1080P", "720P", "480P", "360P"), result.qualityLabels)
+    }
+
+    @Test
     fun `resolveAutoHighestTargetQuality caps non vip users at 1080p`() {
         val useCase = VideoPlaybackUseCase()
 

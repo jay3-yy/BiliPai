@@ -58,12 +58,16 @@ import com.android.purebilibili.feature.video.playback.loader.PlaybackLoader
 import com.android.purebilibili.feature.video.playback.dash.AdaptiveDashPlaybackSource
 import com.android.purebilibili.feature.video.playback.policy.PlaybackPostLoadTask
 import com.android.purebilibili.feature.video.playback.policy.PlaybackQualityMode
+import com.android.purebilibili.feature.video.playback.policy.PlaybackHeartbeatSnapshot
 import com.android.purebilibili.feature.video.playback.policy.resolveOnlineCountPollingDelayMs
 import com.android.purebilibili.feature.video.playback.policy.buildPlaybackPostLoadPlan
+import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackHeartbeatSessionStartTsSec
+import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackHeartbeatSnapshot
 import com.android.purebilibili.feature.video.playback.policy.shouldHoldPlaybackTransitionPosition
 import com.android.purebilibili.feature.video.playback.policy.resolvePluginPollingIntervalMs
 import com.android.purebilibili.feature.video.playback.policy.shouldRefreshOnlineCount
 import com.android.purebilibili.feature.video.playback.policy.shouldSendPlaybackHeartbeat
+import com.android.purebilibili.feature.video.playback.policy.shouldFlushPlaybackHeartbeatSnapshot
 import com.android.purebilibili.feature.video.playback.policy.shouldDispatchPluginPositionUpdate
 import com.android.purebilibili.feature.video.playback.resolver.AudioNextPlaybackStrategy
 import com.android.purebilibili.feature.video.playback.resolver.PlaybackNavigationTarget
@@ -294,12 +298,38 @@ internal data class QualitySwitchFailureDialogState(
     val message: String
 )
 
+internal fun shouldBlockPremiumQualitySwitchDuringCooldown(
+    requestedQualityId: Int,
+    cacheContainsRequestedQuality: Boolean,
+    appApiCooldownRemainingMs: Long
+): Boolean {
+    return requestedQualityId >= 112 &&
+        !cacheContainsRequestedQuality &&
+        appApiCooldownRemainingMs > 0L
+}
+
+internal fun formatQualitySwitchCooldownMessage(
+    requestedQualityLabel: String,
+    remainingMs: Long
+): String {
+    val totalSeconds = (remainingMs / 1000L).coerceAtLeast(1L)
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    val waitHint = if (minutes > 0L) {
+        "大约 ${minutes} 分 ${seconds} 秒后"
+    } else {
+        "大约 ${seconds} 秒后"
+    }
+    return "$requestedQualityLabel 当前受接口风控影响，暂时拿不到可切换轨道。请 $waitHint 再试，或切换网络后重试。"
+}
+
 internal fun resolveQualitySwitchFailureMessage(
     requestedQualityLabel: String,
     permissionResult: QualityPermissionResult? = null,
     loadError: VideoLoadError? = null,
     hasCachedDashTracks: Boolean = true,
-    cacheContainsRequestedQuality: Boolean = true
+    cacheContainsRequestedQuality: Boolean = true,
+    qualityRefetchCooldownRemainingMs: Long? = null
 ): String {
     permissionResult?.let { permission ->
         return when (permission) {
@@ -321,6 +351,13 @@ internal fun resolveQualitySwitchFailureMessage(
         }
     }
 
+    qualityRefetchCooldownRemainingMs?.takeIf { it > 0L }?.let { remainingMs ->
+        return formatQualitySwitchCooldownMessage(
+            requestedQualityLabel = requestedQualityLabel,
+            remainingMs = remainingMs
+        )
+    }
+
     if (!hasCachedDashTracks) {
         return "当前页面没有缓存到可切换轨道，重新请求目标画质时也没有拿到结果。"
     }
@@ -336,7 +373,8 @@ internal fun buildQualitySwitchFailureDialogState(
     permissionResult: QualityPermissionResult? = null,
     loadError: VideoLoadError? = null,
     hasCachedDashTracks: Boolean = true,
-    cacheContainsRequestedQuality: Boolean = true
+    cacheContainsRequestedQuality: Boolean = true,
+    qualityRefetchCooldownRemainingMs: Long? = null
 ): QualitySwitchFailureDialogState {
     return QualitySwitchFailureDialogState(
         requestedQualityId = requestedQualityId,
@@ -347,7 +385,8 @@ internal fun buildQualitySwitchFailureDialogState(
             permissionResult = permissionResult,
             loadError = loadError,
             hasCachedDashTracks = hasCachedDashTracks,
-            cacheContainsRequestedQuality = cacheContainsRequestedQuality
+            cacheContainsRequestedQuality = cacheContainsRequestedQuality,
+            qualityRefetchCooldownRemainingMs = qualityRefetchCooldownRemainingMs
         )
     )
 }
@@ -859,6 +898,10 @@ class PlayerViewModel : ViewModel() {
 
     private var exoPlayer: ExoPlayer? = null
     private var heartbeatJob: Job? = null
+    private var heartbeatSessionStartTsSec: Long = 0L
+    private var heartbeatAccumulatedPlayMs: Long = 0L
+    private var heartbeatActivePlayStartElapsedMs: Long? = null
+    private var lastReportedHeartbeatSnapshot: PlaybackHeartbeatSnapshot? = null
     private var lastPluginDispatchPositionMs: Long? = null
     private var appContext: android.content.Context? = null  //  [新增] 保存 Context 用于网络检测
     private var hasUserStartedPlayback = false  // 🛡️ [修复] 用户是否主动开始播放（用于区分“加载已看完视频”和“自然播放结束”）
@@ -1306,6 +1349,7 @@ class PlayerViewModel : ViewModel() {
         val previousPlayer = exoPlayer
 
         if (changed && previousPlayer != null) {
+            flushPlaybackHeartbeatSnapshot(reason = "replace_player")
             saveCurrentPosition()
             // 切换播放器时立即停止旧实例，避免转场期间双播
             previousPlayer.removeListener(playbackEndListener)
@@ -1384,6 +1428,9 @@ class PlayerViewModel : ViewModel() {
         }
         
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            syncHeartbeatPlaybackTracking(
+                isActivelyPlaying = isPlaying && !BackgroundManager.isInBackground
+            )
             if (isPlaying) {
                 // 🛡️ [修复] 用户开始播放时设置标志
                 hasUserStartedPlayback = true
@@ -1950,6 +1997,7 @@ class PlayerViewModel : ViewModel() {
         }
         
         if (currentBvid.isNotEmpty() && currentBvid != playbackRequest.bvid) {
+            flushPlaybackHeartbeatSnapshot(reason = "switch_video")
             recordCreatorWatchProgressSnapshot()
             saveCurrentPosition()
         }
@@ -4800,7 +4848,26 @@ class PlayerViewModel : ViewModel() {
                 // 继续切换
             }
         }
-        
+
+        val hasCachedDashTracks = current.cachedDashVideos.isNotEmpty()
+        val cacheContainsRequestedQuality = current.cachedDashVideos.any { it.id == qualityId }
+        val appApiCooldownRemainingMs = VideoRepository.getAppApiCooldownRemainingMs()
+        if (
+            shouldBlockPremiumQualitySwitchDuringCooldown(
+                requestedQualityId = qualityId,
+                cacheContainsRequestedQuality = cacheContainsRequestedQuality,
+                appApiCooldownRemainingMs = appApiCooldownRemainingMs
+            )
+        ) {
+            showQualitySwitchFailureDialog(
+                requestedQualityId = qualityId,
+                hasCachedDashTracks = hasCachedDashTracks,
+                cacheContainsRequestedQuality = cacheContainsRequestedQuality,
+                qualityRefetchCooldownRemainingMs = appApiCooldownRemainingMs
+            )
+            return
+        }
+
         val transitionPositionMs = currentPos.coerceAtLeast(0L)
         val playbackQualityMode = resolvePlaybackQualityModeForQualitySelection(qualityId)
         _qualitySwitchFailureDialog.value = null
@@ -4829,8 +4896,6 @@ class PlayerViewModel : ViewModel() {
                     deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
                     sessionBlockedCodecs = sessionBlockedCodecs
                 )
-                val hasCachedDashTracks = current.cachedDashVideos.isNotEmpty()
-                val cacheContainsRequestedQuality = current.cachedDashVideos.any { it.id == qualityId }
 
                 val result = playbackUseCase.changeQualityFromCache(
                     qualityId = qualityId,
@@ -4922,6 +4987,7 @@ class PlayerViewModel : ViewModel() {
         val subtitleClearedState = clearTransientPlaybackPreviewData(clearSubtitleFields(current))
         val previousCid = currentCid
         if (currentBvid.isNotEmpty() && previousCid > 0L) {
+            flushPlaybackHeartbeatSnapshot(reason = "switch_page")
             playbackUseCase.savePosition(currentBvid, previousCid)
         }
         currentCid = page.cid
@@ -4992,6 +5058,7 @@ class PlayerViewModel : ViewModel() {
                             cachedDashAudios = selection.cachedDashAudios
                         )
                         monitorPlaybackTransitionPosition(restoredPosition.coerceAtLeast(0L))
+                        startHeartbeat()
                         interactiveCurrentEdgeId = 0L
                         loadPlayerInfo(currentBvid, page.cid)
                         loadVideoshot(currentBvid, page.cid)
@@ -4999,12 +5066,14 @@ class PlayerViewModel : ViewModel() {
                         return@launch
                     }
                 }
+                currentCid = previousCid
                 _uiState.value = current.copy(
                     isQualitySwitching = false,
                     pendingPlaybackTransitionPositionMs = null
                 )
                 toast("\u5206P\u5207\u6362\u5931\u8d25")
             } catch (e: Exception) {
+                currentCid = previousCid
                 _uiState.value = current.copy(
                     isQualitySwitching = false,
                     pendingPlaybackTransitionPositionMs = null
@@ -5383,6 +5452,113 @@ class PlayerViewModel : ViewModel() {
     fun getPlayerCurrentPosition() = playbackUseCase.getCurrentPosition()
     fun getPlayerDuration() = playbackUseCase.getDuration()
     fun saveCurrentPosition() { playbackUseCase.savePosition(currentBvid, currentCid) }
+    fun flushPlaybackHeartbeatSnapshot(reason: String = "manual") {
+        if (currentBvid.isBlank() || currentCid <= 0L) return
+        viewModelScope.launch {
+            reportPlaybackHeartbeatSnapshot(forceFlush = true, reason = reason)
+        }
+    }
+
+    private fun beginHeartbeatSession(nowEpochSec: Long = System.currentTimeMillis() / 1000L) {
+        heartbeatSessionStartTsSec = resolvePlaybackHeartbeatSessionStartTsSec(
+            existingStartTsSec = 0L,
+            nowEpochSec = nowEpochSec
+        )
+        heartbeatAccumulatedPlayMs = 0L
+        heartbeatActivePlayStartElapsedMs = null
+        lastReportedHeartbeatSnapshot = null
+    }
+
+    private fun clearHeartbeatSession() {
+        heartbeatSessionStartTsSec = 0L
+        heartbeatAccumulatedPlayMs = 0L
+        heartbeatActivePlayStartElapsedMs = null
+        lastReportedHeartbeatSnapshot = null
+    }
+
+    private fun syncHeartbeatPlaybackTracking(
+        isActivelyPlaying: Boolean,
+        nowElapsedMs: Long = android.os.SystemClock.elapsedRealtime()
+    ) {
+        if (isActivelyPlaying) {
+            if (heartbeatActivePlayStartElapsedMs == null) {
+                heartbeatActivePlayStartElapsedMs = nowElapsedMs
+            }
+            return
+        }
+
+        val activePlayStartElapsedMs = heartbeatActivePlayStartElapsedMs ?: return
+        heartbeatAccumulatedPlayMs += (nowElapsedMs - activePlayStartElapsedMs).coerceAtLeast(0L)
+        heartbeatActivePlayStartElapsedMs = null
+    }
+
+    private suspend fun reportPlaybackHeartbeatSnapshot(
+        forceFlush: Boolean,
+        reason: String
+    ): Boolean {
+        if (currentBvid.isBlank() || currentCid <= 0L) return false
+
+        val nowEpochSec = System.currentTimeMillis() / 1000L
+        val nowElapsedMs = android.os.SystemClock.elapsedRealtime()
+        val isActivelyPlaying = exoPlayer?.isPlaying == true && !BackgroundManager.isInBackground
+        syncHeartbeatPlaybackTracking(
+            isActivelyPlaying = isActivelyPlaying,
+            nowElapsedMs = nowElapsedMs
+        )
+
+        if (heartbeatSessionStartTsSec <= 0L) {
+            heartbeatSessionStartTsSec = resolvePlaybackHeartbeatSessionStartTsSec(
+                existingStartTsSec = heartbeatSessionStartTsSec,
+                nowEpochSec = nowEpochSec
+            )
+        }
+
+        val snapshot = resolvePlaybackHeartbeatSnapshot(
+            currentPositionMs = playbackUseCase.getCurrentPosition(),
+            accumulatedPlayMs = heartbeatAccumulatedPlayMs,
+            activePlayStartElapsedMs = heartbeatActivePlayStartElapsedMs,
+            nowElapsedMs = nowElapsedMs
+        )
+
+        val shouldSend = if (forceFlush) {
+            shouldFlushPlaybackHeartbeatSnapshot(
+                currentBvid = currentBvid,
+                currentCid = currentCid,
+                snapshot = snapshot,
+                lastReportedSnapshot = lastReportedHeartbeatSnapshot
+            )
+        } else {
+            shouldSendPlaybackHeartbeat(
+                isPlaying = exoPlayer?.isPlaying == true,
+                isInBackground = BackgroundManager.isInBackground,
+                currentBvid = currentBvid,
+                currentCid = currentCid
+            )
+        }
+        if (!shouldSend) return false
+
+        try {
+            val reported = VideoRepository.reportPlayHeartbeat(
+                bvid = currentBvid,
+                cid = currentCid,
+                playedTime = snapshot.playedTimeSec,
+                realPlayedTime = snapshot.realPlayedTimeSec,
+                startTsSec = heartbeatSessionStartTsSec
+            )
+            if (reported) {
+                lastReportedHeartbeatSnapshot = snapshot
+                Logger.d(
+                    "PlayerVM",
+                        "🔴 Heartbeat snapshot sent: reason=$reason, bvid=$currentBvid, cid=$currentCid, " +
+                            "played=${snapshot.playedTimeSec}, real=${snapshot.realPlayedTimeSec}, startTs=$heartbeatSessionStartTsSec"
+                )
+            }
+            return reported
+        } catch (e: Exception) {
+            Logger.d("PlayerVM", " Heartbeat snapshot failed($reason): ${e.message}")
+            return false
+        }
+    }
 
     private fun playResolvedPlayback(
         videoUrl: String,
@@ -5409,7 +5585,8 @@ class PlayerViewModel : ViewModel() {
         permissionResult: QualityPermissionResult? = null,
         loadError: VideoLoadError? = null,
         hasCachedDashTracks: Boolean = true,
-        cacheContainsRequestedQuality: Boolean = true
+        cacheContainsRequestedQuality: Boolean = true,
+        qualityRefetchCooldownRemainingMs: Long? = null
     ) {
         val requestedQualityLabel = if (requestedQualityId > 0) {
             qualityManager.getQualityLabel(requestedQualityId)
@@ -5422,13 +5599,15 @@ class PlayerViewModel : ViewModel() {
             permissionResult = permissionResult,
             loadError = loadError,
             hasCachedDashTracks = hasCachedDashTracks,
-            cacheContainsRequestedQuality = cacheContainsRequestedQuality
+            cacheContainsRequestedQuality = cacheContainsRequestedQuality,
+            qualityRefetchCooldownRemainingMs = qualityRefetchCooldownRemainingMs
         )
         Logger.w(
             "PlayerVM",
             "QUALITY_SWITCH_FAILURE requested=$requestedQualityId label=$requestedQualityLabel " +
                 "permission=$permissionResult error=$loadError hasCache=$hasCachedDashTracks " +
-                "containsRequested=$cacheContainsRequestedQuality message=${dialogState.message}"
+                "containsRequested=$cacheContainsRequestedQuality cooldownMs=${qualityRefetchCooldownRemainingMs ?: 0L} " +
+                "message=${dialogState.message}"
         )
         _qualitySwitchFailureDialog.value = dialogState
     }
@@ -5443,9 +5622,8 @@ class PlayerViewModel : ViewModel() {
     
     private fun startHeartbeat() {
         heartbeatJob?.cancel()
+        beginHeartbeatSession()
         heartbeatJob = viewModelScope.launch {
-            // [修复] 立即上报一次心跳，确保进入历史记录
-            // 短时间观看也应该被记录
             if (shouldSendPlaybackHeartbeat(
                     isPlaying = true,
                     isInBackground = BackgroundManager.isInBackground,
@@ -5453,30 +5631,34 @@ class PlayerViewModel : ViewModel() {
                     currentCid = currentCid
                 )
             ) {
-                try { 
-                    VideoRepository.reportPlayHeartbeat(currentBvid, currentCid, 0)
-                    Logger.d("PlayerVM", " Initial heartbeat reported for $currentBvid")
-                }
-                catch (e: Exception) {
+                try {
+                    val reported = VideoRepository.reportPlayHeartbeat(
+                        bvid = currentBvid,
+                        cid = currentCid,
+                        playedTime = 0L,
+                        realPlayedTime = 0L,
+                        startTsSec = heartbeatSessionStartTsSec
+                    )
+                    if (reported) {
+                        lastReportedHeartbeatSnapshot = PlaybackHeartbeatSnapshot(
+                            playedTimeSec = 0L,
+                            realPlayedTimeSec = 0L
+                        )
+                        Logger.d(
+                            "PlayerVM",
+                            " Initial heartbeat reported for $currentBvid startTs=$heartbeatSessionStartTsSec"
+                        )
+                    }
+                } catch (e: Exception) {
                     Logger.d("PlayerVM", " Initial heartbeat failed: ${e.message}")
                 }
             }
+            syncHeartbeatPlaybackTracking(isActivelyPlaying = exoPlayer?.isPlaying == true)
             
-            // 之后每30秒上报一次
             while (true) {
                 delay(30_000)
-                if (shouldSendPlaybackHeartbeat(
-                        isPlaying = exoPlayer?.isPlaying == true,
-                        isInBackground = BackgroundManager.isInBackground,
-                        currentBvid = currentBvid,
-                        currentCid = currentCid
-                    )
-                ) {
-                    try {
-                        VideoRepository.reportPlayHeartbeat(currentBvid, currentCid, playbackUseCase.getCurrentPosition() / 1000)
-                        recordCreatorWatchProgressSnapshot()
-                    }
-                    catch (_: Exception) {}
+                if (reportPlaybackHeartbeatSnapshot(forceFlush = false, reason = "interval")) {
+                    recordCreatorWatchProgressSnapshot()
                 }
             }
         }
@@ -5526,6 +5708,7 @@ class PlayerViewModel : ViewModel() {
         super.onCleared()
         recordCreatorWatchProgressSnapshot()
         heartbeatJob?.cancel()
+        clearHeartbeatSession()
         pluginCheckJob?.cancel()
         onlineCountJob?.cancel()  // 👀 取消在线人数轮询
         playbackTransitionMonitorJob?.cancel()

@@ -36,4 +36,18 @@ class CrashReporterLiveTracePolicyTest {
         assertTrue(shouldWriteCrashCustomKey(previousValue = "old", nextValue = "new"))
         assertTrue(shouldWriteCrashCustomKey(previousValue = null, nextValue = "first"))
     }
+
+    @Test
+    fun sensitiveCrashFieldsAndUserIdAreBlocked() {
+        assertTrue(isSensitiveCrashCustomKey("video_bvid"))
+        assertTrue(isSensitiveCrashCustomKey("danmaku_cid"))
+        assertTrue(isSensitiveCrashCustomKey("live_room_id"))
+        assertTrue(isSensitiveCrashCustomKey("live_room_title"))
+        assertTrue(isSensitiveCrashCustomKey("live_anchor_name"))
+        assertFalse(isSensitiveCrashCustomKey("video_error_type"))
+        assertFalse(isSensitiveCrashCustomKey("live_last_stage"))
+
+        assertEquals("", resolveCrashlyticsUserId(mid = 123456L))
+        assertEquals("", resolveCrashlyticsUserId(mid = null))
+    }
 }
