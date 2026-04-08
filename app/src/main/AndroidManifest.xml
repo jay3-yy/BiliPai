@@ -28,6 +28,9 @@
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
 
     <application
         android:name=".app.PureApplication"
@@ -225,9 +228,14 @@
             android:roundIcon="@mipmap/ic_launcher_3d_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
-        <intent-filter android:priority="1">
+            <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- TV Launcher -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
             <!-- 🚀 App Shortcuts -->
             <meta-data

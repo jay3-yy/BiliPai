@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.view.KeyEvent
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -565,6 +566,10 @@ class MainActivity : AppCompatActivity() {
             TAG,
             "🚀 Splash setup. coldStart=$runColdStartSplash, flyoutEnabled=$splashFlyoutEnabled, firstLaunchShown=${welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false)}, disclaimerAck=${welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)}, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
         )
+        
+        // 检测是否为TV设备
+        val isTv = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+        Logger.d(TAG, "📺 Device type: ${if (isTv) "TV" else "Mobile/Tablet"}")
         
         //  🚀 [启动优化] 立即开始预加载首页数据
         // 这个必须尽早调用，利用开屏动画的时间并行加载数据
@@ -1589,6 +1594,35 @@ class MainActivity : AppCompatActivity() {
             }
         } else {
             Logger.d(TAG, "⏳ 未满足 PiP 条件: API>=${Build.VERSION_CODES.O}=${Build.VERSION.SDK_INT >= Build.VERSION_CODES.O}, shouldTriggerPip=$shouldTriggerPip")
+        }
+    }
+    
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        // 处理TV遥控器按键
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_BACK -> {
+                // 这些按键由系统和Compose处理
+                return super.onKeyDown(keyCode, event)
+            }
+            KeyEvent.KEYCODE_MENU -> {
+                // 处理菜单键
+                // 可以打开设置或其他菜单
+                return true
+            }
+            KeyEvent.KEYCODE_INFO -> {
+                // 处理信息键
+                // 可以显示视频信息或其他详情
+                return true
+            }
+            else -> {
+                return super.onKeyDown(keyCode, event)
+            }
         }
     }
     
