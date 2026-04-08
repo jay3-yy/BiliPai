@@ -236,6 +236,15 @@ fun SearchScreen(
     val resultGridState = rememberLazyGridState()
     val resultListState = rememberLazyListState()
 
+    // 每次新搜索（换关键词、切类型、改筛选项）都回到列表顶部
+    // searchVersion 由 ViewModel.search() 自增，作为唯一的触发信号
+    LaunchedEffect(state.searchVersion) {
+        if (state.searchVersion > 0) {
+            resultGridState.scrollToItem(0)
+            resultListState.scrollToItem(0)
+        }
+    }
+
     // ✨ Haze State
     val hazeState = rememberRecoverableHazeState()
 

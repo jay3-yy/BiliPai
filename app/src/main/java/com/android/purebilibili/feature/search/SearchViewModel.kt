@@ -66,7 +66,9 @@ data class SearchUiState(
     val totalPages: Int = 1,
     val hasMoreResults: Boolean = false,
     val isLoadingMore: Boolean = false,
-    val emptyStateReason: SearchEmptyStateReason = SearchEmptyStateReason.NONE
+    val emptyStateReason: SearchEmptyStateReason = SearchEmptyStateReason.NONE,
+    // 每次调用 search() 时自增，供 UI 层监听以重置滚动位置
+    val searchVersion: Int = 0
 )
 
 class SearchViewModel(application: Application) : AndroidViewModel(application) {
@@ -224,19 +226,20 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         } else null
 
         //  清空建议列表，设置彩蛋消息，重置分页状态
-        _uiState.update { 
+        _uiState.update {
             it.copy(
-                query = keyword, 
-                isSearching = true, 
-                showResults = true, 
-                suggestions = emptyList(), 
+                query = keyword,
+                isSearching = true,
+                showResults = true,
+                suggestions = emptyList(),
                 error = null,
                 easterEggMessage = easterEggMessage,
                 currentPage = 1,  // [新增] 重置分页
                 hasMoreResults = false,
                 isLoadingMore = false,
-                emptyStateReason = SearchEmptyStateReason.NONE
-            ) 
+                emptyStateReason = SearchEmptyStateReason.NONE,
+                searchVersion = it.searchVersion + 1
+            )
         }
         saveHistory(keyword)
         
