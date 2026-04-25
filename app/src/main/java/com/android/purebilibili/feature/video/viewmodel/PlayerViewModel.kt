@@ -949,6 +949,8 @@ class PlayerViewModel : ViewModel() {
     //  Public Player Accessor
     val currentPlayer: Player?
         get() = exoPlayer
+
+    internal fun hasUserStartedPlaybackForRecovery(): Boolean = hasUserStartedPlayback
         
     /**
      *  UI 仅音频模式状态

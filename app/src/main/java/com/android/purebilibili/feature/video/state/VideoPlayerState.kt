@@ -1087,6 +1087,18 @@ fun rememberVideoPlayerState(
                     "playerError code=$errorCodeName cause=${causeName ?: "unknown"}"
                 )
 
+                val shouldAutoRecover = player.isPlaying ||
+                    player.playWhenReady ||
+                    viewModel.hasUserStartedPlaybackForRecovery()
+                if (!shouldAutoRecover) {
+                    com.android.purebilibili.core.util.Logger.d(
+                        "VideoPlayerState",
+                        "🛑 Skip auto recovery: user hasn't started playback (playWhenReady=${player.playWhenReady}, isPlaying=${player.isPlaying})"
+                    )
+                    holder.recordDiagnosticEvent("skipAutoRecovery:userNotStarted")
+                    return
+                }
+
                 val currentState = viewModel.uiState.value
                 val hasCdnAlternatives = currentState is com.android.purebilibili.feature.video.viewmodel.PlayerUiState.Success 
                     && currentState.cdnCount > 1
