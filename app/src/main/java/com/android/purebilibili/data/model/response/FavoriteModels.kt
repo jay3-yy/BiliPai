@@ -156,9 +156,12 @@ data class WatchLaterData(
 data class WatchLaterItem(
     val aid: Long = 0,
     val bvid: String? = null,
+    val cid: Long? = null,
     val title: String? = null,
     val pic: String? = null,
     val duration: Int? = null,
+    val progress: Int? = null,
+    val view_at: Long? = null,
     val pubdate: Long? = null,
     val owner: WatchLaterOwner? = null,
     val stat: WatchLaterStat? = null
