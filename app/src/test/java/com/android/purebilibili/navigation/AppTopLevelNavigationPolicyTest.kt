@@ -129,15 +129,15 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun profileShortcutsToTopLevelDestinations_useTopLevelNavigation() {
+    fun profileShortcutToSettings_stillUsesTopLevelNavigation() {
         assertTrue(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.Settings.route))
-        assertTrue(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.History.route))
-        assertTrue(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.Favorite.route))
-        assertTrue(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.WatchLater.route))
     }
 
     @Test
-    fun profileShortcutsToSecondaryDestinations_keepRegularNavigation() {
+    fun profileShortcutsToContentDestinations_keepRegularNavigation() {
+        assertFalse(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.History.route))
+        assertFalse(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.Favorite.route))
+        assertFalse(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.WatchLater.route))
         assertFalse(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.DownloadList.route))
         assertFalse(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.Inbox.route))
         assertFalse(shouldUseTopLevelNavigationFromProfile(ScreenRoutes.Following.route))
