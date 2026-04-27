@@ -150,6 +150,7 @@ fun ElegantVideoCard(
     showInfoGlassBadges: Boolean = true,
     showUpBadge: Boolean = true,
     showDurationBadge: Boolean = true,
+    durationBadgeTextOverride: String? = null,
     showOnlineCount: Boolean = false,
     upFollowerCount: Int? = null,
     upVideoCount: Int? = null,
@@ -173,7 +174,9 @@ fun ElegantVideoCard(
     val cardCornerRadius = 12.dp * cornerRadiusScale  // HIG 标准圆角
     val smallCornerRadius = iOSCornerRadius.Tiny * cornerRadiusScale  // 4.dp * scale
     val durationBadgeStyle = remember { resolveVideoCardDurationBadgeVisualStyle() }
-    val durationText = remember(video.duration) { FormatUtils.formatDuration(video.duration) }
+    val durationText = remember(video.duration, durationBadgeTextOverride) {
+        durationBadgeTextOverride ?: FormatUtils.formatDuration(video.duration)
+    }
     val durationBadgeMinWidth = remember(durationText, durationBadgeStyle) {
         resolveVideoCardDurationBadgeMinWidthDp(
             durationText = durationText,

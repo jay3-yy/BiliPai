@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -51,6 +52,7 @@ import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
+import com.android.purebilibili.core.ui.components.IOSSearchBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.network.NetworkModule
@@ -58,6 +60,7 @@ import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.feature.list.resolveDeleteBatchParallelism
+import com.android.purebilibili.feature.video.controller.PlaybackProgressManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -146,12 +149,20 @@ class WatchLaterViewModel(application: Application) : AndroidViewModel(applicati
                 val response = api.getWatchLaterList()
                 if (response.code == 0 && response.data != null) {
                     val items = response.data.list?.map { item ->
+                        val rawProgress = item.progress ?: -1
+                        val normalizedViewAt = when {
+                            rawProgress == -1 && (item.view_at ?: 0L) <= 0L -> 1L
+                            else -> item.view_at ?: 0L
+                        }
                         VideoItem(
                             id = item.aid,  // 存储 aid 用于删除
                             bvid = item.bvid ?: "",
+                            cid = item.cid ?: 0L,
                             title = item.title ?: "",
                             pic = item.pic ?: "",
                             duration = item.duration ?: 0,
+                            progress = rawProgress,
+                            view_at = normalizedViewAt,
                             owner = Owner(
                                 mid = item.owner?.mid ?: 0L,
                                 name = item.owner?.name ?: "",
@@ -376,9 +387,22 @@ fun WatchLaterScreen(
         baseTier = deviceUiProfile.motionTier,
         animationEnabled = cardAnimationEnabled
     )
+    val playbackProgressManager = remember(context) {
+        PlaybackProgressManager.getInstance(context)
+    }
     var isBatchMode by rememberSaveable { mutableStateOf(false) }
     var selectedBvids by rememberSaveable { mutableStateOf(setOf<String>()) }
     var showBatchDeleteConfirm by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val filteredItems = remember(state.items, searchQuery) {
+        filterWatchLaterItemsByQuery(
+            items = state.items,
+            query = searchQuery
+        )
+    }
+    val actionItems = remember(state.items, filteredItems, searchQuery) {
+        if (searchQuery.isBlank()) state.items else filteredItems
+    }
 
     LaunchedEffect(state.items) {
         val valid = state.items.map { it.bvid }.toSet()
@@ -407,10 +431,15 @@ fun WatchLaterScreen(
                     actions = {
                         if (state.items.isNotEmpty()) {
                             if (isBatchMode) {
-                                val allSelected = selectedBvids.size == state.items.size
+                                val allSelected = actionItems.isNotEmpty() &&
+                                    actionItems.all { it.bvid in selectedBvids }
                                 TextButton(
                                     onClick = {
-                                        selectedBvids = if (allSelected) emptySet() else state.items.map { it.bvid }.toSet()
+                                        selectedBvids = if (allSelected) {
+                                            selectedBvids - actionItems.map { it.bvid }.toSet()
+                                        } else {
+                                            selectedBvids + actionItems.map { it.bvid }.toSet()
+                                        }
                                     }
                                 ) {
                                     Text(if (allSelected) "取消全选" else "全选")
@@ -433,8 +462,8 @@ fun WatchLaterScreen(
                                 IconButton(
                                     onClick = {
                                         val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                            items = state.items,
-                                            clickedBvid = state.items.firstOrNull()?.bvid
+                                            items = actionItems,
+                                            clickedBvid = actionItems.firstOrNull()?.bvid
                                         ) ?: return@IconButton
 
                                         com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
@@ -446,8 +475,8 @@ fun WatchLaterScreen(
                                             .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
 
                                         onVideoClick(
-                                            state.items[externalPlaylist.startIndex].bvid,
-                                            0L
+                                            actionItems[externalPlaylist.startIndex].bvid,
+                                            actionItems[externalPlaylist.startIndex].cid
                                         )
                                     }
                                 ) {
@@ -461,8 +490,8 @@ fun WatchLaterScreen(
                                 IconButton(
                                     onClick = {
                                         val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                            items = state.items,
-                                            clickedBvid = state.items.firstOrNull()?.bvid
+                                            items = actionItems,
+                                            clickedBvid = actionItems.firstOrNull()?.bvid
                                         ) ?: return@IconButton
 
                                         com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
@@ -473,7 +502,7 @@ fun WatchLaterScreen(
                                         com.android.purebilibili.feature.video.player.PlaylistManager
                                             .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
 
-                                        val target = resolveWatchLaterPlayAllStartTarget(state.items)
+                                        val target = resolveWatchLaterPlayAllStartTarget(actionItems)
                                             ?: return@IconButton
                                         onPlayAllAudioClick?.invoke(target.first, target.second)
                                             ?: onVideoClick(target.first, target.second)
@@ -556,6 +585,36 @@ fun WatchLaterScreen(
                         )
                     }
                 }
+                filteredItems.isEmpty() && searchQuery.isNotBlank() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = padding.calculateTopPadding() + 12.dp,
+                                bottom = padding.calculateBottomPadding()
+                            ),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        IOSSearchBar(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = "搜索稍后再看",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(
+                            text = "没有找到相关视频",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextButton(onClick = { searchQuery = "" }) {
+                            Text("清空搜索")
+                        }
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
                 else -> {
                     // 计算合适的列数
                     val minColWidth = if (windowSizeClass.isExpandedScreen) 240.dp else 170.dp
@@ -572,13 +631,43 @@ fun WatchLaterScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            IOSSearchBar(
+                                query = searchQuery,
+                                onQueryChange = { searchQuery = it },
+                                placeholder = "搜索稍后再看",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
 
                         itemsIndexed(
-                            items = state.items,
+                            items = filteredItems,
                             key = { _, item -> item.bvid } 
                         ) { index, item ->
                             val isDissolving = item.bvid in state.dissolvingIds
                             val isSelected = item.bvid in selectedBvids
+                            val localPositionMs = remember(item.bvid, item.cid) {
+                                if (item.bvid.isBlank()) {
+                                    0L
+                                } else {
+                                    playbackProgressManager.getCachedPosition(item.bvid, item.cid)
+                                }
+                            }
+                            val playbackVisualState = remember(
+                                item.bvid,
+                                item.cid,
+                                item.duration,
+                                item.progress,
+                                item.view_at,
+                                localPositionMs
+                            ) {
+                                resolveWatchLaterPlaybackVisualState(
+                                    video = item,
+                                    localPositionMs = localPositionMs
+                                )
+                            }
                             
                             DissolvableVideoCard(
                                 isDissolving = isDissolving,
@@ -599,6 +688,7 @@ fun WatchLaterScreen(
                                         transitionEnabled = cardTransitionEnabled,
                                         showPublishTime = true,
                                         showOnlineCount = showOnlineCount,
+                                        durationBadgeTextOverride = playbackVisualState.durationBadgeText,
                                         dismissMenuText = "\uD83D\uDDD1\uFE0F 删除",
                                         // 触发 Thanos 响指动画 (开始消散)
                                         onDismiss = if (isBatchMode) null else ({ viewModel.startVideoDissolve(item.bvid) }),
@@ -624,11 +714,10 @@ fun WatchLaterScreen(
                                                         .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
                                                 }
 
-                                                onVideoClick(bvid, 0L)
+                                                onVideoClick(bvid, item.cid)
                                             }
                                         }
                                     )
-
                                     if (isBatchMode) {
                                         Box(
                                             modifier = Modifier
