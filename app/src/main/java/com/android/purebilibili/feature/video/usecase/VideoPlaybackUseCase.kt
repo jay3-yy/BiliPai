@@ -106,7 +106,7 @@ data class PlaybackSelectionResult(
     val qualityLabels: List<String>
 )
 
-internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = true
+internal fun shouldPreparePlayerOnLoad(playWhenReady: Boolean): Boolean = playWhenReady
 
 internal enum class PlaybackBootstrapMode {
     DETAIL_ONLY,
