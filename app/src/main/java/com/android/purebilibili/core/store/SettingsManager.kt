@@ -435,7 +435,8 @@ data class AppNavigationSettings(
 
 data class HomeTopTabSettings(
     val orderIds: List<String> = listOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
-    val visibleIds: Set<String> = setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME")
+    val visibleIds: Set<String> = setOf("RECOMMEND", "FOLLOW", "POPULAR", "LIVE", "GAME"),
+    val defaultCategoryId: String = "RECOMMEND"
 )
 
 data class PlayerInteractionSettings(
@@ -697,6 +698,7 @@ object SettingsManager {
     //  [新增] 顶部标签自定义 - 顺序和可见性
     private val KEY_TOP_TAB_ORDER = stringPreferencesKey("top_tab_order")
     private val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
+    private val KEY_DEFAULT_HOME_TOP_TAB_ID = stringPreferencesKey("default_home_top_tab_id")
     private val KEY_DYNAMIC_TAB_VISIBLE_TABS = stringPreferencesKey("dynamic_tab_visible_tabs")
     private val KEY_LIVE_FAVORITE_TAGS = stringPreferencesKey("live_favorite_tags")
     
@@ -737,6 +739,7 @@ object SettingsManager {
 
     private const val DEFAULT_TOP_TAB_ORDER = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
     private const val DEFAULT_TOP_TAB_VISIBLE = "RECOMMEND,FOLLOW,POPULAR,LIVE,GAME"
+    private const val DEFAULT_HOME_TOP_TAB_ID = "RECOMMEND"
     private const val DEFAULT_DYNAMIC_TAB_VISIBLE = "all,video,pgc,article,up"
     //  [新增] 模糊效果开关
     private val KEY_HEADER_BLUR_ENABLED = booleanPreferencesKey("header_blur_enabled")
@@ -881,7 +884,8 @@ object SettingsManager {
             .toSet()
         return HomeTopTabSettings(
             orderIds = orderIds,
-            visibleIds = visibleIds
+            visibleIds = visibleIds,
+            defaultCategoryId = preferences[KEY_DEFAULT_HOME_TOP_TAB_ID] ?: DEFAULT_HOME_TOP_TAB_ID
         )
     }
 
@@ -1820,6 +1824,16 @@ object SettingsManager {
     suspend fun setTopTabVisibleTabs(context: Context, tabs: Set<String>) {
         context.settingsDataStore.edit { prefs ->
             prefs[KEY_TOP_TAB_VISIBLE_TABS] = tabs.joinToString(",")
+        }
+    }
+
+    fun getDefaultHomeTopTabId(context: Context): Flow<String> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_DEFAULT_HOME_TOP_TAB_ID] ?: DEFAULT_HOME_TOP_TAB_ID }
+        .distinctUntilChanged()
+
+    suspend fun setDefaultHomeTopTabId(context: Context, id: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_DEFAULT_HOME_TOP_TAB_ID] = id
         }
     }
 
@@ -4385,6 +4399,7 @@ object SettingsManager {
             IntShareablePreferenceDefinition(KEY_TOP_TAB_LABEL_MODE, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_ORDER, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
+            StringShareablePreferenceDefinition(KEY_DEFAULT_HOME_TOP_TAB_ID, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_DYNAMIC_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_BLUR_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HEADER_COLLAPSE_ENABLED, SettingsShareSection.APPEARANCE),

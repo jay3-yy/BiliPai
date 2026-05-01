@@ -132,6 +132,18 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun queryByDefaultHomeTabKeywords_hitsTopTabManagementEntry() {
+        listOf("默认首页", "默认热门", "启动首页").forEach { query ->
+            val result = resolveSettingsSearchResults(query).firstOrNull {
+                it.target == SettingsSearchTarget.BOTTOM_BAR &&
+                    it.focusId == SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS
+            }
+
+            assertEquals("顶部标签管理", result?.title)
+        }
+    }
+
+    @Test
     fun queryBySidebarNavigation_hitsNavigationSettingsEntry() {
         val result = resolveSettingsSearchResults("侧边导航栏").firstOrNull {
             it.target == SettingsSearchTarget.BOTTOM_BAR &&

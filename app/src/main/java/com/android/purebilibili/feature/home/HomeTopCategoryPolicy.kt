@@ -69,6 +69,17 @@ fun resolveHomeTopCategories(
     return listOf(HomeCategory.RECOMMEND) + withoutRecommend
 }
 
+fun resolveInitialHomeCategory(
+    defaultCategoryId: String?,
+    topCategories: List<HomeCategory>
+): HomeCategory {
+    val resolvedDefault = defaultCategoryId
+        ?.let(::resolveHomeTopCategoryById)
+        ?.takeIf { it in topCategories }
+    if (resolvedDefault != null) return resolvedDefault
+    return HomeCategory.RECOMMEND
+}
+
 fun resolveHomeTopTabIndex(
     category: HomeCategory,
     topCategories: List<HomeCategory> = resolveHomeTopCategories()
