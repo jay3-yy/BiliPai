@@ -509,23 +509,54 @@ fun ElegantVideoCard(
                 contentScale = ContentScale.Crop
             )
 
-            if (premiumBadgeLabel != null) {
-                HomeVideoBadgePill(
-                    style = badgeStylePolicy.coverStyle,
-                    shape = RoundedCornerShape(smallCornerRadius),
-                    containerColor = BiliPink.copy(alpha = if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) 0.78f else 1f),
-                    borderColor = Color.White.copy(alpha = 0.24f),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        text = premiumBadgeLabel,
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+                if (premiumBadgeLabel != null) {
+                    HomeVideoBadgePill(
+                        style = badgeStylePolicy.coverStyle,
+                        shape = RoundedCornerShape(smallCornerRadius),
+                        containerColor = BiliPink.copy(alpha = if (badgeStylePolicy.coverStyle == HomeVideoBadgeStyle.GLASS) 0.78f else 1f),
+                        borderColor = Color.White.copy(alpha = 0.24f)
+                    ) {
+                        Text(
+                            text = premiumBadgeLabel,
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                if (onlineCount.isNotEmpty()) {
+                    HomeVideoBadgePill(
+                        style = badgeStylePolicy.coverStyle,
+                        shape = RoundedCornerShape(999.dp),
+                        containerColor = coverPillColors.containerColor,
+                        borderColor = coverPillColors.borderColor
+                    ) {
+                        Icon(
+                            imageVector = CupertinoIcons.Outlined.Eye,
+                            contentDescription = null,
+                            modifier = Modifier.size(10.dp),
+                            tint = Color.White.copy(alpha = 0.90f)
+                        )
+                        Text(
+                            text = onlineCount,
+                            color = Color.White.copy(alpha = 0.90f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
             
@@ -635,28 +666,6 @@ fun ElegantVideoCard(
                             )
                             Text(
                                 text = FormatUtils.formatStat(commentCount.toLong()),
-                                color = Color.White.copy(alpha = 0.90f),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    if (onlineCount.isNotEmpty()) {
-                        HomeVideoBadgePill(
-                            style = badgeStylePolicy.coverStyle,
-                            shape = RoundedCornerShape(999.dp),
-                            containerColor = coverPillColors.containerColor,
-                            borderColor = coverPillColors.borderColor
-                        ) {
-                            Icon(
-                                imageVector = CupertinoIcons.Outlined.Eye,
-                                contentDescription = null,
-                                modifier = Modifier.size(10.dp),
-                                tint = Color.White.copy(alpha = 0.90f)
-                            )
-                            Text(
-                                text = onlineCount,
                                 color = Color.White.copy(alpha = 0.90f),
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium
