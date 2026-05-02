@@ -44,6 +44,20 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
+    fun `comment drag handle only appears on comment tab`() {
+        assertTrue(
+            shouldShowVideoContentCommentDragHandle(
+                selectedTabIndex = 1
+            )
+        )
+        assertFalse(
+            shouldShowVideoContentCommentDragHandle(
+                selectedTabIndex = 0
+            )
+        )
+    }
+
+    @Test
     fun `danmaku action layout keeps settings target comfortably tappable`() {
         val policy = resolveVideoContentTabBarDanmakuActionLayoutPolicy(widthDp = 412)
 

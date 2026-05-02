@@ -43,6 +43,22 @@ internal fun reduceVideoDetailPostScroll(
     )
 }
 
+internal fun reduceVideoDetailDragHandleScroll(
+    currentOffsetPx: Float,
+    deltaPx: Float,
+    minOffsetPx: Float,
+    isPortraitFullscreen: Boolean,
+    minUpdateDeltaPx: Float = 0.75f
+): VideoDetailScrollUpdate? {
+    if (isPortraitFullscreen) return null
+    return reduceVideoDetailScrollOffset(
+        currentOffsetPx = currentOffsetPx,
+        deltaPx = deltaPx,
+        minOffsetPx = minOffsetPx,
+        minUpdateDeltaPx = minUpdateDeltaPx
+    )
+}
+
 internal fun resolveVideoDetailCollapseProgress(
     playerHeightOffsetPx: Float,
     collapseRangePx: Float,

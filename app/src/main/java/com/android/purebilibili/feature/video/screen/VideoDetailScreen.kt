@@ -133,6 +133,7 @@ import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModePreference
 import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
+import com.android.purebilibili.feature.video.policy.reduceVideoDetailDragHandleScroll
 import com.android.purebilibili.feature.video.policy.reduceVideoDetailPostScroll
 import com.android.purebilibili.feature.video.policy.reduceVideoDetailPreScroll
 import com.android.purebilibili.feature.video.policy.resolveVideoDetailCollapseProgress
@@ -2276,33 +2277,13 @@ fun VideoDetailScreen(
                         if (!inlinePortraitScrollEnabled) playerHeightOffsetPx = 0f
                     }
 
-                    val nestedScrollConnection = remember(inlinePortraitScrollEnabled, isPortraitFullscreen) {
-                        object : NestedScrollConnection {
-                            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                                val scrollUpdate = reduceVideoDetailPreScroll(
-                                    currentOffsetPx = playerHeightOffsetPx,
-                                    deltaPx = available.y,
-                                    minOffsetPx = -collapseRangePx,
-                                    inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
-                                    isPortraitFullscreen = isPortraitFullscreen
-                                ) ?: return Offset.Zero
-                                playerHeightOffsetPx = scrollUpdate.nextOffsetPx
-                                return Offset(0f, scrollUpdate.consumedDeltaPx)
-                            }
-
-                            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                                val scrollUpdate = reduceVideoDetailPostScroll(
-                                    currentOffsetPx = playerHeightOffsetPx,
-                                    deltaPx = available.y,
-                                    minOffsetPx = -collapseRangePx,
-                                    inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
-                                    isPortraitFullscreen = isPortraitFullscreen
-                                ) ?: return Offset.Zero
-                                playerHeightOffsetPx = scrollUpdate.nextOffsetPx
-                                return Offset(0f, scrollUpdate.consumedDeltaPx)
-                            }
-                        }
-                    }
+                    val nestedScrollConnection = rememberVideoDetailNestedScrollConnection(
+                        inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
+                        isPortraitFullscreen = isPortraitFullscreen,
+                        playerHeightOffsetPx = playerHeightOffsetPx,
+                        collapseRangePx = collapseRangePx,
+                        onPlayerHeightOffsetChange = { playerHeightOffsetPx = it }
+                    )
 
                     Column(
                         modifier = Modifier
@@ -2726,6 +2707,14 @@ fun VideoDetailScreen(
                                                         // [新增] 恢复播放器 (音频模式 -> 视频模式)
                                                         isPlayerCollapsed = isPlayerCollapsed,
                                                         onRestorePlayer = { playerHeightOffsetPx = 0f },
+                                                        onCommentDragHandleDrag = { deltaPx ->
+                                                            reduceVideoDetailDragHandleScroll(
+                                                                currentOffsetPx = playerHeightOffsetPx,
+                                                                deltaPx = deltaPx,
+                                                                minOffsetPx = -collapseRangePx,
+                                                                isPortraitFullscreen = isPortraitFullscreen
+                                                            )?.let { playerHeightOffsetPx = it.nextOffsetPx }
+                                                        },
                                                         // [新增] AI Summary & BGM
                                                         aiSummary = success.aiSummary,
                                                         aiSummaryPrompt = success.aiSummaryPrompt,
@@ -2811,76 +2800,10 @@ fun VideoDetailScreen(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Column(
-                                        horizontalAlignment = Alignment.CenterHorizontally,
-                                        modifier = Modifier.padding(32.dp)
-                                    ) {
-                                        //  根据错误类型显示不同图标
-                                        Text(
-                                            text = when (errorState.error) {
-                                                is com.android.purebilibili.data.model.VideoLoadError.NetworkError -> "📡"
-                                                is com.android.purebilibili.data.model.VideoLoadError.VideoNotFound -> "🔍"
-                                                is com.android.purebilibili.data.model.VideoLoadError.RegionRestricted -> "🌐"
-                                                is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> "⏳"
-                                                is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown -> ""
-                                                is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty -> "⚡"
-                                                else -> ""
-                                            },
-                                            fontSize = 48.sp
-                                        )
-                                        Spacer(Modifier.height(16.dp))
-                                        Text(
-                                            text = errorState.msg,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            fontSize = 16.sp,
-                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                        )
-                                        
-                                        //  针对风控错误显示额外建议
-                                        when (errorState.error) {
-                                            is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown,
-                                            is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty -> {
-                                                Spacer(Modifier.height(8.dp))
-                                                Text(
-                                                    text = " 建议：切换 WiFi/移动数据 或 清除缓存后重试",
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 13.sp,
-                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                )
-                                            }
-                                            is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> {
-                                                Spacer(Modifier.height(8.dp))
-                                                Text(
-                                                    text = " 该视频可能暂时不可用，请尝试其他视频",
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    fontSize = 13.sp,
-                                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                                )
-                                            }
-                                            else -> {}
-                                        }
-                                        
-                                        //  只有可重试的错误才显示重试按钮（或者风控错误允许强制重试）
-                                        val showRetryButton = errorState.canRetry || 
-                                            errorState.error is com.android.purebilibili.data.model.VideoLoadError.RateLimited ||
-                                            errorState.error is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty
-                                        if (showRetryButton) {
-                                            Spacer(Modifier.height(24.dp))
-                                            Button(
-                                                onClick = { viewModel.retry() },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = MaterialTheme.colorScheme.primary
-                                                )
-                                            ) {
-                                                Text(
-                                                    text = when (errorState.error) {
-                                                        is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> "强制重试"
-                                                        is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown -> "清除冷却并重试"
-                                                        else -> "重试"
-                                                    }
-                                                )
-                                            }
-                                        }
+                                    VideoDetailErrorContent(
+                                        errorState = errorState,
+                                        onRetry = { viewModel.retry() }
+                                    )
                                 }
                             }
                         }
@@ -3631,60 +3554,62 @@ fun VideoDetailScreen(
             )
         }
         
-        // 🎉 点赞成功爆裂动画
-        val likeBurstVisible by viewModel.likeBurstVisible.collectAsState()
-        if (likeBurstVisible) {
-            Box(
-                modifier = Modifier
-                    .align(feedbackAnchorAlignment)
-                    .padding(
-                        end = if (feedbackPlacement.anchor == VideoFeedbackAnchor.BottomTrailing) feedbackPlacement.sideInsetDp.dp else 0.dp,
-                        bottom = (feedbackPlacement.bottomInsetDp + 56).dp
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 🎉 点赞成功爆裂动画
+            val likeBurstVisible by viewModel.likeBurstVisible.collectAsState()
+            if (likeBurstVisible) {
+                Box(
+                    modifier = Modifier
+                        .align(feedbackAnchorAlignment)
+                        .padding(
+                            end = if (feedbackPlacement.anchor == VideoFeedbackAnchor.BottomTrailing) feedbackPlacement.sideInsetDp.dp else 0.dp,
+                            bottom = (feedbackPlacement.bottomInsetDp + 56).dp
+                        )
+                ) {
+                    LikeBurstAnimation(
+                        visible = true,
+                        reducedMotion = isReducedActionMotion,
+                        onAnimationEnd = { viewModel.dismissLikeBurst() }
                     )
-            ) {
-                LikeBurstAnimation(
-                    visible = true,
-                    reducedMotion = isReducedActionMotion,
-                    onAnimationEnd = { viewModel.dismissLikeBurst() }
-                )
+                }
             }
-        }
-        
-        // 🎉 三连成功庆祝动画
-        val tripleCelebrationVisible by viewModel.tripleCelebrationVisible.collectAsState()
-        val tripleCelebrationPlacement = resolveTripleCelebrationPlacement(
-            isFullscreen = isFullscreenMode,
-            isLandscape = isLandscape
-        )
-        if (tripleCelebrationVisible) {
-            Box(
-                modifier = Modifier.align(
-                    when (tripleCelebrationPlacement) {
-                        TripleCelebrationPlacement.CenterOverlay -> Alignment.Center
-                    }
-                )
-            ) {
-                TripleSuccessAnimation(
-                    visible = true,
-                    isCompact = false,
-                    reducedMotion = isReducedActionMotion,
-                    onAnimationEnd = { viewModel.dismissTripleCelebration() }
-                )
-            }
-        }
-        
-        val activeFeedbackPlacement = if (popupMessage?.presentation == PlayerToastPresentation.CenteredHighlight) {
-            resolveQualityReminderPlacement()
-        } else {
-            feedbackPlacement
-        }
 
-        VideoActionFeedbackHost(
-            message = popupMessage?.message,
-            visible = popupMessage != null,
-            placement = activeFeedbackPlacement,
-            hazeState = hazeState
-        )
+            // 🎉 三连成功庆祝动画
+            val tripleCelebrationVisible by viewModel.tripleCelebrationVisible.collectAsState()
+            val tripleCelebrationPlacement = resolveTripleCelebrationPlacement(
+                isFullscreen = isFullscreenMode,
+                isLandscape = isLandscape
+            )
+            if (tripleCelebrationVisible) {
+                Box(
+                    modifier = Modifier.align(
+                        when (tripleCelebrationPlacement) {
+                            TripleCelebrationPlacement.CenterOverlay -> Alignment.Center
+                        }
+                    )
+                ) {
+                    TripleSuccessAnimation(
+                        visible = true,
+                        isCompact = false,
+                        reducedMotion = isReducedActionMotion,
+                        onAnimationEnd = { viewModel.dismissTripleCelebration() }
+                    )
+                }
+            }
+
+            val activeFeedbackPlacement = if (popupMessage?.presentation == PlayerToastPresentation.CenteredHighlight) {
+                resolveQualityReminderPlacement()
+            } else {
+                feedbackPlacement
+            }
+
+            VideoActionFeedbackHost(
+                message = popupMessage?.message,
+                visible = popupMessage != null,
+                placement = activeFeedbackPlacement,
+                hazeState = hazeState
+            )
+        }
 
         resumePlaybackSuggestion?.let { suggestion ->
             AlertDialog(
@@ -3756,14 +3681,14 @@ fun VideoDetailScreen(
 
         // 💬 弹幕上下文菜单
         val danmakuMenuState by viewModel.danmakuMenuState.collectAsState()
-        
+
         if (danmakuMenuState.visible) {
             DanmakuContextMenu(
                 text = danmakuMenuState.text,
                 onDismiss = { viewModel.hideDanmakuMenu() },
                 onLike = { viewModel.likeDanmaku(danmakuMenuState.dmid) },
                 onRecall = { viewModel.recallDanmaku(danmakuMenuState.dmid) },
-                onReport = { reason -> 
+                onReport = { reason ->
                     viewModel.reportDanmaku(danmakuMenuState.dmid, reason)
                 },
                 voteCount = danmakuMenuState.voteCount,
@@ -3826,6 +3751,80 @@ fun VideoDetailScreen(
             danmakuManager.setOnDanmakuClickListener { text, dmid, userHash, isSelf ->
                 android.util.Log.d("VideoDetailScreen", "👆 Danmaku clicked: $text")
                 viewModel.showDanmakuMenu(dmid, text, userHash, isSelf)
+            }
+        }
+    }
+
+@Composable
+private fun VideoDetailErrorContent(
+    errorState: PlayerUiState.Error,
+    onRetry: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(32.dp)
+    ) {
+        Text(
+            text = when (errorState.error) {
+                is com.android.purebilibili.data.model.VideoLoadError.NetworkError -> "📡"
+                is com.android.purebilibili.data.model.VideoLoadError.VideoNotFound -> "🔍"
+                is com.android.purebilibili.data.model.VideoLoadError.RegionRestricted -> "🌐"
+                is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> "⏳"
+                is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown -> ""
+                is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty -> "⚡"
+                else -> ""
+            },
+            fontSize = 48.sp
+        )
+        Spacer(Modifier.height(16.dp))
+        Text(
+            text = errorState.msg,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+
+        when (errorState.error) {
+            is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown,
+            is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty -> {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = " 建议：切换 WiFi/移动数据 或 清除缓存后重试",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+            is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = " 该视频可能暂时不可用，请尝试其他视频",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
+            else -> {}
+        }
+
+        val showRetryButton = errorState.canRetry ||
+            errorState.error is com.android.purebilibili.data.model.VideoLoadError.RateLimited ||
+            errorState.error is com.android.purebilibili.data.model.VideoLoadError.PlayUrlEmpty
+        if (showRetryButton) {
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(
+                    text = when (errorState.error) {
+                        is com.android.purebilibili.data.model.VideoLoadError.RateLimited -> "强制重试"
+                        is com.android.purebilibili.data.model.VideoLoadError.GlobalCooldown -> "清除冷却并重试"
+                        else -> "重试"
+                    }
+                )
             }
         }
     }
@@ -4243,6 +4242,49 @@ internal fun resolveIsPlayerCollapsed(
 ): Boolean {
     if (!swipeHidePlayerEnabled) return false
     return playerHeightOffsetPx <= (-videoHeightPx + collapseTolerancePx)
+}
+
+@Composable
+private fun rememberVideoDetailNestedScrollConnection(
+    inlinePortraitScrollEnabled: Boolean,
+    isPortraitFullscreen: Boolean,
+    playerHeightOffsetPx: Float,
+    collapseRangePx: Float,
+    onPlayerHeightOffsetChange: (Float) -> Unit
+): NestedScrollConnection {
+    val currentOffsetState = rememberUpdatedState(playerHeightOffsetPx)
+    val onOffsetChangeState = rememberUpdatedState(onPlayerHeightOffsetChange)
+    return remember(inlinePortraitScrollEnabled, isPortraitFullscreen, collapseRangePx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val scrollUpdate = reduceVideoDetailPreScroll(
+                    currentOffsetPx = currentOffsetState.value,
+                    deltaPx = available.y,
+                    minOffsetPx = -collapseRangePx,
+                    inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
+                    isPortraitFullscreen = isPortraitFullscreen
+                ) ?: return Offset.Zero
+                onOffsetChangeState.value(scrollUpdate.nextOffsetPx)
+                return Offset(0f, scrollUpdate.consumedDeltaPx)
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                val scrollUpdate = reduceVideoDetailPostScroll(
+                    currentOffsetPx = currentOffsetState.value,
+                    deltaPx = available.y,
+                    minOffsetPx = -collapseRangePx,
+                    inlinePortraitScrollEnabled = inlinePortraitScrollEnabled,
+                    isPortraitFullscreen = isPortraitFullscreen
+                ) ?: return Offset.Zero
+                onOffsetChangeState.value(scrollUpdate.nextOffsetPx)
+                return Offset(0f, scrollUpdate.consumedDeltaPx)
+            }
+        }
+    }
 }
 
 internal fun shouldRotateToPortraitOnSplitBack(

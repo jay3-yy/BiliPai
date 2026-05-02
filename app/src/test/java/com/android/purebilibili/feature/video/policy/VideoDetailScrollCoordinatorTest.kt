@@ -34,6 +34,19 @@ class VideoDetailScrollCoordinatorTest {
     }
 
     @Test
+    fun dragHandleScroll_consumesUpwardSwipeWithoutInlineCollapseSetting() {
+        val update = reduceVideoDetailDragHandleScroll(
+            currentOffsetPx = 0f,
+            deltaPx = -42f,
+            minOffsetPx = -320f,
+            isPortraitFullscreen = false
+        )
+
+        assertEquals(-42f, update?.nextOffsetPx)
+        assertEquals(-42f, update?.consumedDeltaPx)
+    }
+
+    @Test
     fun postScroll_consumesDownwardSwipeToRestorePlayer() {
         val update = reduceVideoDetailPostScroll(
             currentOffsetPx = -80f,
