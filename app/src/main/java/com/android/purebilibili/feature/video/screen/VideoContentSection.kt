@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -88,6 +89,10 @@ import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
 import kotlin.math.abs
 
 internal fun shouldShowDanmakuSendInput(isPlayerCollapsed: Boolean): Boolean = !isPlayerCollapsed
+
+internal fun shouldShowVideoContentCommentDragHandle(
+    selectedTabIndex: Int
+): Boolean = selectedTabIndex == 1
 
 internal data class VideoContentTabBarLayoutSpec(
     val tabsRowWeight: Float,
@@ -283,7 +288,8 @@ fun VideoContentSection(
     isVideoPlaying: Boolean = false,
     onSelectedTabChange: (Int) -> Unit = {},
     onIntroScrollStateChange: (Int, Int) -> Unit = { _, _ -> },
-    onCommentScrollStateChange: (Int, Int) -> Unit = { _, _ -> }
+    onCommentScrollStateChange: (Int, Int) -> Unit = { _, _ -> },
+    onCommentDragHandleDrag: (Float) -> Unit = {}
 ) {
     val tabs = listOf("简介", "评论 $replyCount")
     val pagerState = rememberPagerState(pageCount = { tabs.size })
@@ -364,7 +370,11 @@ fun VideoContentSection(
                 onDanmakuSettingsClick = { showDanmakuSettings = true },
                 modifier = Modifier,
                 isPlayerCollapsed = isPlayerCollapsed,
-                onRestorePlayer = onRestorePlayer
+                onRestorePlayer = onRestorePlayer,
+                onCommentDragHandleDrag = onCommentDragHandleDrag,
+                commentDragHandleVisible = shouldShowVideoContentCommentDragHandle(
+                    selectedTabIndex = pagerState.currentPage
+                )
             )
 
             HorizontalPager(
@@ -1082,7 +1092,9 @@ private fun VideoContentTabBar(
     onDanmakuSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
     isPlayerCollapsed: Boolean = false,
-    onRestorePlayer: () -> Unit = {}
+    onRestorePlayer: () -> Unit = {},
+    onCommentDragHandleDrag: (Float) -> Unit = {},
+    commentDragHandleVisible: Boolean = false
 ) {
     val configuration = LocalConfiguration.current
     val layoutSpec = remember(configuration.screenWidthDp) {
@@ -1094,6 +1106,15 @@ private fun VideoContentTabBar(
     Column(
         modifier = modifier
     ) {
+        AnimatedVisibility(
+            visible = commentDragHandleVisible,
+            enter = fadeIn(animationSpec = tween(120)) + expandVertically(),
+            exit = fadeOut(animationSpec = tween(90)) + shrinkVertically()
+        ) {
+            VideoContentCommentDragHandle(
+                onDrag = onCommentDragHandleDrag
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1246,6 +1267,35 @@ private fun VideoRecommendationHeader() {
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun VideoContentCommentDragHandle(
+    onDrag: (Float) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(26.dp)
+            .background(MaterialTheme.colorScheme.surface)
+            .pointerInput(onDrag) {
+                detectVerticalDragGestures(
+                    onVerticalDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount)
+                    }
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .width(48.dp)
+                .height(4.dp)
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f))
         )
     }
 }
