@@ -33,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // 状态类已移至 HomeUiState.kt
@@ -252,7 +253,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
-        loadData()
+        loadInitialData()
+    }
+
+    private fun loadInitialData() {
+        viewModelScope.launch {
+            val topTabSettings = SettingsManager.getHomeTopTabSettings(getApplication()).first()
+            val topCategories = resolveHomeTopCategories(
+                customOrderIds = topTabSettings.orderIds,
+                visibleIds = topTabSettings.visibleIds
+            )
+            val initialCategory = resolveInitialHomeCategory(
+                defaultCategoryId = topTabSettings.defaultCategoryId,
+                topCategories = topCategories
+            )
+            val currentState = _uiState.value
+            val liveSubCategory = if (initialCategory == HomeCategory.LIVE) {
+                val isLoggedIn = !com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty()
+                if (isLoggedIn) currentState.liveSubCategory else LiveSubCategory.POPULAR
+            } else {
+                currentState.liveSubCategory
+            }
+
+            _uiState.value = currentState.copy(
+                currentCategory = initialCategory,
+                liveSubCategory = liveSubCategory,
+                isLoading = true,
+                error = null
+            )
+            fetchData(isLoadMore = false)
+        }
     }
     
     // [Feature] Re-filter all content when block list changes

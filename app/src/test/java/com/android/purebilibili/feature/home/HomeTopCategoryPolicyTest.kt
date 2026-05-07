@@ -71,6 +71,37 @@ class HomeTopCategoryPolicyTest {
     }
 
     @Test
+    fun `initial category should use visible user default`() {
+        val categories = listOf(
+            HomeCategory.RECOMMEND,
+            HomeCategory.POPULAR,
+            HomeCategory.LIVE
+        )
+
+        assertEquals(
+            HomeCategory.POPULAR,
+            resolveInitialHomeCategory("POPULAR", categories)
+        )
+    }
+
+    @Test
+    fun `initial category should fallback to recommend when default is invalid or hidden`() {
+        val categories = listOf(
+            HomeCategory.RECOMMEND,
+            HomeCategory.FOLLOW
+        )
+
+        assertEquals(
+            HomeCategory.RECOMMEND,
+            resolveInitialHomeCategory("UNKNOWN", categories)
+        )
+        assertEquals(
+            HomeCategory.RECOMMEND,
+            resolveInitialHomeCategory("POPULAR", categories)
+        )
+    }
+
+    @Test
     fun `safe category resolve should not crash on out of range index`() {
         val categories = listOf(
             HomeCategory.RECOMMEND,

@@ -255,6 +255,7 @@ fun BottomBarSettingsContent(
     val visibleTabs by SettingsManager.getBottomBarVisibleTabs(context).collectAsState(initial = setOf("HOME", "DYNAMIC", "HISTORY", "PROFILE"))
     val topTabOrder by SettingsManager.getTopTabOrder(context).collectAsState(initial = defaultTopTabIds)
     val topTabVisible by SettingsManager.getTopTabVisibleTabs(context).collectAsState(initial = defaultTopTabIds.toSet())
+    val defaultHomeTopTabId by SettingsManager.getDefaultHomeTopTabId(context).collectAsState(initial = "RECOMMEND")
     val headerCollapseEnabled by SettingsManager.getHeaderCollapseEnabled(context).collectAsState(initial = true)
     val topTabLabelMode by SettingsManager.getTopTabLabelMode(context)
         .collectAsState(initial = SettingsManager.TopTabLabelMode.TEXT_ONLY)
@@ -276,6 +277,16 @@ fun BottomBarSettingsContent(
         mutableStateOf(
             (topTabVisible.filter { id -> allTopTabs.any { it.id == id } }.toSet() + "RECOMMEND")
         )
+    }
+    var localDefaultHomeTopTabId by remember(defaultHomeTopTabId) {
+        mutableStateOf(defaultHomeTopTabId)
+    }
+
+    LaunchedEffect(localTopTabVisible, localDefaultHomeTopTabId) {
+        if (localDefaultHomeTopTabId !in localTopTabVisible) {
+            localDefaultHomeTopTabId = "RECOMMEND"
+            SettingsManager.setDefaultHomeTopTabId(context, "RECOMMEND")
+        }
     }
     
     // [新增] 监听顺序变化并保存
@@ -309,10 +320,17 @@ fun BottomBarSettingsContent(
         }
     }
 
-    fun saveTopTabConfig() {
+    fun saveTopTabConfig(
+        order: List<String> = localTopTabOrder,
+        visible: Set<String> = localTopTabVisible,
+        defaultTabId: String = localDefaultHomeTopTabId
+    ) {
+        val effectiveVisible = visible + "RECOMMEND"
+        val effectiveDefaultTabId = defaultTabId.takeIf { it in effectiveVisible } ?: "RECOMMEND"
         scope.launch {
-            SettingsManager.setTopTabOrder(context, localTopTabOrder)
-            SettingsManager.setTopTabVisibleTabs(context, localTopTabVisible + "RECOMMEND")
+            SettingsManager.setTopTabOrder(context, order)
+            SettingsManager.setTopTabVisibleTabs(context, effectiveVisible)
+            SettingsManager.setDefaultHomeTopTabId(context, effectiveDefaultTabId)
         }
     }
 
@@ -753,6 +771,73 @@ fun BottomBarSettingsContent(
                             }
 
                             val visibleTopOrder = localTopTabOrder.filter { it in localTopTabVisible }
+
+                            HorizontalDivider()
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    CupertinoIcons.Default.House,
+                                    contentDescription = null,
+                                    tint = com.android.purebilibili.core.theme.iOSBlue,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Column {
+                                    Text(
+                                        text = "默认打开标签",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = allTopTabs.firstOrNull { it.id == localDefaultHomeTopTabId }?.label
+                                            ?: "推荐",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            visibleTopOrder.forEach { id ->
+                                val tab = allTopTabs.firstOrNull { it.id == id } ?: return@forEach
+                                val isSelected = localDefaultHomeTopTabId == tab.id
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .clickable {
+                                            localDefaultHomeTopTabId = tab.id
+                                            saveTopTabConfig(defaultTabId = tab.id)
+                                        }
+                                        .background(
+                                            if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = tab.icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = tab.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    RadioButton(
+                                        selected = isSelected,
+                                        onClick = null
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider()
+
                             Text(
                                 text = "已显示（上下按钮可排序）",
                                 style = MaterialTheme.typography.labelMedium,
@@ -842,18 +927,29 @@ fun BottomBarSettingsContent(
                                         checked = isVisibleTab,
                                         onCheckedChange = { checked ->
                                             if (!canToggle) return@AppAdaptiveSwitch
-                                            localTopTabVisible = if (checked) {
+                                            val newVisible = if (checked) {
                                                 localTopTabVisible + tab.id
                                             } else {
                                                 localTopTabVisible - tab.id
                                             }
+                                            localTopTabVisible = newVisible
                                             if (checked && tab.id !in localTopTabOrder) {
                                                 localTopTabOrder = localTopTabOrder + tab.id
                                             }
                                             // 推荐固定在首位
                                             val withoutRecommend = localTopTabOrder.filterNot { it == "RECOMMEND" }
                                             localTopTabOrder = listOf("RECOMMEND") + withoutRecommend
-                                            saveTopTabConfig()
+                                            val newDefaultTabId = if (localDefaultHomeTopTabId in newVisible) {
+                                                localDefaultHomeTopTabId
+                                            } else {
+                                                "RECOMMEND"
+                                            }
+                                            localDefaultHomeTopTabId = newDefaultTabId
+                                            saveTopTabConfig(
+                                                order = localTopTabOrder,
+                                                visible = newVisible,
+                                                defaultTabId = newDefaultTabId
+                                            )
                                         },
                                         enabled = canToggle
                                     )
@@ -982,8 +1078,9 @@ fun BottomBarSettingsContent(
                                 localVisibleTabs = setOf("HOME", "DYNAMIC", "HISTORY", "PROFILE")
                                 localTopTabOrder = defaultTopTabIds
                                 localTopTabVisible = defaultTopTabIds.toSet()
+                                localDefaultHomeTopTabId = "RECOMMEND"
                                 saveConfig()
-                                saveTopTabConfig()
+                                saveTopTabConfig(defaultTabId = "RECOMMEND")
                                 scope.launch {
                                     SettingsManager.setHomeHeaderBlurMode(context, HomeHeaderBlurMode.FOLLOW_PRESET)
                                     SettingsManager.setTabletUseSidebar(context, false)
