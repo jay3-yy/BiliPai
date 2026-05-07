@@ -390,6 +390,10 @@ internal data class KernelSuBottomBarSearchLayout(
 
 internal fun resolveKernelSuBottomBarSearchCircleSize(): Dp = 64.dp
 
+internal fun resolveKernelSuExpandedHomeIconSize(): Dp = 28.dp
+
+internal fun resolveKernelSuExpandedHomeIconScale(): Float = 0.92f
+
 internal fun resolveKernelSuBottomBarSearchLayout(
     containerWidth: Dp,
     itemCount: Int,
@@ -645,6 +649,20 @@ internal fun Modifier.kernelSuFloatingDockSurface(
                                     )
                                 }
                             }
+                        },
+                        highlight = {
+                            Highlight.Default.copy(alpha = if (glassEnabled) nativeSpec.highlightAlpha else 0f)
+                        },
+                        shadow = {
+                            Shadow.Default.copy(
+                                color = Color.Black.copy(
+                                    alpha = if (isDarkTheme) {
+                                        nativeSpec.shadowAlpha
+                                    } else {
+                                        nativeSpec.shadowAlpha * 0.58f
+                                    }
+                                )
+                            )
                         },
                         onDrawSurface = {
                             drawRect(
@@ -909,6 +927,8 @@ internal data class BottomBarBackdropNativeSurfaceSpec(
     val refractionHeightDp: Float,
     val refractionAmountDp: Float,
     val surfaceAlphaMultiplier: Float,
+    val highlightAlpha: Float,
+    val shadowAlpha: Float,
     val chromaticAberration: Boolean
 )
 
@@ -1065,10 +1085,9 @@ internal fun resolveBottomBarBackdropPresetProgress(
     pressProgress: Float
 ): BottomBarBackdropPresetProgress {
     val clampedMotion = motionProgress.coerceIn(0f, 1f)
-    val clampedVertical = verticalProgress.coerceIn(0f, 1f)
     return BottomBarBackdropPresetProgress(
-        shellProgress = maxOf(pressProgress.coerceIn(0f, 1f), clampedVertical),
-        captureProgress = maxOf(clampedMotion, clampedVertical),
+        shellProgress = pressProgress.coerceIn(0f, 1f),
+        captureProgress = clampedMotion,
         indicatorProgress = clampedMotion
     )
 }
@@ -1303,7 +1322,18 @@ internal fun resolveBottomBarEffectiveRefractionMotionProfile(
 ): BottomBarRefractionMotionProfile {
     return when (preset) {
         BottomBarLiquidGlassPreset.BILIPAI_TUNED -> profile
-        BottomBarLiquidGlassPreset.BACKDROP_NATIVE -> profile
+        BottomBarLiquidGlassPreset.BACKDROP_NATIVE -> profile.copy(
+            exportPanelOffsetFraction = profile.exportPanelOffsetFraction * 0.12f,
+            indicatorPanelOffsetFraction = profile.indicatorPanelOffsetFraction * 0.16f,
+            visiblePanelOffsetFraction = 0f,
+            visibleSelectionEmphasis = lerp(1f, profile.visibleSelectionEmphasis, 0.32f),
+            exportSelectionEmphasis = lerp(1f, profile.exportSelectionEmphasis, 0.24f),
+            exportCaptureWidthScale = 1f,
+            forceChromaticAberration = false,
+            indicatorLensAmountScale = 1f,
+            indicatorLensHeightScale = 1f,
+            chromaticBoostScale = 1f
+        )
     }
 }
 
@@ -1313,15 +1343,17 @@ internal fun resolveBottomBarBackdropNativeSurfaceSpec(
 ): BottomBarBackdropNativeSurfaceSpec {
     val progress = verticalProgress.coerceIn(0f, 1f)
     val transparentBlurRadiusDp = lerp(
-        start = minOf(blurRadiusDp * 0.34f, 5.5f),
-        stop = minOf(blurRadiusDp * 0.24f, 4.5f),
+        start = minOf(blurRadiusDp * 0.36f, 7.2f),
+        stop = minOf(blurRadiusDp * 0.46f, 8.6f),
         fraction = progress
     )
     return BottomBarBackdropNativeSurfaceSpec(
         blurRadiusDp = transparentBlurRadiusDp,
-        refractionHeightDp = lerp(32f, 48f, progress),
-        refractionAmountDp = lerp(38f, 56f, progress),
-        surfaceAlphaMultiplier = lerp(0.62f, 0.56f, progress),
+        refractionHeightDp = lerp(16f, 26f, progress),
+        refractionAmountDp = lerp(14f, 22f, progress),
+        surfaceAlphaMultiplier = lerp(0.58f, 0.40f, progress),
+        highlightAlpha = lerp(0.26f, 0.48f, progress),
+        shadowAlpha = lerp(0.14f, 0.22f, progress),
         chromaticAberration = false
     )
 }
@@ -2299,6 +2331,8 @@ private fun KernelSuAlignedBottomBar(
                 ),
                 label = "bottomBarCompactHomeAlpha"
             )
+            val compactHomeIconSize = resolveKernelSuExpandedHomeIconSize()
+            val compactHomeIconScale = resolveKernelSuExpandedHomeIconScale()
             val indicatorWidth = (dockWidth - (contentPadding * 2)) / totalItems
             val itemWidthPx = with(density) { indicatorWidth.toPx() }.coerceAtLeast(1f)
             val panelOffsetPx by remember(density, itemWidthPx) {
@@ -2412,7 +2446,7 @@ private fun KernelSuAlignedBottomBar(
                             blurEnabled = blurEnabled,
                             glassEnabled = glassEnabled,
                             liquidGlassPreset = liquidGlassPreset,
-                            nativeVerticalProgress = backdropPresetProgress.shellProgress,
+                            nativeVerticalProgress = verticalGlassProfile.progress,
                             blurRadius = tuning.shellBlurRadiusDp.dp,
                             hazeState = hazeState,
                             motionTier = motionTier,
@@ -2496,7 +2530,7 @@ private fun KernelSuAlignedBottomBar(
                                     BottomBarLiquidGlassPreset.BACKDROP_NATIVE -> {
                                         val nativeCaptureSpec = resolveBottomBarBackdropNativeSurfaceSpec(
                                             blurRadiusDp = tuning.shellBlurRadiusDp,
-                                            verticalProgress = backdropPresetProgress.captureProgress
+                                            verticalProgress = verticalGlassProfile.progress
                                         )
                                         drawBackdrop(
                                             backdrop = backdrop,
@@ -2803,11 +2837,16 @@ private fun KernelSuAlignedBottomBar(
                             },
                             contentAlignment = Alignment.Center
                         ) {
-                            BottomBarBlendedCupertinoIcon(
-                                item = BottomNavItem.HOME,
-                                unreadCount = 0,
-                                selectedAlpha = 1f,
-                                contentColor = if (currentItem == BottomNavItem.HOME) selectedColor else unselectedColor
+                            Icon(
+                                imageVector = CupertinoIcons.Filled.House,
+                                contentDescription = null,
+                                tint = if (currentItem == BottomNavItem.HOME) selectedColor else unselectedColor,
+                                modifier = Modifier
+                                    .size(compactHomeIconSize)
+                                    .graphicsLayer {
+                                        scaleX = compactHomeIconScale
+                                        scaleY = compactHomeIconScale
+                                    }
                             )
                         }
                     }
@@ -2844,7 +2883,7 @@ private fun KernelSuAlignedBottomBar(
                         blurEnabled = blurEnabled,
                         glassEnabled = glassEnabled,
                         liquidGlassPreset = liquidGlassPreset,
-                        nativeVerticalProgress = backdropPresetProgress.shellProgress,
+                        nativeVerticalProgress = verticalGlassProfile.progress,
                         blurRadius = tuning.shellBlurRadiusDp.dp,
                         hazeState = hazeState,
                         motionTier = motionTier,

@@ -126,6 +126,12 @@ class BottomBarLayoutPolicyTest {
     }
 
     @Test
+    fun `kernelsu expanded home icon matches compact search icon size`() {
+        assertEquals(28.dp, resolveKernelSuExpandedHomeIconSize())
+        assertEquals(0.92f, resolveKernelSuExpandedHomeIconScale(), 0.001f)
+    }
+
+    @Test
     fun `home top automatically expands bottom search`() {
         assertEquals(
             true,

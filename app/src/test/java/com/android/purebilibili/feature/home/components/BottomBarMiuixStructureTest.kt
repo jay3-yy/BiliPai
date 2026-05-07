@@ -58,6 +58,7 @@ class BottomBarMiuixStructureTest {
         assertTrue(kernelSuRendererSource.contains("pressProgress = dampedDragState.pressProgress"))
         assertTrue(kernelSuRendererSource.contains("val verticalGlassProfile = resolveBottomBarVerticalGlassMotionProfile("))
         assertTrue(kernelSuRendererSource.contains("scrollOffsetPx = scrollOffset"))
+        assertTrue(kernelSuRendererSource.contains("nativeVerticalProgress = verticalGlassProfile.progress"))
         assertTrue(kernelSuRendererSource.contains("resolveBottomBarBackdropPresetCaptureLens("))
         assertTrue(kernelSuRendererSource.contains("resolveBottomBarBackdropPresetIndicatorLens("))
         assertTrue(kernelSuRendererSource.contains("progress = backdropPresetProgress.captureProgress"))

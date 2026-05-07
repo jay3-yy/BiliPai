@@ -234,7 +234,7 @@ class BottomBarIndicatorPolicyTest {
     }
 
     @Test
-    fun `backdrop native preset keeps bilipai horizontal refraction motion`() {
+    fun `backdrop native preset damps bilipai horizontal refraction motion`() {
         val profile = resolveBottomBarRefractionMotionProfile(
             position = 1.32f,
             velocity = 860f,
@@ -245,7 +245,17 @@ class BottomBarIndicatorPolicyTest {
             profile = profile
         )
 
-        assertEquals(profile, effectiveProfile)
+        assertEquals(profile.progress, effectiveProfile.progress, 0.001f)
+        assertTrue(effectiveProfile.exportPanelOffsetFraction < profile.exportPanelOffsetFraction)
+        assertTrue(effectiveProfile.indicatorPanelOffsetFraction < profile.indicatorPanelOffsetFraction)
+        assertEquals(0f, effectiveProfile.visiblePanelOffsetFraction, 0.001f)
+        assertTrue(effectiveProfile.visibleSelectionEmphasis > profile.visibleSelectionEmphasis)
+        assertTrue(effectiveProfile.exportSelectionEmphasis > profile.exportSelectionEmphasis)
+        assertEquals(1f, effectiveProfile.exportCaptureWidthScale, 0.001f)
+        assertFalse(effectiveProfile.forceChromaticAberration)
+        assertEquals(1f, effectiveProfile.indicatorLensAmountScale, 0.001f)
+        assertEquals(1f, effectiveProfile.indicatorLensHeightScale, 0.001f)
+        assertEquals(1f, effectiveProfile.chromaticBoostScale, 0.001f)
     }
 
     @Test
@@ -296,7 +306,7 @@ class BottomBarIndicatorPolicyTest {
     }
 
     @Test
-    fun `backdrop native vertical motion becomes transparent jelly without adding blur`() {
+    fun `backdrop native surface stays frosted without jelly distortion`() {
         val idle = resolveBottomBarBackdropNativeSurfaceSpec(
             blurRadiusDp = 18f,
             verticalProgress = 0f
@@ -306,17 +316,24 @@ class BottomBarIndicatorPolicyTest {
             verticalProgress = 1f
         )
 
-        assertTrue(idle.blurRadiusDp <= 6f)
-        assertTrue(scrolled.blurRadiusDp <= idle.blurRadiusDp)
+        assertTrue(idle.blurRadiusDp <= 7.2f)
+        assertTrue(scrolled.blurRadiusDp >= idle.blurRadiusDp)
         assertTrue(scrolled.refractionHeightDp > idle.refractionHeightDp)
         assertTrue(scrolled.refractionAmountDp > idle.refractionAmountDp)
+        assertTrue(idle.refractionHeightDp >= 16f)
+        assertTrue(idle.refractionAmountDp >= 14f)
+        assertTrue(scrolled.refractionHeightDp <= 26f)
+        assertTrue(scrolled.refractionAmountDp <= 22f)
         assertTrue(scrolled.surfaceAlphaMultiplier < idle.surfaceAlphaMultiplier)
-        assertTrue(scrolled.surfaceAlphaMultiplier >= 0.54f)
-        assertTrue(scrolled.surfaceAlphaMultiplier <= 0.58f)
+        assertTrue(idle.surfaceAlphaMultiplier <= 0.58f)
+        assertTrue(scrolled.surfaceAlphaMultiplier <= 0.42f)
+        assertTrue(scrolled.highlightAlpha > idle.highlightAlpha)
+        assertTrue(scrolled.shadowAlpha > idle.shadowAlpha)
+        assertFalse(scrolled.chromaticAberration)
     }
 
     @Test
-    fun `static indicator ignores vertical backdrop progress`() {
+    fun `home vertical scroll does not scale bottom bar shell or capture layers`() {
         val progress = resolveBottomBarBackdropPresetProgress(
             motionProgress = 0f,
             verticalProgress = 1f,
@@ -326,8 +343,8 @@ class BottomBarIndicatorPolicyTest {
             progress = progress.indicatorProgress
         )
 
-        assertEquals(1f, progress.shellProgress, 0.001f)
-        assertEquals(1f, progress.captureProgress, 0.001f)
+        assertEquals(0f, progress.shellProgress, 0.001f)
+        assertEquals(0f, progress.captureProgress, 0.001f)
         assertEquals(0f, progress.indicatorProgress, 0.001f)
         assertEquals(0f, indicator.refractionHeightDp, 0.001f)
         assertEquals(0f, indicator.refractionAmountDp, 0.001f)
