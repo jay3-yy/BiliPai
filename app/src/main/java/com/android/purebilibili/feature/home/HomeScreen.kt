@@ -10,17 +10,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.foundation.ExperimentalFoundationApi //  Added
-import androidx.compose.foundation.LocalOverscrollFactory // [Fix] Import for disabling overscroll (New API)
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.lazy.staggeredgrid.*  // 🌊 瀑布流布局
 import com.kyant.backdrop.backdrops.layerBackdrop // [Fix] Import for modifier
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
@@ -31,7 +27,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import androidx.compose.material3.DrawerValue
@@ -40,7 +35,6 @@ import androidx.compose.material3.rememberDrawerState
 import com.android.purebilibili.feature.home.components.MineSideDrawer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -54,8 +48,6 @@ import com.android.purebilibili.core.ui.ComfortablePullToRefreshBox
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.theme.LocalUiPreset
-import com.android.purebilibili.core.theme.BiliPink
-import com.android.purebilibili.feature.settings.GITHUB_URL
 import com.android.purebilibili.core.store.SettingsManager //  引入 SettingsManager
 import com.android.purebilibili.core.store.HomeTopTabSettings
 import com.android.purebilibili.core.store.AppNavigationSettings
@@ -65,9 +57,7 @@ import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
 import com.android.purebilibili.core.plugin.skin.rememberUiSkinState
 //  从 components 包导入拆分后的组件
 import com.android.purebilibili.feature.home.components.BottomNavItem
-import com.android.purebilibili.feature.home.components.FluidHomeTopBar
 import com.android.purebilibili.feature.home.components.FrostedSideBar
-import com.android.purebilibili.feature.home.components.CategoryTabRow
 import com.android.purebilibili.feature.home.components.iOSHomeHeader  //  iOS 大标题头部
 import com.android.purebilibili.feature.home.components.iOSRefreshIndicator  //  iOS 下拉刷新指示器
 import com.android.purebilibili.feature.home.components.Md3ScreenshotRefreshIndicator
@@ -78,7 +68,6 @@ import com.android.purebilibili.feature.home.components.resolveHomeDrawerScrimAl
 import com.android.purebilibili.feature.home.components.resolveTopTabStyle
 import com.android.purebilibili.feature.home.components.resolveHomeTopChromeMaterialMode
 import com.android.purebilibili.feature.home.components.resolveHomeTopSearchBarHeight
-import com.android.purebilibili.feature.home.components.resolveHomeTopSearchCollapseDistance
 import com.android.purebilibili.feature.home.components.resolveHomeTopReservedListPadding
 import com.android.purebilibili.feature.home.components.resolveHomeTopTabRowHeight
 import com.android.purebilibili.feature.home.policy.BottomBarVisibilityIntent
@@ -95,10 +84,6 @@ import com.android.purebilibili.feature.home.policy.shouldAnimateHomePagerToCate
 import com.android.purebilibili.feature.home.policy.HomePagerSettledAction
 import com.android.purebilibili.feature.home.policy.shouldUseInitialHomePagerSnap
 //  从 cards 子包导入卡片组件
-import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
-import com.android.purebilibili.feature.home.components.cards.LiveRoomCard
-import com.android.purebilibili.feature.home.components.cards.StoryVideoCard   //  故事卡片
-import com.android.purebilibili.core.ui.LoadingAnimation
 import com.android.purebilibili.core.ui.VideoCardSkeleton
 import com.android.purebilibili.core.ui.ErrorState as ModernErrorState
 import com.android.purebilibili.core.ui.AppShapes
@@ -106,12 +91,7 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
-import com.android.purebilibili.core.ui.shimmer
-import com.android.purebilibili.core.ui.LocalSharedTransitionScope  //  共享过渡
-import com.android.purebilibili.core.ui.animation.DissolvableVideoCard  //  粒子消散动画
-import com.android.purebilibili.core.ui.animation.jiggleOnDissolve      // 📳 iOS 风格抖动效果
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
-import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
@@ -120,7 +100,6 @@ import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
 import com.android.purebilibili.core.ui.performance.TrackJankStateValue
 import com.android.purebilibili.core.util.resolveScrollToTopPlan
-import io.github.alexzhirkevich.cupertino.CupertinoActivityIndicator
 import coil.imageLoader
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止重复触发
@@ -134,7 +113,7 @@ import com.android.purebilibili.core.ui.LocalBottomBarVisible
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import com.android.purebilibili.data.model.response.VideoItem // [Fix] Import VideoItem
-import com.android.purebilibili.feature.home.components.VideoPreviewDialog // [Fix] Import VideoPreviewDialog
+import com.android.purebilibili.feature.home.components.resolveHomeHeaderCollapseDistance
 
 // [新增] 全局回顶事件通道
 val LocalHomeScrollChannel = compositionLocalOf<Channel<Unit>?> { null }
@@ -1011,7 +990,6 @@ fun HomeScreen(
 
     //  根据滚动距离动态调整 BottomBar 可见性
     //  逻辑优化：使用 nestedScrollConnection 监听滚动
-    var isHeaderVisible by rememberSaveable { mutableStateOf(true) }
     var areTopTabsManuallyCollapsed by rememberSaveable { mutableStateOf(false) }
     
     // Constants
@@ -1039,9 +1017,10 @@ fun HomeScreen(
         androidNativeVariant = androidNativeVariant,
         labelMode = homeSettings.topTabLabelMode
     )
-    val searchCollapseDistanceDp = resolveHomeTopSearchCollapseDistance(
+    val headerCollapseDistanceDp = resolveHomeHeaderCollapseDistance(
         searchBarHeight = searchBarHeightDp,
-        uiPreset = uiPreset,
+        tabRowHeight = tabRowHeightDp,
+        uiPreset = uiPreset
         androidNativeVariant = androidNativeVariant
     )
     val listTopPadding = resolveHomeTopReservedListPadding(
@@ -1053,9 +1032,9 @@ fun HomeScreen(
     )
     
     // Pixels
-    val searchCollapseDistancePx = with(density) { searchCollapseDistanceDp.toPx() }
+    val headerCollapseDistancePx = with(density) { headerCollapseDistanceDp.toPx() }
 
-    LaunchedEffect(pagerState, topCategories, searchCollapseDistancePx) {
+    LaunchedEffect(pagerState, topCategories, headerCollapseDistancePx) {
         snapshotFlow { pagerState.currentPage to pagerState.isScrollInProgress }
             .distinctUntilChanged()
             .collect { (page, scrolling) ->
@@ -1065,7 +1044,7 @@ fun HomeScreen(
                 val settledHeaderOffsetPx = resolveHomeHeaderOffsetForSettledPage(
                     firstVisibleItemIndex = settledGridState.firstVisibleItemIndex,
                     firstVisibleItemScrollOffset = settledGridState.firstVisibleItemScrollOffset,
-                    maxHeaderCollapsePx = searchCollapseDistancePx
+                    maxHeaderCollapsePx = headerCollapseDistancePx
                 )
                 if (kotlin.math.abs(headerOffsetHeightPx - settledHeaderOffsetPx) > 0.5f) {
                     animateHeaderOffsetTo(settledHeaderOffsetPx)
@@ -1095,7 +1074,7 @@ fun HomeScreen(
         derivedStateOf {
             activeGridState != null &&
                 activeGridState.firstVisibleItemIndex == 0 &&
-                activeGridState.firstVisibleItemScrollOffset == 0
+                activeGridState.firstVisibleItemScrollOffset.toFloat() <= headerCollapseDistancePx
         }
     }
 
@@ -1116,18 +1095,18 @@ fun HomeScreen(
                 val scrollUpdate = reduceHomePreScroll(
                     currentHeaderOffsetPx = headerOffsetHeightPx,
                     deltaY = available.y,
-                    minHeaderOffsetPx = -searchCollapseDistancePx,
+                    minHeaderOffsetPx = -headerCollapseDistancePx,
                     canRevealHeader = canRevealHeader,
                     isHeaderCollapseEnabled = isHeaderCollapseEnabled,
                     isBottomBarAutoHideEnabled = isBottomBarAutoHideEnabled,
                     useSideNavigation = useSideNavigation,
                     liquidGlassEnabled = isLiquidGlassEnabled,
-                    currentGlobalScrollOffset = globalScrollOffset.value
+                    currentGlobalScrollOffset = globalScrollOffset.floatValue
                 )
 
                 headerOffsetHeightPx = scrollUpdate.headerOffsetPx
                 scrollUpdate.globalScrollOffset?.let { nextOffset ->
-                    globalScrollOffset.value = nextOffset
+                    globalScrollOffset.floatValue = nextOffset
                 }
                 when (scrollUpdate.bottomBarVisibilityIntent) {
                     BottomBarVisibilityIntent.SHOW -> bottomBarVisibleState(true)

@@ -64,11 +64,8 @@ internal fun resolveHomeHeaderOffsetForSettledPage(
     maxHeaderCollapsePx: Float
 ): Float {
     if (maxHeaderCollapsePx <= 0f) return 0f
-    return if (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0) {
-        0f
-    } else {
-        -maxHeaderCollapsePx
-    }
+    if (firstVisibleItemIndex != 0) return -maxHeaderCollapsePx
+    return -firstVisibleItemScrollOffset.toFloat().coerceIn(0f, maxHeaderCollapsePx)
 }
 
 internal fun reduceHomePreScroll(
