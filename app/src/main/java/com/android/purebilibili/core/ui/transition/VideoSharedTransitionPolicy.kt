@@ -238,9 +238,8 @@ internal fun shouldEnableVideoMetadataSharedTransition(
     if (!coverSharedEnabled) return false
     // 卡片容器已经承载整体放大/回收时，标题、UP、统计等不要再各自抢独立 sharedBounds。
     if (useCardContainerSharedBounds) return false
-    // Keep metadata linked during quick return to avoid cover-only snapback.
-    if (isQuickReturnLimited && profile == VideoSharedTransitionProfile.COVER_ONLY) return false
-    // Home 源也启用 metadata sharedBounds，标题/头像/UP名独立共享
+    // COVER_ONLY 来源只让封面参与共享元素，避免标题、UP 名等文本在落位时被 bounds 缩放。
+    if (profile == VideoSharedTransitionProfile.COVER_ONLY) return false
     return true
 }
 

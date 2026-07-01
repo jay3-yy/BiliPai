@@ -10,6 +10,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -25,15 +27,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.geometry.Rect
@@ -117,6 +122,8 @@ import com.android.purebilibili.data.model.response.SpaceDynamicItem
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
@@ -129,16 +136,25 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.times
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 
 internal fun shouldEnableProfileHeaderLoginClick(isLogin: Boolean): Boolean = !isLogin
@@ -861,7 +877,6 @@ private fun ProfileSpaceContent(
             onSurfaceVariantColor = colorScheme.onSurfaceVariant
         )
     }
-    val topBarIconColor = heroChrome.textColor
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (isTablet) {
@@ -928,8 +943,20 @@ private fun ProfileSpaceContent(
                 )
             }
         } else {
+            val heroListState = rememberLazyListState()
+            val heroFullInvertPullPx = with(LocalDensity.current) {
+                ProfileHeroPullFullInvertDp.dp.toPx()
+            }
+            val heroPullState = rememberProfileHeroPullState(
+                listState = heroListState,
+                fullInvertPullPx = heroFullInvertPullPx,
+                enabled = hasWallpaper
+            )
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(heroPullState),
+                state = heroListState,
                 contentPadding = PaddingValues(bottom = paddingValues.calculateBottomPadding() + 120.dp)
             ) {
                 item {
@@ -937,6 +964,9 @@ private fun ProfileSpaceContent(
                         user = user,
                         editableAccount = editableAccount,
                         heroChrome = heroChrome,
+                        onSurfaceColor = colorScheme.onSurface,
+                        onSurfaceVariantColor = colorScheme.onSurfaceVariant,
+                        pullInvertFractionProvider = { heroPullState.fraction() },
                         layoutTokens = layoutTokens,
                         showWallpaperAction = false,
                         onEditClick = { showEditDialog = true },
@@ -979,26 +1009,14 @@ private fun ProfileSpaceContent(
                     }
                 }
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = statusBarTopPadding)
-                    .height(56.dp)
-                    .padding(horizontal = 8.dp)
-                    .align(Alignment.TopCenter),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(rememberAppBackIcon(), contentDescription = "返回", tint = topBarIconColor)
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = { showWallpaperActionSheet = true }) {
-                    Icon(rememberAppPhotoIcon(), contentDescription = "换壁纸", tint = topBarIconColor)
-                }
-                IconButton(onClick = onSettingsClick) {
-                    Icon(rememberAppSettingsIcon(), contentDescription = "设置", tint = topBarIconColor)
-                }
-            }
+            ProfileHeroTopActionBar(
+                onBack = onBack,
+                onWallpaperActionClick = { showWallpaperActionSheet = true },
+                onSettingsClick = onSettingsClick,
+                baseIconColor = heroChrome.textColor,
+                statusBarTopPadding = statusBarTopPadding,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
         }
     }
 }
@@ -1060,17 +1078,143 @@ private fun ProfileSpaceFeedColumn(
     }
 }
 
+/**
+ * Pull distance (dp) at which the hero header text is fully inverted toward
+ * onSurface when the user pulls the profile list down past the wallpaper.
+ */
+private const val ProfileHeroPullFullInvertDp = 64
+
+/**
+ * Tracks the pull-down overscroll distance of the profile LazyColumn so the hero
+ * header text can dynamically invert color when pulled into the surface area
+ * below the wallpaper. Implements [NestedScrollConnection] so it can be attached
+ * directly via [Modifier.nestedScroll]. The default stretch overscroll still
+ * applies because this connection consumes nothing.
+ */
+private class ProfileHeroPullState(
+    val listState: LazyListState,
+    private val pullPx: MutableFloatState,
+    private val scope: CoroutineScope,
+    private val fullInvertPullPx: Float,
+    private val enabled: Boolean
+) : NestedScrollConnection {
+    private var settleJob: Job? = null
+
+    fun fraction(): Float {
+        if (!enabled || fullInvertPullPx <= 0f) return 0f
+        return resolveProfileHeroPullInvertFraction(
+            pullPx = pullPx.floatValue,
+            fullInvertPullPx = fullInvertPullPx
+        )
+    }
+
+    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        if (!enabled || source != NestedScrollSource.Drag) return Offset.Zero
+        val atTop = listState.firstVisibleItemIndex == 0 &&
+            listState.firstVisibleItemScrollOffset == 0
+        val dy = available.y
+        if (atTop) {
+            // Pull-down at top is a positive delta (finger moves down). Pulling
+            // back up (negative) releases the accumulated overscroll.
+            if (dy > 0f || (dy < 0f && pullPx.floatValue > 0f)) {
+                settleJob?.cancel()
+                pullPx.floatValue = (pullPx.floatValue + dy).coerceAtLeast(0f)
+            }
+        } else if (pullPx.floatValue > 0f) {
+            settleJob?.cancel()
+            pullPx.floatValue = 0f
+        }
+        return Offset.Zero
+    }
+
+    override suspend fun onPreFling(velocity: Velocity): Velocity {
+        if (!enabled) return Velocity.Zero
+        val current = pullPx.floatValue
+        if (current <= 0f) return Velocity.Zero
+        settleJob?.cancel()
+        settleJob = scope.launch {
+            animate(
+                initialValue = current,
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing)
+            ) { value, _ ->
+                pullPx.floatValue = value
+            }
+        }
+        return Velocity.Zero
+    }
+}
+
+@Composable
+private fun rememberProfileHeroPullState(
+    listState: LazyListState,
+    fullInvertPullPx: Float,
+    enabled: Boolean
+): ProfileHeroPullState {
+    val pullPx = remember { mutableFloatStateOf(0f) }
+    val scope = rememberCoroutineScope()
+    return remember(listState, scope, fullInvertPullPx, enabled) {
+        ProfileHeroPullState(listState, pullPx, scope, fullInvertPullPx, enabled)
+    }
+}
+
+/**
+ * 顶部常驻操作栏（返回 / 换壁纸 / 设置）。
+ * 固定覆盖在壁纸上，图标始终保持英雄区 chrome 颜色以保证深色壁纸可读性。
+ */
+@Composable
+private fun ProfileHeroTopActionBar(
+    onBack: () -> Unit,
+    onWallpaperActionClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    baseIconColor: Color,
+    statusBarTopPadding: Dp,
+    modifier: Modifier = Modifier
+) {
+    val iconTint = baseIconColor
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = statusBarTopPadding)
+            .height(56.dp)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBack) {
+            Icon(rememberAppBackIcon(), contentDescription = "返回", tint = iconTint)
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = onWallpaperActionClick) {
+            Icon(rememberAppPhotoIcon(), contentDescription = "换壁纸", tint = iconTint)
+        }
+        IconButton(onClick = onSettingsClick) {
+            Icon(rememberAppSettingsIcon(), contentDescription = "设置", tint = iconTint)
+        }
+    }
+}
+
 @Composable
 private fun ProfileSpaceHeroHeader(
     user: UserState,
     editableAccount: ProfileEditableAccountState,
     heroChrome: ProfileHeroChrome,
+    onSurfaceColor: Color,
+    onSurfaceVariantColor: Color,
+    pullInvertFractionProvider: () -> Float,
     layoutTokens: ProfileLayoutTokens,
     showWallpaperAction: Boolean,
     onEditClick: () -> Unit,
     onWallpaperActionClick: () -> Unit,
     onFollowingClick: () -> Unit
 ) {
+    // Read pull fraction here (not in the parent) so only this header item
+    // recomposes while the user pulls down, keeping the LazyColumn cheap.
+    val effectiveHeroChrome = resolveProfileHeroInvertedChrome(
+        heroChrome = heroChrome,
+        onSurfaceColor = onSurfaceColor,
+        onSurfaceVariantColor = onSurfaceVariantColor,
+        invertFraction = pullInvertFractionProvider()
+    )
     val configuration = LocalConfiguration.current
     val windowSizeClass = LocalWindowSizeClass.current
     val heroHeight = resolveProfileHeroHeightDp(
@@ -1086,7 +1230,7 @@ private fun ProfileSpaceHeroHeader(
             user = user,
             editableAccount = editableAccount,
             compact = false,
-            heroChrome = heroChrome,
+            heroChrome = effectiveHeroChrome,
             showWallpaperAction = showWallpaperAction,
             onEditClick = onEditClick,
             onWallpaperActionClick = onWallpaperActionClick,

@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.profile
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 
 data class ProfileHeroChrome(
@@ -122,3 +123,39 @@ fun resolveProfileHeroFallbackGradient(
 fun resolveProfileContentUsesOpaqueSurface(hasWallpaper: Boolean): Boolean = true
 
 fun resolveProfileHeroUsesWallpaperBackground(hasWallpaper: Boolean): Boolean = hasWallpaper
+
+/**
+ * Maps the pull-down overscroll distance (px) to a 0..1 inversion fraction.
+ * 0 = header rests on the wallpaper (text keeps hero chrome); 1 = header pulled
+ * fully into the surface area below the wallpaper (text inverted toward onSurface).
+ */
+fun resolveProfileHeroPullInvertFraction(
+    pullPx: Float,
+    fullInvertPullPx: Float
+): Float {
+    if (fullInvertPullPx <= 0f) return 0f
+    if (pullPx <= 0f) return 0f
+    return (pullPx / fullInvertPullPx).coerceIn(0f, 1f)
+}
+
+/**
+ * Blends the wallpaper hero chrome's foreground colors (text, secondary text,
+ * action button) toward the surface's onSurface/onSurfaceVariant colors by
+ * [invertFraction], so white hero text stays legible when pulled down into the
+ * surface (white) area. No-op when [invertFraction] <= 0. Blending toward
+ * onSurface keeps dark-theme text light (no-op) since onSurface is light there.
+ */
+fun resolveProfileHeroInvertedChrome(
+    heroChrome: ProfileHeroChrome,
+    onSurfaceColor: Color,
+    onSurfaceVariantColor: Color,
+    invertFraction: Float
+): ProfileHeroChrome {
+    if (invertFraction <= 0f) return heroChrome
+    val fraction = invertFraction.coerceIn(0f, 1f)
+    return heroChrome.copy(
+        textColor = lerp(heroChrome.textColor, onSurfaceColor, fraction),
+        secondaryTextColor = lerp(heroChrome.secondaryTextColor, onSurfaceVariantColor, fraction),
+        actionButtonContentColor = lerp(heroChrome.actionButtonContentColor, onSurfaceColor, fraction)
+    )
+}

@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.profile
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -98,5 +99,99 @@ class ProfileChromePolicyTest {
         )
         assertEquals(Color.DarkGray.copy(alpha = 0.92f), gradient?.topColor)
         assertEquals(Color.Black, gradient?.bottomColor)
+    }
+
+    @Test
+    fun pullInvertFraction_mapsPullDistanceAndClamps() {
+        assertEquals(0f, resolveProfileHeroPullInvertFraction(pullPx = 0f, fullInvertPullPx = 100f))
+        assertEquals(0f, resolveProfileHeroPullInvertFraction(pullPx = -20f, fullInvertPullPx = 100f))
+        assertEquals(0.5f, resolveProfileHeroPullInvertFraction(pullPx = 50f, fullInvertPullPx = 100f))
+        assertEquals(1f, resolveProfileHeroPullInvertFraction(pullPx = 100f, fullInvertPullPx = 100f))
+        assertEquals(1f, resolveProfileHeroPullInvertFraction(pullPx = 250f, fullInvertPullPx = 100f))
+    }
+
+    @Test
+    fun pullInvertFraction_disabledWhenThresholdNotPositive() {
+        assertEquals(0f, resolveProfileHeroPullInvertFraction(pullPx = 80f, fullInvertPullPx = 0f))
+        assertEquals(0f, resolveProfileHeroPullInvertFraction(pullPx = 80f, fullInvertPullPx = -1f))
+    }
+
+    @Test
+    fun invertedChrome_noOpAtZeroFraction() {
+        val hero = resolveProfileHeroChrome(
+            hasWallpaper = true,
+            isDarkTheme = false,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray
+        )
+
+        val inverted = resolveProfileHeroInvertedChrome(
+            heroChrome = hero,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray,
+            invertFraction = 0f
+        )
+
+        assertEquals(hero, inverted)
+    }
+
+    @Test
+    fun invertedChrome_blendsTowardOnSurfaceAtFullFraction() {
+        val hero = resolveProfileHeroChrome(
+            hasWallpaper = true,
+            isDarkTheme = false,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray
+        )
+
+        val inverted = resolveProfileHeroInvertedChrome(
+            heroChrome = hero,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray,
+            invertFraction = 1f
+        )
+
+        assertEquals(Color.Black, inverted.textColor)
+        assertEquals(Color.Gray, inverted.secondaryTextColor)
+        assertEquals(Color.Black, inverted.actionButtonContentColor)
+    }
+
+    @Test
+    fun invertedChrome_clampsFractionAboveOne() {
+        val hero = resolveProfileHeroChrome(
+            hasWallpaper = true,
+            isDarkTheme = false,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray
+        )
+
+        val inverted = resolveProfileHeroInvertedChrome(
+            heroChrome = hero,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray,
+            invertFraction = 5f
+        )
+
+        assertEquals(Color.Black, inverted.textColor)
+    }
+
+    @Test
+    fun invertedChrome_midpointIsBlend() {
+        val hero = resolveProfileHeroChrome(
+            hasWallpaper = true,
+            isDarkTheme = false,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray
+        )
+        val expectedText = lerp(Color.White, Color.Black, 0.5f)
+
+        val inverted = resolveProfileHeroInvertedChrome(
+            heroChrome = hero,
+            onSurfaceColor = Color.Black,
+            onSurfaceVariantColor = Color.Gray,
+            invertFraction = 0.5f
+        )
+
+        assertEquals(expectedText, inverted.textColor)
     }
 }

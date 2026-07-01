@@ -60,7 +60,7 @@ class VideoSharedTransitionPolicyTest {
     }
 
     @Test
-    fun homeVideoTransition_usesCoverAsPrimaryAnchor() {
+    fun homeVideoTransition_usesCoverOnlyToAvoidTextBoundsScaling() {
         val policy = resolveVideoSharedTransitionOwnership(
             sourceRoute = "home",
             coverSharedEnabled = true,
@@ -68,8 +68,8 @@ class VideoSharedTransitionPolicyTest {
         )
 
         assertTrue(policy.useCoverSharedBounds)
-        // Home 源也启用 metadata sharedBounds，标题、UP主等独立过渡
-        assertTrue(policy.useMetadataSharedBounds)
+        // Home 卡片标题和 UP 名排版与详情页不同，参与 sharedBounds 会在落位时缩放文字。
+        assertFalse(policy.useMetadataSharedBounds)
     }
 
     @Test
