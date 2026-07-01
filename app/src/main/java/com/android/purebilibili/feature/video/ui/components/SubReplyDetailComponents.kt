@@ -22,6 +22,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -576,12 +577,20 @@ internal fun SubReplyDetailContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (applyStatusBarPadding) Modifier.statusBarsPadding() else Modifier)
-                .padding(start = 20.dp, end = 8.dp, top = 10.dp, bottom = 10.dp)
-                .testTag(SUB_REPLY_DETAIL_HEADER_TAG)
+                .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                .testTag(SUB_REPLY_DETAIL_HEADER_TAG),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Text(
+                text = if (effectiveConversationMode) "对话详情" else "评论详情",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                color = appearance.primaryTextColor
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier.testTag(SUB_REPLY_DETAIL_CLOSE_TAG)
             ) {
                 Text(
                     text = if (effectiveConversationMode) "对话详情" else "评论详情",
@@ -602,7 +611,6 @@ internal fun SubReplyDetailContent(
                 }
             }
         }
-        HorizontalDivider(thickness = 0.5.dp, color = appearance.dividerColor)
 
         LazyColumn(
             state = listState,
@@ -881,7 +889,7 @@ private fun SubReplyDetailItem(
             }
         }
     }
-    val avatarSize = if (isRootItem) 44.dp else 40.dp
+    val avatarSize = 36.dp
     val nameColor = if (item.member.vip?.vipStatus == 1) {
         appearance.accentColor
     } else {
@@ -993,198 +1001,211 @@ private fun SubReplyDetailItem(
                 onLongClick = { showActionSheet = true }
             )
     ) {
-        Row(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 14.dp, bottom = 14.dp, start = 16.dp, end = 16.dp)
+                .padding(top = 10.dp, bottom = 10.dp, start = 12.dp, end = 12.dp)
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(item.member.avatar))
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                modifier = Modifier
-                    .size(avatarSize)
-                    .clip(CircleShape)
-                    .background(appearance.placeholderColor)
-                    .clickable { onAvatarClick(item.member.mid) }
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = item.member.uname,
-                                fontSize = if (isRootItem) 15.sp else 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = nameColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            if (item.member.levelInfo.currentLevel > 0) {
-                                LevelTag(
-                                    level = item.member.levelInfo.currentLevel,
-                                    isSeniorMember = item.member.isSeniorMember == 1
-                                )
-                            }
-
-                            if (isUpComment) {
-                                UpTag()
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        Text(
-                            text = metadataText,
-                            fontSize = 12.sp,
-                            color = appearance.secondaryTextColor
-                        )
-                    }
-
-                    if (!isRootItem && auxiliaryLabel != null) {
-                        Spacer(modifier = Modifier.width(12.dp))
-                        SubReplyAuxiliaryBadge(
-                            item = item,
-                            auxiliaryLabel = auxiliaryLabel,
-                            appearance = appearance
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-                    IconButton(
-                        onClick = { showActionSheet = true },
+            val startPadding = if (maxWidth > 280.dp) 42.dp else 12.dp
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(FormatUtils.fixImageUrl(item.member.avatar))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
                         modifier = Modifier
-                            .size(40.dp)
-                            .testTag("$COMMENT_ACTION_BUTTON_TAG_PREFIX${item.rpid}")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = "评论操作",
-                            tint = appearance.actionTint,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-                ReplyMessageText(
-                    text = item.content.message,
-                    fontSize = if (isRootItem) 16.sp else 15.sp,
-                    color = appearance.primaryTextColor,
-                    emoteMap = localEmoteMap,
-                    content = item.content,
-                    onTimestampClick = onTimestampClick,
-                    maxTimestampMs = maxTimestampMs,
-                    onUrlClick = onUrlClick,
-                    onUserClick = { mid -> onAvatarClick(mid.toString()) },
-                    onTopicClick = { topic -> onUrlClick?.invoke(resolveReplyTopicNavigationUrl(topic)) },
-                    onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
-                    noteCvidStr = item.noteCvidStr,
-                    prefix = contentPrefix
-                )
-
-                if (!item.content.pictures.isNullOrEmpty()) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(modifier = Modifier.heightIn(max = 220.dp)) {
-                        CommentPictures(
-                            pictures = item.content.pictures,
-                            onImageClick = { images, index, rect ->
-                                onImagePreview?.invoke(
-                                    images,
-                                    index,
-                                    rect,
-                                    resolveReplyPreviewTextContent(
-                                        item = item,
-                                        isLiked = isLiked,
-                                        onLikeClick = onLikeClick,
-                                        onReplyClick = onReplyClick
-                                    )
-                                )
-                            },
-                            testTagPrefix = "$SUB_REPLY_DETAIL_IMAGE_TAG_PREFIX${item.rpid}_"
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SubReplyTextAction(
-                        label = "回复",
-                        appearance = appearance,
-                        onClick = onReplyClick
+                            .size(avatarSize)
+                            .clip(CircleShape)
+                            .background(appearance.placeholderColor)
+                            .clickable { onAvatarClick(item.member.mid) }
+                            .padding(top = 4.dp)
                     )
 
-                    if (!specialLabelText.isNullOrEmpty()) {
-                        Spacer(modifier = Modifier.width(10.dp))
-                        ReplySpecialLabelChip(text = specialLabelText)
-                    }
-
-                    if (showConversationAction) {
-                        Spacer(modifier = Modifier.width(18.dp))
-                        Text(
-                            text = "查看对话",
-                            fontSize = 13.sp,
-                            color = appearance.actionTint,
-                            modifier = Modifier
-                                .testTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${item.rpid}")
-                                .clickable(enabled = onConversationClick != null) {
-                                    onConversationClick?.invoke()
-                                }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    if (onDeleteClick != null) {
-                        Icon(
-                            imageVector = CupertinoIcons.Outlined.Trash,
-                            contentDescription = "Delete",
-                            tint = appearance.actionTint,
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { onDeleteClick() }
-                        )
-                        Spacer(modifier = Modifier.width(18.dp))
-                    }
-
-                    val likeIcon = rememberAppLikeIcon()
-                    val likeFilledIcon = rememberAppLikeFilledIcon()
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clickable(enabled = onLikeClick != null) { onLikeClick?.invoke() }
-                            .padding(4.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Icon(
-                            imageVector = if (isLiked) likeFilledIcon else likeIcon,
-                            contentDescription = "Like",
-                            tint = if (isLiked) appearance.primaryTextColor else appearance.actionTint,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        if (displayLikeCount > 0) {
-                            Spacer(modifier = Modifier.width(4.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = item.member.uname,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = nameColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                if (item.member.levelInfo.currentLevel > 0) {
+                                    LevelTag(
+                                        level = item.member.levelInfo.currentLevel,
+                                        isSeniorMember = item.member.isSeniorMember == 1
+                                    )
+                                }
+
+                                if (isUpComment) {
+                                    UpTag()
+                                }
+                            }
+
                             Text(
-                                text = FormatUtils.formatStat(displayLikeCount.toLong()),
+                                text = metadataText,
                                 fontSize = 12.sp,
-                                color = if (isLiked) appearance.primaryTextColor else appearance.actionTint
+                                lineHeight = 18.sp,
+                                color = appearance.secondaryTextColor
                             )
+                        }
+
+                        if (!isRootItem && auxiliaryLabel != null) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            SubReplyAuxiliaryBadge(
+                                item = item,
+                                auxiliaryLabel = auxiliaryLabel,
+                                appearance = appearance
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = { showActionSheet = true },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .testTag("$COMMENT_ACTION_BUTTON_TAG_PREFIX${item.rpid}")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "评论操作",
+                                tint = appearance.actionTint,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Column(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = startPadding)
+                ) {
+                    ReplyMessageText(
+                        text = item.content.message,
+                        fontSize = 15.sp,
+                        color = appearance.primaryTextColor,
+                        emoteMap = localEmoteMap,
+                        content = item.content,
+                        onTimestampClick = onTimestampClick,
+                        maxTimestampMs = maxTimestampMs,
+                        onUrlClick = onUrlClick,
+                        onUserClick = { mid -> onAvatarClick(mid.toString()) },
+                        onTopicClick = { topic ->
+                            onUrlClick?.invoke(
+                                resolveReplyTopicNavigationUrl(
+                                    topic
+                                )
+                            )
+                        },
+                        onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
+                        noteCvidStr = item.noteCvidStr,
+                        prefix = contentPrefix
+                    )
+
+                    if (!item.content.pictures.isNullOrEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(modifier = Modifier.heightIn(max = 220.dp)) {
+                            CommentPictures(
+                                pictures = item.content.pictures,
+                                onImageClick = { images, index, rect ->
+                                    onImagePreview?.invoke(
+                                        images,
+                                        index,
+                                        rect,
+                                        resolveReplyPreviewTextContent(
+                                            item = item,
+                                            isLiked = isLiked,
+                                            onLikeClick = onLikeClick,
+                                            onReplyClick = onReplyClick
+                                        )
+                                    )
+                                },
+                                testTagPrefix = "$SUB_REPLY_DETAIL_IMAGE_TAG_PREFIX${item.rpid}_"
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SubReplyTextAction(
+                            label = "回复",
+                            appearance = appearance,
+                            onClick = onReplyClick
+                        )
+
+                        if (!specialLabelText.isNullOrEmpty()) {
+                            Spacer(modifier = Modifier.width(10.dp))
+                            ReplySpecialLabelChip(text = specialLabelText)
+                        }
+
+                        if (showConversationAction) {
+                            Spacer(modifier = Modifier.width(18.dp))
+                            Text(
+                                text = "查看对话",
+                                fontSize = 13.sp,
+                                color = appearance.actionTint,
+                                modifier = Modifier
+                                    .testTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${item.rpid}")
+                                    .clickable(enabled = onConversationClick != null) {
+                                        onConversationClick?.invoke()
+                                    }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.weight(1f))
+
+                        if (onDeleteClick != null) {
+                            Icon(
+                                imageVector = CupertinoIcons.Outlined.Trash,
+                                contentDescription = "Delete",
+                                tint = appearance.actionTint,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .clickable { onDeleteClick() }
+                            )
+                            Spacer(modifier = Modifier.width(18.dp))
+                        }
+
+                        val likeIcon = rememberAppLikeIcon()
+                        val likeFilledIcon = rememberAppLikeFilledIcon()
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable(enabled = onLikeClick != null) { onLikeClick?.invoke() }
+                                .padding(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isLiked) likeFilledIcon else likeIcon,
+                                contentDescription = "Like",
+                                tint = if (isLiked) appearance.primaryTextColor else appearance.actionTint,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            if (displayLikeCount > 0) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = FormatUtils.formatStat(displayLikeCount.toLong()),
+                                    fontSize = 12.sp,
+                                    color = if (isLiked) appearance.primaryTextColor else appearance.actionTint
+                                )
+                            }
                         }
                     }
                 }

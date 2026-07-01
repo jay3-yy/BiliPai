@@ -143,8 +143,8 @@ fun resolveTabletCinemaLayoutPolicy(
     val maxCurtainWidthWithPlayerGuard =
         widthDp - horizontalPaddingDp * 2 - minimumPlayerWidthDp - 4
     val curtainOpenWidthDp = targetCurtainOpenWidthDp
-        .coerceIn(280, 560)
-        .coerceAtMost(maxCurtainWidthWithPlayerGuard.coerceAtLeast(280))
+        .coerceIn(300, 560)
+        .coerceAtMost(maxCurtainWidthWithPlayerGuard.coerceAtLeast(300))
 
     return TabletCinemaLayoutPolicy(
         curtainPeekWidthDp = curtainPeekWidthDp,

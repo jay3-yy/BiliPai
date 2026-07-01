@@ -26,6 +26,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
@@ -210,7 +211,7 @@ fun RelatedVideoItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp) // Spacing between items
+            .padding(horizontal = 10.dp) // Spacing between items
     ) {
         Surface(
             shape = cardShape,
@@ -231,6 +232,22 @@ fun RelatedVideoItem(
                 .fillMaxWidth()
                 .padding(5.dp) // Internal padding
         ) {
+            // 🔗 [共享元素] 为封面添加共享元素标记
+            val coverModifier = if (coverSharedEnabled) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "video_cover_${video.bvid}"),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> com.android.purebilibili.core.theme.AnimationSpecs.BiliPaiSpringSpec },
+                            clipInOverlayDuringTransition = OverlayClip(
+                                RoundedCornerShape(12.dp)
+                            )
+                        )
+                }
+            } else {
+                Modifier
+            }
             val relatedCoverWidth = 130.dp
             val relatedCoverHeight = relatedCoverWidth / VIDEO_SHARED_COVER_ASPECT_RATIO
             
@@ -304,6 +321,7 @@ fun RelatedVideoItem(
                     Text(
                         text = video.title,
                         style = MaterialTheme.typography.bodyMedium.copy( // 15sp regular/medium
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         ),
                         maxLines = 2,
@@ -371,7 +389,7 @@ fun RelatedVideoItem(
                             leadingContent = if (video.owner.face.isNotEmpty()) {
                                 {
                                     var avatarModifier = Modifier
-                                        .size(16.dp)
+                                        .size(15.dp)
                                         .clip(androidx.compose.foundation.shape.CircleShape)
                                         .background(MaterialTheme.colorScheme.surfaceVariant)
 
@@ -479,9 +497,9 @@ private fun StatItem(icon: androidx.compose.ui.graphics.vector.ImageVector, text
             icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.outline, // System Gray 3 or similar
-            modifier = Modifier.size(12.dp)
+            modifier = Modifier.size(10.dp)
         )
-        Spacer(modifier = Modifier.width(2.dp))
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = text,
             style = MaterialTheme.typography.labelMedium,

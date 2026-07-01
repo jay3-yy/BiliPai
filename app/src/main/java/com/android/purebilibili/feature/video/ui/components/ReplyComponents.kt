@@ -1302,6 +1302,7 @@ fun ReplyItemView(
                             .clip(CircleShape)
                             .background(appearance.placeholderColor)
                             .clickable { onAvatarClick(item.member.mid) }
+                            .padding(top = 4.dp)
                     )
 
                     Spacer(modifier = Modifier.width(layoutPolicy.avatarContentSpacingDp.dp))
@@ -1318,7 +1319,7 @@ fun ReplyItemView(
                         ) {
                             Text(
                                 text = item.member.uname,
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (item.member.vip?.vipStatus == 1) {
                                     appearance.accentColor
@@ -1362,7 +1363,7 @@ fun ReplyItemView(
                         Text(
                             text = metadataText,
                             fontSize = 12.sp,
-                            lineHeight = 16.sp,
+                            lineHeight = 18.sp,
                             color = appearance.secondaryTextColor
                         )
                     }
