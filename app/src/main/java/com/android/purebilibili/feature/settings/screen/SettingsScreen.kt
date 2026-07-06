@@ -18,7 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -1281,7 +1281,6 @@ private fun MobileSettingsLayout(
     onHomeRefreshCountChange: (Int) -> Unit
 ) {
     val context = LocalContext.current
-    val listState = rememberLazyListState()
     val windowSizeClass = LocalWindowSizeClass.current
     val sectionOrder = remember { resolveSettingsRootCategoryOrder() }
     var activeRootCategoryName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -1296,6 +1295,15 @@ private fun MobileSettingsLayout(
             activeCategory = activeRootCategory
         )
     }
+    // 每个层级（首页 / 分类子页 / 搜索）各自保留独立滚动位置，
+    // 避免在子页滚动后返回首页时把偏移带回首页。
+    val listStateStore = remember { mutableMapOf<String, LazyListState>() }
+    val listStateKey = when (val destination = bodyDestination) {
+        SettingsRootBodyDestination.Home -> "home"
+        SettingsRootBodyDestination.Search -> "search"
+        is SettingsRootBodyDestination.Category -> "category:${destination.category.name}"
+    }
+    val listState = listStateStore.getOrPut(listStateKey) { LazyListState() }
     val entranceAnimationEnabled by SettingsManager.getUiEntranceAnimationEnabled(context)
         .collectAsStateWithLifecycle(initialValue = true)
     val reduceMotion = rememberSystemReduceMotion()
