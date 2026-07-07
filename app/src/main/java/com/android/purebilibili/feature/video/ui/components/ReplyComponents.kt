@@ -224,9 +224,11 @@ internal fun shouldEnableRichCommentSelection(
     return !hasRenderableEmotes && !hasInteractiveAnnotations
 }
 
-internal fun shouldShowReplyAncillaryDecorations(
+// 纯 Text 标签渲染成本低；滚动/播放期间保持稳定显示，对齐底栏 dragFloor 不因 motion 切换可见性。
+@Suppress("UNUSED_PARAMETER")
+internal fun shouldShowReplySpecialLabel(
     lightweightMode: Boolean
-): Boolean = !lightweightMode
+): Boolean = true
 
 internal fun shouldShowReplyIdentityDecorations(enabled: Boolean): Boolean = enabled
 
@@ -1018,7 +1020,6 @@ fun ReplyItemView(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val isUpComment = upMid > 0 && item.mid == upMid
-    val showAncillaryDecorations = shouldShowReplyAncillaryDecorations(lightweightMode)
     val showResolvedIdentityDecorations = shouldShowReplyIdentityDecorations(showIdentityDecorations)
     val showSubPreview = shouldShowReplySubPreview(
         hideSubPreview = hideSubPreview,
@@ -1061,8 +1062,8 @@ fun ReplyItemView(
             }
         }
     }
-    val specialLabelText = remember(item.cardLabels, showUpFlag, item.upAction, showAncillaryDecorations) {
-        if (!showAncillaryDecorations) return@remember null
+    val specialLabelText = remember(item.cardLabels, showUpFlag, item.upAction) {
+        if (!shouldShowReplySpecialLabel(lightweightMode)) return@remember null
         resolveReplySpecialLabelText(
             cardLabels = item.cardLabels,
             showUpFlag = showUpFlag,

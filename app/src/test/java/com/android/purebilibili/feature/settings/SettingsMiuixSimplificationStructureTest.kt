@@ -16,8 +16,10 @@ class SettingsMiuixSimplificationStructureTest {
         assertTrue(source.contains("viewModel.setUiPreset("))
         assertTrue(source.contains("安卓原生液态玻璃"))
         assertTrue(source.contains("toggleAndroidNativeLiquidGlass("))
-        assertTrue(source.contains("MiuixScaffold("))
-        assertTrue(source.contains("MiuixSmallTopAppBar("))
+        assertTrue(source.contains("AdaptiveScaffold("))
+        assertTrue(source.contains("AdaptiveTopAppBar("))
+        assertFalse(source.contains("MiuixScaffold("))
+        assertFalse(source.contains("MiuixSmallTopAppBar("))
     }
 
     @Test
@@ -35,8 +37,10 @@ class SettingsMiuixSimplificationStructureTest {
         assertFalse(source.contains("toggleAndroidNativeLiquidGlass("))
         assertFalse(source.contains("共享元素背景模糊"))
         assertFalse(source.contains("toggleVideoTransitionRealtimeBlur("))
-        assertTrue(source.contains("MiuixScaffold("))
-        assertTrue(source.contains("MiuixSmallTopAppBar("))
+        assertTrue(source.contains("AdaptiveScaffold("))
+        assertTrue(source.contains("AdaptiveTopAppBar("))
+        assertFalse(source.contains("MiuixScaffold("))
+        assertFalse(source.contains("MiuixSmallTopAppBar("))
     }
 
     @Test

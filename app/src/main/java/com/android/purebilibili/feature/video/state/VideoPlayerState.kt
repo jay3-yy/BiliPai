@@ -758,7 +758,8 @@ fun rememberVideoPlayerState(
     bvid: String,
     cid: Long = 0L,
     fallbackResumePositionMs: Long = 0L,
-    startPaused: Boolean = false
+    startPaused: Boolean = false,
+    entryTransitionFinished: Boolean = true,
 ): VideoPlayerState {
 
     //  尝试复用 MiniPlayerManager 中已加载的 player
@@ -1206,13 +1207,24 @@ fun rememberVideoPlayerState(
 
     //  [重构] 合并为单个 LaunchedEffect 确保执行顺序
     // 必须先 attachPlayer，再 loadVideo，否则 ViewModel 中的 exoPlayer 引用无效
-    LaunchedEffect(player, bvid, cid, reuseFromMiniPlayerAtEntry, fallbackResumePositionMs) {
+    LaunchedEffect(
+        player,
+        bvid,
+        cid,
+        reuseFromMiniPlayerAtEntry,
+        fallbackResumePositionMs,
+        entryTransitionFinished,
+    ) {
         // 1️⃣ 首先绑定 player
         viewModel.attachPlayer(player)
         Logger.d(
             "VideoPlayerState",
-            "SUB_DBG attach player + decide restore/load: request=$bvid/$cid, reuse=$reuseFromMiniPlayerAtEntry"
+            "SUB_DBG attach player + decide restore/load: request=$bvid/$cid, reuse=$reuseFromMiniPlayerAtEntry, entryFinished=$entryTransitionFinished"
         )
+
+        if (!entryTransitionFinished) {
+            return@LaunchedEffect
+        }
         
         // 2️⃣ 尝试从缓存恢复 UI 状态 (仅当复用播放器时)
         // 解决从小窗/后台返回时的网络请求错误问题

@@ -230,6 +230,14 @@ internal fun buildAudioModeCollectionPlaylist(
     )
 }
 
+/** 听视频模式下，收藏夹/稍后再看等外部队列优先于视频自带合集队列。 */
+internal fun shouldApplyAudioModeCollectionPlaylist(
+    isInAudioMode: Boolean,
+    keepExternalPlaylist: Boolean
+): Boolean {
+    return isInAudioMode && !keepExternalPlaylist
+}
+
 internal data class PlaybackCdnFallbackState(
     val selectedVideoUrl: String = "",
     val selectedAudioUrl: String? = null,
@@ -2906,7 +2914,28 @@ class PlayerViewModel : ViewModel() {
      *  [新增] 更新播放列表
      */
     private fun updatePlaylist(currentInfo: com.android.purebilibili.data.model.response.ViewInfo, related: List<com.android.purebilibili.data.model.response.RelatedVideo>) {
-        if (_isInAudioMode.value) {
+        val currentPlaylist = PlaylistManager.playlist.value
+        val externalDecision = resolveExternalPlaylistSyncDecision(
+            isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
+            playlist = currentPlaylist,
+            currentBvid = currentInfo.bvid
+        )
+
+        // 🔒 外部队列（收藏夹、稍后再看等）始终优先，听视频模式也不应被合集/分P 队列覆盖。
+        if (externalDecision.keepExternalPlaylist) {
+            val matchIndex = externalDecision.matchedIndex
+            if (matchIndex in currentPlaylist.indices) {
+                PlaylistManager.playAt(matchIndex)
+                Logger.d("PlayerVM", "🔒 外部播放列表模式: 更新索引到 $matchIndex/${currentPlaylist.size}")
+            }
+            return
+        }
+
+        if (shouldApplyAudioModeCollectionPlaylist(
+                isInAudioMode = _isInAudioMode.value,
+                keepExternalPlaylist = false
+            )
+        ) {
             val collectionPlaylist = currentInfo.ugc_season?.let { season ->
                 buildAudioModeCollectionPlaylist(
                     episodes = season.sections.flatMap { it.episodes },
@@ -2925,25 +2954,6 @@ class PlayerViewModel : ViewModel() {
                 )
                 return
             }
-        }
-
-        val currentPlaylist = PlaylistManager.playlist.value
-        val externalDecision = resolveExternalPlaylistSyncDecision(
-            isExternalPlaylist = PlaylistManager.isExternalPlaylist.value,
-            playlist = currentPlaylist,
-            currentBvid = currentInfo.bvid
-        )
-
-        // 🔒 [修复] 检查是否为外部播放列表（稍后再看、UP主页等）
-        // 如果是外部播放列表，只更新当前索引，不覆盖列表
-        if (externalDecision.keepExternalPlaylist) {
-            val matchIndex = externalDecision.matchedIndex
-            if (matchIndex in currentPlaylist.indices) {
-                // 找到当前视频在列表中的位置，更新索引
-                PlaylistManager.playAt(matchIndex)
-                Logger.d("PlayerVM", "🔒 外部播放列表模式: 更新索引到 $matchIndex/${currentPlaylist.size}")
-            }
-            return
         }
 
         if (PlaylistManager.isExternalPlaylist.value) {

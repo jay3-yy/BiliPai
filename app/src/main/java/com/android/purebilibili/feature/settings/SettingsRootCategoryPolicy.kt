@@ -1,6 +1,9 @@
 package com.android.purebilibili.feature.settings
 
-internal enum class SettingsRootCategory(
+import kotlinx.serialization.Serializable
+
+@Serializable
+enum class SettingsRootCategory(
     val title: String,
     val subtitle: String,
     val searchTarget: SettingsSearchTarget

@@ -162,6 +162,38 @@ class SearchMotionBudgetPolicyTest {
     }
 
     @Test
+    fun searchCardTransition_followsGlobalSettingRegardlessOfBudget() {
+        assertTrue(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = true,
+                motionBudget = SearchMotionBudget.FULL,
+                isReturningFromVideoDetail = false
+            )
+        )
+        assertTrue(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = true,
+                motionBudget = SearchMotionBudget.REDUCED,
+                isReturningFromVideoDetail = false
+            )
+        )
+        assertTrue(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = true,
+                motionBudget = SearchMotionBudget.REDUCED,
+                isReturningFromVideoDetail = true
+            )
+        )
+        assertFalse(
+            resolveEffectiveSearchCardTransitionEnabled(
+                cardTransitionEnabled = false,
+                motionBudget = SearchMotionBudget.FULL,
+                isReturningFromVideoDetail = false
+            )
+        )
+    }
+
+    @Test
     fun newSearchSession_resetsResultScroll() {
         assertTrue(
             shouldResetSearchResultScroll(

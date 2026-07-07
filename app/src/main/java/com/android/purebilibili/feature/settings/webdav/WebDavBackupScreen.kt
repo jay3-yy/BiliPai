@@ -26,7 +26,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
@@ -58,6 +57,7 @@ import com.android.purebilibili.core.ui.components.IOSClickableItem
 import com.android.purebilibili.core.ui.components.IOSDivider
 import com.android.purebilibili.core.ui.components.IOSGroup
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
+import com.android.purebilibili.core.ui.components.IOSAdaptiveTextField
 import com.android.purebilibili.core.ui.components.IOSSwitchItem
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 
@@ -293,41 +293,37 @@ fun WebDavBackupScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     when (editMode) {
                         WebDavEditMode.SERVER -> {
-                            OutlinedTextField(
+                            IOSAdaptiveTextField(
                                 value = draftBaseUrl,
                                 onValueChange = { draftBaseUrl = it },
-                                label = { Text("服务器地址") },
-                                placeholder = { Text("https://dav.example.com/remote.php/dav/files/<user>") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "服务器地址",
+                                placeholder = "https://dav.example.com/remote.php/dav/files/<user>",
+                                singleLine = true
                             )
                         }
 
                         WebDavEditMode.ACCOUNT -> {
-                            OutlinedTextField(
+                            IOSAdaptiveTextField(
                                 value = draftUsername,
                                 onValueChange = { draftUsername = it },
-                                label = { Text("用户名") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "用户名",
+                                singleLine = true
                             )
-                            OutlinedTextField(
+                            IOSAdaptiveTextField(
                                 value = draftPassword,
                                 onValueChange = { draftPassword = it },
-                                label = { Text("密码") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "密码",
+                                singleLine = true
                             )
                         }
 
                         WebDavEditMode.REMOTE_DIR -> {
-                            OutlinedTextField(
+                            IOSAdaptiveTextField(
                                 value = draftRemoteDir,
                                 onValueChange = { draftRemoteDir = it },
-                                label = { Text("远端目录") },
-                                placeholder = { Text("/BiliPai/backups") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
+                                label = "远端目录",
+                                placeholder = "/BiliPai/backups",
+                                singleLine = true
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),

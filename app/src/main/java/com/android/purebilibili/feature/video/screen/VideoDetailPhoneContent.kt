@@ -1,15 +1,12 @@
 package com.android.purebilibili.feature.video.screen
 
 import android.content.Context
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,9 +19,6 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,7 +58,6 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     sortPreferenceScope: CoroutineScope,
     playerState: VideoPlayerState,
     motionSpec: VideoDetailMotionSpec,
-    entryVisualFrame: VideoDetailEntryVisualFrame,
     hazeState: HazeState,
     isTransitionFinished: Boolean,
     isLeaving: Boolean,
@@ -109,20 +102,6 @@ internal fun VideoDetailPhoneSuccessContentLayer(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer {
-                        alpha = entryVisualFrame.contentAlpha
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                            entryVisualFrame.blurRadiusPx > 0.01f
-                        ) {
-                            renderEffect = RenderEffect.createBlurEffect(
-                                entryVisualFrame.blurRadiusPx,
-                                entryVisualFrame.blurRadiusPx,
-                                Shader.TileMode.CLAMP
-                            ).asComposeRenderEffect()
-                        } else {
-                            renderEffect = null
-                        }
-                    }
                     .hazeSourceCompat(hazeState)
             ) {
                 val detailContentRevealEnter = fadeIn(
@@ -354,13 +333,6 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                         }
                     }
                 }
-            }
-            if (entryVisualFrame.scrimAlpha > 0.001f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = entryVisualFrame.scrimAlpha))
-                )
             }
         }
     }

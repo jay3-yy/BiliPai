@@ -36,7 +36,7 @@ class SettingsScreenTokenAdoptionTest {
         "src/main/java/com/android/purebilibili/feature/settings/screen/PermissionSettingsScreen.kt",
         "src/main/java/com/android/purebilibili/feature/settings/screen/PlaybackSettingsScreen.kt",
         "src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt",
-        "src/main/java/com/android/purebilibili/feature/settings/screen/TabletSettingsLayout.kt",
+        "src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt",
         "src/main/java/com/android/purebilibili/feature/settings/screen/TipsSettingsScreen.kt",
         "src/main/java/com/android/purebilibili/feature/settings/ui/SettingsComponents.kt",
         "src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt"

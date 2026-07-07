@@ -47,19 +47,12 @@ class SettingsTabletLayoutPolicyTest {
     @Test
     fun tabletLandscape_keepsMasterAndDetailContentScrollable() {
         val source = listOf(
-            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/TabletSettingsLayout.kt"),
-            File("src/main/java/com/android/purebilibili/feature/settings/screen/TabletSettingsLayout.kt")
+            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt")
         ).first { it.exists() }.readText()
 
-        val masterPane = source
-            .substringAfter("// Master List")
-            .substringBefore("secondaryContent =")
-        val detailPane = source.substringAfter("// Detail Content")
-
-        assertTrue(masterPane.contains("LazyColumn("))
-        assertTrue(masterPane.contains(".weight(1f)"))
-        assertTrue(detailPane.contains(".testTag(\"settings_detail_panel\")"))
-        assertTrue(detailPane.contains(".weight(1f)"))
-        assertTrue(detailPane.contains("AnimatedContent(\n                        modifier = Modifier.fillMaxSize()"))
+        assertTrue(source.contains("AdaptiveSplitLayout("))
+        assertTrue(source.contains("LazyColumn("))
+        assertTrue(source.contains("rightPane"))
     }
 }

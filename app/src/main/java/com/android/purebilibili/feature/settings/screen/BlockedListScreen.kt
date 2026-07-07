@@ -29,6 +29,7 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.components.IOSAdaptiveTextField
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.util.ShareUtils
@@ -174,12 +175,12 @@ fun BlockedListContent(
             onDismissRequest = { showImportDialog = false },
             title = { Text("导入黑名单") },
             text = {
-                OutlinedTextField(
+                IOSAdaptiveTextField(
                     value = importText,
                     onValueChange = { importText = it },
-                    label = { Text("粘贴分享出来的黑名单文本") },
-                    minLines = 5,
-                    modifier = Modifier.fillMaxWidth()
+                    label = "粘贴分享出来的黑名单文本",
+                    singleLine = false,
+                    minLines = 5
                 )
             },
             confirmButton = {

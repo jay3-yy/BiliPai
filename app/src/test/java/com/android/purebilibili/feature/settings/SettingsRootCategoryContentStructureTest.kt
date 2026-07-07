@@ -47,34 +47,33 @@ class SettingsRootCategoryContentStructureTest {
     }
 
     @Test
-    fun feedSwitchDescription_allowsWrappingInIosSettings() {
+    fun feedApiSection_usesNativeSwitchAndSliderItems() {
         val source = listOf(
             File("app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt"),
             File("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt")
         ).first { it.exists() }.readText()
 
-        val feedSwitchBlock = source
-            .substringAfter("private fun FeedSwitchItem(")
-            .substringBefore("@Composable\nprivate fun FeedRefreshCountItem(")
+        val feedApiBlock = source
+            .substringAfter("fun FeedApiSection(")
+            .substringBefore("@Composable\nprivate fun FeedDynamicTabVisibilityItem(")
 
-        assertTrue(feedSwitchBlock.contains("text = subtitle"))
-        assertTrue(!feedSwitchBlock.contains("maxLines = 1"))
+        assertTrue(feedApiBlock.contains("SettingSwitchItem("))
+        assertTrue(feedApiBlock.contains("SettingSliderItem("))
+        assertTrue(feedApiBlock.contains("SettingsAdaptiveDivider()"))
+        assertFalse(feedApiBlock.contains("private fun FeedSwitchItem("))
     }
 
     @Test
-    fun mobileSettingsRoot_usesNagramStyleHomeSections() {
+    fun mobileSettingsRoot_usesCategoryListWithSearchEntryAndAboutSection() {
         val source = listOf(
             File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt"),
             File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt")
         ).first { it.exists() }.readText()
 
-        assertTrue(source.contains("SettingsSearchBarSection("))
+        assertTrue(source.contains("SettingsHomeSearchEntry("))
         assertTrue(source.contains("SettingsRootCategoryListSection("))
         assertTrue(source.contains("SettingsAboutHomeSection("))
-        assertTrue(source.contains("SettingsBackupHomeSection("))
-        assertTrue(source.indexOf("SettingsRootCategoryListSection(") < source.indexOf("SettingsAboutHomeSection("))
-        assertTrue(source.indexOf("SettingsAboutHomeSection(") < source.indexOf("SettingsBackupHomeSection("))
-        assertFalse(source.contains("SupportAuthorCompactSection("))
+        assertTrue(source.contains("MobileSettingsNavLayout("))
     }
 
     @Test
@@ -117,16 +116,17 @@ class SettingsRootCategoryContentStructureTest {
     }
 
     @Test
-    fun mobileSettingsRootPinsSearchAboveNagramSections() {
+    fun mobileSettingsRootUsesNav3DestinationInsteadOfLocalDrillDown() {
         val source = listOf(
             File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt"),
             File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt")
         ).first { it.exists() }.readText()
 
-        assertTrue(source.contains("SettingsSearchBarSection("))
-        assertTrue(source.contains("activeRootCategoryName"))
-        assertTrue(source.indexOf("SettingsSearchBarSection(") < source.indexOf("SettingsRootCategoryListSection("))
-        assertFalse(source.contains("FollowAuthorSection("))
+        assertTrue(source.contains("SettingsNavDestination"))
+        assertTrue(source.contains("SettingsRootCategoryContent("))
+        assertTrue(source.contains("onCategoryClick"))
+        assertFalse(source.contains("SettingsRootDrillDownNavigator("))
+        assertFalse(source.contains("activeRootCategoryName"))
     }
 
     @Test
@@ -138,53 +138,81 @@ class SettingsRootCategoryContentStructureTest {
 
         val sectionBlock = source
             .substringAfter("internal fun SettingsRootCategoryListSection(")
-            .substringBefore("@Composable\ninternal fun SettingsDetailGroup(")
+            .substringBefore("@Composable\nprivate fun SettingsRootCategoryRow(")
 
-        assertTrue(sectionBlock.contains("title = category.title"))
-        assertTrue(sectionBlock.contains("subtitle = category.subtitle"))
+        assertTrue(sectionBlock.contains("SettingsRootCategoryRow("))
         assertTrue(sectionBlock.contains("onCategoryClick(category)"))
         assertFalse(sectionBlock.contains("AnimatedVisibility("), "Nagram-style root should navigate, not accordion-expand")
         assertFalse(sectionBlock.contains("SettingsRootCategoryContent("), "root rows should not inline detail content")
     }
 
     @Test
-    fun mobileSettingsRootUsesCategoryDetailScreenInsteadOfInlineExpansion() {
-        val source = listOf(
+    fun mobileSettingsRootUsesNav3ScreensInsteadOfInlineDrillDown() {
+        val screenSource = listOf(
             File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt"),
             File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsScreen.kt")
         ).first { it.exists() }.readText()
+        val categoryScreenExists = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsCategoryScreen.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsCategoryScreen.kt")
+        ).any { it.exists() }
+        val searchScreenExists = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsSearchScreen.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsSearchScreen.kt")
+        ).any { it.exists() }
 
-        assertTrue(source.contains("activeRootCategoryName"))
-        assertTrue(source.contains("SettingsRootCategoryContent("))
-        assertTrue(source.contains("AnimatedContent("))
-        assertTrue(source.contains("resolveSettingsRootCategoryContentTransform("))
-        assertTrue(source.contains("key(destination)"))
-        assertTrue(source.contains("EntranceGroup(startWhen = settled)"))
-        assertTrue(source.contains("label = \"SettingsRootBody\""))
-        assertFalse(source.contains("isExpanded ="), "should not use accordion isExpanded")
-        assertFalse(source.contains("onToggle ="), "should not use accordion onToggle")
-        assertFalse(source.contains("expandedRootCategoryNames"))
+        assertTrue(categoryScreenExists)
+        assertTrue(searchScreenExists)
+        assertTrue(screenSource.contains("SettingsNavDestination"))
+        assertFalse(screenSource.contains("SettingsRootDrillDownNavigator("))
     }
 
     @Test
-    fun tabletSettingsRootUsesCompactSupportInMasterAndKeepsDetailFocused() {
+    fun tabletSettingsShell_usesNavDrivenCategoryRail() {
         val source = listOf(
-            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/TabletSettingsLayout.kt"),
-            File("src/main/java/com/android/purebilibili/feature/settings/screen/TabletSettingsLayout.kt")
+            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt")
         ).first { it.exists() }.readText()
 
-        val masterBlock = source
-            .substringAfter("// Master List")
-            .substringBefore("secondaryContent =")
-        val rootDetailBlock = source
-            .substringAfter("// Category Root")
-            .substringBefore("Spacer(modifier = Modifier\n                                .windowInsetsBottomHeight")
+        assertTrue(source.contains("SettingsHomeSearchEntry(onClick = onSearchOpen)"))
+        assertTrue(source.contains("NavigationDrawerItem("))
+        assertTrue(source.contains("text = category.subtitle"))
+        assertTrue(source.contains("rightPane()"))
+    }
 
-        assertTrue(masterBlock.contains("SettingsSearchBarSection("))
-        assertTrue(masterBlock.contains("SupportAuthorCompactSection("))
-        assertTrue(masterBlock.indexOf("SettingsSearchBarSection(") < masterBlock.indexOf("SupportAuthorCompactSection("))
-        assertFalse(rootDetailBlock.contains("FollowAuthorSection("))
-        assertTrue(rootDetailBlock.contains("SettingsRootCategoryContent("))
+    @Test
+    fun appNavigation_wrapsSettingsSubtreeRoutesWithTabletShell() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"),
+            File("src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
+        ).first { it.exists() }.readText()
+
+        assertTrue(source.contains("fun SettingsTabletEntry(content: @Composable () -> Unit)"))
+        assertTrue(source.contains("SettingsTabletNavEntryShell("))
+        listOf(
+            "BiliPaiNavEntryContentRole.SETTINGS ->",
+            "BiliPaiNavEntryContentRole.PLAYBACK_SETTINGS ->",
+            "BiliPaiNavEntryContentRole.PLUGINS_SETTINGS ->",
+            "BiliPaiNavEntryContentRole.TIPS_SETTINGS ->",
+        ).forEach { marker ->
+            val block = source.substringAfter(marker)
+            assertTrue(
+                block.contains("SettingsTabletEntry {"),
+                "Expected SettingsTabletEntry wrapper after $marker"
+            )
+        }
+    }
+
+    @Test
+    fun tipsSettingsScreen_usesSharedPageScaffold() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/TipsSettingsScreen.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/screen/TipsSettingsScreen.kt")
+        ).first { it.exists() }.readText()
+
+        assertTrue(source.contains("SettingsPageScaffold("))
+        assertTrue(source.contains("SettingsLargeTitleHeader("))
+        assertFalse(source.contains("AdaptiveScaffold("))
     }
 
     @Test
@@ -320,6 +348,28 @@ class SettingsRootCategoryContentStructureTest {
 
         assertFalse(aboutSectionBlock.contains("title = \"发布渠道声明\""))
         assertFalse(aboutSectionBlock.contains("SettingsSearchTarget.DISCLAIMER"))
+    }
+
+    @Test
+    fun tabletSettingsCategoryDrawer_showsSubtitle() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/screen/SettingsTabletShell.kt")
+        ).first { it.exists() }.readText()
+
+        assertTrue(source.contains("text = category.subtitle"))
+    }
+
+    @Test
+    fun categoryEntries_useShortPlaybackNavigationCopy() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt"),
+            File("src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt")
+        ).first { it.exists() }.readText()
+
+        assertTrue(source.contains("title = \"首页样式与壁纸\""))
+        assertTrue(source.contains("value = \"在播放设置内 · 全屏方向与手势控制\""))
+        assertTrue(source.contains("value = \"在播放设置内 · 诊断日志与统计\""))
     }
 
     @Test

@@ -11,9 +11,9 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 //  Cupertino Icons - iOS SF Symbols 风格图标
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -34,16 +34,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.android.purebilibili.R
-import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
-import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.EntranceGroup
 import com.android.purebilibili.core.ui.animation.entrance
-import com.android.purebilibili.core.ui.rememberAppBackIcon
-import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.feature.settings.ui.SettingsLargeTitleHeader
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.core.theme.iOSPink  // 存储权限图标色
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSGreen
@@ -67,24 +62,17 @@ fun PermissionSettingsScreen(
 ) {
     val screenTitle = stringResource(R.string.permission_management_title)
     val backLabel = stringResource(R.string.common_back)
-    AdaptiveScaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
-                    }
-                },
-                colors = settingsSubpageTopAppBarColors()
-            )
-        },
-        containerColor = settingsSubpageContainerColor(),
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        PermissionSettingsContent(
-            modifier = Modifier.padding(padding)
-        )
+    val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    EntranceGroup {
+        SettingsPageScaffold(
+            title = screenTitle,
+            onBack = onBack,
+            backContentDescription = backLabel,
+            bottomContentPadding = bottomPadding,
+            header = { SettingsLargeTitleHeader(title = screenTitle) },
+        ) {
+            PermissionSettingsContent()
+        }
     }
 }
 
@@ -94,15 +82,8 @@ fun PermissionSettingsContent(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val windowSizeClass = LocalWindowSizeClass.current
-    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
-        resolveDeviceUiProfile(
-            widthSizeClass = windowSizeClass.widthSizeClass
-        )
-    }
-    
+
     //  [修复] 设置导航栏透明，确保底部手势栏沉浸式效果
-    val view = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(Unit) {
         val window = (context as? android.app.Activity)?.window
         val originalNavBarColor = window?.navigationBarColor ?: android.graphics.Color.TRANSPARENT
@@ -211,101 +192,66 @@ fun PermissionSettingsContent(
             }
         }
     }
-    val grantedCount = permissions.count { info ->
-        info.alwaysGranted || permissionStates[info.permission] == true
-    }
-    val permissionInteractionLevel = (
-        0.2f + grantedCount.toFloat() / permissions.size.coerceAtLeast(1) * 0.8f
-        ).coerceIn(0f, 1f)
-
-    EntranceGroup {
-    LazyColumn(
+    Column(
         modifier = modifier
-            .fillMaxSize(),
-        //  [修复] 添加底部导航栏内边距，确保沉浸式效果
-        contentPadding = WindowInsets.navigationBars.asPaddingValues()
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState()),
     ) {
+            Box(modifier = Modifier.entrance()) {
+                Text(
+                    text = "以下是应用所需的权限及其用途说明。普通权限在安装时自动授予，无需手动操作。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
 
-            
-            
-            // 说明文字
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    Text(
-                        text = "以下是应用所需的权限及其用途说明。普通权限在安装时自动授予，无需手动操作。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
-                }
+            Box(modifier = Modifier.entrance()) {
+                IOSSectionTitle("需要授权的权限")
             }
-            
-            // 需要运行时请求的权限
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("需要授权的权限")
-                }
-            }
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    IOSGroup {
-                        permissions.filter { !it.isNormal }.forEachIndexed { index, info ->
-                            if (index > 0) HorizontalDivider()
-                            PermissionItem(
-                                info = info,
-                                isGranted = permissionStates[info.permission] ?: false,
-                                onOpenSettings = {
-                                    openAppSettings(context)
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // 普通权限（自动授予）
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    IOSSectionTitle("自动授予的权限")
-                }
-            }
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    IOSGroup {
-                        permissions.filter { it.isNormal }.forEachIndexed { index, info ->
-                            if (index > 0) HorizontalDivider()
-                            PermissionItem(
-                                info = info,
-                                isGranted = true,
-                                onOpenSettings = null
-                            )
-                        }
-                    }
-                }
-            }
-            
-            // 隐私说明
-            item {
-                Box(modifier = Modifier.entrance()) {
-                    Column {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "BiliPai 仅在必要功能的前提下申请部分敏感权限。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(horizontal = 16.dp)
+            Box(modifier = Modifier.entrance()) {
+                IOSGroup {
+                    permissions.filter { !it.isNormal }.forEachIndexed { index, info ->
+                        if (index > 0) HorizontalDivider()
+                        PermissionItem(
+                            info = info,
+                            isGranted = permissionStates[info.permission] ?: false,
+                            onOpenSettings = { openAppSettings(context) },
                         )
                     }
                 }
             }
+
+            Box(modifier = Modifier.entrance()) {
+                IOSSectionTitle("自动授予的权限")
+            }
+            Box(modifier = Modifier.entrance()) {
+                IOSGroup {
+                    permissions.filter { it.isNormal }.forEachIndexed { index, info ->
+                        if (index > 0) HorizontalDivider()
+                        PermissionItem(
+                            info = info,
+                            isGranted = true,
+                            onOpenSettings = null,
+                        )
+                    }
+                }
+            }
+
+            Box(modifier = Modifier.entrance()) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "BiliPai 仅在必要功能的前提下申请部分敏感权限。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            }
         }
-    }
-    }
+}
 
-
-/**
- * 权限信息数据类
- */
 private data class PermissionInfo(
     val name: String,
     val permission: String,

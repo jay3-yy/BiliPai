@@ -17,6 +17,8 @@ internal fun resolveBiliPaiPredictiveBackAnimationHandler(
     }
 
     return when (routeTransition) {
+        BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_POP ->
+            BiliPaiIosPushPredictiveBackAnimation(exitDirection = exitDirection)
         BiliPaiNavRouteTransition.CLASSIC_CARD -> resolveClassicCardPredictiveBackHandler(
             style = style,
             exitDirection = exitDirection,

@@ -68,13 +68,16 @@ internal fun shouldExpandHomeHeaderForSettledPage(
 }
 
 internal fun resolveHomeHeaderOffsetForSettledPage(
+    currentHeaderOffsetPx: Float,
     firstVisibleItemIndex: Int,
     firstVisibleItemScrollOffset: Int,
     maxHeaderCollapsePx: Float
 ): Float {
     if (maxHeaderCollapsePx <= 0f) return 0f
     return if (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0) {
-        0f
+        // 目标页在顶部时保留当前折叠态，避免切到「热门」等未滚动分区时把已折叠顶栏强行展开。
+        // 回到顶部后的展开仍由列表上滑 + canRevealHeader 驱动。
+        currentHeaderOffsetPx.coerceIn(-maxHeaderCollapsePx, 0f)
     } else {
         -maxHeaderCollapsePx
     }

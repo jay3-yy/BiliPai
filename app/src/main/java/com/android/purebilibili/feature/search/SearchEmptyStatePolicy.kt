@@ -40,7 +40,7 @@ internal fun resolveSearchEmptyStateCopy(
         SearchType.UP -> "未找到相关UP主"
         SearchType.BANGUMI -> "未找到相关番剧"
         SearchType.MEDIA_FT -> "未找到相关影视"
-        SearchType.LIVE -> "未找到相关直播"
+        SearchType.LIVE -> "未找到相关直播间"
         SearchType.ARTICLE -> "未找到相关专栏"
         else -> "未找到相关内容"
     }

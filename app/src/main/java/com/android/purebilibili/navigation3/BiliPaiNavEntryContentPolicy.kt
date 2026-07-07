@@ -8,6 +8,8 @@ internal enum class BiliPaiNavEntryContentRole {
     SEARCH_TRENDING,
     TOPIC_DETAIL,
     SETTINGS,
+    SETTINGS_CATEGORY,
+    SETTINGS_SEARCH,
     OPEN_SOURCE_LICENSES,
     APPEARANCE_SETTINGS,
     ICON_SETTINGS,
@@ -69,6 +71,8 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.SearchTrending -> BiliPaiNavEntryContentRole.SEARCH_TRENDING
         is BiliPaiNavKey.TopicDetail -> BiliPaiNavEntryContentRole.TOPIC_DETAIL
         BiliPaiNavKey.Settings -> BiliPaiNavEntryContentRole.SETTINGS
+        is BiliPaiNavKey.SettingsCategory -> BiliPaiNavEntryContentRole.SETTINGS_CATEGORY
+        BiliPaiNavKey.SettingsSearch -> BiliPaiNavEntryContentRole.SETTINGS_SEARCH
         BiliPaiNavKey.OpenSourceLicenses -> BiliPaiNavEntryContentRole.OPEN_SOURCE_LICENSES
         BiliPaiNavKey.AppearanceSettings -> BiliPaiNavEntryContentRole.APPEARANCE_SETTINGS
         BiliPaiNavKey.IconSettings -> BiliPaiNavEntryContentRole.ICON_SETTINGS

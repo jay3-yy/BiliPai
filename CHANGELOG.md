@@ -1,5 +1,64 @@
 # Changelog
 
+## v9.8.9 (2026-07-07)
+
+### 版本信息
+- 版本号从 `9.8.8` 升级到 `9.8.9`，`versionCode` 从 `247` 升级到 `248`。
+
+### 更新内容
+
+#### 设置导航架构（Nav3 统一）
+- **取消手机本地 drill-down**：设置首页、分类、搜索全部纳入 Nav3 单栈；新增 `SettingsCategory`、`SettingsSearch` 路由，分类点击与搜索提交改为标准 push/pop。
+- **层级 sibling 过渡**：`SettingsNavHierarchyPolicy` 统一管理 settings 子树深度与父子关系，子树内相邻 push/pop 均走同一套 iOS push 动效，不再与底栏 sibling 混用。
+- **删除废弃实现**：移除 `SettingsRootDrillDownNavigator`、`SettingsRootCategoryTransitionPolicy` 及平板 `TabletSettingsLayout` 的 `activeDetail` 本地导航。
+
+#### iOS Settings 风格 push 动效
+- **专用过渡类型**：新增 `SETTINGS_IOS_PUSH_FORWARD` / `SETTINGS_IOS_PUSH_POP`，新页全宽右推入、旧页 parallax（≈0.33）左移，更接近 iOS UINavigationController。
+- **预测返回同源**：`BiliPaiIosPushPredictiveBackAnimation` 无 scale/圆角，手势中纯横滑 + 底层 parallax；提交 pop 与预测手势视觉一致，消除此前 SCALE 预览 vs BOTTOM_BAR 提交的分裂。
+- **退出设置到主页**：Settings → MainHost 仍走全局 `CLASSIC_CARD`，不纳入 iOS push 子树。
+
+#### 设置 UI 重设计
+- **首页**：Large Title「设置」+ 可点击搜索入口 + 四分类 icon bubble 卡片 + 关于区分组下沉。
+- **分类页 / 搜索页**：独立 Nav 页面（`SettingsCategoryScreen`、`SettingsSearchScreen`），搜索结果直达子页 push。
+- **共享 scaffold**：新增 `SettingsVisualSpec`、`SettingsPageScaffold`；首页、搜索、技巧、权限等页已统一 Large Title → Inline Title 与分组间距规范。
+
+#### 平板分栏
+- **`SettingsTabletShell`**：Nav 栈驱动左栏分类高亮 + 右栏当前 entry 内容；`AppNavigation` 中 settings 子树全部路由（含插件、WebDAV、分享等）经 `SettingsTabletEntry` 包裹，与手机共用 iOS push 预测返回体验。
+
+#### 测试
+- 新增/迁移 `SettingsNavHierarchyPolicyTest`、`SettingsIosPushTransitionPolicyTest` 等 policy 测试；更新 Nav entry provider 与 content transform 结构测试。
+
+---
+
+## v9.8.8 (2026-07-07)
+
+### 版本信息
+- 版本号从 `9.8.7` 升级到 `9.8.8`，`versionCode` 从 `246` 升级到 `247`。
+
+### 更新内容
+
+#### 液态玻璃滑动性能
+- **切断底栏无效重组**：删除贯穿底栏四层却从未消费的 `scrollOffset` 死参数，移除 `AppNavigation` 对滚动偏移的 composition 读取，滑动时底栏子树不再每帧重组。
+- **消除 RenderEffect 每帧分配**：`liquidGlassBackground` 缓存 `RenderEffect`，shader uniform 仍每帧更新，像素输出不变但 GC 压力显著降低。
+- **顶部 chrome 折射延迟读取**：液态玻璃 Tab / slab 的滚动耦合折射改为 draw 阶段读取，保持实时联动、避免逐帧重组，且不引入滑动停止时的折射突跳闪烁。
+- **Header lambda 稳定化**：`headerOffsetProvider` 改为 `remember`，恢复 `iOSHomeHeader` 可跳过性。
+
+#### 视频卡片过渡
+- **移除原生过渡层**：删除 `NativeVideoCardTransition` 控制器/覆盖视图/策略及其测试，统一走 Compose 过渡与 backdrop 模糊链路。
+- **motionTier 驱动过渡背景**：`VideoCardTransitionBackgroundPolicy` 接入 `motionTierProvider`，过渡背景按运动档位降级，减少低性能设备上的模糊开销。
+- **返回落位与共享边界修复**：修复封面共享边界与播放器容器冲突导致的返回落位动画缺失；完整进入后返回、横幅卡片返回、分区/分类来源转场等多条路径对齐。
+- **背景模糊稳定性**：稳定返回背景模糊状态，优化打断表现与模糊层级；调整预测返回背景时长与壳层背景透明度。
+
+#### 视频详情 Tab 与指示器
+- **顶部指示器实时同步**：Tab 指示器与 Pager 滑动、拖拽状态对齐，修复 settle 后重复播放 slide 的问题。
+- **分段控件物理回弹**：Tab 指示器增加物理 settle 回弹，拖拽切换与液态玻璃复用体验更一致。
+
+#### 首页与分区
+- **分区入口兜底**：修复分区入口与一级分区兜底逻辑。
+- **分类卡片转场来源**：修正首页分类与分区视频卡片的转场来源 metadata。
+
+---
+
 ## v9.8.6 (2026-06-30)
 
 ### 版本信息

@@ -1372,19 +1372,21 @@ internal fun Modifier.homeTopChromeSurface(
         renderMode = renderMode,
         preferFlatGlass = style.preferFlatGlass
     )
-    // 滑动时冻结折射参数，避免逐帧偏移让整个顶部材质树持续重组。
-    val scrollOffset = if (isScrolling) {
-        0f
-    } else {
+    val isDarkTheme = isSystemInDarkTheme()
+    // [Optimization] 将滚动读取延迟到 draw 阶段:在 drawBackdrop 的 effects/onDrawSurface 与
+    // liquidGlassBackground 的 graphicsLayer 内读取 LocalHomeScrollOffset,折射保持实时联动却不
+    // 触发逐帧重组,同时避免"冻结滚动耦合"会在滑动停止瞬间产生的折射突跳(停止闪烁)。
+    val scrollCoupledOffsetProvider: () -> Float = {
         scrollState.floatValue * resolvedTuning.scrollCoupledRefractionAmount
     }
-    val backdropSpec = resolveHomeTopChromeBackdropSpec(
+    // 滚动无关的基线(scrollOffset = 0);滚动耦合增量在 draw 阶段按需叠加。
+    val baseBackdropSpec = resolveHomeTopChromeBackdropSpec(
         tuning = resolvedTuning,
-        scrollOffset = scrollOffset,
-        isDarkTheme = isSystemInDarkTheme(),
+        scrollOffset = 0f,
+        isDarkTheme = isDarkTheme,
         style = style
     )
-    val resolvedSurfaceColor = resolveHomeTopChromeSurfaceColor(surfaceColor, backdropSpec, style)
+    val baseSurfaceColor = resolveHomeTopChromeSurfaceColor(surfaceColor, baseBackdropSpec, style)
     // 匹配 KSU drawBackdrop 路径的模糊半径，确保 LIQUID_GLASS_HAZE 视觉强度一致
     val hazeLiquidBlurRadius = if (isLiquidGlassMode) {
         resolvedTuning.backdropBlurRadius * (0.08f + resolvedTuning.progress * 0.92f)
@@ -1412,8 +1414,14 @@ internal fun Modifier.homeTopChromeSurface(
                         )
                     },
                     onDrawSurface = {
-                        drawRect(resolvedSurfaceColor)
-                        drawRect(Color.White.copy(alpha = backdropSpec.whiteOverlayAlpha))
+                        val drawSpec = resolveHomeTopChromeBackdropSpec(
+                            tuning = resolvedTuning,
+                            scrollOffset = scrollCoupledOffsetProvider(),
+                            isDarkTheme = isDarkTheme,
+                            style = style
+                        )
+                        drawRect(resolveHomeTopChromeSurfaceColor(surfaceColor, drawSpec, style))
+                        drawRect(Color.White.copy(alpha = drawSpec.whiteOverlayAlpha))
                     }
                 )
             } else if (backdrop != null && lensShape != null) {
@@ -1425,18 +1433,30 @@ internal fun Modifier.homeTopChromeSurface(
                             resolvedTuning.backdropBlurRadius *
                                 (0.08f + resolvedTuning.progress * 0.92f)
                         )
-                        if (backdropSpec.refractionAmount > 0.5f) {
+                        val lensSpec = resolveHomeTopChromeBackdropSpec(
+                            tuning = resolvedTuning,
+                            scrollOffset = scrollCoupledOffsetProvider(),
+                            isDarkTheme = isDarkTheme,
+                            style = style
+                        )
+                        if (lensSpec.refractionAmount > 0.5f) {
                             lens(
                                 refractionHeight = resolvedTuning.refractionHeight,
-                                refractionAmount = backdropSpec.refractionAmount,
+                                refractionAmount = lensSpec.refractionAmount,
                                 depthEffect = style.depthEffect && resolvedTuning.depthEffectEnabled,
                                 chromaticAberration = resolvedTuning.chromaticAberrationAmount > 0.01f
                             )
                         }
                     },
                     onDrawSurface = {
-                        drawRect(resolvedSurfaceColor)
-                        drawRect(Color.White.copy(alpha = backdropSpec.whiteOverlayAlpha))
+                        val drawSpec = resolveHomeTopChromeBackdropSpec(
+                            tuning = resolvedTuning,
+                            scrollOffset = scrollCoupledOffsetProvider(),
+                            isDarkTheme = isDarkTheme,
+                            style = style
+                        )
+                        drawRect(resolveHomeTopChromeSurfaceColor(surfaceColor, drawSpec, style))
+                        drawRect(Color.White.copy(alpha = drawSpec.whiteOverlayAlpha))
                     }
                 )
             } else if (backdrop != null) {
@@ -1450,8 +1470,14 @@ internal fun Modifier.homeTopChromeSurface(
                         )
                     },
                     onDrawSurface = {
-                        drawRect(resolvedSurfaceColor)
-                        drawRect(Color.White.copy(alpha = backdropSpec.whiteOverlayAlpha))
+                        val drawSpec = resolveHomeTopChromeBackdropSpec(
+                            tuning = resolvedTuning,
+                            scrollOffset = scrollCoupledOffsetProvider(),
+                            isDarkTheme = isDarkTheme,
+                            style = style
+                        )
+                        drawRect(resolveHomeTopChromeSurfaceColor(surfaceColor, drawSpec, style))
+                        drawRect(Color.White.copy(alpha = drawSpec.whiteOverlayAlpha))
                     }
                 )
             } else {
@@ -1473,7 +1499,7 @@ internal fun Modifier.homeTopChromeSurface(
                         ) {
                             blurredEdgeTreatment = resolveUnifiedBlurredEdgeTreatment(shape)
                         }
-                        .background(resolvedSurfaceColor, shape)
+                        .background(baseSurfaceColor, shape)
                 } else {
                     this
                         .hazeEffect(
@@ -1488,18 +1514,18 @@ internal fun Modifier.homeTopChromeSurface(
                         }
                         .liquidGlassBackground(
                             refractIntensity = hazeRefractIntensity,
-                            scrollOffsetProvider = { scrollOffset },
-                            backgroundColor = if (isLiquidGlassMode && backdropSpec.whiteOverlayAlpha > 0f) {
-                                val wa = backdropSpec.whiteOverlayAlpha
+                            scrollOffsetProvider = scrollCoupledOffsetProvider,
+                            backgroundColor = if (isLiquidGlassMode && baseBackdropSpec.whiteOverlayAlpha > 0f) {
+                                val wa = baseBackdropSpec.whiteOverlayAlpha
                                 // 合成白色叠加层，匹配 drawBackdrop 的 drawRect(resolvedSurfaceColor) + drawRect(Color.White(wa))
                                 Color(
-                                    alpha = resolvedSurfaceColor.alpha + wa * (1f - resolvedSurfaceColor.alpha),
-                                    red = wa + (1f - wa) * resolvedSurfaceColor.red,
-                                    green = wa + (1f - wa) * resolvedSurfaceColor.green,
-                                    blue = wa + (1f - wa) * resolvedSurfaceColor.blue
+                                    alpha = baseSurfaceColor.alpha + wa * (1f - baseSurfaceColor.alpha),
+                                    red = wa + (1f - wa) * baseSurfaceColor.red,
+                                    green = wa + (1f - wa) * baseSurfaceColor.green,
+                                    blue = wa + (1f - wa) * baseSurfaceColor.blue
                                 )
                             } else {
-                                resolvedSurfaceColor
+                                baseSurfaceColor
                             }
                         )
                 }

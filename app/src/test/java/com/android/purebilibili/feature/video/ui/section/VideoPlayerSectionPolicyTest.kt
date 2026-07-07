@@ -1556,4 +1556,44 @@ class VideoPlayerSectionPolicyTest {
 
         assertTrue(dragStartBlock.contains("if (isLongPressing || longPressSpeedLocked)"))
     }
+
+    @Test
+    fun returnCoverPresentation_usesSharedBoundsDuringForcedReturn() {
+        val spec = resolveVideoPlayerEntryPresentationSpec(
+            shouldKeepCoverForManualStart = false,
+            forceCoverDuringReturnAnimation = true,
+            isVerticalVideo = false,
+            targetMode = com.android.purebilibili.core.ui.transition.VideoSharedTransitionTargetMode.InlinePlayer
+        )
+
+        assertTrue(spec.coverUsesSharedBounds)
+        assertFalse(spec.fillCoverViewport)
+        assertFalse(spec.showManualStartPlayButton)
+    }
+
+    @Test
+    fun returnCoverPresentation_usesSharedBoundsForManualStart() {
+        val spec = resolveVideoPlayerEntryPresentationSpec(
+            shouldKeepCoverForManualStart = true,
+            forceCoverDuringReturnAnimation = false,
+            isVerticalVideo = false,
+            targetMode = com.android.purebilibili.core.ui.transition.VideoSharedTransitionTargetMode.InlinePlayer
+        )
+
+        assertTrue(spec.coverUsesSharedBounds)
+        assertTrue(spec.showManualStartPlayButton)
+    }
+
+    @Test
+    fun returnCoverPresentation_doesNotUseSharedBoundsForNormalPlayback() {
+        val spec = resolveVideoPlayerEntryPresentationSpec(
+            shouldKeepCoverForManualStart = false,
+            forceCoverDuringReturnAnimation = false,
+            isVerticalVideo = false,
+            targetMode = com.android.purebilibili.core.ui.transition.VideoSharedTransitionTargetMode.InlinePlayer
+        )
+
+        assertFalse(spec.coverUsesSharedBounds)
+        assertFalse(spec.showManualStartPlayButton)
+    }
 }

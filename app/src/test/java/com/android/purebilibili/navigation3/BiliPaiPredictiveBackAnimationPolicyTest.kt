@@ -70,6 +70,14 @@ class BiliPaiPredictiveBackAnimationPolicyTest {
     }
 
     @Test
+    fun scalePredictiveBack_doesNotDrawTargetPageScrim() {
+        val source = scalePredictiveBackSource()
+
+        assertFalse(source.contains("drawRect(color = Color.Black"))
+        assertFalse(source.contains("dynamicAlpha"))
+    }
+
+    @Test
     fun classicCardRoute_aospStyle_usesAospHandler() {
         val handler = resolveBiliPaiPredictiveBackAnimationHandler(
             routeTransition = BiliPaiNavRouteTransition.CLASSIC_CARD,

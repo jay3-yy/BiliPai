@@ -220,6 +220,8 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertTrue(searchBranch.contains("isReturningFromVideoDetail = navigation3ReturnSession.isReturningFromDetail"))
         assertTrue(searchBranch.contains("isQuickReturningFromVideoDetail ="))
         assertTrue(searchBranch.contains("navigation3ReturnSession.isQuickReturnFromDetail"))
+        assertTrue(searchBranch.contains("onVideoDetailReturnAnimationConsumed ="))
+        assertTrue(searchBranch.contains("sourceRoute = ScreenRoutes.Search.route"))
     }
 
     @Test

@@ -2246,8 +2246,6 @@ fun FrostedBottomBar(
     itemColorIndices: Map<String, Int> = emptyMap(),
     dynamicUnreadCount: Int = 0,
     onToggleSidebar: (() -> Unit)? = null,
-    // [NEW] Scroll offset for liquid glass refraction effect
-    scrollOffset: Float = 0f,
     // [NEW] LayerBackdrop for real background refraction (captures content behind the bar)
     backdrop: LayerBackdrop? = null,
     miuixBackdrop: MiuixLayerBackdrop? = null,
@@ -2278,9 +2276,7 @@ fun FrostedBottomBar(
                 onSearchClick = onSearchClick,
                 onSearchKeywordSubmit = onSearchKeywordSubmit,
                 searchLaunchKey = searchLaunchKey,
-                onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-                scrollOffset = scrollOffset,
-                motionTier = motionTier,
+                onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,                motionTier = motionTier,
                 isTransitionRunning = isTransitionRunning,
                 forceLowBlurBudget = forceLowBlurBudget,
                 isFeedScrollInProgress = isFeedScrollInProgress,
@@ -2303,9 +2299,7 @@ fun FrostedBottomBar(
                 miuixBackdrop = miuixBackdrop,
                 homeSettings = homeSettings,
                 onSearchClick = onSearchClick,
-                onSearchKeywordSubmit = onSearchKeywordSubmit,
-                scrollOffset = scrollOffset,
-                motionTier = motionTier,
+                onSearchKeywordSubmit = onSearchKeywordSubmit,                motionTier = motionTier,
                 isTransitionRunning = isTransitionRunning,
                 forceLowBlurBudget = forceLowBlurBudget,
                 isFeedScrollInProgress = isFeedScrollInProgress,
@@ -2380,9 +2374,7 @@ fun FrostedBottomBar(
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,
             searchLaunchKey = searchLaunchKey,
-            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-            scrollOffset = scrollOffset,
-            isFeedScrollInProgress = isFeedScrollInProgress,
+            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,            isFeedScrollInProgress = isFeedScrollInProgress,
             uiSkinDecoration = uiSkinDecoration
         )
         return
@@ -2405,7 +2397,6 @@ fun FrostedBottomBar(
         homeSettings = homeSettings,
         onSearchClick = onSearchClick,
         onSearchKeywordSubmit = onSearchKeywordSubmit,
-        scrollOffset = scrollOffset,
         motionTier = motionTier,
         isTransitionRunning = isTransitionRunning,
         forceLowBlurBudget = forceLowBlurBudget,
@@ -2432,9 +2423,7 @@ private fun MaterialBottomBar(
     onSearchClick: () -> Unit,
     onSearchKeywordSubmit: (String) -> Unit,
     searchLaunchKey: Int = 0,
-    onSearchLaunchTransitionFinished: (Int) -> Unit = {},
-    scrollOffset: Float,
-    motionTier: MotionTier,
+    onSearchLaunchTransitionFinished: (Int) -> Unit = {},    motionTier: MotionTier,
     isTransitionRunning: Boolean,
     forceLowBlurBudget: Boolean,
     isFeedScrollInProgress: Boolean = false,
@@ -2525,9 +2514,7 @@ private fun MaterialBottomBar(
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,
             searchLaunchKey = searchLaunchKey,
-            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-            scrollOffset = scrollOffset,
-            isFeedScrollInProgress = isFeedScrollInProgress,
+            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,            isFeedScrollInProgress = isFeedScrollInProgress,
             uiSkinDecoration = uiSkinDecoration
         )
         return
@@ -2687,9 +2674,7 @@ private fun MiuixBottomBar(
     onSearchClick: () -> Unit,
     onSearchKeywordSubmit: (String) -> Unit,
     searchLaunchKey: Int = 0,
-    onSearchLaunchTransitionFinished: (Int) -> Unit = {},
-    scrollOffset: Float,
-    motionTier: MotionTier,
+    onSearchLaunchTransitionFinished: (Int) -> Unit = {},    motionTier: MotionTier,
     isTransitionRunning: Boolean,
     forceLowBlurBudget: Boolean,
     isFeedScrollInProgress: Boolean = false,
@@ -2775,9 +2760,7 @@ private fun MiuixBottomBar(
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,
             searchLaunchKey = searchLaunchKey,
-            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,
-            scrollOffset = scrollOffset,
-            isFeedScrollInProgress = isFeedScrollInProgress,
+            onSearchLaunchTransitionFinished = onSearchLaunchTransitionFinished,            isFeedScrollInProgress = isFeedScrollInProgress,
             uiSkinDecoration = uiSkinDecoration
         )
         return
@@ -3027,7 +3010,6 @@ private fun KernelSuAlignedBottomBar(
     onSearchKeywordSubmit: (String) -> Unit = {},
     searchLaunchKey: Int = 0,
     onSearchLaunchTransitionFinished: (Int) -> Unit = {},
-    scrollOffset: Float = 0f,
     isFeedScrollInProgress: Boolean = false,
     uiSkinDecoration: BottomBarUiSkinDecoration? = null
 ) {

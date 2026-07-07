@@ -20,6 +20,7 @@ import com.android.purebilibili.core.plugin.json.JsonRulePlugin
 import com.android.purebilibili.core.plugin.json.Rule
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.components.IOSAdaptiveTextField
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
@@ -113,20 +114,19 @@ fun JsonPluginEditorContent(
                     Text("基本信息", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    OutlinedTextField(
+                    IOSAdaptiveTextField(
                         value = name,
                         onValueChange = onNameChange,
-                        label = { Text("插件名称") },
-                        modifier = Modifier.fillMaxWidth()
+                        label = "插件名称"
                     )
                     
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    OutlinedTextField(
+                    IOSAdaptiveTextField(
                         value = description,
                         onValueChange = onDescriptionChange,
-                        label = { Text("插件描述") },
-                        modifier = Modifier.fillMaxWidth(),
+                        label = "插件描述",
+                        singleLine = false,
                         minLines = 2
                     )
                 }
@@ -271,15 +271,14 @@ private fun RuleEditor(
             )
             
             // 值输入
-            OutlinedTextField(
+            IOSAdaptiveTextField(
                 value = value,
                 onValueChange = { 
                     value = it
                     onUpdate(rule.copy(value = JsonPrimitive(it)))
                 },
-                label = { Text("值") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                label = "值",
+                singleLine = true
             )
             
             // 动作选择

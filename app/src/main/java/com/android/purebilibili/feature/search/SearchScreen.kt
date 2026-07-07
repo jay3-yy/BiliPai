@@ -42,7 +42,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 //  Cupertino Icons - iOS SF Symbols 风格图标
@@ -60,7 +60,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
@@ -100,6 +99,7 @@ import com.android.purebilibili.core.ui.components.shouldUseNativeMiuixSearchBar
 import top.yukonga.miuix.kmp.basic.InputField
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard  //  使用首页卡片
 import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
+import com.android.purebilibili.feature.home.resolveReturnAnimationSuppressionDurationMs
 import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.store.SettingsManager  //  读取动画设置
 import com.android.purebilibili.data.repository.SearchOrder
@@ -160,6 +160,18 @@ internal fun resolveSearchTopBarLayoutSpec(): SearchTopBarLayoutSpec {
         placeholderMaxLines = 1
     )
 }
+
+internal const val SEARCH_TOP_BAR_VERTICAL_PADDING_DP = 16
+
+internal fun resolveSearchTopBarRowMinHeightDp(
+    inputHeightDp: Int,
+    verticalPaddingDp: Int = SEARCH_TOP_BAR_VERTICAL_PADDING_DP
+): Int = maxOf(64, inputHeightDp + verticalPaddingDp)
+
+internal fun shouldOmitSearchInputLeadingIcon(
+    uiPreset: UiPreset,
+    usesMiuixSearchInput: Boolean
+): Boolean = uiPreset == UiPreset.MD3 && !usesMiuixSearchInput
 
 internal fun resolveSearchTopBarHeaderColor(
     surfaceColor: Color,
@@ -350,6 +362,17 @@ internal fun resolveSearchFilterTabs(): List<SearchType> {
     )
 }
 
+internal fun resolveSearchDefaultPlaceholder(): String {
+    return "搜索视频、番剧、影视、直播、UP主、专栏..."
+}
+
+internal fun resolveSearchUpUserTypeFilterLabel(userType: SearchUserType): String {
+    return when (userType) {
+        SearchUserType.ALL -> "用户类型"
+        else -> userType.displayName
+    }
+}
+
 internal fun resolveSearchTypeForPagerPage(
     page: Int,
     tabs: List<SearchType> = resolveSearchFilterTabs()
@@ -507,7 +530,8 @@ fun SearchScreen(
     entryMotionKey: Int = 0,
     onEntryMotionConsumed: (Int) -> Unit = {},
     isReturningFromVideoDetail: Boolean = false,
-    isQuickReturningFromVideoDetail: Boolean = false
+    isQuickReturningFromVideoDetail: Boolean = false,
+    onVideoDetailReturnAnimationConsumed: () -> Unit = {}
 ) {
     val uiPreset = LocalUiPreset.current
     val androidNativeVariant = LocalAndroidNativeVariant.current
@@ -688,8 +712,22 @@ fun SearchScreen(
         isSearching = state.isSearching,
         startupSettled = startupSettled
     )
-    val effectiveCardTransitionEnabled =
-        cardTransitionEnabled && effectiveSearchMotionBudget == SearchMotionBudget.FULL
+    val effectiveCardTransitionEnabled = resolveEffectiveSearchCardTransitionEnabled(
+        cardTransitionEnabled = cardTransitionEnabled,
+        motionBudget = effectiveSearchMotionBudget,
+        isReturningFromVideoDetail = isReturningFromVideoDetail
+    )
+    val returnAnimationSuppressionDurationMs = resolveReturnAnimationSuppressionDurationMs(
+        isTabletLayout = windowSizeClass.isTablet,
+        cardAnimationEnabled = cardAnimationEnabled,
+        cardTransitionEnabled = cardTransitionEnabled,
+        isQuickReturnFromDetail = isQuickReturningFromVideoDetail
+    )
+    LaunchedEffect(returnAnimationSuppressionDurationMs, isReturningFromVideoDetail) {
+        if (!isReturningFromVideoDetail) return@LaunchedEffect
+        kotlinx.coroutines.delay(returnAnimationSuppressionDurationMs)
+        onVideoDetailReturnAnimationConsumed()
+    }
     val forceLowBudgetSearchHeaderBlur = remember(state.isSearching, isSearchResultsScrolling) {
         shouldForceLowBudgetSearchHeaderBlur(
             isSearching = state.isSearching,
@@ -817,7 +855,10 @@ fun SearchScreen(
                                             text = easterEggMsg,
                                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                                             fontSize = 14.sp,
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = FontWeight.Medium,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                         )
                                     }
                                 }
@@ -960,6 +1001,7 @@ fun SearchScreen(
                                             showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
                                             coverAspectRatio = cardLayout.coverAspectRatio,
                                             compactMetadata = cardLayout.compactMetadata,
+                                            titleMinLines = 1,
                                             highlightedTitle = highlightedTitle,
                                             showOnlineCount = showOnlineCount,
                                             modifier = Modifier,
@@ -1154,6 +1196,7 @@ fun SearchScreen(
                                     ) { index, bangumiItem ->
                                         BangumiSearchResultCard(
                                             item = bangumiItem,
+                                            categoryLabel = targetSearchType.displayName,
                                             appearance = genericResultCardAppearance,
                                             onClick = {
                                                 if (bangumiItem.seasonId > 0) {
@@ -1180,6 +1223,30 @@ fun SearchScreen(
                                                     modifier = Modifier.size(24.dp),
                                                     strokeWidth = 2.dp
                                                 )
+                                            }
+                                        }
+                                    }
+
+                                    if (!pageResultState.isSearching && pageResultState.bangumiResults.isEmpty() && pageResultState.error == null && pageEmptyStateCopy != null) {
+                                        item {
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Text(
+                                                        text = pageEmptyStateCopy.title,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        fontSize = 15.sp,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(
+                                                        text = pageEmptyStateCopy.subtitle,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                                        fontSize = 13.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -1517,7 +1584,7 @@ fun SearchScreen(
                 },
                 onClearQuery = { viewModel.onQueryChange("") },
                 focusRequester = searchFocusRequester,  //  传递 focusRequester
-                placeholder = state.defaultSearchHint.ifBlank { "搜索视频、UP主..." },
+                placeholder = state.defaultSearchHint.ifBlank { resolveSearchDefaultPlaceholder() },
                 suggestedKeyword = state.defaultSearchHint,
                 autoFocusEnabled = shouldAutoFocusSearchField(
                     startupSettled = startupSettled,
@@ -1603,7 +1670,7 @@ fun SearchTopBar(
     onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onClearQuery: () -> Unit,
-    placeholder: String = "搜索视频、UP主...",
+    placeholder: String = resolveSearchDefaultPlaceholder(),
     suggestedKeyword: String = "",
     focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
     autoFocusEnabled: Boolean = true,
@@ -1620,6 +1687,13 @@ fun SearchTopBar(
         resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
     }
     val usesMiuixSearchInput = shouldUseNativeMiuixSearchBar(uiPreset, androidNativeVariant)
+    val omitSearchInputLeadingIcon = shouldOmitSearchInputLeadingIcon(
+        uiPreset = uiPreset,
+        usesMiuixSearchInput = usesMiuixSearchInput
+    )
+    val topBarRowMinHeightDp = remember(chromeSpec.inputHeightDp) {
+        resolveSearchTopBarRowMinHeightDp(chromeSpec.inputHeightDp)
+    }
     val searchInteractionSource = remember { MutableInteractionSource() }
     val isSearchFieldFocused by searchInteractionSource.collectIsFocusedAsState()
     val backIcon = rememberAppBackIcon()
@@ -1646,13 +1720,6 @@ fun SearchTopBar(
             isFocused = isSearchFieldFocused
         }
     }
-    
-    //  边框宽度动画
-    val borderWidth by animateDpAsState(
-        targetValue = if (isFocused) 2.dp else 0.dp,
-        animationSpec = if (reducedMotionBudget) snap() else tween(durationMillis = 200),
-        label = "borderWidth"
-    )
     
     //  搜索图标颜色动画
     val searchIconColor by animateColorAsState(
@@ -1721,7 +1788,7 @@ fun SearchTopBar(
             Row(
                 modifier = Modifier
                     .responsiveContentWidth()
-                    .height(64.dp)
+                    .heightIn(min = topBarRowMinHeightDp.dp)
                     .padding(horizontal = 12.dp, vertical = 8.dp)
                     .padding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal).asPaddingValues()),
                 verticalAlignment = Alignment.CenterVertically
@@ -1749,71 +1816,67 @@ fun SearchTopBar(
                         onExpandedChange = {},
                         modifier = Modifier
                             .weight(1f)
-                            .height(chromeSpec.inputHeightDp.dp),
+                            .defaultMinSize(minHeight = chromeSpec.inputHeightDp.dp),
                         label = placeholder,
                         interactionSource = searchInteractionSource,
                     )
                 } else {
-                    //  搜索输入框 (带 Focus 边框动画)
-                    Row(
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
                         modifier = Modifier
                             .weight(1f)
-                            .height(chromeSpec.inputHeightDp.dp)
-                            .clip(RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp))
-                            .border(
-                                width = borderWidth,
-                                color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp)
+                            .defaultMinSize(minHeight = chromeSpec.inputHeightDp.dp)
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { isFocused = it.isFocused },
+                        placeholder = {
+                            Text(
+                                text = placeholder,
+                                maxLines = layoutSpec.placeholderMaxLines,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodyLarge
                             )
-                            .background(
-                                if (uiPreset == UiPreset.MD3) {
-                                    AppSurfaceTokens.surfaceContainerHigh()
-                                } else {
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                }
-                            )
-                            .padding(horizontal = chromeSpec.inputHorizontalPaddingDp.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        BasicTextField(
-                            value = query,
-                            onValueChange = onQueryChange,
-                            modifier = Modifier
-                                .weight(1f)
-                                .focusRequester(focusRequester)
-                                .onFocusChanged { isFocused = it.isFocused },
-                            textStyle = TextStyle(
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 15.sp
-                            ),
-                            singleLine = true,
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(
-                                onSearch = {
-                                    if (canSubmit) {
-                                        onSearch(resolvedSubmitKeyword)
-                                    }
-                                }
-                            ),
-                            decorationBox = { inner ->
-                                Box(contentAlignment = Alignment.CenterStart) {
-                                    if (query.isEmpty()) {
-                                        Text(
-                                            placeholder,
-                                            style = TextStyle(
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.5f),
-                                                fontSize = 15.sp
-                                            ),
-                                            maxLines = layoutSpec.placeholderMaxLines,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    inner()
+                        },
+                        leadingIcon = if (omitSearchInputLeadingIcon) {
+                            null
+                        } else {
+                            {
+                                Icon(
+                                    searchIcon,
+                                    contentDescription = searchLabel,
+                                    tint = searchIconColor,
+                                    modifier = Modifier.size(chromeSpec.actionIconSizeDp.dp)
+                                )
+                            }
+                        },
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        shape = RoundedCornerShape(chromeSpec.inputCornerRadiusDp.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = Color.Transparent,
+                            focusedContainerColor = if (uiPreset == UiPreset.MD3) {
+                                AppSurfaceTokens.surfaceContainerHigh()
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            },
+                            unfocusedContainerColor = if (uiPreset == UiPreset.MD3) {
+                                AppSurfaceTokens.surfaceContainerHigh()
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            }
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                if (canSubmit) {
+                                    onSearch(resolvedSubmitKeyword)
                                 }
                             }
                         )
-                    }
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(chromeSpec.horizontalGapDp.dp))
@@ -1874,46 +1937,33 @@ fun HistoryChip(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
     val historyIcon = rememberAppHistoryIcon()
     val clearIcon = rememberAppClearIcon()
     val deleteLabel = stringResource(R.string.common_delete)
-    val chromeSpec = remember(uiPreset, androidNativeVariant) {
-        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
-    }
-    Surface(
+    androidx.compose.material3.InputChip(
+        selected = false,
         onClick = onClick,
-        color = if (uiPreset == UiPreset.MD3) {
-            AppSurfaceTokens.surfaceContainerHigh()
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        label = {
+            Text(
+                text = keyword,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         },
-        shape = RoundedCornerShape(chromeSpec.chipCornerRadiusDp.dp),
-        tonalElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .height(chromeSpec.chipHeightDp.dp)
-                .padding(start = chromeSpec.chipHorizontalPaddingDp.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        leadingIcon = {
             Icon(
                 historyIcon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.6f),
                 modifier = Modifier.size(16.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = keyword,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 13.sp,
-                maxLines = 1
-            )
+        },
+        trailingIcon = {
             IconButton(
                 onClick = onDelete,
-                modifier = Modifier.size(28.dp)
+                modifier = Modifier.size(24.dp)
             ) {
                 Icon(
                     clearIcon,
@@ -1923,7 +1973,7 @@ fun HistoryChip(
                 )
             }
         }
-    }
+    )
 }
 
 // 保留旧版 HistoryItem 用于兼容 (可选保留)
@@ -2230,10 +2280,12 @@ private fun SearchResultTypeTabRow(
         contentColor = MaterialTheme.colorScheme.onSurface,
         divider = {},
         indicator = { tabPositions ->
-            SearchPagerTabIndicator(
-                tabPositions = tabPositions,
-                pagerState = pagerState
-            )
+            if (tabPositions.isNotEmpty()) {
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedPage.coerceIn(tabPositions.indices)]),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     ) {
         tabs.forEachIndexed { index, type ->
@@ -2284,36 +2336,6 @@ private fun rememberSearchHighlightedTitle(video: VideoItem): androidx.compose.u
             }
         }
     }
-}
-
-@Composable
-private fun SearchPagerTabIndicator(
-    tabPositions: List<TabPosition>,
-    pagerState: PagerState
-) {
-    if (tabPositions.isEmpty()) return
-    val currentPage = pagerState.currentPage.coerceIn(tabPositions.indices)
-    val offsetFraction = pagerState.currentPageOffsetFraction
-    val targetPage = (currentPage + offsetFraction.compareTo(0f))
-        .coerceIn(tabPositions.indices)
-    val progress = kotlin.math.abs(offsetFraction).coerceIn(0f, 1f)
-    val current = tabPositions[currentPage]
-    val target = tabPositions[targetPage]
-    val indicatorLeft = current.left + (target.left - current.left) * progress
-    val indicatorWidth = current.width + (target.width - current.width) * progress
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .zIndex(-1f)
-            .wrapContentSize(Alignment.BottomStart)
-            .offset(x = indicatorLeft)
-            .width(indicatorWidth)
-            .padding(horizontal = 3.dp, vertical = 6.dp)
-            .height(32.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.72f))
-    )
 }
 
 /**
@@ -2512,7 +2534,7 @@ fun SearchFilterBar(
                 if (SearchFilterControl.UP_USER_TYPE in filterControls) {
                 Box {
                     FilterMenuChip(
-                        text = currentUpUserType.displayName,
+                        text = resolveSearchUpUserTypeFilterLabel(currentUpUserType),
                         highlighted = currentUpUserType != SearchUserType.ALL,
                         onClick = { showUpUserTypeMenu = true }
                     )
@@ -2566,45 +2588,26 @@ private fun FilterMenuChip(
     highlighted: Boolean,
     onClick: () -> Unit
 ) {
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
-    val chromeSpec = remember(uiPreset, androidNativeVariant) {
-        resolveSearchChromeVisualSpec(uiPreset, androidNativeVariant)
-    }
     val chevronIcon = rememberAppChevronDownIcon()
-    Surface(
+    androidx.compose.material3.FilterChip(
+        selected = highlighted,
         onClick = onClick,
-        color = if (highlighted) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-        } else {
-            if (uiPreset == UiPreset.MD3) {
-                MaterialTheme.colorScheme.surfaceContainerHigh
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-            }
-        },
-        shape = RoundedCornerShape(chromeSpec.chipCornerRadiusDp.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .height(chromeSpec.chipHeightDp.dp)
-                .padding(horizontal = chromeSpec.chipHorizontalPaddingDp.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        label = {
             Text(
                 text = text,
                 fontSize = 13.sp,
-                color = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.width(4.dp))
+        },
+        trailingIcon = {
             Icon(
                 chevronIcon,
                 contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                modifier = Modifier.size(16.dp)
             )
         }
-    }
+    )
 }
 
 @Composable
@@ -2760,7 +2763,7 @@ fun SearchResultCard(
         Text(
             text = video.title,
             maxLines = 2,
-            minLines = 2,
+            minLines = 1,
             overflow = TextOverflow.Ellipsis,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
@@ -2901,7 +2904,7 @@ internal fun UpSearchResultCard(
                         text = cleanedItem.usign,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
@@ -2934,7 +2937,8 @@ internal fun UpSearchResultCard(
 internal fun BangumiSearchResultCard(
     item: com.android.purebilibili.data.model.response.BangumiSearchItem,
     appearance: SearchResultCardAppearance,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    categoryLabel: String? = null
 ) {
     SearchResultCardSurface(
         appearance = appearance,
@@ -2965,6 +2969,20 @@ internal fun BangumiSearchResultCard(
             
             // 番剧信息
             Column(modifier = Modifier.weight(1f)) {
+                if (!categoryLabel.isNullOrBlank()) {
+                    androidx.compose.material3.AssistChip(
+                        onClick = {},
+                        enabled = false,
+                        label = {
+                            Text(
+                                text = categoryLabel,
+                                fontSize = 11.sp
+                            )
+                        },
+                        modifier = Modifier.height(24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                }
                 Text(
                     text = item.title,
                     fontSize = 15.sp,
@@ -2982,7 +3000,10 @@ internal fun BangumiSearchResultCard(
                         Text(
                             text = item.seasonTypeName,
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                     }
@@ -2990,7 +3011,9 @@ internal fun BangumiSearchResultCard(
                         Text(
                             text = item.indexShow,
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -3122,7 +3145,9 @@ internal fun LiveSearchResultCard(
                 Text(
                     text = item.uname,
                     fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 
                 Spacer(modifier = Modifier.height(2.dp))
@@ -3132,7 +3157,9 @@ internal fun LiveSearchResultCard(
                     Text(
                         text = "${item.area_v2_parent_name} · ${item.area_v2_name}",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -3289,7 +3316,9 @@ internal fun PhotoSearchResultCard(
 ) {
     val cleaned = remember(item.id, item.title, item.cover) { item.cleanupFields() }
     SearchResultCardSurface(
-        appearance = appearance,
+        appearance = appearance.copy(
+            containerAlpha = appearance.containerAlpha * 0.72f
+        ),
         onClick = null
     ) {
         Row(
@@ -3335,6 +3364,12 @@ internal fun PhotoSearchResultCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "暂不支持打开",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.outline
                 )
             }
         }
@@ -3385,6 +3420,16 @@ internal fun ArticleSearchResultCard(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                if (item.description.isNotBlank()) {
+                    Text(
+                        text = item.description,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 val metaLine = buildString {
                     val publishTime = FormatUtils.formatPublishTime(item.pubTime)

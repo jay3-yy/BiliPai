@@ -332,6 +332,7 @@ fun ElegantVideoCard(
     homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
     coverAspectRatio: Float = 4f / 3f,
     compactMetadata: Boolean = true,
+    titleMinLines: Int = 2,
     highlightedTitle: AnnotatedString? = null,
     showOnlineCount: Boolean = false,
     upFollowerCount: Int? = null,
@@ -959,7 +960,7 @@ fun ElegantVideoCard(
             Text(
                 text = highlightedTitle ?: AnnotatedString(video.title),
                 maxLines = 2,
-                minLines = 2,
+                minLines = titleMinLines,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.Medium,

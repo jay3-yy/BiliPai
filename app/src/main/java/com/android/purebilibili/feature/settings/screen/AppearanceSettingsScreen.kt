@@ -61,6 +61,8 @@ import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
 import com.android.purebilibili.core.ui.blur.BlurIntensity
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor
 import com.android.purebilibili.core.ui.getWindowNavigationBarColor
 import com.android.purebilibili.core.ui.rememberAppBackIcon
@@ -79,8 +81,6 @@ import com.github.skydoves.colorpicker.compose.HsvColorPicker
 import com.github.skydoves.colorpicker.compose.HueSlider
 import com.github.skydoves.colorpicker.compose.SaturationSlider
 import com.github.skydoves.colorpicker.compose.rememberColorPickerController
-import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar as MiuixSmallTopAppBar
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
@@ -133,74 +133,37 @@ fun AppearanceSettingsScreen(
         }
     }
     
-    val useMaterialAndroidChrome =
-        state.uiPreset == UiPreset.MD3 && state.androidNativeVariant != AndroidNativeVariant.MIUIX
-
-    if (useMaterialAndroidChrome) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text(screenTitle) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(rememberAppBackIcon(), contentDescription = backLabel)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer())
-                    )
-                )
-            },
-            containerColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer()),
-            contentWindowInsets = WindowInsets(0.dp)
-        ) { padding ->
-            CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
-                AppearanceSettingsContent(
-                    modifier = Modifier.padding(padding),
-                    state = state,
-                    onNavigateToIconSettings = onNavigateToIconSettings,
-                    onNavigateToAnimationSettings = onNavigateToAnimationSettings,
-                    viewModel = viewModel,
-                    context = context,
-                    onAppLanguageChange = { language ->
-                        if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
-                            pendingLanguageRestart = language
-                        }
+    AdaptiveScaffold(
+        topBar = {
+            AdaptiveTopAppBar(
+                title = screenTitle,
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer())
                 )
-            }
-        }
-    } else {
-        MiuixScaffold(
-            topBar = {
-                MiuixSmallTopAppBar(
-                    title = screenTitle,
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(rememberAppBackIcon(), contentDescription = backLabel)
-                        }
-                    },
-                    color = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer())
-                )
-            },
-            containerColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer()),
-            contentWindowInsets = WindowInsets(0.dp)
-        ) { padding ->
-            CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
-                AppearanceSettingsContent(
-                    modifier = Modifier.padding(padding),
-                    state = state,
-                    onNavigateToIconSettings = onNavigateToIconSettings,
-                    onNavigateToAnimationSettings = onNavigateToAnimationSettings,
-                    viewModel = viewModel,
-                    context = context,
-                    onAppLanguageChange = { language ->
-                        if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
-                            pendingLanguageRestart = language
-                        }
+            )
+        },
+        containerColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer()),
+        contentWindowInsets = WindowInsets(0.dp)
+    ) { padding ->
+        CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
+            AppearanceSettingsContent(
+                modifier = Modifier.padding(padding),
+                state = state,
+                onNavigateToIconSettings = onNavigateToIconSettings,
+                onNavigateToAnimationSettings = onNavigateToAnimationSettings,
+                viewModel = viewModel,
+                context = context,
+                onAppLanguageChange = { language ->
+                    if (shouldPromptAppRestartForLanguageChange(state.appLanguage, language)) {
+                        pendingLanguageRestart = language
                     }
-                )
-            }
+                }
+            )
         }
     }
 
@@ -2057,18 +2020,17 @@ private fun Md3CustomColorPickerDialog(
                     )
                 }
 
-                OutlinedTextField(
+                IOSAdaptiveTextField(
                     value = pendingHex,
                     onValueChange = { pendingHex = it.uppercase().take(9) },
-                    label = { Text("HEX") },
+                    label = "HEX",
                     singleLine = true,
                     isError = invalidInput,
                     supportingText = {
                         if (invalidInput) {
                             Text("请输入 #RRGGBB 格式")
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth()
+                    }
                 )
 
                 LazyRow(

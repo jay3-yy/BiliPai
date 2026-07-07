@@ -2,7 +2,6 @@ package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,7 +9,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -21,20 +19,16 @@ import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSTeal
-import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.ui.AdaptiveScaffold
-import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
-import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.animation.EntranceGroup
 import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.ui.components.IOSSectionTitle
-import com.android.purebilibili.core.ui.rememberAppBackIcon
-import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.feature.settings.ui.SettingsLargeTitleHeader
+import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
 import io.github.alexzhirkevich.cupertino.icons.filled.*
 import io.github.alexzhirkevich.cupertino.icons.outlined.*
@@ -51,15 +45,8 @@ private data class TipEntry(
 fun TipsSettingsScreen(
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
     val screenTitle = stringResource(R.string.tips_title)
     val backLabel = stringResource(R.string.common_back)
-    val windowSizeClass = LocalWindowSizeClass.current
-    val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
-        resolveDeviceUiProfile(
-            widthSizeClass = windowSizeClass.widthSizeClass
-        )
-    }
     val contentBottomPadding = resolveBottomSafeAreaPadding(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
         extraBottomPadding = 32.dp
@@ -152,28 +139,14 @@ fun TipsSettingsScreen(
         )
     }
 
-    AdaptiveScaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = screenTitle,
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(rememberAppBackIcon(), contentDescription = backLabel)
-                    }
-                },
-                colors = settingsSubpageTopAppBarColors()
-            )
-        },
-        containerColor = settingsSubpageContainerColor(),
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { padding ->
-        EntranceGroup {
-        LazyColumn(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize(),
-            contentPadding = PaddingValues(bottom = contentBottomPadding)
-        ) {
+    EntranceGroup {
+        SettingsPageScaffold(
+            title = screenTitle,
+            onBack = onBack,
+            backContentDescription = backLabel,
+            bottomContentPadding = contentBottomPadding,
+            header = { SettingsLargeTitleHeader(title = screenTitle) },
+            lazyListContent = {
             item {
                 Box(modifier = Modifier.entrance()) {
                     IOSSectionTitle("基础技巧")
@@ -206,8 +179,8 @@ fun TipsSettingsScreen(
                     TipSection(items = advancedTips)
                 }
             }
-        }
-        }
+        },
+        )
     }
 }
 

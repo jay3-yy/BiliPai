@@ -130,10 +130,10 @@ class NextPlaybackResolverTest {
     }
 
     @Test
-    fun `external playlist navigation should prefer page season before queue`() {
+    fun `external playlist navigation should follow queue instead of page or season`() {
         assertContentEquals(
             listOf(
-                PlaybackNavigationTarget.PAGE_OR_SEASON,
+                PlaybackNavigationTarget.PLAYLIST,
                 PlaybackNavigationTarget.DIRECT_QUEUE
             ),
             resolvePlaybackNavigationTargets(
@@ -147,11 +147,22 @@ class NextPlaybackResolverTest {
     @Test
     fun `external playlist navigation should use queue when no page season target exists`() {
         assertContentEquals(
-            listOf(PlaybackNavigationTarget.DIRECT_QUEUE),
+            listOf(
+                PlaybackNavigationTarget.PLAYLIST,
+                PlaybackNavigationTarget.DIRECT_QUEUE
+            ),
             resolvePlaybackNavigationTargets(
                 strategy = AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST,
                 hasPageOrSeasonTarget = false,
                 hasPlaylistTarget = true
+            )
+        )
+        assertContentEquals(
+            listOf(PlaybackNavigationTarget.DIRECT_QUEUE),
+            resolvePlaybackNavigationTargets(
+                strategy = AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST,
+                hasPageOrSeasonTarget = false,
+                hasPlaylistTarget = false
             )
         )
     }

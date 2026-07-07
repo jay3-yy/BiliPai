@@ -121,6 +121,7 @@ import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.state.rememberVideoPlayerState
+import com.android.purebilibili.feature.video.state.shouldReuseMiniPlayerAtEntry
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlaybackAwake
 import com.android.purebilibili.feature.video.ui.components.ReplyHeader
@@ -285,11 +286,15 @@ internal fun resolveForceCoverOnlyForReturn(
     forceCoverOnlyOnReturn: Boolean,
     isReturningFromDetail: Boolean,
     isExitTransitionInProgress: Boolean,
-    transitionEnabled: Boolean = true
+    transitionEnabled: Boolean = true,
+    isCardReturnExitInProgress: Boolean = false
 ): Boolean {
     if (!transitionEnabled) return false
     // 壳体 sharedBounds 只负责整体落位；返回中仍需要封面压住播放器，避免加载完成后的播放器层缩回卡片。
-    return forceCoverOnlyOnReturn || isReturningFromDetail
+    // isCardReturnExitInProgress: 仅在"存在卡片共享元素配对且本页正在退出"时为真(调用点用
+    // isExitTransitionInProgress && sharedBoundsActive 计算)，使预测式返回手势拖动期间就让封面接管，
+    // 与共享元素 morph 同步；手势取消时 PostExit 回退 → 该值转 false → 封面淡出复原，避免 player↔cover 硬切。
+    return forceCoverOnlyOnReturn || isReturningFromDetail || isCardReturnExitInProgress
 }
 
 internal fun shouldUseReturningVideoDetailVisualState(
@@ -606,12 +611,6 @@ internal fun resolveDanmakuDialogTopReservePx(
     return (playerBottomPx ?: fallbackPlayerBottomPx).coerceAtLeast(0)
 }
 
-internal data class VideoDetailEntryVisualFrame(
-    val contentAlpha: Float,
-    val scrimAlpha: Float,
-    val blurRadiusPx: Float
-)
-
 internal data class VideoDetailRouteSheetMotion(
     val enabled: Boolean,
     val durationMillis: Int,
@@ -809,6 +808,7 @@ private fun VideoDetailRouteSheetHost(
     motion: VideoDetailRouteSheetMotion,
     isFullscreenMode: Boolean,
     backgroundColor: Color,
+    backgroundAlpha: Float = 1f,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
     overlayContent: @Composable BoxScope.() -> Unit
@@ -836,21 +836,14 @@ private fun VideoDetailRouteSheetHost(
                 clip = motion.enabled && frame.cornerDp > 0.01f
                 shape = RoundedCornerShape(frame.cornerDp.dp)
             }
-            .background(if (isFullscreenMode) Color.Black else backgroundColor),
+            .background(
+                if (isFullscreenMode) Color.Black.copy(alpha = backgroundAlpha)
+                else backgroundColor.copy(alpha = backgroundAlpha)
+            ),
     ) {
         content()
         overlayContent()
     }
-}
-
-internal fun resolveVideoDetailEntryVisualFrame(): VideoDetailEntryVisualFrame {
-    // 共享元素模式下，sharedBounds 已经处理视觉过渡，
-    // 额外的 alpha/blur 会与共享元素动画冲突导致闪烁。
-    return VideoDetailEntryVisualFrame(
-        contentAlpha = 1f,
-        scrimAlpha = 0f,
-        blurRadiusPx = 0f
-    )
 }
 
 internal fun shouldApplyPipParamsUpdate(
@@ -1186,6 +1179,41 @@ fun VideoDetailScreen(
     var currentBvid by rememberSaveable(bvid) { mutableStateOf(bvid) }
     var currentBvidCid by rememberSaveable { mutableLongStateOf(0L) }
 
+    val entryRootAnimatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val entryRootSharedTransitionScope = LocalSharedTransitionScope.current
+    val detailShellSharedBoundsEnabledForEntry = shouldUseVideoCardShellContainerTransform(
+        sourceRoute = sourceRouteForSharedElement,
+        transitionEnabled = transitionEnabled,
+        hasSharedTransitionScope = entryRootSharedTransitionScope != null,
+        hasAnimatedVisibilityScope = entryRootAnimatedVisibilityScope != null
+    )
+    val reuseFromMiniPlayerAtEntry = remember(currentBvid, cid, miniPlayerManager) {
+        val manager = miniPlayerManager
+        if (manager == null) {
+            false
+        } else {
+            shouldReuseMiniPlayerAtEntry(
+                isMiniPlayerActive = manager.isActive,
+                miniPlayerBvid = manager.currentBvid,
+                miniPlayerCid = manager.currentCid,
+                hasMiniPlayerInstance = manager.player != null,
+                requestBvid = currentBvid,
+                requestCid = cid
+            )
+        }
+    }
+    val deferVideoDetailEntryLoad = shouldDeferVideoDetailLoadUntilEntryTransitionFinished(
+        transitionEnabled = transitionEnabled,
+        detailShellSharedBoundsEnabled = detailShellSharedBoundsEnabledForEntry,
+        reuseFromMiniPlayerAtEntry = reuseFromMiniPlayerAtEntry,
+    )
+    val entryTransitionFinished = rememberVideoDetailEntryTransitionFinished(
+        deferLoad = deferVideoDetailEntryLoad,
+        sharedTransitionScope = entryRootSharedTransitionScope,
+        animatedVisibilityScope = entryRootAnimatedVisibilityScope,
+        fallbackDurationMillis = homeSharedTransitionMotionSpec.durationMillis,
+    )
+
     fun markSecondaryNavigationLeave(expectedBvid: String = currentBvid) {
         miniPlayerManager?.markLeavingByNavigation(expectedBvid = expectedBvid)
     }
@@ -1301,42 +1329,55 @@ fun VideoDetailScreen(
     }
 
     // 🎭 [性能优化] 进场视觉帧 + 重型组件延迟加载
-    // shell sharedBounds 接管整体 morph 时，内容必须从第一帧就处在最终布局，
-    // 不能再走 isTransitionFinished 门控触发的二级 fadeIn / slide / shrink。
+    // 卡片 shell morph 进场时：loadVideo 与 Tab 内容均等待 entryTransitionFinished，
+    // 但不再叠加二级 fadeIn/slide，避免与 sharedBounds 冲突。
     val shellSharedBoundsLikely = transitionEnabled && !sourceRouteForSharedElement.isNullOrBlank()
-    val entryVisualEnabled = transitionEnabled
-    var isTransitionFinished by remember {
-        mutableStateOf(!entryVisualEnabled || shellSharedBoundsLikely)
+    val entryVisualEnabled = transitionEnabled && !deferVideoDetailEntryLoad && !shellSharedBoundsLikely
+    var isTransitionFinished by remember(deferVideoDetailEntryLoad, entryTransitionFinished, entryVisualEnabled) {
+        mutableStateOf(
+            when {
+                deferVideoDetailEntryLoad -> entryTransitionFinished
+                !transitionEnabled || shellSharedBoundsLikely -> true
+                else -> false
+            }
+        )
     }
     val entryVisualProgress = remember(entryVisualEnabled) {
         Animatable(if (entryVisualEnabled) 0f else 1f)
     }
 
     LaunchedEffect(
+        deferVideoDetailEntryLoad,
+        entryTransitionFinished,
         entryVisualEnabled,
         motionSpec.entryPhaseDurationMillis,
-        shellSharedBoundsLikely
+        shellSharedBoundsLikely,
+        transitionEnabled
     ) {
-        if (!entryVisualEnabled || shellSharedBoundsLikely) {
-            entryVisualProgress.snapTo(1f)
-            isTransitionFinished = true
-            return@LaunchedEffect
+        when {
+            deferVideoDetailEntryLoad -> {
+                entryVisualProgress.snapTo(if (entryTransitionFinished) 1f else 0f)
+                isTransitionFinished = entryTransitionFinished
+            }
+
+            !transitionEnabled || shellSharedBoundsLikely -> {
+                entryVisualProgress.snapTo(1f)
+                isTransitionFinished = true
+            }
+
+            else -> {
+                entryVisualProgress.snapTo(0f)
+                isTransitionFinished = false
+                entryVisualProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = motionSpec.entryPhaseDurationMillis,
+                        easing = FastOutSlowInEasing
+                    )
+                )
+                isTransitionFinished = true
+            }
         }
-
-        entryVisualProgress.snapTo(0f)
-        isTransitionFinished = false
-        entryVisualProgress.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = motionSpec.entryPhaseDurationMillis,
-                easing = FastOutSlowInEasing
-            )
-        )
-        isTransitionFinished = true
-    }
-
-    val entryVisualFrame = remember {
-        resolveVideoDetailEntryVisualFrame()
     }
 
     //  监听评论状态
@@ -1747,16 +1788,29 @@ fun VideoDetailScreen(
     val coverTakeoverBeforeBackDelayMillis = remember {
         resolveCoverTakeoverDelayBeforeBackNavigationMillis()
     }
+    // 预测式返回手势拖动期间(video → card)：本页 AnimatedContent 进入 PostExit(isExitTransitionInProgress)
+    // 且存在共享元素配对(sharedBoundsActive)时，提前让封面接管，避免提交返回瞬间 player→cover 硬切闪烁。
+    // 仅在有卡片可落位(sharedBoundsActive)时启用，普通退出/无共享元素场景保持原行为。
+    val isCardReturnExitInProgress = isExitTransitionInProgress && sharedBoundsActive
     val forceCoverOnlyForReturn = resolveForceCoverOnlyForReturn(
         forceCoverOnlyOnReturn = forceCoverOnlyOnReturn,
         isReturningFromDetail = isReturningFromDetail,
         isExitTransitionInProgress = isExitTransitionInProgress,
-        transitionEnabled = transitionEnabled
+        transitionEnabled = transitionEnabled,
+        isCardReturnExitInProgress = isCardReturnExitInProgress
     )
     val useReturningVideoDetailVisualState = shouldUseReturningVideoDetailVisualState(
         forceCoverOnlyForReturn = forceCoverOnlyForReturn,
         isReturningFromDetail = isReturningFromDetail,
         isExitTransitionInProgress = isExitTransitionInProgress
+    )
+    val shellBackgroundAlpha by animateFloatAsState(
+        targetValue = if (useReturningVideoDetailVisualState && sharedBoundsActive) 0f else 1f,
+        animationSpec = tween(
+            durationMillis = homeSharedTransitionMotionSpec.durationMillis.coerceAtLeast(1),
+            easing = homeSharedTransitionMotionSpec.easing
+        ),
+        label = "shellBackgroundAlpha"
     )
 
     val handleTopBarAction = remember(
@@ -2158,7 +2212,8 @@ fun VideoDetailScreen(
         bvid = currentBvid,
         cid = cid,
         fallbackResumePositionMs = resumePositionMsFromRoute,
-        startPaused = isPortraitFullscreen && !useSharedPortraitPlayer
+        startPaused = isPortraitFullscreen && !useSharedPortraitPlayer,
+        entryTransitionFinished = entryTransitionFinished,
     )
     val shouldKeepVideoScreenAwake by produceState(
         initialValue = shouldKeepVideoPlaybackAwake(
@@ -3678,7 +3733,6 @@ fun VideoDetailScreen(
                                         sortPreferenceScope = sortPreferenceScope,
                                         playerState = playerState,
                                         motionSpec = motionSpec,
-                                        entryVisualFrame = entryVisualFrame,
                                         hazeState = hazeState,
                                         isTransitionFinished = isTransitionFinished,
                                         isLeaving = isLeaving,
@@ -4576,6 +4630,7 @@ fun VideoDetailScreen(
         motion = routeSheetMotion,
         isFullscreenMode = isFullscreenMode,
         backgroundColor = MaterialTheme.colorScheme.background,
+        backgroundAlpha = shellBackgroundAlpha,
         modifier = detailShellModifier,
         content = { VideoDetailRouteSheetMainContent() },
         overlayContent = { VideoDetailRouteSheetOverlayContent() }

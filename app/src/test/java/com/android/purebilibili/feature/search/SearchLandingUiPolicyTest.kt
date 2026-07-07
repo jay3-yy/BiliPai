@@ -33,10 +33,11 @@ class SearchLandingUiPolicyTest {
     }
 
     @Test
-    fun `search discovery original subtitle keeps update metadata but hides generic reasons`() {
+    fun `search discovery original subtitle keeps all non blank metadata`() {
         assertEquals("15小时前更新", resolveSearchDiscoverOriginalSubtitle("15小时前更新"))
         assertEquals("47分钟前更新", resolveSearchDiscoverOriginalSubtitle("47分钟前更新"))
-        assertEquals(null, resolveSearchDiscoverOriginalSubtitle("关注的 UP 主"))
-        assertEquals(null, resolveSearchDiscoverOriginalSubtitle("与最近搜索相关"))
+        assertEquals("关注的 UP 主", resolveSearchDiscoverOriginalSubtitle("关注的 UP 主"))
+        assertEquals("与最近搜索相关", resolveSearchDiscoverOriginalSubtitle("与最近搜索相关"))
+        assertEquals(null, resolveSearchDiscoverOriginalSubtitle("   "))
     }
 }

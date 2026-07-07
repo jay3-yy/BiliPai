@@ -62,6 +62,9 @@ import com.android.purebilibili.core.ui.common.copyOnLongPress
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.ui.components.resolveAdaptiveListComponentVisualSpec
+import com.android.purebilibili.core.ui.components.IOSSearchBar
+import com.android.purebilibili.core.ui.components.resolveAdaptiveListRowVisualSpec
+import androidx.compose.ui.res.stringResource
 import com.android.purebilibili.core.ui.IOSAlertDialog
 import com.android.purebilibili.core.ui.IOSDialogAction
 import com.android.purebilibili.core.store.MAX_HOME_REFRESH_COUNT
@@ -80,17 +83,29 @@ import kotlin.math.roundToInt
 
 // Delegated to core/ui/components/iOSListComponents.kt
 import com.android.purebilibili.core.ui.animation.entrance
+import com.android.purebilibili.core.theme.LocalAndroidNativeVariant
 import com.android.purebilibili.core.ui.components.IOSSectionTitle as SettingsSectionTitle
 import com.android.purebilibili.core.ui.components.IOSGroup as SettingsGroup
 import com.android.purebilibili.core.ui.components.IOSSwitchItem as SettingSwitchItem
 import com.android.purebilibili.core.ui.components.IOSClickableItem as SettingClickableItem
 import com.android.purebilibili.core.ui.components.IOSDivider as SettingsDivider
+import com.android.purebilibili.core.ui.components.IOSSliderPreference as SettingSliderItem
 
 
 
 // ═══════════════════════════════════════════════════
 //  业务板块 (Business Sections)
 // ═══════════════════════════════════════════════════
+
+@Composable
+private fun SettingsAdaptiveDivider() {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
+    SettingsDivider(startIndent = visualSpec.dividerStartIndentDp.dp)
+}
 
 @Composable
 private fun SettingsCardGroup(
@@ -159,7 +174,7 @@ fun GeneralSection(
             onClick = onAppearanceClick,
             iconTint = appearanceVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = playbackVisual.icon,
             iconPainter = playbackVisual.iconResId?.let { painterResource(id = it) },
@@ -168,7 +183,7 @@ fun GeneralSection(
             onClick = onPlaybackClick,
             iconTint = playbackVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = bottomBarVisual.icon,
             iconPainter = bottomBarVisual.iconResId?.let { painterResource(id = it) },
@@ -361,24 +376,113 @@ internal fun SettingsRootCategoryListSection(
     onCategoryClick: (SettingsRootCategory) -> Unit
 ) {
     val uiPreset = LocalUiPreset.current
+    val visualSpec = resolveSettingsVisualSpec()
 
     SettingsDetailGroup(title = "分类") {
         SettingsCardGroup {
             categories.forEachIndexed { index, category ->
                 val visual = rememberSettingsEntryVisual(category.searchTarget, uiPreset)
-                SettingClickableItem(
-                    icon = visual.icon,
-                    iconPainter = visual.iconResId?.let { painterResource(id = it) },
+                SettingsRootCategoryRow(
                     title = category.title,
                     subtitle = category.subtitle,
+                    icon = visual.icon,
+                    iconPainter = visual.iconResId?.let { painterResource(id = it) },
+                    iconTint = visual.iconTint,
                     onClick = { onCategoryClick(category) },
-                    iconTint = visual.iconTint
                 )
                 if (index != categories.lastIndex) {
-                    SettingsDivider(startIndent = 66.dp)
+                    SettingsAdaptiveDivider()
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsRootCategoryRow(
+    title: String,
+    subtitle: String,
+    icon: ImageVector?,
+    iconPainter: androidx.compose.ui.graphics.painter.Painter?,
+    iconTint: Color,
+    onClick: () -> Unit,
+) {
+    val visualSpec = resolveSettingsVisualSpec()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(
+                horizontal = 16.dp,
+                vertical = visualSpec.categoryRowVerticalPadding,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(visualSpec.categoryIconBubbleSize)
+                .clip(RoundedCornerShape(10.dp))
+                .background(iconTint.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                iconPainter != null -> Icon(
+                    painter = iconPainter,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(visualSpec.categoryIconSize),
+                )
+                icon != null -> Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(visualSpec.categoryIconSize),
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(
+            imageVector = CupertinoIcons.Default.ChevronForward,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+            modifier = Modifier.size(14.dp),
+        )
+    }
+}
+
+@Composable
+internal fun SettingsHomeSearchEntry(
+    onClick: () -> Unit,
+) {
+    val visualSpec = resolveSettingsVisualSpec()
+    Box(
+        modifier = Modifier
+            .padding(
+                horizontal = visualSpec.screenHorizontalPadding,
+                vertical = visualSpec.searchBarVerticalPadding,
+            )
+            .clickable(onClick = onClick),
+    ) {
+        IOSSearchBar(
+            query = "",
+            onQueryChange = {},
+            placeholder = stringResource(R.string.settings_search_placeholder),
+        )
     }
 }
 
@@ -405,7 +509,7 @@ internal fun SettingsAboutHomeSection(
                 onClick = onTelegramClick,
                 iconTint = telegramVisual.iconTint
             )
-            SettingsDivider(startIndent = 66.dp)
+            SettingsAdaptiveDivider()
             SettingClickableItem(
                 icon = githubVisual.icon,
                 iconPainter = githubVisual.iconResId?.let { painterResource(id = it) },
@@ -414,7 +518,7 @@ internal fun SettingsAboutHomeSection(
                 onClick = onGithubClick,
                 iconTint = githubVisual.iconTint
             )
-            SettingsDivider(startIndent = 66.dp)
+            SettingsAdaptiveDivider()
             SettingClickableItem(
                 icon = updateVisual.icon,
                 iconPainter = updateVisual.iconResId?.let { painterResource(id = it) },
@@ -423,7 +527,7 @@ internal fun SettingsAboutHomeSection(
                 onClick = onCheckUpdateClick,
                 iconTint = updateVisual.iconTint
             )
-            SettingsDivider(startIndent = 66.dp)
+            SettingsAdaptiveDivider()
             SettingClickableItem(
                 icon = donateVisual.icon,
                 iconPainter = donateVisual.iconResId?.let { painterResource(id = it) },
@@ -459,7 +563,7 @@ internal fun SettingsBackupHomeSection(
                 onClick = onSettingsShareClick,
                 iconTint = shareVisual.iconTint
             )
-            SettingsDivider(startIndent = 66.dp)
+            SettingsAdaptiveDivider()
             SettingClickableItem(
                 icon = webDavVisual.icon,
                 iconPainter = webDavVisual.iconResId?.let { painterResource(id = it) },
@@ -468,7 +572,7 @@ internal fun SettingsBackupHomeSection(
                 onClick = onWebDavBackupClick,
                 iconTint = webDavVisual.iconTint
             )
-            SettingsDivider(startIndent = 66.dp)
+            SettingsAdaptiveDivider()
             SettingClickableItem(
                 icon = cacheVisual.icon,
                 iconPainter = cacheVisual.iconResId?.let { painterResource(id = it) },
@@ -514,7 +618,7 @@ internal fun SettingsDetailEntrySection(
                 iconTint = visual.iconTint
             )
             if (index != entries.lastIndex) {
-                SettingsDivider(startIndent = 66.dp)
+                SettingsAdaptiveDivider()
             }
         }
     }
@@ -590,7 +694,7 @@ internal fun SettingsRootCategoryContent(
                                 SettingsDetailEntry(
                                     target = SettingsSearchTarget.FULLSCREEN_GESTURE,
                                     title = "全屏与手势",
-                                    value = "全屏方向、截图按钮、应用内截图、亮度/音量/进度手势",
+                                    value = "在播放设置内 · 全屏方向与手势控制",
                                     onClick = actions.onPlaybackClick
                                 )
                             )
@@ -605,8 +709,8 @@ internal fun SettingsRootCategoryContent(
                             entries = listOf(
                                 SettingsDetailEntry(
                                     target = SettingsSearchTarget.HOME_FEED,
-                                    title = "首页展示",
-                                    value = "展示样式、首页壁纸效果、推荐流卡片宽度",
+                                    title = "首页样式与壁纸",
+                                    value = "卡片样式、壁纸效果与推荐流宽度",
                                     onClick = actions.onAppearanceClick
                                 )
                             )
@@ -641,7 +745,7 @@ internal fun SettingsRootCategoryContent(
                                 SettingsDetailEntry(
                                     target = SettingsSearchTarget.PLAYBACK_QUALITY,
                                     title = "播放与画质",
-                                    value = "解码、默认画质、自动最高画质、网络、省流量、字幕、倍速与连播",
+                                    value = "在播放设置内 · 解码、画质与倍速",
                                     onClick = actions.onPlaybackClick
                                 )
                             )
@@ -656,7 +760,7 @@ internal fun SettingsRootCategoryContent(
                                 SettingsDetailEntry(
                                     target = SettingsSearchTarget.INTERACTION_COMMENT,
                                     title = "互动与评论",
-                                    value = "评论发送检测、评论装扮、AI 总结、双击点赞与视频简介",
+                                    value = "在播放设置内 · 评论、点赞与简介",
                                     onClick = actions.onPlaybackClick
                                 )
                             )
@@ -701,7 +805,7 @@ internal fun SettingsRootCategoryContent(
                                 SettingsDetailEntry(
                                     target = SettingsSearchTarget.DIAGNOSTICS,
                                     title = "播放器诊断",
-                                    value = "诊断日志、详细统计信息、画质降档弹窗与仅提示一次",
+                                    value = "在播放设置内 · 诊断日志与统计",
                                     onClick = actions.onPlaybackClick
                                 )
                             )
@@ -788,7 +892,7 @@ fun SupportToolsSection(
             onClick = onTipsClick,
             iconTint = tipsVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = openLinksVisual.icon,
             iconPainter = openLinksVisual.iconResId?.let { painterResource(id = it) },
@@ -909,7 +1013,7 @@ fun SettingsSubpageEntrySection(
             onClick = onContentAndStorageClick,
             iconTint = storageTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = privacyIcon,
             title = "隐私与安全",
@@ -917,7 +1021,7 @@ fun SettingsSubpageEntrySection(
             onClick = onPrivacyAndSecurityClick,
             iconTint = privacyTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = developerVisual.icon,
             iconPainter = developerVisual.iconResId?.let { painterResource(id = it) },
@@ -926,7 +1030,7 @@ fun SettingsSubpageEntrySection(
             onClick = onExtensionsAndDebugClick,
             iconTint = developerTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = aboutIcon,
             title = "关于与支持",
@@ -994,8 +1098,8 @@ fun FeedApiSection(
                 onSelectionChange = onFeedApiTypeChange
             )
         }
-        SettingsDivider(startIndent = 66.dp)
-        FeedSwitchItem(
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
             icon = refreshIcon,
             title = "动态增量刷新",
             subtitle = "下拉刷新时不重置列表，仅在顶部插入新内容",
@@ -1003,8 +1107,8 @@ fun FeedApiSection(
             onCheckedChange = onIncrementalTimelineRefreshChange,
             iconTint = incrementalRefreshTint
         )
-        SettingsDivider(startIndent = 66.dp)
-        FeedSwitchItem(
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
             icon = previewTextIcon,
             title = "动态图片默认显示文字",
             subtitle = "打开图文动态图片时默认显示下方文字，可用右上角眼睛临时切换",
@@ -1012,8 +1116,8 @@ fun FeedApiSection(
             onCheckedChange = onDynamicImagePreviewTextVisibleChange,
             iconTint = feedTint
         )
-        SettingsDivider(startIndent = 66.dp)
-        FeedSwitchItem(
+        SettingsAdaptiveDivider()
+        SettingSwitchItem(
             icon = visibilityIcon,
             title = "全部动态显示 UP 主栏",
             subtitle = "关闭后，“全部”tab 顶部不再弹出 UP 主横向栏，UP tab 仍可选择关注用户",
@@ -1021,18 +1125,23 @@ fun FeedApiSection(
             onCheckedChange = onDynamicAllTabHorizontalUserListVisibleChange,
             iconTint = feedTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         FeedDynamicTabVisibilityItem(
             icon = visibilityIcon,
             visibleTabIds = dynamicVisibleTabIds,
             onTabVisibilityChange = onDynamicTabVisibilityChange,
             iconTint = feedTint
         )
-        SettingsDivider(startIndent = 66.dp)
-        FeedRefreshCountItem(
+        SettingsAdaptiveDivider()
+        SettingSliderItem(
             icon = refreshIcon,
-            count = homeRefreshCount,
-            onCountChange = onHomeRefreshCountChange,
+            title = "首页刷新数量",
+            subtitle = resolveHomeRefreshCountSummary(homeRefreshCount),
+            value = homeRefreshCount.toFloat(),
+            onValueChange = { value -> onHomeRefreshCountChange(value.roundToInt()) },
+            valueRange = resolveHomeRefreshSliderRange(),
+            steps = resolveHomeRefreshSliderSteps(),
+            valueLabel = homeRefreshCount.toString(),
             iconTint = incrementalRefreshTint
         )
     }
@@ -1047,11 +1156,19 @@ private fun FeedDynamicTabVisibilityItem(
 ) {
     val uiPreset = LocalUiPreset.current
     val androidNativeVariant = LocalAndroidNativeVariant.current
-    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
+    val rowSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListRowVisualSpec(uiPreset, androidNativeVariant)
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(
+                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                vertical = rowSpec.insideVerticalPaddingDp.dp
+            )
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Box(
@@ -1083,154 +1200,23 @@ private fun FeedDynamicTabVisibilityItem(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         allDynamicTabSpecs.forEachIndexed { index, tab ->
             val checked = tab.id in visibleTabIds
             val enabled = shouldAllowDynamicTabVisibilityToggleOff(
                 currentVisibleTabIds = visibleTabIds,
                 targetTabId = tab.id
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(AppShapes.container(ContainerLevel.Card))
-                    .clickable(enabled = enabled) { onTabVisibilityChange(tab.id) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = tab.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (enabled) {
-                        MaterialTheme.colorScheme.onSurface
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-                AppAdaptiveSwitch(
-                    checked = checked,
-                    onCheckedChange = { onTabVisibilityChange(tab.id) },
-                    enabled = enabled
-                )
-            }
+            SettingSwitchItem(
+                title = tab.title,
+                checked = checked,
+                onCheckedChange = { onTabVisibilityChange(tab.id) },
+                enabled = enabled
+            )
             if (index != allDynamicTabSpecs.lastIndex) {
-                Spacer(modifier = Modifier.height(4.dp))
+                SettingsAdaptiveDivider()
             }
         }
-    }
-}
-
-@Composable
-private fun FeedSwitchItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    iconTint: Color
-) {
-    val uiPreset = LocalUiPreset.current
-    val androidNativeVariant = LocalAndroidNativeVariant.current
-    val visualSpec = resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Box(
-            modifier = Modifier
-                .size(visualSpec.iconContainerSizeDp.dp)
-                .clip(RoundedCornerShape(visualSpec.iconCornerRadiusDp.dp))
-                .background(iconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                AppAdaptiveSwitch(
-                    checked = checked,
-                    onCheckedChange = onCheckedChange
-                )
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun FeedRefreshCountItem(
-    icon: ImageVector,
-    count: Int,
-    onCountChange: (Int) -> Unit,
-    iconTint: Color
-) {
-    val sliderRange = resolveHomeRefreshSliderRange()
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(24.dp),
-                tint = iconTint
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "首页刷新数量",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = resolveHomeRefreshCountSummary(count),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Text(
-                text = count.toString(),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Slider(
-            value = count.toFloat(),
-            onValueChange = { value -> onCountChange(value.roundToInt()) },
-            valueRange = sliderRange,
-            steps = resolveHomeRefreshSliderSteps()
-        )
     }
 }
 
@@ -1274,7 +1260,7 @@ fun PrivacySection(
             onCheckedChange = onPrivacyModeChange,
             iconTint = privacyModeTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = contentAuthenticationIcon,
             title = "进入隐私内容时验证",
@@ -1283,7 +1269,7 @@ fun PrivacySection(
             onCheckedChange = onPrivacyContentAuthenticationChange,
             iconTint = permissionVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = permissionVisual.icon,
             iconPainter = permissionVisual.iconResId?.let { painterResource(id = it) },
@@ -1292,7 +1278,7 @@ fun PrivacySection(
             onClick = onPermissionClick,
             iconTint = permissionVisual.iconTint
         )
-         SettingsDivider(startIndent = 66.dp)
+         SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = blockedListVisual.icon,
             iconPainter = blockedListVisual.iconResId?.let { painterResource(id = it) },
@@ -1331,7 +1317,7 @@ fun DataStorageSection(
             onClick = onSettingsShareClick,
             iconTint = settingsShareVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         // WebDAV 是“备份副本”场景，使用双文档图标比链路图标更贴合语义。
         SettingClickableItem(
             icon = webDavVisual.icon,
@@ -1341,7 +1327,7 @@ fun DataStorageSection(
             onClick = onWebDavBackupClick,
             iconTint = webDavVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = downloadPathVisual.icon,
             iconPainter = downloadPathVisual.iconResId?.let { painterResource(id = it) },
@@ -1350,7 +1336,7 @@ fun DataStorageSection(
             onClick = onDownloadPathClick,
             iconTint = downloadPathVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = imageSavePathVisual.icon,
             iconPainter = imageSavePathVisual.iconResId?.let { painterResource(id = it) },
@@ -1359,7 +1345,7 @@ fun DataStorageSection(
             onClick = onImageSavePathClick,
             iconTint = imageSavePathVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = clearCacheVisual.icon,
             iconPainter = clearCacheVisual.iconResId?.let { painterResource(id = it) },
@@ -1398,7 +1384,7 @@ fun DeveloperSection(
             onCheckedChange = onCrashTrackingChange,
             iconTint = crashTrackingTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = analyticsIcon,
             title = "使用情况统计",
@@ -1407,7 +1393,7 @@ fun DeveloperSection(
             onCheckedChange = onAnalyticsChange,
             iconTint = analyticsTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = pluginsVisual.icon,
             iconPainter = pluginsVisual.iconResId?.let { painterResource(id = it) },
@@ -1416,7 +1402,7 @@ fun DeveloperSection(
             onClick = onPluginsClick,
             iconTint = pluginsVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = exportLogsVisual.icon,
             iconPainter = exportLogsVisual.iconResId?.let { painterResource(id = it) },
@@ -1559,7 +1545,7 @@ fun AboutSection(
             iconTint = openSourceHomeVisual.iconTint,
             enableCopy = true
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = verificationIcon,
             title = "源码一致性",
@@ -1577,7 +1563,7 @@ fun AboutSection(
                 else -> iOSOrange
             }
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = buildSourceIcon,
             title = "构建来源",
@@ -1592,7 +1578,7 @@ fun AboutSection(
             iconTint = iOSOrange,
             enableCopy = true
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = buildFingerprintIcon,
             title = "SHA-256",
@@ -1622,7 +1608,7 @@ fun AboutSection(
             onClick = onLicenseClick,
             iconTint = licensesVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = checkUpdateVisual.icon,
             iconPainter = checkUpdateVisual.iconResId?.let { painterResource(id = it) },
@@ -1631,7 +1617,7 @@ fun AboutSection(
             onClick = onCheckUpdateClick,
             iconTint = checkUpdateVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = releaseNotesVisual.icon,
             iconPainter = releaseNotesVisual.iconResId?.let { painterResource(id = it) },
@@ -1640,7 +1626,7 @@ fun AboutSection(
             onClick = onViewReleaseNotesClick,
             iconTint = releaseNotesVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = notificationIcon,
             title = "自动检查更新",
@@ -1662,7 +1648,7 @@ fun AboutSection(
             iconTint = versionIconTint,
             enableCopy = true
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = replayOnboardingVisual.icon,
             iconPainter = replayOnboardingVisual.iconResId?.let { painterResource(id = it) },
@@ -1671,7 +1657,7 @@ fun AboutSection(
             onClick = onReplayOnboardingClick,
             iconTint = replayOnboardingVisual.iconTint
         )
-        SettingsDivider(startIndent = 66.dp)
+        SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = sparklesIcon,
             title = "趣味彩蛋",

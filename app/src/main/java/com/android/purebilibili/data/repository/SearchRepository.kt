@@ -743,8 +743,8 @@ enum class SearchOrderSort(val value: Int, val displayName: String) {
 }
 
 enum class SearchUserType(val value: Int, val displayName: String) {
-    ALL(0, "全部用户"),
-    UP(1, "UP主"),
+    ALL(0, "全部类型"),
+    UP(1, "仅UP主"),
     NORMAL(2, "普通用户"),
     VERIFIED(3, "认证用户")
 }

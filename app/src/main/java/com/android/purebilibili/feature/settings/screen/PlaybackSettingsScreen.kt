@@ -119,8 +119,13 @@ fun PlaybackSettingsContent(
     }
     LaunchedEffect(focusRequest?.token) {
         val request = focusRequest ?: return@LaunchedEffect
-        if (request.target != SettingsSearchTarget.PLAYBACK) return@LaunchedEffect
-        val index = resolvePlaybackSettingsScrollIndex(request.focusId) ?: return@LaunchedEffect
+        val playbackFocusId = when (request.target) {
+            SettingsSearchTarget.PLAYBACK -> request.focusId
+            else -> resolveSettingsSceneDetailFocus(request.target)
+                ?.takeIf { it.target == SettingsSearchTarget.PLAYBACK }
+                ?.focusId
+        } ?: return@LaunchedEffect
+        val index = resolvePlaybackSettingsScrollIndex(playbackFocusId) ?: return@LaunchedEffect
         listState.animateScrollToItem(index)
         SettingsSearchFocusController.clear(request.token)
     }

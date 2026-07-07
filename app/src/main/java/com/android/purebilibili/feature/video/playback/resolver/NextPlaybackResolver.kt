@@ -68,9 +68,10 @@ internal fun resolvePlaybackNavigationTargets(
     hasPlaylistTarget: Boolean
 ): List<PlaybackNavigationTarget> {
     if (strategy == AudioNextPlaybackStrategy.PLAY_EXTERNAL_PLAYLIST) {
+        // 收藏夹/稍后再看等外部队列：只按列表顺序续播，不插入分P/合集内下一集。
         return buildList {
-            if (hasPageOrSeasonTarget) {
-                add(PlaybackNavigationTarget.PAGE_OR_SEASON)
+            if (hasPlaylistTarget) {
+                add(PlaybackNavigationTarget.PLAYLIST)
             }
             add(PlaybackNavigationTarget.DIRECT_QUEUE)
         }

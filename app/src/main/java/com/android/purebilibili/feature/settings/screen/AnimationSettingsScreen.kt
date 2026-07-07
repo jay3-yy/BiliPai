@@ -33,6 +33,8 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
+import com.android.purebilibili.core.ui.AdaptiveScaffold
+import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_TRANSITION_CUSTOM_MAX_MILLIS
@@ -51,8 +53,6 @@ import com.android.purebilibili.core.ui.animation.rememberEffectiveEntranceMotio
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.os.Build
-import top.yukonga.miuix.kmp.basic.Scaffold as MiuixScaffold
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar as MiuixSmallTopAppBar
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 
@@ -84,16 +84,18 @@ fun AnimationSettingsScreen(
             blurLevel * 0.2f
         ).coerceIn(0f, 1f)
 
-    MiuixScaffold(
+    AdaptiveScaffold(
         topBar = {
-            MiuixSmallTopAppBar(
+            AdaptiveTopAppBar(
                 title = screenTitle,
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(rememberAppBackIcon(), contentDescription = backLabel)
                     }
                 },
-                color = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer())
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer())
+                )
             )
         },
         containerColor = globalWallpaperAwareChromeColor(AppSurfaceTokens.groupedListContainer()),

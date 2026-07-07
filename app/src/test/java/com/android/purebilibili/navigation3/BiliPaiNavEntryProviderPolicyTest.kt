@@ -220,37 +220,50 @@ class BiliPaiNavEntryProviderPolicyTest {
     }
 
     @Test
-    fun settingsInnerPagesUseLightSiblingForwardTransition() {
-        val settingsChildren = listOf(
-            "appearance_settings",
-            "animation_settings",
-            "playback_settings",
-            "bottom_bar_settings"
-        )
-
-        settingsChildren.forEach { childRoute ->
-            assertEquals(
-                BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD,
-                resolveBiliPaiNavEntryForwardRouteTransition(
-                    defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
-                    fromRoute = ScreenRoutes.Settings.route,
-                    toRoute = childRoute,
-                    visibleBottomBarRoutes = emptySet()
-                )
+    fun settingsHierarchyUsesIosPushForwardTransition() {
+        assertEquals(
+            BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_FORWARD,
+            resolveBiliPaiNavEntryForwardRouteTransition(
+                defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                fromRoute = ScreenRoutes.Settings.route,
+                toRoute = "settings_category",
+                visibleBottomBarRoutes = emptySet(),
             )
-        }
+        )
+        assertEquals(
+            BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_FORWARD,
+            resolveBiliPaiNavEntryForwardRouteTransition(
+                defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                fromRoute = "settings_category",
+                toRoute = "appearance_settings",
+                visibleBottomBarRoutes = emptySet(),
+            )
+        )
     }
 
     @Test
-    fun settingsInnerPagesFromActiveMainHostUseLightSiblingForwardTransition() {
+    fun settingsDirectChildFromRootUsesFallbackUntilCategoryRoute() {
         assertEquals(
-            BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD,
+            BiliPaiNavRouteTransition.FALLBACK,
+            resolveBiliPaiNavEntryForwardRouteTransition(
+                defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
+                fromRoute = ScreenRoutes.Settings.route,
+                toRoute = "appearance_settings",
+                visibleBottomBarRoutes = emptySet(),
+            )
+        )
+    }
+
+    @Test
+    fun settingsInnerPagesFromActiveMainHostUseFallbackUntilCategoryRoute() {
+        assertEquals(
+            BiliPaiNavRouteTransition.FALLBACK,
             resolveBiliPaiNavEntryForwardRouteTransition(
                 defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
                 fromRoute = BiliPaiNavKey.MainHost.routeBase,
                 toRoute = ScreenRoutes.AppearanceSettings.route,
                 visibleBottomBarRoutes = setOf(ScreenRoutes.Settings.route),
-                activeMainHostRoute = ScreenRoutes.Settings.route
+                activeMainHostRoute = ScreenRoutes.Settings.route,
             )
         )
     }
@@ -270,15 +283,14 @@ class BiliPaiNavEntryProviderPolicyTest {
     }
 
     @Test
-    fun settingsInnerPagesPopToActiveMainHostUseLightSiblingPopTransition() {
+    fun settingsHierarchyPopUsesIosPushTransition() {
         assertEquals(
-            BiliPaiNavRouteTransition.LIGHT_SIBLING_POP,
+            BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_POP,
             resolveBiliPaiNavEntryPopRouteTransition(
                 defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
-                fromRoute = ScreenRoutes.AppearanceSettings.route,
-                toRoute = BiliPaiNavKey.MainHost.routeBase,
+                fromRoute = "appearance_settings",
+                toRoute = "settings_category",
                 sourceMetadata = BiliPaiNavSourceMetadata(),
-                activeMainHostRoute = ScreenRoutes.Settings.route
             )
         )
     }
@@ -350,15 +362,15 @@ class BiliPaiNavEntryProviderPolicyTest {
     @Test
     fun lightSiblingPopReturnsFromChildToDomainRoot() {
         val cases = listOf(
-            "appearance_settings" to ScreenRoutes.Settings.route,
-            "message/reply_me" to ScreenRoutes.Inbox.route,
-            "live_area" to ScreenRoutes.LiveList.route,
-            "topic" to ScreenRoutes.Search.route
+            Triple("appearance_settings", "settings_category", BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_POP),
+            Triple("message/reply_me", ScreenRoutes.Inbox.route, BiliPaiNavRouteTransition.LIGHT_SIBLING_POP),
+            Triple("live_area", ScreenRoutes.LiveList.route, BiliPaiNavRouteTransition.LIGHT_SIBLING_POP),
+            Triple("topic", ScreenRoutes.Search.route, BiliPaiNavRouteTransition.LIGHT_SIBLING_POP)
         )
 
-        cases.forEach { (fromRoute, toRoute) ->
+        cases.forEach { (fromRoute, toRoute, expectedTransition) ->
             assertEquals(
-                BiliPaiNavRouteTransition.LIGHT_SIBLING_POP,
+                expectedTransition,
                 resolveBiliPaiNavEntryPopRouteTransition(
                     defaultTransition = BiliPaiNavRouteTransition.FALLBACK,
                     fromRoute = fromRoute,

@@ -815,6 +815,95 @@ fun IOSSwitchItem(
 }
 
 @Composable
+fun IOSSliderPreference(
+    icon: ImageVector? = null,
+    title: String,
+    subtitle: String? = null,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int = 0,
+    valueLabel: String? = null,
+    iconTint: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    valueColor: Color = MaterialTheme.colorScheme.primary
+) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    val visualSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListComponentVisualSpec(uiPreset, androidNativeVariant)
+    }
+    val rowSpec = remember(uiPreset, androidNativeVariant) {
+        resolveAdaptiveListRowVisualSpec(uiPreset, androidNativeVariant)
+    }
+    val effectiveIconTint = rememberAdaptiveSemanticIconTint(iconTint, uiPreset)
+    val cornerRadiusScale = LocalCornerRadiusScale.current
+    val iconCornerRadius = if (uiPreset == UiPreset.MD3) {
+        visualSpec.iconCornerRadiusDp.dp
+    } else {
+        iOSCornerRadius.Small * cornerRadiusScale
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = rowSpec.insideHorizontalPaddingDp.dp,
+                vertical = rowSpec.insideVerticalPaddingDp.dp
+            )
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(visualSpec.iconContainerSizeDp.dp)
+                        .clip(RoundedCornerShape(iconCornerRadius))
+                        .background(effectiveIconTint.copy(alpha = visualSpec.iconBackgroundAlpha)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = effectiveIconTint,
+                        modifier = Modifier.size(visualSpec.iconGlyphSizeDp.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(14.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = title, style = MaterialTheme.typography.bodyLarge, color = textColor)
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = subtitleColor
+                    )
+                }
+            }
+            if (valueLabel != null) {
+                Spacer(modifier = Modifier.width(rowSpec.trailingSpacingDp.dp))
+                Text(
+                    text = valueLabel,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = valueColor
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = steps
+        )
+    }
+}
+
+@Composable
 fun IOSClickableItem(
     icon: ImageVector? = null,
     iconPainter: androidx.compose.ui.graphics.painter.Painter? = null,
@@ -1323,6 +1412,50 @@ fun IOSSearchBar(
                 }
             }
         }
+    )
+}
+
+@Composable
+fun IOSAdaptiveTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    placeholder: String? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    isError: Boolean = false,
+    supportingText: @Composable (() -> Unit)? = null,
+) {
+    val uiPreset = LocalUiPreset.current
+    val androidNativeVariant = LocalAndroidNativeVariant.current
+    if (shouldUseNativeMiuixSearchBar(uiPreset, androidNativeVariant)) {
+        Column(modifier = modifier.fillMaxWidth()) {
+            InputField(
+                query = value,
+                onQueryChange = onValueChange,
+                onSearch = {},
+                expanded = true,
+                onExpandedChange = {},
+                modifier = Modifier.fillMaxWidth(),
+                label = label ?: placeholder.orEmpty(),
+            )
+            supportingText?.invoke()
+        }
+        return
+    }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.fillMaxWidth(),
+        label = label?.let { { Text(it) } },
+        placeholder = placeholder?.let { { Text(it) } },
+        singleLine = singleLine,
+        minLines = minLines,
+        maxLines = maxLines,
+        isError = isError,
+        supportingText = supportingText
     )
 }
 

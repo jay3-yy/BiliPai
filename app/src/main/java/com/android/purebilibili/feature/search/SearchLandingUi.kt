@@ -36,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -84,17 +85,7 @@ internal fun resolveSearchDiscoverOriginalSubtitle(
     subtitle: String?
 ): String? {
     val normalized = subtitle?.trim().orEmpty()
-    if (normalized.isBlank()) return null
-    return if (
-        normalized.contains("更新") ||
-        normalized.contains("分钟前") ||
-        normalized.contains("小时前") ||
-        normalized.contains("天前")
-    ) {
-        normalized
-    } else {
-        null
-    }
+    return normalized.takeIf { it.isNotBlank() }
 }
 
 internal data class SearchDiscoverOriginalCellColors(
@@ -303,6 +294,8 @@ fun SearchSuggestionDropdown(
                         ),
                         color = MaterialTheme.colorScheme.onSurface,
                         fontSize = 15.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -507,51 +500,37 @@ private fun SearchDiscoverOriginalCell(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colorScheme = MaterialTheme.colorScheme
-    val colors = resolveSearchDiscoverOriginalCellColors(colorScheme)
     val displaySubtitle = remember(item.subtitle) {
         resolveSearchDiscoverOriginalSubtitle(item.subtitle)
     }
-    Surface(
-        modifier = modifier,
+    SuggestionChip(
         onClick = onClick,
-        shape = AppShapes.container(ContainerLevel.Field),
-        color = colors.containerColor,
-        border = androidx.compose.foundation.BorderStroke(1.dp, colors.borderColor),
-        tonalElevation = 0.dp,
-        shadowElevation = 0.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = buildAnnotatedString {
-                    append(item.title)
-                    if (!displaySubtitle.isNullOrBlank()) {
-                        pushStyle(
-                            SpanStyle(
-                                color = colors.subtitleColor,
-                                fontWeight = FontWeight.Normal
-                            )
-                        )
-                        append(" · ")
-                        append(displaySubtitle)
-                        pop()
-                    }
-                },
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = colors.titleColor
+        label = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    text = item.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 )
-            )
-        }
-    }
+                if (!displaySubtitle.isNullOrBlank()) {
+                    Text(
+                        text = displaySubtitle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+            }
+        },
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 @Composable

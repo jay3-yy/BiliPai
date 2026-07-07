@@ -17,8 +17,6 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -111,22 +109,6 @@ internal class BiliPaiScalePredictiveBackAnimation(
                     if (needsClip) deviceCornerShape
                     else RoundedCornerShape(0.dp),
                 )
-        } else if (transitionState is InProgress) {
-            // 目标页覆盖层：手势阶段跟随 gestureProgress 从 0→0.5 平滑渐入，
-            // 提交后（exitingPageKey 非空）随 exitAnimatable 从 0.5→0 渐出。
-            val gestureProgressValue = (transitionState as InProgress).latestEvent?.progress ?: 0f
-            val hasCommitted = exitingPageKey.value != null
-            val dynamicAlpha = if (hasCommitted) {
-                0.5f * (1f - exitAnimatable.value)
-            } else {
-                0.5f * gestureProgressValue
-            }
-            this
-                .graphicsLayer()
-                .drawWithContent {
-                    drawContent()
-                    drawRect(color = Color.Black.copy(alpha = dynamicAlpha))
-                }
         } else {
             this
         }

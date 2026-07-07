@@ -96,9 +96,6 @@ import com.android.purebilibili.core.theme.buildDisplayMetricsSnapshot
 import com.android.purebilibili.core.ui.IOSAlertDialog
 import com.android.purebilibili.core.ui.IOSDialogAction
 import com.android.purebilibili.core.ui.blur.ProvideUnifiedBlurIntensity
-import com.android.purebilibili.core.ui.transition.native.LocalNativeVideoCardTransitionController
-import com.android.purebilibili.core.ui.transition.native.NativeVideoCardTransitionController
-import com.android.purebilibili.core.ui.transition.native.NativeVideoCardTransitionOverlayView
 import com.android.purebilibili.core.util.BilibiliUrlParser
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.calculateWindowSizeClass
@@ -1035,21 +1032,9 @@ open class MainActivity : AppCompatActivity() {
         val composeContentView = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
         }
-        val nativeVideoTransitionOverlay = NativeVideoCardTransitionOverlayView(this)
-        val nativeVideoTransitionController = NativeVideoCardTransitionController(
-            contentView = composeContentView,
-            overlayView = nativeVideoTransitionOverlay
-        )
         val rootContainer = FrameLayout(this).apply {
             addView(
                 composeContentView,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-            )
-            addView(
-                nativeVideoTransitionOverlay,
                 FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT
@@ -1059,9 +1044,6 @@ open class MainActivity : AppCompatActivity() {
         setContentView(rootContainer)
 
         composeContentView.setContent {
-            CompositionLocalProvider(
-                LocalNativeVideoCardTransitionController provides nativeVideoTransitionController
-            ) {
             val context = LocalContext.current
             val uriHandler = LocalUriHandler.current
             val scope = rememberCoroutineScope()
@@ -1874,7 +1856,6 @@ open class MainActivity : AppCompatActivity() {
                     }
 
                     }
-                    }  // 📐 CompositionLocalProvider 结束
                 }
             }
             }

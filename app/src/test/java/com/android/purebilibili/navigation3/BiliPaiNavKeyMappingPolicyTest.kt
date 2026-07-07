@@ -163,6 +163,13 @@ class BiliPaiNavKeyMappingPolicyTest {
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Home))
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Search))
         assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.Space(42L)))
+        assertEquals(true, isCardReturnTargetNavKey(BiliPaiNavKey.LikedVideos))
+        assertEquals(
+            true,
+            isCardReturnTargetNavKey(
+                BiliPaiNavKey.SeasonSeriesDetail(type = "series", id = 1L, mid = 2L)
+            )
+        )
         assertEquals(false, isCardReturnTargetNavKey(BiliPaiNavKey.VideoDetail("BV1")))
         assertEquals(false, isCardReturnTargetNavKey(BiliPaiNavKey.Settings))
     }

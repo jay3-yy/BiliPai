@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.search
 
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.data.repository.SearchUpOrder
+import com.android.purebilibili.data.repository.SearchUserType
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -80,6 +81,20 @@ class SearchScreenPolicyTest {
                 suggestedKeyword = " "
             )
         )
+    }
+
+    @Test
+    fun `searchDefaultPlaceholder covers all visible tabs`() {
+        assertEquals(
+            "搜索视频、番剧、影视、直播、UP主、专栏...",
+            resolveSearchDefaultPlaceholder()
+        )
+    }
+
+    @Test
+    fun `searchUpUserTypeFilterLabel avoids repeating tab name`() {
+        assertEquals("用户类型", resolveSearchUpUserTypeFilterLabel(SearchUserType.ALL))
+        assertEquals("仅UP主", resolveSearchUpUserTypeFilterLabel(SearchUserType.UP))
     }
 
     @Test
@@ -338,9 +353,12 @@ class SearchScreenPolicyTest {
         assertTrue(filterBarBeforePager > 0)
         assertFalse(resultPagerBody.contains("SearchFilterBar("))
         assertFalse(searchSource.contains("detectHorizontalDragGestures"))
-        assertTrue(searchSource.contains("currentPageOffsetFraction"))
+        assertTrue(searchSource.contains("TabRowDefaults.SecondaryIndicator"))
+        assertTrue(searchSource.contains("OutlinedTextField("))
+        assertTrue(searchSource.contains("material3.FilterChip("))
+        assertTrue(searchSource.contains("material3.InputChip("))
+        assertFalse(searchSource.contains("SearchPagerTabIndicator("))
         assertFalse(searchSource.contains("val showStableFilterBar = !searchPagerState.isScrollInProgress"))
-        assertTrue(searchSource.contains(".zIndex(-1f)"))
     }
 
     @Test

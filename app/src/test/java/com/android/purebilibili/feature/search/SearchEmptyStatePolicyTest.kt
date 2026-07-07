@@ -57,6 +57,20 @@ class SearchEmptyStatePolicyTest {
     }
 
     @Test
+    fun `resolveSearchEmptyStateCopy supports live room type`() {
+        assertEquals(
+            SearchEmptyStateCopy(
+                title = "未找到相关直播间",
+                subtitle = "试试其他关键词或调整筛选条件"
+            ),
+            resolveSearchEmptyStateCopy(
+                reason = SearchEmptyStateReason.NO_RESULTS,
+                searchType = SearchType.LIVE
+            )
+        )
+    }
+
+    @Test
     fun `resolveSearchEmptyStateCopy supports article type`() {
         assertEquals(
             SearchEmptyStateCopy(

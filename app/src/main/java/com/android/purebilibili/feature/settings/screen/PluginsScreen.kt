@@ -61,11 +61,13 @@ import com.android.purebilibili.core.theme.iOSGreen
 import com.android.purebilibili.core.theme.iOSOrange
 import com.android.purebilibili.core.theme.iOSPurple
 import com.android.purebilibili.core.theme.iOSTeal
+import com.android.purebilibili.feature.settings.SettingsLocalBackHandler
 import com.android.purebilibili.core.ui.AdaptiveScaffold
 import com.android.purebilibili.core.ui.AdaptiveTopAppBar
 import com.android.purebilibili.core.ui.resolveBottomSafeAreaPadding
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppAdaptiveSwitch
+import com.android.purebilibili.core.ui.components.IOSAdaptiveTextField
 import com.android.purebilibili.core.ui.components.rememberAdaptiveSemanticIconTint
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.rememberNotificationPermissionState
@@ -156,6 +158,7 @@ fun PluginsScreen(
     //  如果正在编辑插件，显示编辑器全屏覆盖 (Mobile behavior)
     //  In Tablet, this will be handled differently.
     editingPlugin?.let { plugin ->
+        SettingsLocalBackHandler { editingPlugin = null }
         JsonPluginEditorScreen(
             plugin = plugin,
             onBack = { editingPlugin = null },
@@ -1115,18 +1118,17 @@ fun PluginsContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(
+                    IOSAdaptiveTextField(
                         value = jsImportUrl,
                         onValueChange = {
                             jsImportUrl = it
                             jsImportError = null
                         },
-                        label = { Text("JS 插件链接") },
-                        placeholder = { Text("例如：https://example.com/plugin.js") },
+                        label = "JS 插件链接",
+                        placeholder = "例如：https://example.com/plugin.js",
                         singleLine = true,
                         isError = jsImportError != null,
-                        supportingText = jsImportError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
-                        modifier = Modifier.fillMaxWidth()
+                        supportingText = jsImportError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } }
                     )
                     if (isJsPreviewLoading) {
                         Spacer(modifier = Modifier.height(16.dp))
@@ -1279,18 +1281,17 @@ fun PluginsContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(
+                    IOSAdaptiveTextField(
                         value = importUrl,
                         onValueChange = { 
                             importUrl = it
                             importError = null
                         },
-                        label = { Text("插件链接") },
-                        placeholder = { Text("例如：https://example.com/plugin.json") },
+                        label = "插件链接",
+                        placeholder = "例如：https://example.com/plugin.json",
                         singleLine = true,
                         isError = importError != null,
-                        supportingText = importError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } },
-                        modifier = Modifier.fillMaxWidth()
+                        supportingText = importError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } }
                     )
                     
                     if (isImporting) {

@@ -620,9 +620,17 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `lightweight reply mode preserves independent identity toggle and sub previews while hiding ancillary labels`() {
-        assertFalse(shouldShowReplyAncillaryDecorations(lightweightMode = true))
-        assertTrue(shouldShowReplyAncillaryDecorations(lightweightMode = false))
+    fun `lightweight reply mode keeps special labels visible while preserving identity and sub preview toggles`() {
+        assertTrue(shouldShowReplySpecialLabel(lightweightMode = true))
+        assertTrue(shouldShowReplySpecialLabel(lightweightMode = false))
+        assertEquals(
+            "UP主觉得很赞",
+            resolveReplySpecialLabelText(
+                cardLabels = emptyList(),
+                showUpFlag = true,
+                upAction = ReplyUpAction(like = true, reply = false)
+            ).takeIf { shouldShowReplySpecialLabel(lightweightMode = true) }
+        )
         assertFalse(shouldShowReplyIdentityDecorations(enabled = false))
         assertTrue(shouldShowReplyIdentityDecorations(enabled = true))
         assertTrue(

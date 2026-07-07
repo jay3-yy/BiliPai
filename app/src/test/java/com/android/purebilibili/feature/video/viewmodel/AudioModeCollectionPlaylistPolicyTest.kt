@@ -4,7 +4,9 @@ import com.android.purebilibili.data.model.response.UgcEpisode
 import com.android.purebilibili.data.model.response.UgcEpisodeArc
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class AudioModeCollectionPlaylistPolicyTest {
 
@@ -46,5 +48,31 @@ class AudioModeCollectionPlaylistPolicyTest {
 
         assertNotNull(result)
         assertEquals(1, result.startIndex)
+    }
+
+    @Test
+    fun `audio mode collection playlist is skipped when external queue is active`() {
+        assertFalse(
+            shouldApplyAudioModeCollectionPlaylist(
+                isInAudioMode = true,
+                keepExternalPlaylist = true
+            )
+        )
+    }
+
+    @Test
+    fun `audio mode collection playlist applies without external queue`() {
+        assertTrue(
+            shouldApplyAudioModeCollectionPlaylist(
+                isInAudioMode = true,
+                keepExternalPlaylist = false
+            )
+        )
+        assertFalse(
+            shouldApplyAudioModeCollectionPlaylist(
+                isInAudioMode = false,
+                keepExternalPlaylist = false
+            )
+        )
     }
 }

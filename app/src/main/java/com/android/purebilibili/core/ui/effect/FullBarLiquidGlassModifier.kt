@@ -25,6 +25,11 @@ fun Modifier.liquidGlassBackground(
     backgroundColor: Color = Color.Transparent
 ): Modifier = composed {
     val shader = remember { RuntimeShader(LiquidGlassBackgroundShader.SHADER) }
+    // Cache the RenderEffect once: it references the shader, so updating uniforms below
+    // re-renders with new values without allocating a new RenderEffect every frame.
+    val liquidGlassRenderEffect = remember(shader) {
+        RenderEffect.createRuntimeShaderEffect(shader, "img").asComposeRenderEffect()
+    }
 
     this.graphicsLayer {
         shader.setFloatUniform("resolution", size.width, size.height)
@@ -39,8 +44,7 @@ fun Modifier.liquidGlassBackground(
         val b = android.graphics.Color.blue(bgColor) / 255f * a
         shader.setFloatUniform("background_color", r, g, b, a)
 
-        renderEffect = RenderEffect.createRuntimeShaderEffect(shader, "img")
-            .asComposeRenderEffect()
+        renderEffect = liquidGlassRenderEffect
     }
 }
 

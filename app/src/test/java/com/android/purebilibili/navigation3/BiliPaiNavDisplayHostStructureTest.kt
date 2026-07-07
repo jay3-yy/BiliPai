@@ -89,9 +89,23 @@ class BiliPaiNavDisplayHostStructureTest {
         assertTrue(openingBranch.contains("VideoCardTransitionBackgroundPhase.HELD"))
         assertFalse(openingBranch.substringAfter("targetValue = 1f").contains("videoCardTransitionBackgroundProgress.snapTo(0f)"))
         assertFalse(openingBranch.substringAfter("targetValue = 1f").contains("VideoCardTransitionBackgroundPhase.IDLE"))
-        assertTrue(returnBranch.contains("VideoCardTransitionBackgroundPhase.RETURNING"))
-        assertTrue(returnBranch.contains("videoCardTransitionBackgroundProgress.snapTo(1f)"))
-        assertTrue(returnBranch.contains("targetValue = 0f"))
+        assertTrue(returnBranch.contains("videoCardTransitionBackgroundProgress.snapTo(0f)"))
+        assertTrue(returnBranch.contains("VideoCardTransitionBackgroundPhase.IDLE"))
+        assertFalse(returnBranch.contains("VideoCardTransitionBackgroundPhase.RETURNING"))
+        assertFalse(returnBranch.contains("videoCardTransitionBackgroundProgress.snapTo(1f)"))
+        assertFalse(returnBranch.contains("resolveVideoCardTransitionBackgroundReturnDurationMs"))
+    }
+
+    @Test
+    fun navDisplayHostIntegratesPredictiveBackGestureBlurPipeline() {
+        val source = navDisplayHostSource()
+
+        assertTrue(source.contains("predictiveBackBackgroundProgress"))
+        assertTrue(source.contains("resolvePredictiveBackGestureBlurProgress"))
+        assertTrue(source.contains("shouldApplyPredictiveBackGestureBlur"))
+        assertTrue(source.contains("LocalPredictiveBackBackgroundState provides"))
+        assertTrue(source.contains("isLightBackgroundProvider ="))
+        assertTrue(source.contains("isLightBackground: Boolean"))
     }
 
     @Test
@@ -103,6 +117,8 @@ class BiliPaiNavDisplayHostStructureTest {
 
         assertTrue(source.contains("onBack = { performBack { } }"))
         assertTrue(source.contains("onBackCompleted = performBack"))
+        assertTrue(performBackBlock.contains("finalVideoCardGestureBackProgress"))
+        assertTrue(performBackBlock.contains("resolveVideoCardTransitionBackgroundGestureProgress"))
         assertTrue(performBackBlock.contains("predictiveBackHandler.onBackPressed("))
         assertTrue(performBackBlock.contains("commitTransitionCallBack()"))
         assertTrue(performBackBlock.contains("onBack()"))

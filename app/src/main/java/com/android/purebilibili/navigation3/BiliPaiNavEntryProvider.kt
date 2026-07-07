@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
+import com.android.purebilibili.feature.settings.SETTINGS_SUBTREE_ROUTE_BASES
+import com.android.purebilibili.feature.settings.isSettingsNavHierarchyTransition
 
 private const val BILI_PAI_NAV_ROUTE_BASE_METADATA_KEY = "biliPaiNavRouteBase"
 private const val VIDEO_ROUTE_BASE = "video"
@@ -23,27 +25,15 @@ private val CARD_RETURN_TARGET_ROUTE_BASES = setOf(
     "search",
     "history",
     "favorite",
+    "liked_videos",
     "watch_later",
     "partition",
     "dynamic_detail",
     "space",
-    "category"
+    "category",
+    "season_series_detail"
 )
-private val SETTINGS_LIGHT_SIBLING_ROUTE_BASES = setOf(
-    "appearance_settings",
-    "icon_settings",
-    "animation_settings",
-    "playback_settings",
-    "permission_settings",
-    "plugins_settings",
-    "js_plugin",
-    "external_media",
-    "bottom_bar_settings",
-    "settings_share",
-    "webdav_backup",
-    "tips_settings",
-    "open_source_licenses"
-)
+private val SETTINGS_LIGHT_SIBLING_ROUTE_BASES = SETTINGS_SUBTREE_ROUTE_BASES - SETTINGS_ROUTE_BASE
 private val MESSAGE_LIGHT_SIBLING_ROUTE_BASES = setOf(
     "message/reply_me",
     "message/at_me",
@@ -93,6 +83,8 @@ internal fun biliPaiNavEntryProvider(
         entry<BiliPaiNavKey.SearchTrending>(metadata = entryMetadata, content = content)
         entry<BiliPaiNavKey.TopicDetail>(metadata = entryMetadata, content = content)
         entry<BiliPaiNavKey.Settings>(metadata = entryMetadata, content = content)
+        entry<BiliPaiNavKey.SettingsSearch>(metadata = entryMetadata, content = content)
+        entry<BiliPaiNavKey.SettingsCategory>(metadata = entryMetadata, content = content)
         entry<BiliPaiNavKey.OpenSourceLicenses>(metadata = entryMetadata, content = content)
         entry<BiliPaiNavKey.AppearanceSettings>(metadata = entryMetadata, content = content)
         entry<BiliPaiNavKey.IconSettings>(metadata = entryMetadata, content = content)
@@ -226,7 +218,17 @@ internal fun resolveBiliPaiNavEntryForwardRouteTransition(
             activeMainHostRoute = normalizedActiveMainHostRoute
         )
     ) {
-        return BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD
+        return if (
+            isSettingsNavHierarchyRoute(
+                parentRoute = normalizedFromRoute,
+                childRoute = normalizedToRoute,
+                activeMainHostRoute = normalizedActiveMainHostRoute
+            )
+        ) {
+            BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_FORWARD
+        } else {
+            BiliPaiNavRouteTransition.LIGHT_SIBLING_FORWARD
+        }
     }
     return defaultTransition
 }
@@ -278,7 +280,17 @@ internal fun resolveBiliPaiNavEntryPopRouteTransition(
             activeMainHostRoute = normalizedActiveMainHostRoute
         )
     ) {
-        return BiliPaiNavRouteTransition.LIGHT_SIBLING_POP
+        return if (
+            isSettingsNavHierarchyRoute(
+                parentRoute = normalizedToRoute,
+                childRoute = normalizedFromRoute,
+                activeMainHostRoute = normalizedActiveMainHostRoute
+            )
+        ) {
+            BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_POP
+        } else {
+            BiliPaiNavRouteTransition.LIGHT_SIBLING_POP
+        }
     }
 
     return if (defaultTransition == BiliPaiNavRouteTransition.NO_OP_SHARED_ELEMENT) {
@@ -392,18 +404,81 @@ private fun isLightSiblingRoute(
     childRoute: String?,
     activeMainHostRoute: String?
 ): Boolean {
+    return isSettingsNavHierarchyRoute(
+        parentRoute = parentRoute,
+        childRoute = childRoute,
+        activeMainHostRoute = activeMainHostRoute
+    ) || isMessageLightSiblingRoute(
+        parentRoute = parentRoute,
+        childRoute = childRoute,
+        activeMainHostRoute = activeMainHostRoute
+    ) || isLiveLightSiblingRoute(
+        parentRoute = parentRoute,
+        childRoute = childRoute,
+        activeMainHostRoute = activeMainHostRoute
+    ) || isSearchLightSiblingRoute(
+        parentRoute = parentRoute,
+        childRoute = childRoute,
+        activeMainHostRoute = activeMainHostRoute
+    )
+}
+
+private fun isSettingsNavHierarchyRoute(
+    parentRoute: String?,
+    childRoute: String?,
+    activeMainHostRoute: String?
+): Boolean {
     val effectiveParentRoute = if (parentRoute == BiliPaiNavKey.MainHost.routeBase) {
         activeMainHostRoute
     } else {
         parentRoute
     }
-    return when (effectiveParentRoute) {
-        SETTINGS_ROUTE_BASE -> childRoute in SETTINGS_LIGHT_SIBLING_ROUTE_BASES
-        INBOX_ROUTE_BASE -> childRoute in MESSAGE_LIGHT_SIBLING_ROUTE_BASES
-        LIVE_LIST_ROUTE_BASE -> childRoute in LIVE_LIGHT_SIBLING_ROUTE_BASES
-        SEARCH_ROUTE_BASE -> childRoute in SEARCH_LIGHT_SIBLING_ROUTE_BASES
-        else -> false
+    return isSettingsNavHierarchyTransition(
+        parentRoute = effectiveParentRoute,
+        childRoute = childRoute,
+    )
+}
+
+private fun isMessageLightSiblingRoute(
+    parentRoute: String?,
+    childRoute: String?,
+    activeMainHostRoute: String?
+): Boolean {
+    val effectiveParentRoute = if (parentRoute == BiliPaiNavKey.MainHost.routeBase) {
+        activeMainHostRoute
+    } else {
+        parentRoute
     }
+    return effectiveParentRoute == INBOX_ROUTE_BASE &&
+        childRoute in MESSAGE_LIGHT_SIBLING_ROUTE_BASES
+}
+
+private fun isLiveLightSiblingRoute(
+    parentRoute: String?,
+    childRoute: String?,
+    activeMainHostRoute: String?
+): Boolean {
+    val effectiveParentRoute = if (parentRoute == BiliPaiNavKey.MainHost.routeBase) {
+        activeMainHostRoute
+    } else {
+        parentRoute
+    }
+    return effectiveParentRoute == LIVE_LIST_ROUTE_BASE &&
+        childRoute in LIVE_LIGHT_SIBLING_ROUTE_BASES
+}
+
+private fun isSearchLightSiblingRoute(
+    parentRoute: String?,
+    childRoute: String?,
+    activeMainHostRoute: String?
+): Boolean {
+    val effectiveParentRoute = if (parentRoute == BiliPaiNavKey.MainHost.routeBase) {
+        activeMainHostRoute
+    } else {
+        parentRoute
+    }
+    return effectiveParentRoute == SEARCH_ROUTE_BASE &&
+        childRoute in SEARCH_LIGHT_SIBLING_ROUTE_BASES
 }
 
 private fun isMainHostOrVisibleBottomRoute(

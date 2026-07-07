@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation3
 
+import com.android.purebilibili.feature.settings.isSettingsNavPopTransition
 import com.android.purebilibili.navigation.AppSystemBackAction
 import com.android.purebilibili.navigation.shouldInterceptSystemBackForAppAction
 
@@ -17,6 +18,10 @@ internal enum class BiliPaiNavRouteTransition {
     SPACE_FORWARD,
     LIGHT_SIBLING_FORWARD,
     LIGHT_SIBLING_POP,
+    BOTTOM_BAR_SIBLING_FORWARD,
+    BOTTOM_BAR_SIBLING_POP,
+    SETTINGS_IOS_PUSH_FORWARD,
+    SETTINGS_IOS_PUSH_POP,
     CLASSIC_CARD,
     FALLBACK
 }
@@ -141,6 +146,9 @@ internal fun resolveBiliPaiNavDisplayPopRouteTransition(
             toIsCardReturnTarget
         if (sharedReadyVideoToSourceCard) {
             return BiliPaiNavRouteTransition.NO_OP_SHARED_ELEMENT
+        }
+        if (isSettingsNavPopTransition(fromKey = fromKey, toKey = toKey)) {
+            return BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_POP
         }
         return BiliPaiNavRouteTransition.CLASSIC_CARD
     }

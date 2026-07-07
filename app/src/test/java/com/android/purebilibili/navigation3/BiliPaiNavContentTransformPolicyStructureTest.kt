@@ -97,6 +97,41 @@ class BiliPaiNavContentTransformPolicyStructureTest {
         assertTrue(function.contains("fadeOut(animationSpec = tween(NAV3_LIGHT_SIBLING_MILLIS"))
     }
 
+    @Test
+    fun settingsIosPushForwardUsesParallaxSlide() {
+        val source = contentTransformPolicySource()
+
+        assertTrue(source.contains("BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_FORWARD"))
+        assertTrue(source.contains("private fun settingsIosPushForwardTransform()"))
+        assertTrue(source.contains("resolveSettingsIosPushForwardContentTransform("))
+    }
+
+    @Test
+    fun settingsIosPushPopUsesParallaxSlide() {
+        val source = contentTransformPolicySource()
+
+        assertTrue(source.contains("BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_POP"))
+        assertTrue(source.contains("private fun settingsIosPushPopTransform()"))
+        assertTrue(source.contains("resolveSettingsIosPushPopContentTransform("))
+    }
+
+    @Test
+    fun bottomBarSiblingForwardUsesFullWidthHorizontalSlide() {
+        val source = contentTransformPolicySource()
+
+        assertTrue(source.contains("BiliPaiNavRouteTransition.BOTTOM_BAR_SIBLING_FORWARD"))
+        assertTrue(source.contains("private fun bottomBarSiblingForwardTransform()"))
+        assertTrue(source.contains("resolveBottomBarLikeHorizontalContentTransform("))
+    }
+
+    @Test
+    fun bottomBarSiblingPopUsesFullWidthHorizontalSlide() {
+        val source = contentTransformPolicySource()
+
+        assertTrue(source.contains("BiliPaiNavRouteTransition.BOTTOM_BAR_SIBLING_POP"))
+        assertTrue(source.contains("private fun bottomBarSiblingPopTransform()"))
+    }
+
     private fun contentTransformPolicySource(): String {
         return listOf(
             File("app/src/main/java/com/android/purebilibili/navigation3/BiliPaiNavContentTransformPolicy.kt"),

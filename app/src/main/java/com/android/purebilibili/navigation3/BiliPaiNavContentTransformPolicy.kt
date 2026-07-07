@@ -10,12 +10,19 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.SETTINGS_IOS_PUSH_DURATION_MS
+import com.android.purebilibili.core.ui.motion.resolveBottomBarLikeHorizontalContentTransform
+import com.android.purebilibili.core.ui.motion.resolveSettingsIosPushForwardContentTransform
+import com.android.purebilibili.core.ui.motion.resolveSettingsIosPushPopContentTransform
+import com.android.purebilibili.navigation.resolveBottomPagerNavigationDurationMillis
 
 private const val NAV3_FALLBACK_FADE_MILLIS = 180
 private const val NAV3_DISABLED_VIDEO_DIRECTION_MILLIS = 220
 private const val NAV3_DISABLED_VIDEO_RETURN_MILLIS = 220
 private const val NAV3_SPACE_FORWARD_MILLIS = 220
 private const val NAV3_LIGHT_SIBLING_MILLIS = 220
+private val NAV3_BOTTOM_BAR_SIBLING_MILLIS =
+    resolveBottomPagerNavigationDurationMillis(pageDistance = 1)
 internal fun resolveBiliPaiNavContentTransform(
     routeTransition: BiliPaiNavRouteTransition
 ): ContentTransform {
@@ -36,6 +43,14 @@ internal fun resolveBiliPaiNavContentTransform(
             lightSiblingForwardTransform()
         BiliPaiNavRouteTransition.LIGHT_SIBLING_POP ->
             lightSiblingPopTransform()
+        BiliPaiNavRouteTransition.BOTTOM_BAR_SIBLING_FORWARD ->
+            bottomBarSiblingForwardTransform()
+        BiliPaiNavRouteTransition.BOTTOM_BAR_SIBLING_POP ->
+            bottomBarSiblingPopTransform()
+        BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_FORWARD ->
+            settingsIosPushForwardTransform()
+        BiliPaiNavRouteTransition.SETTINGS_IOS_PUSH_POP ->
+            settingsIosPushPopTransform()
         BiliPaiNavRouteTransition.CLASSIC_CARD,
         BiliPaiNavRouteTransition.FALLBACK ->
             fadeIn(animationSpec = tween(NAV3_FALLBACK_FADE_MILLIS)) togetherWith
@@ -91,6 +106,24 @@ private fun lightSiblingPopTransform(): ContentTransform {
             ) + fadeOut(animationSpec = tween(NAV3_LIGHT_SIBLING_MILLIS, easing = AppMotionEasing.EmphasizedExit))
         )
 }
+
+private fun bottomBarSiblingForwardTransform(): ContentTransform =
+    resolveBottomBarLikeHorizontalContentTransform(
+        durationMillis = NAV3_BOTTOM_BAR_SIBLING_MILLIS,
+        forward = true
+    )
+
+private fun bottomBarSiblingPopTransform(): ContentTransform =
+    resolveBottomBarLikeHorizontalContentTransform(
+        durationMillis = NAV3_BOTTOM_BAR_SIBLING_MILLIS,
+        forward = false
+    )
+
+private fun settingsIosPushForwardTransform(): ContentTransform =
+    resolveSettingsIosPushForwardContentTransform(durationMillis = SETTINGS_IOS_PUSH_DURATION_MS)
+
+private fun settingsIosPushPopTransform(): ContentTransform =
+    resolveSettingsIosPushPopContentTransform(durationMillis = SETTINGS_IOS_PUSH_DURATION_MS)
 
 private fun disabledVideoDirectionReturnTransform(directionSign: Int): ContentTransform {
     return EnterTransition.None togetherWith

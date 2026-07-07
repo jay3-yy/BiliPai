@@ -2,6 +2,7 @@ package com.android.purebilibili.navigation3
 
 import com.android.purebilibili.navigation.ScreenRoutes
 import com.android.purebilibili.navigation.VideoRoute
+import com.android.purebilibili.feature.settings.SettingsRootCategory
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -14,6 +15,8 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.SearchTrending -> ScreenRoutes.SearchTrending.route
         is BiliPaiNavKey.TopicDetail -> ScreenRoutes.TopicDetail.createRoute(topicId)
         BiliPaiNavKey.Settings -> ScreenRoutes.Settings.route
+        is BiliPaiNavKey.SettingsCategory -> "settings_category/${category.name}"
+        BiliPaiNavKey.SettingsSearch -> "settings_search"
         BiliPaiNavKey.OpenSourceLicenses -> ScreenRoutes.OpenSourceLicenses.route
         BiliPaiNavKey.AppearanceSettings -> ScreenRoutes.AppearanceSettings.route
         BiliPaiNavKey.IconSettings -> ScreenRoutes.IconSettings.route
@@ -110,6 +113,12 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
             BiliPaiNavKey.TopicDetail(topicId = segments[1].toLongOrNull() ?: 0L)
         }
         normalized == ScreenRoutes.Settings.route -> BiliPaiNavKey.Settings
+        routeBase == "settings_category" && segments.size >= 2 -> {
+            val category = SettingsRootCategory.entries.firstOrNull { it.name == segments[1] }
+                ?: SettingsRootCategory.APPEARANCE_INTERACTION
+            BiliPaiNavKey.SettingsCategory(category = category)
+        }
+        normalized == "settings_search" -> BiliPaiNavKey.SettingsSearch
         normalized == ScreenRoutes.OpenSourceLicenses.route -> BiliPaiNavKey.OpenSourceLicenses
         normalized == ScreenRoutes.AppearanceSettings.route -> BiliPaiNavKey.AppearanceSettings
         normalized == ScreenRoutes.IconSettings.route -> BiliPaiNavKey.IconSettings
@@ -272,10 +281,12 @@ internal fun isCardReturnTargetNavKey(key: BiliPaiNavKey): Boolean {
         BiliPaiNavKey.Search,
         BiliPaiNavKey.History,
         BiliPaiNavKey.Favorite,
+        BiliPaiNavKey.LikedVideos,
         BiliPaiNavKey.WatchLater,
         BiliPaiNavKey.Partition,
         is BiliPaiNavKey.DynamicDetail,
         is BiliPaiNavKey.Space,
+        is BiliPaiNavKey.SeasonSeriesDetail,
         is BiliPaiNavKey.Category -> true
         else -> false
     }

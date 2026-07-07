@@ -1,6 +1,7 @@
 package com.android.purebilibili.navigation3
 
 import androidx.navigation3.runtime.NavKey
+import com.android.purebilibili.feature.settings.SettingsRootCategory
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -42,6 +43,18 @@ internal sealed interface BiliPaiNavKey : NavKey {
     @Serializable
     data object Settings : BiliPaiNavKey {
         override val routeBase: String = "settings"
+    }
+
+    @Serializable
+    data class SettingsCategory(
+        val category: SettingsRootCategory,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "settings_category"
+    }
+
+    @Serializable
+    data object SettingsSearch : BiliPaiNavKey {
+        override val routeBase: String = "settings_search"
     }
 
     @Serializable
