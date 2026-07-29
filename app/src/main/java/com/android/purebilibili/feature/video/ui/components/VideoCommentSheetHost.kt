@@ -165,13 +165,10 @@ internal fun resolveVideoCommentSheetHostHeightPx(
 }
 
 internal fun resolveVideoCommentSheetHostScrimAlpha(
-    mainSheetVisible: Boolean
+    mainSheetVisible: Boolean,
+    hostContent: VideoCommentSheetHostContent = VideoCommentSheetHostContent.MAIN_LIST
 ): Float {
-    return if (mainSheetVisible) {
-        MAIN_COMMENT_SHEET_SCRIM_ALPHA
-    } else {
-        resolveVideoSubReplySheetScrimAlpha()
-    }
+    return 0f
 }
 
 internal fun shouldApplyVideoCommentThreadStatusBarPadding(
@@ -189,14 +186,16 @@ internal fun shouldInitializeVideoCommentSheetHost(
 }
 
 internal fun shouldDismissVideoCommentSheetHostOnBackdropTap(
-    mainSheetVisible: Boolean
+    mainSheetVisible: Boolean,
+    hostContent: VideoCommentSheetHostContent = VideoCommentSheetHostContent.MAIN_LIST
 ): Boolean {
-    return mainSheetVisible
+    return mainSheetVisible && hostContent != VideoCommentSheetHostContent.THREAD_DETAIL
 }
 
 internal fun shouldInterceptVideoCommentSheetHostBackdropTap(
-    mainSheetVisible: Boolean
-): Boolean = mainSheetVisible
+    mainSheetVisible: Boolean,
+    hostContent: VideoCommentSheetHostContent = VideoCommentSheetHostContent.MAIN_LIST
+): Boolean = mainSheetVisible && hostContent != VideoCommentSheetHostContent.THREAD_DETAIL
 
 internal fun shouldHandleVideoCommentSheetVerticalDrag(
     dragAmountPx: Float,
@@ -277,13 +276,14 @@ internal fun resolveVideoCommentSheetPresentationProgress(
 
 internal fun resolveVideoCommentSheetHostOverlayVisual(
     mainSheetVisible: Boolean,
-    presentationProgress: Float
+    presentationProgress: Float,
+    hostContent: VideoCommentSheetHostContent = VideoCommentSheetHostContent.MAIN_LIST
 ): InteractiveOverlayProgressVisual {
     return resolveInteractiveOverlayProgressVisual(
         presentationProgress = presentationProgress,
         surfaceType = InteractiveOverlaySurfaceType.BOTTOM_SHEET,
         blurActive = mainSheetVisible,
-        maxScrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible)
+        maxScrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible, hostContent)
     )
 }
 
@@ -335,7 +335,8 @@ fun VideoCommentSheetHost(
     val hostVisible = hostContent != VideoCommentSheetHostContent.HIDDEN
     val scrimAlpha = resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = mainSheetVisible)
     val dismissOnBackdropTap = shouldDismissVideoCommentSheetHostOnBackdropTap(
-        mainSheetVisible = mainSheetVisible
+        mainSheetVisible = mainSheetVisible,
+        hostContent = hostContent
     )
     val applyThreadStatusBarPadding = shouldApplyVideoCommentThreadStatusBarPadding(
         mainSheetVisible = mainSheetVisible,
@@ -410,10 +411,11 @@ fun VideoCommentSheetHost(
             }
         }
     }
-    val overlayVisual = remember(mainSheetVisible, mainSheetVisibilityProgress) {
+    val overlayVisual = remember(mainSheetVisible, mainSheetVisibilityProgress, hostContent) {
         resolveVideoCommentSheetHostOverlayVisual(
             mainSheetVisible = mainSheetVisible,
-            presentationProgress = mainSheetVisibilityProgress
+            presentationProgress = mainSheetVisibilityProgress,
+            hostContent = hostContent
         )
     }
 
@@ -544,7 +546,8 @@ fun VideoCommentSheetHost(
         exit = bottomSheetScrimExitTransition(uiPreset, androidNativeVariant)
     ) {
         val interceptBackdropTap = shouldInterceptVideoCommentSheetHostBackdropTap(
-            mainSheetVisible = mainSheetVisible
+            mainSheetVisible = mainSheetVisible,
+            hostContent = hostContent
         )
         BoxWithConstraints(
             modifier = Modifier

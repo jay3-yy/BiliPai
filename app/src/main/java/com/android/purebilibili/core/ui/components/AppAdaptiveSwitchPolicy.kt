@@ -22,7 +22,6 @@ internal fun resolveAppAdaptiveSwitchTreatment(
     return when {
         uiPreset == UiPreset.MD3 && androidNativeVariant == AndroidNativeVariant.MIUIX -> AppAdaptiveSwitchTreatment.MIUIX
         uiPreset == UiPreset.MD3 -> AppAdaptiveSwitchTreatment.MATERIAL
-        settingsLiquidGlassEnabled -> AppAdaptiveSwitchTreatment.LIQUID_GLASS
         else -> AppAdaptiveSwitchTreatment.CUPERTINO
     }
 }

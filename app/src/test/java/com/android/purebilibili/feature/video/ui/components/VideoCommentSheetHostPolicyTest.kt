@@ -73,7 +73,7 @@ class VideoCommentSheetHostPolicyTest {
                 topReservedPx = 450
             )
         )
-        assertEquals(0.5f, resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = true))
+        assertEquals(0f, resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = true))
     }
 
     @Test
@@ -93,10 +93,9 @@ class VideoCommentSheetHostPolicyTest {
 
         assertEquals(0f, hidden.scrimAlpha)
         assertFalse(hidden.blurEnabled)
-        assertEquals(0.25f, half.scrimAlpha)
+        assertEquals(0f, half.scrimAlpha)
         assertTrue(half.forceLowBlurBudget)
-        assertTrue(half.scrimAlpha < shown.scrimAlpha)
-        assertEquals(0.5f, shown.scrimAlpha)
+        assertEquals(0f, shown.scrimAlpha)
         assertFalse(shown.forceLowBlurBudget)
     }
 
@@ -112,6 +111,17 @@ class VideoCommentSheetHostPolicyTest {
             )
         )
         assertEquals(0f, resolveVideoCommentSheetHostScrimAlpha(mainSheetVisible = false))
+    }
+
+    @Test
+    fun `thread detail should not have a grey scrim mask when main sheet is visible`() {
+        assertEquals(
+            0f,
+            resolveVideoCommentSheetHostScrimAlpha(
+                mainSheetVisible = true,
+                hostContent = VideoCommentSheetHostContent.THREAD_DETAIL
+            )
+        )
     }
 
     @Test
@@ -217,22 +227,38 @@ class VideoCommentSheetHostPolicyTest {
     fun `backdrop tap dismissal only applies to main comment sheet`() {
         assertTrue(
             shouldDismissVideoCommentSheetHostOnBackdropTap(
-                mainSheetVisible = true
+                mainSheetVisible = true,
+                hostContent = VideoCommentSheetHostContent.MAIN_LIST
             )
         )
         assertFalse(
             shouldDismissVideoCommentSheetHostOnBackdropTap(
-                mainSheetVisible = false
+                mainSheetVisible = true,
+                hostContent = VideoCommentSheetHostContent.THREAD_DETAIL
+            )
+        )
+        assertFalse(
+            shouldDismissVideoCommentSheetHostOnBackdropTap(
+                mainSheetVisible = false,
+                hostContent = VideoCommentSheetHostContent.MAIN_LIST
             )
         )
         assertTrue(
             shouldInterceptVideoCommentSheetHostBackdropTap(
-                mainSheetVisible = true
+                mainSheetVisible = true,
+                hostContent = VideoCommentSheetHostContent.MAIN_LIST
             )
         )
         assertFalse(
             shouldInterceptVideoCommentSheetHostBackdropTap(
-                mainSheetVisible = false
+                mainSheetVisible = true,
+                hostContent = VideoCommentSheetHostContent.THREAD_DETAIL
+            )
+        )
+        assertFalse(
+            shouldInterceptVideoCommentSheetHostBackdropTap(
+                mainSheetVisible = false,
+                hostContent = VideoCommentSheetHostContent.MAIN_LIST
             )
         )
     }

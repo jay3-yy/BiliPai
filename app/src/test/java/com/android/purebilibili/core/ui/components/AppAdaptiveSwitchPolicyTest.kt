@@ -12,9 +12,9 @@ import kotlin.test.assertTrue
 class AppAdaptiveSwitchPolicyTest {
 
     @Test
-    fun `ios liquid glass settings use liquid switch treatment`() {
+    fun `ios liquid glass settings use cupertino switch treatment`() {
         assertEquals(
-            AppAdaptiveSwitchTreatment.LIQUID_GLASS,
+            AppAdaptiveSwitchTreatment.CUPERTINO,
             resolveAppAdaptiveSwitchTreatment(
                 uiPreset = UiPreset.IOS,
                 settingsLiquidGlassEnabled = true
