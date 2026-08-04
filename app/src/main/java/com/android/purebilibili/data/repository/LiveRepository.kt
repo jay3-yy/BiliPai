@@ -3,6 +3,7 @@ package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.*
+import com.android.purebilibili.feature.live.LiveMixedPlaybackPolicy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -938,7 +939,9 @@ object LiveRepository {
             if (resp.code == 0 && resp.data != null) {
                 val xliveQualities = resp.data.playurl_info?.playurl?.gQnDesc.orEmpty()
                 if (xliveQualities.isNotEmpty() || !resp.data.quality_description.isNullOrEmpty()) {
-                    return@withContext Result.success(resp.data)
+                    // 「web+app 混合取流」：web 流成功后再尝试合并 app 端流，失败则回退 web 原数据。
+                    val mixed = tryMergeAppStream(realRoomId, qn, onlyAudio, resp.data)
+                    return@withContext Result.success(mixed)
                 }
                 val legacyResp = try {
                     api.getLivePlayUrlLegacy(cid = realRoomId, qn = qn)
@@ -975,6 +978,41 @@ object LiveRepository {
             e.printStackTrace()
             Result.failure(e)
         }
+    }
+
+    /**
+     * 「web+app 混合取流」：以 web 端数据为主，尝试获取 app 端（platform=android）流并与其合并。
+     *
+     * app 端取流失败或返回异常时静默回退到 [webData]，保持现有 web 播放行为不变。
+     */
+    private suspend fun tryMergeAppStream(
+        realRoomId: Long,
+        qn: Int,
+        onlyAudio: Boolean,
+        webData: LivePlayUrlData
+    ): LivePlayUrlData {
+        val appResp = try {
+            api.getLivePlayUrlApp(
+                roomId = realRoomId,
+                quality = qn,
+                onlyAudio = if (onlyAudio) 1 else null,
+                signedParams = signWithWbi(emptyMap())
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("LiveRepo", " App stream API failed, fallback to web: ${e.message}")
+            null
+        }
+        val appData = appResp?.takeIf { it.code == 0 }?.data
+        if (appData == null) {
+            return webData
+        }
+        val merged = LiveMixedPlaybackPolicy.merge(web = webData, app = appData) ?: webData
+        com.android.purebilibili.core.util.Logger.d(
+            "LiveRepo",
+            " Mixed web+app: webStreams=${webData.playurl_info?.playurl?.stream?.size}, " +
+                "mergedStreams=${merged.playurl_info?.playurl?.stream?.size}"
+        )
+        return merged
     }
     /**
      * 发送直播弹幕

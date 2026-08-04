@@ -508,6 +508,26 @@ interface BilibiliApi {
         @Query("only_audio") onlyAudio: Int? = null,
         @QueryMap signedParams: Map<String, String> = emptyMap()
     ): LivePlayUrlResponse
+
+    //  [新增] app 端直播流 API - 与 getLivePlayUrl 同 endpoint，但 platform=android，
+    //  用于「web+app 双平台混合取流」：app 端可能返回 web 端缺失的更高画质/更优流。
+    @GET("https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo")
+    suspend fun getLivePlayUrlApp(
+        @Query("room_id") roomId: Long,
+        @Query("protocol") protocol: String = "0,1",  // 0=http_stream, 1=http_hls
+        @Query("format") format: String = "0,1,2",    // 0=flv, 1=ts, 2=fmp4
+        @Query("codec") codec: String = "0,1,2",      // 0=avc, 1=hevc, 2=av1
+        @Query("qn") quality: Int = 10000,
+        @Query("platform") platform: String = "android",
+        @Query("device") device: String = "pad",
+        @Query("mobi_app") mobiApp: String = "android",
+        @Query("q") q: Int = 80,
+        @Query("ptype") ptype: Int = 8,
+        @Query("dolby") dolby: Int = 5,
+        @Query("panorama") panorama: Int = 1,
+        @Query("only_audio") onlyAudio: Int? = null,
+        @QueryMap signedParams: Map<String, String> = emptyMap()
+    ): LivePlayUrlResponse
     
     //  [新增] 旧版直播流 API - 可靠返回 quality_description 画质列表
     @GET("https://api.live.bilibili.com/room/v1/Room/playUrl")
