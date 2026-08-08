@@ -186,15 +186,20 @@ object PluginManager {
     /**
      *  使用所有启用的 FeedPlugin 过滤视频列表
      * 用于首页推荐和搜索结果
+     *
+     * @param feedKind 信息流来源(首页推荐/热门/排行/分区/搜索), 默认 GENERIC
      */
-    fun filterFeedItems(items: List<com.android.purebilibili.data.model.response.VideoItem>): List<com.android.purebilibili.data.model.response.VideoItem> {
+    fun filterFeedItems(
+        items: List<com.android.purebilibili.data.model.response.VideoItem>,
+        feedKind: FeedKind = FeedKind.GENERIC
+    ): List<com.android.purebilibili.data.model.response.VideoItem> {
         val feedPlugins = getEnabledFeedPlugins()
         if (feedPlugins.isEmpty()) return items
         
         return items.filter { item ->
             feedPlugins.all { plugin ->
                 try {
-                    plugin.shouldShowItem(item)
+                    plugin.shouldShowItem(item, feedKind)
                 } catch (e: Exception) {
                     Logger.e(TAG, " Feed plugin failed: ${plugin.name}", e)
                     true

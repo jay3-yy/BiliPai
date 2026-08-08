@@ -198,6 +198,7 @@ data class VideoItem(
     val view_at: Long = 0,
     val pubdate: Long = 0,
     val isVertical: Boolean = false,  //  是否为竖屏视频
+    val isFollowed: Boolean = false,  //  是否已关注该 UP 主(web 推荐接口的 is_followed)
     val isCollectionResource: Boolean = false,
     val collectionId: Long = 0,
     val collectionMid: Long = 0,
@@ -316,7 +317,11 @@ data class RecommendItem(
     val tname: String = "",
     //  [新增] 视频尺寸信息 (用于判断竖屏视频)
     val dimension: Dimension? = null,
-    val rights: VideoRights? = null
+    val rights: VideoRights? = null,
+    //  [新增] 是否已关注该 UP 主(推荐流过滤已关注豁免用; 接口返回 0/1 整数)
+    @SerialName("is_followed")
+    @Serializable(with = FlexibleBooleanSerializer::class)
+    val isFollowed: Boolean = false
 ) {
     fun toVideoItem(): VideoItem {
         return VideoItem(
@@ -338,6 +343,7 @@ data class RecommendItem(
             duration = duration ?: 0,
             pubdate = pubdate ?: 0L,
             isVertical = dimension?.isVertical == true,
+            isFollowed = isFollowed,
             rights = rights
         )
     }

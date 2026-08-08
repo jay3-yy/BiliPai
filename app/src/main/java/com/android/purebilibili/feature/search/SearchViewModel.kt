@@ -12,6 +12,7 @@ import com.android.purebilibili.data.model.response.SearchTopicItem
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.model.response.SearchUpItem
 import com.android.purebilibili.data.model.response.SearchType
+import com.android.purebilibili.core.plugin.FeedKind
 import com.android.purebilibili.data.model.response.BangumiSearchItem
 import com.android.purebilibili.data.model.response.LiveRoomSearchItem
 import com.android.purebilibili.data.repository.SearchRepository
@@ -555,7 +556,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     result.onSuccess { (videos, pageInfo) ->
                         if (!shouldApplySearchResult(searchSessionId, activeSearchSessionId, normalizedKeyword, _uiState.value.query, searchType, _uiState.value.searchType)) return@onSuccess
                         val nativeFiltered = videos.filter { it.owner.mid !in blockedMids }
-                        val builtinFiltered = com.android.purebilibili.core.plugin.PluginManager.filterFeedItems(nativeFiltered)
+                        val builtinFiltered = com.android.purebilibili.core.plugin.PluginManager.filterFeedItems(nativeFiltered, feedKind = FeedKind.SEARCH)
                         val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtinFiltered)
                         _uiState.update {
                             it.copy(
@@ -936,7 +937,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         if (!shouldApplySearchResult(searchSessionId, activeSearchSessionId, state.query, _uiState.value.query, state.searchType, _uiState.value.searchType)) return@onSuccess
                         val nativeFiltered = videos.filter { it.owner.mid !in blockedMids }
                         val builtinFiltered = com.android.purebilibili.core.plugin.PluginManager
-                            .filterFeedItems(nativeFiltered)
+                            .filterFeedItems(nativeFiltered, feedKind = FeedKind.SEARCH)
                         val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager
                             .filterVideos(builtinFiltered)
 

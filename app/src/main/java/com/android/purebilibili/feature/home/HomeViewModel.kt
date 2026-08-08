@@ -4,6 +4,7 @@ package com.android.purebilibili.feature.home
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.android.purebilibili.core.plugin.FeedKind
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.plugin.RecommendationCreatorSignal
 import com.android.purebilibili.core.plugin.RecommendationFeedbackSignals
@@ -92,6 +93,20 @@ internal fun resolveRecommendFeedRequestIndex(
         currentRefreshIndex + 1
     } else {
         0
+    }
+}
+
+/**
+ * 首页分类 → 插件信息流来源(供 FeedPlugin 按来源区分过滤行为)。
+ */
+internal fun HomeCategory.toFeedKind(popularSubCategory: PopularSubCategory? = null): FeedKind {
+    return when (this) {
+        HomeCategory.RECOMMEND -> FeedKind.HOME_RECOMMEND
+        HomeCategory.POPULAR -> when (popularSubCategory) {
+            PopularSubCategory.RANKING -> FeedKind.HOME_RANK
+            else -> FeedKind.HOME_POPULAR
+        }
+        else -> FeedKind.HOME_REGION
     }
 }
 
@@ -390,10 +405,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // [Feature] Re-filter all content when block list changes
     private fun reFilterAllContent() {
         val oldState = _uiState.value
-        val newCategoryStates = oldState.categoryStates.mapValues { (_, content) ->
+        val newCategoryStates = oldState.categoryStates.mapValues { (category, content) ->
             content.copy(
                 videos = PluginManager.filterFeedItems(
-                    filterHomeFeedbackVideos(content.videos.filter { it.owner.mid !in blockedMids })
+                    filterHomeFeedbackVideos(content.videos.filter { it.owner.mid !in blockedMids }),
+                    feedKind = category.toFeedKind(popularSubCategory.value)
                 ).toImmutableList(),
                 // Filter live rooms if possible (assuming uid matches mid)
                 liveRooms = content.liveRooms.filter { it.uid !in blockedMids }.toImmutableList(),
@@ -1304,7 +1320,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             //  [Feature] 应用屏蔽 + 原生插件 + JSON 规则插件过滤器
             val blockedFiltered = validVideos.filter { video -> video.owner.mid !in blockedMids }
             val feedbackFiltered = filterHomeFeedbackVideos(blockedFiltered)
-            val builtinFiltered = PluginManager.filterFeedItems(feedbackFiltered)
+            val builtinFiltered = PluginManager.filterFeedItems(
+                feedbackFiltered,
+                feedKind = currentCategory.toFeedKind(popularSubCategory)
+            )
             val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager
                 .filterVideos(builtinFiltered)
             
