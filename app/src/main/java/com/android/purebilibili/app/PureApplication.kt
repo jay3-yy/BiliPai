@@ -72,6 +72,11 @@ internal fun shouldRefreshLauncherIconForNightModeChange(
 //  实现 ComponentCallbacks2 响应系统内存警告
 class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     
+    companion object {
+        lateinit var instance: PureApplication
+            private set
+    }
+
     //  保存 ImageLoader 引用以便在 onTrimMemory 中使用
     private var _imageLoader: ImageLoader? = null
     private var launcherIconUiModeSnapshot: Int? = null
@@ -118,6 +123,8 @@ class PureApplication : Application(), ImageLoaderFactory, ComponentCallbacks2 {
     }
     
     override fun onCreate() {
+        instance = this
+
         // StrictMode 必须装在任何业务代码之前，否则紧接着的 applyThemePreference()
         // 里那次同步偏好读取就漏检了——而那恰恰是最该被看见的一处。
         installStrictModeForDebugBuilds()

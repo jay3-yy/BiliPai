@@ -7,6 +7,7 @@ import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyPage
 import com.android.purebilibili.data.repository.CommentRepository
+import com.android.purebilibili.data.repository.CommentFraudRepository
 import com.android.purebilibili.data.repository.shouldStartCommentFraudDetection
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -569,6 +570,7 @@ class VideoCommentViewModel : ViewModel() {
                 aid = aid,
                 rpid = newReply.rpid,
                 rootId = newReply.root,
+                message = newReply.content.message,
                 hasPictures = !newReply.content.pictures.isNullOrEmpty(),
                 sentAtSeconds = sentAtSeconds
             )
@@ -899,14 +901,25 @@ class VideoCommentViewModel : ViewModel() {
 
                 // [新增] 启动评论反诈检测（后台协程，不阻塞 UI）
                 val rpidToCheck = newReply?.rpid ?: 0L
-                if (shouldStartCommentFraudDetection(fraudDetectionEnabled, rpidToCheck)) {
-                    val sentAtSeconds = newReply?.ctime
-                        ?.takeIf { it > 0L }
-                        ?: (System.currentTimeMillis() / 1000L)
+                if (rpidToCheck > 0L) {
+                    // 💾 发评成功瞬间立即在本地数据库记一笔
+                    viewModelScope.launch {
+                        com.android.purebilibili.data.repository.CommentFraudRepository.saveRecord(
+                            rpid = rpidToCheck,
+                            oid = currentAid,
+                            type = 1,
+                            root = root,
+                            message = message,
+                            status = com.android.purebilibili.data.model.CommentFraudStatus.NORMAL
+                        )
+                    }
+                    
+                    val sentAtSeconds = newReply?.ctime?.takeIf { it > 0L } ?: (System.currentTimeMillis() / 1000L)
                     launchFraudDetection(
                         aid = currentAid,
                         rpid = rpidToCheck,
                         rootId = root,
+                        message = message,
                         sentAtSeconds = sentAtSeconds
                     )
                 }
@@ -1067,6 +1080,7 @@ class VideoCommentViewModel : ViewModel() {
         aid: Long,
         rpid: Long,
         rootId: Long,
+        message: String = "",
         hasPictures: Boolean = false,
         sentAtSeconds: Long = 0
     ) {
@@ -1085,6 +1099,16 @@ class VideoCommentViewModel : ViewModel() {
             )
             result.onSuccess { status ->
                 android.util.Log.d("CommentVM", "评论反诈检测结果: $status (rpid=$rpid)")
+                // [存储初检] 初检完成，同步将真实状态写入 initial_status 与 status
+                CommentFraudRepository.saveRecord(
+                    rpid = rpid,
+                    oid = aid,
+                    type = 1,
+                    root = rootId,
+                    message = message,
+                    status = status,
+                    initialStatus = status // 该评论发布 T+5s 的“初始出生状态”！
+                )
                 _commentState.value = _commentState.value.copy(
                     isDetectingFraud = false,
                     fraudDetectResult = status,

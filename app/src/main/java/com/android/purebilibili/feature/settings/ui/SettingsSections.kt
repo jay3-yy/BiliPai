@@ -208,6 +208,7 @@ internal data class SettingsRootCategoryActions(
     val onBottomBarClick: () -> Unit,
     val onPermissionClick: () -> Unit,
     val onBlockedListClick: () -> Unit,
+    val onCommentFraudHistoryClick: () -> Unit,
     val onPluginsClick: () -> Unit,
     val onExportLogsClick: () -> Unit,
     val onSettingsShareClick: () -> Unit,
@@ -796,6 +797,7 @@ internal fun SettingsRootCategoryContent(
                             onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
                             onPermissionClick = actions.onPermissionClick,
                             onBlockedListClick = actions.onBlockedListClick,
+                            onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
                         )
                     }
                 }
@@ -1018,7 +1020,8 @@ internal fun SettingsRootCategoryContent(
                             onPrivacyModeChange = actions.onPrivacyModeChange,
                             onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
                             onPermissionClick = actions.onPermissionClick,
-                            onBlockedListClick = actions.onBlockedListClick
+                            onBlockedListClick = actions.onBlockedListClick,
+                            onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
                         )
                     }
                 }
@@ -1490,7 +1493,8 @@ fun PrivacySection(
     onPrivacyModeChange: (Boolean) -> Unit,
     onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     onPermissionClick: () -> Unit,
-    onBlockedListClick: () -> Unit // [New]
+    onBlockedListClick: () -> Unit, // [New]
+    onCommentFraudHistoryClick: () -> Unit // [New]
 ) {
     val siblingTints = remember { resolveSettingsSiblingIconTints(4, paletteOffset = 4) }
     val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION)
@@ -1527,7 +1531,7 @@ fun PrivacySection(
             onClick = onPermissionClick,
             iconTint = siblingTints[2]
         )
-         SettingsAdaptiveDivider()
+        SettingsAdaptiveDivider()
         SettingClickableItem(
             icon = blockedListVisual.icon,
             iconPainter = blockedListVisual.iconResId?.let { painterResource(id = it) },
@@ -1535,6 +1539,14 @@ fun PrivacySection(
             value = "管理已屏蔽的 UP 主",
             onClick = onBlockedListClick,
             iconTint = siblingTints[3]
+        )
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
+            icon = Icons.Outlined.Shield,
+            title = "发评反诈历史",
+            value = "查看历史发评与风控状态",
+            onClick = onCommentFraudHistoryClick,
+            iconTint = com.android.purebilibili.core.theme.iOSPink
         )
     }
 }

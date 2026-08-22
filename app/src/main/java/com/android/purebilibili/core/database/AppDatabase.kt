@@ -10,11 +10,18 @@ import com.android.purebilibili.core.database.dao.SearchHistoryDao
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.database.entity.BlockedUp
 import com.android.purebilibili.core.database.dao.BlockedUpDao
+import com.android.purebilibili.core.database.dao.CommentFraudDao
+import com.android.purebilibili.core.database.entity.CommentFraudRecord
 
-@Database(entities = [SearchHistory::class, BlockedUp::class], version = 4, exportSchema = false)
+@Database(
+    entities = [SearchHistory::class, BlockedUp::class, CommentFraudRecord::class],
+    version = 6,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun searchHistoryDao(): SearchHistoryDao
     abstract fun blockedUpDao(): BlockedUpDao
+    abstract fun commentFraudDao(): CommentFraudDao
 
     companion object {
         @Volatile
@@ -28,7 +35,6 @@ abstract class AppDatabase : RoomDatabase() {
                     "app_database"
                 )
                     .addMigrations(MIGRATION_3_4)
-                    //  数据库迁移：Schema 变更时清空旧数据
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                 INSTANCE = instance

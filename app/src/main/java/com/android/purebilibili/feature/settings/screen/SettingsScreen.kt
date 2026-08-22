@@ -81,6 +81,7 @@ import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.feature.dynamic.defaultDynamicTabVisibleIds
 import com.android.purebilibili.feature.dynamic.resolveDynamicVisibleTabIdsAfterToggle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.feature.settings.screen.CommentFraudHistoryScreen
 
 const val GITHUB_URL = OFFICIAL_GITHUB_URL
 
@@ -202,6 +203,8 @@ fun SettingsScreen(
     
     // [新增] 黑名单页面状态
     var showBlockedList by remember { mutableStateOf(false) }
+    // [新增] 发评反诈页面状态
+    var showCommentFraudHistory by remember { mutableStateOf(false) }
     val installedBuildProvenance = remember { readInstalledAppBuildProvenance() }
 
     // Effects
@@ -397,6 +400,7 @@ fun SettingsScreen(
     }
     val onDisclaimerClick: () -> Unit = { showReleaseDisclaimerDialog = true }
     val onBlockedListClickAction: () -> Unit = { showBlockedList = true }
+    val onCommentFraudHistoryClickAction: () -> Unit = { showCommentFraudHistory = true }
     suspend fun runUpdateCheck(
         silent: Boolean,
         shouldOpenReleaseNotes: Boolean = false
@@ -982,6 +986,8 @@ fun SettingsScreen(
     CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
         if (showBlockedList) {
             BlockedListScreen(onBack = { showBlockedList = false })
+        } else if (showCommentFraudHistory) {
+            CommentFraudHistoryScreen(onBack = { showCommentFraudHistory = false })
         } else {
         // Layout Switching
         Box(
@@ -1039,6 +1045,7 @@ fun SettingsScreen(
                     onDonateClick = { showDonateDialog = true },
                     onOpenLinksClick = onOpenLinksAction,
                     onBlockedListClick = onBlockedListClickAction,
+                    onCommentFraudHistoryClick = onCommentFraudHistoryClickAction,
                     onPrivacyModeChange = onPrivacyModeChange,
                     onPrivacyContentAuthenticationChange = onPrivacyContentAuthenticationChange,
                     onCrashTrackingChange = onCrashTrackingChange,
@@ -1198,6 +1205,7 @@ private fun MobileSettingsNavLayout(
     onDonateClick: () -> Unit,
     onOpenLinksClick: () -> Unit,
     onBlockedListClick: () -> Unit,
+    onCommentFraudHistoryClick: () -> Unit,
     onPrivacyModeChange: (Boolean) -> Unit,
     onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     onCrashTrackingChange: (Boolean) -> Unit,
@@ -1273,6 +1281,7 @@ private fun MobileSettingsNavLayout(
         onBottomBarClick = onNavigateToBottomBarSettings,
         onPermissionClick = onPermissionClick,
         onBlockedListClick = onBlockedListClick,
+        onCommentFraudHistoryClick = onCommentFraudHistoryClick,
         onPluginsClick = onPluginsClick,
         onExportLogsClick = onExportLogsClick,
         onSettingsShareClick = onSettingsShareClick,
