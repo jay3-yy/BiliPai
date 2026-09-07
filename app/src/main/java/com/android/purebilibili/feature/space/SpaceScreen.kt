@@ -201,7 +201,6 @@ fun SpaceScreen(
     onLiveClick: (Long, String, String) -> Unit = { _, _, _ -> },
     onUserClick: (Long) -> Unit = {},
     onTopicClick: (Long) -> Unit = {},
-    onPlayAllAudioClick: ((String, Long) -> Unit)? = null,
     onDynamicDetailClick: (String) -> Unit = {},
     onArticleClick: (Long, String) -> Unit = { _, _ -> },
     onViewAllClick: (String, Long, Long, String, String) -> Unit = { _, _, _, _, _ -> },
@@ -284,8 +283,7 @@ fun SpaceScreen(
         )
         com.android.purebilibili.feature.video.player.PlaylistManager
             .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
-        onPlayAllAudioClick?.invoke(startBvid, playbackTarget.resumePositionMs)
-            ?: onVideoClick(startBvid, playbackTarget.cid, playbackTarget.resumePositionMs)
+        onVideoClick(startBvid, playbackTarget.cid, playbackTarget.resumePositionMs)
     }
     val playedVideoBvid = targetBvid?.trim().orEmpty()
     val playedVideoLocatePromptEnabled by com.android.purebilibili.core.store.SettingsManager
@@ -563,7 +561,6 @@ fun SpaceScreen(
                             onLiveClick = onLiveClick,
                             onUserClick = onUserClick,
                             onTopicClick = onTopicClick,
-                            onPlayAllAudioClick = onPlayAllAudioClick,
                             onDynamicDetailClick = onDynamicDetailClick,
                             onArticleClick = onArticleClick,
                             onViewAllClick = onViewAllClick,
@@ -897,7 +894,6 @@ private fun SpaceContent(
     onLiveClick: (Long, String, String) -> Unit,
     onUserClick: (Long) -> Unit,
     onTopicClick: (Long) -> Unit,
-    onPlayAllAudioClick: ((String, Long) -> Unit)?,
     onDynamicDetailClick: (String) -> Unit,
     onArticleClick: (Long, String) -> Unit,
     onViewAllClick: (String, Long, Long, String, String) -> Unit,
