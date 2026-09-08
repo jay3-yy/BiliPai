@@ -3539,16 +3539,6 @@ fun AppNavigation(
                                             )
                                         }
                                     },
-                                    onPlayAllAudioClick = { bvid, resumePositionMs ->
-                                        navigateToVideoInNavigation3(
-                                            bvid = bvid,
-                                            cid = 0L,
-                                            coverUrl = "",
-                                            startAudio = true,
-                                            resumePositionMs = resumePositionMs,
-                                            sourceRoute = spaceKey.toLegacyRoute()
-                                        )
-                                    },
                                     onDynamicDetailClick = { dynamicId ->
                                         pushNavigation3Key(BiliPaiNavKey.DynamicDetail(dynamicId))
                                     },
