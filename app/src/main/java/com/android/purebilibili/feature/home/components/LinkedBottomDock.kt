@@ -2,9 +2,7 @@ package com.android.purebilibili.feature.home.components
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.snap
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -29,14 +27,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.motion.iosMorphTween
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.feature.home.LocalHomeScrollOffset
 import kotlinx.coroutines.flow.collect
 import top.yukonga.miuix.kmp.blur.Backdrop
 
-private const val LINKED_DOCK_MERGE_DURATION_MILLIS = 320
-private const val LINKED_DOCK_SEARCH_DURATION_MILLIS = 280
-private val LinkedDockIosEaseInOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+private const val LINKED_DOCK_MERGE_DURATION_MILLIS = 280
+private const val LINKED_DOCK_SEARCH_DURATION_MILLIS = 240
 
 @Composable
 internal fun LinkedBottomDock(
@@ -53,7 +51,7 @@ internal fun LinkedBottomDock(
     glassEnabled: Boolean,
     liquidGlassTuning: LiquidGlassTuning,
     iconStyle: SharedFloatingBottomBarIconStyle,
-    nowPlayingContent: (@Composable (Modifier, Float, Boolean, Float) -> Unit)?,
+    nowPlayingContent: (@Composable (Modifier, Float, Float, Float) -> Unit)?,
     modifier: Modifier = Modifier,
     navigationContent: @Composable () -> Unit,
 ) {
@@ -107,19 +105,13 @@ internal fun LinkedBottomDock(
     val transition = updateTransition(targetState = phase, label = "linkedBottomDock")
     val merge = transition.animateFloat(
         transitionSpec = {
-            if (reduceMotion) snap() else tween(
-                durationMillis = LINKED_DOCK_MERGE_DURATION_MILLIS,
-                easing = LinkedDockIosEaseInOut,
-            )
+            if (reduceMotion) snap() else iosMorphTween(LINKED_DOCK_MERGE_DURATION_MILLIS)
         },
         label = "dockMerge",
     ) { if (it == LinkedDockPhase.Expanded) 0f else 1f }
     val search = transition.animateFloat(
         transitionSpec = {
-            if (reduceMotion) snap() else tween(
-                durationMillis = LINKED_DOCK_SEARCH_DURATION_MILLIS,
-                easing = LinkedDockIosEaseInOut,
-            )
+            if (reduceMotion) snap() else iosMorphTween(LINKED_DOCK_SEARCH_DURATION_MILLIS)
         },
         label = "dockSearch",
     ) { if (it == LinkedDockPhase.Search) 1f else 0f }
@@ -163,7 +155,7 @@ internal fun LinkedBottomDock(
             }
             Box {
                 nowPlayingContent?.invoke(Modifier.fillMaxSize(), merge.value.coerceIn(0f, 1f),
-                    search.value > 0.5f, 0f)
+                    search.value.coerceIn(0f, 1f), 0f)
             }
             Box(contentAlignment = Alignment.Center) {
                 if (searchEnabled) {

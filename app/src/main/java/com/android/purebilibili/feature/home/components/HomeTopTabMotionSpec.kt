@@ -1,10 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.SpringSpec
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.TweenSpec
+import com.android.purebilibili.core.ui.motion.iosMorphTween
 
-internal fun <T> iosTopTabCapsuleMotionSpec(): SpringSpec<T> = spring(
-    dampingRatio = 0.68f,
-    stiffness = Spring.StiffnessMediumLow,
-)
+internal fun <T> iosTopTabCapsuleMotionSpec(): TweenSpec<T> = iosMorphTween(260)

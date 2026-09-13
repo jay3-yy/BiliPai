@@ -647,7 +647,6 @@ fun DynamicScreen(
         if (!shouldAutoCollapseBottomBar) {
             setBottomBarVisible(true)
             bottomBarChromeScrollOffset.value = 0f
-            return@LaunchedEffect
         }
         snapshotFlow {
             Pair(state.firstVisibleItemIndex, state.firstVisibleItemScrollOffset)
@@ -655,9 +654,10 @@ fun DynamicScreen(
         .distinctUntilChanged()
         .collect { (firstVisibleItem, scrollOffset) ->
              // 顶部始终显示
-             if (firstVisibleItem == 0 && scrollOffset < 100) {
-                 setBottomBarVisible(true)
-             } else {
+             if (shouldAutoCollapseBottomBar) {
+                 if (firstVisibleItem == 0 && scrollOffset < 100) {
+                     setBottomBarVisible(true)
+                 } else {
                  val isScrollingDown = when {
                      firstVisibleItem > lastFirstVisibleItem -> true
                      firstVisibleItem < lastFirstVisibleItem -> false
@@ -671,6 +671,11 @@ fun DynamicScreen(
 
                  if (isScrollingDown) setBottomBarVisible(false)
                  if (isScrollingUp) setBottomBarVisible(true)
+                 }
+             } else {
+                 // Waterfall keeps the navigation bar mounted, but the linked playback
+                 // strip still follows the same scroll position and can merge globally.
+                 setBottomBarVisible(true)
              }
              lastFirstVisibleItem = firstVisibleItem
              lastScrollOffset = scrollOffset

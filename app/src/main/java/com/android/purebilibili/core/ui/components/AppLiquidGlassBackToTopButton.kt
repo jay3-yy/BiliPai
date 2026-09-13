@@ -48,7 +48,7 @@ fun AppLiquidGlassBackToTopButton(
 
     AnimatedVisibility(
         visible = visible,
-        modifier = modifier.offset(y = (-8).dp),
+        modifier = modifier.offset(y = (-20).dp),
         enter = fadeIn(animationSpec = AppMotionTokens.standardSpec()) +
             scaleIn(animationSpec = AppMotionTokens.standardSpec(), initialScale = 0.92f),
         exit = fadeOut(animationSpec = AppMotionTokens.expressiveSpec()) +

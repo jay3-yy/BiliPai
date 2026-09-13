@@ -7,6 +7,8 @@ import androidx.compose.ui.unit.IntOffset
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.resolveAndroidNativeChromeTokens
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.iosMorphTween
 import com.android.purebilibili.core.ui.motion.navigationSlideSpring
 import com.android.purebilibili.core.ui.motion.pullRefreshReleaseSpring
 import kotlin.test.Test
@@ -14,6 +16,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AppMotionTokensTest {
+
+    @Test
+    fun iosMorphSpec_usesSharedAppleEaseInOutCurve() {
+        val spec = iosMorphTween<Float>(260)
+
+        assertEquals(260, spec.durationMillis)
+        assertEquals(AppMotionEasing.IosEaseInOut, spec.easing)
+    }
 
     @Test
     fun material3_standardSpec_isTween200ms() {

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -14,6 +15,9 @@ class BottomBarChromeMotionSpecTest {
         assertEquals(240, bottomBarClickPulseMotionSpec<Float>().durationMillis)
         assertEquals(240, bottomBarTapReleaseMotionSpec<Float>().durationMillis)
         assertEquals(260, bottomBarSettleReboundMotionSpec<Float>().durationMillis)
+        assertEquals(AppMotionEasing.IosEaseInOut, bottomBarDockWidthMotionSpec<Float>().easing)
+        assertEquals(AppMotionEasing.IosEaseInOut, bottomBarChromeHeightMotionSpec<Float>().easing)
+        assertEquals(AppMotionEasing.IosEaseInOut, bottomBarSearchGapMotionSpec<Float>().easing)
     }
 
     @Test

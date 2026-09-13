@@ -57,9 +57,12 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.motion.iosMorphTween
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 
 private const val TAG = "MiniPlayerOverlay"
 private const val AUTO_HIDE_DELAY_MS = 3000L
+private const val MINI_PLAYER_VISIBILITY_DURATION_MILLIS = 280
 
 /**
  *  小窗播放器覆盖层
@@ -100,6 +103,7 @@ fun MiniPlayerOverlay(
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val playerChromeProfile = rememberAppPlayerChromeProfile()
+    val reduceMotion = rememberSystemReduceMotion()
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveMiniPlayerOverlayLayoutPolicy(
             widthDp = configuration.screenWidthDp
@@ -335,42 +339,58 @@ fun MiniPlayerOverlay(
 
     val animatedOffsetX by animateFloatAsState(
         targetValue = targetOffsetX,
-        animationSpec = if (isDraggingPosition || isResizing) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
+            snap()
+        } else {
+            spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)
+        },
         label = "offsetX"
     )
     val animatedOffsetY by animateFloatAsState(
         targetValue = targetOffsetY,
-        animationSpec = if (isDraggingPosition || isResizing) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = if (isDraggingPosition || isResizing || reduceMotion) {
+            snap()
+        } else {
+            spring(dampingRatio = 1f, stiffness = Spring.StiffnessMedium)
+        },
         label = "offsetY"
     )
 
+    val visibilitySlideSpec: FiniteAnimationSpec<IntOffset> =
+        iosMorphTween(MINI_PLAYER_VISIBILITY_DURATION_MILLIS)
+    val visibilityFadeSpec: FiniteAnimationSpec<Float> =
+        iosMorphTween(if (reduceMotion) 160 else MINI_PLAYER_VISIBILITY_DURATION_MILLIS)
+    val enterTransition = if (reduceMotion) {
+        fadeIn(animationSpec = visibilityFadeSpec)
+    } else {
+        (when (cardPosition) {
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT ->
+                slideInHorizontally(animationSpec = visibilitySlideSpec, initialOffsetX = { -it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT ->
+                slideInHorizontally(animationSpec = visibilitySlideSpec, initialOffsetX = { it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE ->
+                slideInVertically(animationSpec = visibilitySlideSpec, initialOffsetY = { -it })
+        }) + fadeIn(animationSpec = visibilityFadeSpec)
+    }
+    val exitTransition = if (!miniPlayerManager.shouldAnimateExit) {
+        ExitTransition.None
+    } else if (reduceMotion) {
+        fadeOut(animationSpec = visibilityFadeSpec)
+    } else {
+        (when (cardPosition) {
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT ->
+                slideOutHorizontally(animationSpec = visibilitySlideSpec, targetOffsetX = { -it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT ->
+                slideOutHorizontally(animationSpec = visibilitySlideSpec, targetOffsetX = { it })
+            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE ->
+                slideOutVertically(animationSpec = visibilitySlideSpec, targetOffsetY = { -it })
+        }) + fadeOut(animationSpec = visibilityFadeSpec)
+    }
+
     AnimatedVisibility(
         visible = miniPlayerManager.isMiniMode && miniPlayerManager.isActive,
-        //  [修改] 根据卡片在屏幕中的水平分块决定动画方向
-        //  Left: 从左往右飞出 (SlideIn Left)
-        //  Right: 从右往左飞出 (SlideIn Right)
-        //  Middle: 从上往下飞出 (SlideIn Top)
-        enter = (when (cardPosition) {
-            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT -> 
-                slideInHorizontally(initialOffsetX = { -it }) // 从左侧滑入
-            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT -> 
-                slideInHorizontally(initialOffsetX = { it })  // 从右侧滑入
-            com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE -> 
-                slideInVertically(initialOffsetY = { -it })   // 从顶部滑入
-        }) + fadeIn(),
-        
-        exit = if (miniPlayerManager.shouldAnimateExit) {
-            (when (cardPosition) {
-                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.LEFT -> 
-                    slideOutHorizontally(targetOffsetX = { -it })
-                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.RIGHT -> 
-                    slideOutHorizontally(targetOffsetX = { it })
-                com.android.purebilibili.core.util.CardPositionManager.CardHorizontalPosition.MIDDLE -> 
-                    slideOutVertically(targetOffsetY = { -it })
-            }) + fadeOut()
-        } else {
-            ExitTransition.None
-        },
+        enter = enterTransition,
+        exit = exitTransition,
             modifier = modifier.zIndex(100f)
     ) {
         if (isStashed) {

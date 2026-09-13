@@ -1453,7 +1453,8 @@ fun AppNavigation(
         // This raw signal is intentionally independent from the user's bottom-bar visibility
         // mode: the linked playback strip still compacts on downward browsing when the bar itself
         // is configured to remain visible.
-        val collapseLinkedPlaybackDock = !isBottomBarVisible
+        val collapseLinkedPlaybackDock = !isBottomBarVisible ||
+            (currentBottomNavItem == BottomNavItem.DYNAMIC && scrollOffsetState.floatValue > 50f)
         val bottomBarVisibilityState = remember { MutableTransitionState(finalBottomBarVisible) }
         bottomBarVisibilityState.targetState = finalBottomBarVisible
         val bottomBarCanMount =
@@ -3983,9 +3984,9 @@ fun AppNavigation(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                        val dockAudioContent: (@Composable (Modifier, Float, Boolean, Float) -> Unit)? =
+                        val dockAudioContent: (@Composable (Modifier, Float, Float, Float) -> Unit)? =
                             if (showAudioNowPlayingInDock && audioNowPlayingItem != null) {
-                                { audioModifier, dockMergeProgress, iconOnly, surfaceMergeProgress ->
+                                { audioModifier, dockMergeProgress, iconOnlyProgress, surfaceMergeProgress ->
                                     val playbackManager = miniPlayerManager ?: MiniPlayerManager.getInstance(context)
                                     AudioNowPlayingBar(
                                         state = AudioNowPlayingBarState(
@@ -4037,13 +4038,13 @@ fun AppNavigation(
                                         dockHosted = isBottomBarFloating,
                                         dockMergeProgress = dockMergeProgress,
                                         surfaceMergeProgress = surfaceMergeProgress,
-                                        iconOnly = iconOnly,
+                                        iconOnlyProgress = iconOnlyProgress,
                                         modifier = audioModifier
                                     )
                                 }
                             } else null
                         if (!isBottomBarFloating) {
-                            dockAudioContent?.invoke(Modifier, 0f, false, 0f)
+                            dockAudioContent?.invoke(Modifier, 0f, 0f, 0f)
                         }
                         if (isBottomBarFloating) {
                             Box(

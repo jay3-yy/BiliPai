@@ -1,15 +1,15 @@
 package com.android.purebilibili.feature.home.components
 
-import androidx.compose.animation.core.Spring
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class HomeTopTabMotionSpecTest {
     @Test
-    fun iosCapsule_preservesItsTrackingPhysics() {
+    fun iosCapsule_usesSharedReversibleMorphCurve() {
         val spec = iosTopTabCapsuleMotionSpec<Float>()
 
-        assertEquals(0.68f, spec.dampingRatio)
-        assertEquals(Spring.StiffnessMediumLow, spec.stiffness)
+        assertEquals(260, spec.durationMillis)
+        assertEquals(AppMotionEasing.IosEaseInOut, spec.easing)
     }
 }

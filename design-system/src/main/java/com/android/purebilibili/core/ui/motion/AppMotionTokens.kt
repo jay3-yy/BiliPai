@@ -16,6 +16,8 @@ import com.android.purebilibili.core.theme.resolveAndroidNativeChromeTokens
 import top.yukonga.miuix.kmp.anim.folmeSpring
 
 object AppMotionEasing {
+    /** Apple/SwiftUI easeInOut unit curve for reversible on-screen morphs. */
+    val IosEaseInOut: Easing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
     val EmphasizedEnter: Easing = CubicBezierEasing(0.22f, 1f, 0.36f, 1f)
     val EmphasizedExit: Easing = CubicBezierEasing(0.32f, 0f, 0.67f, 0f)
     val Continuity: Easing = CubicBezierEasing(0.20f, 0.90f, 0.22f, 1.00f)
@@ -44,6 +46,9 @@ fun <T> emphasizedExitTween(durationMillis: Int): TweenSpec<T> =
 
 fun <T> continuityTween(durationMillis: Int): TweenSpec<T> =
     tween(durationMillis = durationMillis, easing = AppMotionEasing.Continuity)
+
+fun <T> iosMorphTween(durationMillis: Int): TweenSpec<T> =
+    tween(durationMillis = durationMillis, easing = AppMotionEasing.IosEaseInOut)
 
 internal fun <T> gentleEnterTween(durationMillis: Int): TweenSpec<T> =
     tween(durationMillis = durationMillis, easing = AppMotionEasing.GentleEnter)

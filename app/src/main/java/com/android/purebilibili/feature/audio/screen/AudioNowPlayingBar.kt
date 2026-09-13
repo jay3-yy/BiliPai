@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -75,11 +76,14 @@ internal fun AudioNowPlayingBar(
     consumeNavigationBarsPadding: Boolean = true,
     dockHosted: Boolean = false,
     dockMergeProgress: Float = 0f,
-    iconOnly: Boolean = false,
+    iconOnlyProgress: Float = 0f,
     surfaceMergeProgress: Float = dockMergeProgress,
     modifier: Modifier = Modifier
 ) {
-    val compact = dockMergeProgress > 0.5f
+    val mergeProgress = dockMergeProgress.coerceIn(0f, 1f)
+    val searchProgress = iconOnlyProgress.coerceIn(0f, 1f)
+    val primaryContentProgress = 1f - searchProgress
+    val supplementalContentProgress = (1f - mergeProgress) * primaryContentProgress
     val chrome = resolveMusicPlayerChromeSpec(
         uiStyle = LocalAppUiStyle.current,
         glassEnabled = glassEnabled
@@ -134,22 +138,27 @@ internal fun AudioNowPlayingBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(if (dockHosted) 56.dp else 64.dp)
-                .padding(horizontal = if (iconOnly) 0.dp else 10.dp),
+                .padding(horizontal = (10f * primaryContentProgress).dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (iconOnly) Arrangement.Center else Arrangement.Start,
+            horizontalArrangement = if (searchProgress >= 0.999f) Arrangement.Center else Arrangement.Start,
         ) {
             AsyncImage(
                 model = state.coverUrl,
                 contentDescription = null,
                 modifier = Modifier
-                    .size((40f - 8f * dockMergeProgress.coerceIn(0f, 1f)).dp)
+                    .size((40f - 8f * mergeProgress).dp)
                     .graphicsLayer { rotationZ = coverRotationDegrees() }
                     .clip(if (chrome.coverShapeIsCircle) CircleShape else AppShapes.container(ContainerLevel.Field)),
                 contentScale = ContentScale.Crop
             )
-            if (!iconOnly) {
-                Spacer(Modifier.width(if (compact) 6.dp else 10.dp))
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+            if (primaryContentProgress > 0.001f) {
+                Spacer(Modifier.width(((10f - 4f * mergeProgress) * primaryContentProgress).dp))
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .graphicsLayer { alpha = primaryContentProgress },
+                    verticalArrangement = Arrangement.Center,
+                ) {
                     AppText(
                         text = state.title,
                         modifier = if (state.isPlaying) {
@@ -164,46 +173,98 @@ internal fun AudioNowPlayingBar(
                         fontWeight = FontWeight.SemiBold,
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    if (!compact) Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    if (supplementalContentProgress > 0.001f) {
+                        Box(
+                            modifier = Modifier
+                                .height((20f * supplementalContentProgress).dp)
+                                .clipToBounds()
+                                .graphicsLayer { alpha = supplementalContentProgress },
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                if (state.artistAvatarUrl.isNotBlank()) {
+                                    AsyncImage(
+                                        model = state.artistAvatarUrl,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
+                                AppText(
+                                    text = state.artist,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .width((48f * primaryContentProgress).dp)
+                        .height(48.dp)
+                        .clipToBounds()
+                        .graphicsLayer {
+                            alpha = primaryContentProgress
+                            scaleX = primaryContentProgress
+                            scaleY = primaryContentProgress
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIconButton(onClick = onPlayPause, modifier = Modifier.size(48.dp)) {
+                        AppIcon(
+                            imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (state.isPlaying) "暂停" else "播放",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+                if (supplementalContentProgress > 0.001f) {
+                    Box(
+                        modifier = Modifier
+                            .width((48f * supplementalContentProgress).dp)
+                            .height(48.dp)
+                            .clipToBounds()
+                            .graphicsLayer {
+                                alpha = supplementalContentProgress
+                                scaleX = supplementalContentProgress
+                                scaleY = supplementalContentProgress
+                            },
+                        contentAlignment = Alignment.Center,
                     ) {
-                        if (state.artistAvatarUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = state.artistAvatarUrl,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop
+                        AppIconButton(onClick = onExpand, modifier = Modifier.size(48.dp)) {
+                            AppIcon(
+                                Icons.Outlined.QueueMusic,
+                                contentDescription = "打开$expandDestinationLabel",
+                                tint = MaterialTheme.colorScheme.onSurface,
                             )
                         }
-                        AppText(
-                            text = state.artist,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
-                }
-                AppIconButton(onClick = onPlayPause, modifier = Modifier.size(48.dp)) {
-                    AppIcon(
-                        imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (state.isPlaying) "暂停" else "播放",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                if (!compact) {
-                    AppIconButton(onClick = onExpand, modifier = Modifier.size(48.dp)) {
-                        AppIcon(
-                            Icons.Outlined.QueueMusic,
-                            contentDescription = "打开$expandDestinationLabel",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                    AppIconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-                        AppIcon(Icons.Filled.Close, contentDescription = "关闭听视频条", tint = MaterialTheme.colorScheme.onSurface)
+                    Box(
+                        modifier = Modifier
+                            .width((48f * supplementalContentProgress).dp)
+                            .height(48.dp)
+                            .clipToBounds()
+                            .graphicsLayer {
+                                alpha = supplementalContentProgress
+                                scaleX = supplementalContentProgress
+                                scaleY = supplementalContentProgress
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AppIconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
+                            AppIcon(
+                                Icons.Filled.Close,
+                                contentDescription = "关闭听视频条",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                 }
             }
