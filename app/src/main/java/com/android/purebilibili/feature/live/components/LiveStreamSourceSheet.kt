@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.live.components
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,21 +10,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.SettingsInputComponent
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -35,6 +26,7 @@ import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.feature.live.LivePlaybackCandidate
@@ -112,31 +104,16 @@ private fun LiveSourceRow(
     isActive: Boolean,
     onClick: () -> Unit
 ) {
-    AppSurface(
+    AppSingleChoiceRow(
+        selected = isActive,
         onClick = onClick,
         shape = AppShapes.container(ContainerLevel.Card),
-        color = if (isActive) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            AppSurfaceTokens.surfaceContainerHigh().copy(alpha = 0.72f)
-        },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(
-                horizontal = AppSpacingTokens.Large,
-                vertical = AppSpacingTokens.Medium
-            ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             AppIcon(
                 imageVector = Icons.Outlined.SettingsInputComponent,
                 contentDescription = null,
-                tint = if (isActive) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                tint = AppSurfaceTokens.onSurfaceVariantActions()
             )
             Spacer(Modifier.width(AppSpacingTokens.Medium))
             Column(modifier = Modifier.weight(1f)) {
@@ -148,7 +125,7 @@ private fun LiveSourceRow(
                         append(" · ")
                         append(candidate.codecName.uppercase().ifBlank { "?" })
                     },
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = AppSurfaceTokens.onSurfaceContainerHigh(),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                     maxLines = 1,
@@ -156,24 +133,10 @@ private fun LiveSourceRow(
                 )
                 AppText(
                     text = "线路 ${urlIndex + 1}/$totalUrls",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppSurfaceTokens.onSurfaceVariantSummary(),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
-            if (isActive) {
-                AppIcon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .semantics {
-                            contentDescription = "当前线路"
-                            this.selected = true
-                        }
-                )
-            }
-        }
     }
 }
 

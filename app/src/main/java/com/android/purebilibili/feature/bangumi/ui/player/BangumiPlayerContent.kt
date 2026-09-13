@@ -5,6 +5,8 @@ import com.android.purebilibili.navigation.animatePagerSelection
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
@@ -384,24 +386,20 @@ contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme))
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     BANGUMI_FOLLOW_STATUS_OPTIONS.forEach { option ->
-                        AppSurface(
+                        AppSingleChoiceRow(
+                            selected = detail.userStatus?.followStatus == option.status,
                             onClick = {
                                 showFollowStatusDialog = false
                                 onFollowStatusSelect(option.status)
                             },
                             shape = AppShapes.container(ContainerLevel.Chip),
-                            color = if (detail.userStatus?.followStatus == option.status) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-                            },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             AppText(
                                 text = option.label,
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontSize = 15.sp
+                                color = AppSurfaceTokens.onSurfaceContainerHigh(),
+                                fontSize = 15.sp,
+                                modifier = Modifier.weight(1f)
                             )
                         }
                     }

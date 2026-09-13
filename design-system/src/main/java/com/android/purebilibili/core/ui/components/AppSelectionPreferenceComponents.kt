@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
@@ -34,9 +33,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -201,26 +197,12 @@ fun <T> AppSingleChoiceDialog(
                 ) {
                     options.forEach { option ->
                         val selected = option.value == selectedValue
-                        Row(
+                        AppSingleChoiceRow(
+                            selected = selected,
+                            onClick = { onValueSelected(option.value) },
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 56.dp)
-                                .selectable(
-                                    selected = selected,
-                                    role = Role.RadioButton,
-                                    onClick = { onValueSelected(option.value) },
-                                )
-                                .semantics(mergeDescendants = true) {
-                                    stateDescription = if (selected) "已选中" else "未选中"
-                                }
-                                .padding(horizontal = 18.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                                .fillMaxWidth(),
                         ) {
-                            AppRadioButton(
-                                selected = selected,
-                                onClick = null,
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = option.label,

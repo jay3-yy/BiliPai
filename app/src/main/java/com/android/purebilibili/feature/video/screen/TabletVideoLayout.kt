@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppSplitLayout
 import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.util.ShareUtils
@@ -1130,17 +1131,11 @@ private fun TabletCollectionPane(
         }
         items(episodes, key = { it.id }) { episode ->
             val isCurrent = isCurrentUgcEpisode(currentBvid, currentCid, episode)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(AppShapes.container(ContainerLevel.Card))
-                    .background(
-                        if (isCurrent) MaterialTheme.colorScheme.primaryContainer
-                        else MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                    .clickable(enabled = !isCurrent) { onEpisodeClick(episode) }
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+            AppSingleChoiceRow(
+                selected = isCurrent,
+                onClick = { if (!isCurrent) onEpisodeClick(episode) },
+                shape = AppShapes.container(ContainerLevel.Card),
+                modifier = Modifier.fillMaxWidth()
             ) {
                 coil3.compose.AsyncImage(
                     model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(episode.arc?.pic.orEmpty()),
@@ -1157,15 +1152,9 @@ private fun TabletCollectionPane(
                         text = episode.title,
                         maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        color = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (isCurrent) {
-                        AppText(
-                            text = "正在播放",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    if (isCurrent) AppText(text = "正在播放", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

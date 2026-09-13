@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.bangumi
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
@@ -1232,20 +1234,12 @@ private fun BangumiFollowStatusDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 BANGUMI_FOLLOW_STATUS_OPTIONS.forEach { option ->
-                    AppSurface(
+                    AppSingleChoiceRow(
+                        selected = currentStatus == option.status,
                         onClick = { onSelect(option.status) },
                         shape = AppShapes.container(ContainerLevel.Chip),
-                        color = if (currentStatus == option.status) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
                             AppText(
                                 text = option.label,
                                 fontSize = 15.sp,
@@ -1254,22 +1248,9 @@ private fun BangumiFollowStatusDialog(
                                 } else {
                                     FontWeight.Normal
                                 },
-                                color = if (currentStatus == option.status) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
+                                color = AppSurfaceTokens.onSurfaceContainerHigh(),
                                 modifier = Modifier.weight(1f)
                             )
-                            if (currentStatus == option.status) {
-                                AppIcon(
-                                    Icons.Outlined.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
                     }
                 }
             }

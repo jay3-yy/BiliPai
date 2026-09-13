@@ -408,7 +408,9 @@ fun SidebarItem(
             AppText(
                 text = label,
                 fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                // The label sits outside the selected icon container, so it uses the
+                // accent role rather than the container's paired content role.
+                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

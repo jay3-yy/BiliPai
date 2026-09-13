@@ -45,6 +45,8 @@ import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppCheckbox
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.util.FormatUtils
@@ -534,8 +536,7 @@ private fun FavoritePgcCard(
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = AppShapes.container(ContainerLevel.Card),
-        color = if (selected) MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.30f),
+        color = AppSurfaceTokens.cardContainer(),
     ) {
         Column {
             Box {
@@ -560,6 +561,14 @@ private fun FavoritePgcCard(
                     ) {
                         AppIcon(Icons.Rounded.Close, contentDescription = "取消收藏")
                     }
+                } else {
+                    AppCheckbox(
+                        checked = selected,
+                        onCheckedChange = null,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(AppSpacingTokens.Small),
+                    )
                 }
             }
             Column(

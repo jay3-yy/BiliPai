@@ -8,6 +8,7 @@ import com.android.purebilibili.core.ui.components.videoListItemModifier
 import com.android.purebilibili.core.ui.components.AnimatedVideoListItem
 import coil3.request.crossfade
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -1192,17 +1193,12 @@ fun WatchLaterScreen(
                 } else {
                     LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
                         items(state.favoriteFolders, key = { it.id }) { folder ->
-                            AppSurface(
+                            AppSingleChoiceRow(
+                                selected = selectedTransferFolderId == folder.id,
                                 onClick = { selectedTransferFolderId = folder.id },
                                 modifier = Modifier.fillMaxWidth(),
-                                color = if (selectedTransferFolderId == folder.id) {
-                                    MaterialTheme.colorScheme.primaryContainer
-                                } else Color.Transparent,
                             ) {
-                                AppText(
-                                    folder.title,
-                                    modifier = Modifier.padding(AppSpacingTokens.Medium),
-                                )
+                                AppText(folder.title, modifier = Modifier.weight(1f))
                             }
                         }
                     }

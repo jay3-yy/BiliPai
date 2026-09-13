@@ -1,6 +1,7 @@
 // 文件路径: feature/video/ui/components/VideoSettingsPanel.kt
 package com.android.purebilibili.feature.video.ui.components
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
@@ -1435,33 +1436,25 @@ private fun CdnLineRow(
         }
     }.ifBlank { "手动检测后显示延迟/速度" }
 
-    AppSurface(
+    AppSingleChoiceRow(
+        selected = isSelected,
         onClick = onClick,
         shape = AppShapes.container(ContainerLevel.Chip),
-        color = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f)
-        },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-        ) {
             Column(modifier = Modifier.weight(1f)) {
                 VideoSettingsPanelText(
                     text = displayName,
                     role = VideoSettingsPanelTextRole.BODY,
                     legacyFontSize = 14.sp,
                     legacyFontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = AppSurfaceTokens.onSurfaceContainerHigh()
                 )
                 VideoSettingsPanelText(
                     text = "$status · $host",
                     role = VideoSettingsPanelTextRole.DIAGNOSTIC,
                     legacyFontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppSurfaceTokens.onSurfaceVariantSummary(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1469,21 +1462,11 @@ private fun CdnLineRow(
                     text = metric,
                     role = VideoSettingsPanelTextRole.DIAGNOSTIC,
                     legacyFontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = AppSurfaceTokens.onSurfaceVariantSummary(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (isSelected) {
-                VideoSettingsPanelText(
-                    text = "当前",
-                    role = VideoSettingsPanelTextRole.OPTION,
-                    legacyFontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    legacyFontWeight = FontWeight.Medium
-                )
-            }
-        }
     }
 }
 

@@ -139,6 +139,7 @@ import com.android.purebilibili.core.ui.components.AppWindowAction
 import com.android.purebilibili.core.ui.components.AppWindowActionMenu
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppSurface
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppSwitch
 import com.android.purebilibili.core.ui.components.AppTextButton
 import kotlinx.coroutines.delay
@@ -2406,45 +2407,25 @@ private fun LiveDanmakuAreaSelector(
             ) {
                 options.forEach { option ->
                     val selected = kotlin.math.abs(currentArea - option.value) < 0.05f
-                    AppSurface(
+                    AppSingleChoiceRow(
+                        selected = selected,
                         onClick = { onAreaSelected(option.value) },
                         shape = AppShapes.borderedContainer(ContainerLevel.Card),
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            AppSurfaceTokens.surface().copy(alpha = 0.72f)
-                        },
-                        border = androidx.compose.foundation.BorderStroke(
-                            AppSpacingTokens.Micro / 2f,
-                            if (selected) {
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.62f)
-                            } else {
-                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f)
-                            }
-                        ),
                         modifier = Modifier.weight(1f)
                     ) {
                         Column(
-                            modifier = Modifier.padding(vertical = AppSpacingTokens.Small),
+                            modifier = Modifier.weight(1f),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             AppText(
                                 text = option.label,
                                 style = MaterialTheme.typography.labelLarge,
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                }
+                                color = AppSurfaceTokens.onSurfaceContainerHigh()
                             )
                             AppText(
                                 text = option.subtitle,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.72f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
+                                color = AppSurfaceTokens.onSurfaceVariantSummary()
                             )
                         }
                     }

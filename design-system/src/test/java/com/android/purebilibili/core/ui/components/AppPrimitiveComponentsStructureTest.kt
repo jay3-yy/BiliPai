@@ -9,6 +9,18 @@ import kotlin.test.assertTrue
 class AppPrimitiveComponentsStructureTest {
 
     @Test
+    fun singleChoiceRowsDelegateSelectionAndColorsToTheSharedThemeLayer() {
+        val source = loadSource("components/AppSingleChoiceRow.kt")
+
+        assertTrue(source.contains("fun AppSingleChoiceRow("))
+        assertTrue(source.contains("AppRadioButton("))
+        assertTrue(source.contains("AppSurfaceTokens.surfaceContainerHigh()"))
+        assertTrue(source.contains("AppSurfaceTokens.onSurfaceContainerHigh()"))
+        assertFalse(source.contains("primaryContainer"))
+        assertFalse(source.contains("if (selected)"))
+    }
+
+    @Test
     fun remainingLegacyPrimitiveApisStayAvailableDuringRendererMigration() {
         val source = loadSource()
 

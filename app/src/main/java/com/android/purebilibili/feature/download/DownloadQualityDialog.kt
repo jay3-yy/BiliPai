@@ -1,8 +1,9 @@
 package com.android.purebilibili.feature.download
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.AppSurfaceTokens
+import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppText
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -118,27 +119,18 @@ fun DownloadQualityDialog(
                     val isSelected = qualityId == currentQuality
                     val isVip = qualityLabel.contains("4K") || qualityLabel.contains("HDR") || qualityLabel.contains("杜比")
                     
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(AppShapes.container(ContainerLevel.Chip))
-                            .background(
-                                if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                            )
-                            .clickable {
-                                onQualitySelected(qualityId, DownloadOptions(includeDanmaku = includeDanmaku))
-                            }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                    AppSingleChoiceRow(
+                        selected = isSelected,
+                        onClick = {
+                            onQualitySelected(qualityId, DownloadOptions(includeDanmaku = includeDanmaku))
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             AppText(
                                 text = qualityLabel,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
-                                       else MaterialTheme.colorScheme.onSurface
+                                color = AppSurfaceTokens.onSurfaceContainerHigh()
                             )
                             if (isVip) {
                                 Spacer(modifier = Modifier.width(8.dp))
@@ -155,13 +147,6 @@ fun DownloadQualityDialog(
                                     )
                                 }
                             }
-                        }
-                        if (isSelected) {
-                            AppIcon(
-                                imageVector = Icons.Outlined.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
