@@ -59,15 +59,12 @@ class VideoContentSectionPerformanceStructureTest {
         assertTrue(source.contains("nestedScroll(tabBarCollapseConnection)"))
         assertTrue(source.contains("var tabBarCollapsePx by remember"))
         assertTrue(source.contains("resolveVideoContentTabBarCollapseProgress("))
+        assertTrue(source.contains("enabled = tabBarCollapseEnabled"))
         assertFalse(source.contains("visible = !collapseTabBarForCommentScroll"))
         // Sort filter bar lives in the top chrome beside the comment tab.
         assertTrue(source.contains("pagerState.currentPage == 1 &&"))
         assertTrue(source.contains("visible = commentListAtTop"))
         assertTrue(source.contains("CommentSortFilterBar("))
-        assertTrue(source.contains("resolveVideoContentTabBarFollowScrollPx("))
-        assertTrue(source.contains("immersiveVideoContentChromeEnabled || !tabBarScrollHideEnabled"))
-        assertTrue(source.contains(".padding(top = commentHeaderTopPaddingDp)"))
-        assertTrue(source.contains("translationY = -renderedTabBarCollapsePx"))
         val sortControlSource = source
             .substringAfter("CommentSortFilterBar(")
             .substringBefore("AppLiquidGlassBackToTopButton(")

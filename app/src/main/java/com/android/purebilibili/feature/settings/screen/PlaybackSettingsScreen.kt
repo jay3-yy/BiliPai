@@ -1861,7 +1861,7 @@ private fun PlaybackFullscreenGestureSettingsSection(
             subtitle = if (videoDetailChromeScrollHideEnabled) {
                 "评论页下滑时隐藏顶部标签，最热/最新排序跟随移动，回顶后恢复标题"
             } else {
-                "关闭后详情页顶部控件跟随内容移动，保留渐进模糊"
+                "关闭后详情页顶部控件保持显示，最热/最新下滑隐藏，保留渐进模糊"
             },
             checked = videoDetailChromeScrollHideEnabled,
             onCheckedChange = { enabled ->
