@@ -156,6 +156,7 @@ import com.android.purebilibili.feature.privacy.PrivacyAuthenticationReason
 import com.android.purebilibili.feature.privacy.PrivacyAuthenticationRequest
 import com.android.purebilibili.feature.privacy.PrivacyAuthenticationResult
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
+import com.android.purebilibili.feature.video.controller.PlaybackProgressManager
 import com.android.purebilibili.feature.video.handoff.PlaybackHandoffCodec
 import com.android.purebilibili.feature.video.handoff.PlaybackHandoffPayload
 import com.android.purebilibili.feature.video.handoff.PlaybackHandoffRegistry
@@ -189,6 +190,7 @@ private const val TAG = "MainActivity"
 private const val PREFS_NAME = "app_welcome"
 private const val KEY_FIRST_LAUNCH = "first_launch_shown"
 internal const val EXTRA_PENDING_NAVIGATION_ROUTE = "pending_navigation_route"
+internal const val EXTRA_OPEN_ACTIVE_PLAYBACK = "open_active_playback"
 private val PLUGIN_INSTALL_HTTPS_HOSTS = setOf(
     "bilipai.app",
     "www.bilipai.app",
@@ -267,7 +269,8 @@ internal fun shouldNavigateToVideoFromNotification(
 internal fun resolveMainActivityVideoRoute(
     bvid: String,
     cid: Long,
-    startFullscreen: Boolean = false
+    startFullscreen: Boolean = false,
+    resumePositionMs: Long = 0L,
 ): String {
     return VideoRoute.resolveVideoRoutePath(
         bvid = bvid,
@@ -276,7 +279,22 @@ internal fun resolveMainActivityVideoRoute(
         startAudio = false,
         autoPortrait = true,
         fullscreen = startFullscreen,
-        resumePositionMs = 0L
+        resumePositionMs = resumePositionMs.coerceAtLeast(0L)
+    )
+}
+
+internal fun resolveActivePlaybackReturnRoute(
+    isActive: Boolean,
+    bvid: String?,
+    cid: Long,
+    currentPositionMs: Long,
+): String? {
+    val safeBvid = bvid?.trim().orEmpty()
+    if (!isActive || safeBvid.isBlank() || cid <= 0L) return null
+    return resolveMainActivityVideoRoute(
+        bvid = safeBvid,
+        cid = cid,
+        resumePositionMs = currentPositionMs,
     )
 }
 
@@ -2404,6 +2422,41 @@ open class MainActivity : AppCompatActivity() {
             pendingNavigationRoute = PlaybackHandoffCodec.toRoute(payload)
             Logger.d(TAG, "🔄 Received Android 17 playback handoff")
             return
+        }
+
+        if (intent.getBooleanExtra(EXTRA_OPEN_ACTIVE_PLAYBACK, false)) {
+            val activePlayer = miniPlayerManager.player
+            val activeBvid = miniPlayerManager.currentBvid
+            val activeCid = miniPlayerManager.currentCid
+            val activePositionMs = activePlayer?.currentPosition
+                ?.coerceAtLeast(0L)
+                ?: miniPlayerManager.currentPosition.coerceAtLeast(0L)
+            val activePlaybackRoute = resolveActivePlaybackReturnRoute(
+                isActive = miniPlayerManager.isActive && activePlayer != null,
+                bvid = activeBvid,
+                cid = activeCid,
+                currentPositionMs = activePositionMs,
+            )
+            if (activePlaybackRoute != null) {
+                // ON_PAUSE saved the position at the moment the app left the foreground. Refresh
+                // that cache before navigation so an emergency re-prepare cannot seek back to it
+                // after background playback has continued on the same ExoPlayer.
+                PlaybackProgressManager.getInstance(this).savePosition(
+                    bvid = requireNotNull(activeBvid),
+                    cid = activeCid,
+                    positionMs = activePositionMs,
+                    durationMs = activePlayer?.duration?.coerceAtLeast(0L) ?: 0L,
+                )
+                if (!isInVideoDetail) {
+                    pendingNavigationRoute = activePlaybackRoute
+                }
+                Logger.d(
+                    TAG,
+                    "🎵 Restore active playback from system media entry: " +
+                        "bvid=$activeBvid, cid=$activeCid, position=$activePositionMs"
+                )
+                return
+            }
         }
 
         intent.getStringExtra(EXTRA_PENDING_NAVIGATION_ROUTE)

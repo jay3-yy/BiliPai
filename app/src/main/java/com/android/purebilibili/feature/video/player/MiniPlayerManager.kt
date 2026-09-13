@@ -2215,6 +2215,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                         action = Intent.ACTION_VIEW
                         data = Uri.parse("https://www.bilibili.com/video/$currentBvid")
                     }
+                    putExtra(com.android.purebilibili.EXTRA_OPEN_ACTIVE_PLAYBACK, true)
                     flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 },
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
@@ -2753,6 +2754,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         val intent = Intent(context, com.android.purebilibili.MainActivity::class.java).apply {
             action = Intent.ACTION_VIEW
             data = Uri.parse("https://www.bilibili.com/video/$currentBvid") // 携带 BVID
+            putExtra(com.android.purebilibili.EXTRA_OPEN_ACTIVE_PLAYBACK, true)
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val contentIntent = PendingIntent.getActivity(
