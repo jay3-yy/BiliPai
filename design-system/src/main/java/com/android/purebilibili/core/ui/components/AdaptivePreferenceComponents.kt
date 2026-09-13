@@ -266,7 +266,7 @@ internal fun resolveAdaptiveSearchBarContainerColor(
     globalWallpaperVisible: Boolean = false
 ): Color {
     val resolvedColor = when (uiStyle) {
-        AppUiStyle.MIUIX -> colorScheme.surfaceContainer
+        AppUiStyle.MIUIX -> colorScheme.surfaceContainerHigh
         AppUiStyle.MATERIAL3 -> colorScheme.surfaceContainerHigh
     }
     return resolveGlobalWallpaperListContainerColor(
@@ -276,6 +276,11 @@ internal fun resolveAdaptiveSearchBarContainerColor(
         targetAlpha = 0.48f
     )
 }
+
+internal fun resolveAdaptiveSearchBarContainerOverride(
+    requestedColor: Color,
+    defaultColor: Color,
+): Color = if (requestedColor == Color.Unspecified) defaultColor else requestedColor
 
 internal fun shouldUseNativeMiuixSearchBar(
     uiStyle: AppUiStyle
@@ -1586,15 +1591,14 @@ fun AdaptiveSearchFieldRenderer(
     val visualSpec = rememberAdaptiveListComponentVisualSpec()
     val searchBarCornerRadius = visualSpec.searchBarCornerRadiusDp.dp
     val searchBarShape = shapeOverride ?: RoundedCornerShape(searchBarCornerRadius)
-    val resolvedContainerColor = if (containerColor == Color.Unspecified) {
-        resolveAdaptiveSearchBarContainerColor(
+    val resolvedContainerColor = resolveAdaptiveSearchBarContainerOverride(
+        requestedColor = containerColor,
+        defaultColor = resolveAdaptiveSearchBarContainerColor(
             uiStyle = uiStyle,
             colorScheme = colorScheme,
             globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
-        )
-    } else {
-        containerColor
-    }
+        ),
+    )
     val resolvedHeight = heightOverride ?: visualSpec.searchBarHeightDp.dp
 
     if (forceExpandedInput) {
@@ -1828,16 +1832,20 @@ fun AppSearchEntry(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "搜索",
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+    containerColor: Color = Color.Unspecified,
 ) {
     val uiStyle = LocalAppUiStyle.current
     val colorScheme = MaterialTheme.colorScheme
     val visualSpec = rememberAdaptiveListVisualCapabilities().componentSpec
-    val resolvedContainerColor = resolveAdaptiveSearchBarContainerColor(
-        uiStyle = uiStyle,
-        colorScheme = colorScheme,
-        globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current,
+    val resolvedContainerColor = resolveAdaptiveSearchBarContainerOverride(
+        requestedColor = containerColor,
+        defaultColor = resolveAdaptiveSearchBarContainerColor(
+            uiStyle = uiStyle,
+            colorScheme = colorScheme,
+            globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current,
+        ),
     )
+    val contentColor = AppSurfaceTokens.searchContent()
     val cornerRadius = visualSpec.searchBarCornerRadiusDp.dp
     val searchIcon = Icons.Default.Search
 
@@ -1854,14 +1862,14 @@ fun AppSearchEntry(
         Icon(
             imageVector = searchIcon,
             contentDescription = null,
-            tint = colorScheme.onSurfaceVariant,
+            tint = contentColor,
             modifier = Modifier.size(18.dp),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = placeholder,
             style = MaterialTheme.typography.bodyMedium,
-            color = colorScheme.onSurfaceVariant,
+            color = contentColor,
         )
     }
 }

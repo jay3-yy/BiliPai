@@ -334,11 +334,7 @@ internal fun resolveNativeMiuixColors(
     scheme: ColorScheme,
     darkTheme: Boolean,
     amoledDarkTheme: Boolean = false,
-    customRolesEnabled: Boolean = false,
 ): top.yukonga.miuix.kmp.theme.Colors {
-    if (customRolesEnabled) {
-        return resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(scheme), darkTheme)
-    }
     val base = if (darkTheme) miuixDarkColorScheme() else miuixLightColorScheme()
     val accentContainer = opaqueCompositeOver(scheme.primary.copy(alpha = 0.2f), base.surface)
     val accentScheme = scheme.copy(
@@ -356,11 +352,6 @@ internal fun resolveNativeMiuixColors(
         onPrimaryVariant = accent.onPrimaryVariant,
         primaryContainer = accent.primaryContainer,
         onPrimaryContainer = accent.onPrimaryContainer,
-        disabledPrimary = accent.disabledPrimary,
-        disabledOnPrimary = accent.disabledOnPrimary,
-        disabledPrimaryButton = accent.disabledPrimaryButton,
-        disabledOnPrimaryButton = accent.disabledOnPrimaryButton,
-        disabledPrimarySlider = accent.disabledPrimarySlider,
         tertiaryContainer = accentContainer,
         onTertiaryContainer = scheme.primary,
         onBackgroundVariant = scheme.primary,
@@ -370,33 +361,53 @@ internal fun resolveNativeMiuixColors(
     )
 }
 
-/** Material-backed content shares the same surfaces as native Miuix components. */
+/** Material-backed content consumes the same semantic palette as native Miuix components. */
 internal fun alignMaterialSurfacesWithMiuix(
     scheme: ColorScheme,
     colors: top.yukonga.miuix.kmp.theme.Colors,
-): ColorScheme = scheme.copy(
-    primary = colors.primary,
-    onPrimary = colors.onPrimary,
-    primaryFixed = colors.primaryVariant,
-    onPrimaryFixed = colors.onPrimaryVariant,
-    primaryContainer = colors.primaryContainer,
-    onPrimaryContainer = colors.onPrimaryContainer,
-    tertiaryContainer = colors.tertiaryContainer,
-    onTertiaryContainer = colors.onTertiaryContainer,
-    background = colors.background,
-    onBackground = colors.onBackground,
-    surface = colors.surface,
-    onSurface = colors.onSurface,
-    surfaceVariant = colors.surfaceVariant,
-    onSurfaceVariant = colors.onSurfaceVariantSummary,
-    surfaceContainerLowest = colors.surface,
-    surfaceContainerLow = colors.surfaceContainer,
-    surfaceContainer = colors.surfaceContainer,
-    surfaceContainerHigh = colors.surfaceContainerHigh,
-    surfaceContainerHighest = colors.surfaceContainerHighest,
-    outline = colors.outline,
-    outlineVariant = colors.dividerLine,
-)
+): ColorScheme {
+    val isDark = colors.background.luminance() < 0.5f
+    return scheme.copy(
+        primary = colors.primary,
+        onPrimary = colors.onPrimary,
+        primaryFixed = colors.primaryVariant,
+        onPrimaryFixed = colors.onPrimaryVariant,
+        primaryContainer = colors.primaryContainer,
+        onPrimaryContainer = colors.onPrimaryContainer,
+        secondary = colors.secondary,
+        onSecondary = colors.onSecondary,
+        secondaryContainer = colors.secondaryContainer,
+        onSecondaryContainer = colors.onSecondaryContainer,
+        tertiary = colors.primary,
+        onTertiary = colors.onPrimary,
+        tertiaryContainer = colors.tertiaryContainer,
+        onTertiaryContainer = colors.onTertiaryContainer,
+        error = colors.error,
+        onError = colors.onError,
+        errorContainer = colors.errorContainer,
+        onErrorContainer = colors.onErrorContainer,
+        background = colors.background,
+        onBackground = colors.onBackground,
+        surface = colors.surface,
+        onSurface = colors.onSurface,
+        surfaceVariant = colors.surfaceVariant,
+        onSurfaceVariant = colors.onSurfaceVariantSummary,
+        surfaceTint = Color.Transparent,
+        inversePrimary = colors.primaryVariant,
+        inverseSurface = colors.onSurface,
+        inverseOnSurface = colors.surface,
+        outline = colors.outline,
+        outlineVariant = colors.dividerLine,
+        scrim = colors.windowDimming,
+        surfaceBright = if (isDark) colors.surfaceContainerHighest else colors.surface,
+        surfaceDim = if (isDark) colors.surface else colors.surfaceContainerHighest,
+        surfaceContainerLowest = colors.surface,
+        surfaceContainerLow = colors.surfaceContainer,
+        surfaceContainer = colors.surfaceContainer,
+        surfaceContainerHigh = colors.surfaceContainerHigh,
+        surfaceContainerHighest = colors.surfaceContainerHighest,
+    )
+}
 
 internal fun resolveMiuixColorsFromMaterialBridge(
     bridge: MiuixMaterialBridge,
@@ -1153,8 +1164,8 @@ fun PureBiliBiliTheme(
         dynamicBaseScheme = dynamicDarkBaseScheme
     )
 
-    val effectiveThemeRoleOverrides = remember(md3ColorSource, themeRoleOverrides) {
-        resolveEffectiveThemeRoleOverrides(md3ColorSource, themeRoleOverrides)
+    val effectiveThemeRoleOverrides = remember(md3ColorSource, themeRoleOverrides, uiStyle) {
+        resolveEffectiveThemeRoleOverrides(md3ColorSource, themeRoleOverrides, uiStyle)
     }
     val resolvedLightMaterialScheme = remember(lightMaterialScheme, effectiveThemeRoleOverrides) {
         applyThemeRoleOverrides(lightMaterialScheme, effectiveThemeRoleOverrides, darkTheme = false)
@@ -1172,26 +1183,24 @@ fun PureBiliBiliTheme(
     // Liquid glass changes chrome rendering, not the app's base palette. Keep Miuix's
     // native light-gray surfaces stable when the effect is toggled on or off.
     val useNativeMiuix = shouldUseNativeMiuixPalette(uiStyle)
-    val miuixLightColors = remember(resolvedLightMaterialScheme, useNativeMiuix, effectiveThemeRoleOverrides) {
+    val miuixLightColors = remember(resolvedLightMaterialScheme, useNativeMiuix) {
         if (useNativeMiuix) {
             resolveNativeMiuixColors(
                 resolvedLightMaterialScheme,
                 darkTheme = false,
-                customRolesEnabled = effectiveThemeRoleOverrides.enabled,
             )
         } else {
             resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(resolvedLightMaterialScheme), false)
         }
     }
     val miuixDarkColors = remember(
-        resolvedDarkMaterialScheme, useNativeMiuix, amoledDarkTheme, effectiveThemeRoleOverrides,
+        resolvedDarkMaterialScheme, useNativeMiuix, amoledDarkTheme,
     ) {
         if (useNativeMiuix) {
             resolveNativeMiuixColors(
                 resolvedDarkMaterialScheme,
                 darkTheme = true,
                 amoledDarkTheme = amoledDarkTheme,
-                customRolesEnabled = effectiveThemeRoleOverrides.enabled,
             )
         } else {
             resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(resolvedDarkMaterialScheme), true)

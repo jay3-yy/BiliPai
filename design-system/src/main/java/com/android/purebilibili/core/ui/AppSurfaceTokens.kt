@@ -15,7 +15,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * `MaterialTheme.colorScheme.surface` / `.background` 的直接读取，
  * 让 AMOLED、动态取色与 Miuix 桥接在两种主题风格下保持一致。
  *
- * - 卡片容器 = surfaceContainer（Miuix 桥接映射到 secondaryContainerVariant）。
+ * - 卡片容器 = surfaceContainer（Miuix 桥接映射到同名上游语义角色）。
  * - 分组列表 / chrome 背景 = background。
  */
 object AppSurfaceTokens {
@@ -30,6 +30,10 @@ object AppSurfaceTokens {
     fun resolveChromeBackground(colorScheme: ColorScheme): Color = colorScheme.background
 
     fun resolveDivider(colorScheme: ColorScheme): Color = colorScheme.outlineVariant
+
+    fun resolveSearchContainer(colorScheme: ColorScheme): Color = colorScheme.surfaceContainerHigh
+
+    fun resolveSearchContent(colorScheme: ColorScheme): Color = colorScheme.onSurfaceVariant
 
     @Composable
     @ReadOnlyComposable
@@ -46,6 +50,20 @@ object AppSurfaceTokens {
     @Composable
     @ReadOnlyComposable
     fun divider(): Color = resolveDivider(MaterialTheme.colorScheme)
+
+    @Composable
+    @ReadOnlyComposable
+    fun searchContainer(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.surfaceContainerHigh,
+        materialFallback = resolveSearchContainer(MaterialTheme.colorScheme)
+    )
+
+    @Composable
+    @ReadOnlyComposable
+    fun searchContent(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.onSurfaceContainerHigh,
+        materialFallback = resolveSearchContent(MaterialTheme.colorScheme)
+    )
 
     @Composable
     @ReadOnlyComposable
@@ -119,6 +137,20 @@ object AppSurfaceTokens {
 
     @Composable
     @ReadOnlyComposable
+    fun onSurfaceSecondary(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.onSurfaceSecondary,
+        materialFallback = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    @Composable
+    @ReadOnlyComposable
+    fun onSurfaceContainer(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.onSurfaceContainer,
+        materialFallback = MaterialTheme.colorScheme.onSurface
+    )
+
+    @Composable
+    @ReadOnlyComposable
     fun onSurfaceContainerHigh(): Color = resolveMiuixSemanticColorComposable(
         miuixColor = MiuixTheme.colorScheme.onSurfaceContainerHigh,
         materialFallback = MaterialTheme.colorScheme.onSurfaceVariant
@@ -136,6 +168,27 @@ object AppSurfaceTokens {
     fun primary(): Color = resolveMiuixSemanticColorComposable(
         miuixColor = MiuixTheme.colorScheme.primary,
         materialFallback = MaterialTheme.colorScheme.primary
+    )
+
+    @Composable
+    @ReadOnlyComposable
+    fun outline(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.outline,
+        materialFallback = MaterialTheme.colorScheme.outline
+    )
+
+    @Composable
+    @ReadOnlyComposable
+    fun error(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.error,
+        materialFallback = MaterialTheme.colorScheme.error
+    )
+
+    @Composable
+    @ReadOnlyComposable
+    fun disabledContent(): Color = resolveMiuixSemanticColorComposable(
+        miuixColor = MiuixTheme.colorScheme.disabledOnSurface,
+        materialFallback = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     )
 
     fun resolveMiuixSemanticColor(

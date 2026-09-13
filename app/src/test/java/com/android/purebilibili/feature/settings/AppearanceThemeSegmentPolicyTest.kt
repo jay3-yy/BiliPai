@@ -112,4 +112,16 @@ class AppearanceThemeSegmentPolicyTest {
         assertTrue(shouldShowMd3CustomColorControls(Md3ColorSource.CUSTOM))
         assertFalse(shouldShowMd3CustomColorControls(Md3ColorSource.FOLLOW_WALLPAPER))
     }
+
+    @Test
+    fun `advanced palette subtitle explains that overrides only affect material3`() {
+        assertEquals(
+            "已保留配置，仅切换到 Material 3 后生效",
+            resolveAdvancedPaletteSubtitle(com.android.purebilibili.core.theme.AppUiStyle.MIUIX),
+        )
+        assertEquals(
+            "自定义明暗模式的背景、文字与控件色",
+            resolveAdvancedPaletteSubtitle(com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3),
+        )
+    }
 }

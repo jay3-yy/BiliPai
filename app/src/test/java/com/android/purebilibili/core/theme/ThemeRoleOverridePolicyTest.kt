@@ -30,6 +30,24 @@ class ThemeRoleOverridePolicyTest {
     }
 
     @Test
+    fun miuixStyle_disablesAdvancedRoleOverridesWithoutDeletingThem() {
+        val overrides = ThemeRoleOverrides(
+            enabled = true,
+            light = ThemeModeRoleOverrides("#F4F0E8", "#201A17", "#655D57", "#FFF000"),
+        )
+
+        val result = resolveEffectiveThemeRoleOverrides(
+            source = Md3ColorSource.CUSTOM,
+            overrides = overrides,
+            uiStyle = AppUiStyle.MIUIX,
+        )
+
+        assertFalse(result.enabled)
+        assertEquals(overrides.light, result.light)
+        assertEquals(overrides.dark, result.dark)
+    }
+
+    @Test
     fun enabledOverrides_replaceMaterialRolesAndChooseReadableButtonText() {
         val overrides = ThemeRoleOverrides(
             enabled = true,

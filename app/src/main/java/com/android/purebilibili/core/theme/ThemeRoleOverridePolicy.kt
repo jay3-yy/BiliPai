@@ -46,9 +46,10 @@ internal fun syncThemeRoleControlAccent(
 
 internal fun resolveEffectiveThemeRoleOverrides(
     source: Md3ColorSource,
-    overrides: ThemeRoleOverrides
+    overrides: ThemeRoleOverrides,
+    uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
 ): ThemeRoleOverrides {
-    return if (source == Md3ColorSource.CUSTOM) {
+    return if (source == Md3ColorSource.CUSTOM && uiStyle == AppUiStyle.MATERIAL3) {
         overrides
     } else {
         overrides.copy(enabled = false)

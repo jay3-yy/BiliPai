@@ -168,8 +168,8 @@ internal fun SettingsPageScaffold(
     val topBarBlurActive = progressiveBlurEnabled || hazeState != null
     val pageContainerColor = when (LocalAppUiStyle.current) {
         // Miuix presets keep the page base stable when liquid glass is toggled.
-        // Glass changes chrome rendering only; `background` is the official page tone.
-        AppUiStyle.MIUIX -> AppSurfaceTokens.background()
+        // Glass changes chrome rendering only; Miuix Scaffold uses `surface` as its page tone.
+        AppUiStyle.MIUIX -> AppSurfaceTokens.surface()
         AppUiStyle.MATERIAL3 -> AppSurfaceTokens.groupedListContainer()
     }
 

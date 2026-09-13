@@ -712,7 +712,7 @@ fun AppearanceSettingsContent(
                                 AppSwitchPreference(
                                     icon = rememberSettingsSemanticIcon(SettingsIconRole.ADVANCED_COLOR),
                                     title = "高级配色",
-                                    subtitle = "自定义明暗模式的背景、文字与控件色",
+                                    subtitle = resolveAdvancedPaletteSubtitle(state.themeSelection),
                                     checked = themeRoleOverrides.enabled,
                                     onCheckedChange = { enabled ->
                                         scope.launch {

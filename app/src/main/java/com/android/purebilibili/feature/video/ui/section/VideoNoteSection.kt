@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FormatColorFill
 import androidx.compose.material.icons.outlined.Share
 import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppAssistChip
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
@@ -331,14 +332,14 @@ fun VideoNoteEditorSheet(
                 BasicRichTextEditor(
                     state = richTextState,
                     textStyle = MiuixTheme.textStyles.body1.copy(
-                        color = MiuixTheme.colorScheme.onSurface
+                        color = AppSurfaceTokens.onSurface()
                     ),
-                    cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
+                    cursorBrush = SolidColor(AppSurfaceTokens.primary()),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(220.dp)
                         .clip(VideoDetailShapes.field())
-                        .background(MiuixTheme.colorScheme.surfaceContainer)
+                        .background(AppSurfaceTokens.surfaceContainer())
                         .padding(10.dp)
                 )
             } else {

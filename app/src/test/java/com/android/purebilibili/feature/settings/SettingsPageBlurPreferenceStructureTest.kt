@@ -51,6 +51,17 @@ class SettingsPageBlurPreferenceStructureTest {
         assertTrue(settings.contains("AppTopBarStyle.LARGE"))
     }
 
+    @Test
+    fun miuixSettingsPageUsesUpstreamSurfaceIndependentlyFromGlassChrome() {
+        val scaffold = locate(
+            "src/main/java/com/android/purebilibili/feature/settings/ui/SettingsPageScaffold.kt"
+        ).readText()
+
+        assertTrue(scaffold.contains("AppUiStyle.MIUIX -> AppSurfaceTokens.surface()"))
+        assertTrue(scaffold.contains("containerColor = if (!topBarBlurActive)"))
+        assertTrue(scaffold.contains("Color.Transparent"))
+    }
+
     private fun locate(path: String): File {
         return listOf(File(path), File("app/$path"))
             .firstOrNull { it.exists() }

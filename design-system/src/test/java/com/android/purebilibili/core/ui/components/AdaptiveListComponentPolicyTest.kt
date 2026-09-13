@@ -300,7 +300,7 @@ class AdaptiveListComponentPolicyTest {
     }
 
     @Test
-    fun `miuix style should use denser shared container tones`() {
+    fun `miuix style should use upstream search container tone`() {
         val colorScheme = lightColorScheme(
             surfaceContainer = Color(0xFFF0EBF4),
             surfaceContainerLow = Color(0xFFF4F0F8),
@@ -315,11 +315,26 @@ class AdaptiveListComponentPolicyTest {
             )
         )
         assertEquals(
-            colorScheme.surfaceContainer,
+            colorScheme.surfaceContainerHigh,
             resolveAdaptiveSearchBarContainerColor(
                 uiStyle = AppUiStyle.MIUIX,
                 colorScheme = colorScheme,
             )
+        )
+    }
+
+    @Test
+    fun `search container honors explicit override and otherwise uses semantic default`() {
+        val fallback = Color(0xFF242424)
+        val explicit = Color(0xFF334455)
+
+        assertEquals(
+            fallback,
+            resolveAdaptiveSearchBarContainerOverride(Color.Unspecified, fallback),
+        )
+        assertEquals(
+            explicit,
+            resolveAdaptiveSearchBarContainerOverride(explicit, fallback),
         )
     }
 
@@ -362,7 +377,7 @@ class AdaptiveListComponentPolicyTest {
             )
         )
         assertEquals(
-            colorScheme.surfaceContainer.copy(alpha = 0.48f),
+            colorScheme.surfaceContainerHigh.copy(alpha = 0.48f),
             resolveAdaptiveSearchBarContainerColor(
                 uiStyle = AppUiStyle.MIUIX,
                 colorScheme = colorScheme,

@@ -11,6 +11,8 @@ class AppSurfaceTokensTest {
     private val scheme = lightColorScheme(
         surface = Color.White,
         surfaceContainer = Color(0xFFEEEEEE),
+        surfaceContainerHigh = Color(0xFFE8E8E8),
+        onSurfaceVariant = Color(0xFF666666),
         background = iOSSystemGray6,
         outlineVariant = Color(0xFFC7C7CC)
     )
@@ -37,6 +39,12 @@ class AppSurfaceTokensTest {
     fun divider_returnsOutlineVariant() {
         val color = AppSurfaceTokens.resolveDivider(scheme)
         assertEquals(Color(0xFFC7C7CC), color)
+    }
+
+    @Test
+    fun search_usesHighSurfaceContainerAndMatchingContentRole() {
+        assertEquals(Color(0xFFE8E8E8), AppSurfaceTokens.resolveSearchContainer(scheme))
+        assertEquals(Color(0xFF666666), AppSurfaceTokens.resolveSearchContent(scheme))
     }
 
     @Test

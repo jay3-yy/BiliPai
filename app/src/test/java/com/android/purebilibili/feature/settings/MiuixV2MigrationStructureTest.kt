@@ -49,7 +49,7 @@ class MiuixV2MigrationStructureTest {
     @Test
     fun versionCatalog_pinsMiuixToPublishedUpstreamSnapshot() {
         val source = loadSource("gradle/libs.versions.toml")
-        assertTrue(source.contains("miuix = \"0.9.4-4f86de92-SNAPSHOT\""))
+        assertTrue(source.contains("miuix = \"0.9.4-5157b503-SNAPSHOT\""))
     }
 
     @Test
@@ -71,8 +71,11 @@ class MiuixV2MigrationStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/home/components/BottomBar.kt",
             "app/src/main/java/com/android/purebilibili/feature/message/InboxScreen.kt",
             "app/src/main/java/com/android/purebilibili/feature/message/feed/MessageFeedCommon.kt",
+            "app/src/main/java/com/android/purebilibili/feature/video/ui/section/AiSummarySection.kt",
+            "app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoNoteSection.kt",
             "app/src/main/java/com/android/purebilibili/feature/video/ui/components/VideoSettingsPanel.kt",
-            "app/src/main/java/com/android/purebilibili/feature/settings/AppSegmentedControl.kt"
+            "app/src/main/java/com/android/purebilibili/feature/settings/AppSegmentedControl.kt",
+            "app/src/main/java/com/android/purebilibili/navigation3/BiliPaiNavDisplayHost.kt",
         ).filter { path ->
             loadSource(path).contains("MiuixTheme.colorScheme")
         }

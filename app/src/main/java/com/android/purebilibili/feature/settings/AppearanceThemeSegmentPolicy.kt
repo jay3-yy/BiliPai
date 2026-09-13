@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.ui.AppIconStyle
 import com.android.purebilibili.core.ui.AppListItemStyle
 import com.android.purebilibili.core.ui.components.AppSegmentOption
@@ -36,6 +37,13 @@ internal fun resolveColorSpecOptions(): List<AppSegmentOption<ColorSpec.SpecVers
 
 internal fun shouldShowMd3CustomColorControls(source: Md3ColorSource): Boolean =
     source == Md3ColorSource.CUSTOM
+
+internal fun resolveAdvancedPaletteSubtitle(uiStyle: AppUiStyle): String =
+    if (uiStyle == AppUiStyle.MIUIX) {
+        "已保留配置，仅切换到 Material 3 后生效"
+    } else {
+        "自定义明暗模式的背景、文字与控件色"
+    }
 
 internal fun resolveMd3ColorSourceOptions(): List<AppSegmentOption<Md3ColorSource>> {
     return listOf(

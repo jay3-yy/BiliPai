@@ -77,7 +77,6 @@ import top.yukonga.miuix.kmp.nav.core.NavCornerClipMode
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 internal class BiliPaiProgrammaticBackDispatcher {
     private var callback: (() -> Unit)? = null
@@ -570,7 +569,7 @@ internal fun BiliPaiNavDisplayHost(
     // Miuix's generic covered-entry dim can be resolved from the lower VideoDetail transition
     // during nested related-video navigation, which darkens that page a second time.
     val hostDimAmount = if (videoCardMorphOwnsCorners) 0f else 0.5f
-    val backdropColor = MiuixTheme.colorScheme.surface
+    val backdropColor = AppSurfaceTokens.surface()
     val effects = remember(
         navCornerRadius,
         roundAllCorners,

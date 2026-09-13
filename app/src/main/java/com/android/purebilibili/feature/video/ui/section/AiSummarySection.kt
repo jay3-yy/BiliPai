@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppContentCard
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -222,11 +223,11 @@ private fun MiuixAiSummaryHeader(
         onClickLabel = if (expanded) "收起 AI 总结" else "展开 AI 总结",
         role = Role.Button,
         startAction = {
-            LeadingIconBadge(containerColor = MiuixTheme.colorScheme.primary.copy(alpha = 0.12f)) {
+            LeadingIconBadge(containerColor = AppSurfaceTokens.primary().copy(alpha = 0.12f)) {
                 AppIcon(
                     imageVector = Icons.Filled.AutoAwesome,
                     contentDescription = null,
-                    tint = MiuixTheme.colorScheme.primary,
+                    tint = AppSurfaceTokens.primary(),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -235,7 +236,7 @@ private fun MiuixAiSummaryHeader(
             AppIcon(
                 imageVector = MiuixIcons.Basic.ArrowRight,
                 contentDescription = null,
-                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                tint = AppSurfaceTokens.onSurfaceVariantActions(),
                 modifier = Modifier
                     .size(20.dp)
                     .graphicsLayer { rotationZ = arrowRotation.value }
@@ -246,12 +247,12 @@ private fun MiuixAiSummaryHeader(
             text = "AI 总结",
             style = MiuixTheme.textStyles.headline1,
             fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface
+            color = AppSurfaceTokens.onSurface()
         )
         MiuixText(
             text = preview,
             style = MiuixTheme.textStyles.body2,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            color = AppSurfaceTokens.onSurfaceVariantSummary(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
