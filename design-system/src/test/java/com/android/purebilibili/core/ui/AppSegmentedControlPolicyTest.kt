@@ -26,6 +26,14 @@ class AppSegmentedControlPolicyTest {
         assertEquals(track, resolveAppMiuixTabTrackColor(false, track))
         assertEquals(readable, resolveAppMiuixTabContentColor(true, inactive, readable))
         assertEquals(inactive, resolveAppMiuixTabContentColor(false, inactive, readable))
+
+        val source = loadSource(
+            "src/main/java/com/android/purebilibili/core/ui/renderer/miuix/" +
+                "AppMiuixSegmentedControl.kt"
+        )
+        assertTrue(source.contains("nonGlassMiuix -> tabColors.backgroundColor"))
+        assertTrue(source.contains("AppMiuixNonGlassTabItem("))
+        assertTrue(source.contains("Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)"))
     }
 
     @Test
@@ -142,7 +150,7 @@ class AppSegmentedControlPolicyTest {
     }
 
     @Test
-    fun `native Miuix tabs use a real 48dp selectable height`() {
+    fun `native Miuix tabs keep compact visuals inside a 48dp touch target`() {
         val materialSource = loadSource(
             "src/main/java/com/android/purebilibili/core/ui/renderer/material3/" +
                 "AppMaterial3SegmentedControl.kt"
@@ -154,8 +162,9 @@ class AppSegmentedControlPolicyTest {
 
         assertFalse(materialSource.contains("heightIn(min = 48.dp)"))
         assertTrue(miuixSource.contains("resolveRoundedControlVisualGeometry("))
-        assertTrue(miuixSource.contains("height = interactiveHeight"))
-        assertTrue(miuixSource.contains("maxOf(geometry.height, AppChromeSizeTokens.MinimumTouchTarget)"))
+        assertTrue(miuixSource.contains("AppMiuixNonGlassTabItem("))
+        assertTrue(miuixSource.contains(".height(visualHeight)"))
+        assertTrue(miuixSource.contains(".heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)"))
     }
 
     @Test
