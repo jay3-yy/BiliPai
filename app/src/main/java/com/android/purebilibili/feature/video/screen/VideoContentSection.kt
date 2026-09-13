@@ -330,6 +330,18 @@ internal fun resolveVideoContentTabBarCollapseProgress(
     return (collapsePx / maxCollapsePx).coerceIn(0f, 1f)
 }
 
+/** When automatic chrome hiding is off, the tab row occupies the list's leading content space. */
+internal fun resolveVideoContentTabBarFollowScrollPx(
+    scrollHideEnabled: Boolean,
+    firstVisibleItemIndex: Int,
+    firstVisibleItemScrollOffset: Int,
+    maxFollowPx: Float,
+): Float {
+    if (scrollHideEnabled || maxFollowPx <= 0f) return 0f
+    if (firstVisibleItemIndex > 0) return maxFollowPx
+    return firstVisibleItemScrollOffset.toFloat().coerceIn(0f, maxFollowPx)
+}
+
 
 internal data class VideoContentTabBarCollapseScrollUpdate(
     val nextCollapsePx: Float,
@@ -826,8 +838,47 @@ internal fun VideoContentSection(
         selectedTabIndex = pagerState.currentPage,
         listAtTop = commentListAtTop,
     )
+    val tabBarFollowScrollPx by remember(tabBarScrollHideEnabled) {
+        derivedStateOf {
+            val activeListState = if (pagerState.currentPage == 1) {
+                commentListState
+            } else {
+                introListState
+            }
+            resolveVideoContentTabBarFollowScrollPx(
+                scrollHideEnabled = tabBarScrollHideEnabled,
+                firstVisibleItemIndex = activeListState.firstVisibleItemIndex,
+                firstVisibleItemScrollOffset = activeListState.firstVisibleItemScrollOffset,
+                maxFollowPx = tabBarMaxHeightPx,
+            )
+        }
+    }
+    val renderedTabBarCollapsePx = if (tabBarScrollHideEnabled) {
+        tabBarCollapsePx
+    } else {
+        tabBarFollowScrollPx
+    }
+    val renderedTabBarCollapseProgress = if (tabBarScrollHideEnabled) {
+        tabBarCollapseProgress
+    } else if (tabBarMaxHeightPx > 0f) {
+        (renderedTabBarCollapsePx / tabBarMaxHeightPx).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
     val tabBarVisibleHeightDp = with(density) {
-        (tabBarMaxHeightPx - tabBarCollapsePx).coerceAtLeast(0f).toDp()
+        (tabBarMaxHeightPx - renderedTabBarCollapsePx).coerceAtLeast(0f).toDp()
+    }
+    val tabBarContentTopPaddingDp = with(density) {
+        if (tabBarScrollHideEnabled) {
+            (tabBarMaxHeightPx - tabBarCollapsePx).coerceAtLeast(0f).toDp()
+        } else {
+            tabBarMaxHeightPx.coerceAtLeast(0f).toDp()
+        }
+    }
+    val commentHeaderTopPaddingDp = if (tabBarScrollHideEnabled) {
+        tabBarVisibleHeightDp
+    } else {
+        tabBarContentTopPaddingDp
     }
     val commentSortDockLiftDp = remember {
         resolveCommentSortDockViewportOverflowDp(
@@ -865,7 +916,7 @@ internal fun VideoContentSection(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(
-                        if (immersiveVideoContentChromeEnabled) {
+                        if (immersiveVideoContentChromeEnabled || !tabBarScrollHideEnabled) {
                             Modifier
                         } else {
                             Modifier.padding(top = tabBarVisibleHeightDp)
@@ -911,7 +962,11 @@ internal fun VideoContentSection(
                         onWatchLaterClick = onWatchLaterClick,
                         onShareClick = onShareClick,
                         contentPadding = PaddingValues(
-                            top = if (immersiveVideoContentChromeEnabled) tabBarVisibleHeightDp else 0.dp,
+                            top = if (immersiveVideoContentChromeEnabled || !tabBarScrollHideEnabled) {
+                                tabBarContentTopPaddingDp
+                            } else {
+                                0.dp
+                            },
                             bottom = bottomContentPadding,
                         ),
                         transitionEnabled = transitionEnabled,
@@ -966,7 +1021,11 @@ internal fun VideoContentSection(
                         onTimestampClick = onTimestampClick,
                         showUpFlag = showUpFlag,
                         contentPadding = PaddingValues(
-                            top = if (immersiveVideoContentChromeEnabled) tabBarVisibleHeightDp else 0.dp,
+                            top = if (immersiveVideoContentChromeEnabled || !tabBarScrollHideEnabled) {
+                                tabBarContentTopPaddingDp
+                            } else {
+                                0.dp
+                            },
                             bottom = bottomContentPadding,
                         ),
                         currentMid = currentMid,
@@ -1020,7 +1079,7 @@ internal fun VideoContentSection(
                         Modifier
                             .height(tabBarVisibleHeightDp)
                             .graphicsLayer {
-                                clip = tabBarCollapseProgress > 0.001f
+                                clip = renderedTabBarCollapseProgress > 0.001f
                             }
                     }
                 ),
@@ -1056,9 +1115,14 @@ internal fun VideoContentSection(
                         }
                     }
                     .graphicsLayer {
-                        val progress = tabBarCollapseProgress.coerceIn(0f, 1f)
-                        alpha = 1f - progress
-                        translationY = -tabBarMaxHeightPx * progress * 0.35f
+                        val progress = renderedTabBarCollapseProgress.coerceIn(0f, 1f)
+                        if (tabBarScrollHideEnabled) {
+                            alpha = 1f - progress
+                            translationY = -tabBarMaxHeightPx * progress * 0.35f
+                        } else {
+                            alpha = 1f
+                            translationY = -renderedTabBarCollapsePx
+                        }
                     },
                 isPlayerCollapsed = isPlayerCollapsed,
                 miuixBackdrop = videoContentMiuixBackdrop,
@@ -1077,7 +1141,7 @@ internal fun VideoContentSection(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = tabBarVisibleHeightDp)
+                    .padding(top = commentHeaderTopPaddingDp)
                     .heightIn(min = 46.dp),
             ) {
                 if (immersiveVideoContentChromeEnabled) {
@@ -1093,18 +1157,24 @@ internal fun VideoContentSection(
                         )
                     }
                 }
-                CommentSortFilterBar(
-                    sortMode = sortMode,
-                    onSortModeChange = onSortModeChange,
-                    // The liquid dock reports its press/drag bloom as layout viewport. Lift that
-                    // complete viewport so the resting 40dp shell aligns with the comment header.
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = 6.dp, end = 16.dp)
-                        .offset(y = (-commentSortDockLiftDp).dp),
-                    miuixBackdrop = if (liquidGlassEnabled) videoContentMiuixBackdrop else null,
-                    liquidGlassEffectsEnabled = liquidGlassEnabled,
-                )
+                AnimatedVisibility(
+                    visible = commentListAtTop,
+                    enter = fadeIn(animationSpec = tween(durationMillis = 120)),
+                    exit = fadeOut(animationSpec = tween(durationMillis = 90)),
+                    modifier = Modifier.align(Alignment.TopEnd),
+                ) {
+                    CommentSortFilterBar(
+                        sortMode = sortMode,
+                        onSortModeChange = onSortModeChange,
+                        // The liquid dock reports its press/drag bloom as layout viewport. Lift that
+                        // complete viewport so the resting 40dp shell aligns with the comment header.
+                        modifier = Modifier
+                            .padding(top = 6.dp, end = 16.dp)
+                            .offset(y = (-commentSortDockLiftDp).dp),
+                        miuixBackdrop = if (liquidGlassEnabled) videoContentMiuixBackdrop else null,
+                        liquidGlassEffectsEnabled = liquidGlassEnabled,
+                    )
+                }
             }
         }
 

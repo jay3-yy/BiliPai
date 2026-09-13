@@ -11,6 +11,46 @@ import kotlin.test.assertTrue
 class VideoContentTabBarPolicyTest {
 
     @Test
+    fun `disabled automatic hiding lets the whole top row follow list content`() {
+        assertEquals(
+            0f,
+            resolveVideoContentTabBarFollowScrollPx(
+                scrollHideEnabled = false,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0,
+                maxFollowPx = 48f,
+            ),
+        )
+        assertEquals(
+            24f,
+            resolveVideoContentTabBarFollowScrollPx(
+                scrollHideEnabled = false,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 24,
+                maxFollowPx = 48f,
+            ),
+        )
+        assertEquals(
+            48f,
+            resolveVideoContentTabBarFollowScrollPx(
+                scrollHideEnabled = false,
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 0,
+                maxFollowPx = 48f,
+            ),
+        )
+        assertEquals(
+            0f,
+            resolveVideoContentTabBarFollowScrollPx(
+                scrollHideEnabled = true,
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 0,
+                maxFollowPx = 48f,
+            ),
+        )
+    }
+
+    @Test
     fun `comment list at top only when first item and zero offset`() {
         assertTrue(isVideoContentCommentListAtTop(0, 0))
         assertFalse(isVideoContentCommentListAtTop(0, 1))
