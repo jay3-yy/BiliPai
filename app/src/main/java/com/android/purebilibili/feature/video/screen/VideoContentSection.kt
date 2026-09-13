@@ -1095,24 +1095,17 @@ internal fun VideoContentSection(
                         )
                     }
                 }
-                AnimatedVisibility(
-                    visible = commentListAtTop,
-                    enter = fadeIn(animationSpec = tween(durationMillis = 120)),
-                    exit = fadeOut(animationSpec = tween(durationMillis = 90)),
-                    modifier = Modifier.align(Alignment.TopEnd),
-                ) {
-                    CommentSortFilterBar(
-                        sortMode = sortMode,
-                        onSortModeChange = onSortModeChange,
-                        // The liquid dock reports its press/drag bloom as layout viewport. Lift that
-                        // complete viewport so the resting 40dp shell aligns with the comment header.
-                        modifier = Modifier
-                            .padding(top = 6.dp, end = 16.dp)
-                            .offset(y = (-commentSortDockLiftDp).dp),
-                        miuixBackdrop = if (liquidGlassEnabled) videoContentMiuixBackdrop else null,
-                        liquidGlassEffectsEnabled = liquidGlassEnabled,
-                    )
-                }
+                CommentSortFilterBar(
+                    sortMode = sortMode,
+                    onSortModeChange = onSortModeChange,
+                    // Keep sorting attached to the viewport chrome while the comment list moves.
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 6.dp, end = 16.dp)
+                        .offset(y = (-commentSortDockLiftDp).dp),
+                    miuixBackdrop = if (liquidGlassEnabled) videoContentMiuixBackdrop else null,
+                    liquidGlassEffectsEnabled = liquidGlassEnabled,
+                )
             }
         }
 

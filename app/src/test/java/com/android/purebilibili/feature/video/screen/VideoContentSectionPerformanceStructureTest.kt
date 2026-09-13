@@ -69,6 +69,8 @@ class VideoContentSectionPerformanceStructureTest {
             .substringAfter("CommentSortFilterBar(")
             .substringBefore("AppLiquidGlassBackToTopButton(")
         assertTrue(sortControlSource.contains("liquidGlassEffectsEnabled = liquidGlassEnabled"))
+        assertTrue(sortControlSource.contains(".align(Alignment.TopEnd)"))
+        assertFalse(sortControlSource.contains("visible = commentListAtTop"))
         assertFalse(source.contains("(!tabBarCollapseEnabled || commentListAtTop)"))
         assertTrue(source.contains("顶部标签与评论标题/排序共用同一张渐进模糊材质"))
         assertTrue(source.contains(".height(tabBarVisibleHeightDp + commentChromeHeight)"))
