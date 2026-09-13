@@ -61,7 +61,6 @@ import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
-import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.home.components.biliPaiProgressiveTopBlur
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
 import com.android.purebilibili.core.ui.performance.TrackScrollJank
@@ -309,9 +308,7 @@ internal fun shouldEnableVideoContentTabBarCollapse(
     selectedTabIndex: Int,
     isPagerScrollInProgress: Boolean,
     commentPageIndex: Int = 1,
-): Boolean = settingEnabled &&
-    selectedTabIndex == commentPageIndex &&
-    !isPagerScrollInProgress
+): Boolean = false
 
 /**
  * 跟手折叠进度 0 = 全展开，1 = 全收起。
@@ -764,18 +761,8 @@ internal fun VideoContentSection(
         }
     }
     val backToTopButtonEnabled = rememberBackToTopButtonEnabled()
-    val tabBarScrollHideEnabled by SettingsManager
-        .getVideoDetailChromeScrollHideEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false)
-    val tabBarCollapseEnabled by remember(tabBarScrollHideEnabled) {
-        derivedStateOf {
-            shouldEnableVideoContentTabBarCollapse(
-                settingEnabled = tabBarScrollHideEnabled,
-                selectedTabIndex = pagerState.currentPage,
-                isPagerScrollInProgress = pagerState.isScrollInProgress,
-            )
-        }
-    }
+    // “简介 / 评论”与评论排序承担导航和操作职责，必须始终可见，不能随列表滚动收起。
+    val tabBarCollapseEnabled = false
     // 离开评论列表顶部时钳到全收；回到简介 Tab 时复位展开。
     LaunchedEffect(tabBarCollapseEnabled, commentListAtTop, tabBarMaxHeightPx) {
         tabBarCollapsePx = resolveVideoContentTabBarCollapsePxWhenListLeavesTop(

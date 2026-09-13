@@ -18,8 +18,8 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
-    fun `collapse only consumes scroll on a settled comment page`() {
-        assertTrue(
+    fun `comment navigation chrome never collapses with content scroll`() {
+        assertFalse(
             shouldEnableVideoContentTabBarCollapse(
                 settingEnabled = true,
                 selectedTabIndex = 1,

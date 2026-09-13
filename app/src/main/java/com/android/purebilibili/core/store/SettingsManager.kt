@@ -1601,8 +1601,6 @@ object SettingsManager {
     private val KEY_VIDEO_NOTE_ENABLED = booleanPreferencesKey("video_note_enabled")
     private val KEY_VIDEO_NOTE_DEFAULT_COLLAPSED = booleanPreferencesKey("video_note_default_collapsed")
     private val KEY_VIDEO_INFO_DEFAULT_EXPANDED = booleanPreferencesKey("video_info_default_expanded")
-    private val KEY_VIDEO_DETAIL_CHROME_SCROLL_HIDE_ENABLED =
-        booleanPreferencesKey("video_detail_chrome_scroll_hide_enabled")
     private const val VIDEO_NOTE_CACHE_PREFS = "video_note_settings"
     private const val CACHE_KEY_VIDEO_NOTE_ENABLED = "video_note_enabled"
     private const val CACHE_KEY_VIDEO_NOTE_DEFAULT_COLLAPSED = "video_note_default_collapsed"
@@ -6081,17 +6079,6 @@ object SettingsManager {
         }
     }
 
-    fun getVideoDetailChromeScrollHideEnabled(context: Context): Flow<Boolean> =
-        context.settingsDataStore.data.map { preferences ->
-            preferences[KEY_VIDEO_DETAIL_CHROME_SCROLL_HIDE_ENABLED] ?: false
-        }
-
-    suspend fun setVideoDetailChromeScrollHideEnabled(context: Context, enabled: Boolean) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_VIDEO_DETAIL_CHROME_SCROLL_HIDE_ENABLED] = enabled
-        }
-    }
-    
     // ==========  底栏显示模式 ==========
     
     private val KEY_BOTTOM_BAR_VISIBILITY_MODE = intPreferencesKey("bottom_bar_visibility_mode")
@@ -7434,10 +7421,6 @@ object SettingsManager {
             BooleanShareablePreferenceDefinition(KEY_VIDEO_NOTE_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_VIDEO_NOTE_DEFAULT_COLLAPSED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_VIDEO_INFO_DEFAULT_EXPANDED, SettingsShareSection.PLAYBACK),
-            BooleanShareablePreferenceDefinition(
-                KEY_VIDEO_DETAIL_CHROME_SCROLL_HIDE_ENABLED,
-                SettingsShareSection.PLAYBACK,
-            ),
             BooleanShareablePreferenceDefinition(KEY_CLICK_TO_PLAY, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_RESUME_PLAYBACK_PROMPT_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(
