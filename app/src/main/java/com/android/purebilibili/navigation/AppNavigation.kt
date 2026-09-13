@@ -1441,6 +1441,9 @@ fun AppNavigation(
         val audioPlaylist by PlaylistManager.playlist.collectAsStateWithLifecycle()
         val audioPlaylistIndex by PlaylistManager.currentIndex.collectAsStateWithLifecycle()
         val audioNowPlayingItem = audioPlaylist.getOrNull(audioPlaylistIndex)
+        // Shared scroll position is also used by non-home destinations to drive the
+        // linked playback dock without forcing the bottom bar itself to disappear.
+        val scrollOffsetState = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
         val finalBottomBarVisible = showBottomBar &&
             (driveBottomBarByProgress || videoCardSourceChromeVisible) &&
             bottomBarVisibilityMode != SettingsManager.BottomBarVisibilityMode.ALWAYS_HIDDEN &&
@@ -1699,7 +1702,6 @@ fun AppNavigation(
             }
         }
         // [New] Global Scroll Offset State
-        val scrollOffsetState = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
         val homeFeedScrollInProgressState = remember { androidx.compose.runtime.mutableStateOf(false) }
         LaunchedEffect(currentRoute, currentBottomNavItem) {
             scrollOffsetState.floatValue = 0f
