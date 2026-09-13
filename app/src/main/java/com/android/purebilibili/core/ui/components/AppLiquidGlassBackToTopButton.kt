@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +48,7 @@ fun AppLiquidGlassBackToTopButton(
 
     AnimatedVisibility(
         visible = visible,
-        modifier = modifier,
+        modifier = modifier.offset(y = (-8).dp),
         enter = fadeIn(animationSpec = AppMotionTokens.standardSpec()) +
             scaleIn(animationSpec = AppMotionTokens.standardSpec(), initialScale = 0.92f),
         exit = fadeOut(animationSpec = AppMotionTokens.expressiveSpec()) +

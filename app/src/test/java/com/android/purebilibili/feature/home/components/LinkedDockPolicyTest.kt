@@ -6,6 +6,26 @@ import kotlin.test.assertTrue
 
 class LinkedDockPolicyTest {
     @Test
+    fun globalCollapseRequestUsesCompactPlaybackPhaseWhenAudioIsPresent() {
+        assertEquals(
+            LinkedDockPhase.Playback,
+            resolveLinkedDockRestingPhase(collapseRequested = true, hasAudio = true),
+        )
+    }
+
+    @Test
+    fun dockStaysExpandedWithoutAudioOrCollapseRequest() {
+        assertEquals(
+            LinkedDockPhase.Expanded,
+            resolveLinkedDockRestingPhase(collapseRequested = true, hasAudio = false),
+        )
+        assertEquals(
+            LinkedDockPhase.Expanded,
+            resolveLinkedDockRestingPhase(collapseRequested = false, hasAudio = true),
+        )
+    }
+
+    @Test
     fun expandedAudioOccupiesItsOwnRow() {
         val geometry = geometry(merge = 0f, search = 0f)
         assertEquals(336, geometry.audioWidth)
@@ -60,50 +80,11 @@ class LinkedDockPolicyTest {
     }
 
     @Test
-    fun springOvershootCannotProduceNegativeSizes() {
+    fun outOfRangeAnimationProgressCannotProduceNegativeSizes() {
         val geometry = geometry(merge = 1.05f, search = 1.04f)
         assertEquals(0, geometry.top)
         assertEquals(56, geometry.audioWidth)
         assertEquals(64, geometry.height)
-    }
-
-    @Test
-    fun directionChangeStartsANewScrollThreshold() {
-        assertEquals(16f, accumulateDockScroll(10f, 6f))
-        assertEquals(-3f, accumulateDockScroll(16f, -3f))
-        assertEquals(-13f, accumulateDockScroll(-3f, -10f))
-    }
-
-    @Test
-    fun landingOvershootSquashesAllLinkedControls() {
-        val impact = resolveLinkedDockImpact(progress = 1.08f)
-
-        assertTrue(impact.translationYDp > 0f)
-        assertTrue(impact.scaleX > 1f)
-        assertTrue(impact.scaleY < 1f)
-    }
-
-    @Test
-    fun reverseOvershootLiftsAndStretchesControls() {
-        val impact = resolveLinkedDockImpact(progress = -0.08f)
-
-        assertTrue(impact.translationYDp < 0f)
-        assertTrue(impact.scaleX < 1f)
-        assertTrue(impact.scaleY > 1f)
-    }
-
-    @Test
-    fun searchStretchPreservesSpringOvershootOutsideSafeLayoutBounds() {
-        val expandedOvershoot = resolveLinkedDockSearchStretch(progress = 1.08f)
-        val collapsedOvershoot = resolveLinkedDockSearchStretch(progress = -0.08f)
-        val settled = resolveLinkedDockSearchStretch(progress = 1f)
-
-        assertTrue(expandedOvershoot.scaleX > 1f)
-        assertTrue(expandedOvershoot.scaleY < 1f)
-        assertTrue(collapsedOvershoot.scaleX < 1f)
-        assertTrue(collapsedOvershoot.scaleY > 1f)
-        assertEquals(1f, settled.scaleX, 0.001f)
-        assertEquals(1f, settled.scaleY, 0.001f)
     }
 
     private fun geometry(merge: Float, search: Float) =

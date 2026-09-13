@@ -1450,6 +1450,9 @@ fun AppNavigation(
                     (isBottomBarFloating && audioNowPlayingBarEnabled && audioNowPlayingActive &&
                         audioNowPlayingItem != null)
             )
+        val collapseLinkedPlaybackDock =
+            bottomBarVisibilityMode == SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE &&
+                !isBottomBarVisible
         val bottomBarVisibilityState = remember { MutableTransitionState(finalBottomBarVisible) }
         bottomBarVisibilityState.targetState = finalBottomBarVisible
         val bottomBarCanMount =
@@ -4075,6 +4078,7 @@ fun AppNavigation(
                                     forceLowBlurBudget = false,
                                     isFeedScrollInProgress = currentBottomNavItem == BottomNavItem.HOME &&
                                         homeFeedScrollInProgressState.value,
+                                    collapseLinkedDock = collapseLinkedPlaybackDock,
                                     indicatorPositionProvider =
                                         mainBottomPagerState.indicatorPositionProvider,
                                     isPagerScrollInProgressProvider =
@@ -4119,6 +4123,7 @@ fun AppNavigation(
                                 forceLowBlurBudget = false,
                                 isFeedScrollInProgress = currentBottomNavItem == BottomNavItem.HOME &&
                                     homeFeedScrollInProgressState.value,
+                                collapseLinkedDock = collapseLinkedPlaybackDock,
                                 indicatorPositionProvider =
                                     mainBottomPagerState.indicatorPositionProvider,
                                 isPagerScrollInProgressProvider =

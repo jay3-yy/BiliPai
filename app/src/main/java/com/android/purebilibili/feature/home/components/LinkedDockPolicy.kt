@@ -2,9 +2,16 @@ package com.android.purebilibili.feature.home.components
 
 import kotlin.math.roundToInt
 
-/** Accumulate one direction before changing chrome; tiny reversals must not cause flicker. */
-internal fun accumulateDockScroll(previous: Float, delta: Float): Float =
-    if (previous * delta < 0f) delta else previous + delta
+internal enum class LinkedDockPhase { Expanded, Playback, Search }
+
+internal fun resolveLinkedDockRestingPhase(
+    collapseRequested: Boolean,
+    hasAudio: Boolean,
+): LinkedDockPhase = if (collapseRequested && hasAudio) {
+    LinkedDockPhase.Playback
+} else {
+    LinkedDockPhase.Expanded
+}
 
 internal data class LinkedDockGeometry(
     val searchWidth: Int,
@@ -42,39 +49,5 @@ internal fun resolveLinkedDockGeometry(
         audioY = (top * merge).roundToInt(),
         top = top,
         height = top + barHeight,
-    )
-}
-
-internal data class LinkedDockImpact(
-    val translationYDp: Float,
-    val scaleX: Float,
-    val scaleY: Float,
-)
-
-internal data class LinkedDockSearchStretch(
-    val scaleX: Float,
-    val scaleY: Float,
-)
-
-/** Apply the spring's overshoot after safe layout measurement, anchored at the trailing edge. */
-internal fun resolveLinkedDockSearchStretch(progress: Float): LinkedDockSearchStretch {
-    val overshoot = (progress - progress.coerceIn(0f, 1f)).coerceIn(-0.10f, 0.10f)
-    return LinkedDockSearchStretch(
-        scaleX = 1f + overshoot * 0.30f,
-        scaleY = 1f - overshoot * 0.14f,
-    )
-}
-
-/** Preserve spring overshoot in the draw layer while measurement stays within valid bounds. */
-internal fun resolveLinkedDockImpact(
-    progress: Float,
-    response: Float = 1f,
-): LinkedDockImpact {
-    val overshoot = (progress - progress.coerceIn(0f, 1f)).coerceIn(-0.12f, 0.12f)
-    val effectiveOvershoot = overshoot * response.coerceIn(0f, 1f)
-    return LinkedDockImpact(
-        translationYDp = effectiveOvershoot * 52f,
-        scaleX = 1f + effectiveOvershoot * 0.32f,
-        scaleY = 1f - effectiveOvershoot * 0.58f,
     )
 }
