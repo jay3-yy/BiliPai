@@ -313,11 +313,6 @@ internal fun shouldEnableVideoContentTabBarCollapse(
     selectedTabIndex == commentPageIndex &&
     !isPagerScrollInProgress
 
-internal fun shouldShowFloatingCommentTitle(
-    collapseEnabled: Boolean,
-    commentListAtTop: Boolean,
-): Boolean = !collapseEnabled || commentListAtTop
-
 /**
  * 跟手折叠进度 0 = 全展开，1 = 全收起。
  * 由 [collapsePx] / [maxCollapsePx] 得到；列表已离开顶部时钳到 1，保证浏览评论时 chrome 收净。
@@ -1069,31 +1064,33 @@ internal fun VideoContentSection(
             )
         }
 
-        AnimatedVisibility(
-            visible = pagerState.currentPage == 1 &&
-                !pagerState.isScrollInProgress &&
-                (liquidGlassEnabled || immersiveVideoContentChromeEnabled) &&
-                (!tabBarCollapseEnabled || commentListAtTop),
-            enter = fadeIn(animationSpec = tween(durationMillis = 120)),
-            exit = fadeOut(animationSpec = tween(durationMillis = 90)),
+        if (
+            pagerState.currentPage == 1 &&
+            !pagerState.isScrollInProgress &&
+            (liquidGlassEnabled || immersiveVideoContentChromeEnabled)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(top = tabBarVisibleHeightDp)
-                    .heightIn(min = 46.dp)
-                    .graphicsLayer {
-                        val progress = tabBarCollapseProgress.coerceIn(0f, 1f)
-                        alpha = 1f - progress
-                        translationY = -tabBarMaxHeightPx * progress * 0.35f
-                    },
+                    .heightIn(min = 46.dp),
             ) {
                 if (immersiveVideoContentChromeEnabled) {
+                    // 评论标题与排序栏拥有独立的渐进模糊背景；滚动隐藏开关只移动控件，
+                    // 不得卸载或压缩这层背景。
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .biliPaiProgressiveTopBlur(
+                                backdrop = videoContentMiuixBackdrop,
+                                enabled = true,
+                                surfaceColor = Color.Transparent,
+                            ),
+                    )
+                }
+                if (immersiveVideoContentChromeEnabled) {
                     AnimatedVisibility(
-                        visible = shouldShowFloatingCommentTitle(
-                            collapseEnabled = tabBarCollapseEnabled,
-                            commentListAtTop = commentListAtTop,
-                        ),
+                        visible = commentListAtTop,
                         enter = fadeIn(animationSpec = tween(durationMillis = 120)),
                         exit = fadeOut(animationSpec = tween(durationMillis = 90)),
                         modifier = Modifier.align(Alignment.TopStart),

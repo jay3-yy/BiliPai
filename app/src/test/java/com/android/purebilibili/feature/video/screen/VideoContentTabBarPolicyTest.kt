@@ -43,13 +43,6 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
-    fun `floating comment title only follows list visibility when collapse is enabled`() {
-        assertTrue(shouldShowFloatingCommentTitle(collapseEnabled = false, commentListAtTop = false))
-        assertTrue(shouldShowFloatingCommentTitle(collapseEnabled = true, commentListAtTop = true))
-        assertFalse(shouldShowFloatingCommentTitle(collapseEnabled = true, commentListAtTop = false))
-    }
-
-    @Test
     fun `collapse progress follows nested collapse px and snaps full when list leaves top`() {
         assertEquals(
             0f,

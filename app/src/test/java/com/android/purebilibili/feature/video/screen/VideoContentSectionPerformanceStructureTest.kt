@@ -64,6 +64,8 @@ class VideoContentSectionPerformanceStructureTest {
         assertTrue(source.contains("pagerState.currentPage == 1 &&"))
         assertTrue(source.contains("visible = commentListAtTop"))
         assertTrue(source.contains("CommentSortFilterBar("))
+        assertFalse(source.contains("(!tabBarCollapseEnabled || commentListAtTop)"))
+        assertTrue(source.contains("不得卸载或压缩这层背景"))
         assertTrue(source.contains("showHeader = !immersiveVideoContentChromeEnabled"))
         assertTrue(source.contains("shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)"))
     }

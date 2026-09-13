@@ -1839,9 +1839,9 @@ private fun PlaybackFullscreenGestureSettingsSection(
             icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_HEADER_COLLAPSE),
             title = "详情页控件随滚动隐藏",
             subtitle = if (videoDetailChromeScrollHideEnabled) {
-                "评论页下滑时隐藏顶部标签、发弹幕和排序控件，回到顶部后显示"
+                "评论页下滑时隐藏顶部标签，最热/最新排序跟随移动，回顶后恢复标题"
             } else {
-                "关闭后详情页顶部控件跟随内容移动，不再自动折叠"
+                "关闭后详情页顶部控件跟随内容移动，保留渐进模糊"
             },
             checked = videoDetailChromeScrollHideEnabled,
             onCheckedChange = { enabled ->
