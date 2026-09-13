@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect as ComposeRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
@@ -157,8 +158,9 @@ internal fun rememberLiquidGlassAdaptiveContentColor(
     stableColor: Color,
     state: LiquidGlassAdaptiveReadabilityState,
     enabled: Boolean,
+    contrastBackgroundColor: Color? = null,
 ): Color {
-    val targetColor = if (enabled) {
+    val sampledColor = if (enabled) {
         when (state.foregroundTone) {
             LiquidGlassAdaptiveForegroundTone.DARK -> Color.Black.copy(alpha = 0.90f)
             LiquidGlassAdaptiveForegroundTone.LIGHT -> Color.White.copy(alpha = 0.96f)
@@ -167,12 +169,40 @@ internal fun rememberLiquidGlassAdaptiveContentColor(
     } else {
         stableColor
     }
+    val targetColor = resolveLiquidGlassContrastGuardedForeground(
+        sampledColor = sampledColor,
+        stableColor = stableColor,
+        backgroundColor = contrastBackgroundColor,
+    )
     val animatedColor by animateColorAsState(
         targetValue = targetColor,
         animationSpec = tween(durationMillis = 240),
         label = "liquidGlassAdaptiveContentColor",
     )
     return animatedColor
+}
+
+internal fun resolveLiquidGlassContrastGuardedForeground(
+    sampledColor: Color,
+    stableColor: Color,
+    backgroundColor: Color?,
+    minimumContrastRatio: Float = 3f,
+): Color {
+    val background = backgroundColor ?: return sampledColor
+    if (liquidGlassContrastRatio(sampledColor, background) >= minimumContrastRatio) {
+        return sampledColor
+    }
+    if (liquidGlassContrastRatio(stableColor, background) >= minimumContrastRatio) {
+        return stableColor
+    }
+    return listOf(Color.Black, Color.White)
+        .maxBy { candidate -> liquidGlassContrastRatio(candidate, background) }
+}
+
+private fun liquidGlassContrastRatio(foreground: Color, background: Color): Float {
+    val lighter = maxOf(foreground.luminance(), background.luminance())
+    val darker = minOf(foreground.luminance(), background.luminance())
+    return (lighter + 0.05f) / (darker + 0.05f)
 }
 
 private suspend fun sampleWindowLuminance(

@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.ColumnScope
@@ -100,7 +99,9 @@ internal fun BottomBarFloatingSegmentedControl(
         )
     }
     val liquidGlassTuning = liquidGlassTuningOverride ?: storedLiquidGlassTuning
-    val isDarkTheme = isSystemInDarkTheme()
+    // The app theme can be forced independently from the system theme. Derive chrome tone from
+    // the active semantic palette so a forced MD3 dark theme never receives a light-mode scrim.
+    val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val itemCount = items.size
     val maxTabIndex = (itemCount - 1).coerceAtLeast(0)
     val safeSelectedIndex = selectedIndex.coerceIn(0, maxTabIndex)

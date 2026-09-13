@@ -62,7 +62,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
@@ -2292,7 +2291,7 @@ private fun LightweightTopTabItem(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiStyle = LocalAppUiStyle.current
-    val isDarkTheme = isSystemInDarkTheme()
+    val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val selected = selectionFraction > 0.5f || index == selectedIndex
     val skinIconPath = skinIconPaths?.pathFor(selected)
     val unselectedIcon = resolveTopTabCategoryIcon(

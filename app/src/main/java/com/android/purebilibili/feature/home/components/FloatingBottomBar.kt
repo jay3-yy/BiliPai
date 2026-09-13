@@ -20,7 +20,6 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,6 +82,7 @@ import com.android.purebilibili.feature.home.components.liquid.lens
 import com.android.purebilibili.feature.home.components.liquid.rememberCombinedBackdrop
 import com.android.purebilibili.feature.home.components.liquid.vibrancy
 import com.android.purebilibili.core.store.LiquidGlassReadabilityMode
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorGeometry
 import com.android.purebilibili.feature.home.components.miuix.DampedDragAnimation
 import com.android.purebilibili.feature.home.components.miuix.DampedDragTrackingMode
@@ -460,7 +460,8 @@ fun FloatingBottomBar(
     liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
     content: @Composable RowScope.() -> Unit
 ) {
-    val isInDark = isSystemInDarkTheme()
+    // Do not use the system night flag here: BiliPai supports an app-only dark theme.
+    val isInDark = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val isLiquidGlassMode = mode == FloatingBottomBarMode.LiquidGlass
     val segmentedGeometry = geometryMode != FloatingBottomBarGeometryMode.Dock
     val allowOverflow = isLiquidGlassMode || !segmentedGeometry
@@ -478,6 +479,7 @@ fun FloatingBottomBar(
         stableColor = colors.contentColor,
         state = adaptiveReadabilityState,
         enabled = adaptiveReadabilityEnabled,
+        contrastBackgroundColor = colors.containerColor,
     )
     val readabilityScrimColor = if (isInDark) Color.Black else Color.White
     val containerColor =

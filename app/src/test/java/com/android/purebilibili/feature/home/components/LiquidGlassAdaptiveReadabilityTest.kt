@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components
 
+import androidx.compose.ui.graphics.Color
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,6 +62,30 @@ class LiquidGlassAdaptiveReadabilityTest {
             resolveLiquidGlassAdaptiveForegroundTone(
                 previous = LiquidGlassAdaptiveForegroundTone.LIGHT,
                 backgroundLuminance = 0.70f,
+            ),
+        )
+    }
+
+    @Test
+    fun `dark glass rejects black foreground from a stale light sample`() {
+        assertEquals(
+            Color.White,
+            resolveLiquidGlassContrastGuardedForeground(
+                sampledColor = Color.Black,
+                stableColor = Color.White,
+                backgroundColor = Color(0xFF171821),
+            ),
+        )
+    }
+
+    @Test
+    fun `light glass keeps readable black adaptive foreground`() {
+        assertEquals(
+            Color.Black,
+            resolveLiquidGlassContrastGuardedForeground(
+                sampledColor = Color.Black,
+                stableColor = Color.White,
+                backgroundColor = Color(0xFFF2F2F4),
             ),
         )
     }

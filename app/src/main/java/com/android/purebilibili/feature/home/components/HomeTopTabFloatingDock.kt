@@ -205,6 +205,14 @@ internal fun HomeTopTabFloatingDock(
         darkTheme = isDarkTheme,
         liquidGlassTuning = liquidGlassTuning,
     )
+    val selectedContentColor = resolveReadableBottomBarSkinForeground(
+        preferredColor = MaterialTheme.colorScheme.primary,
+        backgroundColor = shellColor,
+    )
+    val unselectedContentColor = resolveReadableBottomBarSkinForeground(
+        preferredColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        backgroundColor = shellColor,
+    )
     BottomBarFloatingSegmentedControl(
         items = categories,
         selectedIndex = selectedIndex,
@@ -223,8 +231,8 @@ internal fun HomeTopTabFloatingDock(
         longPressDragSelectionEnabled = false,
         miuixBackdrop = miuixBackdrop,
         containerColorOverride = shellColor,
-        selectedTextColorOverride = MaterialTheme.colorScheme.primary,
-        unselectedTextColorOverride = MaterialTheme.colorScheme.onSurfaceVariant,
+        selectedTextColorOverride = selectedContentColor,
+        unselectedTextColorOverride = unselectedContentColor,
         indicatorPositionProvider = indicatorPositionProvider,
         isScrollInProgressProvider = isScrollInProgressProvider,
         onIndicatorPositionChanged = null,
