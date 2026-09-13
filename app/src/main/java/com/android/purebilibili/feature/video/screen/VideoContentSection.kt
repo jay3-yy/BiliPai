@@ -993,6 +993,22 @@ internal fun VideoContentSection(
             }
         }
 
+        if (immersiveVideoContentChromeEnabled) {
+            // 顶部标签与评论标题/排序共用同一张渐进模糊材质，避免两个独立渐变
+            // 在相邻边界重新起算而形成断层。
+            val commentChromeHeight = if (pagerState.currentPage == 1) 46.dp else 0.dp
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(tabBarVisibleHeightDp + commentChromeHeight)
+                    .biliPaiProgressiveTopBlur(
+                        backdrop = videoContentMiuixBackdrop,
+                        enabled = true,
+                        surfaceColor = Color.Transparent,
+                    ),
+            )
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1010,17 +1026,6 @@ internal fun VideoContentSection(
                 ),
             contentAlignment = Alignment.TopStart,
         ) {
-            if (immersiveVideoContentChromeEnabled) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .biliPaiProgressiveTopBlur(
-                            backdrop = videoContentMiuixBackdrop,
-                            enabled = true,
-                            surfaceColor = Color.Transparent,
-                        ),
-                )
-            }
             VideoContentTabBar(
                 tabs = tabs,
                 replyCount = replyCount,
@@ -1075,19 +1080,6 @@ internal fun VideoContentSection(
                     .padding(top = tabBarVisibleHeightDp)
                     .heightIn(min = 46.dp),
             ) {
-                if (immersiveVideoContentChromeEnabled) {
-                    // 评论标题与排序栏拥有独立的渐进模糊背景；滚动隐藏开关只移动控件，
-                    // 不得卸载或压缩这层背景。
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .biliPaiProgressiveTopBlur(
-                                backdrop = videoContentMiuixBackdrop,
-                                enabled = true,
-                                surfaceColor = Color.Transparent,
-                            ),
-                    )
-                }
                 if (immersiveVideoContentChromeEnabled) {
                     AnimatedVisibility(
                         visible = commentListAtTop,

@@ -65,7 +65,8 @@ class VideoContentSectionPerformanceStructureTest {
         assertTrue(source.contains("visible = commentListAtTop"))
         assertTrue(source.contains("CommentSortFilterBar("))
         assertFalse(source.contains("(!tabBarCollapseEnabled || commentListAtTop)"))
-        assertTrue(source.contains("不得卸载或压缩这层背景"))
+        assertTrue(source.contains("顶部标签与评论标题/排序共用同一张渐进模糊材质"))
+        assertTrue(source.contains(".height(tabBarVisibleHeightDp + commentChromeHeight)"))
         assertTrue(source.contains("showHeader = !immersiveVideoContentChromeEnabled"))
         assertTrue(source.contains("shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)"))
     }
