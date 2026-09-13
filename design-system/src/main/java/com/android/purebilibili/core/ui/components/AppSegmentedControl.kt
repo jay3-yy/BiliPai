@@ -176,6 +176,17 @@ fun resolveAppMiuixSegmentedColors(
     selectedContentColor = colors.activeContentColor,
 )
 
+fun resolveAppMiuixTabTrackColor(
+    nonGlassMiuix: Boolean,
+    trackColor: Color,
+): Color = if (nonGlassMiuix) Color.Transparent else trackColor
+
+fun resolveAppMiuixTabContentColor(
+    nonGlassMiuix: Boolean,
+    inactiveContentColor: Color,
+    readableContentColor: Color,
+): Color = if (nonGlassMiuix) readableContentColor else inactiveContentColor
+
 fun <T> resolveAppSegmentedSelectionIndex(
     options: List<AppSegmentOption<T>>,
     selectedValue: T,

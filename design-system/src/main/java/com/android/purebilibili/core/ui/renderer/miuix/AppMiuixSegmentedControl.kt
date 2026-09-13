@@ -29,6 +29,8 @@ import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppSegmentedControlColors
 import com.android.purebilibili.core.ui.components.resolveAppMiuixSegmentedColors
 import com.android.purebilibili.core.ui.components.resolveAppSegmentedSelectionIndex
+import com.android.purebilibili.core.ui.components.resolveAppMiuixTabContentColor
+import com.android.purebilibili.core.ui.components.resolveAppMiuixTabTrackColor
 import com.android.purebilibili.core.ui.resolveRoundedControlVisualGeometry
 import com.android.purebilibili.core.ui.resolveMiuixNonGlassControlGeometry
 import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
@@ -72,12 +74,22 @@ internal fun <T> AppMiuixSegmentedControl(
     val targetHeight = height ?: 34.dp
     val cornerRadius = 8.dp
     val tabColors = resolveAppMiuixSegmentedColors(colors)
+    val nonGlassMiuix = isMiuixNonGlassEnabled()
+    val trackColor = resolveAppMiuixTabTrackColor(
+        nonGlassMiuix = nonGlassMiuix,
+        trackColor = tabColors.backgroundColor,
+    )
+    val inactiveContentColor = resolveAppMiuixTabContentColor(
+        nonGlassMiuix = nonGlassMiuix,
+        inactiveContentColor = tabColors.contentColor,
+        readableContentColor = tabColors.selectedContentColor,
+    )
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .adaptiveSquircleBackground(
-                color = tabColors.backgroundColor,
+                color = trackColor,
                 cornerRadius = cornerRadius + 3.dp,
             )
             .squircleClip(cornerRadius + 3.dp)
@@ -96,7 +108,7 @@ internal fun <T> AppMiuixSegmentedControl(
             val contentColor = if (selected) {
                 tabColors.selectedContentColor
             } else {
-                tabColors.contentColor
+                inactiveContentColor
             }
 
             Box(
@@ -223,6 +235,15 @@ private fun <T> AppMiuixNonGlassTabs(
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     val tabColors = resolveAppMiuixSegmentedColors(colors)
+    val trackColor = resolveAppMiuixTabTrackColor(
+        nonGlassMiuix = true,
+        trackColor = tabColors.backgroundColor,
+    )
+    val inactiveContentColor = resolveAppMiuixTabContentColor(
+        nonGlassMiuix = true,
+        inactiveContentColor = tabColors.contentColor,
+        readableContentColor = tabColors.selectedContentColor,
+    )
     // Match upstream TabItem: main text with body1 size, bold when selected.
     val style = MiuixTheme.textStyles.main.copy(
         fontSize = MiuixTheme.textStyles.body1.fontSize,
@@ -274,8 +295,8 @@ private fun <T> AppMiuixNonGlassTabs(
             },
             modifier = Modifier.squircleClip(geometry.cornerRadius),
             colors = TabRowDefaults.tabRowColors(
-                backgroundColor = tabColors.backgroundColor,
-                contentColor = tabColors.contentColor,
+                backgroundColor = trackColor,
+                contentColor = inactiveContentColor,
                 selectedBackgroundColor = tabColors.selectedBackgroundColor,
                 selectedContentColor = tabColors.selectedContentColor,
             ),

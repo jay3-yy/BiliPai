@@ -5,6 +5,9 @@ import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.ui.components.shouldUseCompactMiuixTabRow
 import com.android.purebilibili.core.ui.components.resolveReadableNativeTabMinWidth
 import com.android.purebilibili.core.ui.components.resolveCompactMiuixTabRowWidth
+import com.android.purebilibili.core.ui.components.resolveAppMiuixTabContentColor
+import com.android.purebilibili.core.ui.components.resolveAppMiuixTabTrackColor
+import androidx.compose.ui.graphics.Color
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,6 +15,18 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AppSegmentedControlPolicyTest {
+
+    @Test
+    fun `non glass Miuix removes outer dock while keeping readable labels`() {
+        val track = Color(0xFF303030)
+        val inactive = Color(0xFF8A8A8A)
+        val readable = Color(0xFFF2F2F2)
+
+        assertEquals(Color.Transparent, resolveAppMiuixTabTrackColor(true, track))
+        assertEquals(track, resolveAppMiuixTabTrackColor(false, track))
+        assertEquals(readable, resolveAppMiuixTabContentColor(true, inactive, readable))
+        assertEquals(inactive, resolveAppMiuixTabContentColor(false, inactive, readable))
+    }
 
     @Test
     fun `non glass tabs keep native geometry and grow for accessible text`() {

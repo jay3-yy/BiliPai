@@ -224,5 +224,8 @@ fun CommentSegmentedControl(
         liquidGlassEffectsEnabled = liquidGlassEffectsEnabled,
         dragSelectionEnabled = items.size > 1,
         tapPressRefractionEnabled = true,
+        // The detail header owns a fixed 66dp-per-item width. Keep native Miuix items
+        // evenly divided when its non-glass outer track is transparent.
+        forceEqualWidth = true,
     )
 }
