@@ -67,6 +67,7 @@ internal fun AudioNowPlayingBar(
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
     onDismiss: () -> Unit,
+    expandDestinationLabel: String = "听视频",
     glassEnabled: Boolean = LocalSettingsLiquidGlassEnabled.current,
     miuixBackdrop: MiuixBackdrop? = null,
     liquidGlassTuning: LiquidGlassTuning = LocalLiquidGlassRenderConfig.current.tuning,
@@ -110,7 +111,7 @@ internal fun AudioNowPlayingBar(
                 }
             )
             .clip(shape)
-            .semantics { contentDescription = "当前视频：${state.title}，打开听视频" }
+            .semantics { contentDescription = "当前视频：${state.title}，打开$expandDestinationLabel" }
             .clickable(onClick = onExpand)
             .audioNowPlayingSkipGesture(
                 onSkipNext = onSkipNext,
@@ -195,7 +196,11 @@ internal fun AudioNowPlayingBar(
                 }
                 if (!compact) {
                     AppIconButton(onClick = onExpand, modifier = Modifier.size(48.dp)) {
-                        AppIcon(Icons.Outlined.QueueMusic, contentDescription = "正在播放", tint = MaterialTheme.colorScheme.onSurface)
+                        AppIcon(
+                            Icons.Outlined.QueueMusic,
+                            contentDescription = "打开$expandDestinationLabel",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
                     }
                     AppIconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
                         AppIcon(Icons.Filled.Close, contentDescription = "关闭听视频条", tint = MaterialTheme.colorScheme.onSurface)

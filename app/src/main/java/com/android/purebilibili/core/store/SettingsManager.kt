@@ -1597,6 +1597,8 @@ object SettingsManager {
     private val KEY_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("audio_focus_enabled")
     private val KEY_AUDIO_MODE_AUTO_PIP_ENABLED = booleanPreferencesKey("audio_mode_auto_pip_enabled")
     private val KEY_AUDIO_NOW_PLAYING_BAR_ENABLED = booleanPreferencesKey("audio_now_playing_bar_enabled")
+    private val KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE =
+        booleanPreferencesKey("audio_now_playing_bar_opens_audio_mode")
     private val KEY_VIDEO_AI_SUMMARY_ENTRY_ENABLED = booleanPreferencesKey("video_ai_summary_entry_enabled")
     private val KEY_VIDEO_NOTE_ENABLED = booleanPreferencesKey("video_note_enabled")
     private val KEY_VIDEO_NOTE_DEFAULT_COLLAPSED = booleanPreferencesKey("video_note_default_collapsed")
@@ -6023,6 +6025,17 @@ object SettingsManager {
             .getBoolean("audio_now_playing_bar_enabled", true)
     }
 
+    fun getAudioNowPlayingBarOpensAudioMode(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE] ?: false
+        }
+
+    suspend fun setAudioNowPlayingBarOpensAudioMode(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE] = value
+        }
+    }
+
     internal fun shouldEnableAudioModeAutoPipToggle(mode: MiniPlayerMode): Boolean {
         return mode.supportsSystemPip
     }
@@ -7430,6 +7443,10 @@ object SettingsManager {
             BooleanShareablePreferenceDefinition(KEY_STOP_PLAYBACK_ON_EXIT, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_BACKGROUND_PLAYBACK_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_AUDIO_FOCUS_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(
+                KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE,
+                SettingsShareSection.PLAYBACK,
+            ),
             BooleanShareablePreferenceDefinition(KEY_VIDEO_AI_SUMMARY_ENTRY_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_VIDEO_NOTE_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_VIDEO_NOTE_DEFAULT_COLLAPSED, SettingsShareSection.PLAYBACK),

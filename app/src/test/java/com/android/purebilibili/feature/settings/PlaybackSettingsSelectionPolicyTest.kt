@@ -53,6 +53,8 @@ class PlaybackSettingsSelectionPolicyTest {
             .substringBefore("private fun PlaybackInteractionSettingsSection(")
         assertTrue(source.contains("视频小横条"))
         assertTrue(source.contains("setAudioNowPlayingBarEnabled(context, it)"))
+        assertTrue(source.contains("点击小横条进入听视频"))
+        assertTrue(source.contains("setAudioNowPlayingBarOpensAudioMode(context, it)"))
         assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"互动与评论\")"))
         assertTrue(contentBlock.contains("AppPreferenceSectionTitle(\"全屏与手势\")"))
         assertTrue(contentBlock.contains("PlaybackInteractionSettingsSection("))

@@ -8,6 +8,25 @@ import kotlin.test.assertTrue
 class AppNavigationPlaybackPolicyTest {
 
     @Test
+    fun audioNowPlayingBar_defaultsToVideoDetailAndCanOpenAudioMode() {
+        val detailRoute = resolveAudioNowPlayingBarExpandRoute(
+            opensAudioMode = false,
+            bvid = "BV1TEST",
+            cid = 42L,
+            coverUrl = "https://example.com/cover.jpg",
+        )
+        val audioRoute = resolveAudioNowPlayingBarExpandRoute(
+            opensAudioMode = true,
+            bvid = "BV1TEST",
+            cid = 42L,
+            coverUrl = "https://example.com/cover.jpg",
+        )
+
+        assertTrue(detailRoute.startsWith("video/BV1TEST?cid=42"))
+        assertEquals(ScreenRoutes.AudioMode.createRoute("BV1TEST", 42L), audioRoute)
+    }
+
+    @Test
     fun miniPlayerTransition_doesNotMarkPlaybackAsNavigationLeave() {
         assertFalse(shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = true))
         assertTrue(shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = false))

@@ -1434,6 +1434,9 @@ fun AppNavigation(
         val audioNowPlayingBarEnabled by SettingsManager
             .getAudioNowPlayingBarEnabled(context)
             .collectAsStateWithLifecycle(initialValue = true)
+        val audioNowPlayingBarOpensAudioMode by SettingsManager
+            .getAudioNowPlayingBarOpensAudioMode(context)
+            .collectAsStateWithLifecycle(initialValue = false)
         val audioNowPlayingActive by AudioNowPlayingSession.active.collectAsStateWithLifecycle()
         val audioPlaylist by PlaylistManager.playlist.collectAsStateWithLifecycle()
         val audioPlaylistIndex by PlaylistManager.currentIndex.collectAsStateWithLifecycle()
@@ -3991,9 +3994,11 @@ fun AppNavigation(
                                         ),
                                         onExpand = {
                                             pushNavigation3Route(
-                                                ScreenRoutes.AudioMode.createRoute(
+                                                resolveAudioNowPlayingBarExpandRoute(
+                                                    opensAudioMode = audioNowPlayingBarOpensAudioMode,
                                                     bvid = audioNowPlayingItem.bvid,
-                                                    cid = audioNowPlayingItem.cid
+                                                    cid = audioNowPlayingItem.cid,
+                                                    coverUrl = audioNowPlayingItem.cover,
                                                 )
                                             )
                                         },
@@ -4014,6 +4019,11 @@ fun AppNavigation(
                                                 playbackManager.togglePlayPause()
                                             }
                                             AudioNowPlayingSession.dismiss()
+                                        },
+                                        expandDestinationLabel = if (audioNowPlayingBarOpensAudioMode) {
+                                            "听视频"
+                                        } else {
+                                            "视频详情页"
                                         },
                                         glassEnabled = effectiveHomeSettings.androidNativeLiquidGlassEnabled,
                                         miuixBackdrop = bottomBarBackdrop,
@@ -4141,9 +4151,11 @@ fun AppNavigation(
                     ),
                     onExpand = {
                         pushNavigation3Route(
-                            ScreenRoutes.AudioMode.createRoute(
+                            resolveAudioNowPlayingBarExpandRoute(
+                                opensAudioMode = audioNowPlayingBarOpensAudioMode,
                                 bvid = audioNowPlayingItem.bvid,
-                                cid = audioNowPlayingItem.cid
+                                cid = audioNowPlayingItem.cid,
+                                coverUrl = audioNowPlayingItem.cover,
                             )
                         )
                     },
@@ -4164,6 +4176,11 @@ fun AppNavigation(
                             playbackManager.togglePlayPause()
                         }
                         AudioNowPlayingSession.dismiss()
+                    },
+                    expandDestinationLabel = if (audioNowPlayingBarOpensAudioMode) {
+                        "听视频"
+                    } else {
+                        "视频详情页"
                     },
                     glassEnabled = effectiveHomeSettings.androidNativeLiquidGlassEnabled,
                     miuixBackdrop = bottomBarBackdrop,

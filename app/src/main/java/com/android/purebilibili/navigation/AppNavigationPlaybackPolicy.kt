@@ -74,6 +74,17 @@ internal fun isVideoDetailRoute(route: String?): Boolean {
     return route?.startsWith("${VideoRoute.base}/") == true
 }
 
+internal fun resolveAudioNowPlayingBarExpandRoute(
+    opensAudioMode: Boolean,
+    bvid: String,
+    cid: Long,
+    coverUrl: String,
+): String = if (opensAudioMode) {
+    ScreenRoutes.AudioMode.createRoute(bvid = bvid, cid = cid)
+} else {
+    VideoRoute.createRoute(bvid = bvid, cid = cid, coverUrl = coverUrl)
+}
+
 internal fun shouldEnableVideoDetailSharedTransition(
     cardTransitionEnabled: Boolean,
     sourceRoute: String?,

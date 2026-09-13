@@ -578,7 +578,7 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         title = "后台播放 / 画中画 / 小窗",
         subtitle = "设置离开播放页后停止、后台继续或进入小窗",
         section = "播放设置",
-        aliases = listOf("后台播放", "画中画", "pip", "小窗", "小窗画中画", "音频焦点", "自动进入画中画", "离开播放页后停止", "视频小横条", "听视频小横条", "听视频横条", "当前视频条", "now playing"),
+        aliases = listOf("后台播放", "画中画", "pip", "小窗", "小窗画中画", "音频焦点", "自动进入画中画", "离开播放页后停止", "视频小横条", "听视频小横条", "听视频横条", "当前视频条", "点击小横条", "小横条跳转详情", "小横条跳转听视频", "now playing"),
         focusId = SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER
     ),
     SettingsSearchEntry(

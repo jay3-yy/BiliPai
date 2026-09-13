@@ -157,6 +157,9 @@ fun PlaybackSettingsContent(
         .getAudioModeAutoPipEnabled(context).collectAsStateWithLifecycle(initialValue = false)
     val audioNowPlayingBarEnabled by com.android.purebilibili.core.store.SettingsManager
         .getAudioNowPlayingBarEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val audioNowPlayingBarOpensAudioMode by SettingsManager
+        .getAudioNowPlayingBarOpensAudioMode(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val playerDiagnosticLoggingEnabled by com.android.purebilibili.core.store.SettingsManager
         .getPlayerDiagnosticLoggingEnabled(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_PLAYER_DIAGNOSTIC_LOGGING_ENABLED)
@@ -636,6 +639,23 @@ fun PlaybackSettingsContent(
                                 scope.launch {
                                     com.android.purebilibili.core.store.SettingsManager
                                         .setAudioNowPlayingBarEnabled(context, it)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+                        AppPreferenceDivider()
+                        AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYLIST_AUTO_CONTINUE),
+                            title = "点击小横条进入听视频",
+                            subtitle = if (audioNowPlayingBarOpensAudioMode) {
+                                "点击视频小横条时跳转到听视频"
+                            } else {
+                                "关闭后点击视频小横条时跳转到视频详情页（默认）"
+                            },
+                            checked = audioNowPlayingBarOpensAudioMode,
+                            onCheckedChange = {
+                                scope.launch {
+                                    SettingsManager.setAudioNowPlayingBarOpensAudioMode(context, it)
                                 }
                             },
                             iconTint = iOSOrange
