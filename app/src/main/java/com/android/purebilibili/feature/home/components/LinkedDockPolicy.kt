@@ -4,6 +4,10 @@ import kotlin.math.roundToInt
 
 internal enum class LinkedDockPhase { Expanded, Playback, Search }
 
+/** Accumulate one direction before changing chrome; tiny reversals must not cause flicker. */
+internal fun accumulateDockScroll(previous: Float, delta: Float): Float =
+    if (previous * delta < 0f) delta else previous + delta
+
 internal fun resolveLinkedDockRestingPhase(
     collapseRequested: Boolean,
     hasAudio: Boolean,

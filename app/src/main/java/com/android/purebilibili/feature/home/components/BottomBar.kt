@@ -3215,6 +3215,7 @@ private fun BiliPaiFloatingBottomBar(
             firstItem = visibleItems.firstOrNull() ?: BottomNavItem.HOME,
             firstLabel = resolveBottomNavItemLabel(visibleItems.firstOrNull() ?: BottomNavItem.HOME, itemLabels),
             searchEnabled = bottomBarSearchEnabled,
+            isFeedScrollInProgress = isFeedScrollInProgress,
             collapseRequested = collapseLinkedDock,
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,

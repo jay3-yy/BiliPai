@@ -3,9 +3,9 @@ package com.android.purebilibili.feature.home.components
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
@@ -29,6 +30,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.feature.home.LocalHomeScrollOffset
+import kotlinx.coroutines.flow.collect
 import top.yukonga.miuix.kmp.blur.Backdrop
 
 private const val LINKED_DOCK_MERGE_DURATION_MILLIS = 320
@@ -41,6 +44,7 @@ internal fun LinkedBottomDock(
     firstItem: BottomNavItem,
     firstLabel: String,
     searchEnabled: Boolean,
+    isFeedScrollInProgress: Boolean,
     collapseRequested: Boolean,
     onSearchClick: () -> Unit,
     onSearchKeywordSubmit: (String) -> Unit,
@@ -55,12 +59,42 @@ internal fun LinkedBottomDock(
 ) {
     val hasAudio = nowPlayingContent != null
     var phase by remember(currentItem, searchEnabled, hasAudio) {
-        mutableStateOf(resolveLinkedDockRestingPhase(collapseRequested, hasAudio))
+        mutableStateOf(
+            if (currentItem == BottomNavItem.HOME) {
+                LinkedDockPhase.Expanded
+            } else {
+                resolveLinkedDockRestingPhase(collapseRequested, hasAudio)
+            }
+        )
     }
     var query by remember { mutableStateOf("") }
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(collapseRequested, hasAudio) {
-        if (phase != LinkedDockPhase.Search) {
+    val scroll = LocalHomeScrollOffset.current
+    val scrolling by rememberUpdatedState(isFeedScrollInProgress)
+    val threshold = with(LocalDensity.current) { 24.dp.toPx() }
+    LaunchedEffect(currentItem, hasAudio, scroll, threshold) {
+        if (currentItem != BottomNavItem.HOME) return@LaunchedEffect
+        var previous = scroll.floatValue
+        var accumulated = 0f
+        snapshotFlow { scroll.floatValue to scrolling }.collect { (offset, active) ->
+            val delta = offset - previous
+            previous = offset
+            if (!active || phase == LinkedDockPhase.Search) {
+                accumulated = 0f
+            } else {
+                accumulated = accumulateDockScroll(accumulated, delta)
+                if (offset <= 0f || accumulated <= -threshold) {
+                    phase = LinkedDockPhase.Expanded
+                    accumulated = 0f
+                } else if (hasAudio && accumulated >= threshold) {
+                    phase = LinkedDockPhase.Playback
+                    accumulated = 0f
+                }
+            }
+        }
+    }
+    LaunchedEffect(currentItem, collapseRequested, hasAudio) {
+        if (currentItem != BottomNavItem.HOME && phase != LinkedDockPhase.Search) {
             phase = resolveLinkedDockRestingPhase(collapseRequested, hasAudio)
         }
     }
@@ -70,7 +104,7 @@ internal fun LinkedBottomDock(
     }
     BackHandler(phase != LinkedDockPhase.Expanded) { expand() }
     val reduceMotion = rememberSystemReduceMotion()
-    val transition = updateTransition(phase, label = "linkedBottomDock")
+    val transition = rememberTransition(targetState = phase, label = "linkedBottomDock")
     val merge = transition.animateFloat(
         transitionSpec = {
             if (reduceMotion) snap() else tween(

@@ -87,6 +87,13 @@ class LinkedDockPolicyTest {
         assertEquals(64, geometry.height)
     }
 
+    @Test
+    fun homeScrollDirectionChangeStartsANewThreshold() {
+        assertEquals(16f, accumulateDockScroll(10f, 6f))
+        assertEquals(-3f, accumulateDockScroll(16f, -3f))
+        assertEquals(-13f, accumulateDockScroll(-3f, -10f))
+    }
+
     private fun geometry(merge: Float, search: Float) =
         resolveLinkedDockGeometry(336, 56, 64, 8, true, true, merge, search)
 }

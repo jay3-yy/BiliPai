@@ -1450,9 +1450,10 @@ fun AppNavigation(
                     (isBottomBarFloating && audioNowPlayingBarEnabled && audioNowPlayingActive &&
                         audioNowPlayingItem != null)
             )
-        val collapseLinkedPlaybackDock =
-            bottomBarVisibilityMode == SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE &&
-                !isBottomBarVisible
+        // This raw signal is intentionally independent from the user's bottom-bar visibility
+        // mode: the linked playback strip still compacts on downward browsing when the bar itself
+        // is configured to remain visible.
+        val collapseLinkedPlaybackDock = !isBottomBarVisible
         val bottomBarVisibilityState = remember { MutableTransitionState(finalBottomBarVisible) }
         bottomBarVisibilityState.targetState = finalBottomBarVisible
         val bottomBarCanMount =
