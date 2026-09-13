@@ -18,8 +18,8 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
-    fun `comment navigation chrome never collapses with content scroll`() {
-        assertFalse(
+    fun `collapse only consumes scroll on a settled comment page`() {
+        assertTrue(
             shouldEnableVideoContentTabBarCollapse(
                 settingEnabled = true,
                 selectedTabIndex = 1,
@@ -40,6 +40,13 @@ class VideoContentTabBarPolicyTest {
                 isPagerScrollInProgress = true,
             ),
         )
+    }
+
+    @Test
+    fun `floating comment title only follows list visibility when collapse is enabled`() {
+        assertTrue(shouldShowFloatingCommentTitle(collapseEnabled = false, commentListAtTop = false))
+        assertTrue(shouldShowFloatingCommentTitle(collapseEnabled = true, commentListAtTop = true))
+        assertFalse(shouldShowFloatingCommentTitle(collapseEnabled = true, commentListAtTop = false))
     }
 
     @Test

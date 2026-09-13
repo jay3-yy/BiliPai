@@ -1576,6 +1576,9 @@ private fun PlaybackFullscreenGestureSettingsSection(
     val portraitPlayerCollapseMode by com.android.purebilibili.core.store.SettingsManager
         .getPortraitPlayerCollapseMode(context)
         .collectAsStateWithLifecycle(initialValue = PortraitPlayerCollapseMode.INTRO_ONLY)
+    val videoDetailChromeScrollHideEnabled by SettingsManager
+        .getVideoDetailChromeScrollHideEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
     val portraitSwipeToFullscreenEnabled by com.android.purebilibili.core.store.SettingsManager
         .getPortraitSwipeToFullscreenEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val directPortraitStoryEntry by com.android.purebilibili.core.store.SettingsManager
@@ -1829,6 +1832,24 @@ private fun PlaybackFullscreenGestureSettingsSection(
                         .setPortraitPlayerCollapseMode(context, mode)
                 }
             }
+        )
+
+        AppPreferenceDivider()
+        AppSwitchPreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_HEADER_COLLAPSE),
+            title = "详情页控件随滚动隐藏",
+            subtitle = if (videoDetailChromeScrollHideEnabled) {
+                "评论页下滑时隐藏顶部标签、发弹幕和排序控件，回到顶部后显示"
+            } else {
+                "关闭后详情页顶部控件跟随内容移动，不再自动折叠"
+            },
+            checked = videoDetailChromeScrollHideEnabled,
+            onCheckedChange = { enabled ->
+                scope.launch {
+                    SettingsManager.setVideoDetailChromeScrollHideEnabled(context, enabled)
+                }
+            },
+            iconTint = iOSTeal,
         )
 
         val pauseOnPlayerCollapseEnabled by com.android.purebilibili.core.store.SettingsManager
