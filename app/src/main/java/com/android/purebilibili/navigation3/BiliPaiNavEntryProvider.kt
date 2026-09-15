@@ -35,6 +35,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     entry<BiliPaiNavKey.AnimationSettings>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.PlaybackSettings>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.PermissionSettings>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.MessageNotificationSettings>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.PluginsSettings>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.JsPluginContent>(
         transition = predictiveBackExcludedTransition,

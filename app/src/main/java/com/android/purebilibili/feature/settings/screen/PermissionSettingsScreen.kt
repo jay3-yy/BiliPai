@@ -112,7 +112,7 @@ fun PermissionSettingsContent(
                 } else {
                     "android.permission.POST_NOTIFICATIONS"
                 },
-                description = "显示媒体播放控制通知，方便后台控制播放",
+                description = "显示媒体播放控制，以及已开启的消息、关注更新和开播提醒",
                 iconResId = R.drawable.ms_notifications_24,
                 iconTint = iOSOrange,
                 isNormal = false,
@@ -121,7 +121,7 @@ fun PermissionSettingsContent(
             PermissionInfo(
                 name = "前台服务",
                 permission = Manifest.permission.FOREGROUND_SERVICE,
-                description = "支持后台播放视频时保持服务运行",
+                description = "支持后台播放和可选的常驻消息检查",
                 iconResId = R.drawable.ms_play_circle_24,
                 iconTint = iOSPurple,
                 isNormal = true,

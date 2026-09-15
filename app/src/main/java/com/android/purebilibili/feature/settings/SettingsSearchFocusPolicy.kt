@@ -158,6 +158,7 @@ internal fun resolveSettingsSceneDetailFocus(
     )
     SettingsSearchTarget.DATA_BACKUP,
     SettingsSearchTarget.PRIVACY_PERMISSION,
+    SettingsSearchTarget.MESSAGE_NOTIFICATION,
     SettingsSearchTarget.ABOUT_SUPPORT,
     SettingsSearchTarget.APPEARANCE,
     SettingsSearchTarget.ANIMATION,

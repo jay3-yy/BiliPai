@@ -2887,6 +2887,7 @@ fun AppNavigation(
                                     onAnimationClick = { pushNavigation3Key(BiliPaiNavKey.AnimationSettings) },
                                     onPlaybackClick = { pushNavigation3Key(BiliPaiNavKey.PlaybackSettings) },
                                     onPermissionClick = { pushNavigation3Key(BiliPaiNavKey.PermissionSettings) },
+                                    onMessageNotificationClick = { pushNavigation3Key(BiliPaiNavKey.MessageNotificationSettings) },
                                     onPluginsClick = { pushNavigation3Key(BiliPaiNavKey.PluginsSettings()) },
                                     onSettingsShareClick = { pushNavigation3Key(BiliPaiNavKey.SettingsShare) },
                                     onWebDavBackupClick = { pushNavigation3Key(BiliPaiNavKey.WebDavBackup) },
@@ -2915,6 +2916,7 @@ fun AppNavigation(
                                     onAnimationClick = { pushNavigation3Key(BiliPaiNavKey.AnimationSettings) },
                                     onPlaybackClick = { pushNavigation3Key(BiliPaiNavKey.PlaybackSettings) },
                                     onPermissionClick = { pushNavigation3Key(BiliPaiNavKey.PermissionSettings) },
+                                    onMessageNotificationClick = { pushNavigation3Key(BiliPaiNavKey.MessageNotificationSettings) },
                                     onPluginsClick = { pushNavigation3Key(BiliPaiNavKey.PluginsSettings()) },
                                     onSettingsShareClick = { pushNavigation3Key(BiliPaiNavKey.SettingsShare) },
                                     onWebDavBackupClick = { pushNavigation3Key(BiliPaiNavKey.WebDavBackup) },
@@ -2991,6 +2993,12 @@ fun AppNavigation(
                         BiliPaiNavEntryContentRole.PERMISSION_SETTINGS ->
                             SettingsTabletEntry {
                                 com.android.purebilibili.feature.settings.PermissionSettingsScreen(
+                                    onBack = { performSystemBackAction() }
+                                )
+                            }
+                        BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS ->
+                            SettingsTabletEntry {
+                                com.android.purebilibili.feature.settings.MessageNotificationSettingsScreen(
                                     onBack = { performSystemBackAction() }
                                 )
                             }

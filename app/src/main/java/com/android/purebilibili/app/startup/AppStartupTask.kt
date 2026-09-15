@@ -132,6 +132,12 @@ internal fun defaultAppStartupTasks(
             delayMs = if (telemetryThread == StartupThread.MAIN_DELAYED) deferredDelayMs else 0L
         ),
         AppStartupTask(
+            id = "message_notification_sync",
+            phase = StartupPhase.AFTER_FIRST_INTERACTIVE,
+            criticality = StartupCriticality.DEFERRED,
+            thread = StartupThread.MAIN_IDLE
+        ),
+        AppStartupTask(
             id = "plugin_init",
             phase = StartupPhase.AFTER_FIRST_INTERACTIVE,
             criticality = StartupCriticality.DEFERRED,

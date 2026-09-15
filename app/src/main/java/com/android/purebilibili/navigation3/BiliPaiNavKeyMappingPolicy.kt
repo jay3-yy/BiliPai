@@ -61,6 +61,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.AnimationSettings -> ScreenRoutes.AnimationSettings.route
         BiliPaiNavKey.PlaybackSettings -> ScreenRoutes.PlaybackSettings.route
         BiliPaiNavKey.PermissionSettings -> ScreenRoutes.PermissionSettings.route
+        BiliPaiNavKey.MessageNotificationSettings -> ScreenRoutes.MessageNotificationSettings.route
         is BiliPaiNavKey.PluginsSettings -> ScreenRoutes.PluginsSettings.createRoute(importUrl)
         is BiliPaiNavKey.JsPluginContent -> ScreenRoutes.JsPluginContent.createRoute(pluginId)
         is BiliPaiNavKey.ExternalMedia -> ScreenRoutes.ExternalMedia.createRoute(launchId)
@@ -180,6 +181,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         normalized == ScreenRoutes.AnimationSettings.route -> BiliPaiNavKey.AnimationSettings
         normalized == ScreenRoutes.PlaybackSettings.route -> BiliPaiNavKey.PlaybackSettings
         normalized == ScreenRoutes.PermissionSettings.route -> BiliPaiNavKey.PermissionSettings
+        normalized == ScreenRoutes.MessageNotificationSettings.route -> BiliPaiNavKey.MessageNotificationSettings
         routeBase == "plugins_settings" -> BiliPaiNavKey.PluginsSettings(importUrl = query["importUrl"])
         segments.firstOrNull() == "js_plugin" && segments.size >= 2 -> {
             BiliPaiNavKey.JsPluginContent(pluginId = decodeRouteValue(segments[1]))
@@ -296,6 +298,18 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
                 commentTargetRpid = query["commentTargetRpid"]?.toLongOrNull() ?: 0L,
                 initialVertical = query["initialVertical"]?.toBooleanStrictOrNull() ?: false,
                 directPortraitEntry = query["directPortraitEntry"]?.toBooleanStrictOrNull() ?: false,
+                sourceRoute = null
+            )
+        }
+        // 动态通知沿用历史 video_player 路由（ScreenRoutes.VideoPlayer）：桥接到真实的视频详情目的地，
+        // 否则点击通知只能落到 Unknown。
+        segments.firstOrNull() == "video_player" && segments.size >= 2 -> {
+            BiliPaiNavKey.VideoDetail(
+                bvid = decodeRouteValue(segments[1]),
+                cid = query["cid"]?.toLongOrNull() ?: 0L,
+                coverUrl = query["cover"].orEmpty(),
+                commentRootRpid = query["commentRootRpid"]?.toLongOrNull() ?: 0L,
+                commentTargetRpid = query["commentTargetRpid"]?.toLongOrNull() ?: 0L,
                 sourceRoute = null
             )
         }

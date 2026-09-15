@@ -264,6 +264,15 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             "background_manager_init" -> BackgroundManager.init(this)
             "player_settings_cache_init" -> com.android.purebilibili.core.store.PlayerSettingsCache.init(this)
             "notification_channel_init" -> createNotificationChannel()
+            "message_notification_sync" -> AppScope.ioScope.launch {
+                try {
+                    com.android.purebilibili.feature.message.notification.MessageNotificationSync.sync(this@PureApplication)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Logger.e("MessageNotification", "Unable to restore notification scheduling", e)
+                }
+            }
             "playlist_restore" -> initPlaylistRestoreNow()
             "telemetry_init" -> initTelemetryNow()
             "plugin_init" -> initPluginStackNow()

@@ -122,7 +122,7 @@ private fun SettingsAdaptiveDivider() {
 }
 
 @Composable
-private fun SettingsCardGroup(
+internal fun SettingsCardGroup(
     content: @Composable ColumnScope.() -> Unit
 ) {
     SettingsGroup(
@@ -192,6 +192,7 @@ internal data class SettingsRootCategoryActions(
     val onPlaybackClick: () -> Unit,
     val onBottomBarClick: () -> Unit,
     val onPermissionClick: () -> Unit,
+    val onMessageNotificationClick: () -> Unit,
     val onBlockedListClick: () -> Unit,
     val onCommentFraudHistoryClick: () -> Unit,
     val onPluginsClick: () -> Unit,
@@ -794,6 +795,7 @@ internal fun SettingsRootCategoryContent(
                             onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
                             onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
                             onPermissionClick = actions.onPermissionClick,
+                            onMessageNotificationClick = actions.onMessageNotificationClick,
                             onBlockedListClick = actions.onBlockedListClick,
                             onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
                         )
@@ -1020,6 +1022,7 @@ internal fun SettingsRootCategoryContent(
                             onSearchSuggestionsChange = actions.onSearchSuggestionsChange,
                             onPrivacyContentAuthenticationChange = actions.onPrivacyContentAuthenticationChange,
                             onPermissionClick = actions.onPermissionClick,
+                            onMessageNotificationClick = actions.onMessageNotificationClick,
                             onBlockedListClick = actions.onBlockedListClick,
                             onCommentFraudHistoryClick = actions.onCommentFraudHistoryClick // [New]
                         )
@@ -1495,6 +1498,7 @@ fun PrivacySection(
     onSearchSuggestionsChange: (Boolean) -> Unit,
     onPrivacyContentAuthenticationChange: (Boolean) -> Unit,
     onPermissionClick: () -> Unit,
+    onMessageNotificationClick: () -> Unit,
     onBlockedListClick: () -> Unit, // [New]
     onCommentFraudHistoryClick: () -> Unit // [New]
 ) {
@@ -1505,6 +1509,8 @@ fun PrivacySection(
     }.collectAsStateWithLifecycle(initialValue = true)
     val siblingTints = remember { resolveSettingsSiblingIconTints(4, paletteOffset = 4) }
     val permissionVisual = rememberSettingsEntryVisual(SettingsSearchTarget.PERMISSION)
+    val messageNotificationVisual =
+        rememberSettingsEntryVisual(SettingsSearchTarget.MESSAGE_NOTIFICATION)
     val blockedListVisual = rememberSettingsEntryVisual(SettingsSearchTarget.BLOCKED_LIST)
     val visibilityOffIcon = rememberSettingsSemanticIcon(SettingsIconRole.PRIVACY_HISTORY)
     val contentAuthenticationIcon = rememberSettingsSemanticIcon(
@@ -1560,6 +1566,15 @@ fun PrivacySection(
             value = "查看应用权限",
             onClick = onPermissionClick,
             iconTint = siblingTints[2]
+        )
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
+            icon = messageNotificationVisual.icon,
+            iconPainter = messageNotificationVisual.iconResId?.let { painterResource(id = it) },
+            title = "消息通知",
+            value = "后台消息、关注更新与开播提醒",
+            onClick = onMessageNotificationClick,
+            iconTint = messageNotificationVisual.iconTint
         )
         SettingsAdaptiveDivider()
         SettingClickableItem(

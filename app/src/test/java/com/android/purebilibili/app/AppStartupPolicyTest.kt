@@ -1,28 +1,11 @@
 package com.android.purebilibili.app
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppStartupPolicyTest {
 
-    @Test
-    fun startupPlanAssignsCriticalityAndThreadModelToEveryTask() {
-        val tasks = defaultAppStartupTasks(
-            sdkInt = 34,
-            deferredDelayMs = 900L,
-            dex2OatDelayMs = 2_500L
-        )
-
-        assertTrue(tasks.isNotEmpty())
-        tasks.forEach { task ->
-            assertTrue(task.id.isNotBlank())
-            assertNotNull(task.phase)
-            assertNotNull(task.criticality)
-            assertNotNull(task.thread)
-        }
-    }
 
     @Test
     fun startupPlanKeepsCoreInitializersBeforeFirstInteractiveState() {

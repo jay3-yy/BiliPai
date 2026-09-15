@@ -1,5 +1,6 @@
 package com.android.purebilibili.navigation
 
+import com.android.purebilibili.core.util.encodeUrlComponentCompat
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -35,7 +36,7 @@ sealed class ScreenRoutes(val route: String) {
     object LiveArea : ScreenRoutes("live_area")
     object LiveAreaDetail : ScreenRoutes("live_area_detail/{parentAreaId}/{areaId}?title={title}") {
         fun createRoute(parentAreaId: Int, areaId: Int, title: String): String {
-            return "live_area_detail/$parentAreaId/$areaId?title=${android.net.Uri.encode(title)}"
+            return "live_area_detail/$parentAreaId/$areaId?title=${encodeUrlComponentCompat(title)}"
         }
     }
     object LiveFollowing : ScreenRoutes("live_following")
@@ -53,7 +54,7 @@ sealed class ScreenRoutes(val route: String) {
     // 🔧 [新增] 离线视频播放
     object OfflineVideoPlayer : ScreenRoutes("offline_video/{taskId}") {
         fun createRoute(taskId: String): String {
-            return "offline_video/${android.net.Uri.encode(taskId)}"
+            return "offline_video/${encodeUrlComponentCompat(taskId)}"
         }
     }
     
@@ -76,7 +77,7 @@ sealed class ScreenRoutes(val route: String) {
 
     object ArticleDetail : ScreenRoutes("article/{articleId}?title={title}") {
         fun createRoute(articleId: Long, title: String? = null): String {
-            val encodedTitle = title?.let(android.net.Uri::encode).orEmpty()
+            val encodedTitle = title?.let(::encodeUrlComponentCompat).orEmpty()
             return "article/$articleId?title=$encodedTitle"
         }
     }
@@ -91,9 +92,9 @@ sealed class ScreenRoutes(val route: String) {
             cover: String = "",
             title: String = ""
         ): String {
-            val encodedCover = android.net.Uri.encode(cover)
-            val encodedTitle = android.net.Uri.encode(title)
-            return "story?bvid=${android.net.Uri.encode(bvid)}&cid=$cid&cover=$encodedCover&title=$encodedTitle"
+            val encodedCover = encodeUrlComponentCompat(cover)
+            val encodedTitle = encodeUrlComponentCompat(title)
+            return "story?bvid=${encodeUrlComponentCompat(bvid)}&cid=$cid&cover=$encodedCover&title=$encodedTitle"
         }
     }
 
@@ -105,20 +106,21 @@ sealed class ScreenRoutes(val route: String) {
     object HomeSettings : ScreenRoutes("home_settings")
     object PlaybackSettings : ScreenRoutes("playback_settings")
     object PermissionSettings : ScreenRoutes("permission_settings")  //  权限管理
+    object MessageNotificationSettings : ScreenRoutes("message_notification_settings")
     object PluginsSettings : ScreenRoutes("plugins_settings?importUrl={importUrl}") {  //  插件中心
         fun createRoute(importUrl: String? = null): String {
             if (importUrl.isNullOrBlank()) return "plugins_settings"
-            return "plugins_settings?importUrl=${android.net.Uri.encode(importUrl)}"
+            return "plugins_settings?importUrl=${encodeUrlComponentCompat(importUrl)}"
         }
     }
     object JsPluginContent : ScreenRoutes("js_plugin/{pluginId}") {
         fun createRoute(pluginId: String): String {
-            return "js_plugin/${URLEncoder.encode(pluginId, StandardCharsets.UTF_8.name()).replace("+", "%20")}"
+            return "js_plugin/${encodeUrlComponentCompat(pluginId)}"
         }
     }
     object ExternalMedia : ScreenRoutes("external_media/{launchId}") {
         fun createRoute(launchId: String): String {
-            return "external_media/${URLEncoder.encode(launchId, StandardCharsets.UTF_8.name()).replace("+", "%20")}"
+            return "external_media/${encodeUrlComponentCompat(launchId)}"
         }
     }
     object BottomBarSettings : ScreenRoutes("bottom_bar_settings")  //  底栏管理
@@ -158,8 +160,8 @@ sealed class ScreenRoutes(val route: String) {
     object SeasonSeriesDetail : ScreenRoutes("season_series_detail/{type}/{id}?mid={mid}&title={title}&ownerName={ownerName}") {
         fun createRoute(type: String, id: Long, mid: Long, title: String, ownerName: String = ""): String {
             // Encode title to handle special characters
-            val encodedTitle = android.net.Uri.encode(title)
-            val encodedOwnerName = android.net.Uri.encode(ownerName)
+            val encodedTitle = encodeUrlComponentCompat(title)
+            val encodedOwnerName = encodeUrlComponentCompat(ownerName)
             return "season_series_detail/$type/$id?mid=$mid&title=$encodedTitle&ownerName=$encodedOwnerName"
         }
     }
@@ -167,8 +169,8 @@ sealed class ScreenRoutes(val route: String) {
     //  [新增] 直播播放页面
     object Live : ScreenRoutes("live/{roomId}?title={title}&uname={uname}&site={site}") {
         fun createRoute(roomId: Any, title: String, uname: String, siteId: String = "bilibili"): String {
-            val encodedTitle = android.net.Uri.encode(title).orEmpty()
-            val encodedUname = android.net.Uri.encode(uname).orEmpty()
+            val encodedTitle = encodeUrlComponentCompat(title)
+            val encodedUname = encodeUrlComponentCompat(uname)
             return "live/$roomId?title=$encodedTitle&uname=$encodedUname&site=$siteId"
         }
     }
@@ -196,7 +198,7 @@ sealed class ScreenRoutes(val route: String) {
 
     object BangumiReview : ScreenRoutes("bangumi_review/{mediaId}?title={title}") {
         fun createRoute(mediaId: Long, title: String = ""): String {
-            return "bangumi_review/$mediaId?title=${android.net.Uri.encode(title)}"
+            return "bangumi_review/$mediaId?title=${encodeUrlComponentCompat(title)}"
         }
     }
     
@@ -223,7 +225,7 @@ sealed class ScreenRoutes(val route: String) {
     //  分类详情页面
     object Category : ScreenRoutes("category/{tid}?name={name}") {
         fun createRoute(tid: Int, name: String): String {
-            return "category/$tid?name=${android.net.Uri.encode(name)}"
+            return "category/$tid?name=${encodeUrlComponentCompat(name)}"
         }
     }
 
@@ -238,15 +240,15 @@ sealed class ScreenRoutes(val route: String) {
     object SystemNotice : ScreenRoutes("message/system_notice")
     object Chat : ScreenRoutes("chat/{talkerId}/{sessionType}?name={name}") {
         fun createRoute(talkerId: Long, sessionType: Int, userName: String): String {
-            return "chat/$talkerId/$sessionType?name=${android.net.Uri.encode(userName)}"
+            return "chat/$talkerId/$sessionType?name=${encodeUrlComponentCompat(userName)}"
         }
     }
     
     // [新增] In-app Browser
     object Web : ScreenRoutes("web?url={url}&title={title}") {
         fun createRoute(url: String, title: String? = null): String {
-            val encodedUrl = android.net.Uri.encode(url)
-            val encodedTitle = title?.let { android.net.Uri.encode(it) } ?: ""
+            val encodedUrl = encodeUrlComponentCompat(url)
+            val encodedTitle = title?.let(::encodeUrlComponentCompat) ?: ""
             return "web?url=$encodedUrl&title=$encodedTitle"
         }
     }
@@ -261,7 +263,7 @@ sealed class ScreenRoutes(val route: String) {
     // [新增] Native Music - 用于 MA 格式的原生音乐播放 (从视频 DASH 流提取音频)
     object NativeMusic : ScreenRoutes("native_music?title={title}&bvid={bvid}&cid={cid}") {
         fun createRoute(title: String, bvid: String, cid: Long): String {
-            return "native_music?title=${android.net.Uri.encode(title)}&bvid=${android.net.Uri.encode(bvid)}&cid=$cid"
+            return "native_music?title=${encodeUrlComponentCompat(title)}&bvid=${encodeUrlComponentCompat(bvid)}&cid=$cid"
         }
     }
 }

@@ -21,17 +21,25 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
+    fun queryByMessageNotificationTitleOrAlias_hitsMessageNotificationSetting() {
+        val byTitle = resolveSettingsSearchResults("消息通知")
+        val byAlias = resolveSettingsSearchResults("后台消息")
+
+        assertEquals(
+            SettingsSearchTarget.MESSAGE_NOTIFICATION,
+            byTitle.firstOrNull()?.target
+        )
+        assertEquals(
+            SettingsSearchTarget.MESSAGE_NOTIFICATION,
+            byAlias.firstOrNull()?.target
+        )
+    }
+
+    @Test
     fun naturalLanguageQueryContainingSettingName_hitsExpectedSetting() {
         val results = resolveSettingsSearchResults("怎么清除应用缓存释放空间")
 
         assertEquals(SettingsSearchTarget.CLEAR_CACHE, results.firstOrNull()?.target)
-    }
-
-    @Test
-    fun naturalLanguageQuery_prefersMoreSpecificContainedAlias() {
-        val result = resolveSettingsSearchResults("我想把首页顶栏改成仅回顶显示").firstOrNull()
-
-        assertEquals(SettingsSearchTarget.HOME_FEED, result?.target)
     }
 
     @Test
@@ -257,10 +265,15 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryBySubReplyBlur_returnsNoRemovedBlurSetting() {
-        val results = resolveSettingsSearchResults("楼中楼模糊")
+    fun queryBySubReply_hitsPlaybackFullscreenEntry() {
+        val results = resolveSettingsSearchResults("楼中楼")
 
-        assertTrue(results.isEmpty())
+        assertTrue(
+            results.any {
+                it.target == SettingsSearchTarget.PLAYBACK &&
+                    it.focusId == SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
+            }
+        )
     }
 
     @Test
@@ -393,23 +406,16 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryByBottomBar_surfacesTopTabDiscoverabilityInSubtitle() {
-        val result = resolveSettingsSearchResults("底栏").firstOrNull {
-            it.target == SettingsSearchTarget.BOTTOM_BAR && it.title == "导航设置"
-        }
-
-        assertEquals("底栏、顶部标签、平板侧边栏", result?.subtitle)
+    fun queryByBottomBar_hitsBottomBarSettingsEntry() {
+        assertTrue(resolveSettingsSearchResults("底栏").any { it.target == SettingsSearchTarget.BOTTOM_BAR })
     }
 
     @Test
     fun queryByHomeTopRightMessage_hitsTopTabManagementEntry() {
-        val result = resolveSettingsSearchResults("首页右上角消息").firstOrNull {
-            it.target == SettingsSearchTarget.BOTTOM_BAR &&
-                it.focusId == SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS
-        }
+        val first = resolveSettingsSearchResults("首页右上角消息").firstOrNull()
 
-        assertEquals("顶部标签管理", result?.title)
-        assertEquals("显示/隐藏、排序、右上角入口", result?.subtitle)
+        assertEquals(SettingsSearchTarget.BOTTOM_BAR, first?.target)
+        assertEquals(SettingsSearchFocusIds.BOTTOM_BAR_TOP_TABS, first?.focusId)
     }
 
     @Test

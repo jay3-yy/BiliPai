@@ -17,6 +17,7 @@ class SettingsNavHierarchyPolicyTest {
         assertTrue(isSettingsSubtreeRoute("settings_search"))
         assertTrue(isSettingsSubtreeRoute("appearance_settings"))
         assertTrue(isSettingsSubtreeRoute("home_settings"))
+        assertTrue(isSettingsSubtreeRoute("message_notification_settings"))
         assertFalse(isSettingsSubtreeRoute("home"))
     }
 
@@ -26,6 +27,7 @@ class SettingsNavHierarchyPolicyTest {
         assertEquals(1, resolveSettingsNavDepth("settings_category"))
         assertEquals(2, resolveSettingsNavDepth("appearance_settings"))
         assertEquals(2, resolveSettingsNavDepth("home_settings"))
+        assertEquals(2, resolveSettingsNavDepth("message_notification_settings"))
         assertEquals(3, resolveSettingsNavDepth("icon_settings"))
         assertEquals(2, resolveSettingsNavDepth("animation_settings"))
     }
@@ -35,6 +37,7 @@ class SettingsNavHierarchyPolicyTest {
         assertEquals("settings_category", resolveSettingsNavParentRoute("animation_settings"))
         assertEquals("settings_category", resolveSettingsNavParentRoute("home_settings"))
         assertEquals("appearance_settings", resolveSettingsNavParentRoute("icon_settings"))
+        assertEquals("settings_category", resolveSettingsNavParentRoute("message_notification_settings"))
         assertEquals("settings_category", resolveSettingsNavParentRoute("appearance_settings"))
     }
 
@@ -68,6 +71,12 @@ class SettingsNavHierarchyPolicyTest {
             isSettingsNavHierarchyTransition(
                 parentRoute = "settings",
                 childRoute = "playback_settings",
+            )
+        )
+        assertTrue(
+            isSettingsNavHierarchyTransition(
+                parentRoute = "settings",
+                childRoute = "message_notification_settings",
             )
         )
         assertFalse(
@@ -169,6 +178,14 @@ class SettingsNavHierarchyPolicyTest {
             BiliPaiNavKey.SettingsCategory(SettingsRootCategory.CONTENT_PLAYBACK)
         )
         assertEquals(SettingsRootCategory.PLAYBACK_QUALITY, category)
+        assertEquals(
+            SettingsRootCategory.PRIVACY_PERMISSION,
+            resolveSettingsRootCategoryForRoute("message_notification_settings"),
+        )
+        assertEquals(
+            SettingsRootCategory.PRIVACY_PERMISSION,
+            resolveSettingsRootCategoryForNavKey(BiliPaiNavKey.MessageNotificationSettings),
+        )
     }
 
     @Test

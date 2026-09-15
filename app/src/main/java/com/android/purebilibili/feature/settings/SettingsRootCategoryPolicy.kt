@@ -112,7 +112,8 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
 
     SettingsSearchTarget.PRIVACY_PERMISSION,
     SettingsSearchTarget.PERMISSION,
-    SettingsSearchTarget.BLOCKED_LIST -> SettingsRootCategory.PRIVACY_PERMISSION
+    SettingsSearchTarget.BLOCKED_LIST,
+    SettingsSearchTarget.MESSAGE_NOTIFICATION -> SettingsRootCategory.PRIVACY_PERMISSION
 
     SettingsSearchTarget.DATA_BACKUP,
     SettingsSearchTarget.SETTINGS_SHARE,

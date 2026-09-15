@@ -26,6 +26,7 @@ internal enum class SettingsIconRole {
     PLAYBACK,
     BOTTOM_BAR,
     PERMISSION,
+    MESSAGE_NOTIFICATION,
     BLOCKED_LIST,
     SETTINGS_SHARE,
     WEBDAV_BACKUP,
@@ -216,6 +217,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.PLAYBACK -> R.drawable.ms_play_circle_24
     SettingsIconRole.BOTTOM_BAR -> R.drawable.ms_widgets_24
     SettingsIconRole.PERMISSION -> R.drawable.ms_security_24
+    SettingsIconRole.MESSAGE_NOTIFICATION -> R.drawable.ms_notifications_24
     SettingsIconRole.BLOCKED_LIST -> R.drawable.ms_block_24
     SettingsIconRole.SETTINGS_SHARE -> R.drawable.ms_share_24
     SettingsIconRole.WEBDAV_BACKUP -> R.drawable.ms_cloud_upload_24
@@ -408,6 +410,7 @@ internal fun resolveSettingsSearchTargetIconRole(
     SettingsSearchTarget.PLAYBACK -> SettingsIconRole.PLAYBACK
     SettingsSearchTarget.BOTTOM_BAR -> SettingsIconRole.BOTTOM_BAR
     SettingsSearchTarget.PERMISSION -> SettingsIconRole.PERMISSION
+    SettingsSearchTarget.MESSAGE_NOTIFICATION -> SettingsIconRole.MESSAGE_NOTIFICATION
     SettingsSearchTarget.BLOCKED_LIST -> SettingsIconRole.BLOCKED_LIST
     SettingsSearchTarget.SETTINGS_SHARE -> SettingsIconRole.SETTINGS_SHARE
     SettingsSearchTarget.WEBDAV_BACKUP -> SettingsIconRole.WEBDAV_BACKUP
@@ -476,6 +479,7 @@ internal fun resolveMiuixSettingsSemanticIcon(role: SettingsIconRole): ImageVect
     SettingsIconRole.PLAYBACK -> MiuixIcons.Play
     SettingsIconRole.BOTTOM_BAR -> MiuixIcons.HorizontalSplit
     SettingsIconRole.PERMISSION -> MiuixIcons.Unlock
+    SettingsIconRole.MESSAGE_NOTIFICATION -> MiuixIcons.Messages
     SettingsIconRole.BLOCKED_LIST -> MiuixIcons.Blocklist
     SettingsIconRole.SETTINGS_SHARE -> MiuixIcons.Share
     SettingsIconRole.WEBDAV_BACKUP -> MiuixIcons.UploadCloud

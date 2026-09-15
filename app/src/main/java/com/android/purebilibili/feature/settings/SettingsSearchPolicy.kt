@@ -18,6 +18,7 @@ enum class SettingsSearchTarget {
     PLAYBACK,
     BOTTOM_BAR,
     PERMISSION,
+    MESSAGE_NOTIFICATION,
     BLOCKED_LIST,
     SETTINGS_SHARE,
     WEBDAV_BACKUP,
@@ -335,6 +336,13 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = "查看每项系统权限的用途和当前授权状态",
         section = "隐私与安全",
         aliases = listOf("权限", "存储权限", "通知权限", "相册权限", "文件权限", "系统设置权限")
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.MESSAGE_NOTIFICATION,
+        title = "消息通知",
+        subtitle = "后台检查私信、互动消息、关注更新与开播提醒",
+        section = "隐私与安全",
+        aliases = listOf("消息通知", "后台通知", "私信通知", "开播提醒", "关注更新", "新消息提醒", "常驻后台", "后台消息", "通知")
     ),
     SettingsSearchEntry(
         target = SettingsSearchTarget.BLOCKED_LIST,

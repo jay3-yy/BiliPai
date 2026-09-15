@@ -1,35 +1,25 @@
 package com.android.purebilibili.app
 
+import android.app.NotificationManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class AppNotificationChannelsTest {
-
     @Test
-    fun resolveAppNotificationChannels_includesDownloadChannel() {
-        val channel = resolveAppNotificationChannels()
-            .firstOrNull { it.id == DOWNLOAD_NOTIFICATION_CHANNEL_ID }
-
-        assertNotNull(channel)
-        assertEquals("下载任务", channel.name)
+    fun messageChannelAllowsAlertsAndBadges() {
+        val channel = resolveAppNotificationChannels().single { it.id == MESSAGE_NOTIFICATION_CHANNEL_ID }
+        assertEquals(NotificationManager.IMPORTANCE_DEFAULT, channel.importance)
+        assertTrue(channel.showBadge)
+        assertFalse(channel.silent)
     }
 
     @Test
-    fun resolveAppNotificationChannels_includesSponsorBlockChannel() {
-        val channel = resolveAppNotificationChannels()
-            .firstOrNull { it.id == SPONSOR_BLOCK_NOTIFICATION_CHANNEL_ID }
-
-        assertNotNull(channel)
-        assertEquals("空降助手", channel.name)
-    }
-
-    @Test
-    fun resolveAppNotificationChannels_includesJsonPluginStatsChannel() {
-        val channel = resolveAppNotificationChannels()
-            .firstOrNull { it.id == JSON_PLUGIN_STATS_NOTIFICATION_CHANNEL_ID }
-
-        assertNotNull(channel)
-        assertEquals("插件统计", channel.name)
+    fun residentServiceDoesNotSoundOrCountAsUnreadMessage() {
+        val channel = resolveAppNotificationChannels().single { it.id == MESSAGE_NOTIFICATION_SERVICE_CHANNEL_ID }
+        assertEquals(NotificationManager.IMPORTANCE_LOW, channel.importance)
+        assertFalse(channel.showBadge)
+        assertTrue(channel.silent)
     }
 }

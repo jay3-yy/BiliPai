@@ -163,6 +163,9 @@ class BiliPaiNavKeyMappingPolicyTest {
         assertEquals(BiliPaiNavKey.AnimationSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.AnimationSettings.route))
         assertEquals(BiliPaiNavKey.PlaybackSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.PlaybackSettings.route))
         assertEquals(BiliPaiNavKey.PermissionSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.PermissionSettings.route))
+        val messageNotificationKey = BiliPaiNavKey.MessageNotificationSettings
+        assertEquals(ScreenRoutes.MessageNotificationSettings.route, messageNotificationKey.toLegacyRoute())
+        assertEquals(messageNotificationKey, legacyRouteToBiliPaiNavKey(messageNotificationKey.toLegacyRoute()))
         assertEquals(BiliPaiNavKey.PluginsSettings(), legacyRouteToBiliPaiNavKey(ScreenRoutes.PluginsSettings.createRoute()))
         val pluginImportRoute = "plugins_settings?importUrl=https%3A%2F%2Fexample.com%2Fa.bpplugin"
         assertEquals(
@@ -210,6 +213,10 @@ class BiliPaiNavKeyMappingPolicyTest {
             BiliPaiNavKey.Chat(talkerId = 42L, sessionType = 1, userName = "测试用户"),
             legacyRouteToBiliPaiNavKey("chat/42/1?name=%E6%B5%8B%E8%AF%95%E7%94%A8%E6%88%B7")
         )
+        assertEquals(
+            BiliPaiNavKey.Chat(talkerId = 42L, sessionType = 1, userName = "测试 用户+号"),
+            legacyRouteToBiliPaiNavKey(ScreenRoutes.Chat.createRoute(42L, 1, "测试 用户+号"))
+        )
     }
 
     @Test
@@ -245,6 +252,23 @@ class BiliPaiNavKeyMappingPolicyTest {
             BiliPaiNavKey.NativeMusic(title = "背景音乐", bvid = "BV1", cid = 3L),
             legacyRouteToBiliPaiNavKey("native_music?title=%E8%83%8C%E6%99%AF%E9%9F%B3%E4%B9%90&bvid=BV1&cid=3")
         )
+    }
+
+    @Test
+    fun notificationDynamicVideoRoute_reachesVideoDetailDestination() {
+        val route = ScreenRoutes.VideoPlayer.createRoute(
+            bvid = "BV1xx411c7mD",
+            cid = 7L,
+            commentRootRpid = 11L,
+            commentTargetRpid = 22L
+        )
+
+        val key = assertIs<BiliPaiNavKey.VideoDetail>(legacyRouteToBiliPaiNavKey(route))
+
+        assertEquals("BV1xx411c7mD", key.bvid)
+        assertEquals(7L, key.cid)
+        assertEquals(11L, key.commentRootRpid)
+        assertEquals(22L, key.commentTargetRpid)
     }
 
     @Test

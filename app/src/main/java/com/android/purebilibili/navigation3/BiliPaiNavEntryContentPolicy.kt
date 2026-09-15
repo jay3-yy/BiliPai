@@ -18,6 +18,7 @@ internal enum class BiliPaiNavEntryContentRole {
     ANIMATION_SETTINGS,
     PLAYBACK_SETTINGS,
     PERMISSION_SETTINGS,
+    MESSAGE_NOTIFICATION_SETTINGS,
     PLUGINS_SETTINGS,
     JS_PLUGIN_CONTENT,
     EXTERNAL_MEDIA,
@@ -86,6 +87,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.AnimationSettings -> BiliPaiNavEntryContentRole.ANIMATION_SETTINGS
         BiliPaiNavKey.PlaybackSettings -> BiliPaiNavEntryContentRole.PLAYBACK_SETTINGS
         BiliPaiNavKey.PermissionSettings -> BiliPaiNavEntryContentRole.PERMISSION_SETTINGS
+        BiliPaiNavKey.MessageNotificationSettings -> BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS
         is BiliPaiNavKey.PluginsSettings -> BiliPaiNavEntryContentRole.PLUGINS_SETTINGS
         is BiliPaiNavKey.JsPluginContent -> BiliPaiNavEntryContentRole.JS_PLUGIN_CONTENT
         is BiliPaiNavKey.ExternalMedia -> BiliPaiNavEntryContentRole.EXTERNAL_MEDIA
