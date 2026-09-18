@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.pager
 
+import com.android.purebilibili.core.player.buildPlaybackUpstreamDataSourceFactory
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.util.UnstableApi
@@ -439,8 +440,7 @@ internal suspend fun prefetchPortraitPlaybackHead(
 @UnstableApi
 internal fun buildPortraitCachedMediaSourceFactory(context: Context): DefaultMediaSourceFactory {
     val headers = buildPortraitPlaybackHttpHeaders()
-    val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-        .setDefaultRequestProperties(headers)
+    val upstreamFactory = buildPlaybackUpstreamDataSourceFactory(context, headers)
     val dataSourceFactory: DataSource.Factory =
         PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
     return DefaultMediaSourceFactory(context)

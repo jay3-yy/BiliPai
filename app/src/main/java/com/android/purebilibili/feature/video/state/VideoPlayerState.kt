@@ -3,6 +3,7 @@
 
 package com.android.purebilibili.feature.video.state
 
+import com.android.purebilibili.core.player.buildPlaybackUpstreamDataSourceFactory
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.VideoActivity
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
@@ -27,7 +28,6 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
@@ -990,8 +990,7 @@ fun rememberVideoPlayerState(
                 "Referer" to "https://www.bilibili.com",
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             )
-            val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-                .setDefaultRequestProperties(headers)
+            val upstreamFactory = buildPlaybackUpstreamDataSourceFactory(context, headers)
             val dataSourceFactory: DataSource.Factory =
                 PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
 

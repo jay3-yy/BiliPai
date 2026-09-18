@@ -1,6 +1,9 @@
 package com.android.purebilibili.core.store
 
 import android.content.Context
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_CONCURRENCY
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_ENABLED
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_MULTI_HOST
 import com.android.purebilibili.core.util.Logger
 
 /**
@@ -19,6 +22,9 @@ object PlayerSettingsCache {
     private const val KEY_SEEK_FAST = "seek_fast_enabled"
     private const val KEY_PLAYER_DIAGNOSTIC_LOGGING = "player_diagnostic_logging_enabled"
     private const val KEY_DASH_SEGMENT_REQUESTS_ENABLED = "dash_segment_requests_enabled"
+    private const val KEY_THREAD_RIPPER_ENABLED = "thread_ripper_enabled"
+    private const val KEY_THREAD_RIPPER_CONCURRENCY = "thread_ripper_concurrency"
+    private const val KEY_THREAD_RIPPER_MULTI_HOST = "thread_ripper_multi_host"
     private const val LEGACY_HW_DECODE_PREFS_NAME = "hw_decode_cache"
     
     // 内存缓存
@@ -33,6 +39,15 @@ object PlayerSettingsCache {
 
     @Volatile
     private var dashSegmentRequestsEnabled: Boolean? = null
+
+    @Volatile
+    private var threadRipperEnabled: Boolean? = null
+
+    @Volatile
+    private var threadRipperConcurrency: Int? = null
+
+    @Volatile
+    private var threadRipperMultiHostEnabled: Boolean? = null
     
     /**
      * 初始化缓存（在 Application.onCreate 中调用）
@@ -49,6 +64,9 @@ object PlayerSettingsCache {
             KEY_DASH_SEGMENT_REQUESTS_ENABLED,
             DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED
         )
+        threadRipperEnabled = prefs.getBoolean(KEY_THREAD_RIPPER_ENABLED, DEFAULT_THREAD_RIPPER_ENABLED)
+        threadRipperConcurrency = prefs.getInt(KEY_THREAD_RIPPER_CONCURRENCY, DEFAULT_THREAD_RIPPER_CONCURRENCY)
+        threadRipperMultiHostEnabled = prefs.getBoolean(KEY_THREAD_RIPPER_MULTI_HOST, DEFAULT_THREAD_RIPPER_MULTI_HOST)
         Logger.d(
             TAG,
             "✅ 初始化完成: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +
@@ -166,6 +184,63 @@ object PlayerSettingsCache {
         Logger.d(TAG, "💾 DASH 分段请求设置已更新: $enabled")
     }
     
+    /** 线程撕裂者：多线程 Range 并发下载是否开启。 */
+    fun isThreadRipperEnabled(context: Context): Boolean {
+        return threadRipperEnabled ?: run {
+            val value = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_THREAD_RIPPER_ENABLED, DEFAULT_THREAD_RIPPER_ENABLED)
+            threadRipperEnabled = value
+            value
+        }
+    }
+
+    fun setThreadRipperEnabled(context: Context, enabled: Boolean) {
+        threadRipperEnabled = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_THREAD_RIPPER_ENABLED, enabled)
+            .apply()
+        Logger.d(TAG, "💾 线程撕裂者开关已更新: $enabled")
+    }
+
+    /** 线程撕裂者：单条轨道的并发块数上限。 */
+    fun getThreadRipperConcurrency(context: Context): Int {
+        return threadRipperConcurrency ?: run {
+            val value = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(KEY_THREAD_RIPPER_CONCURRENCY, DEFAULT_THREAD_RIPPER_CONCURRENCY)
+            threadRipperConcurrency = value
+            value
+        }
+    }
+
+    fun setThreadRipperConcurrency(context: Context, concurrency: Int) {
+        threadRipperConcurrency = concurrency
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putInt(KEY_THREAD_RIPPER_CONCURRENCY, concurrency)
+            .apply()
+        Logger.d(TAG, "💾 线程撕裂者并发数已更新: $concurrency")
+    }
+
+    /** 线程撕裂者：是否把块分摊到多个大陆 CDN 主机。 */
+    fun isThreadRipperMultiHostEnabled(context: Context): Boolean {
+        return threadRipperMultiHostEnabled ?: run {
+            val value = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean(KEY_THREAD_RIPPER_MULTI_HOST, DEFAULT_THREAD_RIPPER_MULTI_HOST)
+            threadRipperMultiHostEnabled = value
+            value
+        }
+    }
+
+    fun setThreadRipperMultiHostEnabled(context: Context, enabled: Boolean) {
+        threadRipperMultiHostEnabled = enabled
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_THREAD_RIPPER_MULTI_HOST, enabled)
+            .apply()
+        Logger.d(TAG, "💾 线程撕裂者多线路分摊已更新: $enabled")
+    }
+
     /**
      * 强制刷新缓存（设置页面修改后调用）
      */
@@ -181,6 +256,9 @@ object PlayerSettingsCache {
             KEY_DASH_SEGMENT_REQUESTS_ENABLED,
             DEFAULT_DASH_SEGMENT_REQUESTS_ENABLED
         )
+        threadRipperEnabled = prefs.getBoolean(KEY_THREAD_RIPPER_ENABLED, DEFAULT_THREAD_RIPPER_ENABLED)
+        threadRipperConcurrency = prefs.getInt(KEY_THREAD_RIPPER_CONCURRENCY, DEFAULT_THREAD_RIPPER_CONCURRENCY)
+        threadRipperMultiHostEnabled = prefs.getBoolean(KEY_THREAD_RIPPER_MULTI_HOST, DEFAULT_THREAD_RIPPER_MULTI_HOST)
         Logger.d(
             TAG,
             "🔄 缓存已刷新: hwDecode=$hwDecodeEnabled, seekFast=$seekFastEnabled, " +

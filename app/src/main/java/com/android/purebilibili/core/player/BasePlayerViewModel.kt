@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ConcatenatingMediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -270,8 +269,7 @@ abstract class BasePlayerViewModel : ViewModel() {
             "Referer" to referer,
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-            .setDefaultRequestProperties(headers)
+        val upstreamFactory = buildPlaybackUpstreamDataSourceFactory(NetworkModule.appContext, headers)
         val dataSourceFactory: DataSource.Factory = NetworkModule.appContext?.let { context ->
             PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
         } ?: upstreamFactory

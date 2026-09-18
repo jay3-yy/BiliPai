@@ -68,6 +68,12 @@ import com.android.purebilibili.feature.screenshot.AppScreenshotCaptureMode
 import com.android.purebilibili.feature.screenshot.AppScreenshotGestureMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_CONCURRENCY
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_ENABLED
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_MULTI_HOST
+import com.android.purebilibili.core.player.ripper.THREAD_RIPPER_CONCURRENCY_OPTIONS
+import com.android.purebilibili.core.player.ripper.ThreadRipperStats
+import com.android.purebilibili.core.player.ripper.formatThreadRipperStatus
 import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -212,6 +218,19 @@ fun PlaybackSettingsContent(
             AppSegmentOption(preference, preference.displayName)
         }
     }
+    val threadRipperEnabled by SettingsManager
+        .getThreadRipperEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_THREAD_RIPPER_ENABLED)
+    val threadRipperConcurrency by SettingsManager
+        .getThreadRipperConcurrency(context)
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_THREAD_RIPPER_CONCURRENCY)
+    val threadRipperMultiHostEnabled by SettingsManager
+        .getThreadRipperMultiHostEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_THREAD_RIPPER_MULTI_HOST)
+    val threadRipperConcurrencyOptions = remember {
+        THREAD_RIPPER_CONCURRENCY_OPTIONS.map { threads -> AppSegmentOption(threads, "$threads 线程") }
+    }
+    val threadRipperSnapshot by ThreadRipperStats.snapshot.collectAsStateWithLifecycle()
 
     // ... [保留原有逻辑: checkPipPermission, gotoPipSettings] ...
 
@@ -931,6 +950,55 @@ fun PlaybackSettingsContent(
                             },
                             iconTint = iOSTeal,
                         )
+
+                        AppPreferenceDivider()
+
+                        AppSwitchPreference(
+                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_speed_24),
+                            title = "多线程下载（线程撕裂者）",
+                            subtitle = if (threadRipperEnabled) {
+                                formatThreadRipperStatus(threadRipperSnapshot)
+                            } else {
+                                "默认关闭；国内网络通常不需要，海外卡顿时可开启"
+                            },
+                            checked = threadRipperEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    SettingsManager.setThreadRipperEnabled(context, enabled)
+                                }
+                            },
+                            iconTint = iOSOrange
+                        )
+
+                        if (threadRipperEnabled) {
+                            AppPreferenceDivider()
+                            SettingsSingleChoicePreference(
+                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_hub_24),
+                                title = "并发线程：${threadRipperConcurrency} 线程",
+                                subtitle = "先用 8，缓冲跟不上再试 16 或 32；线程越多调度开销也越大",
+                                options = threadRipperConcurrencyOptions,
+                                selectedValue = threadRipperConcurrency,
+                                onSelectionChange = { threads ->
+                                    scope.launch {
+                                        SettingsManager.setThreadRipperConcurrency(context, threads)
+                                    }
+                                },
+                                iconTint = iOSOrange
+                            )
+                            AppPreferenceDivider()
+                            AppSwitchPreference(
+                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lan_24),
+                                title = "多线路分摊（实验性）",
+                                subtitle = "把字节块轮流分给多个大陆 CDN 节点，某条线路卡住时自动换路重试",
+                                checked = threadRipperMultiHostEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        SettingsManager.setThreadRipperMultiHostEnabled(context, enabled)
+                                    }
+                                },
+                                iconTint = iOSOrange
+                            )
+                        }
 
                         AppPreferenceDivider()
 

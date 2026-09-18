@@ -3,6 +3,7 @@
 
 package com.android.purebilibili.feature.video.player
 
+import com.android.purebilibili.core.player.buildPlaybackUpstreamDataSourceFactory
 import coil3.request.allowHardware
 import coil3.request.transformations
 
@@ -33,7 +34,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -1758,8 +1758,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 "Referer" to "https://www.bilibili.com",
                 "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             )
-            val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-                .setDefaultRequestProperties(headers)
+            val upstreamFactory = buildPlaybackUpstreamDataSourceFactory(context, headers)
             val dataSourceFactory: DataSource.Factory =
                 PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
 
@@ -1856,8 +1855,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = OkHttpDataSource.Factory(NetworkModule.playbackOkHttpClient)
-            .setDefaultRequestProperties(headers)
+        val upstreamFactory = buildPlaybackUpstreamDataSourceFactory(context, headers)
         val dataSourceFactory: DataSource.Factory =
             PlaybackMediaCache.buildCachedDataSourceFactory(context, upstreamFactory)
 

@@ -12,6 +12,9 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_CONCURRENCY
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_ENABLED
+import com.android.purebilibili.core.player.ripper.DEFAULT_THREAD_RIPPER_MULTI_HOST
 import com.android.purebilibili.core.ui.AppIconStyle
 import com.android.purebilibili.core.ui.AppListItemStyle
 import com.android.purebilibili.core.ui.components.AppSingleChoicePresentation
@@ -6469,6 +6472,9 @@ object SettingsManager {
     private val KEY_DASH_SEGMENT_REQUESTS_ENABLED =
         booleanPreferencesKey("dash_segment_requests_enabled")
     private val KEY_PLAYBACK_CDN_PREFERENCE = stringPreferencesKey("playback_cdn_preference")
+    private val KEY_THREAD_RIPPER_ENABLED = booleanPreferencesKey("thread_ripper_enabled")
+    private val KEY_THREAD_RIPPER_CONCURRENCY = intPreferencesKey("thread_ripper_concurrency")
+    private val KEY_THREAD_RIPPER_MULTI_HOST = booleanPreferencesKey("thread_ripper_multi_host")
     private val KEY_QUALITY_SWITCH_FAILURE_DIALOG_ENABLED =
         booleanPreferencesKey("quality_switch_failure_dialog_enabled")
     private val KEY_QUALITY_SWITCH_FAILURE_DIALOG_ONCE_ENABLED =
@@ -6885,6 +6891,44 @@ object SettingsManager {
             preferences[KEY_DASH_SEGMENT_REQUESTS_ENABLED] = enabled
         }
         PlayerSettingsCache.setDashSegmentRequestsEnabled(context, enabled)
+    }
+
+    // ---- 线程撕裂者：多线程 Range 并发下载 ----
+
+    fun getThreadRipperEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_THREAD_RIPPER_ENABLED] ?: DEFAULT_THREAD_RIPPER_ENABLED
+        }
+
+    suspend fun setThreadRipperEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_THREAD_RIPPER_ENABLED] = enabled
+        }
+        PlayerSettingsCache.setThreadRipperEnabled(context, enabled)
+    }
+
+    fun getThreadRipperConcurrency(context: Context): Flow<Int> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_THREAD_RIPPER_CONCURRENCY] ?: DEFAULT_THREAD_RIPPER_CONCURRENCY
+        }
+
+    suspend fun setThreadRipperConcurrency(context: Context, concurrency: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_THREAD_RIPPER_CONCURRENCY] = concurrency
+        }
+        PlayerSettingsCache.setThreadRipperConcurrency(context, concurrency)
+    }
+
+    fun getThreadRipperMultiHostEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_THREAD_RIPPER_MULTI_HOST] ?: DEFAULT_THREAD_RIPPER_MULTI_HOST
+        }
+
+    suspend fun setThreadRipperMultiHostEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_THREAD_RIPPER_MULTI_HOST] = enabled
+        }
+        PlayerSettingsCache.setThreadRipperMultiHostEnabled(context, enabled)
     }
 
     fun getPlaybackCdnPreference(context: Context): Flow<String> =

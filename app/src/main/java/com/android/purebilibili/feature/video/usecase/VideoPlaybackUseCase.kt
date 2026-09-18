@@ -3,6 +3,7 @@
 
 package com.android.purebilibili.feature.video.usecase
 
+import com.android.purebilibili.core.player.buildPlaybackUpstreamDataSourceFactory
 import android.content.Context
 import android.net.Uri
 import androidx.media3.common.MediaItem
@@ -1224,9 +1225,7 @@ class VideoPlaybackUseCase(
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
-            NetworkModule.playbackOkHttpClient
-        ).setDefaultRequestProperties(headers)
+        val upstreamFactory = buildPlaybackUpstreamDataSourceFactory(appContext ?: NetworkModule.appContext, headers)
         val dataSourceFactory = buildCachedPlaybackDataSourceFactory(upstreamFactory, cdnCacheKeysByUrl)
 
         val mediaSourceFactory = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(dataSourceFactory)
@@ -1252,9 +1251,7 @@ class VideoPlaybackUseCase(
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         )
-        val upstreamFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
-            NetworkModule.playbackOkHttpClient
-        ).setDefaultRequestProperties(headers)
+        val upstreamFactory = buildPlaybackUpstreamDataSourceFactory(context, headers)
         val dataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(
             context,
             PlaybackMediaCache.buildCdnOptimizedDataSourceFactory(
