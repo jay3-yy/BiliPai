@@ -15,6 +15,7 @@ import com.android.purebilibili.core.plugin.RecommendationRequest
 import com.android.purebilibili.core.plugin.RecommendationResult
 import com.android.purebilibili.core.plugin.RecommendationSceneSignals
 import com.android.purebilibili.feature.plugin.ADFILTER_PLUGIN_ID
+import com.android.purebilibili.feature.plugin.PILINARA_FEED_FILTER_PLUGIN_ID
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TodayWatchDislikedVideoSnapshot
 import com.android.purebilibili.core.store.TodayWatchFeedbackStore
@@ -362,6 +363,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncTodayWatchFeedbackFromStore()
         viewModelScope.launch {
             PluginManager.awaitPluginReady(ADFILTER_PLUGIN_ID)
+            //  推荐流过滤插件的「启用态 + 配置」是注册协程里异步回填的(DataStore)。
+            //  若不等待就重过滤, 冷启动的首个请求会在“无规则”状态下被过滤, 表现为
+            //  首次展示漏过滤、必须手动刷新一次才生效。
+            PluginManager.awaitPluginReady(PILINARA_FEED_FILTER_PLUGIN_ID)
             reFilterAllContent()
         }
         viewModelScope.launch {

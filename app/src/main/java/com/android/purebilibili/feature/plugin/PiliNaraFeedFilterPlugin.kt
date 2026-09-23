@@ -36,6 +36,9 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
+/** 插件 ID: 供启动阶段等待启用态与配置回填, 避免冷启动首次展示漏过滤 */
+internal const val PILINARA_FEED_FILTER_PLUGIN_ID = "pilinara_feed_filter"
+
 /**
  * 推荐流过滤插件(移植自 PiliNara 的「推荐流设置」RecommendFilter)。
  *
@@ -46,7 +49,7 @@ import kotlinx.serialization.json.Json
  */
 class PiliNaraFeedFilterPlugin : FeedPlugin {
 
-    override val id = "pilinara_feed_filter"
+    override val id = PILINARA_FEED_FILTER_PLUGIN_ID
     override val name = "推荐流过滤"
     override val description = "移植自 PiliNara 的推荐流过滤: 时长/播放量/点赞率/标题关键词/屏蔽用户/白名单"
     override val version = "1.0.0"
