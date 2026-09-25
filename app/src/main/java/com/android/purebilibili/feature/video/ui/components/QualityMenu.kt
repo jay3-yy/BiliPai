@@ -1,8 +1,13 @@
 package com.android.purebilibili.feature.video.ui.components
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.DropdownItem
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.SettingsManager
 
 @Composable
 fun QualitySelectionMenu(
@@ -43,7 +48,13 @@ fun SpeedSelectionMenu(
     currentSpeed: Float, onSpeedSelected: (Float) -> Unit,
     onDismiss: () -> Unit, placement: SpeedSelectionMenuPlacement,
 ) {
-    val options = PlaybackSpeed.OPTIONS.asReversed()
+    val context = LocalContext.current
+    val speedOptions by SettingsManager.getPlaybackSpeedOptions(context)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val options = remember(speedOptions, currentSpeed) {
+        if (currentSpeed in speedOptions) speedOptions.asReversed()
+        else (speedOptions + currentSpeed).sortedDescending()
+    }
     PlayerMiuixListPopup(
         title = "播放速度", onDismissRequest = onDismiss,
         placement = if (placement == SpeedSelectionMenuPlacement.RIGHT_SIDE) {

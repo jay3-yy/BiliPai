@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.ui.gesture
 
-import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
 import kotlin.math.abs
 
 data class TwoFingerSpeedToggleState(
@@ -92,7 +91,7 @@ internal fun resolveTwoFingerGesturePlaybackSpeed(
     totalDragY: Float,
     containerWidthPx: Float,
     containerHeightPx: Float,
-    supportedSpeeds: List<Float> = PlaybackSpeed.OPTIONS
+    supportedSpeeds: List<Float>
 ): Float {
     if (mode == TwoFingerSpeedGestureMode.Off || supportedSpeeds.isEmpty()) {
         return startSpeed

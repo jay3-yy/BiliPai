@@ -189,6 +189,9 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
             "播放速度",
             "倍速",
             "默认播放速度",
+            "倍速列表",
+            "长按倍速",
+            "长按临时加速",
             "记忆上次播放速度",
             "续播",
             "续播弹窗",
@@ -590,9 +593,9 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         target = SettingsSearchTarget.PLAYBACK,
         title = "播放速度",
-        subtitle = "默认播放速度、记忆上次播放速度",
+        subtitle = "编辑播放器倍速列表、默认速度和长按临时加速",
         section = "播放设置",
-        aliases = listOf("播放速度", "倍速", "默认播放速度", "记忆上次播放速度"),
+        aliases = listOf("播放速度", "倍速", "倍速列表", "默认播放速度", "长按倍速", "长按临时加速", "记忆上次播放速度"),
         focusId = SettingsSearchFocusIds.PLAYBACK_SPEED
     ),
     SettingsSearchEntry(

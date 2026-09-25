@@ -57,6 +57,7 @@ import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.store.DanmakuSettings
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.DEFAULT_LONG_PRESS_SPEED
 import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
@@ -126,6 +127,9 @@ fun OfflineVideoPlayerScreen(
     val danmakuSettings by SettingsManager
         .getDanmakuSettings(context, danmakuSettingsScope)
         .collectAsStateWithLifecycle(initialValue = DanmakuSettings())
+    val longPressSpeed by SettingsManager
+        .getLongPressSpeed(context)
+        .collectAsStateWithLifecycle(initialValue = DEFAULT_LONG_PRESS_SPEED)
     val task = tasks[currentTaskId]
     
     // === 状态管理 ===
@@ -163,7 +167,6 @@ fun OfflineVideoPlayerScreen(
     var isLongPressing by remember { mutableStateOf(false) }
     var originalSpeed by remember { mutableFloatStateOf(1.0f) }
     var longPressSpeedVisible by remember { mutableStateOf(false) }
-    val longPressSpeed = 2.0f
     var danmakuEnabled by remember(currentTaskId) { mutableStateOf(true) }
 
     LaunchedEffect(danmakuManager, danmakuSettings) {

@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PhotoCamera
-import com.android.purebilibili.core.store.LONG_PRESS_SPEED_OPTIONS
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.rememberAppPlayerChromeProfile
 import com.android.purebilibili.core.ui.rememberAppCodecIcon
@@ -49,12 +48,12 @@ import com.android.purebilibili.core.ui.rememberAppRefreshIcon
 import com.android.purebilibili.core.ui.rememberAppSpeedIcon
 import com.android.purebilibili.core.ui.rememberAppTimerIcon
 import com.android.purebilibili.core.ui.rememberAppWifiIcon
-import com.android.purebilibili.core.ui.components.DefaultPlaybackSpeedPreferenceControl
+import com.android.purebilibili.core.ui.components.PlaybackSpeedPreferenceControl
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppSwitchPreference
-import com.android.purebilibili.core.ui.components.formatDefaultPlaybackSpeed
+import com.android.purebilibili.core.ui.components.formatPlaybackSpeed
 import com.android.purebilibili.data.model.response.AiAudioInfo
 import com.android.purebilibili.feature.plugin.CdnLineDiagnostic
 import com.android.purebilibili.feature.anime4k.Anime4KBypassReason
@@ -343,6 +342,9 @@ fun VideoSettingsPanel(
         .getLongPressSpeed(context)
         .collectAsStateWithLifecycle(initialValue = 2.0f
         )
+    val playbackSpeedOptions by com.android.purebilibili.core.store.SettingsManager
+        .getPlaybackSpeedOptions(context)
+        .collectAsStateWithLifecycle(initialValue = emptyList())
     val longPressSpeedLockEnabled by com.android.purebilibili.core.store.SettingsManager
         .getLongPressSpeedLockEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false
@@ -1146,7 +1148,7 @@ fun VideoSettingsPanel(
                         )
                         Spacer(modifier = Modifier.width(customInlineTextGap))
                         VideoSettingsPanelText(
-                            text = if (currentSpeed == 1.0f) "正常" else "${currentSpeed}x",
+                            text = PlaybackSpeed.formatSpeedFull(currentSpeed),
                             role = VideoSettingsPanelTextRole.BODY,
                             legacyFontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1155,7 +1157,15 @@ fun VideoSettingsPanel(
                     Spacer(modifier = Modifier.height(customTitleToOptionsGap))
                     SpeedOptions(
                         currentSpeed = currentSpeed,
+                        options = playbackSpeedOptions,
                         onSelect = onSpeedChange
+                    )
+                    Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                    VideoSettingsPanelText(
+                        text = "可在播放设置中调整倍速列表",
+                        role = VideoSettingsPanelTextRole.BODY,
+                        legacyFontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 SettingsDivider()
@@ -1169,7 +1179,7 @@ fun VideoSettingsPanel(
                         subtitle = if (rememberLastPlaybackSpeed) {
                             "已开启记忆上次速度（当前优先）"
                         } else {
-                            "当前默认 ${formatDefaultPlaybackSpeed(defaultPlaybackSpeed)}"
+                            "当前默认 ${formatPlaybackSpeed(defaultPlaybackSpeed)}"
                         },
                         checked = rememberLastPlaybackSpeed,
                         onCheckedChange = { checked ->
@@ -1182,8 +1192,12 @@ fun VideoSettingsPanel(
 
                     Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
 
-                    DefaultPlaybackSpeedPreferenceControl(
+                    PlaybackSpeedPreferenceControl(
                         currentSpeed = defaultPlaybackSpeed,
+                        options = remember(playbackSpeedOptions, defaultPlaybackSpeed) {
+                            if (defaultPlaybackSpeed in playbackSpeedOptions) playbackSpeedOptions
+                            else (playbackSpeedOptions + defaultPlaybackSpeed).sorted()
+                        },
                         onSpeedChange = { speed ->
                             scope.launch {
                                 com.android.purebilibili.core.store.SettingsManager
@@ -1307,18 +1321,26 @@ fun VideoSettingsPanel(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             VideoSettingsPanelText(
-                                text = "当前 ${longPressSpeed}x",
+                                text = "当前 ${PlaybackSpeed.formatSpeedFull(longPressSpeed)}",
                                 role = VideoSettingsPanelTextRole.BODY,
                                 legacyFontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
+                    VideoSettingsPanelText(
+                        text = "从统一倍速列表中独立选择",
+                        role = VideoSettingsPanelTextRole.BODY,
+                        legacyFontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = customSectionIconSize + customSectionIconGap)
+                    )
                     Spacer(modifier = Modifier.height(customTitleToOptionsGap))
                     
                     // 长按倍速选项
                     LongPressSpeedOptions(
                         currentSpeed = longPressSpeed,
+                        options = playbackSpeedOptions,
                         onSelect = { speed ->
                             scope.launch {
                                 com.android.purebilibili.core.store.SettingsManager.setLongPressSpeed(context, speed)
@@ -1561,40 +1583,36 @@ private fun SleepTimerOptions(
 @Composable
 private fun SpeedOptions(
     currentSpeed: Float,
+    options: List<Float>,
     onSelect: (Float) -> Unit
 ) {
     val spec = rememberVideoSettingsPanelVisualSpec()
-    val options = listOf(
-        0.5f to "0.5x",
-        0.75f to "0.75x",
-        1.0f to "正常",
-        1.25f to "1.25x",
-        1.3f to "1.3x",
-        1.5f to "1.5x",
-        2.0f to "2x"
-    )
-    
+    val displayOptions = remember(options, currentSpeed) {
+        if (currentSpeed in options) options else (options + currentSpeed).sorted()
+    }
+
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(spec.chipSpacing)
     ) {
-        options.forEach { (speed, label) ->
+        displayOptions.forEach { speed ->
             val isSelected = currentSpeed == speed
             AppSurface(
                 onClick = { onSelect(speed) },
                 shape = RoundedCornerShape(spec.chipCornerRadius),
                 color = videoSettingsChipContainerColor(isSelected),
-                modifier = Modifier.height(spec.chipHeight)
+                modifier = Modifier.heightIn(min = 48.dp)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.padding(horizontal = spec.chipHorizontalPadding)
                 ) {
                     VideoSettingsPanelText(
-                        text = label,
+                        text = PlaybackSpeed.formatSpeedFull(speed),
                         role = VideoSettingsPanelTextRole.OPTION,
                         legacyFontSize = 13.sp,
-                        color = videoSettingsChipContentColor(isSelected)
+                        color = videoSettingsChipContentColor(isSelected),
+                        modifier = Modifier.padding(vertical = 10.dp)
                     )
                 }
             }
@@ -1747,32 +1765,36 @@ private fun SeekSecondsOptions(
 @Composable
 private fun LongPressSpeedOptions(
     currentSpeed: Float,
+    options: List<Float>,
     onSelect: (Float) -> Unit
 ) {
     val spec = rememberVideoSettingsPanelVisualSpec()
-    val options = LONG_PRESS_SPEED_OPTIONS
-    
+    val displayOptions = remember(options, currentSpeed) {
+        if (currentSpeed in options) options else (options + currentSpeed).sorted()
+    }
+
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(spec.chipSpacing)
     ) {
-        options.forEach { speed ->
+        displayOptions.forEach { speed ->
             val isSelected = currentSpeed == speed
             AppSurface(
                 onClick = { onSelect(speed) },
                 shape = RoundedCornerShape(spec.chipCornerRadius),
                 color = videoSettingsChipContainerColor(isSelected),
-                modifier = Modifier.height(spec.chipHeight)
+                modifier = Modifier.heightIn(min = 48.dp)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier.padding(horizontal = spec.chipHorizontalPadding)
                 ) {
                     VideoSettingsPanelText(
-                        text = "${speed}x",
+                        text = PlaybackSpeed.formatSpeedFull(speed),
                         role = VideoSettingsPanelTextRole.OPTION,
                         legacyFontSize = 13.sp,
-                        color = videoSettingsChipContentColor(isSelected)
+                        color = videoSettingsChipContentColor(isSelected),
+                        modifier = Modifier.padding(vertical = 10.dp)
                     )
                 }
             }

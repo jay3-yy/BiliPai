@@ -5,8 +5,15 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.android.purebilibili.core.store.resolvePreferredPlaybackSpeed as resolvePreferredPlaybackSpeedPolicy
+import com.android.purebilibili.core.store.DEFAULT_LONG_PRESS_SPEED
+import com.android.purebilibili.core.store.nearestPlaybackSpeed
+import com.android.purebilibili.core.store.normalizeLongPressSpeed
+import com.android.purebilibili.core.store.normalizePlaybackSpeedOptions
+import com.android.purebilibili.core.store.resolvePlaybackSpeedOptions
 import com.android.purebilibili.core.store.normalizePlaybackSpeed as normalizePlaybackSpeedPolicy
 import com.android.purebilibili.core.store.settingsDataStore
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +23,8 @@ import kotlinx.coroutines.flow.map
 const val DEFAULT_AUDIO_QUALITY_FOLLOW_LAST = -2
 
 internal val defaultAudioQualityPreferenceKey = intPreferencesKey("default_audio_quality")
+internal val longPressSpeedPreferenceKey = floatPreferencesKey("long_press_speed")
+internal val playbackSpeedOptionsPreferenceKey = stringPreferencesKey("playback_speed_options")
 
 object PlayerSettingsStore {
     enum class PlayerInsightMode {
@@ -78,17 +87,92 @@ object PlayerSettingsStore {
         )
     }
 
+    internal fun playbackSpeedOptions(preferences: Preferences): List<Float> =
+        resolvePlaybackSpeedOptions(
+            storedValues = preferences[playbackSpeedOptionsPreferenceKey],
+            legacyDefaultSpeed = preferences[keyDefaultPlaybackSpeed] ?: 1f,
+            legacyLongPressSpeed = preferences[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED,
+            legacyLastSpeed = preferences[keyLastPlaybackSpeed] ?: 1f
+        )
+
+    fun getPlaybackSpeedOptions(context: Context): Flow<List<Float>> =
+        context.settingsDataStore.data.map(::playbackSpeedOptions)
+
+    suspend fun addPlaybackSpeedOption(context: Context, speed: Float) {
+        updatePlaybackSpeedOptions(context) { options -> options + speed }
+    }
+
+    suspend fun removePlaybackSpeedOption(context: Context, speed: Float) {
+        updatePlaybackSpeedOptions(context) { options -> options - speed }
+    }
+
+    private suspend fun updatePlaybackSpeedOptions(
+        context: Context,
+        change: (List<Float>) -> List<Float>
+    ) {
+        val preferences = context.settingsDataStore.edit { values ->
+            val options = normalizePlaybackSpeedOptions(change(playbackSpeedOptions(values)))
+            values[playbackSpeedOptionsPreferenceKey] = options.joinToString(",")
+            reconcilePlaybackSpeedSelections(values, options)
+        }
+        syncPlaybackSpeedCache(context, preferences)
+    }
+
+    internal fun reconcilePlaybackSpeedSelections(
+        values: MutablePreferences,
+        options: List<Float> = playbackSpeedOptions(values)
+    ) {
+        values[keyDefaultPlaybackSpeed] =
+            nearestPlaybackSpeed(values[keyDefaultPlaybackSpeed] ?: 1f, options)
+        values[longPressSpeedPreferenceKey] = normalizeLongPressSpeed(
+            values[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED, options
+        )
+        values[keyLastPlaybackSpeed] =
+            nearestPlaybackSpeed(values[keyLastPlaybackSpeed] ?: 1f, options)
+    }
+
+    fun getLongPressSpeed(context: Context): Flow<Float> =
+        context.settingsDataStore.data.map { preferences ->
+            normalizeLongPressSpeed(
+                preferences[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED,
+                playbackSpeedOptions(preferences)
+            )
+        }
+
+    suspend fun setLongPressSpeed(context: Context, speed: Float) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[longPressSpeedPreferenceKey] =
+                normalizeLongPressSpeed(speed, playbackSpeedOptions(preferences))
+        }
+    }
+
     fun getDefaultPlaybackSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> normalizePlaybackSpeed(preferences[keyDefaultPlaybackSpeed] ?: 1.0f) }
+        .map { preferences ->
+            nearestPlaybackSpeed(
+                preferences[keyDefaultPlaybackSpeed] ?: 1f, playbackSpeedOptions(preferences)
+            )
+        }
 
     suspend fun setDefaultPlaybackSpeed(context: Context, speed: Float) {
-        val normalized = normalizePlaybackSpeed(speed)
-        context.settingsDataStore.edit { preferences ->
-            preferences[keyDefaultPlaybackSpeed] = normalized
+        val preferences = context.settingsDataStore.edit { values ->
+            values[keyDefaultPlaybackSpeed] = nearestPlaybackSpeed(speed, playbackSpeedOptions(values))
         }
+        syncPlaybackSpeedCache(context, preferences)
+    }
+
+    internal fun syncPlaybackSpeedCache(context: Context, preferences: Preferences) {
+        val options = playbackSpeedOptions(preferences)
         context.getSharedPreferences(playbackSpeedCachePrefs, Context.MODE_PRIVATE)
             .edit()
-            .putFloat(cacheKeyDefaultPlaybackSpeed, normalized)
+            .putFloat(
+                cacheKeyDefaultPlaybackSpeed,
+                nearestPlaybackSpeed(preferences[keyDefaultPlaybackSpeed] ?: 1f, options)
+            )
+            .putBoolean(cacheKeyRememberLastSpeed, preferences[keyRememberLastPlaybackSpeed] ?: false)
+            .putFloat(
+                cacheKeyLastPlaybackSpeed,
+                nearestPlaybackSpeed(preferences[keyLastPlaybackSpeed] ?: 1f, options)
+            )
             .apply()
     }
 
@@ -106,17 +190,17 @@ object PlayerSettingsStore {
     }
 
     fun getLastPlaybackSpeed(context: Context): Flow<Float> = context.settingsDataStore.data
-        .map { preferences -> normalizePlaybackSpeed(preferences[keyLastPlaybackSpeed] ?: 1.0f) }
+        .map { preferences ->
+            nearestPlaybackSpeed(
+                preferences[keyLastPlaybackSpeed] ?: 1f, playbackSpeedOptions(preferences)
+            )
+        }
 
     suspend fun setLastPlaybackSpeed(context: Context, speed: Float) {
-        val normalized = normalizePlaybackSpeed(speed)
-        context.settingsDataStore.edit { preferences ->
-            preferences[keyLastPlaybackSpeed] = normalized
+        val preferences = context.settingsDataStore.edit { values ->
+            values[keyLastPlaybackSpeed] = nearestPlaybackSpeed(speed, playbackSpeedOptions(values))
         }
-        context.getSharedPreferences(playbackSpeedCachePrefs, Context.MODE_PRIVATE)
-            .edit()
-            .putFloat(cacheKeyLastPlaybackSpeed, normalized)
-            .apply()
+        syncPlaybackSpeedCache(context, preferences)
     }
 
     fun getPreferredPlaybackSpeed(context: Context): Flow<Float> = combine(
