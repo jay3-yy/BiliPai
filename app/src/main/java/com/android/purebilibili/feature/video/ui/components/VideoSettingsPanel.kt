@@ -49,6 +49,7 @@ import com.android.purebilibili.core.ui.rememberAppSpeedIcon
 import com.android.purebilibili.core.ui.rememberAppTimerIcon
 import com.android.purebilibili.core.ui.rememberAppWifiIcon
 import com.android.purebilibili.core.ui.components.PlaybackSpeedPreferenceControl
+import com.android.purebilibili.core.ui.components.LongPressSpeedPreferenceControl
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -1320,32 +1321,18 @@ fun VideoSettingsPanel(
                                 legacyFontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            VideoSettingsPanelText(
-                                text = "当前 ${PlaybackSpeed.formatSpeedFull(longPressSpeed)}",
-                                role = VideoSettingsPanelTextRole.BODY,
-                                legacyFontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
                         }
                     }
-                    VideoSettingsPanelText(
-                        text = "从统一倍速列表中独立选择",
-                        role = VideoSettingsPanelTextRole.BODY,
-                        legacyFontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = customSectionIconSize + customSectionIconGap)
-                    )
                     Spacer(modifier = Modifier.height(customTitleToOptionsGap))
-                    
-                    // 长按倍速选项
-                    LongPressSpeedOptions(
+                    LongPressSpeedPreferenceControl(
                         currentSpeed = longPressSpeed,
-                        options = playbackSpeedOptions,
-                        onSelect = { speed ->
+                        onSpeedChange = { speed ->
                             scope.launch {
                                 com.android.purebilibili.core.store.SettingsManager.setLongPressSpeed(context, speed)
                             }
-                        }
+                        },
+                        title = null,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
                 SettingsDivider()
@@ -1759,45 +1746,3 @@ private fun SeekSecondsOptions(
     }
 }
 
-/**
- * 长按倍速选项
- */
-@Composable
-private fun LongPressSpeedOptions(
-    currentSpeed: Float,
-    options: List<Float>,
-    onSelect: (Float) -> Unit
-) {
-    val spec = rememberVideoSettingsPanelVisualSpec()
-    val displayOptions = remember(options, currentSpeed) {
-        if (currentSpeed in options) options else (options + currentSpeed).sorted()
-    }
-
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(spec.chipSpacing)
-    ) {
-        displayOptions.forEach { speed ->
-            val isSelected = currentSpeed == speed
-            AppSurface(
-                onClick = { onSelect(speed) },
-                shape = RoundedCornerShape(spec.chipCornerRadius),
-                color = videoSettingsChipContainerColor(isSelected),
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = spec.chipHorizontalPadding)
-                ) {
-                    VideoSettingsPanelText(
-                        text = PlaybackSpeed.formatSpeedFull(speed),
-                        role = VideoSettingsPanelTextRole.OPTION,
-                        legacyFontSize = 13.sp,
-                        color = videoSettingsChipContentColor(isSelected),
-                        modifier = Modifier.padding(vertical = 10.dp)
-                    )
-                }
-            }
-        }
-    }
-}

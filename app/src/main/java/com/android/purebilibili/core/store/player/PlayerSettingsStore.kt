@@ -91,7 +91,6 @@ object PlayerSettingsStore {
         resolvePlaybackSpeedOptions(
             storedValues = preferences[playbackSpeedOptionsPreferenceKey],
             legacyDefaultSpeed = preferences[keyDefaultPlaybackSpeed] ?: 1f,
-            legacyLongPressSpeed = preferences[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED,
             legacyLastSpeed = preferences[keyLastPlaybackSpeed] ?: 1f
         )
 
@@ -124,25 +123,20 @@ object PlayerSettingsStore {
     ) {
         values[keyDefaultPlaybackSpeed] =
             nearestPlaybackSpeed(values[keyDefaultPlaybackSpeed] ?: 1f, options)
-        values[longPressSpeedPreferenceKey] = normalizeLongPressSpeed(
-            values[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED, options
-        )
+        values[longPressSpeedPreferenceKey] =
+            normalizeLongPressSpeed(values[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED)
         values[keyLastPlaybackSpeed] =
             nearestPlaybackSpeed(values[keyLastPlaybackSpeed] ?: 1f, options)
     }
 
     fun getLongPressSpeed(context: Context): Flow<Float> =
         context.settingsDataStore.data.map { preferences ->
-            normalizeLongPressSpeed(
-                preferences[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED,
-                playbackSpeedOptions(preferences)
-            )
+            normalizeLongPressSpeed(preferences[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED)
         }
 
     suspend fun setLongPressSpeed(context: Context, speed: Float) {
         context.settingsDataStore.edit { preferences ->
-            preferences[longPressSpeedPreferenceKey] =
-                normalizeLongPressSpeed(speed, playbackSpeedOptions(preferences))
+            preferences[longPressSpeedPreferenceKey] = normalizeLongPressSpeed(speed)
         }
     }
 

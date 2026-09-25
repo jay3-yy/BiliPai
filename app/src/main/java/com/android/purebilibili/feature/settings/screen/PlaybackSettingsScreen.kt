@@ -516,7 +516,6 @@ fun PlaybackSettingsContent(
                             PlaybackSpeedOptionsPreferenceControl(
                                 options = playbackSpeedOptions,
                                 defaultSpeed = defaultPlaybackSpeed,
-                                longPressSpeed = longPressSpeed,
                                 onAddSpeed = { speed ->
                                     scope.launch {
                                         SettingsManager.addPlaybackSpeedOption(context, speed)
@@ -543,16 +542,15 @@ fun PlaybackSettingsContent(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             AppPreferenceDivider()
-                            PlaybackSpeedPreferenceControl(
+                            LongPressSpeedPreferenceControl(
                                 currentSpeed = longPressSpeed,
-                                options = playbackSpeedOptions,
                                 onSpeedChange = { speed ->
                                     scope.launch {
                                         SettingsManager.setLongPressSpeed(context, speed)
                                     }
                                 },
                                 title = "长按临时加速",
-                                subtitle = "与默认速度独立；按住视频临时加速，松开恢复",
+                                subtitle = "按住视频临时加速，松开恢复；点按倍速数值可输入",
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

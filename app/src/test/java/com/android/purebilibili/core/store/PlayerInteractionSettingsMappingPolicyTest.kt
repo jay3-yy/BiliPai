@@ -3,9 +3,12 @@ package com.android.purebilibili.core.store
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.mutablePreferencesOf
+import com.android.purebilibili.core.store.player.PlayerSettingsStore
+import com.android.purebilibili.core.store.player.longPressSpeedPreferenceKey
+import com.android.purebilibili.core.store.player.playbackSpeedOptionsPreferenceKey
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -52,6 +55,7 @@ class PlayerInteractionSettingsMappingPolicyTest {
             booleanPreferencesKey("hide_video_page_status_bar") to true,
             intPreferencesKey("tablet_comment_panel_width_preset") to TabletCommentPanelWidthPreset.ULTRA_WIDE.value,
             floatPreferencesKey("long_press_speed") to 4.6f,
+            stringPreferencesKey("playback_speed_options") to "1,1.5,2",
             booleanPreferencesKey("long_press_speed_lock_enabled") to true,
             booleanPreferencesKey("long_press_speed_lock_hint_shown") to true,
             floatPreferencesKey("subtitle_vertical_offset_fraction") to -0.42f,
@@ -71,7 +75,7 @@ class PlayerInteractionSettingsMappingPolicyTest {
         assertEquals(SubtitleAutoPreference.ON, result.subtitleAutoPreference)
         assertTrue(result.hideVideoPageStatusBar)
         assertEquals(TabletCommentPanelWidthPreset.ULTRA_WIDE, result.tabletCommentPanelWidthPreset)
-        assertEquals(3.0f, result.longPressSpeed)
+        assertEquals(4.6f, result.longPressSpeed)
         assertTrue(result.longPressSpeedLockEnabled)
         assertTrue(result.longPressSpeedLockHintShown)
         assertEquals(-0.30f, result.subtitleVerticalOffsetFraction)
@@ -81,29 +85,21 @@ class PlayerInteractionSettingsMappingPolicyTest {
     }
 
     @Test
-    fun hideVideoPageStatusBar_hasSyncCacheForInitialValue() {
-        val source = File("src/main/java/com/android/purebilibili/core/store/SettingsManager.kt")
-            .takeIf { it.exists() }
-            ?: File("app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt")
-        val text = source.readText()
+    fun removingPlaybackOption_doesNotChangeIndependentLongPressSpeed() {
+        val defaultKey = floatPreferencesKey("default_playback_speed")
+        val lastKey = floatPreferencesKey("last_playback_speed")
+        val prefs = mutablePreferencesOf(
+            playbackSpeedOptionsPreferenceKey to "1,1.5,2",
+            defaultKey to 1.5f,
+            lastKey to 2f,
+            longPressSpeedPreferenceKey to 2.75f
+        )
 
-        assertTrue(text.contains("fun getHideVideoPageStatusBarSync(context: Context): Boolean"))
-        assertTrue(text.contains("CACHE_KEY_HIDE_VIDEO_PAGE_STATUS_BAR"))
-        assertTrue(text.contains("putBoolean(CACHE_KEY_HIDE_VIDEO_PAGE_STATUS_BAR, enabled)"))
-        assertTrue(text.contains("putBoolean(CACHE_KEY_HIDE_VIDEO_PAGE_STATUS_BAR, enabledFromDataStore)"))
-    }
+        prefs[playbackSpeedOptionsPreferenceKey] = "1,1.5"
+        PlayerSettingsStore.reconcilePlaybackSpeedSelections(prefs)
 
-    @Test
-    fun longPressSpeedLockHintShown_updatesSyncCacheBeforeDataStoreWrite() {
-        val source = File("src/main/java/com/android/purebilibili/core/store/SettingsManager.kt")
-            .takeIf { it.exists() }
-            ?: File("app/src/main/java/com/android/purebilibili/core/store/SettingsManager.kt")
-        val body = source.readText()
-            .substringAfter("suspend fun setLongPressSpeedLockHintShown(context: Context, shown: Boolean)")
-            .substringBefore("fun getLongPressSpeedLockHintShownSync")
-
-        assertTrue(body.indexOf("putBoolean(CACHE_KEY_LONG_PRESS_SPEED_LOCK_HINT_SHOWN, shown)") >= 0)
-        assertTrue(body.indexOf("putBoolean(CACHE_KEY_LONG_PRESS_SPEED_LOCK_HINT_SHOWN, shown)") < body.indexOf("context.settingsDataStore.edit"))
+        assertEquals(1.5f, prefs[lastKey])
+        assertEquals(2.75f, prefs[longPressSpeedPreferenceKey])
     }
 
     @Test

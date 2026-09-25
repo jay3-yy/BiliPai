@@ -68,7 +68,7 @@
 | **Danmaku System** | Adjustable opacity, font size, speed, and density filtering |
 | **Video Notes** | Private notes, AI-summary drafts, rich text editing, timestamps, Markdown as the editor interchange format, and system sharing |
 | **Gesture Control** | Brightness (left), Volume (right), Seek (horizontal) |
-| **Playback Speed** | Edit the shared speed list (0.1x–8x) under Settings → Playback; choose default playback and temporary long-press speeds independently. Player menus and two-finger speed gestures use the same list; swipe-up lock remains available. |
+| **Playback Speed** | Edit the shared speed list (0.1x–8x) under Settings → Playback and choose the default speed from it. Temporary long-press speed has an independent 1.0x–8.0x slider, quick presets, and tap-to-enter value; player menus and two-finger speed gestures use the shared list. |
 | **Picture-in-Picture** | Floating window playback for multitasking |
 | **Audio Mode** | 🆕 Dedicated audio player with immersive/vinyl modes, lyrics, playlists, and a sleep timer |
 | **In-app Update** | Check for updates from Settings; also follow the Telegram channel for releases |

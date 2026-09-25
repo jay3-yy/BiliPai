@@ -1877,8 +1877,7 @@ object SettingsManager {
                 preferences[KEY_SUBTITLE_AUTO_PREFERENCE] ?: SubtitleAutoPreference.OFF.ordinal
             ) { SubtitleAutoPreference.OFF },
             longPressSpeed = normalizeLongPressSpeed(
-                preferences[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED,
-                PlayerSettingsStore.playbackSpeedOptions(preferences)
+                preferences[longPressSpeedPreferenceKey] ?: DEFAULT_LONG_PRESS_SPEED
             ),
             longPressSpeedLockEnabled = preferences[KEY_LONG_PRESS_SPEED_LOCK_ENABLED] ?: false,
             longPressSpeedLockHintShown = preferences[KEY_LONG_PRESS_SPEED_LOCK_HINT_SHOWN] ?: false,
@@ -2900,7 +2899,7 @@ object SettingsManager {
             .getBoolean(CACHE_KEY_HI_RES_LONG_PRESS_HINT_SHOWN, false)
     }
 
-    //  播放器、长按与默认速度共用同一份倍速选项
+    //  播放器菜单、双指调速与默认速度共用倍速列表；长按速度独立设置
     fun getPlaybackSpeedOptions(context: Context): Flow<List<Float>> =
         PlayerSettingsStore.getPlaybackSpeedOptions(context)
 
