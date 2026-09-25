@@ -46,7 +46,7 @@ fun formatPlaybackSpeed(speed: Float): String {
     return if (hundredths % 100 == 0) "${value.toInt()}x" else "${value}x"
 }
 
-private val LONG_PRESS_SPEED_PRESETS = listOf(1f, 1.5f, 2f, 3f, 4f, 6f, 8f)
+private val LONG_PRESS_SPEED_PRESETS = listOf(1.5f, 2f, 3f, 4f, 6f, 8f)
 
 @Composable
 fun LongPressSpeedPreferenceControl(

@@ -550,7 +550,7 @@ fun PlaybackSettingsContent(
                                     }
                                 },
                                 title = "长按临时加速",
-                                subtitle = "按住视频临时加速，松开恢复；点按倍速数值可输入",
+                                subtitle = "按住视频时使用此速度；点按倍速数值可输入",
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
