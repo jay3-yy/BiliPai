@@ -1196,8 +1196,8 @@ fun CommonListScreen(
                             searchQuery = ""
                         },
                     )
-                } else when (favoriteContentMode) {
-                    FavoriteContentMode.BASE_LIST -> if (historyViewModel != null) {
+                } else {
+                    if (historyViewModel != null) {
                         HorizontalPager(
                             state = historyPagerState,
                             userScrollEnabled = !isHistoryBatchMode,

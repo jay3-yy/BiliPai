@@ -205,7 +205,7 @@ private fun FavoriteSubscribedEntryRow(
             style = MaterialTheme.typography.bodyMedium,
         )
         AppIcon(
-            imageVector = rememberAppChevronRightIcon(),
+            imageVector = rememberAppChevronForwardIcon(),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
