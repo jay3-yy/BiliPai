@@ -1650,7 +1650,12 @@ fun HomeScreen(
         AppSpacingTokens.None
     }
     val listTopPadding = statusBarHeight + chromeHeight +
-        (if (effectiveHomeSettings.hideTopTabs) AppSpacingTokens.Small else (homeTopPresetStyle.tabsToContentSpacing + floatingDockLift)) +
+        (if (effectiveHomeSettings.hideTopTabs) {
+            AppSpacingTokens.Small
+        } else {
+            homeTopPresetStyle.tabsToContentSpacing + floatingDockLift -
+                resolveHomeTabsToContentTighteningDp(appUiStyle, isLiquidGlassEnabled)
+        }).coerceAtLeast(AppSpacingTokens.None) +
         legacyTopChromeSafetyGap
     
     // Pixels
