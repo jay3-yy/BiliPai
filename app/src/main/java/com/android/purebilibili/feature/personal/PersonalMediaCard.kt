@@ -1,6 +1,13 @@
 package com.android.purebilibili.feature.personal
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,6 +24,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,7 +40,6 @@ import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.components.AppCheckbox
 import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
 import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
 import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse
@@ -138,13 +147,52 @@ internal fun PersonalMediaCardFrame(
                 )
             }
 
-            if (selected) {
-                AppCheckbox(
-                    checked = true,
-                    onCheckedChange = null,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(AppSpacingTokens.Small),
+            }
+        }
+    }
+}
+
+/**
+ * PiliPlus 式多选遮罩：选中时在缩略图上铺黑色 60% 蒙层并居中显示对勾圆圈，
+ * 以缩放 + 淡入淡出动画进出。
+ */
+@Composable
+internal fun PersonalCardSelectMask(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    AnimatedVisibility(
+        visible = selected,
+        enter = fadeIn(animationSpec = spring(stiffness = 380f)) + scaleIn(
+            initialScale = 0.7f,
+            animationSpec = spring(dampingRatio = 0.7f, stiffness = 380f),
+        ),
+        exit = fadeOut(animationSpec = spring(stiffness = 480f)) + scaleOut(
+            targetScale = 0.7f,
+            animationSpec = spring(stiffness = 480f),
+        ),
+        modifier = modifier,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                        CircleShape,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppIcon(
+                    Icons.Rounded.Check,
+                    contentDescription = "已选择",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
                 )
             }
         }

@@ -1,10 +1,10 @@
 package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.navigation.animatePagerSelection
-import com.android.purebilibili.core.ui.components.VideoListLayoutToggle
-import com.android.purebilibili.core.ui.components.resolveVideoListColumns
-import com.android.purebilibili.core.ui.components.rememberVideoListLayoutControl
 import com.android.purebilibili.core.ui.components.videoListItemModifier
+import com.android.purebilibili.feature.home.GridPinchColumnHudPill
+import com.android.purebilibili.feature.home.homeFeedPinchZoom
+import com.android.purebilibili.feature.home.resolveHomeFeedPinchColumnBounds
 import com.android.purebilibili.core.ui.components.AnimatedVideoListItem
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
@@ -240,10 +240,11 @@ fun CommonListScreen(
     isCurrentPage: Boolean = true
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val listLayout = rememberVideoListLayoutControl(
-        defaultSingleColumn = viewModel is HistoryViewModel || viewModel is FavoriteViewModel,
-        key = viewModel,
-    )
+    // 个人列表（历史/收藏）默认单列，列数由双指缩放调节；其余页面保持双列默认。
+    val personalListPage = viewModel is HistoryViewModel || viewModel is FavoriteViewModel
+    var pinchListColumns by rememberSaveable(viewModel) {
+        androidx.compose.runtime.mutableIntStateOf(if (personalListPage) 1 else 2)
+    }
     val primaryGridState = rememberLazyGridState()
     val subscribedFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val favoritePagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.grid.LazyGridState>() }
@@ -277,16 +278,20 @@ fun CommonListScreen(
         homeSettings.cardTransitionEnabled && LocalSharedTransitionEnabled.current
 
     // Video lists expose an explicit single/double-column choice, independent of home.
-    val columns = resolveVideoListColumns(
-        listLayout.singleColumn,
-        LocalConfiguration.current.screenWidthDp.toFloat(),
-    )
+    val columns = pinchListColumns
     val configuration = LocalConfiguration.current
     val commonListViewportWidthPx = with(density) {
         configuration.screenWidthDp.dp.roundToPx()
     }
     val personalListColumns = columns
     val spacing = rememberResponsiveSpacing()
+    val pinchColumnBounds = remember(windowSizeClass.widthSizeClass, configuration.screenWidthDp) {
+        resolveHomeFeedPinchColumnBounds(
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            contentWidthDp = configuration.screenWidthDp,
+        )
+    }
+    val pinchToZoomColumnsEnabled = homeSettings.pinchToChangeGridColumnsEnabled
 
     //  [修复] 分页支持：收藏 + 历史记录 + 用户最近点赞
     val favoriteViewModel = viewModel as? FavoriteViewModel
@@ -634,6 +639,26 @@ fun CommonListScreen(
 
     // [Fix] 协程作用域 (用于 UI 事件触发的滚动)
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // 双指缩放列数：换档震动 + HUD 胶囊提示
+    val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var pinchPillVisible by remember { mutableStateOf(false) }
+    var pinchPillDismissJob by remember { androidx.compose.runtime.mutableStateOf<Job?>(null) }
+    val onPinchColumnsChange: (Int) -> Unit = { newColumns ->
+        pinchListColumns = newColumns
+        hapticFeedback.performHapticFeedback(
+            androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+        )
+        pinchPillVisible = true
+        pinchPillDismissJob?.cancel()
+    }
+    val onPinchColumnsEnd: (Int) -> Unit = { _ ->
+        pinchPillDismissJob?.cancel()
+        pinchPillDismissJob = coroutineScope.launch {
+            kotlinx.coroutines.delay(1000)
+            pinchPillVisible = false
+        }
+    }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
@@ -1078,6 +1103,10 @@ fun CommonListScreen(
                         onUnfavorite = { favoriteViewModel.removeVideo(it) },
                         onUpClick = onUpClick,
                         gridState = primaryGridState,
+                        pinchEnabled = pinchToZoomColumnsEnabled,
+                        pinchBounds = pinchColumnBounds,
+                        onPinchColumnsChange = onPinchColumnsChange,
+                        onPinchColumnsEnd = onPinchColumnsEnd,
                     )
                 } else if (favoriteViewModel != null && favoriteSection != FavoriteSection.VIDEO) {
                     FavoriteCategoryRoute(
@@ -1201,7 +1230,11 @@ fun CommonListScreen(
                                 onUpClick = onUpClick,
                                 gridState = favoritePagerGridStates.getOrPut(page) {
                                     androidx.compose.foundation.lazy.grid.LazyGridState()
-                                }
+                                },
+                                pinchEnabled = pinchToZoomColumnsEnabled,
+                                pinchBounds = pinchColumnBounds,
+                                onPinchColumnsChange = onPinchColumnsChange,
+                                onPinchColumnsEnd = onPinchColumnsEnd,
                             )
                         }
                     }
@@ -1243,7 +1276,11 @@ fun CommonListScreen(
                                 null
                             },
                             onUpClick = onUpClick,
-                            gridState = primaryGridState
+                            gridState = primaryGridState,
+                            pinchEnabled = pinchToZoomColumnsEnabled,
+                            pinchBounds = pinchColumnBounds,
+                            onPinchColumnsChange = onPinchColumnsChange,
+                            onPinchColumnsEnd = onPinchColumnsEnd,
                         )
                     }
 
@@ -1325,7 +1362,11 @@ fun CommonListScreen(
                                         }
                                     }
                                 },
-                                gridState = pageGridState
+                                gridState = pageGridState,
+                                pinchEnabled = pinchToZoomColumnsEnabled,
+                                pinchBounds = pinchColumnBounds,
+                                onPinchColumnsChange = onPinchColumnsChange,
+                                onPinchColumnsEnd = onPinchColumnsEnd,
                             )
                         }
                     } else {
@@ -1389,7 +1430,11 @@ fun CommonListScreen(
                             onHistoryAddToWatchLater = null,
                             onHistoryDissolveComplete = null,
                             onHistoryToggleSelect = null,
-                            gridState = primaryGridState
+                            gridState = primaryGridState,
+                            pinchEnabled = pinchToZoomColumnsEnabled,
+                            pinchBounds = pinchColumnBounds,
+                            onPinchColumnsChange = onPinchColumnsChange,
+                            onPinchColumnsEnd = onPinchColumnsEnd,
                         )
                     }
                 }
@@ -1436,16 +1481,6 @@ fun CommonListScreen(
                         },
                         actions = {
                             val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode
-                            if (
-                                !isBatchActionMode &&
-                                !isSubscribedBrowse &&
-                                (favoriteViewModel == null || favoriteSection == FavoriteSection.VIDEO)
-                            ) {
-                                VideoListLayoutToggle(
-                                    singleColumn = listLayout.singleColumn,
-                                    onClick = listLayout.toggle,
-                                )
-                            }
                             if (!isBatchActionMode) {
                                 onOpenSearchDestination?.let { openSearch ->
                                     AppIconButton(onClick = { openSearch(searchQuery) }) {
@@ -2000,6 +2035,12 @@ fun CommonListScreen(
                     .padding(end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall, bottom = commonListBottomPadding + AppSpacingTokens.Medium),
                 backdrop = commonListChromeBackdrop,
             )
+
+            GridPinchColumnHudPill(
+                visible = pinchPillVisible,
+                columns = pinchListColumns,
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
     }
 
@@ -2548,6 +2589,10 @@ private fun CommonListContent(
     searchPaginationFallbackEnabled: Boolean = false,
     hasMoreSearchResults: Boolean = false,
     isLoadingMoreSearchResults: Boolean = false,
+    pinchEnabled: Boolean = false,
+    pinchBounds: IntRange = 1..1,
+    onPinchColumnsChange: (Int) -> Unit = {},
+    onPinchColumnsEnd: (Int) -> Unit = {},
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState? = null
 ) {
     val context = LocalContext.current
@@ -2690,6 +2735,13 @@ private fun CommonListContent(
                 horizontalArrangement = Arrangement.spacedBy(gridItemSpacingDp.dp),
                 verticalArrangement = Arrangement.spacedBy(gridItemSpacingDp.dp),
                 modifier = viewportModifier
+                    .homeFeedPinchZoom(
+                        enabled = pinchEnabled,
+                        currentColumns = columns,
+                        bounds = pinchBounds,
+                        onColumnsChange = onPinchColumnsChange,
+                        onGestureEnd = onPinchColumnsEnd,
+                    )
             ) {
                  itemsIndexed(
                     items = filteredItems,

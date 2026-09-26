@@ -2,11 +2,12 @@
 package com.android.purebilibili.feature.watchlater
 
 import android.os.Build
-import com.android.purebilibili.core.ui.components.VideoListLayoutToggle
-import com.android.purebilibili.core.ui.components.resolveVideoListColumns
-import com.android.purebilibili.core.ui.components.rememberVideoListLayoutControl
 import com.android.purebilibili.core.ui.components.videoListItemModifier
 import com.android.purebilibili.core.ui.components.AnimatedVideoListItem
+import com.android.purebilibili.feature.home.GridPinchColumnHudPill
+import com.android.purebilibili.feature.home.homeFeedPinchZoom
+import com.android.purebilibili.feature.home.resolveHomeFeedPinchColumnBounds
+import com.android.purebilibili.core.util.LocalWindowSizeClass
 import coil3.request.crossfade
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
@@ -663,9 +664,16 @@ fun WatchLaterScreen(
     isCurrentPage: Boolean = true
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val listLayout = rememberVideoListLayoutControl(
-        defaultSingleColumn = true,
-    )
+    // PiliPlus 式默认单列，双指缩放调节列数
+    var pinchListColumns by rememberSaveable { mutableStateOf(1) }
+    val windowSizeClass = LocalWindowSizeClass.current
+    val configuration = LocalConfiguration.current
+    val pinchColumnBounds = remember(windowSizeClass.widthSizeClass, configuration.screenWidthDp) {
+        resolveHomeFeedPinchColumnBounds(
+            widthSizeClass = windowSizeClass.widthSizeClass,
+            contentWidthDp = configuration.screenWidthDp,
+        )
+    }
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings(),
         context = kotlin.coroutines.EmptyCoroutineContext
@@ -728,6 +736,28 @@ fun WatchLaterScreen(
     }
     val displayedItems = state.items
     val gridState = rememberLazyGridState()
+
+    // 双指缩放列数：换档震动 + HUD 胶囊提示
+    val pinchScope = rememberCoroutineScope()
+    val hapticFeedback = androidx.compose.ui.platform.LocalHapticFeedback.current
+    var pinchPillVisible by remember { mutableStateOf(false) }
+    var pinchPillDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val onPinchColumnsChange: (Int) -> Unit = { newColumns ->
+        pinchListColumns = newColumns
+        hapticFeedback.performHapticFeedback(
+            androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove
+        )
+        pinchPillVisible = true
+        pinchPillDismissJob?.cancel()
+    }
+    val onPinchColumnsEnd: (Int) -> Unit = { _ ->
+        pinchPillDismissJob?.cancel()
+        pinchPillDismissJob = pinchScope.launch {
+            kotlinx.coroutines.delay(1000)
+            pinchPillVisible = false
+        }
+    }
+
     LaunchedEffect(scrollToTopChannel) {
         scrollToTopChannel?.receiveAsFlow()?.collect {
             if (gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0) {
@@ -821,11 +851,6 @@ fun WatchLaterScreen(
                         }
                     },
                     actions = {
-                        VideoListLayoutToggle(
-                            singleColumn = listLayout.singleColumn,
-                            onClick = listLayout.toggle,
-                            enabled = !isBatchMode,
-                        )
                         onOpenSearchDestination?.let { openSearch ->
                             AppIconButton(onClick = { openSearch(searchQuery) }) {
                                 AppIcon(Icons.Rounded.Search, contentDescription = "搜索")
@@ -1084,7 +1109,7 @@ fun WatchLaterScreen(
             when {
                 state.isLoading -> {
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                        val skeletonColumns = resolveVideoListColumns(listLayout.singleColumn, maxWidth.value)
+                        val skeletonColumns = pinchListColumns
                         val skeletonBlockColor = com.android.purebilibili.core.ui.skeleton
                             .rememberContentSkeletonBlockColor(
                                 com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulse()
@@ -1143,9 +1168,7 @@ fun WatchLaterScreen(
                 }
                 else -> {
                     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                        val columns = resolveVideoListColumns(
-                            listLayout.singleColumn, maxWidth.value,
-                        )
+                        val columns = pinchListColumns
                         LazyVerticalGrid(
                             state = gridState,
                             columns = GridCells.Fixed(columns),
@@ -1157,7 +1180,15 @@ fun WatchLaterScreen(
                             ),
                             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
                             verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .homeFeedPinchZoom(
+                                    enabled = homeSettings.pinchToChangeGridColumnsEnabled && !isBatchMode,
+                                    currentColumns = columns,
+                                    bounds = pinchColumnBounds,
+                                    onColumnsChange = onPinchColumnsChange,
+                                    onGestureEnd = onPinchColumnsEnd,
+                                ),
                         ) {
                             itemsIndexed(
                                 items = displayedItems,
@@ -1238,6 +1269,11 @@ fun WatchLaterScreen(
                     }
                 }
             }
+            GridPinchColumnHudPill(
+                visible = pinchPillVisible,
+                columns = pinchListColumns,
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
     }
 
@@ -1549,17 +1585,10 @@ private fun WatchLaterVideoCard(
                     trackColor = Color.Transparent,
                 )
             }
+            com.android.purebilibili.feature.personal.PersonalCardSelectMask(selected = isSelected)
         },
         trailingContent = {
-            if (isBatchMode) {
-                AppIcon(
-                    imageVector = if (isSelected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
-                    contentDescription = if (isSelected) "已选择" else "未选择",
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(AppSpacingTokens.ExtraLarge),
-                )
-            } else {
+            if (!isBatchMode) {
                 AppIconButton(
                     onClick = onDelete,
                 ) {

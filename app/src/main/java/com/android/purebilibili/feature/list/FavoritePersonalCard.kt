@@ -50,6 +50,7 @@ import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.personal.PersonalCardSelectMask
 import com.android.purebilibili.feature.personal.PersonalMediaCardFrame
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
 import com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText
@@ -240,6 +241,7 @@ internal fun FavoritePersonalCard(
                         .fillMaxWidth(),
                 )
             }
+            PersonalCardSelectMask(selected = selected)
         },
         selected = selected,
         trailingContent = if (!batchMode && canRemove && onRemove != null) {

@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.list
 
 import java.io.File
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class CommonListBatchTopBarStructureTest {
@@ -15,6 +16,18 @@ class CommonListBatchTopBarStructureTest {
 
         assertTrue(actions.contains("val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode"))
         assertTrue(actions.contains("if (!isBatchActionMode)"))
-        assertTrue(actions.indexOf("VideoListLayoutToggle(") < actions.indexOf("onOpenSearchDestination?.let"))
+    }
+
+    @Test
+    fun personalListsUsePinchZoomColumnsInsteadOfLayoutToggle() {
+        val source = listOf(
+            File("app/src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt"),
+            File("src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt"),
+        ).first(File::exists).readText()
+
+        assertFalse(source.contains("VideoListLayoutToggle("))
+        assertTrue(source.contains("homeFeedPinchZoom("))
+        assertTrue(source.contains("resolveHomeFeedPinchColumnBounds("))
+        assertTrue(source.contains("GridPinchColumnHudPill("))
     }
 }

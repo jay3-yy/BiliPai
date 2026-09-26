@@ -78,6 +78,7 @@ import com.android.purebilibili.data.model.response.HistoryItem
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCoverOverlayTextShadow
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
 import com.android.purebilibili.feature.personal.PERSONAL_LIST_HORIZONTAL_COVER_ASPECT_RATIO
+import com.android.purebilibili.feature.personal.PersonalCardSelectMask
 
 internal fun resolveHistoryKindLabel(business: HistoryBusiness): String = when (business) {
     HistoryBusiness.ARCHIVE -> "视频"
@@ -109,8 +110,7 @@ internal fun HistoryPersonalCardSkeleton(
 
     HorizontalVideoCardFrame(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp),
+            .fillMaxWidth(),
         coverContent = {
             ContentSkeletonBlock(
                 color = color,
@@ -364,6 +364,7 @@ internal fun HistoryPersonalCard(
                     AppLinearProgressIndicator(progress = { progressState.progressFraction },
                         modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth())
                 }
+                PersonalCardSelectMask(selected = selected)
             },
             trailingContent = { actionContent() },
             onClick = triggerClick,
@@ -375,7 +376,6 @@ internal fun HistoryPersonalCard(
     HorizontalVideoCardFrame(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 5.dp)
             .videoCardShellSharedBoundsOrEmpty(
                 enabled = useSharedBounds,
                 sharedTransitionScope = sharedTransitionScope,
@@ -393,16 +393,7 @@ internal fun HistoryPersonalCard(
                 onClick = triggerClick,
                 onLongClick = onLongClick,
             )
-            .onGloballyPositioned { cardBounds.value = it.boundsInRoot() }
-            .then(
-                if (selected) {
-                    Modifier.background(
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                    )
-                } else {
-                    Modifier
-                }
-            ),
+            .onGloballyPositioned { cardBounds.value = it.boundsInRoot() },
         coverAspectRatio = PERSONAL_LIST_HORIZONTAL_COVER_ASPECT_RATIO,
         coverModifier = Modifier.onGloballyPositioned {
             coverBounds.value = it.boundsInRoot()
@@ -437,6 +428,7 @@ internal fun HistoryPersonalCard(
                         .fillMaxWidth(),
                 )
             }
+            PersonalCardSelectMask(selected = selected)
         },
         infoContent = {
             AppText(
