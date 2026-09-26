@@ -43,8 +43,8 @@ class PersonalListSelectorStructureTest {
 
         assertTrue(source.contains("AppWindowActionMenu("))
         assertTrue(source.contains("label = \"新建收藏夹\""))
-        assertTrue(source.contains("label = \"清空历史\""))
-        assertTrue(source.contains("label = \"复制到收藏夹\""))
+        assertTrue(source.contains("label = \"清空观看记录\""))
+        assertTrue(source.contains("\"复制到收藏夹\" else \"移动到收藏夹\""))
         assertFalse(source.contains("showFavoriteManagementMenu"))
         assertFalse(source.contains("showHistoryManagementMenu"))
         assertFalse(source.contains("showFavoriteBatchMenu"))

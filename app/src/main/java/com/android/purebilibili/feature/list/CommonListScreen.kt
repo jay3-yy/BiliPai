@@ -1441,6 +1441,18 @@ fun CommonListScreen(
             }
 
             // 2. 顶层：悬浮顶栏 (使用 onGloballyPositioned 测量高度)
+            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode
+            val exitFavoriteBatchMode: () -> Unit = {
+                isFavoriteBatchMode = false
+                selectedFavoriteResourceIds = emptySet()
+            }
+            val exitHistoryBatchMode: () -> Unit = {
+                isHistoryBatchMode = false
+                selectedHistoryKeys = emptySet()
+            }
+            androidx.activity.compose.BackHandler(enabled = isBatchActionMode) {
+                if (isFavoriteBatchMode) exitFavoriteBatchMode() else exitHistoryBatchMode()
+            }
             BiliPaiImmersiveTopBar(
                 backdrop = commonListChromeBackdrop,
                 enabled = useProgressiveHeaderBlur,
@@ -1466,7 +1478,11 @@ fun CommonListScreen(
                     modifier = if (supportsCollapsibleCommonListHeader) Modifier.clipToBounds() else Modifier,
                     content = {
                     AppTopBar(
-                        title = state.title,
+                        title = when {
+                            isFavoriteBatchMode -> "已选: ${selectedFavoriteResourceIds.size}"
+                            isHistoryBatchMode -> "已选: ${selectedHistoryKeys.size}"
+                            else -> state.title
+                        },
                         modifier = Modifier.favoriteCollectionSharedBounds(
                             route = favoriteCollectionSharedElementRoute,
                             transitionEnabled = favoriteCollectionSharedTransitionEnabled
@@ -1475,12 +1491,22 @@ fun CommonListScreen(
                                 fixedTopBarHeightPx = coordinates.size.height
                             },
                         navigationIcon = {
-                            AppIconButton(onClick = onBack) {
-                                AppIcon(rememberAppBackIcon(), contentDescription = "Back")
+                            AppIconButton(
+                                onClick = {
+                                    if (isBatchActionMode) {
+                                        if (isFavoriteBatchMode) exitFavoriteBatchMode() else exitHistoryBatchMode()
+                                    } else {
+                                        onBack()
+                                    }
+                                }
+                            ) {
+                                AppIcon(
+                                    if (isBatchActionMode) Icons.Rounded.Close else rememberAppBackIcon(),
+                                    contentDescription = if (isBatchActionMode) "退出多选" else "Back",
+                                )
                             }
                         },
                         actions = {
-                            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode
                             if (!isBatchActionMode) {
                                 onOpenSearchDestination?.let { openSearch ->
                                     AppIconButton(onClick = { openSearch(searchQuery) }) {
@@ -1504,34 +1530,27 @@ fun CommonListScreen(
                                     ) {
                                         AppText(if (allSelected) "取消全选" else "全选")
                                     }
-                                    AppWindowActionMenu(
+                                    // PiliPlus 批量操作以文字按钮平铺，删除类动作红色
+                                    AppTextButton(
                                         enabled = selectedFavoriteResourceIds.isNotEmpty() && !isFavoriteManaging,
-                                        groups = listOf(
-                                            listOf(
-                                                AppWindowAction(
-                                                    label = "复制到收藏夹",
-                                                    onClick = { pendingFavoriteTransferCopy = true },
-                                                ),
-                                                AppWindowAction(
-                                                    label = "移动到收藏夹",
-                                                    onClick = { pendingFavoriteTransferCopy = false },
-                                                ),
-                                                AppWindowAction(
-                                                    label = "删除",
-                                                    onClick = { showFavoriteBatchDeleteConfirm = true },
-                                                ),
-                                            ),
-                                        ),
+                                        onClick = { pendingFavoriteTransferCopy = true },
                                     ) {
-                                        AppIcon(Icons.Filled.MoreVert, contentDescription = "批量操作")
+                                        AppText("复制")
                                     }
                                     AppTextButton(
-                                        onClick = {
-                                            isFavoriteBatchMode = false
-                                            selectedFavoriteResourceIds = emptySet()
-                                        }
+                                        enabled = selectedFavoriteResourceIds.isNotEmpty() && !isFavoriteManaging,
+                                        onClick = { pendingFavoriteTransferCopy = false },
                                     ) {
-                                        AppText("完成")
+                                        AppText("移动")
+                                    }
+                                    AppTextButton(
+                                        enabled = selectedFavoriteResourceIds.isNotEmpty() && !isFavoriteManaging,
+                                        onClick = { showFavoriteBatchDeleteConfirm = true },
+                                    ) {
+                                        AppText(
+                                            "删除",
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
                                     }
                                 } else {
                                 AppIconButton(
@@ -1677,33 +1696,17 @@ fun CommonListScreen(
                                     ) {
                                         AppText(if (allSelected) "取消全选" else "全选")
                                     }
+                                    // PiliPlus：批量删除直接以红色文字按钮呈现
                                     AppTextButton(
                                         enabled = selectedHistoryKeys.isNotEmpty(),
                                         onClick = { showHistoryBatchDeleteConfirm = true }
                                     ) {
-                                        AppText("删除(${selectedHistoryKeys.size})")
-                                    }
-                                    AppTextButton(
-                                        onClick = {
-                                            isHistoryBatchMode = false
-                                            selectedHistoryKeys = emptySet()
-                                        }
-                                    ) {
-                                        AppText("完成")
+                                        AppText(
+                                            "移除",
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
                                     }
                                 } else {
-                                    if (state.items.isNotEmpty()) {
-                                        AppTextButton(
-                                            enabled = !isHistoryManagementBusy,
-                                            onClick = {
-                                                isHistoryBatchMode = true
-                                                selectedHistoryKeys = emptySet()
-                                            }
-                                        ) {
-                                            AppText("批量删除")
-                                        }
-                                    }
-
                                     AppWindowActionMenu(
                                         enabled = !isHistoryManagementBusy,
                                         groups = listOf(
@@ -1719,7 +1722,7 @@ fun CommonListScreen(
                                                     onClick = { historyViewModel.deleteViewedHistory() },
                                                 ),
                                                 AppWindowAction(
-                                                    label = "清空历史",
+                                                    label = "清空观看记录",
                                                     enabled = state.items.isNotEmpty() && !isHistoryManagementBusy,
                                                     onClick = { showHistoryClearConfirm = true },
                                                 ),
@@ -1885,18 +1888,19 @@ fun CommonListScreen(
 
                     if (historyViewModel != null) {
                         if (isHistoryPaused) {
+                            // PiliPlus：暂停提示为 secondaryContainer 细条
                             AppSurface(
                                 onClick = historyViewModel::toggleHistoryPause,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = AppSpacingTokens.Medium),
                                 shape = AppShapes.container(ContainerLevel.Pill),
-                                color = MaterialTheme.colorScheme.errorContainer,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
                             ) {
                                 AppText(
                                     text = "历史记录功能已关闭 · 点击开启",
                                     modifier = Modifier.padding(AppSpacingTokens.Medium),
-                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     style = MaterialTheme.typography.bodyMedium,
                                 )
                             }
