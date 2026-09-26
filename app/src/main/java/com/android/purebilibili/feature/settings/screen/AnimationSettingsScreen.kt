@@ -286,7 +286,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.UI_ENTRANCE_ANIMATION),
                             title = "界面入场动画",
-                            subtitle = "进入设置等页面时，让内容依次淡入；关闭后页面会直接显示",
+                            subtitle = "进入页面时内容依次淡入",
                             checked = uiEntranceAnimationEnabled,
                             onCheckedChange = { value ->
                                 scope.launch {
@@ -299,7 +299,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.HAPTIC_FEEDBACK),
                             title = "触感反馈",
-                            subtitle = "为导航、切换与关键操作提供触感反馈",
+                            subtitle = "导航和关键操作时提供振动反馈",
                             checked = state.hapticFeedbackEnabled,
                             onCheckedChange = viewModel::toggleHapticFeedback,
                             iconTint = iOSBlue,
@@ -308,7 +308,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.COPY_TEXT),
                             title = "点按文字复制",
-                            subtitle = "点按非交互文字时复制内容；按钮、标签与导航不参与复制",
+                            subtitle = "点按正文文字即可复制",
                             checked = globalTextTapCopyEnabled,
                             onCheckedChange = { enabled ->
                                 scope.launch {
@@ -347,7 +347,7 @@ fun AnimationSettingsContent(
 	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_ENTRANCE_ANIMATION),
                             title = "进场动画",
-                            subtitle = "打开首页时让首屏卡片依次淡入，正常滚动时不会重复播放",
+                            subtitle = "打开首页时卡片依次淡入",
                             checked = state.cardAnimationEnabled,
                             onCheckedChange = { viewModel.toggleCardAnimation(it) },
                             iconTint = iOSPink
@@ -356,7 +356,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_TRANSITION_ANIMATION),
                             title = "过渡动画",
-                            subtitle = "点击视频卡片时，让封面和标题自然移动到详情页",
+                            subtitle = "封面和标题平滑过渡到详情页",
                             checked = state.cardTransitionEnabled,
                             onCheckedChange = { viewModel.toggleCardTransition(it) },
                             iconTint = iOSTeal
@@ -383,7 +383,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.LIVE_SURFACE_TRANSITION),
                             title = "实时画面转场",
-                            subtitle = "进出详情用播放器当前画面做双向变形；HDR/杜比仍走高质量输出，不降画质",
+                            subtitle = "用播放器当前画面做转场变形，不降低画质",
                             checked = liveSurfaceCardTransitionEnabled,
                             onCheckedChange = { viewModel.toggleLiveSurfaceCardTransition(it) },
                             enabled = state.cardTransitionEnabled,
@@ -414,7 +414,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.WALLPAPER_EFFECT),
                             title = "转场时模糊背景",
-                            subtitle = "让视频转场更有层次；关闭可减少性能和耗电开销",
+                            subtitle = "转场更有层次感；关闭可省电",
                             checked = videoTransitionRealtimeBlurEnabled,
                             onCheckedChange = { viewModel.toggleVideoTransitionRealtimeBlur(it) },
                             iconTint = iOSTeal
@@ -423,7 +423,7 @@ fun AnimationSettingsContent(
                         SettingsSingleChoicePreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.PREDICTIVE_BACK),
                             title = "全局导航动画",
-                            subtitle = "用于页面进入、按钮返回和侧滑返回；关闭视频卡片转场后也沿用此设置",
+                            subtitle = "页面进入与返回共用的动画样式",
                             options = predictiveBackStyleOptions,
                             selectedValue = predictiveBackStyle,
                             onSelectionChange = { style ->
@@ -441,7 +441,7 @@ fun AnimationSettingsContent(
                             AppPreferenceDivider()
                             AppSliderDialogPreference(
                                 title = "预见式返回最大进度",
-                                subtitle = "限制手指按住时的预览进度；提交后仍会完成退出",
+                                subtitle = "限制按住时预览的距离",
                                 value = appNavigationSettings
                                     .miuixPredictiveBackMaxProgressPercent
                                     .toFloat(),
@@ -519,7 +519,7 @@ fun AnimationSettingsContent(
                         AppPreferenceDivider()
                         SettingsSingleChoicePreference(
                             title = "视频转场速度：${state.videoSharedTransitionSpeed.label}",
-                            subtitle = "选择封面进入详情页和返回卡片时的动画速度",
+                            subtitle = "进出详情页的转场速度",
                             options = sharedTransitionSpeedOptions,
                             selectedValue = state.videoSharedTransitionSpeed,
                             onSelectionChange = viewModel::setVideoSharedTransitionSpeed
@@ -663,7 +663,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.TOP_BAR_BLUR),
                             title = "骨架呼吸动画",
-                            subtitle = "轻微、舒缓的全局加载脉冲；关闭后恢复应用默认效果",
+                            subtitle = "加载时的轻微呼吸动效",
                             checked = skeletonBreathingEnabled,
                             onCheckedChange = { enabled ->
                                 scope.launch {
@@ -678,7 +678,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.TOP_BAR_BLUR),
                             title = "顶部栏磨砂",
-                            subtitle = "只模糊顶部栏背后的内容，不启用折射和彩光",
+                            subtitle = "模糊顶栏背后的内容，不含折射和光效",
                             checked = state.headerBlurEnabled,
                             onCheckedChange = { viewModel.toggleHeaderBlur(it) },
                             iconTint = iOSBlue
@@ -687,7 +687,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.TOP_BAR_BLUR),
                             title = "顶部渐进模糊",
-                            subtitle = "在顶栏背后滚动时呈现材质渐进纹理模糊 (需 Android 13+)",
+                            subtitle = "顶栏模糊随滚动渐变（需 Android 13+）",
                             checked = state.progressiveTopBlurEnabled,
                             onCheckedChange = { viewModel.toggleProgressiveTopBlur(it) },
                             iconTint = iOSBlue
@@ -695,8 +695,8 @@ fun AnimationSettingsContent(
                         AppPreferenceDivider()
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.TOP_BAR_BLUR),
-                            title = "顶部纯色渐进消隐",
-                            subtitle = "在状态栏与顶栏提供 5 阶非线性平滑纯色渐变消融过渡",
+                            title = "顶栏纯色渐变",
+                            subtitle = "状态栏到顶栏用纯色渐变过渡，比模糊更省电",
                             checked = state.progressiveTopFadeEnabled,
                             onCheckedChange = { viewModel.toggleProgressiveTopFade(it) },
                             iconTint = iOSBlue
@@ -705,7 +705,7 @@ fun AnimationSettingsContent(
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.BOTTOM_BAR_BLUR),
                             title = "底栏磨砂",
-                            subtitle = "只模糊底部栏背后的内容，不启用折射和彩光",
+                            subtitle = "模糊底栏背后的内容，不含折射和光效",
                             checked = state.bottomBarBlurEnabled,
                             onCheckedChange = { viewModel.toggleBottomBarBlur(it) },
                             iconTint = iOSBlue
