@@ -17,6 +17,11 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText
 
 import android.app.Application
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -756,6 +761,35 @@ fun WatchLaterScreen(
         }
     }
 
+    // 分类 tab 行：下滑折叠隐藏，上滑/回顶重新出现
+    var watchLaterTabsVisible by remember { mutableStateOf(true) }
+    LaunchedEffect(gridState) {
+        var lastFirstVisibleItem = 0
+        var lastScrollOffset = 0
+        snapshotFlow {
+            gridState.firstVisibleItemIndex to gridState.firstVisibleItemScrollOffset
+        }.collect { (firstVisibleItem, scrollOffset) ->
+            if (firstVisibleItem == 0 && scrollOffset < 100) {
+                watchLaterTabsVisible = true
+            } else {
+                val isScrollingDown = when {
+                    firstVisibleItem > lastFirstVisibleItem -> true
+                    firstVisibleItem < lastFirstVisibleItem -> false
+                    else -> scrollOffset > lastScrollOffset + 50
+                }
+                val isScrollingUp = when {
+                    firstVisibleItem < lastFirstVisibleItem -> true
+                    firstVisibleItem > lastFirstVisibleItem -> false
+                    else -> scrollOffset < lastScrollOffset - 50
+                }
+                if (isScrollingDown) watchLaterTabsVisible = false
+                if (isScrollingUp) watchLaterTabsVisible = true
+            }
+            lastFirstVisibleItem = firstVisibleItem
+            lastScrollOffset = scrollOffset
+        }
+    }
+
     LaunchedEffect(scrollToTopChannel) {
         scrollToTopChannel?.receiveAsFlow()?.collect {
             if (gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0) {
@@ -1039,21 +1073,27 @@ fun WatchLaterScreen(
                         )
                     }
                 }
-                AppThemeAdaptiveTabRow(
-                    options = watchLaterFilterOptions,
-                    selectedValue = state.filter,
-                    onSelectionChange = viewModel::selectFilter,
-                    enabled = !isBatchMode,
-                    height = watchLaterFilterChrome.heightDp.dp,
-                    indicatorHeight = watchLaterFilterChrome.indicatorHeightDp.dp,
-                    labelFontSize = watchLaterFilterChrome.labelFontSizeSp.sp,
-                    dragSelectionEnabled = watchLaterFilterChrome.dragSelectionEnabled,
-                    tapPressRefractionEnabled = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = watchLaterFilterChrome.horizontalPaddingDp.dp),
-                    miuixBackdrop = watchLaterChromeBackdrop,
-                )
+                AnimatedVisibility(
+                    visible = watchLaterTabsVisible,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut(),
+                ) {
+                    AppThemeAdaptiveTabRow(
+                        options = watchLaterFilterOptions,
+                        selectedValue = state.filter,
+                        onSelectionChange = viewModel::selectFilter,
+                        enabled = !isBatchMode,
+                        height = watchLaterFilterChrome.heightDp.dp,
+                        indicatorHeight = watchLaterFilterChrome.indicatorHeightDp.dp,
+                        labelFontSize = watchLaterFilterChrome.labelFontSizeSp.sp,
+                        dragSelectionEnabled = watchLaterFilterChrome.dragSelectionEnabled,
+                        tapPressRefractionEnabled = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = watchLaterFilterChrome.horizontalPaddingDp.dp),
+                        miuixBackdrop = watchLaterChromeBackdrop,
+                    )
+                }
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
                 }
                 // 分割线 (仅在滚动时显示? 这里简化一直显示细线或跟随滚动)

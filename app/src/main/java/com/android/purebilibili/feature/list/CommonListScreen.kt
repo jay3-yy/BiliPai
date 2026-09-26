@@ -29,6 +29,10 @@ import com.android.purebilibili.core.ui.components.AppTextField
 import com.android.purebilibili.core.ui.components.AppSwitch
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animate
 import dev.chrisbanes.haze.HazeState
@@ -419,6 +423,8 @@ fun CommonListScreen(
     // 监听列表滚动实现底栏自动隐藏/显示
     var lastFirstVisibleItem by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var lastScrollOffset by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // 分类 tab 行：下滑折叠隐藏，上滑/回顶重新出现
+    var commonListTabsVisible by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
 
     // 离开页面时恢复底栏显示
     DisposableEffect(Unit) {
@@ -596,6 +602,7 @@ fun CommonListScreen(
             .collect { (firstVisibleItem, scrollOffset) ->
                 if (firstVisibleItem == 0 && scrollOffset < 100) {
                     setBottomBarVisible(true)
+                    commonListTabsVisible = true
                 } else {
                     val isScrollingDown = when {
                         firstVisibleItem > lastFirstVisibleItem -> true
@@ -608,8 +615,14 @@ fun CommonListScreen(
                         else -> scrollOffset < lastScrollOffset - 50
                     }
 
-                    if (isScrollingDown) setBottomBarVisible(false)
-                    if (isScrollingUp) setBottomBarVisible(true)
+                    if (isScrollingDown) {
+                        setBottomBarVisible(false)
+                        commonListTabsVisible = false
+                    }
+                    if (isScrollingUp) {
+                        setBottomBarVisible(true)
+                        commonListTabsVisible = true
+                    }
                 }
                 lastFirstVisibleItem = firstVisibleItem
                 lastScrollOffset = scrollOffset
@@ -1804,29 +1817,35 @@ fun CommonListScreen(
                                 AppSegmentOption(value = section, label = section.label)
                             }
                         }
-                        AppLiquidAwareTabRow(
-                            options = favoriteSectionOptions,
-                            selectedValue = favoriteSection,
-                            onSelectionChange = { section ->
-                                if (favoriteSection != section) {
-                                    favoriteSection = section
-                                    favoriteBrowseSection = FavoriteBrowseSection.OWNED
-                                    searchQuery = ""
-                                    isFavoriteBatchMode = false
-                                    selectedFavoriteResourceIds = emptySet()
-                                }
-                            },
-                            scrollable = FavoriteSection.entries.size > 4,
-                            height = historyFilterChrome.heightDp.dp,
-                            indicatorHeight = historyFilterChrome.indicatorHeightDp.dp,
-                            labelFontSize = historyFilterChrome.labelFontSizeSp.sp,
-                            dragSelectionEnabled = historyFilterChrome.dragSelectionEnabled,
-                            tapPressRefractionEnabled = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = AppSpacingTokens.Medium),
-                            miuixBackdrop = commonListChromeBackdrop,
-                        )
+                        AnimatedVisibility(
+                            visible = commonListTabsVisible,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            AppLiquidAwareTabRow(
+                                options = favoriteSectionOptions,
+                                selectedValue = favoriteSection,
+                                onSelectionChange = { section ->
+                                    if (favoriteSection != section) {
+                                        favoriteSection = section
+                                        favoriteBrowseSection = FavoriteBrowseSection.OWNED
+                                        searchQuery = ""
+                                        isFavoriteBatchMode = false
+                                        selectedFavoriteResourceIds = emptySet()
+                                    }
+                                },
+                                scrollable = FavoriteSection.entries.size > 4,
+                                height = historyFilterChrome.heightDp.dp,
+                                indicatorHeight = historyFilterChrome.indicatorHeightDp.dp,
+                                labelFontSize = historyFilterChrome.labelFontSizeSp.sp,
+                                dragSelectionEnabled = historyFilterChrome.dragSelectionEnabled,
+                                tapPressRefractionEnabled = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = AppSpacingTokens.Medium),
+                                miuixBackdrop = commonListChromeBackdrop,
+                            )
+                        }
                         Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
                     }
 
@@ -1891,29 +1910,35 @@ fun CommonListScreen(
                                 }
                             }
                         }
-                        AppThemeAdaptiveTabRow(
-                            options = historyFilterOptions,
-                            selectedValue = historyContentFilter,
-                            onSelectionChange = onHistoryFilterSelected,
-                            enabled = !isHistoryBatchMode,
-                            scrollable = historyFilterChrome.itemWidthDp != null,
-                            // Liquid mode has no fixed item width. Preserve the shared beta.21
-                            // default instead of turning "unspecified" into an explicit 0.dp.
-                            minTabWidth = historyFilterChrome.itemWidthDp?.dp ?: Dp.Unspecified,
-                            height = historyFilterChrome.heightDp.dp,
-                            indicatorHeight = historyFilterChrome.indicatorHeightDp.dp,
-                            labelFontSize = historyFilterChrome.labelFontSizeSp.sp,
-                            dragSelectionEnabled = historyFilterChrome.dragSelectionEnabled,
-                            tapPressRefractionEnabled = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = historyFilterChrome.horizontalPaddingDp.dp),
-                            miuixBackdrop = commonListChromeBackdrop,
-                            indicatorPositionProvider = {
-                                historyPagerState.currentPage + historyPagerState.currentPageOffsetFraction
-                            },
-                            isScrollInProgressProvider = { historyPagerState.isScrollInProgress },
-                        )
+                        AnimatedVisibility(
+                            visible = commonListTabsVisible,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            AppThemeAdaptiveTabRow(
+                                options = historyFilterOptions,
+                                selectedValue = historyContentFilter,
+                                onSelectionChange = onHistoryFilterSelected,
+                                enabled = !isHistoryBatchMode,
+                                scrollable = historyFilterChrome.itemWidthDp != null,
+                                // Liquid mode has no fixed item width. Preserve the shared beta.21
+                                // default instead of turning "unspecified" into an explicit 0.dp.
+                                minTabWidth = historyFilterChrome.itemWidthDp?.dp ?: Dp.Unspecified,
+                                height = historyFilterChrome.heightDp.dp,
+                                indicatorHeight = historyFilterChrome.indicatorHeightDp.dp,
+                                labelFontSize = historyFilterChrome.labelFontSizeSp.sp,
+                                dragSelectionEnabled = historyFilterChrome.dragSelectionEnabled,
+                                tapPressRefractionEnabled = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = historyFilterChrome.horizontalPaddingDp.dp),
+                                miuixBackdrop = commonListChromeBackdrop,
+                                indicatorPositionProvider = {
+                                    historyPagerState.currentPage + historyPagerState.currentPageOffsetFraction
+                                },
+                                isScrollInProgressProvider = { historyPagerState.isScrollInProgress },
+                            )
+                        }
                         Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
                     }
 
