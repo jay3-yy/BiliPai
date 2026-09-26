@@ -1250,13 +1250,19 @@ fun HomeScreen(
         contentWidth,
         displayMode,
         homeSettings.gridColumnCount,
+        homeSettings.gridColumnCountCompact,
         homeSettings.homeFeedCardWidthPreset,
         windowSizeClass.widthSizeClass
     ) {
         resolveHomeFeedGridColumns(
             contentWidthDp = contentWidth.value.toInt(),
             displayMode = displayMode,
-            fixedColumnCount = homeSettings.gridColumnCount,
+            // 窄屏（折叠屏外屏/手机竖屏）与宽屏（内屏/平板）各自独立的固定列数记忆
+            fixedColumnCount = resolveHomeFeedStoredColumnCount(
+                widthSizeClass = windowSizeClass.widthSizeClass,
+                compactColumnCount = homeSettings.gridColumnCountCompact,
+                defaultColumnCount = homeSettings.gridColumnCount,
+            ),
             cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
             widthSizeClass = windowSizeClass.widthSizeClass
         )
@@ -1273,7 +1279,10 @@ fun HomeScreen(
             displayMode = displayMode,
         )
     }
-    LaunchedEffect(homeSettings.gridColumnCount) {
+    LaunchedEffect(
+        homeSettings.gridColumnCount,
+        homeSettings.gridColumnCountCompact,
+    ) {
         interactiveColumns = null
     }
 
@@ -2013,7 +2022,12 @@ fun HomeScreen(
                                     onArticleOpenChanged = { subscriptionArticleOpen = it },
                                     onPinchEnd = { finalColumns ->
                                         coroutineScope.launch {
-                                            SettingsManager.setGridColumnCount(context, finalColumns)
+                                            // 窄屏（外屏/手机）与宽屏（内屏/平板）各写各的记忆
+                                            if (isCompactHomeFeedScreen(windowSizeClass.widthSizeClass)) {
+                                                SettingsManager.setGridColumnCountCompact(context, finalColumns)
+                                            } else {
+                                                SettingsManager.setGridColumnCount(context, finalColumns)
+                                            }
                                         }
                                         pinchPillDismissJob?.cancel()
                                         pinchPillDismissJob = coroutineScope.launch {
@@ -2224,7 +2238,12 @@ fun HomeScreen(
                                            },
                                            onGestureEnd = { finalColumns ->
                                                coroutineScope.launch {
-                                                   SettingsManager.setGridColumnCount(context, finalColumns)
+                                                   // 窄屏（外屏/手机）与宽屏（内屏/平板）各写各的记忆
+                                                   if (isCompactHomeFeedScreen(windowSizeClass.widthSizeClass)) {
+                                                       SettingsManager.setGridColumnCountCompact(context, finalColumns)
+                                                   } else {
+                                                       SettingsManager.setGridColumnCount(context, finalColumns)
+                                                   }
                                                }
                                                pinchPillDismissJob?.cancel()
                                                pinchPillDismissJob = coroutineScope.launch {

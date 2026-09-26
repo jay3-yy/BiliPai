@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home
 
 import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
+import com.android.purebilibili.core.util.WindowWidthSizeClass
 import androidx.compose.ui.unit.dp
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -108,5 +109,53 @@ class HomeFeedGridPolicyTest {
                 cardWidthPreset = HomeFeedCardWidthPreset.ULTRA_WIDE
             )
         )
+    }
+
+    @Test
+    fun compactScreensUseIndependentColumnMemory() {
+        // 折叠屏外屏 / 手机竖屏走独立记忆，内屏捏出的固定列数不再串到窄屏
+        assertEquals(
+            0,
+            resolveHomeFeedStoredColumnCount(
+                widthSizeClass = WindowWidthSizeClass.Compact,
+                compactColumnCount = 0,
+                defaultColumnCount = 3,
+            )
+        )
+        assertEquals(
+            2,
+            resolveHomeFeedStoredColumnCount(
+                widthSizeClass = WindowWidthSizeClass.Compact,
+                compactColumnCount = 2,
+                defaultColumnCount = 3,
+            )
+        )
+    }
+
+    @Test
+    fun wideScreensKeepTheOriginalColumnMemory() {
+        assertEquals(
+            3,
+            resolveHomeFeedStoredColumnCount(
+                widthSizeClass = WindowWidthSizeClass.Medium,
+                compactColumnCount = 2,
+                defaultColumnCount = 3,
+            )
+        )
+        assertEquals(
+            3,
+            resolveHomeFeedStoredColumnCount(
+                widthSizeClass = WindowWidthSizeClass.Expanded,
+                compactColumnCount = 2,
+                defaultColumnCount = 3,
+            )
+        )
+    }
+
+    @Test
+    fun onlyCompactWidthCountsAsNarrowScreen() {
+        assertTrue(isCompactHomeFeedScreen(WindowWidthSizeClass.Compact))
+        assertTrue(!isCompactHomeFeedScreen(WindowWidthSizeClass.Medium))
+        assertTrue(!isCompactHomeFeedScreen(WindowWidthSizeClass.Expanded))
     }
 }

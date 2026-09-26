@@ -1394,9 +1394,9 @@ fun AppearanceSettingsContent(
                                     iconTint = com.android.purebilibili.core.theme.iOSBlue,
                                     title = "网格列数",
                                     subtitle = if (state.gridColumnCount == 0) {
-                                        "自适应（默认）"
+                                        "自适应（默认）；折叠屏外屏与窄屏独立记忆，可用双指缩放调整"
                                     } else {
-                                        "固定 ${state.gridColumnCount} 列"
+                                        "宽屏固定 ${state.gridColumnCount} 列；折叠屏外屏与窄屏独立记忆"
                                     },
                                     options = (0..6).map { count ->
                                         AppSegmentOption(

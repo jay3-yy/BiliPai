@@ -13,6 +13,26 @@ import androidx.compose.ui.unit.dp
 
 internal fun resolveHomeFeedMaxContentWidth(): Dp = 1280.dp
 
+/**
+ * 当前窗口是否按"窄屏"档处理列数记忆：折叠屏外屏、手机竖屏（Compact 宽度）。
+ * 宽屏（Medium/Expanded+，折叠屏内屏、平板、外屏横屏）与窄屏互不影响。
+ */
+internal fun isCompactHomeFeedScreen(widthSizeClass: WindowWidthSizeClass): Boolean =
+    widthSizeClass == WindowWidthSizeClass.Compact
+
+/**
+ * 按屏幕分档选择生效的固定列数记忆。
+ *
+ * 双指缩放的记忆此前是全局单一键：在内屏捏合成 3 列后，外屏（宽度约 380–480dp）
+ * 也被固定成 3 列，卡片窄到遮挡文字。窄屏走独立记忆且默认 0=自动——自动档在典型
+ * 外屏宽度下解析为 2 列；宽屏沿用原有记忆，老用户内屏的捏合记忆无需迁移。
+ */
+internal fun resolveHomeFeedStoredColumnCount(
+    widthSizeClass: WindowWidthSizeClass,
+    compactColumnCount: Int,
+    defaultColumnCount: Int,
+): Int = if (isCompactHomeFeedScreen(widthSizeClass)) compactColumnCount else defaultColumnCount
+
 internal fun resolveHomeFeedGridColumns(
     contentWidthDp: Int,
     displayMode: Int,
