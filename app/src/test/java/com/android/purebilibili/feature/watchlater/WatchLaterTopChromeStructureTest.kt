@@ -25,7 +25,9 @@ class WatchLaterTopChromeStructureTest {
         assertTrue(source.contains("miuixBackdrop = watchLaterChromeBackdrop"))
         assertTrue(source.contains("AppWindowActionMenu("))
         assertTrue(source.contains("label = \"全部听\""))
-        assertTrue(source.contains("label = \"复制到收藏夹\""))
+        // PiliPlus 批量操作：复制/移动平铺为文字按钮，对话框保留"复制到收藏夹"标题
+        assertTrue(source.contains("\"复制到收藏夹\" else \"移动到收藏夹\""))
+        assertTrue(source.contains("AppFloatingActionButton("))
         assertFalse(source.contains("AppDropdownMenu("))
         assertFalse(source.contains("AppDropdownMenuItem("))
     }

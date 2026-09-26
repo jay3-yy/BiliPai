@@ -104,14 +104,14 @@ class WatchLaterRefreshContractTest {
             .substringAfter("AppTopBar(")
             .substringBefore("containerColor = MaterialTheme.colorScheme.background")
 
-        assertTrue(
-            topBarSection.contains("text = { AppText(\"批量删除\") }") &&
-                topBarSection.contains("isBatchMode = true"),
-            "批量删除应放进管理菜单，避免 MIUIX 顶栏操作区挤压标题"
-        )
+        // PiliPlus 交互：仅通过卡片长按进入多选，顶栏不再提供批量删除入口
         assertFalse(
-            topBarSection.contains("TextButton(\n                                    onClick = {\n                                        isBatchMode = true"),
-                "顶栏操作区不应直接放置批量删除文字按钮"
+            topBarSection.contains("批量删除"),
+            "顶栏操作区不应放置批量删除入口"
+        )
+        assertTrue(
+            source.contains("onLongClick") && source.contains("isBatchMode = true"),
+            "多选应通过卡片长按进入"
         )
         assertTrue(
             topBarSection.contains("text = { AppText(\"全部听\") }") &&

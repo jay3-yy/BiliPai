@@ -811,6 +811,12 @@ fun WatchLaterScreen(
         }
     }
 
+    // PiliPlus：多选模式下返回键先退出多选
+    androidx.activity.compose.BackHandler(enabled = isBatchMode) {
+        isBatchMode = false
+        selectedBvids = emptySet()
+    }
+
     AppScaffold(
         modifier = Modifier
             .nestedScroll(continuousScrollOffsetConnection)
@@ -844,10 +850,22 @@ fun WatchLaterScreen(
             ) {
                 Column {
                 AppTopBar(
-                    title = "",
+                    title = if (isBatchMode) "已选: ${selectedBvids.size}" else "稍后再看",
                     navigationIcon = {
-                        AppIconButton(onClick = onBack) {
-                            AppIcon(rememberAppBackIcon(), contentDescription = "返回")
+                        AppIconButton(
+                            onClick = {
+                                if (isBatchMode) {
+                                    isBatchMode = false
+                                    selectedBvids = emptySet()
+                                } else {
+                                    onBack()
+                                }
+                            }
+                        ) {
+                            AppIcon(
+                                if (isBatchMode) Icons.Rounded.Close else rememberAppBackIcon(),
+                                contentDescription = if (isBatchMode) "退出多选" else "返回",
+                            )
                         }
                     },
                     actions = {
@@ -866,75 +884,37 @@ fun WatchLaterScreen(
                                 ) {
                                     AppText(if (allSelected) "取消全选" else "全选")
                                 }
-                                AppWindowActionMenu(
+                                // PiliPlus：批量操作平铺为文字按钮，移除为红色
+                                AppTextButton(
                                     enabled = selectedBvids.isNotEmpty() && !state.isTransferLoading,
-                                    groups = listOf(
-                                        listOf(
-                                            AppWindowAction(
-                                                label = "复制到收藏夹",
-                                                onClick = {
-                                                    pendingTransferCopy = true
-                                                    selectedTransferFolderId = null
-                                                    viewModel.loadFavoriteFolders()
-                                                },
-                                            ),
-                                            AppWindowAction(
-                                                label = "移动到收藏夹",
-                                                onClick = {
-                                                    pendingTransferCopy = false
-                                                    selectedTransferFolderId = null
-                                                    viewModel.loadFavoriteFolders()
-                                                },
-                                            ),
-                                            AppWindowAction(
-                                                label = "删除(${selectedBvids.size})",
-                                                onClick = { showBatchDeleteConfirm = true },
-                                            ),
-                                        ),
-                                    ),
+                                    onClick = {
+                                        pendingTransferCopy = true
+                                        selectedTransferFolderId = null
+                                        viewModel.loadFavoriteFolders()
+                                    },
                                 ) {
-                                    AppIcon(Icons.Filled.MoreVert, contentDescription = "批量操作")
+                                    AppText("复制")
                                 }
                                 AppTextButton(
+                                    enabled = selectedBvids.isNotEmpty() && !state.isTransferLoading,
                                     onClick = {
-                                        isBatchMode = false
-                                        selectedBvids = emptySet()
-                                    }
+                                        pendingTransferCopy = false
+                                        selectedTransferFolderId = null
+                                        viewModel.loadFavoriteFolders()
+                                    },
                                 ) {
-                                    AppText("完成")
+                                    AppText("移动")
                                 }
-                            } else {
-                                AppIconButton(
-                                    onClick = {
-                                        val externalPlaylist = buildExternalPlaylistFromWatchLater(
-                                            items = displayedItems,
-                                            clickedBvid = displayedItems.firstOrNull()?.bvid
-                                        ) ?: return@AppIconButton
-
-                                        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
-                                            externalPlaylist.playlistItems,
-                                            externalPlaylist.startIndex,
-                                            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
-                                        )
-                                        com.android.purebilibili.feature.video.player.PlaylistManager
-                                            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
-
-                                        val item = displayedItems[externalPlaylist.startIndex]
-                                        val target = resolveWatchLaterPlaybackTargetOrDefault(
-                                            items = displayedItems,
-                                            bvid = item.bvid,
-                                            fallbackCid = item.cid
-                                        )
-                                        onVideoClick(target.bvid, target.cid, target.resumePositionMs)
-                                    }
+                                AppTextButton(
+                                    enabled = selectedBvids.isNotEmpty() && !state.isManaging,
+                                    onClick = { showBatchDeleteConfirm = true },
                                 ) {
-                                    AppIcon(
-                                        rememberAppPlayIcon(),
-                                        contentDescription = "全部播放",
-                                        tint = MaterialTheme.colorScheme.primary
+                                    AppText(
+                                        "移除",
+                                        color = MaterialTheme.colorScheme.error,
                                     )
                                 }
-
+                            } else {
                                 AppTextButton(
                                     onClick = {
                                         viewModel.updateSortOrder(state.sortOrder.toggled())
@@ -984,14 +964,6 @@ fun WatchLaterScreen(
                                                             )
                                                         }
                                                     }
-                                                },
-                                            ),
-                                            AppWindowAction(
-                                                label = "批量删除",
-                                                enabled = !state.isManaging,
-                                                onClick = {
-                                                    isBatchMode = true
-                                                    selectedBvids = emptySet()
                                                 },
                                             ),
                                             AppWindowAction(
@@ -1274,6 +1246,49 @@ fun WatchLaterScreen(
                 columns = pinchListColumns,
                 modifier = Modifier.align(Alignment.Center),
             )
+
+            // PiliPlus：播放全部以 extended FAB 常驻列表右下角
+            if (state.items.isNotEmpty() && !isBatchMode) {
+                com.android.purebilibili.core.ui.components.AppFloatingActionButton(
+                    onClick = {
+                        val externalPlaylist = buildExternalPlaylistFromWatchLater(
+                            items = displayedItems,
+                            clickedBvid = displayedItems.firstOrNull()?.bvid
+                        ) ?: return@AppFloatingActionButton
+
+                        com.android.purebilibili.feature.video.player.PlaylistManager.setExternalPlaylist(
+                            externalPlaylist.playlistItems,
+                            externalPlaylist.startIndex,
+                            source = com.android.purebilibili.feature.video.player.ExternalPlaylistSource.WATCH_LATER
+                        )
+                        com.android.purebilibili.feature.video.player.PlaylistManager
+                            .setPlayMode(com.android.purebilibili.feature.video.player.PlayMode.SEQUENTIAL)
+
+                        val item = displayedItems[externalPlaylist.startIndex]
+                        val target = resolveWatchLaterPlaybackTargetOrDefault(
+                            items = displayedItems,
+                            bvid = item.bvid,
+                            fallbackCid = item.cid
+                        )
+                        onVideoClick(target.bvid, target.cid, target.resumePositionMs)
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = AppSpacingTokens.Large,
+                            bottom = bottomContentPadding + AppSpacingTokens.Medium,
+                        ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppIcon(rememberAppPlayIcon(), contentDescription = null)
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+                        AppText("播放全部")
+                    }
+                }
+            }
         }
     }
 
