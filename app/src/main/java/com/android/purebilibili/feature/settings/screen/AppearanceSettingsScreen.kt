@@ -602,7 +602,7 @@ fun AppearanceSettingsContent(
                             Spacer(modifier = Modifier.height(8.dp))
                             SettingsSingleChoicePreference(
                                 title = "屏幕帧率：$selectedScreenDisplayModeLabel",
-                                subtitle = "默认交给系统自动调节；手动选择时固定为对应显示模式",
+                                subtitle = "默认跟随系统自动调节",
                                 options = screenDisplayModeOptions,
                                 selectedValue = selectedScreenDisplayModeId,
                                 enabled = activity != null && supportedDisplayModes.isNotEmpty(),
@@ -639,7 +639,7 @@ fun AppearanceSettingsContent(
 
                         SettingsSingleChoicePreference(
                             title = "列表条目样式",
-                            subtitle = "选择统一圆角条目，或使用当前界面预设自带的列表样式",
+                            subtitle = "统一圆角条目，或跟随当前界面预设",
                             options = resolveAppListItemStyleOptions(),
                             selectedValue = state.appListItemStyle,
                             onSelectionChange = { style ->
@@ -653,7 +653,7 @@ fun AppearanceSettingsContent(
 
                         SettingsSingleChoicePreference(
                             title = "图标样式",
-                            subtitle = "选择彩色圆角底图或简洁单色图标，修改会应用到全局",
+                            subtitle = "彩色底图或单色图标，全局生效",
                             options = resolveAppIconStyleOptions(),
                             selectedValue = state.appIconStyle,
                             onSelectionChange = { style ->
@@ -666,8 +666,8 @@ fun AppearanceSettingsContent(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         SettingsSingleChoicePreference(
-                            title = "单选项展示方式",
-                            subtitle = "选择从条目附近展开，或在屏幕中央显示选择窗口",
+                            title = "选项弹窗样式",
+                            subtitle = "从条目旁展开，或居中弹出",
                             options = singleChoicePresentationOptions,
                             selectedValue = singleChoicePresentation,
                             onSelectionChange = { presentation ->
@@ -991,7 +991,7 @@ fun AppearanceSettingsContent(
                         Spacer(modifier = Modifier.height(16.dp))
                         SettingsSingleChoicePreference(
                             title = "全局字重：${state.appFontWeightPreset.label}",
-                            subtitle = "统一调整全部文字的字重（跟随默认保留各场景原字重）",
+                            subtitle = "统一调整全部文字的粗细",
                             options = resolveAppFontWeightSegmentOptions(),
                             selectedValue = state.appFontWeightPreset,
                             onSelectionChange = { preset ->
@@ -1026,7 +1026,7 @@ fun AppearanceSettingsContent(
 	                                AppPreference(
 	                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.REPLAY_ONBOARDING),
                                     title = "恢复默认字体",
-                                    subtitle = "移除已导入字体文件，立即回到系统字体",
+                                    subtitle = "删除已导入的字体文件",
                                     onClick = {
                                         deleteStoredAppFont(context, state.appFontFileName)
                                         viewModel.clearAppFontFile()
@@ -1058,7 +1058,7 @@ fun AppearanceSettingsContent(
 
 	                        AppSwitchPreference(
 	                            icon = rememberSettingsSemanticIcon(SettingsIconRole.DISPLAY_SCALE),
-                            title = "精细调整显示大小",
+                            title = "显示大小微调",
                             subtitle = resolveDpiOverrideSubtitle(
                                 systemDensityDpi = displayMetricsSnapshot.systemDensityDpi,
                                 systemSmallestWidthDp = displayMetricsSnapshot.systemSmallestWidthDp,
@@ -1081,7 +1081,7 @@ fun AppearanceSettingsContent(
                             Column(modifier = Modifier.padding(top = 16.dp)) {
                                 SettingsSingleChoicePreference(
                                     title = "显示缩放：${resolveDisplayedAppDpiPercent(state.appDpiOverridePercent)}%",
-                                    subtitle = "只调整 BiliPai 内文字和控件的整体大小，不修改系统显示设置",
+                                    subtitle = "只影响 BiliPai，不改变系统显示设置",
                                     options = resolveAppDpiOverrideSegmentOptions(),
                                     selectedValue = resolveDisplayedAppDpiPercent(state.appDpiOverridePercent),
                                     onSelectionChange = { percent ->
@@ -1422,7 +1422,7 @@ fun AppearanceSettingsContent(
                                 AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                                 AppSwitchPreference(
                                     title = "双指缩放网格列数",
-                                    subtitle = "在视频列表上双指捏合或撑开可随手无级调节网格列数",
+                                    subtitle = "在视频列表上双指捏合即可调节列数",
                                     checked = pinchToChangeGridColumnsEnabled,
                                     onCheckedChange = { enabled ->
                                         scope.launch {
@@ -1436,11 +1436,11 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.FULL_VIDEO_CARD_CONTENT),
-                            title = "完整卡片展示",
+                            title = "标题完整显示",
                             subtitle = if (fullVideoCardContentVisible) {
-                                "完整显示视频标题，卡片高度可能不同"
+                                "标题不截断，卡片高度可能不一致"
                             } else {
-                                "标题最多显示两行；播放、弹幕等卡片信息始终完整显示"
+                                "标题最多两行，其余信息不变"
                             },
                             checked = fullVideoCardContentVisible,
                             onCheckedChange = {
@@ -1469,11 +1469,11 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_STATS_COMPACT),
-                            title = "统计信息贴封面（紧凑）",
+                            title = "数据贴在封面上",
                             subtitle = if (compactVideoStatsOnCover) {
                                 "播放量和弹幕显示在封面底部"
                             } else {
-                                "默认：播放量和弹幕在标题下方"
+                                "默认显示在标题下方"
                             },
                             checked = compactVideoStatsOnCover,
                             onCheckedChange = {
@@ -1487,7 +1487,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsSingleChoicePreference(
                             title = "首页视频时长：${homeDurationStyle.label}",
-                            subtitle = "可显示在统计行、仅显示无底色文字或完全隐藏",
+                            subtitle = "显示在统计行、纯文字或隐藏",
                             options = HomeDurationStyle.entries.map {
                                 AppSegmentOption(it, it.label)
                             },
@@ -1556,7 +1556,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_ONLINE_COUNT),
-                            title = "卡片与视频页观看人数",
+                            title = "显示观看人数",
                             subtitle = if (showOnlineCount) {
                                 "首页、搜索等视频卡片和视频页显示“xx人正在看”"
                             } else {
@@ -1795,8 +1795,8 @@ fun AppearanceSettingsContent(
                     AppPreferenceGroup {
                         AppSwitchPreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_HEADER_COLLAPSE),
-                            title = "首页顶栏仅回顶显示",
-                            subtitle = "离开顶部后收起搜索框和标签页，单击底栏首页回顶后再出现",
+                            title = "顶栏滚动时收起",
+                            subtitle = "向下滚动时收起搜索框和标签，点底栏「首页」回顶后重新出现",
                             checked = state.isHeaderCollapseEnabled,
                             onCheckedChange = { value ->
                                 viewModel.toggleHeaderCollapse(value)
@@ -1826,7 +1826,7 @@ fun AppearanceSettingsContent(
                             AppPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.BACK_TO_TOP),
                                 title = "重置回顶按钮位置",
-                                subtitle = "恢复回到默认右下角悬浮位置",
+                                subtitle = "恢复默认右下角位置",
                                 onClick = {
                                     scope.launch {
                                         BackToTopSettingsStore.resetCustomOffset(context)

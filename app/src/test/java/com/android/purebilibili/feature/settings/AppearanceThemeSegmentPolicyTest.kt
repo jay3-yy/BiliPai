@@ -88,9 +88,9 @@ class AppearanceThemeSegmentPolicyTest {
         val specOptions = resolveColorSpecOptions()
 
         assertEquals(PaletteStyle.TonalSpot, styleOptions.first().value)
-        assertEquals("TonalSpot", styleOptions.first().label)
+        assertEquals("经典", styleOptions.first().label)
         assertEquals(ColorSpec.SpecVersion.SPEC_2021, specOptions.first().value)
-        assertEquals("SPEC_2021", specOptions.first().label)
+        assertEquals("经典 2021", specOptions.first().label)
     }
 
     @Test

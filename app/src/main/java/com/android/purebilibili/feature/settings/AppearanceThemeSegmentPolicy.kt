@@ -19,10 +19,28 @@ internal fun resolveThemeModeSegmentOptions(
     )
 }
 
+/** 色彩风格的中文短标签(段控件内展示,不超过两字)。 */
+internal fun resolveColorStyleLabel(style: PaletteStyle): String = when (style) {
+    PaletteStyle.TonalSpot -> "经典"
+    PaletteStyle.Vibrant -> "鲜艳"
+    PaletteStyle.Expressive -> "表现"
+    PaletteStyle.Rainbow -> "彩虹"
+    PaletteStyle.FruitSalad -> "缤纷"
+    PaletteStyle.Monochrome -> "单色"
+    PaletteStyle.Fidelity -> "保真"
+    PaletteStyle.Content -> "内容"
+}
+
+/** 配色规范的中文标签:2021 为经典色调算法,2025 为 M3 Expressive 新算法。 */
+internal fun resolveColorSpecLabel(spec: ColorSpec.SpecVersion): String = when (spec) {
+    ColorSpec.SpecVersion.SPEC_2021 -> "经典 2021"
+    ColorSpec.SpecVersion.SPEC_2025 -> "表达 2025"
+}
+
 internal fun resolveColorStyleOptions(): List<AppSegmentOption<PaletteStyle>> {
     return (listOf(PaletteStyle.TonalSpot) + PaletteStyle.entries.filterNot { it == PaletteStyle.TonalSpot })
         .map { style ->
-            AppSegmentOption(style, style.name)
+            AppSegmentOption(style, resolveColorStyleLabel(style))
         }
 }
 
@@ -31,7 +49,7 @@ internal fun resolveColorSpecOptions(): List<AppSegmentOption<ColorSpec.SpecVers
         ColorSpec.SpecVersion.SPEC_2021,
         ColorSpec.SpecVersion.SPEC_2025
     ).map { spec ->
-        AppSegmentOption(spec, spec.name)
+        AppSegmentOption(spec, resolveColorSpecLabel(spec))
     }
 }
 
