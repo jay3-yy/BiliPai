@@ -98,6 +98,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.PickGalleryVisualMedia
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.resolveAppContentDialogLayoutPolicy
@@ -2820,6 +2821,7 @@ private fun ProfileDynamicMajorContent(item: SpaceDynamicItem, onVideoClick: (St
             )
         }
         if (cover.isNotBlank()) {
+            val coverSourceHidden = isImagePreviewSourceHidden(sourceRect)
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(cover)
@@ -2830,6 +2832,7 @@ private fun ProfileDynamicMajorContent(item: SpaceDynamicItem, onVideoClick: (St
                 modifier = Modifier
                     .fillMaxWidth(0.72f)
                     .aspectRatio(1f)
+                    .alpha(if (coverSourceHidden) 0f else 1f)
                     .clip(AppShapes.container(ContainerLevel.Chip))
                     .onGloballyPositioned { coordinates ->
                         sourceRect = coordinates.boundsInWindow()

@@ -158,6 +158,19 @@ private data class ImagePreviewOverlayRequest(
     val onDismiss: () -> Unit
 )
 
+/**
+ * 源缩略图在图片预览打开期间应隐藏，否则飞出的图片会与原位卡片重影；
+ * overlay request 在回位动画结束后才清空，因此卡片等「飞回落地」才恢复。
+ * 匹配规则：捕获的 bounds 中心落在 request.sourceRect 外扩 8px 范围内。
+ */
+@Composable
+fun isImagePreviewSourceHidden(bounds: androidx.compose.ui.geometry.Rect?): Boolean {
+    if (bounds == null) return false
+    val request by ImagePreviewOverlayController.request.collectAsStateWithLifecycle()
+    val sourceRect = request?.sourceRect ?: return false
+    return sourceRect.inflate(8f).contains(bounds.center)
+}
+
 private object ImagePreviewOverlayController {
     private val _request = MutableStateFlow<ImagePreviewOverlayRequest?>(null)
     val request = _request.asStateFlow()
@@ -497,10 +510,21 @@ private fun ImagePreviewOverlayContent(
                 (AppSpacingTokens.Large + AppSpacingTokens.Micro).toPx()
             }
             
-            val rawProgress = if (!isDismissing && backProgress > 0f) {
-                1f - backProgress
-            } else {
-                animateTrigger.value
+            // 手势 scrub 期间画面由 backProgress 驱动；transitionState 离开 InProgress 的
+            // 瞬间 backProgress 归零而 animateTrigger 仍为 1f，若直接回落会让画面先跳回
+            // 全屏再重新飞出（双重回弹）。记住最后一帧 scrub 值，在此过渡窗口内保持。
+            var lastScrubRawProgress by remember { mutableFloatStateOf(1f) }
+            var backRecovering by remember { mutableStateOf(false) }
+            SideEffect {
+                if (backProgress > 0f) {
+                    lastScrubRawProgress = 1f - backProgress
+                }
+            }
+            val rawProgress = when {
+                isDismissing || backRecovering -> animateTrigger.value
+                backProgress > 0f -> 1f - backProgress
+                lastScrubRawProgress < 1f -> lastScrubRawProgress
+                else -> animateTrigger.value
             }
             val verticalDragFrame = resolveImagePreviewVerticalDragFrame(
                 dragOffsetYPx = verticalDismissOffsetYPx,
@@ -596,19 +620,22 @@ private fun ImagePreviewOverlayContent(
                 isBackEnabled = !isDismissing,
                 onBackCancelled = {
                     scope.launch {
+                        backRecovering = true
                         val dismissMotion = imagePreviewDismissMotion()
-                        animateTrigger.snapTo(rawProgress)
+                        animateTrigger.snapTo(lastScrubRawProgress)
                         animateTrigger.animateTo(
                             targetValue = 1f,
                             animationSpec = emphasizedEnterTween(
                                 durationMillis = dismissMotion.cancelRecoverDurationMillis
                             ),
                         )
+                        lastScrubRawProgress = 1f
+                        backRecovering = false
                     }
                 },
                 onBackCompleted = {
                     scope.launch {
-                        animateTrigger.snapTo(rawProgress)
+                        animateTrigger.snapTo(lastScrubRawProgress)
                         triggerDismiss()
                     }
                 },

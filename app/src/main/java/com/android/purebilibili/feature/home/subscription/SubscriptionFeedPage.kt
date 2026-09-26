@@ -70,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -114,6 +115,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.imagePreviewSourceBounds
 import com.android.purebilibili.feature.dynamic.components.rememberImagePreviewSourceRect
 import com.android.purebilibili.feature.home.homeFeedPinchZoom
@@ -771,6 +773,7 @@ private fun FeedArticleImage(
 ) {
     var failed by remember(url) { mutableStateOf(false) }
     val sourceRect = rememberImagePreviewSourceRect()
+    val sourceHidden = isImagePreviewSourceHidden(sourceRect.value)
     if (failed) {
         Box(
             modifier = modifier
@@ -789,8 +792,9 @@ private fun FeedArticleImage(
                 .fillMaxWidth()
                 .heightIn(max = 420.dp)
                 .clip(MaterialTheme.shapes.medium)
+                .alpha(if (sourceHidden) 0f else 1f)
                 .imagePreviewSourceBounds(sourceRect)
-                .clickable { onClick(sourceRect.value) },
+                .clickable(enabled = !sourceHidden) { onClick(sourceRect.value) },
             contentScale = ContentScale.Fit,
             onError = { failed = true },
         )

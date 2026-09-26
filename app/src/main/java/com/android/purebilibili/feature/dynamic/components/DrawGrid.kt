@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -154,15 +155,18 @@ private fun DrawGridImage(
     // boundsInWindow changes on every scroll frame. Keep it outside snapshot state so
     // measuring a waterfall item never back-writes into composition and reflows the grid.
     val imageRectRef = remember { object { var value: Rect? = null } }
+    // 预览打开期间隐藏原位卡片，回位落地后恢复
+    val sourceHidden = isImagePreviewSourceHidden(imageRectRef.value)
 
     Box(
         modifier = modifier
+            .alpha(if (sourceHidden) 0f else 1f)
             .clip(RoundedCornerShape(cornerRadius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .onGloballyPositioned { coordinates ->
                 imageRectRef.value = coordinates.boundsInWindow()
             }
-            .clickable { onImageClick(index, imageRectRef.value) },
+            .clickable(enabled = !sourceHidden) { onImageClick(index, imageRectRef.value) },
         contentAlignment = Alignment.Center
     ) {
         if (imageUrl.isNotEmpty()) {

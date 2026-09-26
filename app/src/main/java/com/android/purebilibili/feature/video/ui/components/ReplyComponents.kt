@@ -14,6 +14,7 @@ import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -73,6 +74,7 @@ import com.android.purebilibili.data.repository.BlockedUpRelationSource
 import com.android.purebilibili.data.repository.BlockedUpRepository
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
+import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextPlacement
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewCommentContext
@@ -2805,6 +2807,7 @@ fun CommentPictures(
                 1.33f  // 默认 4:3 比例
             }
             var imageRect by remember { mutableStateOf<Rect?>(null) }
+            val sourceHidden = isImagePreviewSourceHidden(imageRect)
             
             Box(
                 modifier = Modifier
@@ -2812,12 +2815,13 @@ fun CommentPictures(
                     .heightIn(max = 220.dp)
                     .testTag("${testTagPrefix}0")
                     .aspectRatio(aspectRatio)
+                    .alpha(if (sourceHidden) 0f else 1f)
                     .clip(AppShapes.container(ContainerLevel.Card))  //  [优化] 更大圆角 8dp → 12dp
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .onGloballyPositioned { coordinates ->
                         imageRect = coordinates.boundsInWindow()
                     }
-                    .clickable {
+                    .clickable(enabled = !sourceHidden) {
                         onImageClick(
                             imageUrls,
                             0,
@@ -2853,17 +2857,19 @@ fun CommentPictures(
                         row.forEachIndexed { colIndex, pic ->
                             val globalIndex = rowIndex * columns + colIndex
                             var imageRect by remember { mutableStateOf<Rect?>(null) }
+                            val sourceHidden = isImagePreviewSourceHidden(imageRect)
                             
                             Box(
                                 modifier = Modifier
                                     .size(85.dp)  //  [优化] 增大尺寸 80dp → 85dp
                                     .testTag("${testTagPrefix}$globalIndex")
+                                    .alpha(if (sourceHidden) 0f else 1f)
                                     .clip(AppShapes.container(ContainerLevel.Field))  //  [优化] 更大圆角 6dp → 10dp
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .onGloballyPositioned { coordinates ->
                                         imageRect = coordinates.boundsInWindow()
                                     }
-                                    .clickable {
+                                    .clickable(enabled = !sourceHidden) {
                                         onImageClick(
                                             imageUrls,
                                             globalIndex,

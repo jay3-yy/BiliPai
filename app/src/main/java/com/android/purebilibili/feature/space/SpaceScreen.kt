@@ -117,6 +117,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -231,6 +232,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicCardPresentati
 import com.android.purebilibili.feature.dynamic.components.RichTextContent
 import com.android.purebilibili.feature.dynamic.components.DynamicCommentOverlayHost
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden
 import com.android.purebilibili.feature.dynamic.components.imagePreviewSourceBounds
 import com.android.purebilibili.feature.dynamic.components.rememberImagePreviewSourceRect
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
@@ -2622,10 +2624,12 @@ private fun SpaceHeader(
         ) {
             // 背景 hero（突破内边距全宽延伸至屏幕顶端，按标准比例完整呈现）
             val topPhotoRect = rememberImagePreviewSourceRect()
+            val topPhotoHidden = isImagePreviewSourceHidden(topPhotoRect.value)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .imagePreviewSourceBounds(topPhotoRect)
+                    .alpha(if (topPhotoHidden) 0f else 1f)
                     .layout { measurable, constraints ->
                         val horizontalInsetPx = outerPadding.coerceAtLeast(0.dp).roundToPx()
                         val topInsetPx = chromeTopInset.coerceAtLeast(0.dp).roundToPx()
@@ -2691,11 +2695,13 @@ private fun SpaceHeader(
                 }
 
                 val avatarRect = rememberImagePreviewSourceRect()
+                val avatarHidden = isImagePreviewSourceHidden(avatarRect.value)
                 Box(
                     modifier = Modifier
                         .size(avatarSize)
                         .imagePreviewSourceBounds(avatarRect)
-                        .clickable(enabled = avatarPreviewEnabled) { onAvatarClick(avatarRect.value) }
+                        .alpha(if (avatarHidden) 0f else 1f)
+                        .clickable(enabled = avatarPreviewEnabled && !avatarHidden) { onAvatarClick(avatarRect.value) }
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(context)
