@@ -109,9 +109,9 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextConte
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.data.model.response.AiSummaryData
-import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
-import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
-import com.android.purebilibili.feature.video.ui.section.VideoNoteCard
+import com.android.purebilibili.feature.video.ui.section.AiSummarySheet
+import com.android.purebilibili.feature.video.ui.section.VideoSupplementEntryRow
+import com.android.purebilibili.feature.video.ui.section.VideoNoteListSheet
 import com.android.purebilibili.feature.video.ui.section.VideoNoteDeleteConfirmDialog
 import com.android.purebilibili.feature.video.ui.section.VideoNoteEditorSheet
 import com.android.purebilibili.feature.video.note.VideoNoteEditorDocument
@@ -685,6 +685,8 @@ internal fun VideoContentSection(
     
     // 合集展开状态
     var showCollectionSheet by remember { mutableStateOf(false) }
+    var showAiSummarySheet by remember { mutableStateOf(false) }
+    var showNoteListSheet by remember { mutableStateOf(false) }
     var confirmDeleteNote by remember { mutableStateOf(false) }
     val onShareVideoNote: (VideoNoteEditorDocument, Boolean) -> Unit = { document, isDraft ->
         ShareUtils.shareText(
@@ -943,14 +945,8 @@ internal fun VideoContentSection(
                         onFavoriteLongClick = onFavoriteLongClick,
                         aiSummary = aiSummary,
                         aiSummaryPrompt = aiSummaryPrompt,
-                        onRetryAiSummary = onRetryAiSummary,
-                        onCreateNoteDraftFromAiSummary = onCreateNoteDraftFromAiSummary,
-                        videoNoteState = videoNoteState,
-                        onOpenVideoNoteEditor = onOpenVideoNoteEditor,
-                        onRetryVideoNote = onRetryVideoNote,
-                        onDeleteVideoNoteClick = { confirmDeleteNote = true },
-                        onShareVideoNote = { document -> onShareVideoNote(document, false) },
-                        onPublicVideoNoteClick = onPublicVideoNoteClick,
+                        onShowAiSummarySheet = { showAiSummarySheet = true },
+                        onShowNoteListSheet = { showNoteListSheet = true },
                         bgmInfo = bgmInfo,
                         bgmInfoList = bgmInfoList,
                         onlineCount = onlineCount,
@@ -1191,6 +1187,37 @@ internal fun VideoContentSection(
         }
 
 
+        AiSummarySheet(
+            visible = showAiSummarySheet,
+            aiSummary = aiSummary,
+            promptState = aiSummaryPrompt,
+            onDismiss = { showAiSummarySheet = false },
+            onTimestampClick = onTimestampClick,
+            onRetry = onRetryAiSummary,
+            onCreateNoteDraft = {
+                showAiSummarySheet = false
+                onCreateNoteDraftFromAiSummary()
+            }
+        )
+
+        VideoNoteListSheet(
+            visible = showNoteListSheet,
+            noteState = videoNoteState,
+            isLoggedIn = isLoggedIn,
+            onDismiss = { showNoteListSheet = false },
+            onCreateOrEditClick = {
+                showNoteListSheet = false
+                onOpenVideoNoteEditor()
+            },
+            onRetryClick = onRetryVideoNote,
+            onDeleteClick = {
+                showNoteListSheet = false
+                confirmDeleteNote = true
+            },
+            onShareClick = { document -> onShareVideoNote(document, false) },
+            onPublicNoteClick = onPublicVideoNoteClick
+        )
+
         VideoNoteEditorSheet(
             noteState = videoNoteState,
             onDismiss = onCloseVideoNoteEditor,
@@ -1272,14 +1299,8 @@ private fun VideoIntroTab(
     onFavoriteLongClick: () -> Unit = {},
     aiSummary: AiSummaryData? = null,
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
-    onRetryAiSummary: () -> Unit = {},
-    onCreateNoteDraftFromAiSummary: () -> Unit = {},
-    videoNoteState: VideoNoteUiState = VideoNoteUiState(),
-    onOpenVideoNoteEditor: () -> Unit = {},
-    onRetryVideoNote: () -> Unit = {},
-    onDeleteVideoNoteClick: () -> Unit = {},
-    onShareVideoNote: (VideoNoteEditorDocument) -> Unit = {},
-    onPublicVideoNoteClick: (Long, String) -> Unit = { _, _ -> },
+    onShowAiSummarySheet: () -> Unit = {},
+    onShowNoteListSheet: () -> Unit = {},
     bgmInfo: BgmInfo? = null,
     bgmInfoList: List<BgmInfo> = emptyList(),
     onTimestampClick: ((Long) -> Unit)? = null,
@@ -1335,14 +1356,8 @@ private fun VideoIntroTab(
                 onFavoriteLongClick = onFavoriteLongClick,
                 aiSummary = aiSummary,
                 aiSummaryPrompt = aiSummaryPrompt,
-                onRetryAiSummary = onRetryAiSummary,
-                onCreateNoteDraftFromAiSummary = onCreateNoteDraftFromAiSummary,
-                videoNoteState = videoNoteState,
-                onOpenVideoNoteEditor = onOpenVideoNoteEditor,
-                onRetryVideoNote = onRetryVideoNote,
-                onDeleteVideoNoteClick = onDeleteVideoNoteClick,
-                onShareVideoNote = onShareVideoNote,
-                onPublicVideoNoteClick = onPublicVideoNoteClick,
+                onShowAiSummarySheet = onShowAiSummarySheet,
+                onShowNoteListSheet = onShowNoteListSheet,
                 bgmInfo = bgmInfo,
                 bgmInfoList = bgmInfoList,
                 relatedVideos = relatedVideos,
@@ -1806,14 +1821,8 @@ private fun VideoHeaderContent(
     onFavoriteLongClick: () -> Unit = {},
     aiSummary: AiSummaryData? = null,
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
-    onRetryAiSummary: () -> Unit = {},
-    onCreateNoteDraftFromAiSummary: () -> Unit = {},
-    videoNoteState: VideoNoteUiState = VideoNoteUiState(),
-    onOpenVideoNoteEditor: () -> Unit = {},
-    onRetryVideoNote: () -> Unit = {},
-    onDeleteVideoNoteClick: () -> Unit = {},
-    onShareVideoNote: (VideoNoteEditorDocument) -> Unit = {},
-    onPublicVideoNoteClick: (Long, String) -> Unit = { _, _ -> },
+    onShowAiSummarySheet: () -> Unit = {},
+    onShowNoteListSheet: () -> Unit = {},
     bgmInfo: BgmInfo? = null,
     bgmInfoList: List<BgmInfo> = emptyList(),
     relatedVideos: List<RelatedVideo> = emptyList(),
@@ -1836,9 +1845,6 @@ private fun VideoHeaderContent(
         .getVideoNoteEnabled(context)
         .collectAsStateWithLifecycle(initialValue = true
         )
-    val videoNoteDefaultCollapsed by com.android.purebilibili.core.store.SettingsManager
-        .getVideoNoteDefaultCollapsed(context)
-        .collectAsStateWithLifecycle(initialValue = true)
     val uiStyle = LocalAppUiStyle.current
     val sectionSpacing = if (uiStyle == AppUiStyle.MATERIAL3) 8.dp else 4.dp
     Column(
@@ -1923,38 +1929,20 @@ private fun VideoHeaderContent(
         }
 
         // Keep auxiliary video tools below the primary engagement actions and episode selectors.
-        if (shouldShowAiSummaryEntry(
+        // Heavy content opens in bottom sheets hosted by VideoContentSection.
+        val showAiSummaryEntry = videoAiSummaryEntryEnabled &&
+            (shouldShowAiSummaryEntry(
                 aiSummary = aiSummary,
-                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
-            )
-        ) {
-            AiSummaryCard(
-                aiSummary = aiSummary,
-                onTimestampClick = onTimestampClick,
-                onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-        } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
-            AiSummaryPromptCard(
-                promptState = aiSummaryPrompt,
-                onActionClick = onRetryAiSummary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-        }
-
-        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
-            VideoNoteCard(
-                noteState = videoNoteState,
-                isLoggedIn = isLoggedIn,
-                onCreateOrEditClick = onOpenVideoNoteEditor,
-                onRetryClick = onRetryVideoNote,
-                onDeleteClick = onDeleteVideoNoteClick,
-                onShareClick = onShareVideoNote,
-                onPublicNoteClick = onPublicVideoNoteClick,
-                defaultCollapsed = videoNoteDefaultCollapsed,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-        }
+                isAiSummaryEntryEnabled = true
+            ) || aiSummaryPrompt != null)
+        val showNoteEntry = shouldShowVideoNoteCard(videoNoteEnabled)
+        VideoSupplementEntryRow(
+            showAiSummary = showAiSummaryEntry,
+            showNote = showNoteEntry,
+            onAiSummaryClick = onShowAiSummarySheet,
+            onNoteClick = onShowNoteListSheet,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
 
     }
 

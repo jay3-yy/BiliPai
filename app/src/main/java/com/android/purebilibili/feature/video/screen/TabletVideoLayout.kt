@@ -67,9 +67,9 @@ import com.android.purebilibili.feature.video.note.VideoNoteUiState
 import com.android.purebilibili.feature.video.note.buildVideoNoteShareText
 import com.android.purebilibili.feature.video.note.shouldShowVideoNoteCard
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
-import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
-import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
-import com.android.purebilibili.feature.video.ui.section.VideoNoteCard
+import com.android.purebilibili.feature.video.ui.section.AiSummarySheet
+import com.android.purebilibili.feature.video.ui.section.VideoNoteListSheet
+import com.android.purebilibili.feature.video.ui.section.VideoSupplementEntryRow
 import com.android.purebilibili.feature.video.ui.section.VideoNoteDeleteConfirmDialog
 import com.android.purebilibili.feature.video.ui.section.VideoNoteEditorSheet
 import com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList
@@ -1443,6 +1443,8 @@ private fun ScrollableVideoInfoSection(
     LaunchedEffect(info.bvid) {
         entranceVisible = true
     }
+    var showAiSummarySheet by remember(info.bvid) { mutableStateOf(false) }
+    var showNoteListSheet by remember(info.bvid) { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier,
@@ -1520,60 +1522,25 @@ private fun ScrollableVideoInfoSection(
             }
         }
 
-        // 4. AI 视频总结
-        if (shouldShowAiSummaryEntry(
+        // 4/5. AI 总结与视频笔记入口（内容在底部抽屉中展示）
+        val showAiSummaryEntry = videoAiSummaryEntryEnabled &&
+            (shouldShowAiSummaryEntry(
                 aiSummary = aiSummary,
-                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
-            )
-        ) {
+                isAiSummaryEntryEnabled = true
+            ) || aiSummaryPrompt != null)
+        val showNoteEntry = shouldShowVideoNoteCard(videoNoteEnabled)
+        if (showAiSummaryEntry || showNoteEntry) {
             item {
                 TabletVideoInfoStaggeredItem(
                     visible = entranceVisible,
                     index = 3,
                     spec = entranceSpec,
                 ) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    AiSummaryCard(
-                        aiSummary = aiSummary,
-                        onTimestampClick = onTimestampClick,
-                        onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary,
-                    )
-                }
-            }
-        } else if (videoAiSummaryEntryEnabled && aiSummaryPrompt != null) {
-            item {
-                TabletVideoInfoStaggeredItem(
-                    visible = entranceVisible,
-                    index = 3,
-                    spec = entranceSpec,
-                ) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    AiSummaryPromptCard(
-                        promptState = aiSummaryPrompt,
-                        onActionClick = onRetryAiSummary,
-                    )
-                }
-            }
-        }
-
-        // 5. 视频笔记
-        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
-            item {
-                TabletVideoInfoStaggeredItem(
-                    visible = entranceVisible,
-                    index = 4,
-                    spec = entranceSpec,
-                ) {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    VideoNoteCard(
-                        noteState = videoNoteState,
-                        isLoggedIn = isLoggedIn,
-                        onCreateOrEditClick = onOpenVideoNoteEditor,
-                        onRetryClick = onRetryVideoNote,
-                        onDeleteClick = onDeleteVideoNoteClick,
-                        onShareClick = onShareVideoNote,
-                        onPublicNoteClick = onPublicVideoNoteClick,
-                        defaultCollapsed = videoNoteDefaultCollapsed,
+                    VideoSupplementEntryRow(
+                        showAiSummary = showAiSummaryEntry,
+                        showNote = showNoteEntry,
+                        onAiSummaryClick = { showAiSummarySheet = true },
+                        onNoteClick = { showNoteListSheet = true },
                     )
                 }
             }
@@ -1590,6 +1557,7 @@ private fun ScrollableVideoInfoSection(
                 )
             }
         }
+
 
         // 6. 更多推荐 (水平滚动)。大屏右栏已有相关推荐 Tab 时不再重复。
         if (showRelatedVideos && relatedVideos.isNotEmpty()) {
@@ -1699,6 +1667,37 @@ private fun ScrollableVideoInfoSection(
         }
         }
     }
+
+    AiSummarySheet(
+        visible = showAiSummarySheet,
+        aiSummary = aiSummary,
+        promptState = aiSummaryPrompt,
+        onDismiss = { showAiSummarySheet = false },
+        onTimestampClick = onTimestampClick,
+        onRetry = onRetryAiSummary,
+        onCreateNoteDraft = {
+            showAiSummarySheet = false
+            onCreateNoteDraftFromAiSummary()
+        }
+    )
+
+    VideoNoteListSheet(
+        visible = showNoteListSheet,
+        noteState = videoNoteState,
+        isLoggedIn = isLoggedIn,
+        onDismiss = { showNoteListSheet = false },
+        onCreateOrEditClick = {
+            showNoteListSheet = false
+            onOpenVideoNoteEditor()
+        },
+        onRetryClick = onRetryVideoNote,
+        onDeleteClick = {
+            showNoteListSheet = false
+            onDeleteVideoNoteClick()
+        },
+        onShareClick = onShareVideoNote,
+        onPublicNoteClick = onPublicVideoNoteClick
+    )
 }
 
 @Composable

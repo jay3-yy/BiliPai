@@ -57,6 +57,7 @@ fun AiSummaryCard(
     aiSummary: AiSummaryData?,
     onTimestampClick: ((Long) -> Unit)? = null,
     onCreateNoteDraftClick: (() -> Unit)? = null,
+    defaultExpanded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (!hasAiSummaryContent(aiSummary)) return
@@ -65,7 +66,7 @@ fun AiSummaryCard(
     val collapsedPreview = remember(modelResult.summary, modelResult.outline) {
         modelResult.summary.takeIf { it.isNotBlank() } ?: "查看分段总结和时间点"
     }
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(defaultExpanded) }
     val useMiuix = LocalAppUiStyle.current == AppUiStyle.MIUIX
     val horizontalPadding = if (useMiuix) 12.dp else 16.dp
     val containerColor = MaterialTheme.colorScheme.surfaceContainerLow

@@ -138,9 +138,9 @@ import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActions
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionState
-import com.android.purebilibili.feature.video.ui.section.AiSummaryCard
-import com.android.purebilibili.feature.video.ui.section.AiSummaryPromptCard
-import com.android.purebilibili.feature.video.ui.section.VideoNoteCard
+import com.android.purebilibili.feature.video.ui.section.AiSummarySheet
+import com.android.purebilibili.feature.video.ui.section.VideoNoteListSheet
+import com.android.purebilibili.feature.video.ui.section.VideoSupplementEntryRow
 import com.android.purebilibili.feature.video.ui.section.VideoNoteDeleteConfirmDialog
 import com.android.purebilibili.feature.video.ui.section.VideoNoteEditorSheet
 import com.android.purebilibili.feature.video.ui.section.shouldShowAiSummaryEntry
@@ -1000,33 +1000,49 @@ private fun CinemaVideoIntroSection(
                 onTagClick = onSearchKeywordClick
             )
         }
-        if (shouldShowAiSummaryEntry(
+        val showAiSummaryEntry = videoAiSummaryEntryEnabled &&
+            (shouldShowAiSummaryEntry(
                 aiSummary = success.aiSummary,
-                isAiSummaryEntryEnabled = videoAiSummaryEntryEnabled
-            )
-        ) {
-            AiSummaryCard(
-                aiSummary = success.aiSummary,
-                onCreateNoteDraftClick = onCreateNoteDraftFromAiSummary
-            )
-        } else if (videoAiSummaryEntryEnabled && success.aiSummaryPrompt != null) {
-            AiSummaryPromptCard(
-                promptState = success.aiSummaryPrompt,
-                onActionClick = onRetryAiSummary
-            )
-        }
-        if (shouldShowVideoNoteCard(videoNoteEnabled)) {
-            VideoNoteCard(
-                noteState = success.videoNoteState,
-                isLoggedIn = success.isLoggedIn,
-                onCreateOrEditClick = onOpenVideoNoteEditor,
-                onRetryClick = onRetryVideoNote,
-                onDeleteClick = onDeleteVideoNoteClick,
-                onShareClick = onShareVideoNote,
-                onPublicNoteClick = onPublicVideoNoteClick,
-                defaultCollapsed = videoNoteDefaultCollapsed
-            )
-        }
+                isAiSummaryEntryEnabled = true
+            ) || success.aiSummaryPrompt != null)
+        val showNoteEntry = shouldShowVideoNoteCard(videoNoteEnabled)
+        var showAiSummarySheet by remember { mutableStateOf(false) }
+        var showNoteListSheet by remember { mutableStateOf(false) }
+        VideoSupplementEntryRow(
+            showAiSummary = showAiSummaryEntry,
+            showNote = showNoteEntry,
+            onAiSummaryClick = { showAiSummarySheet = true },
+            onNoteClick = { showNoteListSheet = true }
+        )
+        AiSummarySheet(
+            visible = showAiSummarySheet,
+            aiSummary = success.aiSummary,
+            promptState = success.aiSummaryPrompt,
+            onDismiss = { showAiSummarySheet = false },
+            onTimestampClick = null,
+            onRetry = onRetryAiSummary,
+            onCreateNoteDraft = {
+                showAiSummarySheet = false
+                onCreateNoteDraftFromAiSummary()
+            }
+        )
+        VideoNoteListSheet(
+            visible = showNoteListSheet,
+            noteState = success.videoNoteState,
+            isLoggedIn = success.isLoggedIn,
+            onDismiss = { showNoteListSheet = false },
+            onCreateOrEditClick = {
+                showNoteListSheet = false
+                onOpenVideoNoteEditor()
+            },
+            onRetryClick = onRetryVideoNote,
+            onDeleteClick = {
+                showNoteListSheet = false
+                onDeleteVideoNoteClick()
+            },
+            onShareClick = onShareVideoNote,
+            onPublicNoteClick = onPublicVideoNoteClick
+        )
     }
 }
 
