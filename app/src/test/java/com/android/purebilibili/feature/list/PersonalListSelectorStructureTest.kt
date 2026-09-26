@@ -8,15 +8,18 @@ import kotlin.test.assertTrue
 class PersonalListSelectorStructureTest {
 
     @Test
-    fun favoriteFolderSelector_reusesPageBackdropForLiquidSurface() {
+    fun favoriteFolderList_showsFoldersAsCardsInsteadOfChipSelector() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt")
-        val selector = source.substringAfter("private fun FavoriteFolderSelector(")
-            .substringBefore("AppDropdownMenu(")
-        assertTrue(source.contains("backdrop = commonListChromeBackdrop,"))
-        assertTrue(selector.contains("BottomBarMatchedReusableLiquidDock("))
-        assertTrue(selector.contains("reuseEnabled = true"))
-        assertTrue(selector.contains("backdrop = backdrop"))
-        assertTrue(selector.contains("color = if (liquidChromeActive) Color.Transparent else"))
+        val listSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/list/FavoriteFolderCardList.kt",
+        )
+
+        // PiliPlus 结构：收藏夹以卡片列表呈现，chip 选择器退役
+        assertFalse(source.contains("FavoriteFolderSelector("))
+        assertTrue(source.contains("FavoriteFolderCardList("))
+        assertTrue(listSource.contains("fun FavoriteFolderCardList("))
+        assertTrue(listSource.contains("aspectRatio(16f / 10f)"))
+        assertTrue(listSource.contains("个内容"))
     }
 
     @Test
@@ -51,21 +54,16 @@ class PersonalListSelectorStructureTest {
     }
 
     @Test
-    fun favoriteFolderNavigation_usesSelectorAndProgrammaticPagerOnly() {
+    fun favoriteFolderNavigation_routesToFolderDetailPage() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt",
         )
-        val pagerSection = source
-            .substringAfter("} else when (favoriteContentMode) {")
-            .substringAfter("FavoriteContentMode.PAGER ->")
-            .substringBefore("FavoriteContentMode.SINGLE_FOLDER ->")
 
-        assertTrue(source.contains("FavoriteFolderSelector("))
-        assertTrue(source.contains("AppDropdownMenu("))
+        // 收藏夹卡片点击进入独立收藏夹详情页（SeasonSeriesDetail type=favorite）
+        assertTrue(source.contains("onFavoriteFolderClick?.invoke("))
+        assertTrue(source.contains("resolveFavoriteFolderMediaId(folder)"))
         assertFalse(source.contains("FavoriteFolderSummary("))
         assertFalse(source.contains("selectedValue = favoriteBrowseSection"))
-        assertTrue(pagerSection.contains("userScrollEnabled = false"))
-        assertFalse(pagerSection.contains("verticalPriorityHorizontalPagerSwipe"))
     }
 
     @Test

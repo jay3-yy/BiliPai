@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.space
 import android.app.Application
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.data.model.response.FavFolder
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.FavoriteRepository
 import com.android.purebilibili.feature.list.BaseListViewModel
@@ -188,9 +189,63 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         }
     }
     
+    // ---- 收藏夹详情批量管理（对齐 PiliPlus fav_detail）----
+
+    private val _transferFolders = MutableStateFlow<List<FavFolder>>(emptyList())
+    val transferFolders = _transferFolders.asStateFlow()
+
+    private val _isManagingState = MutableStateFlow(false)
+    val isManagingState = _isManagingState.asStateFlow()
+
+    /** 加载复制/移动的目标收藏夹列表（排除当前收藏夹）。 */
+    fun loadTransferFolders() {
+        if (!isFavoriteDetail || id == 0L) return
+        viewModelScope.launch {
+            val folders = FavoriteRepository.getFavFolders(mid).getOrNull().orEmpty()
+            _transferFolders.value = folders.filter { it.id != id }
+        }
+    }
+
+    /** 批量取消收藏（移除所选内容），成功后刷新列表。 */
+    fun removeFavoriteResources(resourceIds: Set<Long>) {
+        if (!isFavoriteDetail || id == 0L || resourceIds.isEmpty()) return
+        viewModelScope.launch {
+            _isManagingState.value = true
+            try {
+                FavoriteRepository.removeResources(id, resourceIds).onSuccess { loadData() }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isManagingState.value = false
+            }
+        }
+    }
+
+    /** 批量复制/移动所选内容到目标收藏夹，移动成功后刷新列表。 */
+    fun copyOrMoveFavoriteResources(resourceIds: Set<Long>, targetMediaId: Long, copy: Boolean) {
+        if (!isFavoriteDetail || id == 0L || resourceIds.isEmpty()) return
+        viewModelScope.launch {
+            _isManagingState.value = true
+            try {
+                FavoriteRepository.copyOrMoveResources(
+                    sourceMediaId = id,
+                    targetMediaId = targetMediaId,
+                    mid = mid,
+                    resourceIds = resourceIds,
+                    copy = copy,
+                ).onSuccess {
+                    if (!copy) loadData()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isManagingState.value = false
+            }
+        }
+    }
+
     // Supports loading more pages
-    fun loadMore() {
-        if (isLoadingMore || !hasMore) return
+    fun loadMore() {        if (isLoadingMore || !hasMore) return
         
         viewModelScope.launch {
             isLoadingMore = true

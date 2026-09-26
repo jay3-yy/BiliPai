@@ -39,6 +39,7 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
 import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
@@ -145,8 +146,6 @@ internal fun PersonalMediaCardFrame(
                         }
                     },
                 )
-            }
-
             }
         }
     }

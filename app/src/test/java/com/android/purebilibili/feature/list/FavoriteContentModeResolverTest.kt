@@ -33,14 +33,17 @@ class FavoriteContentModeResolverTest {
     }
 
     @Test
-    fun favoriteHeaderUsesFolderSelectorWithoutOwnedSubscribedSegmentedRow() {
+    fun favoriteVideoTabShowsFolderCardsWithSubscribedEntry() {
         val listSource = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt"
         )
+        val cardListSource = loadSource(
+            "app/src/main/java/com/android/purebilibili/feature/list/FavoriteFolderCardList.kt"
+        )
 
-        assertTrue(listSource.contains("FavoriteFolderSelector("))
-        assertTrue(listSource.contains("text = \"追更（订阅）\""))
-        assertTrue(listSource.contains("onSubscribedSelected"))
+        assertTrue(listSource.contains("FavoriteFolderCardList("))
+        assertTrue(cardListSource.contains("订阅收藏夹"))
+        assertTrue(cardListSource.contains("onSubscribedClick"))
         assertFalse(listSource.contains("selectedValue = favoriteBrowseSection"))
         assertFalse(listSource.contains("FavoriteFolderSummary("))
         assertFalse(listSource.contains("AppSegmentOption(FavoriteBrowseSection.OWNED"))

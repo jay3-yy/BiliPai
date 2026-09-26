@@ -15,8 +15,6 @@ import com.android.purebilibili.core.ui.components.AppCard
 import com.android.purebilibili.core.ui.components.AppCardDefaults
 import com.android.purebilibili.core.ui.components.AppCardShape
 import com.android.purebilibili.core.ui.components.AppCardVariant
-import com.android.purebilibili.core.ui.components.AppDropdownMenu
-import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
 import com.android.purebilibili.core.ui.components.AppFilterChip
 import com.android.purebilibili.core.ui.components.AppWindowAction
 import com.android.purebilibili.core.ui.components.AppWindowActionMenu
@@ -74,7 +72,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -129,7 +126,6 @@ import com.android.purebilibili.core.ui.AppScaffold
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.feature.home.LocalHomeScrollOffset
-import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.resolveGlobalWallpaperChromeColor
 
@@ -213,6 +209,16 @@ internal fun resolveFavoritePlayAllItems(
     return candidateItems.filter { !it.isCollectionResource && it.bvid.isNotBlank() }
 }
 
+/** 将详情页选中的渲染键映射回可操作的收藏资源 id（aid），供批量移除/复制/移动使用。 */
+internal fun resolveFavoriteDetailResourceIds(
+    items: List<VideoItem>,
+    keys: Set<String>,
+    keyOf: (VideoItem) -> String,
+): Set<Long> = items
+    .filter { keyOf(it) in keys }
+    .mapNotNull { video -> video.aid.takeIf { it > 0L } }
+    .toSet()
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CommonListScreen(
@@ -247,6 +253,7 @@ fun CommonListScreen(
     }
     val primaryGridState = rememberLazyGridState()
     val subscribedFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val favoriteFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val favoritePagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.grid.LazyGridState>() }
     val historyPagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.grid.LazyGridState>() }
 
@@ -318,6 +325,28 @@ fun CommonListScreen(
     var showHistoryBatchDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var showHistoryClearConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var pendingHistorySingleDeleteKey by rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
+
+    // 收藏夹详情页（SeasonSeriesDetail type=favorite）多选管理状态，对齐 PiliPlus fav_detail
+    val isFavoriteDetailPage = seasonSeriesDetailViewModel?.isFavoriteDetail == true
+    val favoriteDetailRenderKey: (VideoItem) -> String = { video -> video.bvid.ifBlank { video.id.toString() } }
+    var isFavoriteDetailBatchMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var selectedFavoriteDetailKeys by rememberSaveable { androidx.compose.runtime.mutableStateOf(setOf<String>()) }
+    var showFavoriteDetailRemoveConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var pendingFavoriteDetailTransferCopy by rememberSaveable { androidx.compose.runtime.mutableStateOf<Boolean?>(null) }
+    var selectedFavoriteDetailTransferFolderId by rememberSaveable { androidx.compose.runtime.mutableStateOf<Long?>(null) }
+    var pendingFavoriteDetailRemoveKeys by rememberSaveable { androidx.compose.runtime.mutableStateOf<Set<String>?>(null) }
+    LaunchedEffect(state.items, isFavoriteDetailBatchMode, isFavoriteDetailPage) {
+        if (!isFavoriteDetailPage) return@LaunchedEffect
+        val validKeys = state.items
+            .map(favoriteDetailRenderKey)
+            .filter { it.isNotBlank() }
+            .toSet()
+        selectedFavoriteDetailKeys = selectedFavoriteDetailKeys.filter { it in validKeys }.toSet()
+        if (isFavoriteDetailBatchMode && state.items.isEmpty()) {
+            isFavoriteDetailBatchMode = false
+            selectedFavoriteDetailKeys = emptySet()
+        }
+    }
     // 历史与收藏页面支持随全局顶栏收起设置协同折叠搜索栏/标题栏
     val supportsCollapsibleCommonListHeader = (historyViewModel != null || favoriteViewModel != null) &&
         homeSettings.homeHeaderCollapseMode.hasAnyCollapse
@@ -529,23 +558,19 @@ fun CommonListScreen(
     val commonListBottomPadding = LocalBottomBarContentPadding.current
     val activeCommonListScrollState = remember(
         favoriteViewModel,
-        favoriteContentMode,
+        favoriteSection,
         isSubscribedBrowse,
-        pagerState.currentPage,
         historyViewModel,
         historyPagerState.currentPage,
         primaryGridState,
         subscribedFolderListState,
-        favoritePagerGridStates.size,
+        favoriteFolderListState,
         historyPagerGridStates.size
     ) {
         {
             when {
                 isSubscribedBrowse -> CommonListScrollState.List(subscribedFolderListState)
-                favoriteViewModel != null && favoriteContentMode == FavoriteContentMode.PAGER -> {
-                    favoritePagerGridStates[pagerState.currentPage]?.let(CommonListScrollState::Grid)
-                        ?: CommonListScrollState.Grid(primaryGridState)
-                }
+                favoriteViewModel != null -> CommonListScrollState.List(favoriteFolderListState)
                 historyViewModel != null -> {
                     historyPagerGridStates[historyPagerState.currentPage]?.let(CommonListScrollState::Grid)
                         ?: CommonListScrollState.Grid(primaryGridState)
@@ -910,10 +935,7 @@ fun CommonListScreen(
     val loadingChromeContent = when {
         favoriteViewModel != null && isSearchDestination && searchQuery.isNotBlank() ->
             favoriteSearchUiState.isLoading && favoriteSearchUiState.items.isEmpty()
-        favoriteContentMode == FavoriteContentMode.PAGER ->
-            selectedFolderUiState.isLoading && selectedFolderUiState.items.isEmpty()
-        favoriteContentMode == FavoriteContentMode.SINGLE_FOLDER ->
-            singleFolderUiState.isLoading && singleFolderUiState.items.isEmpty()
+        favoriteViewModel != null -> state.isLoading && foldersState.isEmpty()
         else -> state.isLoading && state.items.isEmpty()
     }
     val commonListChromeSource = if (isProgressiveTopBlurEnabled || liquidGlassEnabled) {
@@ -1151,139 +1173,30 @@ fun CommonListScreen(
                             }
                         }
                     )
-                } else when (favoriteContentMode) {
-                    FavoriteContentMode.PAGER -> {
-                        val favoriteVm = requireNotNull(favoriteViewModel)
-                        // Personal-list pages use explicit controls for horizontal navigation.
-                        // Keeping this pager programmatic avoids competing with predictive back
-                        // and with filter/folder controls in the collapsing header.
-                        LaunchedEffect(selectedFolderIndex, pagerState.pageCount) {
-                            if (pagerState.pageCount > 0) {
-                                val targetPage = selectedFolderIndex.coerceIn(
-                                    minimumValue = 0,
-                                    maximumValue = pagerState.pageCount - 1,
-                                )
-                                if (!hasSyncedFavoritePager) {
-                                    pagerState.scrollToPage(targetPage)
-                                    hasSyncedFavoritePager = true
-                                } else if (pagerState.currentPage != targetPage) {
-                                    // Cap intermediate folder traversal so distant switches
-                                    // only animate the final window instead of every folder.
-                                    resolveFavoriteFolderSwitchPreJumpPage(
-                                        currentPage = pagerState.currentPage,
-                                        targetPage = targetPage,
-                                    )?.let { preJumpPage ->
-                                        pagerState.scrollToPage(
-                                            preJumpPage.coerceIn(0, pagerState.pageCount - 1)
-                                        )
-                                    }
-                                    animatePagerSelection(pagerState, targetPage)
-                                }
-                            }
-                        }
-
-                        HorizontalPager(
-                            state = pagerState,
-                            userScrollEnabled = false,
-                            modifier = Modifier.fillMaxSize(),
-                            beyondViewportPageCount = 0,
-                        ) { page ->
-                            // 获取当前页面的状态
-                            val folderUiState by favoriteVm.getFolderUiState(page).collectAsStateWithLifecycle()
-
-                            // 确保数据加载
-                            LaunchedEffect(page) {
-                                favoriteVm.loadFolder(page)
-                            }
-
-                            // 渲染通用列表内容 (复用下方逻辑，提取为组件)
-                            CommonListContent(
-                                items = folderUiState.items,
-                                isLoading = folderUiState.isLoading,
-                                error = folderUiState.error,
-                                searchQuery = searchQuery,
-                                columns = personalListColumns,
-                                isFavoritePersonalList = true,
-                                favoriteBatchMode = isFavoriteBatchMode && page == selectedFolderIndex,
-                                favoriteSelectedResourceIds = selectedFavoriteResourceIds,
-                                onFavoriteToggleSelect = toggleFavoriteResourceSelection,
-                                onFavoriteLongPress = enterFavoriteBatchMode,
-                                spacing = spacing.medium,
-                                padding = PaddingValues(top = headerHeightDp, bottom = commonListBottomPadding),
-                                scrollUnderHeader = commonListScrollUnderHeader,
-                                cardAnimationEnabled = homeSettings.cardAnimationEnabled,
-                                cardTransitionEnabled = homeSettings.cardTransitionEnabled,
-                                cardMotionTier = cardMotionTier,
-                                showOnlineCount = showOnlineCount,
-                                videoCardAppearance = videoCardAppearance,
-                                onVideoClick = { bvid, cid, coverUrl, isVertical ->
-                                    playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl, page, false)
-                                },
-                                onCollectionClick = onCollectionClick,
-                                onRetry = { favoriteVm.retryFolder(page) },
-                                onLoadMore = { favoriteVm.loadMoreForFolder(page) },
-                                onUnfavorite = if (folderUiState.canRemoveItems) {
-                                    { video -> favoriteVm.removeVideo(video) }
-                                } else {
-                                    null
-                                },
-                                onUpClick = onUpClick,
-                                gridState = favoritePagerGridStates.getOrPut(page) {
-                                    androidx.compose.foundation.lazy.grid.LazyGridState()
-                                },
-                                pinchEnabled = pinchToZoomColumnsEnabled,
-                                pinchBounds = pinchColumnBounds,
-                                onPinchColumnsChange = onPinchColumnsChange,
-                                onPinchColumnsEnd = onPinchColumnsEnd,
+                } else if (favoriteViewModel != null) {
+                    // PiliPlus 结构：收藏视频 Tab 以收藏夹卡片列表呈现，点击进入收藏夹详情
+                    FavoriteFolderCardList(
+                        folders = filterFavoriteFoldersByQuery(foldersState, searchQuery),
+                        subscribedFoldersCount = subscribedFoldersState.size,
+                        searchQuery = searchQuery,
+                        padding = PaddingValues(top = headerHeightDp, bottom = commonListBottomPadding),
+                        transitionEnabled = favoriteCollectionSharedTransitionEnabled,
+                        onFolderClick = { folder ->
+                            onFavoriteFolderClick?.invoke(
+                                resolveFavoriteFolderMediaId(folder),
+                                folder.mid,
+                                folder.title,
+                                folder.upper?.name.orEmpty()
                             )
-                        }
-                    }
-
-                    FavoriteContentMode.SINGLE_FOLDER -> {
-                        val favoriteVm = requireNotNull(favoriteViewModel)
-                        val folderUiState by favoriteVm.getFolderUiState(0).collectAsStateWithLifecycle()
-                        LaunchedEffect(favoriteVm) {
-                            favoriteVm.loadFolder(0)
-                        }
-                        CommonListContent(
-                            items = folderUiState.items,
-                            isLoading = folderUiState.isLoading,
-                            error = folderUiState.error,
-                            searchQuery = searchQuery,
-                            columns = personalListColumns,
-                            isFavoritePersonalList = true,
-                            favoriteBatchMode = isFavoriteBatchMode,
-                            favoriteSelectedResourceIds = selectedFavoriteResourceIds,
-                            onFavoriteToggleSelect = toggleFavoriteResourceSelection,
-                            onFavoriteLongPress = enterFavoriteBatchMode,
-                            spacing = spacing.medium,
-                            padding = PaddingValues(top = headerHeightDp, bottom = commonListBottomPadding),
-                            scrollUnderHeader = commonListScrollUnderHeader,
-                            cardAnimationEnabled = homeSettings.cardAnimationEnabled,
-                            cardTransitionEnabled = homeSettings.cardTransitionEnabled,
-                            cardMotionTier = cardMotionTier,
-                            showOnlineCount = showOnlineCount,
-                            videoCardAppearance = videoCardAppearance,
-                            onVideoClick = { bvid, cid, coverUrl, _ ->
-                                playFavoriteVideo(folderUiState.items, bvid, cid, coverUrl, 0, false)
-                            },
-                            onCollectionClick = onCollectionClick,
-                            onRetry = { favoriteVm.retryFolder(0) },
-                            onLoadMore = { favoriteVm.loadMoreForFolder(0) },
-                            onUnfavorite = if (folderUiState.canRemoveItems) {
-                                { video -> favoriteVm.removeVideo(video) }
-                            } else {
-                                null
-                            },
-                            onUpClick = onUpClick,
-                            gridState = primaryGridState,
-                            pinchEnabled = pinchToZoomColumnsEnabled,
-                            pinchBounds = pinchColumnBounds,
-                            onPinchColumnsChange = onPinchColumnsChange,
-                            onPinchColumnsEnd = onPinchColumnsEnd,
-                        )
-                    }
-
+                        },
+                        onSubscribedClick = {
+                            favoriteBrowseSection = FavoriteBrowseSection.SUBSCRIBED
+                            isFavoriteBatchMode = false
+                            selectedFavoriteResourceIds = emptySet()
+                            searchQuery = ""
+                        },
+                    )
+                } else when (favoriteContentMode) {
                     FavoriteContentMode.BASE_LIST -> if (historyViewModel != null) {
                         HorizontalPager(
                             state = historyPagerState,
@@ -1408,10 +1321,14 @@ fun CommonListScreen(
                                     CommonListLoadMoreOwner.NONE -> Unit
                                 }
                             },
-                            onUnfavorite = if (favoriteViewModel != null) {
-                                { favoriteViewModel.removeVideo(it) }
-                            } else null,
-                            onUpClick = if (!isHistoryBatchMode) {
+                            onUnfavorite = when {
+                                favoriteViewModel != null -> ({ favoriteViewModel.removeVideo(it) })
+                                isFavoriteDetailPage && !isFavoriteDetailBatchMode -> ({ video ->
+                                    pendingFavoriteDetailRemoveKeys = setOf(favoriteDetailRenderKey(video))
+                                })
+                                else -> null
+                            },
+                            onUpClick = if (!isHistoryBatchMode && !isFavoriteDetailBatchMode) {
                                 onUpClick
                             } else {
                                 null
@@ -1420,16 +1337,33 @@ fun CommonListScreen(
                             hasMoreSearchResults = likedVideosHasMore,
                             isLoadingMoreSearchResults = likedVideosIsLoadingMore,
                             historyDeleteSession = null,
-                            historyBatchMode = false,
-                            historySelectedKeys = emptySet(),
-                            resolveHistoryItemKey = { video -> video.bvid.ifBlank { video.id.toString() } },
+                            historyBatchMode = isFavoriteDetailPage && isFavoriteDetailBatchMode,
+                            historySelectedKeys = if (isFavoriteDetailPage) selectedFavoriteDetailKeys else emptySet(),
+                            resolveHistoryItemKey = favoriteDetailRenderKey,
                             resolveHistoryLookupKey = null,
                             resolveHistoryItem = null,
-                            onHistoryLongDelete = null,
+                            onHistoryLongDelete = if (isFavoriteDetailPage) {
+                                { key ->
+                                    if (!isFavoriteDetailBatchMode) {
+                                        isFavoriteDetailBatchMode = true
+                                        selectedFavoriteDetailKeys = key.takeIf { it.isNotBlank() }?.let(::setOf).orEmpty()
+                                    }
+                                }
+                            } else null,
                             onHistoryDelete = null,
                             onHistoryAddToWatchLater = null,
-                            onHistoryDissolveComplete = null,
-                            onHistoryToggleSelect = null,
+                            onHistoryDissolveComplete = if (isFavoriteDetailPage) ({ }) else null,
+                            onHistoryToggleSelect = if (isFavoriteDetailPage) {
+                                { key ->
+                                    if (key.isNotBlank()) {
+                                        selectedFavoriteDetailKeys = if (key in selectedFavoriteDetailKeys) {
+                                            selectedFavoriteDetailKeys - key
+                                        } else {
+                                            selectedFavoriteDetailKeys + key
+                                        }
+                                    }
+                                }
+                            } else null,
                             gridState = primaryGridState,
                             pinchEnabled = pinchToZoomColumnsEnabled,
                             pinchBounds = pinchColumnBounds,
@@ -1441,7 +1375,7 @@ fun CommonListScreen(
             }
 
             // 2. 顶层：悬浮顶栏 (使用 onGloballyPositioned 测量高度)
-            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode
+            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode || isFavoriteDetailBatchMode
             val exitFavoriteBatchMode: () -> Unit = {
                 isFavoriteBatchMode = false
                 selectedFavoriteResourceIds = emptySet()
@@ -1450,8 +1384,16 @@ fun CommonListScreen(
                 isHistoryBatchMode = false
                 selectedHistoryKeys = emptySet()
             }
+            val exitFavoriteDetailBatchMode: () -> Unit = {
+                isFavoriteDetailBatchMode = false
+                selectedFavoriteDetailKeys = emptySet()
+            }
             androidx.activity.compose.BackHandler(enabled = isBatchActionMode) {
-                if (isFavoriteBatchMode) exitFavoriteBatchMode() else exitHistoryBatchMode()
+                when {
+                    isFavoriteBatchMode -> exitFavoriteBatchMode()
+                    isHistoryBatchMode -> exitHistoryBatchMode()
+                    else -> exitFavoriteDetailBatchMode()
+                }
             }
             BiliPaiImmersiveTopBar(
                 backdrop = commonListChromeBackdrop,
@@ -1481,6 +1423,7 @@ fun CommonListScreen(
                         title = when {
                             isFavoriteBatchMode -> "已选: ${selectedFavoriteResourceIds.size}"
                             isHistoryBatchMode -> "已选: ${selectedHistoryKeys.size}"
+                            isFavoriteDetailBatchMode -> "已选: ${selectedFavoriteDetailKeys.size}"
                             else -> state.title
                         },
                         modifier = Modifier.favoriteCollectionSharedBounds(
@@ -1494,7 +1437,11 @@ fun CommonListScreen(
                             AppIconButton(
                                 onClick = {
                                     if (isBatchActionMode) {
-                                        if (isFavoriteBatchMode) exitFavoriteBatchMode() else exitHistoryBatchMode()
+                                        when {
+                                            isFavoriteBatchMode -> exitFavoriteBatchMode()
+                                            isHistoryBatchMode -> exitHistoryBatchMode()
+                                            else -> exitFavoriteDetailBatchMode()
+                                        }
                                     } else {
                                         onBack()
                                     }
@@ -1736,6 +1683,52 @@ fun CommonListScreen(
                                     }
                                 }
                             }
+                            if (isFavoriteDetailPage && isFavoriteDetailBatchMode) {
+                                val detailVm = requireNotNull(seasonSeriesDetailViewModel)
+                                val detailKeys = state.items
+                                    .map(favoriteDetailRenderKey)
+                                    .filter { it.isNotBlank() }
+                                    .toSet()
+                                val detailAllSelected = detailKeys.isNotEmpty() &&
+                                    selectedFavoriteDetailKeys.containsAll(detailKeys)
+                                AppTextButton(
+                                    onClick = {
+                                        selectedFavoriteDetailKeys =
+                                            if (detailAllSelected) emptySet() else detailKeys
+                                    }
+                                ) {
+                                    AppText(if (detailAllSelected) "取消全选" else "全选")
+                                }
+                                AppTextButton(
+                                    enabled = selectedFavoriteDetailKeys.isNotEmpty() && !detailVm.isManagingState.value,
+                                    onClick = {
+                                        pendingFavoriteDetailTransferCopy = true
+                                        selectedFavoriteDetailTransferFolderId = null
+                                        detailVm.loadTransferFolders()
+                                    },
+                                ) {
+                                    AppText("复制")
+                                }
+                                AppTextButton(
+                                    enabled = selectedFavoriteDetailKeys.isNotEmpty() && !detailVm.isManagingState.value,
+                                    onClick = {
+                                        pendingFavoriteDetailTransferCopy = false
+                                        selectedFavoriteDetailTransferFolderId = null
+                                        detailVm.loadTransferFolders()
+                                    },
+                                ) {
+                                    AppText("移动")
+                                }
+                                AppTextButton(
+                                    enabled = selectedFavoriteDetailKeys.isNotEmpty() && !detailVm.isManagingState.value,
+                                    onClick = { showFavoriteDetailRemoveConfirm = true },
+                                ) {
+                                    AppText(
+                                        "移除",
+                                        color = MaterialTheme.colorScheme.error,
+                                    )
+                                }
+                            }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent,
@@ -1858,32 +1851,6 @@ fun CommonListScreen(
                             }
                         }
                         Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
-                    }
-
-                    if (
-                        favoriteViewModel != null &&
-                        favoriteSection == FavoriteSection.VIDEO &&
-                        (foldersState.isNotEmpty() || subscribedFoldersState.isNotEmpty())
-                    ) {
-                        FavoriteFolderSelector(
-                            backdrop = commonListChromeBackdrop,
-                            folders = foldersState,
-                            selectedFolderIndex = selectedFolderIndex,
-                            selectedFolderItems = selectedFolderUiState.items,
-                            subscribedSelected = isSubscribedBrowse,
-                            layout = favoriteHeaderLayout,
-                            onFolderSelected = { index ->
-                                favoriteBrowseSection = FavoriteBrowseSection.OWNED
-                                favoriteViewModel.switchFolder(index)
-                                searchQuery = ""
-                            },
-                            onSubscribedSelected = {
-                                favoriteBrowseSection = FavoriteBrowseSection.SUBSCRIBED
-                                isFavoriteBatchMode = false
-                                selectedFavoriteResourceIds = emptySet()
-                                searchQuery = ""
-                            },
-                        )
                     }
 
                     if (historyViewModel != null) {
@@ -2045,6 +2012,41 @@ fun CommonListScreen(
                 columns = pinchListColumns,
                 modifier = Modifier.align(Alignment.Center),
             )
+
+            // 收藏夹详情页：PiliPlus 式播放全部 extended FAB
+            if (isFavoriteDetailPage && !isFavoriteDetailBatchMode &&
+                state.items.any { it.bvid.isNotBlank() }
+            ) {
+                com.android.purebilibili.core.ui.components.AppFloatingActionButton(
+                    onClick = {
+                        state.items.firstOrNull { it.bvid.isNotBlank() }?.let { first ->
+                            playFavoriteVideo(
+                                state.items,
+                                first.bvid,
+                                first.cid,
+                                first.pic,
+                                null,
+                                false,
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
+                            bottom = commonListBottomPadding + AppSpacingTokens.Medium,
+                        ),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppIcon(rememberAppPlayIcon(), contentDescription = null)
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+                        AppText("播放全部")
+                    }
+                }
+            }
         }
     }
 
@@ -2344,206 +2346,126 @@ fun CommonListScreen(
             }
         )
     }
-}
 
-@Composable
-private fun FavoriteFolderSelector(
-    folders: List<com.android.purebilibili.data.model.response.FavFolder>,
-    selectedFolderIndex: Int,
-    selectedFolderItems: List<com.android.purebilibili.data.model.response.VideoItem>,
-    subscribedSelected: Boolean,
-    layout: CommonListFavoriteHeaderLayout,
-    onFolderSelected: (Int) -> Unit,
-    onSubscribedSelected: () -> Unit,
-    modifier: Modifier = Modifier,
-    backdrop: top.yukonga.miuix.kmp.blur.Backdrop? = null,
-) {
-    val selectedFolder = folders.getOrNull(selectedFolderIndex)
-    if (selectedFolder == null && !subscribedSelected) return
-    var expanded by remember { androidx.compose.runtime.mutableStateOf(false) }
-    val selectedPreviewCover = remember(selectedFolder?.cover, selectedFolderItems, subscribedSelected) {
-        selectedFolder?.takeUnless { subscribedSelected }?.let { folder ->
-            resolveFavoriteFolderPreviewCover(
-                folder = folder,
-                loadedItems = selectedFolderItems,
-            )
-        }
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(
-                start = layout.folderChipRowHorizontalPaddingDp.dp,
-                end = layout.folderChipRowHorizontalPaddingDp.dp,
-                top = layout.folderChipRowTopPaddingDp.dp,
-            ),
-    ) {
-        BottomBarMatchedReusableLiquidDock(
-            shape = AppShapes.container(ContainerLevel.Pill),
-            modifier = Modifier.fillMaxWidth(),
-            backdrop = backdrop,
-            reuseEnabled = true,
-            useNeutralLiquidContainer = true,
-        ) { liquidChromeActive ->
-            AppSurface(
-                onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = AppShapes.container(ContainerLevel.Pill),
-                color = if (liquidChromeActive) Color.Transparent else
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)
-                        .padding(horizontal = layout.folderChipHorizontalPaddingDp.dp),
-                    horizontalArrangement = Arrangement.spacedBy(layout.folderChipSpacingDp.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    FavoriteFolderChipPreview(
-                        coverUrl = selectedPreviewCover,
-                        selected = true,
-                    )
-                    AppText(
-                        text = if (subscribedSelected) "追更（订阅）" else selectedFolder?.title.orEmpty(),
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    AppText(
-                        text = if (subscribedSelected) "1/${folders.size + 1}" else
-                            "${selectedFolderIndex + 2}/${folders.size + 1}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    AppIcon(
-                        imageVector = rememberAppChevronDownIcon(),
-                        contentDescription = "切换收藏夹",
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-        AppDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(min = 280.dp, max = 420.dp),
-        ) {
-            AppDropdownMenuItem(
-                text = {
-                    AppText(
-                        text = "追更（订阅）",
-                        fontWeight = if (subscribedSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                },
-                leadingIcon = {
-                    AppIcon(
-                        imageVector = rememberAppBookmarkIcon(),
-                        contentDescription = null,
-                        tint = if (subscribedSelected) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                },
-                trailingIcon = if (subscribedSelected) {
-                    {
-                        AppIcon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = "当前为追更",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                } else {
-                    null
-                },
-                onClick = {
-                    expanded = false
-                    onSubscribedSelected()
-                },
-            )
-            folders.forEachIndexed { index, folder ->
-                val isSelected = !subscribedSelected && index == selectedFolderIndex
-                AppDropdownMenuItem(
-                    text = {
-                        AppText(
-                            text = folder.title,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        )
-                    },
-                    leadingIcon = {
-                        FavoriteFolderChipPreview(
-                            coverUrl = resolveFavoriteFolderPreviewCover(
-                                folder = folder,
-                                loadedItems = if (isSelected) selectedFolderItems else emptyList(),
-                            ),
-                            selected = isSelected,
-                        )
-                    },
-                    trailingIcon = if (isSelected) {
-                        {
-                            AppIcon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = "当前收藏夹",
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-                    } else {
-                        null
-                    },
+    if (showFavoriteDetailRemoveConfirm && seasonSeriesDetailViewModel != null) {
+        AppAlertDialog(
+            onDismissRequest = { showFavoriteDetailRemoveConfirm = false },
+            title = { AppText("取消收藏") },
+            text = { AppText("确认取消收藏所选的 ${selectedFavoriteDetailKeys.size} 个内容吗？") },
+            confirmButton = {
+                AppTextButton(
                     onClick = {
-                        expanded = false
-                        onFolderSelected(index)
-                    },
-                )
+                        seasonSeriesDetailViewModel.removeFavoriteResources(
+                            resolveFavoriteDetailResourceIds(state.items, selectedFavoriteDetailKeys, favoriteDetailRenderKey)
+                        )
+                        selectedFavoriteDetailKeys = emptySet()
+                        isFavoriteDetailBatchMode = false
+                        showFavoriteDetailRemoveConfirm = false
+                    }
+                ) {
+                    AppText("移除")
+                }
+            },
+            dismissButton = {
+                AppTextButton(onClick = { showFavoriteDetailRemoveConfirm = false }) {
+                    AppText("取消")
+                }
             }
-        }
+        )
     }
-}
 
-@Composable
-private fun FavoriteFolderChipPreview(
-    coverUrl: String?,
-    selected: Boolean
-) {
-    Box(
-        modifier = Modifier
-            .size(AppSpacingTokens.ExtraLarge)
-            .clip(AppShapes.container(ContainerLevel.Chip))
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f)
+    pendingFavoriteDetailRemoveKeys?.let { removeKeys ->
+        AppAlertDialog(
+            onDismissRequest = { pendingFavoriteDetailRemoveKeys = null },
+            title = { AppText("取消收藏") },
+            text = { AppText("要取消收藏吗?") },
+            confirmButton = {
+                AppTextButton(
+                    onClick = {
+                        seasonSeriesDetailViewModel?.removeFavoriteResources(
+                            resolveFavoriteDetailResourceIds(state.items, removeKeys, favoriteDetailRenderKey)
+                        )
+                        pendingFavoriteDetailRemoveKeys = null
+                    }
+                ) {
+                    AppText("确认取消")
                 }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        if (coverUrl != null) {
-            AsyncImage(
-                model = FormatUtils.fixImageUrl(coverUrl),
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            AppIcon(
-                imageVector = rememberAppFolderIcon(),
-                contentDescription = null,
-                modifier = Modifier.size(AppSpacingTokens.Large - AppSpacingTokens.Micro / 2),
-                tint = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            dismissButton = {
+                AppTextButton(onClick = { pendingFavoriteDetailRemoveKeys = null }) {
+                    AppText("取消")
                 }
+            }
+        )
+    }
+
+    pendingFavoriteDetailTransferCopy?.let { copy ->
+        val detailTransferVm = seasonSeriesDetailViewModel
+        if (detailTransferVm != null) {
+            AppAlertDialog(
+                onDismissRequest = { pendingFavoriteDetailTransferCopy = null },
+                title = { AppText(if (copy) "复制到收藏夹" else "移动到收藏夹") },
+                text = {
+                    val transferFolders by detailTransferVm.transferFolders.collectAsStateWithLifecycle()
+                    if (transferFolders.isEmpty()) {
+                        AppText("正在加载收藏夹…")
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.heightIn(max = 360.dp),
+                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                        ) {
+                            items(
+                                items = transferFolders,
+                                key = { folder -> folder.id },
+                            ) { folder ->
+                                AppSurface(
+                                    onClick = { selectedFavoriteDetailTransferFolderId = folder.id },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = AppShapes.container(ContainerLevel.Card),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f),
+                                ) {
+                                    AppText(
+                                        text = folder.title,
+                                        modifier = Modifier.padding(AppSpacingTokens.Medium),
+                                        color = if (selectedFavoriteDetailTransferFolderId == folder.id) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    AppTextButton(
+                        enabled = selectedFavoriteDetailTransferFolderId != null,
+                        onClick = {
+                            selectedFavoriteDetailTransferFolderId?.let { targetId ->
+                                detailTransferVm.copyOrMoveFavoriteResources(
+                                    resourceIds = resolveFavoriteDetailResourceIds(
+                                        state.items,
+                                        selectedFavoriteDetailKeys,
+                                        favoriteDetailRenderKey
+                                    ),
+                                    targetMediaId = targetId,
+                                    copy = copy,
+                                )
+                            }
+                            selectedFavoriteDetailKeys = emptySet()
+                            isFavoriteDetailBatchMode = false
+                            pendingFavoriteDetailTransferCopy = null
+                        },
+                    ) {
+                        AppText("确认")
+                    }
+                },
+                dismissButton = {
+                    AppTextButton(onClick = { pendingFavoriteDetailTransferCopy = null }) {
+                        AppText("取消")
+                    }
+                },
             )
         }
     }
