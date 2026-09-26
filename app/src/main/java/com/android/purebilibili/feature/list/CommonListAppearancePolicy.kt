@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.list
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
-import com.android.purebilibili.core.store.HomeHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.resolveHomeHeaderBlurEnabled
 import com.android.purebilibili.core.ui.AppTopChromePolicy
@@ -61,22 +60,17 @@ internal fun shouldUseFloatingCommonListHeaderChrome(
 ): Boolean = (isHistoryPage || isFavoritePage) && globalLiquidGlassReuseEnabled
 
 /**
- * 顶部搜索栏已隐藏时，「仅收起搜索」不再有搜索行可折，改为收起标题栏，
- * 避免标题一直钉在顶部跟内容叠在一起。
+ * 通用列表页折叠位移上限：独立折叠开关开启后，标题/搜索/标签 Dock
+ * 收起至状态栏安全区下方；「始终显示」则不产生折叠位移。
  */
 internal fun resolveCommonListHeaderMaxCollapsePxForMode(
-    homeHeaderMode: HomeHeaderCollapseMode,
-    topSearchBarVisible: Boolean,
-    searchBarHeightPx: Int,
+    collapseMode: CommonListHeaderCollapseMode,
     fixedTopBarHeightPx: Int,
     statusBarHeightPx: Float,
-): Float {
-    val collapseSearchOnly = homeHeaderMode == HomeHeaderCollapseMode.SEARCH_ONLY && topSearchBarVisible
-    return if (collapseSearchOnly) {
-        searchBarHeightPx.toFloat().coerceAtLeast(0f)
-    } else {
-        (fixedTopBarHeightPx.toFloat() - statusBarHeightPx).coerceAtLeast(0f)
-    }
+): Float = if (collapseMode == CommonListHeaderCollapseMode.ALWAYS_VISIBLE) {
+    0f
+} else {
+    (fixedTopBarHeightPx.toFloat() - statusBarHeightPx).coerceAtLeast(0f)
 }
 
 internal fun resolveCommonListViewportTopPadding(headerHeight: Dp): Dp {
@@ -120,17 +114,6 @@ internal fun resolveCommonListHeaderOffsetPx(
         return currentOffsetPx.coerceIn(-maxCollapsePx, 0f)
     }
     return (currentOffsetPx + scrollDeltaYPx).coerceIn(-maxCollapsePx, 0f)
-}
-
-/** Maps the shared home/header switch onto history, favorites, and other common lists. */
-internal fun resolveCommonListHeaderCollapseModeForScreen(
-    homeHeaderMode: HomeHeaderCollapseMode,
-): CommonListHeaderCollapseMode {
-    return if (homeHeaderMode.hasAnyCollapse) {
-        CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY
-    } else {
-        CommonListHeaderCollapseMode.ALWAYS_VISIBLE
-    }
 }
 
 internal fun resolveCommonListHeaderOffsetAfterContentScroll(

@@ -51,7 +51,6 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned // [New]
 import com.android.purebilibili.core.store.SettingsManager // [New]
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
-import com.android.purebilibili.core.store.HomeHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeDurationStyle
 import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.ui.blur.BlurStyles // [New]
@@ -351,9 +350,10 @@ fun CommonListScreen(
             selectedFavoriteDetailKeys = emptySet()
         }
     }
-    // 历史与收藏页面支持随全局顶栏收起设置协同折叠搜索栏/标题栏
-    val supportsCollapsibleCommonListHeader = (historyViewModel != null || favoriteViewModel != null) &&
-        homeSettings.homeHeaderCollapseMode.hasAnyCollapse
+    // 通用列表页（历史/收藏/最近点赞）使用独立的折叠开关，与首页顶栏折叠解耦
+    val supportsCollapsibleCommonListHeader = (
+        historyViewModel != null || favoriteViewModel != null || likedVideosViewModel != null
+    ) && homeSettings.commonListHeaderCollapseMode != CommonListHeaderCollapseMode.ALWAYS_VISIBLE
     val visibleHistoryItems = remember(state.items, historyContentFilter, historyViewModel) {
         if (historyViewModel == null) {
             state.items
@@ -600,9 +600,11 @@ fun CommonListScreen(
         }
             .distinctUntilChanged()
             .collect { (firstVisibleItem, scrollOffset) ->
+                val listCollapseMode = homeSettings.commonListHeaderCollapseMode
                 if (firstVisibleItem == 0 && scrollOffset < 100) {
                     setBottomBarVisible(true)
-                    commonListTabsVisible = true
+                    commonListTabsVisible =
+                        listCollapseMode != CommonListHeaderCollapseMode.ALWAYS_VISIBLE
                 } else {
                     val isScrollingDown = when {
                         firstVisibleItem > lastFirstVisibleItem -> true
@@ -617,11 +619,17 @@ fun CommonListScreen(
 
                     if (isScrollingDown) {
                         setBottomBarVisible(false)
-                        commonListTabsVisible = false
                     }
                     if (isScrollingUp) {
                         setBottomBarVisible(true)
-                        commonListTabsVisible = true
+                    }
+                    when (listCollapseMode) {
+                        CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY -> commonListTabsVisible = false
+                        CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL -> {
+                            if (isScrollingDown) commonListTabsVisible = false
+                            if (isScrollingUp) commonListTabsVisible = true
+                        }
+                        CommonListHeaderCollapseMode.ALWAYS_VISIBLE -> Unit
                     }
                 }
                 lastFirstVisibleItem = firstVisibleItem
@@ -745,9 +753,7 @@ fun CommonListScreen(
     }
     var commonListHeaderOffsetPx by remember { mutableFloatStateOf(0f) }
     var commonListHeaderSettleJob by remember { androidx.compose.runtime.mutableStateOf<Job?>(null) }
-    val commonListHeaderCollapseMode = resolveCommonListHeaderCollapseModeForScreen(
-        homeHeaderMode = homeSettings.homeHeaderCollapseMode,
-    )
+    val commonListHeaderCollapseMode = homeSettings.commonListHeaderCollapseMode
     val commonListHeaderCollapseEnabled = supportsCollapsibleCommonListHeader &&
         commonListHeaderCollapseMode != CommonListHeaderCollapseMode.ALWAYS_VISIBLE
     val statusBarHeightPx = with(LocalDensity.current) {
@@ -755,9 +761,7 @@ fun CommonListScreen(
     }
     val commonListHeaderMaxCollapsePx = if (supportsCollapsibleCommonListHeader) {
         resolveCommonListHeaderMaxCollapsePxForMode(
-            homeHeaderMode = homeSettings.homeHeaderCollapseMode,
-            topSearchBarVisible = !hideListTopSearchBar,
-            searchBarHeightPx = searchBarHeightPx,
+            collapseMode = commonListHeaderCollapseMode,
             fixedTopBarHeightPx = fixedTopBarHeightPx,
             statusBarHeightPx = statusBarHeightPx,
         )
@@ -1963,46 +1967,24 @@ fun CommonListScreen(
                         ?: constraints.minWidth
                     if (supportsCollapsibleCommonListHeader && placeables.isNotEmpty()) {
                         val titleHeight = placeables.first().height
-                        val isSearchOnly = homeSettings.homeHeaderCollapseMode == HomeHeaderCollapseMode.SEARCH_ONLY &&
-                            !hideListTopSearchBar
-                        if (isSearchOnly && placeables.size >= 2 && commonListHeaderMaxCollapsePx > 0f) {
-                            // 仅折叠搜索：标题栏停留在顶部，搜索行上滑折叠，标签页停在标题栏下方
-                            val searchBarHeight = placeables[1].height
-                            val collapseFraction = (-commonListHeaderOffsetPx / commonListHeaderMaxCollapsePx).coerceIn(0f, 1f)
-                            val searchBarOffset = titleHeight - (collapseFraction * searchBarHeight).toInt()
-                            val searchBarVisibleHeight = (searchBarHeight * (1f - collapseFraction)).toInt()
-                            val dockTop = titleHeight + searchBarVisibleHeight
-                            val remainingHeight = placeables.drop(2).sumOf { it.height }
-                            val height = (dockTop + remainingHeight).coerceIn(constraints.minHeight, constraints.maxHeight)
-                            layout(width, height) {
-                                placeables[0].placeRelative(0, 0)
-                                placeables[1].placeRelative(0, searchBarOffset)
-                                var y = dockTop
-                                placeables.drop(2).forEach { placeable ->
-                                    placeable.placeRelative(0, y)
-                                    y += placeable.height
-                                }
-                            }
-                        } else {
-                            val floatingDockHeight = placeables.drop(1).sumOf { it.height }
-                            val titleOffset = resolveHistoryTitleOffsetPx(
-                                headerOffsetPx = commonListHeaderOffsetPx,
-                                maxCollapsePx = commonListHeaderMaxCollapsePx,
-                                titleHeightPx = titleHeight,
-                            )
-                            val floatingDockTop = (titleHeight + commonListHeaderOffsetPx)
-                                .coerceAtLeast(statusBarHeightPx)
-                                .toInt()
-                            val height = (floatingDockTop + floatingDockHeight)
-                                .coerceIn(constraints.minHeight, constraints.maxHeight)
-                            layout(width, height) {
-                                // 标题完整离场；Dock 仍只上移到状态栏安全区下方。
-                                placeables.first().placeRelative(0, titleOffset)
-                                var y = floatingDockTop
-                                placeables.drop(1).forEach { placeable ->
-                                    placeable.placeRelative(0, y)
-                                    y += placeable.height
-                                }
+                        val floatingDockHeight = placeables.drop(1).sumOf { it.height }
+                        val titleOffset = resolveHistoryTitleOffsetPx(
+                            headerOffsetPx = commonListHeaderOffsetPx,
+                            maxCollapsePx = commonListHeaderMaxCollapsePx,
+                            titleHeightPx = titleHeight,
+                        )
+                        val floatingDockTop = (titleHeight + commonListHeaderOffsetPx)
+                            .coerceAtLeast(statusBarHeightPx)
+                            .toInt()
+                        val height = (floatingDockTop + floatingDockHeight)
+                            .coerceIn(constraints.minHeight, constraints.maxHeight)
+                        layout(width, height) {
+                            // 标题完整离场；Dock 仍只上移到状态栏安全区下方。
+                            placeables.first().placeRelative(0, titleOffset)
+                            var y = floatingDockTop
+                            placeables.drop(1).forEach { placeable ->
+                                placeable.placeRelative(0, y)
+                                y += placeable.height
                             }
                         }
                     } else {

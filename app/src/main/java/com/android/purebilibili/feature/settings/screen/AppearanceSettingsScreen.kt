@@ -57,6 +57,7 @@ import com.android.purebilibili.core.store.DEFAULT_BACK_TO_TOP_BUTTON_ENABLED
 import com.android.purebilibili.core.store.HomeDurationStyle
 import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
+import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectScope
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.ThemeModeRoleOverrides
@@ -474,6 +475,16 @@ fun AppearanceSettingsContent(
     val showPgcTimeline by SettingsManager
         .getShowPgcTimeline(context)
         .collectAsStateWithLifecycle(initialValue = true)
+    val commonListHeaderCollapseMode by SettingsManager
+        .getCommonListHeaderCollapseMode(context)
+        .collectAsStateWithLifecycle(initialValue = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL)
+    val commonListHeaderCollapseOptions = remember {
+        listOf(
+            AppSegmentOption(CommonListHeaderCollapseMode.ALWAYS_VISIBLE, "始终显示"),
+            AppSegmentOption(CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL, "上滑时显示"),
+            AppSegmentOption(CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY, "仅回顶显示")
+        )
+    }
     val homeUpBadgesVisible by SettingsManager
         .getHomeUpBadgesVisible(context)
         .collectAsStateWithLifecycle(initialValue = true)
@@ -1802,6 +1813,26 @@ fun AppearanceSettingsContent(
                                 viewModel.toggleHeaderCollapse(value)
                             },
                             iconTint = com.android.purebilibili.core.theme.iOSTeal
+                        )
+
+                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                        SettingsSingleChoicePreference(
+                            title = "列表页顶栏折叠",
+                            subtitle = when (commonListHeaderCollapseMode) {
+                                CommonListHeaderCollapseMode.ALWAYS_VISIBLE ->
+                                    "历史、收藏、最近点赞等列表页顶栏保持展开"
+                                CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL ->
+                                    "向下浏览时折叠搜索与分类标签，反向上滑时恢复"
+                                CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY ->
+                                    "向下浏览时折叠搜索与分类标签，回到顶部时恢复"
+                            },
+                            options = commonListHeaderCollapseOptions,
+                            selectedValue = commonListHeaderCollapseMode,
+                            onSelectionChange = { mode ->
+                                scope.launch {
+                                    SettingsManager.setCommonListHeaderCollapseMode(context, mode)
+                                }
+                            }
                         )
 
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))

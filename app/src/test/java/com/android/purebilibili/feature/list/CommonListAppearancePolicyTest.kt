@@ -51,13 +51,11 @@ class CommonListAppearancePolicyTest {
     }
 
     @Test
-    fun hiddenTopSearch_collapsesTitleEvenWhenSearchOnlyMode() {
+    fun collapsibleListModesCollapseTitleDownToStatusBarInset() {
         assertEquals(
-            40f,
+            0f,
             resolveCommonListHeaderMaxCollapsePxForMode(
-                homeHeaderMode = com.android.purebilibili.core.store.HomeHeaderCollapseMode.SEARCH_ONLY,
-                topSearchBarVisible = true,
-                searchBarHeightPx = 40,
+                collapseMode = com.android.purebilibili.core.store.CommonListHeaderCollapseMode.ALWAYS_VISIBLE,
                 fixedTopBarHeightPx = 96,
                 statusBarHeightPx = 24f,
             ),
@@ -65,9 +63,7 @@ class CommonListAppearancePolicyTest {
         assertEquals(
             72f,
             resolveCommonListHeaderMaxCollapsePxForMode(
-                homeHeaderMode = com.android.purebilibili.core.store.HomeHeaderCollapseMode.SEARCH_ONLY,
-                topSearchBarVisible = false,
-                searchBarHeightPx = 0,
+                collapseMode = com.android.purebilibili.core.store.CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL,
                 fixedTopBarHeightPx = 96,
                 statusBarHeightPx = 24f,
             ),
@@ -75,9 +71,7 @@ class CommonListAppearancePolicyTest {
         assertEquals(
             72f,
             resolveCommonListHeaderMaxCollapsePxForMode(
-                homeHeaderMode = com.android.purebilibili.core.store.HomeHeaderCollapseMode.BOTH,
-                topSearchBarVisible = false,
-                searchBarHeightPx = 0,
+                collapseMode = com.android.purebilibili.core.store.CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
                 fixedTopBarHeightPx = 96,
                 statusBarHeightPx = 24f,
             ),
