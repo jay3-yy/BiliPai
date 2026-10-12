@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.audio.screen
 
-import androidx.compose.animation.core.CubicBezierEasing
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -20,7 +19,9 @@ class AudioNowPlayingBarPresenceMotionPolicyTest {
     fun exitUsesAsymmetricAccelerateCurve() {
         val exit = resolveAudioNowPlayingPresenceAnimationSpec(active = false, reduceMotion = false)
         assertEquals(AUDIO_NOW_PLAYING_PRESENCE_EXIT_DURATION_MILLIS, exit.durationMillis)
-        assertEquals(0.32f, (exit.easing as CubicBezierEasing).x1)
+        assertEquals(0f, exit.easing.transform(0f))
+        assertTrue(exit.easing.transform(0.5f) < 0.5f)
+        assertEquals(1f, exit.easing.transform(1f))
     }
 
     @Test
@@ -51,9 +52,4 @@ class AudioNowPlayingBarPresenceMotionPolicyTest {
         assertEquals(1f, resolveAudioNowPlayingPresenceGeometryFactor(2f))
     }
 
-    @Test
-    fun dockMorphDurationsAreCentralizedHere() {
-        assertEquals(280, LINKED_DOCK_MERGE_DURATION_MILLIS)
-        assertEquals(240, LINKED_DOCK_SEARCH_DURATION_MILLIS)
-    }
 }

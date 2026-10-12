@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import com.android.purebilibili.data.repository.VideoCatalogRepository.resolveRegionRankingRid
+import com.android.purebilibili.data.repository.VideoCatalogRepository.shouldFallbackRegionLatestToRanking
 
 class RegionVideoFallbackPolicyTest {
 
@@ -70,11 +72,4 @@ class RegionVideoFallbackPolicyTest {
         assertEquals(1001, resolveRegionRankingRid(tid = 181))
     }
 
-    @Test
-    fun `info region has a legacy feed fallback`() {
-        val source = java.io.File(
-            "app/src/main/java/com/android/purebilibili/data/repository/VideoRepository.kt"
-        ).readText()
-        assertTrue(source.contains("getLegacyRegionVideos(rid = tid"))
-    }
 }

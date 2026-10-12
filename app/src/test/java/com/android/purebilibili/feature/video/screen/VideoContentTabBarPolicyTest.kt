@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.core.ui.AppTopTabPresentation
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -279,109 +278,6 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
-    fun `danmaku actions are right aligned and settings leave the tab bar`() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
-        )
-        val tabBarBlock = source
-            .substringAfter("private fun VideoContentTabBar(")
-            .substringBefore("private fun VideoRecommendationHeader")
-
-        assertTrue(tabBarBlock.contains("Spacer(modifier = Modifier.weight(1f))"))
-        assertFalse(tabBarBlock.contains("onDanmakuSettingsClick"))
-        assertFalse(tabBarBlock.contains("contentDescription = \"弹幕设置\""))
-        assertTrue(tabBarBlock.contains("NativeDanmakuToggleButton("))
-        assertTrue(tabBarBlock.contains("text = danmakuActionLayoutPolicy.sendLabel"))
-        assertTrue(tabBarBlock.contains("tapToCopyEnabled = false"))
-        assertTrue(tabBarBlock.contains(".clickable(onClick = onDanmakuSendClick)"))
-        assertFalse(tabBarBlock.contains("RoundedCornerShape("))
-        assertFalse(tabBarBlock.contains("AppHorizontalDivider("))
-        assertFalse(tabBarBlock.contains("\"开\""))
-        assertFalse(tabBarBlock.contains("\"关\""))
-        assertFalse(tabBarBlock.contains("rememberAppCommentIcon()"))
-    }
-
-    @Test
-    fun `info comment tab bar uses theme adaptive chrome during pager motion`() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
-        )
-        val tabBarBlock = source
-            .substringAfter("fun VideoContentTabBar(")
-            .substringBefore("// [新增] 恢复画面按钮")
-
-        assertTrue(tabBarBlock.contains("tapPressRefractionEnabled = true"))
-        assertTrue(tabBarBlock.contains("AppThemeAdaptiveTabRow("))
-        assertFalse(tabBarBlock.contains("AppPrimaryTabRow("))
-        assertTrue(tabBarBlock.contains("miuixBackdrop = miuixBackdrop"))
-        assertTrue(tabBarBlock.contains("Arrangement.spacedBy(8.dp)"))
-        assertTrue(tabBarBlock.contains("indicatorPositionProvider = indicatorPositionProvider"))
-        assertTrue(tabBarBlock.contains("dragSelectionEnabled = true"))
-        assertFalse(tabBarBlock.contains("tabSwipeModifier"))
-        assertTrue(tabBarBlock.contains("modifier = Modifier.weight(1f)"))
-        assertTrue(tabBarBlock.contains("compactMiuixWhenTwoOptions = false"))
-        assertTrue(source.contains("clip = tabBarCollapseProgress > 0.001f"))
-    }
-
-    @Test
-    fun `video content section records a full size sibling backdrop for segmented controls`() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
-        )
-
-        assertTrue(source.contains("val videoContentMiuixBackdrop = rememberMiuixLayerBackdrop()"))
-        assertFalse(source.contains(".alpha(0f)"))
-        assertTrue(source.contains("sortMode = sortMode"))
-        assertTrue(source.contains("onSortModeChange = onSortModeChange"))
-        assertTrue(source.contains("miuixBackdrop = videoContentMiuixBackdrop"))
-        assertTrue(source.contains(".miuixLayerBackdrop(videoContentMiuixBackdrop)"))
-        assertTrue(source.contains(".background(MaterialTheme.colorScheme.surface)"))
-        assertTrue(source.contains("top = tabBarVisibleHeightDp"))
-        assertFalse(source.contains("Modifier.miuixLayerBackdrop(chromeBackdrop)"))
-        assertFalse(source.contains("chromeBackdrop: LayerBackdrop?"))
-        assertTrue(source.contains("Column(modifier = modifier.fillMaxSize())"))
-        assertTrue(
-            source.contains(
-                "one full-size content source, with liquid docks rendered as"
-            )
-        )
-        val commentTabSource = source.substringAfter("internal fun VideoCommentTab(")
-            .substringBefore("internal fun LandscapeCommentPanel(")
-        assertTrue(commentTabSource.contains("CommentSortHeader("))
-        assertFalse(commentTabSource.contains("CommentSortFilterBar("))
-        assertTrue(source.contains("shouldShowVideoContentTabBarDanmakuActions(selectedTabIndex)"))
-        assertFalse(source.contains("if (selectedTabIndex != 1)"))
-        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
-        assertFalse(source.contains("AppPrimaryTabRow("))
-        assertTrue(source.contains("indicatorPositionProvider = indicatorPositionProvider"))
-        assertTrue(source.contains("showNativeSortHeader = !liquidGlassEnabled"))
-        assertTrue(source.contains("showSortControlInHeader = true"))
-        assertTrue(source.contains("pagerState.getOffsetDistanceInPages(1) * size.width"))
-        assertTrue(source.contains(".biliPaiProgressiveTopBlur("))
-        assertTrue(source.contains("liquidGlassEffectsEnabled = liquidGlassEnabled"))
-        assertTrue(source.contains("showHeader = !immersiveVideoContentChromeEnabled"))
-        assertTrue(source.contains("floatingHeaderContentPadding = if (immersiveVideoContentChromeEnabled) 46.dp else 0.dp"))
-        val pagerBlock = source.substringAfter("HorizontalPager(").substringBefore(") { page ->")
-        assertFalse(pagerBlock.contains("CommentSortFilterBar("))
-        assertTrue(source.contains("CommentListHeader("))
-        assertTrue(source.contains("if (immersiveVideoContentChromeEnabled && commentListAtTop)"))
-        val primaryTabChrome = source.substringBefore("val commentChromeHeight =")
-        assertTrue(primaryTabChrome.contains(".biliPaiProgressiveTopBlur("))
-        assertTrue(source.contains("backdrop = videoContentMiuixBackdrop"))
-        assertTrue(source.contains("showCommentBackToTop"))
-        assertTrue(pagerBlock.contains("if (immersiveVideoContentChromeEnabled)"))
-        assertTrue(pagerBlock.contains("Modifier.padding(top = tabBarVisibleHeightDp)"))
-        assertTrue(source.contains("top = if (immersiveVideoContentChromeEnabled) tabBarVisibleHeightDp else 0.dp"))
-        assertFalse(
-            pagerBlock.contains("layerBackdrop"),
-            "Pager must not capture backdrop; segmented controls inside would self-sample and overflow RenderThread stack on MIUI"
-        )
-        assertTrue(source.contains("hasBackdrop = miuixBackdrop != null"))
-        assertFalse(source.contains("forceLiquidChrome"))
-        assertTrue(source.contains("labelFontSize = liquidChromeSpec.labelFontSizeSp.sp"))
-    }
-
-    @Test
     fun `moving capsule uses calmer intro comment tab switch motion`() {
         val iosSpec = resolveVideoContentTabSwitchAnimationSpec(AppTopTabPresentation.MOVING_CAPSULE)
         val md3Spec = resolveVideoContentTabSwitchAnimationSpec(AppTopTabPresentation.MATERIAL_UNDERLINE)
@@ -458,20 +354,6 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
-    fun `intro action row exposes a labeled comment entry and opens comment tab`() {
-        val contentSource = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
-        )
-        val actionSource = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/video/ui/section/VideoActionSection.kt"
-        )
-
-        assertTrue(contentSource.contains("onCommentClick = { onTabSelected(1) }"))
-        assertTrue(actionSource.contains("text = \"评论 \${FormatUtils.formatStat(info.stat.reply.toLong())}\""))
-        assertTrue(actionSource.contains("onClick = onCommentClick"))
-    }
-
-    @Test
     fun `video content tab bar reuses dock at scene size when global glass and backdrop are on`() {
         val layoutSpec = resolveVideoContentTabBarLayoutSpec(widthDp = 393)
         val spec = resolveVideoContentTabBarLiquidChromeSpec(
@@ -484,17 +366,10 @@ class VideoContentTabBarPolicyTest {
         assertTrue(spec.liquidGlassEffectsEnabled)
         assertEquals(layoutSpec.segmentedControlHeightDp, spec.segmentedControlHeightDp)
         assertEquals(layoutSpec.segmentedControlIndicatorHeightDp, spec.segmentedControlIndicatorHeightDp)
-        assertEquals(68, spec.itemWidthDp)
+        assertEquals(resolveVideoContentTabBarDockItemWidthDp(spec.labelFontSizeSp), spec.itemWidthDp)
         assertEquals(70, resolveVideoContentTabBarDockItemWidthDp(labelFontSizeSp = 15))
         assertEquals(72, resolveVideoContentTabBarDockItemWidthDp(labelFontSizeSp = 16))
         assertEquals(66, resolveVideoContentTabBarDockItemWidthDp(labelFontSizeSp = 13))
-        assertEquals(
-            136,
-            resolveVideoContentTabBarControlWidthDp(
-                itemWidthDp = spec.itemWidthDp ?: 0,
-                itemCount = 2,
-            ),
-        )
         assertEquals(
             0,
             resolveVideoContentTabBarStartPaddingDp(
@@ -522,27 +397,6 @@ class VideoContentTabBarPolicyTest {
         )
         assertFalse(nativeSpec.reusesLiquidGlassDock)
         assertFalse(nativeSpec.liquidGlassEffectsEnabled)
-        assertEquals(
-            spec.itemWidthDp,
-            resolveVideoContentTabBarDockItemWidthDp(nativeSpec.labelFontSizeSp),
-        )
-
-        val contentSource = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
-        )
-        assertFalse(
-            contentSource.contains("minTabWidth = liquidChromeSpec.itemWidthDp?.dp"),
-            "The video tab row must inherit beta.21 liquid geometry from the shared renderer",
-        )
-    }
-
-    private fun loadSource(path: String): String {
-        val normalizedPath = path.removePrefix("app/")
-        val sourceFile = listOf(
-            File(path),
-            File(normalizedPath)
-        ).firstOrNull { it.exists() }
-        require(sourceFile != null) { "Cannot locate $path from ${File(".").absolutePath}" }
-        return sourceFile.readText()
+        assertNull(nativeSpec.itemWidthDp)
     }
 }

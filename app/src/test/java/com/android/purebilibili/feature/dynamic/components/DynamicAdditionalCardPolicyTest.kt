@@ -144,6 +144,6 @@ class DynamicAdditionalCardPolicyTest {
         assertEquals("https://www.bilibili.com/blackboard/reserve", card?.reserveActionJumpUrl)
         assertEquals("https://www.bilibili.com/blackboard/gift", card?.reserveDescriptionJumpUrl)
         assertEquals(false, card?.reserveButtonDisabled)
-        assertEquals(true, card?.subtitle.contains("预约后参与抽奖"))
+        assertEquals(true, card?.subtitle?.contains("预约后参与抽奖"))
     }
 }

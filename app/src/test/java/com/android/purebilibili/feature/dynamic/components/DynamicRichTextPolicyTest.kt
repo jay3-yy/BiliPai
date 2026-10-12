@@ -1,8 +1,8 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.getLinkAnnotations
-androidx.compose.ui.graphics.Color
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.RichTextNode
 import kotlin.test.Test
@@ -21,6 +21,13 @@ private fun AnnotatedString.firstLinkTagMatching(predicate: (String) -> Boolean)
 
 private fun AnnotatedString.firstLinkTag(prefix: String): String? =
     firstLinkTagMatching { it.startsWith(prefix) }
+    private fun AnnotatedString.firstLinkRange(prefix: String): AnnotatedString.Range<String>? =
+        getLinkAnnotations(0, length).firstNotNullOfOrNull { annotation ->
+            val tag = (annotation.item as? LinkAnnotation.Clickable)?.tag
+                ?: return@firstNotNullOfOrNull null
+            if (!tag.startsWith(prefix)) return@firstNotNullOfOrNull null
+            AnnotatedString.Range(tag.removePrefix(prefix), annotation.start, annotation.end)
+        }
 
 
     @Test
@@ -71,7 +78,10 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
 
         assertTrue(shouldRenderDynamicRichText(resolved))
         assertEquals("第一行\n第二行", resolved.text)
-        assertEquals("第一行\n\n第二行", resolved.rich_text_nodes.joinToString(separator = "") { it.text })
+        assertEquals(
+            resolved.text,
+            buildDynamicRichTextAnnotatedString(resolved, primaryColor = Color.Blue, textColor = Color.Black).text,
+        )
     }
 
     @Test
@@ -298,7 +308,7 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             textColor = Color.Black
         )
 
-        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
+        val annotation = annotated.firstLinkRange(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
 
         assertNotNull(annotation)
         assertEquals("946974", annotation.item)
@@ -324,7 +334,7 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             textColor = Color.Black,
         )
 
-        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX)
+        val annotation = assertNotNull(annotated.firstLinkRange(DYNAMIC_RICH_TEXT_LINK_TOPIC_ID_PREFIX))
 
         assertEquals("1314000", annotation.item)
         assertEquals("#新机来了!#", annotated.text.substring(annotation.start, annotation.end))
@@ -363,7 +373,7 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             textColor = Color.Black,
         )
 
-        val annotation = annotated.firstLinkTag(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)?.removePrefix(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX)
+        val annotation = assertNotNull(annotated.firstLinkRange(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX))
 
         assertEquals("前面的完整正文 @影视飓风 后续内容", annotated.text)
         assertEquals("946974", annotation.item)
@@ -453,7 +463,13 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             "https://i0.hdslb.com/bfs/emote/baofu.png",
             result.emojiUrlById["[豹富]"]
         )
-        assertTrue(result.annotatedString.hasInlineContent())
+        val emojiRanges = result.annotatedString.getStringAnnotations(0, result.annotatedString.length)
+            .filter { it.item in result.emojiUrlById }
+        assertEquals(2, emojiRanges.size)
+        assertEquals(
+            listOf("[豹富]", "[豹富]"),
+            emojiRanges.map { result.annotatedString.text.substring(it.start, it.end) },
+        )
     }
 
     @Test
@@ -472,7 +488,9 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             "https://i0.hdslb.com/bfs/emote/tv_doge.png",
             result.emojiUrlById["[tv_doge]"]
         )
-        assertTrue(result.annotatedString.hasInlineContent())
+        val emojiRanges = result.annotatedString.getStringAnnotations(0, result.annotatedString.length)
+            .filter { it.item == "[tv_doge]" }
+        assertEquals(listOf(3 to 12, 12 to 21), emojiRanges.map { it.start to it.end })
     }
 
     @Test
@@ -491,7 +509,9 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             "https://i0.hdslb.com/bfs/emote/doge_gold.png",
             result.emojiUrlById[token],
         )
-        assertTrue(result.annotatedString.hasInlineContent())
+        val emojiRanges = result.annotatedString.getStringAnnotations(0, result.annotatedString.length)
+            .filter { it.item == token }
+        assertEquals(listOf(6 to 15), emojiRanges.map { it.start to it.end })
     }
 
     @Test
@@ -518,8 +538,10 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
         )
 
         assertFalse(shouldUseDynamicRichTextNodes(desc))
-        assertTrue(result.annotatedString.text.startsWith("第一段\n第二段\n第三段"))
-        assertTrue(result.annotatedString.hasInlineContent())
+        assertEquals(desc.text, result.annotatedString.text)
+        val emojiRanges = result.annotatedString.getStringAnnotations(0, result.annotatedString.length)
+            .filter { it.item == "[豹富]" }
+        assertEquals(listOf(11 to 15), emojiRanges.map { it.start to it.end })
     }
 
     @Test
@@ -577,8 +599,13 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
             blockRichTextNodes = bodyNodes,
         )
 
-        assertEquals(bodyNodes, resolved?.rich_text_nodes)
-        assertEquals(12345L, resolveDynamicRichTextUserMid(resolved!!.rich_text_nodes.last()))
+        val richDesc = assertNotNull(resolved)
+        assertEquals(12345L, resolveDynamicRichTextUserMid(richDesc.rich_text_nodes.last()))
+        val rendered = buildDynamicRichTextAnnotatedString(richDesc, primaryColor = Color.Blue, textColor = Color.Black)
+        assertEquals("谢谢@叽米", rendered.text)
+        val mention = assertNotNull(rendered.firstLinkRange(DYNAMIC_RICH_TEXT_LINK_USER_PREFIX))
+        assertEquals("12345", mention.item)
+        assertEquals(2 to 5, mention.start to mention.end)
     }
 
     @Test
@@ -755,8 +782,3 @@ private fun AnnotatedString.firstLinkTag(prefix: String): String? =
     }
 }
 
-private fun androidx.compose.ui.text.AnnotatedString.hasInlineContent(): Boolean {
-    // Inline content uses a private annotation tag; non-empty emojiUrlById is asserted
-    // by callers. Here we only need a cheap presence signal for the built string.
-    return this.isNotEmpty()
-}

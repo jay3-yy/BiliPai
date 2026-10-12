@@ -1,7 +1,7 @@
 package com.android.purebilibili.core.ui.components
 
-import org.junit.Assert.assertEquals
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.Test
 
 class TabVisibilityPolicyTest {
     @Test

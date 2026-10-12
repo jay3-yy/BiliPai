@@ -271,6 +271,34 @@ gradlew.bat :ci-lint:test --rerun :app:lintDebug -Pbili.ciChecks=true --continue
 
 本独立分支没有再次执行已知阻塞的 app / design-system 测试任务，迁移前的 68 个行为用例结果不能作为本分支结果；未执行完整 `scripts/ci_quality.sh`、全量单元测试、APK 打包或设备帧耗时验证。验证器已运行不代表完整质量门已通过，远端状态以 PR checks 为准。
 
+### 2026-10-12 上游测试编译修复
+
+基于已合并歌词 / 动态图文及语义守卫的 `upstream/main`（`4103c7140`）建立独立测试修复分支。问题证据来自 [PR #898 远程失败日志](https://github.com/jay3-yy/BiliPai/actions/runs/38199034534)：app 测试源码涉及 18 个文件，design-system 涉及 2 个文件；检查器自身的 36 个用例通过，但测试编译及 587 项生产源码策略诊断使质量门失败。
+
+本次只修改测试、测试依赖及文档，不修改生产代码、内部符号可见性或 Lint 门禁：
+
+- 分区回退、搜索签名及评论 gRPC 分页内部策略用例迁到所属 core-data 模块，显式提供 Kotlin/Jupiter 与 JUnit 4/Vintage 运行依赖，避免仅编译成功却不发现测试。
+- 修复重复 package/import/class、过期 Compose 导入、AICU 时钟参数误绑定、设备传输构造器及 OkHttp Call 测试夹具接口。
+- 设备传输和 CDN 字节流测试使用 Robolectric / Android 35，执行真实 Android Base64 / Uri；不依赖 Android JVM 空桩或虚构适配器。
+- 删除源码片段、实现类型、显示措辞及旧几何默认值断言；保留字幕合并与过滤、同意与分页状态、搜索签名、链接点击范围、表情注释、CDN 字节完整性 / 回退 / 取消释放。首页布局改为测量值变化、窄容器边界及液态玻璃开关优先级验证，不重新钉住默认尺寸。
+
+Windows / `D:/Java/jdk-21`、gh 认证下多轮实际 Gradle 编译及定向测试的最终结果：
+
+| 模块 | 用例 | 结果 |
+| --- | --- | --- |
+| app | 310 | 全部通过，0 失败、0 错误、0 跳过 |
+| core-data | 11 | 全部通过，0 失败、0 错误、0 跳过 |
+| design-system | 20 | 全部通过，0 失败、0 错误、0 跳过 |
+
+最后一次 Gradle 命令退出 0；app 重新编译并执行测试，core-data / design-system 的未变更用例任务为 UP-TO-DATE，复用同分支前轮实际执行的报告。上表包含质量入口的 app 56 个及 design-system 12 个运行时行为用例，不代表全量测试通过。
+
+编译阻塞消除后的首轮 app 321 个用例中有 19 个失败：4 个 CDN Android Uri mock 失败；13 个首页旧几何默认值、布局及开关断言失败；2 个动态图文断言把换行节点拼接或 orig_text 空默认值当作契约。随后修复运行环境，移除失效实现断言，并从最终正文、点击目标 / 范围及可变测量值检查消费者行为；未改生产逻辑迎合旧预期。
+
+另外用 Java 直接调用本分支 Gradle 编译的生产 `buildSearchRecommendParams`，将结果消费为真实请求 URI：手机 token 使用 HD appkey、TV token 保持 TV appkey、Cookie-only 不发送 access_key，三种签名均符合预期。未发出实际网络请求，临时 smoke 脚本不进入仓库。
+
+本次未重跑已知失败的生产 Lint、完整质量脚本、全量单元测试、APK 打包、Android 界面或设备帧耗时。远程既有 587 项命中仍须独立处理：4 处分配位置确实在 graphicsLayer 回调中直接创建模糊效果且未缓存，但不是掉帧测量；样式命中含隐藏标签的 `0.sp` 及禁用阴影的 `0.dp` 等规范选择，不能全部解释为产品错误。存量规则如何接入硬门禁由维护者决定，本 PR 不生成 baseline、不新增豁免、不降级规则。
+
+
 按变更面选择最小验证集：
 
 ```bash

@@ -556,6 +556,8 @@ dependencies {
     // --- 12. Testing (测试框架) ---
     // JUnit 4 (兼容旧测试)
     testImplementation("junit:junit:4.13.2")
+    // Codec and CDN tests require real Android Base64/Uri, not returnDefaultValues stubs.
+    testImplementation("org.robolectric:robolectric:4.17")
     // 真实 org.json 实现：android.jar 的 org.json 在单测里是桩（returnDefaultValues 下
     // 静默返回空值），CommandDanmakuPolicy 等生产解析路径需要真实实现才能单测。
     testImplementation("org.json:json:20240303")

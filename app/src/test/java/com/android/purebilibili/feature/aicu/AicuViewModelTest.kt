@@ -39,7 +39,7 @@ class AicuViewModelTest {
     @Test fun `all query actions are blocked until visible five seconds and explicit acceptance`() = runTest(dispatcher) {
         val source = Source()
         val consent = Consent()
-        val vm = AicuViewModel(source, consent) { now }
+        val vm = AicuViewModel(source, consent, nowMs = { now })
         vm.initialize(2, AicuCategory.COMMENT)
         runCurrent()
         vm.setDisclaimerVisible(true)
@@ -80,7 +80,7 @@ class AicuViewModelTest {
     @Test fun `failed persistence never unlocks query and can be retried`() = runTest(dispatcher) {
         val source = Source()
         val consent = Consent(failSave = true)
-        val vm = AicuViewModel(source, consent) { now }
+        val vm = AicuViewModel(source, consent, nowMs = { now })
         vm.initialize(2, AicuCategory.COMMENT)
         runCurrent()
         vm.setDisclaimerVisible(true)
@@ -99,7 +99,7 @@ class AicuViewModelTest {
 
     @Test fun `accepted standalone entry waits for submission and filters are explicit`() = runTest(dispatcher) {
         val source = Source()
-        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION)) { now }
+        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION), nowMs = { now })
         vm.initialize(null, AicuCategory.COMMENT)
         runCurrent()
         assertTrue(source.queries.isEmpty())
@@ -122,7 +122,7 @@ class AicuViewModelTest {
 
     @Test fun `pagination failures retain content and rate limits gate every request`() = runTest(dispatcher) {
         val source = Source()
-        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION)) { now }
+        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION), nowMs = { now })
         vm.initialize(2, AicuCategory.COMMENT)
         runCurrent()
         source.fail = true
@@ -150,7 +150,7 @@ class AicuViewModelTest {
                 return AicuPage(query, emptyList(), 0, true)
             }
         }
-        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION)) { now }
+        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION), nowMs = { now })
         vm.initialize(2, AicuCategory.COMMENT)
         runCurrent()
         vm.editUid("3")
@@ -164,7 +164,7 @@ class AicuViewModelTest {
 
     @Test fun `cancel before acknowledgment cannot be bypassed by another event`() = runTest(dispatcher) {
         val source = Source()
-        val vm = AicuViewModel(source, Consent()) { now }
+        val vm = AicuViewModel(source, Consent(), nowMs = { now })
         vm.initialize(2, AicuCategory.COMMENT)
         runCurrent()
         vm.setDisclaimerVisible(true)
@@ -177,7 +177,7 @@ class AicuViewModelTest {
     }
 
     @Test fun `old consent version requires a new acknowledgment`() = runTest(dispatcher) {
-        val vm = AicuViewModel(Source(), Consent(AICU_DISCLAIMER_VERSION - 1)) { now }
+        val vm = AicuViewModel(Source(), Consent(AICU_DISCLAIMER_VERSION - 1), nowMs = { now })
         vm.initialize(2, AicuCategory.COMMENT)
         runCurrent()
         assertEquals(AicuConsentState.REQUIRED, vm.state.value.consent)
@@ -186,7 +186,7 @@ class AicuViewModelTest {
 
     @Test fun `consent loading in background defers the first contextual request until resume`() = runTest(dispatcher) {
         val source = Source()
-        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION)) { now }
+        val vm = AicuViewModel(source, Consent(AICU_DISCLAIMER_VERSION), nowMs = { now })
         vm.setForeground(false)
         vm.initialize(2, AicuCategory.COMMENT)
         runCurrent()

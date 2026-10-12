@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.video.viewmodel
 import com.android.purebilibili.data.model.response.ReplyCursor
 import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyItem
-import com.android.purebilibili.data.repository.CommentRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -341,25 +340,4 @@ class CommentPaginationPolicyTest {
         )
     }
 
-    @Test
-    fun `grpc paged request continues only with first page or cursor offset`() {
-        assertTrue(
-            CommentRepository.shouldTryGrpcPagedRequest(
-                page = 1,
-                paginationOffset = null
-            )
-        )
-        assertTrue(
-            CommentRepository.shouldTryGrpcPagedRequest(
-                page = 2,
-                paginationOffset = "next-offset"
-            )
-        )
-        assertFalse(
-            CommentRepository.shouldTryGrpcPagedRequest(
-                page = 2,
-                paginationOffset = null
-            )
-        )
-    }
 }

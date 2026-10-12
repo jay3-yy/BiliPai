@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.dynamic.components
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.getLinkAnnotations
 import com.android.purebilibili.data.model.response.DynamicDesc
 import com.android.purebilibili.data.model.response.RichTextNode
 import kotlin.test.Test
