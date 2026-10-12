@@ -3,9 +3,13 @@
 
 更新日志(ChangeLog)
 
+[修复] 评论、动态评论及动态详情覆盖图层复用已有 BlurRenderEffectCache，同一量化半径不再在 graphicsLayer 更新时重复创建 Android/Compose 模糊效果；保留半径计算、0.5px 启用阈值、API 31 判断及关闭时清空效果，缓存不写入 Snapshot 状态
+
+[验证] Robolectric 原生图形场景中，真实评论图层的 6 次正模糊更新复用 2 个效果实例，关闭及量化零值会清空效果；4 个缓存边界用例已接入 PerfGuard。拆分后的真实性能入口通过：57 个用例报告无失败，原生性能 Lint 零诊断，命令退出 0；未修改检查器、放宽门禁或测量设备帧耗时，详见 docs/wiki/QA.md
+
 [更改] CI 拆为 PerfGuard、Correctness 与 StylePolicy 报告，Build 复用统一 QualityChecks 工作流，不再重复执行整组守卫；性能检查不包含颜色、尺寸等设计规范，样式 CI profile 显式发布 warning，规则默认严重性不变，编译及检查器故障仍失败
 
-[验证] 真实性能入口的 53 个用例通过但仍有 4 处分配错误，正确性入口的 37 个用例通过，样式入口的 20 个用例通过并保留 447 个 warning；不代表整体 CI 或 APK 已通过。工作流校验修正无效的 run_started_at 上下文，发布证据改用实际 UTC 生成时间，详见 docs/wiki/QA.md
+[验证] CI 拆分候选（尚未加入模糊修复）的性能入口有 53 个用例通过但仍有 4 处分配错误，正确性入口的 37 个用例通过，样式入口的 20 个用例通过并保留 447 个 warning；不代表整体 CI 或 APK 已通过。工作流校验修正无效的 run_started_at 上下文，发布证据改用实际 UTC 生成时间，详见 docs/wiki/QA.md
 
 [修复] 样式语义验证器区分具名规格定义与 UI 使用位置，识别返回的 Palette / Spec / Policy / Geometry / Metrics / Padding 及规格默认参数；按已解析 API 角色识别零值，不将圆角重复报为尺寸，并修复泛型返回类型无类名时的检查器崩溃。尺寸规则统一为 BiliPaiHardcodedDimension，样式诊断归类为可用性而非性能问题，保留原 ERROR 门禁及既有豁免范围
 

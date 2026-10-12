@@ -4,12 +4,10 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
 import android.os.Build
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
+import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -508,6 +506,7 @@ fun DynamicDetailScreen(
                 )
 
                 val coveredBlurProgress = if (subReplyState.visible) subReplyCoveredBlurProgress else 0f
+                val coveredBlurEffectCache = remember { BlurRenderEffectCache() }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -520,11 +519,7 @@ fun DynamicDetailScreen(
                                     progress = coveredBlurProgress,
                                 )
                                 renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                    AndroidRenderEffect.createBlurEffect(
-                                        blurFrame.blurRadiusPx,
-                                        blurFrame.blurRadiusPx,
-                                        Shader.TileMode.CLAMP,
-                                    ).asComposeRenderEffect()
+                                    coveredBlurEffectCache.resolve(blurFrame.blurRadiusPx)
                                 } else {
                                     null
                                 }

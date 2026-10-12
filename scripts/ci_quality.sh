@@ -18,6 +18,7 @@ case "$MODE" in
         --tests 'com.android.purebilibili.lint.ModelStabilityDetectorTest'
       :app:lintDebug -Pbili.ciChecks=performance
       :app:testDebugUnitTest
+        --tests 'com.android.purebilibili.core.ui.transition.BlurRenderEffectCacheTest'
         --tests 'com.android.purebilibili.core.ui.performance.AppDisplayModePreferenceTest'
         --tests 'com.android.purebilibili.core.ui.performance.RuntimeVisualGuardTrackerTest'
       :design-system:testDebugUnitTest

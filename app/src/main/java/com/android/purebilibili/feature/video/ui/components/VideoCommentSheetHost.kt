@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -12,8 +10,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.ui.graphics.asComposeRenderEffect
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
+import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -719,6 +717,7 @@ fun VideoCommentSheetHost(
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (mainSheetVisible && hostContent != VideoCommentSheetHostContent.HIDDEN) {
                             val coveredBlurProgress = threadCoveredBlurProgress
+                            val coveredBlurEffectCache = remember { BlurRenderEffectCache() }
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -731,11 +730,7 @@ fun VideoCommentSheetHost(
                                                 progress = coveredBlurProgress,
                                             )
                                             renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                                AndroidRenderEffect.createBlurEffect(
-                                                    blurFrame.blurRadiusPx,
-                                                    blurFrame.blurRadiusPx,
-                                                    Shader.TileMode.CLAMP,
-                                                ).asComposeRenderEffect()
+                                                coveredBlurEffectCache.resolve(blurFrame.blurRadiusPx)
                                             } else {
                                                 null
                                             }

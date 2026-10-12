@@ -342,7 +342,48 @@ gradlew.bat :ci-lint:test --rerun :app:lintDebug -Pbili.ciChecks=true --continue
 
 工作流经 actionlint 1.7.12 校验，Shell 入口通过 `bash -n`。校验同时发现 Build 原有的 `github.run_started_at` 不是有效上下文字段，改为在既有发布证据脚本中生成实际 UTC 时间；已直接消费该脚本确认生成可解析的 UTC `generatedAt`，没有打包 APK。
 
-本次工作流与 job 名称变化；若维护者设置了旧 required-check 名称，需要同步分支保护，不在本 PR 中修改仓库保护设置。本地主题、模糊复用及缓存测试保留在独立分支，不加入 #899；未运行全量测试、设备视觉或帧耗时验证。
+本次工作流与 job 名称变化；若维护者设置了旧 required-check 名称，需要同步分支保护，不在本 PR 中修改仓库保护设置。CI 拆分提交本身未包含本地主题、模糊复用及缓存测试；随后追加的模糊修复见下节，主题仍不加入 #899。未运行全量测试、设备视觉或帧耗时验证。
+
+### 2026-10-12 评论覆盖图层的模糊效果复用（PR #899）
+
+以下保存职责拆分前的本地修复证据及拆分后的性能入口验证；旧阶段的 `bili.ciChecks=true` 已由上述两个明确 profile 替代，不再作为当前入口。
+
+在 `0df2ea5dc` 上建立 `fix/comment-blur-effect-reuse`，只处理 `CommentThreadNavigationBlur`、`VideoCommentSheetHost`、`DynamicCommentSheet`、`DynamicDetailScreen` 的重复效果创建。复用现有 `BlurRenderEffectCache`，不新增缓存框架或修改检查器：Modifier 工厂把缓存保留在图层回调外，三个 Composable 图层使用 `remember` 保留各自缓存。半径变化才替换当前效果；关闭仍将图层 `renderEffect` 设为 `null`。保持原半径计算/量化、`> 0.5px` 条件、Android API 31 判断及 `CLAMP` 模式，不改前景、模糊层级、尺寸或动画时长。
+
+修复前后用相同临时消费场景调用真实 Modifier 的 `graphicsLayer` 回调。Robolectric 4.17 / Android 35 的原生图形后端实际创建效果，观察器只记录图层赋值，不复制半径或缓存实现。6 次正模糊更新落在两档半径：修复前创建 6 个效果实例，期望 2 的断言失败；修复后只保留 2 个实例，断言通过。关闭时效果为 `null`；Android 30 场景不创建效果，也不读取进度提供器。观察器涉及私有 Modifier 回调访问，仅用于临时 smoke，已从源码移除，不作为永久实现细节测试。
+
+保留的 `BlurRenderEffectCacheTest` 使用真实 Android 效果检查同半径对象复用、半径变化替换单条缓存、零/负/非有限半径不暴露旧模糊，以及 Android 30 不支持效果的边界。4 个用例全部通过，0 失败、错误或跳过。
+
+```text
+gradlew.bat :app:testDebugUnitTest --tests *.CommentThreadBlurAllocationSmokeTest --tests *.BlurRenderEffectCacheTest :app:lintDebug -Pbili.ciChecks=true --continue --no-daemon --console=plain
+```
+
+该次命令实际重新编译 app 并执行 2 个临时消费场景及 4 个永久缓存用例，测试全部通过；原生 Lint 仍退出 1。含原有未提交主题修改的同口径报告由 441 项降为 437 项，`BiliPaiFrameBlurAllocation` 从 4 归零；其余为 dimension 369、color 6、motion 38、shape 8、surface 11、typography 5。没有模型或检查器故障诊断，未加入 baseline、增加豁免、降低严重性或改动样式参数。
+
+移除临时消费场景源码后，再次实际执行永久用例命令，重新编译测试并执行 4 个用例，全部通过，Gradle 退出 0：
+
+```text
+gradlew.bat :app:testDebugUnitTest --tests *.BlurRenderEffectCacheTest --no-daemon --console=plain
+```
+
+职责拆分后，在包含 `0c86ced3f` 的同一修复分支上验证当前性能入口；发布到 #899 前，暂时移出三处独立主题修改，并再次对仅含模糊修复的候选执行相同命令。`performance` 入口现在显式选择 `BlurRenderEffectCacheTest`，避免缓存边界回归只在手动筛选时执行。下表来自不含主题修改的发布候选：
+
+```bash
+bash scripts/ci_quality.sh performance
+```
+
+| 验证路径 | 当前实际结果 |
+| --- | --- |
+| 原生性能 Lint | 分析任务实际执行，SARIF 零诊断；分配、模型稳定性及检查器故障均为零 |
+| app 行为回归 | 实际执行 23 个用例，含 4 个真实模糊缓存边界用例；全部通过 |
+| 检查器回归 | 22 个用例报告无失败，发布候选任务 UP-TO-DATE |
+| design-system 行为回归 | 12 个用例报告无失败，本轮任务 UP-TO-DATE |
+| 真实脚本退出 | 0，BUILD SUCCESSFUL；共 57 个用例报告无失败、错误或跳过 |
+
+前轮另用临时场景消费真实评论 Modifier 的图层回调，2 个场景及 4 个缓存用例全部通过：6 次正模糊更新复用 2 个效果实例，关闭和量化零值清空效果，重新启用相同半径仍复用上次效果；Android 30 不创建效果且不读取进度。随后移除临时场景源码，再执行上述真实性能入口。发布候选实际重新编译 app 及测试、执行 23 个 app 用例并完成原生 Lint 分析；报告任务 UP-TO-DATE，复用一致的零诊断结果。不是复制缓存算法、参数模拟或源码计数，编译任务允许使用正常 Gradle 缓存。
+
+这是效果对象复用的运行证据，不是完整 Android 页面的视觉验证或设备帧耗时测量。本次追加提交仅包含四处模糊复用、缓存回归、性能入口筛选及对应文档，原有主题修改仍留在本地，不混入 #899。没有改变样式严重性、检查器或 baseline；上述历史 437 项包含本地主题修改，不能当作发布候选的样式结果。本地性能入口通过不等于远端 checks 已通过；主工作区的其他修改未触碰，本次未重跑样式入口、正确性入口、全量测试或 APK 打包。
+
 
 
 
