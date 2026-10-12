@@ -224,7 +224,9 @@ UI 主题、组件、页面状态和设备宽度的专项矩阵见 [UI 设计规
 
 - `BiliPaiFrameBlurAllocation` 检查已解析的 Android `createBlurEffect` 是否位于 Compose `graphicsLayer` 更新回调内；预建效果、外置缓存及能静态建立半径比较/写回/效果存储关系的内联缓存不因变量名不同而报错。这是分配风险定位，不是实际帧耗时测量，也不做跨函数调用图证明。
 - `BiliPaiModelStability` 检查 `compose_stability.conf` 承诺的模型包及子包，涵盖 `core-data` 等依赖模块；区分属性与函数/getter/init 局部变量。只读集合接口仍不证明深度不可变或运行时从未修改。
-- 六类样式规则仍限定 `live/home/dynamic/following/list/watchlater` 包及子包。真正的命名 `Spec/Palette/Policy` 不可变 token 属性 initializer 可豁免；直接返回 `tween/spring` 的具名规格工厂也属于 motion token，支持表达式体、括号及只有一个 return 的函数体，不豁免其他 UI 语句或嵌套回调。同文件 UI 函数不能靠同名测试文件存在而豁免。`dp` 规则描述的是字面尺寸，不把所有尺寸都称为间距。
+- 六类样式规则仍限定 `live/home/dynamic/following/list/watchlater` 包及子包。命名 `Spec/Palette/Policy` 不可变 token 属性 initializer 可豁免；非 `@Composable` 的具名规格工厂还可定义已解析的样式返回值及默认参数。支持表达式体、`return` 分支、Compose 值类型及 `Style/Spec/Palette/Policy/Geometry/Tuning/Metrics/Padding` 命名的数据规格，不豁免中间局部语句、嵌套回调或同文件 UI 函数，也不因同名测试存在而豁免。泛型或匿名类型没有可识别类名时保守保留诊断，不令检查器崩溃；这不是跨函数无副作用证明。
+- `BiliPaiHardcodedDimension` 描述尺寸、间距、位移及效果半径，不把所有 `dp` 都称为间距。零值仅按已解析 API 角色处理：取消阴影、padding/offset/blur、最小边界及 `letterSpacing` 等恒等选择不要求 token；`width(0.dp)`、`fontSize = 0.sp`、最大边界及同名伪 API 仍受检查。`RoundedCornerShape` 只报 shape，不再重复报 dimension；全零 `dp` 圆角表示方形，不报 shape。
+- 对比度计算的 `resolveAccessibleContainerColors(backgroundColor = …)` 可读取真实主题背景；显示容器、其他参数或同名函数不获得豁免。样式诊断归类为可用性约束，仍是 `ERROR`，既不证明实际掉帧，也不直接证明视觉缺陷。
 - 原审批文件豁免按规则迁入 `app/lint.xml`，不自动收录当前违规、不更新数量上限或集合摘要。新的豁免仍需要解释具体设计理由。
 
 Gradle 将检查器挂到 app 和 Android library 的 `lintChecks`，并启用依赖分析，避免只检查 app 而漏掉拆出的模型。CI 的 `-Pbili.ciChecks=true` 仅选择这些策略及检查器故障诊断，不使用旧平台 Lint baseline；普通 `lintDebug` 仍保留平台检查和原 baseline。`ObsoleteLintCustomCheck` 在 CI 中为 fatal，检查器不兼容而被整体跳过不能再产生假绿。
@@ -297,6 +299,31 @@ Windows / `D:/Java/jdk-21`、gh 认证下多轮实际 Gradle 编译及定向测�
 另外用 Java 直接调用本分支 Gradle 编译的生产 `buildSearchRecommendParams`，将结果消费为真实请求 URI：手机 token 使用 HD appkey、TV token 保持 TV appkey、Cookie-only 不发送 access_key，三种签名均符合预期。未发出实际网络请求，临时 smoke 脚本不进入仓库。
 
 本次未重跑已知失败的生产 Lint、完整质量脚本、全量单元测试、APK 打包、Android 界面或设备帧耗时。远程既有 587 项命中仍须独立处理：4 处分配位置确实在 graphicsLayer 回调中直接创建模糊效果且未缓存，但不是掉帧测量；样式命中含隐藏标签的 `0.sp` 及禁用阴影的 `0.dp` 等规范选择，不能全部解释为产品错误。存量规则如何接入硬门禁由维护者决定，本 PR 不生成 baseline、不新增豁免、不降级规则。
+
+### 2026-10-12 样式验证器校准（PR #899）
+
+在测试修复提交 `166532d712` 上追加验证器校准。对照的是 [PR #899 原有远程运行](https://github.com/jay3-yy/BiliPai/actions/runs/38205444886) 的 615 项诊断（611 项样式、4 处分配风险），不是重跑旧失败后宣称修复。仅包含验证器、规则配置、回归测试及对应文档，不包含动态主题修复、原主工作区的其他测试整理或弹幕改动。
+
+先用新的规格工厂回归复现误报：同一 fixture 期望 4 个 UI 使用位置诊断，旧检查器实际报 13 个。校准返回路径、规格默认参数及数据规格类型后，通过实际生产 Lint 补获并修复 `HomeHeroCarouselPolicy.kt` 泛型返回类型无类名导致的 `Set.of().contains(null)` 崩溃；没有禁用检查器或吞掉异常。
+
+在 Windows / `D:/Java/jdk-21`、gh 认证下执行：
+
+```text
+gradlew.bat :ci-lint:test --rerun :app:lintDebug -Pbili.ciChecks=true --continue --no-daemon --console=plain
+```
+
+| 验证路径 | 实际结果 |
+| --- | --- |
+| 检查器回归 | 性能 8、模型 14、样式 20，共 42 个；全部通过，0 失败、错误或跳过 |
+| 原生 CI Lint | 完整执行并生成报告，退出 1；451 项诊断，模型与检查器故障为零 |
+| 样式诊断构成 | dimension 369、color 16、motion 38、shape 8、surface 11、typography 5，共 447 项 |
+| 分配风险 | 原有 4 处 graphicsLayer 模糊效果分配仍保留，未测量设备帧耗时 |
+
+这里的 451 项来自已移除未提交动态主题代码后的 PR 候选运行，不能套用此前包含主题修复的 441 项统计。相较旧远端的 615 项，本次仅校准验证器后净减少 164 项诊断；这不是批量改变页面视觉参数、确认全部剩余命中为产品漏洞，或宣称 CI 已通过。
+
+
+本轮没有生成 baseline、扩大路径豁免或降级规则，也没有批量调整页面尺寸来消除命中。剩余样式位置仍需逐项审查及复用 token，不能全部解释为产品漏洞。未执行全量单元测试、APK 打包或 Android 界面/设备帧耗时验证；远程结果以 PR checks 为准。
+
 
 
 按变更面选择最小验证集：

@@ -14,33 +14,38 @@ import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiMember;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.PsiParameter;
+import com.intellij.psi.PsiType;
 import com.intellij.psi.util.PsiTreeUtil;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.jetbrains.kotlin.psi.KtBlockExpression;
 import org.jetbrains.kotlin.psi.KtClassBody;
 import org.jetbrains.kotlin.psi.KtClassOrObject;
-import org.jetbrains.kotlin.psi.KtDotQualifiedExpression;
 import org.jetbrains.kotlin.psi.KtExpression;
 import org.jetbrains.kotlin.psi.KtFile;
 import org.jetbrains.kotlin.psi.KtImportDirective;
 import org.jetbrains.kotlin.psi.KtLambdaExpression;
 import org.jetbrains.kotlin.psi.KtNamedFunction;
 import org.jetbrains.kotlin.psi.KtParameter;
-import org.jetbrains.kotlin.psi.KtParenthesizedExpression;
 import org.jetbrains.kotlin.psi.KtProperty;
 import org.jetbrains.kotlin.psi.KtReturnExpression;
 import org.jetbrains.uast.UCallExpression;
 import org.jetbrains.uast.UElement;
 import org.jetbrains.uast.UExpression;
 import org.jetbrains.uast.ULiteralExpression;
+import org.jetbrains.uast.UMethod;
 import org.jetbrains.uast.UNamedExpression;
 import org.jetbrains.uast.UParenthesizedExpression;
 import org.jetbrains.uast.UPrefixExpression;
 import org.jetbrains.uast.UQualifiedReferenceExpression;
 import org.jetbrains.uast.USimpleNameReferenceExpression;
 import org.jetbrains.uast.UastPrefixOperator;
+import org.jetbrains.uast.UastContextKt;
+import org.jetbrains.uast.UastUtils;
 
 /** Resolved Compose APIs in the six migrated feature packages, not source-text patterns. */
 public final class StyleDetector extends Detector implements SourceCodeScanner {
@@ -51,14 +56,21 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
             Set.of("live", "home", "dynamic", "following", "list", "watchlater");
     private static final Set<String> NAMED_COLORS = Set.of(
             "Black", "White", "Red", "Blue", "Green", "Yellow", "Gray", "LightGray", "DarkGray");
+    private static final Set<String> STYLE_VALUE_TYPES = Set.of(
+            "float", "double", "int", "long", "boolean",
+            "androidx.compose.ui.unit.Dp", "androidx.compose.ui.unit.TextUnit",
+            "androidx.compose.ui.graphics.Color", "androidx.compose.ui.graphics.Shape",
+            "androidx.compose.animation.core.AnimationSpec",
+            "androidx.compose.animation.core.FiniteAnimationSpec",
+            "androidx.compose.animation.core.SpringSpec", "androidx.compose.animation.core.TweenSpec");
 
     public static final Issue COLOR = issue("BiliPaiHardcodedColor", "Literal Compose color",
             "Use theme roles or an explicitly named Palette/Policy token instead of a numeric "
                     + "Compose Color or one of the fixed named colors. Color.Transparent is allowed.");
-    public static final Issue SPACING = issue("BiliPaiHardcodedSpacing", "Literal Compose dimension",
-            "A numeric literal converted with Compose dp is a hardcoded dimension. This rule does "
-                    + "not infer whether the dimension is spacing, size, offset, or a corner radius. "
-                    + "Use a named dimension token or an approved file exemption.");
+    public static final Issue DIMENSION = issue("BiliPaiHardcodedDimension", "Literal Compose dimension",
+            "Use a named dimension token or a value-producing style policy. This includes size, "
+                    + "spacing, offset and effect radius; it is not a claim of a layout defect. "
+                    + "Zero-valued identities and lower bounds are allowed in their resolved API roles.");
     public static final Issue TYPOGRAPHY = issue("BiliPaiHardcodedTypography", "Literal Compose text unit",
             "Use theme typography or a named typography token instead of converting a numeric literal to sp.");
     public static final Issue SHAPE = issue("BiliPaiHardcodedShape", "Literal rounded corner dimension",
@@ -67,10 +79,10 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
             "Use a named motion token instead of supplying a numeric literal to Compose tween or spring.");
     public static final Issue SURFACE = issue("BiliPaiHardcodedSurface", "Direct base theme surface read",
             "Use a named surface role instead of directly reading MaterialTheme.colorScheme.surface or background.");
-    public static final List<Issue> ISSUES = List.of(COLOR, SPACING, TYPOGRAPHY, SHAPE, MOTION, SURFACE);
+    public static final List<Issue> ISSUES = List.of(COLOR, DIMENSION, TYPOGRAPHY, SHAPE, MOTION, SURFACE);
 
     private static Issue issue(String id, String title, String explanation) {
-        return Issue.create(id, title, explanation, Category.CORRECTNESS, 6, Severity.ERROR, IMPLEMENTATION);
+        return Issue.create(id, title, explanation, Category.USABILITY, 6, Severity.ERROR, IMPLEMENTATION);
     }
 
     @Override
@@ -84,10 +96,11 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
                 || !migratedPackage(context.getUastFile().getPackageName())) {
             return null;
         }
+        Map<KtNamedFunction, Boolean> valueFactories = new IdentityHashMap<>();
         return new UElementHandler() {
             @Override
             public void visitCallExpression(UCallExpression node) {
-                if (namedTokenInitializer(node)) return;
+                if (namedTokenInitializer(node) || namedValueFactory(context, node, valueFactories)) return;
                 PsiMethod method = node.resolve();
                 if (method == null) return;
                 String owner = owner(method);
@@ -106,14 +119,14 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
                     }
                 } else if ("androidx.compose.animation.core.AnimationSpecKt".equals(owner)
                         && ("tween".equals(name) || "spring".equals(name))
-                        && hasLiteralArgument(node, false) && !namedMotionFactory(node)) {
+                        && hasLiteralArgument(node, false)) {
                     report(context, MOTION, node, "Numeric literal supplied to Compose " + name + "; use a named motion token.");
                 }
             }
 
             @Override
             public void visitSimpleNameReferenceExpression(USimpleNameReferenceExpression node) {
-                if (namedTokenInitializer(node)) return;
+                if (namedTokenInitializer(node) || namedValueFactory(context, node, valueFactories)) return;
                 PsiElement source = node.getSourcePsi();
                 if (source != null
                         && PsiTreeUtil.getParentOfType(source, KtImportDirective.class, false) != null) return;
@@ -124,16 +137,20 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
                 if (parent instanceof UQualifiedReferenceExpression qualified
                         && Objects.equals(qualified.getSelector(), node)) {
                     if ("dp".equals(name) && "androidx.compose.ui.unit.DpKt".equals(owner)
-                            && numericLiteral(qualified.getReceiver())) {
-                        report(context, SPACING, qualified,
-                                "Numeric literal converted to Compose dp; use a named dimension token (not necessarily layout spacing).");
+                            && numericLiteral(qualified.getReceiver())
+                            && !roundedCornerArgument(qualified)
+                            && !zeroUnitIdentity(qualified, false)) {
+                        report(context, DIMENSION, qualified,
+                                "Numeric Compose dimension in a UI use site; use a named dimension token or style policy.");
                     } else if ("sp".equals(name) && "androidx.compose.ui.unit.TextUnitKt".equals(owner)
-                            && numericLiteral(qualified.getReceiver())) {
+                            && numericLiteral(qualified.getReceiver())
+                            && !zeroUnitIdentity(qualified, true)) {
                         report(context, TYPOGRAPHY, qualified,
-                                "Numeric literal converted to Compose sp; use theme typography or a named text-unit token.");
+                                "Numeric Compose text unit in a UI use site; use theme typography or a named typography policy.");
                     } else if (("surface".equals(name) || "background".equals(name))
                             && "androidx.compose.material3.ColorScheme".equals(owner)
-                            && materialColorScheme(qualified.getReceiver())) {
+                            && materialColorScheme(qualified.getReceiver())
+                            && !contrastBackgroundInput(qualified)) {
                         report(context, SURFACE, qualified,
                                 "Direct MaterialTheme.colorScheme." + name + " read; use a named surface role.");
                     }
@@ -225,7 +242,9 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
 
     private static boolean hasLiteralArgument(UCallExpression call, boolean dp) {
         for (UExpression argument : call.getValueArguments()) {
-            if (dp ? literalDp(argument) : numericLiteral(argument)) return true;
+            if (dp ? literalDp(argument) && !zeroLiteral(
+                    ((UQualifiedReferenceExpression) unwrap(argument)).getReceiver())
+                    : numericLiteral(argument)) return true;
         }
         return false;
     }
@@ -246,26 +265,155 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
                 && "colorScheme".equals(propertyName(resolved));
     }
 
-    /** A named factory directly returning a Compose animation spec is itself a motion token. */
-    private static boolean namedMotionFactory(UCallExpression node) {
+    /**
+     * A named factory may define returned style values, not arbitrary code in a Policy file.
+     * UI callbacks, local function bodies and non-returned statements keep their diagnostics.
+     */
+    private static boolean namedValueFactory(JavaContext context, UElement node,
+            Map<KtNamedFunction, Boolean> factories) {
         PsiElement source = node.getSourcePsi();
         if (source == null) return false;
-        KtNamedFunction function = PsiTreeUtil.getParentOfType(source, KtNamedFunction.class, false);
-        if (function == null || !tokenName(function.getName())) return false;
-        KtExpression body = function.getBodyExpression();
-        if (body instanceof KtBlockExpression block) {
-            List<KtExpression> statements = block.getStatements();
-            if (statements.size() != 1 || !(statements.get(0) instanceof KtReturnExpression returned)) {
-                return false;
+        KtNamedFunction function = null;
+        for (PsiElement parent = source; parent != null; parent = parent.getParent()) {
+            if (parent instanceof KtLambdaExpression) return false;
+            if (parent instanceof KtNamedFunction named) {
+                function = named;
+                break;
             }
-            body = returned.getReturnedExpression();
         }
-        while (true) {
-            if (body instanceof KtParenthesizedExpression parentheses) body = parentheses.getExpression();
-            else if (body instanceof KtDotQualifiedExpression qualified) body = qualified.getSelectorExpression();
-            else break;
+        if (function == null || !factoryName(function.getName())) return false;
+        Boolean factory = factories.get(function);
+        if (factory == null) {
+            UMethod method = UastContextKt.toUElement(function, UMethod.class);
+            factory = method != null
+                    && context.getEvaluator().findAnnotation(method,
+                            "androidx.compose.runtime.Composable") == null
+                    && styleValueType(context, method.getReturnType())
+                    && (tokenContainer(function) || tokenName(function.getName())
+                            || function.getName().endsWith("Spring")
+                            || function.getName().endsWith("Tween"));
+            factories.put(function, factory);
         }
-        return Objects.equals(body, source);
+        if (!factory) return false;
+        for (KtParameter parameter : function.getValueParameters()) {
+            KtExpression defaultValue = parameter.getDefaultValue();
+            if (defaultValue != null && PsiTreeUtil.isAncestor(defaultValue, source, false)) return true;
+        }
+        KtExpression body = function.getBodyExpression();
+        if (body == null) return false;
+        if (!(body instanceof KtBlockExpression)) {
+            return PsiTreeUtil.isAncestor(body, source, false);
+        }
+        for (PsiElement parent = source; parent != null && parent != function;
+                parent = parent.getParent()) {
+            if (parent instanceof KtReturnExpression returned
+                    && returned.getLabelName() == null) return true;
+        }
+        return false;
+    }
+
+    private static boolean styleValueType(JavaContext context, PsiType type) {
+        if (type == null) return false;
+        String name = type.getCanonicalText();
+        // Compose value classes can be exposed as their JVM primitives by UAST.
+        if (STYLE_VALUE_TYPES.contains(name)) return true;
+        PsiClass valueClass = context.getEvaluator().getTypeClass(type);
+        if (valueClass == null) return false;
+        String qualifiedName = valueClass.getQualifiedName();
+        if (qualifiedName == null) return false;
+        return STYLE_VALUE_TYPES.contains(qualifiedName)
+                || context.getEvaluator().implementsInterface(valueClass,
+                        "androidx.compose.ui.graphics.Shape", false)
+                || context.getEvaluator().inheritsFrom(valueClass,
+                        "androidx.compose.animation.core.AnimationSpec", false)
+                || context.getEvaluator().isData(valueClass) && styleName(valueClass.getName());
+    }
+
+    private static boolean factoryName(String name) {
+        return name != null && (name.startsWith("resolve") || name.startsWith("create")
+                || tokenName(name) || name.endsWith("Spring") || name.endsWith("Tween"));
+    }
+
+    private static boolean styleName(String name) {
+        return name != null && (name.endsWith("Style") || name.endsWith("Spec")
+                || name.endsWith("Palette") || name.endsWith("Policy") || name.endsWith("Geometry")
+                || name.endsWith("Tuning") || name.endsWith("Metrics") || name.endsWith("Padding"));
+    }
+
+    private static boolean tokenContainer(PsiElement declaration) {
+        PsiElement container = declaration.getParent();
+        if (container instanceof KtClassBody && container.getParent() instanceof KtClassOrObject named) {
+            return tokenName(named.getName());
+        }
+        if (container instanceof KtFile file) {
+            String name = file.getName();
+            int extension = name.lastIndexOf('.');
+            return tokenName(extension < 0 ? name : name.substring(0, extension));
+        }
+        return false;
+    }
+
+    private static UCallExpression argumentCall(UExpression expression) {
+        UElement parent = expression.getUastParent();
+        while (parent instanceof UNamedExpression || parent instanceof UParenthesizedExpression) {
+            parent = parent.getUastParent();
+        }
+        return parent instanceof UCallExpression call ? call : null;
+    }
+
+    private static boolean roundedCornerArgument(UExpression expression) {
+        UCallExpression call = argumentCall(expression);
+        PsiMethod method = call == null ? null : call.resolve();
+        return method != null && "RoundedCornerShape".equals(unmangled(method.getName()))
+                && ("androidx.compose.foundation.shape.RoundedCornerShapeKt".equals(owner(method))
+                        || "androidx.compose.foundation.shape.RoundedCornerShape".equals(owner(method)));
+    }
+
+    private static String argumentName(UCallExpression call, UExpression expression) {
+        PsiParameter parameter = UastUtils.getParameterForArgument(call, expression);
+        return parameter == null ? "" : parameter.getName();
+    }
+
+    private static boolean zeroLiteral(UExpression expression) {
+        expression = unwrap(expression);
+        if (expression instanceof UPrefixExpression prefix
+                && (prefix.getOperator() == UastPrefixOperator.UNARY_MINUS
+                        || prefix.getOperator() == UastPrefixOperator.UNARY_PLUS)) {
+            expression = unwrap(prefix.getOperand());
+        }
+        return expression instanceof ULiteralExpression literal
+                && literal.getValue() instanceof Number number && number.doubleValue() == 0;
+    }
+
+    private static boolean zeroUnitIdentity(UQualifiedReferenceExpression expression, boolean text) {
+        if (!zeroLiteral(expression.getReceiver())) return false;
+        UCallExpression call = argumentCall(expression);
+        PsiMethod method = call == null ? null : call.resolve();
+        if (method == null) return false;
+        String owner = owner(method);
+        String name = unmangled(method.getName());
+        String parameter = argumentName(call, expression);
+        if (!text && owner.startsWith("kotlin.ranges.")
+                && ("coerceAtLeast".equals(name) || "coerceIn".equals(name))) {
+            return "minimumValue".equals(parameter);
+        }
+        if (!owner.startsWith("androidx.compose.")
+                && !owner.startsWith("com.android.purebilibili.core.ui.components.")
+                && !owner.startsWith("top.yukonga.miuix.kmp.basic.")) return false;
+        if (text) return "letterSpacing".equals(parameter);
+        return parameter.endsWith("Elevation") || "elevation".equals(parameter)
+                || "padding".equals(name) || "PaddingValues".equals(name)
+                || "offset".equals(name) || "absoluteOffset".equals(name)
+                || "blur".equals(name) || ("widthIn".equals(name) || "heightIn".equals(name))
+                        && "min".equals(parameter);
+    }
+
+    private static boolean contrastBackgroundInput(UQualifiedReferenceExpression expression) {
+        UCallExpression call = argumentCall(expression);
+        PsiMethod method = call == null ? null : call.resolve();
+        return method != null && "resolveAccessibleContainerColors".equals(method.getName())
+                && "com.android.purebilibili.core.theme.ThemeContrastPolicyKt".equals(owner(method))
+                && "backgroundColor".equals(argumentName(call, expression));
     }
 
     /** Only immutable property initializers are token definitions; UI methods in the same file are not. */
@@ -281,16 +429,7 @@ public final class StyleDetector extends Detector implements SourceCodeScanner {
                 ancestor = ancestor.getParent()) {
             if (ancestor instanceof KtLambdaExpression || ancestor instanceof KtNamedFunction) return false;
         }
-        PsiElement container = property.getParent();
-        if (container instanceof KtClassBody && container.getParent() instanceof KtClassOrObject named) {
-            return tokenName(named.getName());
-        }
-        if (container instanceof KtFile file) {
-            String name = file.getName();
-            int extension = name.lastIndexOf('.');
-            return tokenName(extension < 0 ? name : name.substring(0, extension));
-        }
-        return false;
+        return tokenContainer(property);
     }
 
     private static boolean tokenName(String name) {

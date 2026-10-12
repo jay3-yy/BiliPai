@@ -262,7 +262,7 @@ android {
                 "BiliPaiFrameBlurAllocation",
                 "BiliPaiModelStability",
                 "BiliPaiHardcodedColor",
-                "BiliPaiHardcodedSpacing",
+                "BiliPaiHardcodedDimension",
                 "BiliPaiHardcodedTypography",
                 "BiliPaiHardcodedShape",
                 "BiliPaiHardcodedMotion",

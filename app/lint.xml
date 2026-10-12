@@ -8,7 +8,7 @@
         <ignore path="src/main/java/com/android/purebilibili/feature/live/components/LiveSendDanmakuSheet.kt" />
         <ignore path="src/main/java/com/android/purebilibili/feature/live/components/LiveSuperChatFlashOverlay.kt" />
     </issue>
-    <issue id="BiliPaiHardcodedSpacing">
+    <issue id="BiliPaiHardcodedDimension">
         <!-- Existing pixel layouts have non-token dimensions; retain the original file approvals. -->
         <ignore path="src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCard.kt" />
         <ignore path="src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicFeedSkeletonCard.kt" />

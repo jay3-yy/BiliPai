@@ -43,7 +43,9 @@ public final class StyleDetectorTest extends LintDetectorTest {
             """).indented().to("src/main/java/androidx/compose/ui/graphics/Color.kt");
     private static final TestFile DP = kotlin("""
             package androidx.compose.ui.unit
-            @JvmInline value class Dp(val value: Float)
+            @JvmInline value class Dp(val value: Float) : Comparable<Dp> {
+                override fun compareTo(other: Dp): Int = value.compareTo(other.value)
+            }
             val Int.dp: Dp get() = Dp(toFloat())
             val Float.dp: Dp get() = Dp(this)
             val Double.dp: Dp get() = Dp(toFloat())
@@ -122,7 +124,7 @@ public final class StyleDetectorTest extends LintDetectorTest {
 
     @Test
     public void testDpAndSpAreLiteralUnitsNotEveryDynamicExpression() {
-        lint().allowMissingSdk().issues(StyleDetector.SPACING, StyleDetector.TYPOGRAPHY)
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION, StyleDetector.TYPOGRAPHY)
                 .files(withCompose(kotlin("""
                 package com.android.purebilibili.feature.dynamic
                 import androidx.compose.ui.unit.dp
@@ -143,7 +145,7 @@ public final class StyleDetectorTest extends LintDetectorTest {
                 .run().expectErrorCount(6).expectWarningCount(0)
                 .expectContains("Dimensions.kt:5: Error:")
                 .expectContains("Dimensions.kt:9: Error:")
-                .expectContains("[BiliPaiHardcodedSpacing]")
+                .expectContains("[BiliPaiHardcodedDimension]")
                 .expectContains("[BiliPaiHardcodedTypography]");
     }
 
@@ -242,7 +244,7 @@ public final class StyleDetectorTest extends LintDetectorTest {
 
     @Test
     public void testNamedObjectPropertyTokensDoNotExemptUiInSameObjectOrFile() {
-        lint().allowMissingSdk().issues(StyleDetector.COLOR, StyleDetector.SPACING, StyleDetector.TYPOGRAPHY)
+        lint().allowMissingSdk().issues(StyleDetector.COLOR, StyleDetector.DIMENSION, StyleDetector.TYPOGRAPHY)
                 .files(withCompose(kotlin("""
                 package com.android.purebilibili.feature.live
                 import androidx.compose.ui.graphics.Color
@@ -299,7 +301,7 @@ public final class StyleDetectorTest extends LintDetectorTest {
 
     @Test
     public void testMutableLocalLambdaAndGetterAreNotTokenDefinitions() {
-        lint().allowMissingSdk().issues(StyleDetector.SPACING)
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION)
                 .files(withCompose(kotlin("""
                 package com.android.purebilibili.feature.watchlater
                 import androidx.compose.ui.unit.dp
@@ -316,7 +318,7 @@ public final class StyleDetectorTest extends LintDetectorTest {
 
     @Test
     public void testSameBasenameTestDoesNotExemptProductionFile() {
-        lint().allowMissingSdk().issues(StyleDetector.SPACING)
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION)
                 .files(withCompose(kotlin("""
                 package com.android.purebilibili.feature.home
                 import androidx.compose.ui.unit.dp
@@ -331,7 +333,7 @@ public final class StyleDetectorTest extends LintDetectorTest {
 
     @Test
     public void testOnlySixMigratedPackagesAndProductionSourcesAreChecked() {
-        lint().allowMissingSdk().issues(StyleDetector.SPACING).files(withCompose(
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION).files(withCompose(
                 kotlin("""
                 package com.android.purebilibili.feature.video
                 import androidx.compose.ui.unit.dp
@@ -352,10 +354,10 @@ public final class StyleDetectorTest extends LintDetectorTest {
 
     @Test
     public void testLintXmlPathExemptionIsRuleSpecific() {
-        lint().allowMissingSdk().issues(StyleDetector.SPACING, StyleDetector.TYPOGRAPHY)
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION, StyleDetector.TYPOGRAPHY)
                 .files(withCompose(xml("lint.xml", """
                 <lint>
-                    <issue id="BiliPaiHardcodedSpacing">
+                    <issue id="BiliPaiHardcodedDimension">
                         <ignore path="src/main/java/com/android/purebilibili/feature/home/Approved.kt" />
                     </issue>
                 </lint>
@@ -371,7 +373,7 @@ public final class StyleDetectorTest extends LintDetectorTest {
                 fun drawAnother() = 9.dp
                 """).indented().to("src/main/java/com/android/purebilibili/feature/home/Other.kt")))
                 .run().expectErrorCount(2).expectWarningCount(0)
-                .expectContains("[BiliPaiHardcodedSpacing]")
+                .expectContains("[BiliPaiHardcodedDimension]")
                 .expectContains("[BiliPaiHardcodedTypography]");
     }
 
@@ -397,12 +399,182 @@ public final class StyleDetectorTest extends LintDetectorTest {
 
     @Test
     public void testStandardSuppression() {
-        lint().allowMissingSdk().issues(StyleDetector.SPACING).files(withCompose(kotlin("""
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION).files(withCompose(kotlin("""
                 package com.android.purebilibili.feature.home
                 import androidx.compose.ui.unit.dp
-                @Suppress("BiliPaiHardcodedSpacing")
+                @Suppress("BiliPaiHardcodedDimension")
                 fun approvedUi() = 8.dp
                 """).indented().to("src/main/java/com/android/purebilibili/feature/home/Suppressed.kt")))
                 .run().expectClean();
+    }
+
+    @Test
+    public void testValueProducingStyleFactoriesDoNotExemptUiInPolicyFiles() {
+        lint().allowMissingSdk().files(withCompose(kotlin("""
+                package com.android.purebilibili.feature.home
+                import androidx.compose.ui.graphics.Color
+                import androidx.compose.ui.unit.Dp
+                import androidx.compose.ui.unit.TextUnit
+                import androidx.compose.ui.unit.dp
+                import androidx.compose.ui.unit.sp
+                import androidx.compose.animation.core.spring
+                import androidx.compose.animation.core.tween
+                data class PanelStyle(val width: Dp, val label: TextUnit, val color: Color)
+                data class DefaultPalette(val color: Color)
+                data class PanelMetrics(val height: Dp, val spacing: Dp)
+                data class OverlayPadding(val horizontal: Dp, val vertical: Dp)
+                fun resolvePanelStyle(compact: Boolean): PanelStyle {
+                    return when {
+                        compact -> PanelStyle(32.dp, 12.sp, Color(0xFF444444))
+                        else -> PanelStyle(48.dp, 15.sp, Color(0xFFDDDDDD))
+                    }
+                }
+                fun resolveReadingWidth(): Dp = 480.dp
+                fun createDefaultPalette() = DefaultPalette(Color(0xFF6750A4))
+                fun imageCloseSpring() = spring<Float>(dampingRatio = 1f, stiffness = 600f)
+                fun resolvePanelMetrics() = PanelMetrics(0.dp, 0.dp)
+                fun resolveOverlayPadding(
+                    horizontal: Dp = 16.dp,
+                    vertical: Dp = 16.dp,
+                ): OverlayPadding = OverlayPadding(horizontal, vertical)
+                fun draw() {
+                    6.dp
+                    14.sp
+                    Color.Red
+                    tween<Float>(180)
+                }
+                """).indented().to("src/main/java/com/android/purebilibili/feature/home/PanelStylePolicy.kt")))
+                .run().expectErrorCount(4).expectWarningCount(0)
+                .expectContains("[BiliPaiHardcodedColor]")
+                .expectContains("[BiliPaiHardcodedTypography]")
+                .expectContains("[BiliPaiHardcodedMotion]");
+    }
+
+    @Test
+    public void testPolicyNamesDoNotExemptCallbacksOrNonReturnedUiArguments() {
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION).files(withCompose(kotlin("""
+                package com.android.purebilibili.feature.home
+                import androidx.compose.ui.unit.Dp
+                import androidx.compose.ui.unit.dp
+                data class PanelStyle(val width: Dp, val onClick: () -> Unit = {})
+                fun paint(width: Dp) {}
+                fun resolvePanelStyle(): PanelStyle {
+                    paint(22.dp)
+                    return PanelStyle(32.dp, onClick = { paint(9.dp) })
+                }
+                fun draw() { val local = 11.dp }
+                """).indented().to("src/main/java/com/android/purebilibili/feature/home/PanelStylePolicy.kt")))
+                .run().expectErrorCount(3).expectWarningCount(0);
+    }
+
+    @Test
+    public void testZeroUnitsAreAllowedOnlyForResolvedIdentityRoles() {
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION, StyleDetector.TYPOGRAPHY)
+                .files(withCompose(
+                        kotlin("""
+                                package androidx.compose.foundation.layout
+                                import androidx.compose.ui.unit.Dp
+                                fun padding(all: Dp) {}
+                                fun offset(x: Dp, y: Dp) {}
+                                fun width(width: Dp) {}
+                                """).indented().to("src/main/java/androidx/compose/foundation/layout/Size.kt"),
+                        kotlin("""
+                                package androidx.compose.material3
+                                import androidx.compose.ui.unit.Dp
+                                import androidx.compose.ui.unit.TextUnit
+                                object ButtonDefaults {
+                                    fun buttonElevation(defaultElevation: Dp) {}
+                                }
+                                fun Text(fontSize: TextUnit, letterSpacing: TextUnit) {}
+                                """).indented().to("src/main/java/androidx/compose/material3/Text.kt"),
+                        kotlin("""
+                                package com.android.purebilibili.core.ui.components
+                                import androidx.compose.ui.unit.Dp
+                                fun AppSurface(tonalElevation: Dp) {}
+                                """).indented().to("src/main/java/com/android/purebilibili/core/ui/components/AppSurface.kt"),
+                        kotlin("""
+                                package com.android.purebilibili.feature.home
+                                import androidx.compose.foundation.layout.padding
+                                import androidx.compose.foundation.layout.offset
+                                import androidx.compose.foundation.layout.width
+                                import androidx.compose.material3.ButtonDefaults
+                                import androidx.compose.material3.Text
+                                import androidx.compose.ui.unit.Dp
+                                import androidx.compose.ui.unit.TextUnit
+                                import androidx.compose.ui.unit.dp
+                                import androidx.compose.ui.unit.sp
+                                object Pretender { fun padding(all: Dp) {} }
+                                fun draw(size: Dp, font: TextUnit) {
+                                    ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
+                                    com.android.purebilibili.core.ui.components.AppSurface(tonalElevation = 0.dp)
+                                    padding(0.dp)
+                                    offset(0.dp, 0.dp)
+                                    size.coerceAtLeast(0.dp)
+                                    size.coerceIn(minimumValue = 0.dp, maximumValue = size)
+                                    Text(fontSize = font, letterSpacing = 0.sp)
+                                    width(0.dp)
+                                    size.coerceAtMost(0.dp)
+                                    size.coerceIn(minimumValue = size, maximumValue = 0.dp)
+                                    Text(fontSize = 0.sp, letterSpacing = font)
+                                    Pretender.padding(0.dp)
+                                }
+                                """).indented().to("src/main/java/com/android/purebilibili/feature/home/ZeroUnits.kt")))
+                .run().expectErrorCount(5).expectWarningCount(0);
+    }
+
+    @Test
+    public void testRoundedCornersAreNotReportedAgainAsDimensions() {
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION, StyleDetector.SHAPE)
+                .files(withCompose(kotlin("""
+                        package com.android.purebilibili.feature.home
+                        import androidx.compose.foundation.shape.RoundedCornerShape
+                        import androidx.compose.ui.unit.dp
+                        fun draw() {
+                            RoundedCornerShape(8.dp)
+                            RoundedCornerShape(0.dp)
+                        }
+                        """).indented().to("src/main/java/com/android/purebilibili/feature/home/Corners.kt")))
+                .run().expectErrorCount(1).expectWarningCount(0)
+                .expectContains("[BiliPaiHardcodedShape]");
+    }
+
+    @Test
+    public void testContrastBackgroundInputDoesNotExemptDisplayedSurfaceReads() {
+        lint().allowMissingSdk().issues(StyleDetector.SURFACE).files(withCompose(
+                kotlin("""
+                        package com.android.purebilibili.core.theme
+                        import androidx.compose.ui.graphics.Color
+                        fun resolveAccessibleContainerColors(
+                            containerColor: Color, contentColor: Color, backgroundColor: Color
+                        ): Color = containerColor
+                        """).indented().to("src/main/java/com/android/purebilibili/core/theme/ThemeContrastPolicy.kt"),
+                kotlin("""
+                        package com.android.purebilibili.feature.dynamic
+                        import androidx.compose.material3.MaterialTheme
+                        import androidx.compose.ui.graphics.Color
+                        import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
+                        fun paint(backgroundColor: Color) {}
+                        fun draw() {
+                            resolveAccessibleContainerColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                contentColor = MaterialTheme.colorScheme.primary,
+                                backgroundColor = MaterialTheme.colorScheme.surface
+                            )
+                            paint(backgroundColor = MaterialTheme.colorScheme.surface)
+                        }
+                        """).indented().to("src/main/java/com/android/purebilibili/feature/dynamic/Contrast.kt")))
+                .run().expectErrorCount(2).expectWarningCount(0);
+    }
+
+    @Test
+    public void testGenericAndAnonymousFactoryTypesKeepCheckingUiUseSites() {
+        lint().allowMissingSdk().issues(StyleDetector.DIMENSION).files(withCompose(kotlin("""
+                package com.android.purebilibili.feature.home
+                import androidx.compose.ui.unit.dp
+                fun <T> resolveItemOrNull(items: List<T>, page: Int): T? = items.getOrNull(page)
+                fun resolveAnonymousPolicy() = object { val width get() = 8.dp }
+                fun draw() { 7.dp }
+                """).indented().to("src/main/java/com/android/purebilibili/feature/home/GenericPolicy.kt")))
+                .run().expectErrorCount(2).expectWarningCount(0);
     }
 }

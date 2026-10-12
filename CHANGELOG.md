@@ -3,6 +3,10 @@
 
 更新日志(ChangeLog)
 
+[修复] 样式语义验证器区分具名规格定义与 UI 使用位置，识别返回的 Palette / Spec / Policy / Geometry / Metrics / Padding 及规格默认参数；按已解析 API 角色识别零值，不将圆角重复报为尺寸，并修复泛型返回类型无类名时的检查器崩溃。尺寸规则统一为 BiliPaiHardcodedDimension，样式诊断归类为可用性而非性能问题，保留原 ERROR 门禁及既有豁免范围
+
+[验证] 样式工厂回归曾复现旧检查器将 4 个 UI 使用位置报为 13 个诊断；校准后 42 个检查器回归全部通过。不包含动态主题修复的 PR 候选原生 Lint 实际执行后仍有 451 项诊断（447 项样式、4 处分配风险），模型与检查器故障为零；未增加 baseline、豁免或降低严重性，不能据此宣称远端 CI、全量测试或 APK 已通过，详见 docs/wiki/QA.md
+
 [修复] 消除 app / design-system 测试源码的编译阻塞：清理重复 Kotlin 声明、过期导入和已移除接口的断言，适配当前 AICU 时钟参数、设备传输请求及 OkHttp Call 契约；将分区回退、搜索签名与 gRPC 分页内部策略测试迁到 core-data，保留真实行为与边界覆盖
 
 [测试] 设备传输编解码使用 Robolectric 的真实 Android Base64；字体和页签测试采用正确属性引用及 JUnit Platform 适配，动态图文改为检查真实链接和表情注释范围。移除源码片段、显示措辞、实现默认值及重复断言，不修改生产代码或放宽 CI Lint 门禁
