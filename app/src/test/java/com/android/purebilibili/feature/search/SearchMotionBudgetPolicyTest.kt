@@ -268,6 +268,70 @@ class SearchMotionBudgetPolicyTest {
     }
 
     @Test
+    fun focusedQueryClear_retainsImeAndIgnoresLandingKeywordUntilGuardElapses() {
+        assertEquals(300L, SEARCH_LANDING_KEYWORD_CLICK_GUARD_MS)
+        assertTrue(
+            shouldRetainSearchImeWhenQueryCleared(
+                fieldFocused = true,
+                previousQuery = "动画",
+                newQuery = ""
+            )
+        )
+        assertFalse(
+            shouldKeepResultsOnQueryChange(
+                showResults = true,
+                newQuery = ""
+            )
+        )
+        val clearedAtElapsedMs = 1_000L
+        assertFalse(
+            shouldAcceptSearchLandingKeywordClick(
+                clearedAtElapsedMs = clearedAtElapsedMs,
+                nowElapsedMs = clearedAtElapsedMs + SEARCH_LANDING_KEYWORD_CLICK_GUARD_MS - 1L
+            )
+        )
+        assertTrue(
+            shouldAcceptSearchLandingKeywordClick(
+                clearedAtElapsedMs = clearedAtElapsedMs,
+                nowElapsedMs = clearedAtElapsedMs + SEARCH_LANDING_KEYWORD_CLICK_GUARD_MS
+            )
+        )
+        assertTrue(
+            shouldAcceptSearchLandingKeywordClick(
+                clearedAtElapsedMs = -1L,
+                nowElapsedMs = clearedAtElapsedMs
+            )
+        )
+        assertFalse(
+            shouldRetainSearchImeWhenQueryCleared(
+                fieldFocused = false,
+                previousQuery = "动画",
+                newQuery = ""
+            )
+        )
+        assertFalse(
+            shouldRetainSearchImeWhenQueryCleared(
+                fieldFocused = true,
+                previousQuery = "",
+                newQuery = ""
+            )
+        )
+        assertFalse(
+            shouldRetainSearchImeWhenQueryCleared(
+                fieldFocused = true,
+                previousQuery = "动画",
+                newQuery = "动"
+            )
+        )
+        assertTrue(
+            shouldKeepResultsOnQueryChange(
+                showResults = true,
+                newQuery = "动"
+            )
+        )
+    }
+
+    @Test
     fun scrollingResults_shouldNotForceLowHeaderBlurBudget() {
         assertFalse(
             shouldForceLowBudgetSearchHeaderBlur(

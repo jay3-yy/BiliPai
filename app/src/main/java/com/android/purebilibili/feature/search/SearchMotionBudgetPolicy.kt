@@ -102,6 +102,32 @@ internal fun shouldKeepResultsOnQueryChange(
     newQuery: String
 ): Boolean = showResults && newQuery.isNotEmpty()
 
+/**
+ * Keep the IME when a focused field goes from a non-empty query to empty.
+ * Unfocused clears, already-empty text, and non-empty edits return false so submit and
+ * Back still dismiss the keyboard through the existing path.
+ */
+internal fun shouldRetainSearchImeWhenQueryCleared(
+    fieldFocused: Boolean,
+    previousQuery: String,
+    newQuery: String,
+): Boolean = fieldFocused && previousQuery.isNotEmpty() && newQuery.isEmpty()
+
+/** Ignore landing keyword clicks for this long after a focused clear (adjustResize). */
+internal const val SEARCH_LANDING_KEYWORD_CLICK_GUARD_MS = 300L
+
+/**
+ * [clearedAtElapsedMs] is negative when no focused clear has been recorded.
+ * A click at or after [SEARCH_LANDING_KEYWORD_CLICK_GUARD_MS] is accepted.
+ */
+internal fun shouldAcceptSearchLandingKeywordClick(
+    clearedAtElapsedMs: Long,
+    nowElapsedMs: Long,
+): Boolean {
+    if (clearedAtElapsedMs < 0L) return true
+    return nowElapsedMs - clearedAtElapsedMs >= SEARCH_LANDING_KEYWORD_CLICK_GUARD_MS
+}
+
 internal fun shouldForceLowBudgetSearchHeaderBlur(
     isSearching: Boolean,
     isScrollingResults: Boolean
