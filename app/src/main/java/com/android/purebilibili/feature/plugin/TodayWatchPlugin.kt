@@ -583,7 +583,7 @@ private fun TodayWatchPluginModeSegmentedControl(
         itemWidth = 120.dp,
         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
-        labelFontSize = 13.sp,
+        labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
         containerHorizontalPadding = 4.dp,
         containerVerticalPadding = 4.dp,
         miuixBackdrop = miuixBackdrop,

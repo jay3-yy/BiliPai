@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kyant catalog value-control accents, independent of native theme selection. -->
+    <color name="liquid_switch_active">#FF30D158</color>
+    <color name="liquid_slider_active">#FF0088FF</color>
+    <color name="liquid_value_inactive">#5C787880</color>
+</resources>

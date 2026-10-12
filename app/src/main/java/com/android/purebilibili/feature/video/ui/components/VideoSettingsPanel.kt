@@ -86,39 +86,27 @@ private enum class VideoSettingsPanelTextRole {
 private fun VideoSettingsPanelText(
     text: String,
     role: VideoSettingsPanelTextRole,
-    legacyFontSize: TextUnit,
     modifier: Modifier = Modifier,
     color: Color = Color.Unspecified,
     legacyFontWeight: FontWeight? = null,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
 ) {
-    if (isMiuixNonGlassEnabled()) {
-        val style = when (role) {
-            VideoSettingsPanelTextRole.TITLE -> MaterialTheme.typography.titleSmall
-            VideoSettingsPanelTextRole.BODY -> MaterialTheme.typography.bodySmall
-            VideoSettingsPanelTextRole.OPTION -> MaterialTheme.typography.labelMedium
-            VideoSettingsPanelTextRole.DIAGNOSTIC -> MaterialTheme.typography.labelSmall
-        }
-        AppText(
-            text = text,
-            modifier = modifier,
-            color = color,
-            style = style,
-            maxLines = maxLines,
-            overflow = overflow,
-        )
-    } else {
-        AppText(
-            text = text,
-            modifier = modifier,
-            color = color,
-            fontSize = legacyFontSize,
-            fontWeight = legacyFontWeight,
-            maxLines = maxLines,
-            overflow = overflow,
-        )
+    val style = when (role) {
+        VideoSettingsPanelTextRole.TITLE -> MaterialTheme.typography.titleSmall
+        VideoSettingsPanelTextRole.BODY -> MaterialTheme.typography.bodySmall
+        VideoSettingsPanelTextRole.OPTION -> MaterialTheme.typography.labelMedium
+        VideoSettingsPanelTextRole.DIAGNOSTIC -> MaterialTheme.typography.labelSmall
     }
+    AppText(
+        text = text,
+        modifier = modifier,
+        color = color,
+        style = style,
+        fontWeight = legacyFontWeight,
+        maxLines = maxLines,
+        overflow = overflow,
+    )
 }
 
 internal data class VideoSettingsPanelVisualSpec(
@@ -439,7 +427,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = "定时关闭",
                             role = VideoSettingsPanelTextRole.TITLE,
-                            legacyFontSize = 16.sp,
+
                             legacyFontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -558,7 +546,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = "资源下载",
                             role = VideoSettingsPanelTextRole.TITLE,
-                            legacyFontSize = 16.sp,
+
                             legacyFontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -676,7 +664,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = "选择画质",
                                 role = VideoSettingsPanelTextRole.TITLE,
-                                legacyFontSize = 16.sp,
+
                                 legacyFontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -684,7 +672,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = "当前 $currentQualityLabel",
                                 role = VideoSettingsPanelTextRole.BODY,
-                                legacyFontSize = 13.sp,
+
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -729,7 +717,7 @@ fun VideoSettingsPanel(
                                         VideoSettingsPanelText(
                                             text = label,
                                             role = VideoSettingsPanelTextRole.OPTION,
-                                            legacyFontSize = 13.sp,
+
                                             color = contentColor
                                         )
                                     }
@@ -762,7 +750,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = "编码格式",
                             role = VideoSettingsPanelTextRole.TITLE,
-                            legacyFontSize = 16.sp,
+
                             legacyFontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -777,7 +765,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = codecLabel,
                             role = VideoSettingsPanelTextRole.BODY,
-                            legacyFontSize = 13.sp,
+
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -812,7 +800,7 @@ fun VideoSettingsPanel(
                                     VideoSettingsPanelText(
                                         text = label,
                                         role = VideoSettingsPanelTextRole.OPTION,
-                                        legacyFontSize = 13.sp,
+
                                         color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -844,7 +832,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = "次选编码",
                             role = VideoSettingsPanelTextRole.TITLE,
-                            legacyFontSize = 16.sp,
+
                             legacyFontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -859,7 +847,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = secondCodecLabel,
                             role = VideoSettingsPanelTextRole.BODY,
-                            legacyFontSize = 13.sp,
+
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -894,7 +882,7 @@ fun VideoSettingsPanel(
                                     VideoSettingsPanelText(
                                         text = label,
                                         role = VideoSettingsPanelTextRole.OPTION,
-                                        legacyFontSize = 13.sp,
+
                                         color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
@@ -926,7 +914,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = "音频音质",
                             role = VideoSettingsPanelTextRole.TITLE,
-                            legacyFontSize = 16.sp,
+
                             legacyFontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -939,7 +927,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = audioLabel,
                             role = VideoSettingsPanelTextRole.BODY,
-                            legacyFontSize = 13.sp,
+
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -966,7 +954,7 @@ fun VideoSettingsPanel(
                                     VideoSettingsPanelText(
                                         text = option.label,
                                         role = VideoSettingsPanelTextRole.OPTION,
-                                        legacyFontSize = 13.sp,
+
                                         color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                     if (option.isHiRes) {
@@ -998,7 +986,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = "AI原生翻译",
                                 role = VideoSettingsPanelTextRole.TITLE,
-                                legacyFontSize = 16.sp,
+
                                 legacyFontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -1010,7 +998,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = langLabel,
                                 role = VideoSettingsPanelTextRole.BODY,
-                                legacyFontSize = 13.sp,
+
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -1044,7 +1032,7 @@ fun VideoSettingsPanel(
                                         VideoSettingsPanelText(
                                             text = item.langDoc,
                                             role = VideoSettingsPanelTextRole.OPTION,
-                                            legacyFontSize = 13.sp,
+
                                             color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
@@ -1081,7 +1069,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = "播放线路",
                                 role = VideoSettingsPanelTextRole.TITLE,
-                                legacyFontSize = 16.sp,
+
                                 legacyFontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -1090,7 +1078,7 @@ fun VideoSettingsPanel(
                                 text = diagnosticsByIndex[currentCdnIndex]?.displayName
                                     ?: "当前线路${currentCdnIndex + 1}",
                                 role = VideoSettingsPanelTextRole.BODY,
-                                legacyFontSize = 13.sp,
+
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                                 maxLines = 1,
@@ -1160,7 +1148,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = "播放倍速",
                             role = VideoSettingsPanelTextRole.TITLE,
-                            legacyFontSize = 16.sp,
+
                             legacyFontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -1168,7 +1156,7 @@ fun VideoSettingsPanel(
                         VideoSettingsPanelText(
                             text = PlaybackSpeed.formatSpeedFull(currentSpeed),
                             role = VideoSettingsPanelTextRole.BODY,
-                            legacyFontSize = 13.sp,
+
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -1182,7 +1170,7 @@ fun VideoSettingsPanel(
                     VideoSettingsPanelText(
                         text = "可在播放设置中调整倍速列表",
                         role = VideoSettingsPanelTextRole.BODY,
-                        legacyFontSize = 12.sp,
+
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -1269,7 +1257,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = "快进秒数（双击右侧）",
                                 role = VideoSettingsPanelTextRole.BODY,
-                                legacyFontSize = 13.sp,
+
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = AppSpacingTokens.Small)
                             )
@@ -1288,7 +1276,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = "后退秒数（双击左侧）",
                                 role = VideoSettingsPanelTextRole.BODY,
-                                legacyFontSize = 13.sp,
+
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(bottom = AppSpacingTokens.Small)
                             )
@@ -1334,7 +1322,7 @@ fun VideoSettingsPanel(
                             VideoSettingsPanelText(
                                 text = "长按倍速",
                                 role = VideoSettingsPanelTextRole.TITLE,
-                                legacyFontSize = 16.sp,
+
                                 legacyFontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -1528,14 +1516,14 @@ private fun CdnLineRow(
                 VideoSettingsPanelText(
                     text = displayName,
                     role = VideoSettingsPanelTextRole.BODY,
-                    legacyFontSize = 14.sp,
+
                     legacyFontWeight = FontWeight.Medium,
                     color = AppSurfaceTokens.onSurfaceContainerHigh()
                 )
                 VideoSettingsPanelText(
                     text = "$status · $host",
                     role = VideoSettingsPanelTextRole.DIAGNOSTIC,
-                    legacyFontSize = 12.sp,
+
                     color = AppSurfaceTokens.onSurfaceVariantSummary(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1543,7 +1531,7 @@ private fun CdnLineRow(
                 VideoSettingsPanelText(
                     text = metric,
                     role = VideoSettingsPanelTextRole.DIAGNOSTIC,
-                    legacyFontSize = 12.sp,
+
                     color = AppSurfaceTokens.onSurfaceVariantSummary(),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -1597,7 +1585,7 @@ private fun SleepTimerOptions(
                     VideoSettingsPanelText(
                         text = label,
                         role = VideoSettingsPanelTextRole.OPTION,
-                        legacyFontSize = 13.sp,
+
                         color = videoSettingsChipContentColor(isSelected)
                     )
                 }
@@ -1642,7 +1630,7 @@ private fun SpeedOptions(
                     VideoSettingsPanelText(
                         text = PlaybackSpeed.formatSpeedFull(speed),
                         role = VideoSettingsPanelTextRole.OPTION,
-                        legacyFontSize = 13.sp,
+
                         color = videoSettingsChipContentColor(isSelected),
                         modifier = Modifier.padding(vertical = 10.dp)
                     )
@@ -1693,7 +1681,7 @@ private fun FlipButton(
             VideoSettingsPanelText(
                 text = label,
                 role = VideoSettingsPanelTextRole.OPTION,
-                legacyFontSize = 13.sp,
+
                 legacyFontWeight = if (isActive) FontWeight.Medium else FontWeight.Normal,
                 color = if (isActive) 
                     videoSettingsChipContentColor(true)
@@ -1744,7 +1732,7 @@ private fun SettingsActionPill(
                 text = label,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                 role = VideoSettingsPanelTextRole.OPTION,
-                legacyFontSize = 13.sp,
+
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -1782,7 +1770,7 @@ private fun SeekSecondsOptions(
                     VideoSettingsPanelText(
                         text = "${seconds}s",
                         role = VideoSettingsPanelTextRole.OPTION,
-                        legacyFontSize = 13.sp,
+
                         color = videoSettingsChipContentColor(isSelected)
                     )
                 }

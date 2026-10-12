@@ -120,7 +120,7 @@ internal fun PlayerMiniLyrics(
                 text = "轻点查看完整歌词",
                 style = TextStyle(
                     color = contentColor.copy(alpha = 0.70f),
-                    fontSize = 12.sp,
+                    fontSize = androidx.compose.material3.MaterialTheme.typography.labelSmall.fontSize,
                     fontFamily = fontFamily,
                 ),
                 modifier = Modifier

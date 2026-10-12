@@ -5,6 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -48,165 +52,114 @@ fun LiveContributionRankSheet(
     roomTitle: String,
     anchorInfo: AnchorInfo,
     roomInfo: RoomInfo,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onUserClick: (Long) -> Unit = {},
 ) {
-    val visualSpec = remember { resolveLiveSheetVisualSpec() }
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var items by remember { mutableStateOf<List<LiveContributionRankItem>>(emptyList()) }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val rankTypes = remember {
-        listOf(
-            LiveContributionRankType.ONLINE,
-            LiveContributionRankType.DAILY,
-            LiveContributionRankType.WEEKLY,
-            LiveContributionRankType.MONTHLY
-        )
-    }
-
-    LaunchedEffect(roomInfo.roomId, anchorInfo.uid, selectedTab) {
-        isLoading = true
-        error = null
-        LiveRepository.getLiveContributionRank(
-            roomId = roomInfo.roomId,
-            ruid = anchorInfo.uid,
-            type = rankTypes[selectedTab]
-        ).onSuccess {
-            items = it
-            isLoading = false
-        }.onFailure {
-            error = it.message ?: "获取高能榜失败"
-            isLoading = false
-        }
-    }
-
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val rankTypes = remember { LiveContributionRankType.entries.toList() }
+    val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { rankTypes.size })
+    val pageStates = remember(roomInfo.roomId) { rankTypes.associateWith { LiveRankPageState() } }
+    val listStates = remember(roomInfo.roomId) { rankTypes.map { androidx.compose.foundation.lazy.LazyListState() } }
+    val panelHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp * 0.65f).dp
     AppModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = AppSpacingTokens.ExtraLarge,
-                    vertical = AppSpacingTokens.Small
-                ),
-            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Large)
-        ) {
-            AppText(
-                text = "高能榜",
-                color = AppSurfaceTokens.onSurface(),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            AppText(
-                text = roomTitle.ifBlank { anchorInfo.uname },
-                color = AppSurfaceTokens.onSurfaceVariantSummary(),
-                style = MaterialTheme.typography.bodySmall
-            )
+        Column(Modifier.fillMaxWidth().height(panelHeight)) {
+            AppText("高能榜", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(12.dp))
             AppThemeAdaptiveTabRow(
                 role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                options = rankTypes.mapIndexed { index, type ->
-                    AppSegmentOption(index, type.title)
-                },
-                selectedValue = selectedTab,
-                onSelectionChange = { selectedTab = it },
+                options = rankTypes.mapIndexed { index, type -> AppSegmentOption(index, type.title) },
+                selectedValue = pager.currentPage,
+                onSelectionChange = { index -> scope.launch {
+                    if (index == pager.currentPage) listStates[index].animateScrollToItem(0)
+                    else com.android.purebilibili.navigation.animatePagerSelection(pager, index)
+                } },
+                indicatorPositionProvider = { pager.currentPage + pager.currentPageOffsetFraction },
+                isScrollInProgressProvider = { pager.isScrollInProgress },
                 modifier = Modifier.fillMaxWidth(),
             )
-            AppSurface(
-                shape = AppShapes.container(ContainerLevel.Card),
-                color = AppSurfaceTokens.cardContainer()
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(AppSpacingTokens.Large),
-                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
-                    ) {
-                        RankMetricRow("主播", anchorInfo.uname.ifBlank { "直播间" })
-                        RankMetricRow("人气", formatLiveViewerCount(roomInfo.online))
-                        RankMetricRow("观看", roomInfo.watchedText.ifBlank { "暂无数据" })
-                        RankMetricRow("高能观众", roomInfo.onlineRankText.ifBlank { "暂无数据" })
-                        RankMetricRow("开播时长", formatLiveDuration(roomInfo.liveStartTime).ifBlank { "刚刚开播" })
-                    }
-                    AppHorizontalDivider(color = AppSurfaceTokens.divider())
-                    when {
-                        isLoading -> {
-                            AppText(
-                                text = "榜单加载中…",
-                                color = AppSurfaceTokens.onSurfaceVariantSummary(),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(AppSpacingTokens.Large)
-                            )
-                        }
-                        error != null -> {
-                            AppText(
-                                text = error ?: "",
-                                color = AppSurfaceTokens.onSurfaceVariantSummary(),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(AppSpacingTokens.Large)
-                            )
-                        }
-                        items.isEmpty() -> {
-                            AppText(
-                                text = "当前榜单暂无数据",
-                                color = AppSurfaceTokens.onSurfaceVariantSummary(),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(AppSpacingTokens.Large)
-                            )
-                        }
-                        else -> {
-                            LazyColumn(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = visualSpec.contributionListMaxHeightDp.dp),
-                                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
-                            ) {
-                                items(items, key = { "${it.uid}_${it.rank}" }) { item ->
-                                    RankItemRow(item = item)
-                                }
-                            }
-                        }
-                    }
+            com.android.purebilibili.core.ui.components.AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+                LiveRankPage(roomInfo.roomId, anchorInfo.uid, rankTypes[page], pageStates.getValue(rankTypes[page]), listStates[page], onUserClick)
+            }
+        }
+    }
+}
+
+private class LiveRankPageState {
+    var items by mutableStateOf<List<LiveContributionRankItem>>(emptyList())
+    var loading by mutableStateOf(false)
+    var loadingMore by mutableStateOf(false)
+    var hasMore by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+    var initialized = false
+    val requests = com.android.purebilibili.feature.live.LiveBrowseRequestPolicy()
+}
+
+@Composable
+private fun LiveRankPage(
+    roomId: Long,
+    anchorId: Long,
+    type: LiveContributionRankType,
+    state: LiveRankPageState,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onUserClick: (Long) -> Unit,
+) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun load(reset: Boolean) {
+        val request = if (reset) state.requests.refresh(replace = true) else state.requests.loadMore(state.hasMore)
+        if (request == null) return
+        state.loading = reset
+        state.loadingMore = !reset
+        state.error = null
+        scope.launch {
+            try {
+                LiveRepository.getLiveContributionRank(roomId, anchorId, type, request.page).onSuccess { next ->
+                    if (!state.requests.succeed(request)) return@onSuccess
+                    val previous = if (reset) emptyList() else state.items
+                    state.hasMore = next.isNotEmpty() && next.any { candidate -> previous.none { it.uid == candidate.uid } }
+                    state.items = (previous + next).distinctBy { it.uid }
+                    state.initialized = true
+                    state.loading = false
+                    state.loadingMore = false
+                }.onFailure {
+                    if (!state.requests.fail(request)) return@onFailure
+                    state.error = it.message ?: "获取高能榜失败"
+                    state.loading = false
+                    state.loadingMore = false
                 }
+            } finally {
+                if (state.requests.owns(request)) {
+                    state.requests.fail(request)
+                    state.loading = false
+                    state.loadingMore = false
+                }
+            }
+        }
+    }
+    LaunchedEffect(roomId, type) { if (!state.initialized) load(true) }
+    com.android.purebilibili.core.ui.AdaptivePullToRefreshBox(isRefreshing = state.loading, onRefresh = { load(true) }, modifier = Modifier.fillMaxSize()) {
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
+            if (state.items.isEmpty()) item {
+                Column(Modifier.fillMaxWidth().padding(24.dp)) {
+                    AppText(if (state.loading) "榜单加载中…" else state.error ?: "暂无榜单数据")
+                    if (!state.loading) com.android.purebilibili.core.ui.components.AppTextButton(onClick = { load(true) }) { AppText("重新加载") }
+                }
+            }
+            items(state.items, key = { it.uid }) { item -> RankItemRow(item) { onUserClick(item.uid) } }
+            if (state.items.isNotEmpty()) item {
+                com.android.purebilibili.feature.live.LiveHomeLoadMoreFooter(state.loadingMore, state.items.size, state.hasMore, state.error) { load(false) }
             }
         }
     }
 }
 
 @Composable
-private fun RankMetricRow(
-    label: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        AppText(
-            text = label,
-            color = AppSurfaceTokens.onSurfaceVariantSummary(),
-            style = MaterialTheme.typography.bodySmall
-        )
-        androidx.compose.foundation.layout.Spacer(Modifier.width(AppSpacingTokens.Small))
-        AppText(
-            text = value,
-            color = AppSurfaceTokens.onSurface(),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.End,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
 private fun RankItemRow(
-    item: LiveContributionRankItem
+    item: LiveContributionRankItem,
+    onClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(
                 horizontal = AppSpacingTokens.Large,
                 vertical = AppSpacingTokens.Small

@@ -71,6 +71,10 @@ import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SettingsInputComponent
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.feature.live.rememberLiveChromePalette
 import com.android.purebilibili.feature.live.resolveLivePlayerControlVisualSpec
@@ -137,17 +141,7 @@ private fun LivePlayerIconButton(
     }
 }
 
-/**
- * 直播播放器控制层
- * 支持：
- * 1. 左 1/3 亮度调节手势
- * 2. 右 1/3 音量调节手势
- * 3. 非竖向直播：中间 1/3 上下滑切换全屏
- * 4. 单击显示/隐藏控制器
- * 5. 非竖向直播：双击暂停/播放；竖向直播：轻点清屏，长按更多
- * 6. 竖向直播左右滑动关闭/恢复滚动弹幕
- * 7. 全屏锁定/解锁、截图
- */
+/** 直播共用控制层：点击显隐、双击播放、亮度/音量、全屏、缩放、锁定与截图。 */
 
 // 手势分区
 private enum class LiveGestureZone {
@@ -191,6 +185,10 @@ fun LivePlayerControls(
     // [新增] 手动线路切换
     currentSourceDesc: String = "",
     onSourceClick: () -> Unit = {},
+    onOpenMore: () -> Unit = {},
+    videoScale: Float = 1f,
+    onScale: (Float) -> Unit = {},
+    onResetScale: () -> Unit = {},
     showPipButton: Boolean = false,
     onEnterPip: () -> Unit = {},
     applyTopSystemBarPadding: Boolean = true,
@@ -251,6 +249,7 @@ fun LivePlayerControls(
     val latestPortraitTap by rememberUpdatedState(onPortraitTap)
     val latestOpenPortraitMore by rememberUpdatedState(onOpenPortraitMore)
     val latestOnLike by rememberUpdatedState(onLike)
+    val latestOnScale by rememberUpdatedState(onScale)
     
     // 锁定时控制栏强制隐藏
     val effectiveControlsVisible = isControlsVisible && !isLocked && !usePortraitControls
@@ -264,6 +263,18 @@ fun LivePlayerControls(
                     Modifier
                 } else {
                     Modifier
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                do {
+                                    val event = awaitPointerEvent()
+                                    if (event.changes.count { it.pressed } >= 2) {
+                                        latestOnScale(event.calculateZoom())
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                } while (event.changes.any { it.pressed })
+                            }
+                        }
                         .pointerInput(usePortraitControls, gesturePolicy.doubleTapPlayback) {
                             detectTapGestures(
                                 onTap = {
@@ -432,381 +443,69 @@ fun LivePlayerControls(
             percent = gesturePercent,
         )
         
-        // 2. 顶部栏 (返回 + 标题)
+        // Common controls for portrait, landscape and every app theme.
         AnimatedVisibility(
             visible = showTopBar && effectiveControlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.TopStart)
+            enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopCenter),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                palette.scrim.copy(alpha = 0.92f),
-                                palette.scrim.copy(alpha = 0.48f),
-                                Color.Transparent
-                            )
-                        )
-                    )
+                    .background(Brush.verticalGradient(listOf(palette.scrim.copy(alpha = 0.8f), Color.Transparent)))
                     .then(if (applyTopSystemBarPadding) Modifier.statusBarsPadding() else Modifier)
-                    .padding(
-                        horizontal = AppSpacingTokens.Large,
-                        vertical = AppSpacingTokens.Medium
-                    ),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.ExtraSmall),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                LivePlayerIconButton(
-                    icon = backIcon,
-                    label = "返回",
-                    selected = false,
-                    enabled = true,
-                    onClick = onBack
-                )
-                Spacer(Modifier.width(AppSpacingTokens.Large))
-                Column(modifier = Modifier.weight(1f)) {
-                    AppText(
-                        text = title,
-                        color = LiveStatusPalette.MediaContent,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    if (subtitle.isNotBlank() && isFullscreen) {
-                        Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
-                        AppText(
-                            text = subtitle,
-                            color = LiveStatusPalette.MediaContent.copy(alpha = 0.76f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-                }
-                Spacer(Modifier.width(AppSpacingTokens.Small))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (showLockButton) {
-                        LivePlayerIconButton(
-                            icon = Icons.Outlined.LockOpen,
-                            label = "锁定",
-                            selected = false,
-                            enabled = true,
-                            onClick = { isLocked = true }
-                        )
-                    }
-                    if (showPipButton) {
-                        LivePlayerIconButton(
-                            icon = Icons.Outlined.PictureInPictureAlt,
-                            label = "进入画中画",
-                            selected = false,
-                            enabled = true,
-                            onClick = onEnterPip
-                        )
-                    }
-                    LivePlayerIconButton(
-                        icon = Icons.Outlined.MusicNote,
-                        label = "仅听声音",
-                        selected = isAudioOnly,
-                        enabled = true,
-                        onClick = onToggleAudioOnly,
-                        stateDescription = if (isAudioOnly) "已开启" else "已关闭"
-                    )
-                    LivePlayerIconButton(
-                        icon = Icons.Outlined.PlayCircleOutline,
-                        label = "后台播放",
-                        selected = isBackgroundPlaybackEnabled,
-                        enabled = true,
-                        onClick = onToggleBackgroundPlayback,
-                        stateDescription = if (isBackgroundPlaybackEnabled) "已开启" else "已关闭"
-                    )
-                    LivePlayerIconButton(
-                        icon = Icons.Outlined.Timer,
-                        label = "定时关闭",
-                        selected = false,
-                        enabled = true,
-                        onClick = onOpenShutdownTimer,
-                    )
-                    LivePlayerIconButton(
-                        icon = Icons.Outlined.Info,
-                        label = "播放信息",
-                        selected = false,
-                        enabled = true,
-                        onClick = onOpenPlayerInfo,
-                    )
-                }
+                LivePlayerIconButton(backIcon, "返回", false, true, onBack)
+                AppText(title, color = LiveStatusPalette.MediaContent, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                LivePlayerIconButton(Icons.AutoMirrored.Outlined.Send, "发送弹幕", false, true, onOpenSend)
+                LivePlayerIconButton(Icons.Outlined.SettingsInputComponent, "直播线路", false, true, onSourceClick)
+                LivePlayerIconButton(Icons.Outlined.MoreHoriz, "更多播放设置", false, true, onOpenMore)
             }
         }
-        
-        // 3. 底部栏 (播放暂停 + 进度(直播无进度) + 全屏)
         AnimatedVisibility(
             visible = effectiveControlsVisible,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = bottomControlsBottomPadding)
+            enter = fadeIn(), exit = fadeOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = bottomControlsBottomPadding),
         ) {
-            val scrollState = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                palette.scrim.copy(alpha = 0.44f),
-                                palette.scrim.copy(alpha = 0.92f)
-                            )
-                        )
-                    )
-                    .then(if (applyBottomSystemBarPadding) Modifier.navigationBarsPadding() else Modifier)
-                    .padding(
-                        horizontal = AppSpacingTokens.Large,
-                        vertical = AppSpacingTokens.Medium
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 播放/暂停
-                LivePlayerIconButton(
-                    icon = if (isPlaying) Icons.Outlined.Pause else playIcon,
-                    label = if (isPlaying) "暂停" else "播放",
-                    selected = false,
-                    enabled = true,
-                    onClick = onPlayPause
-                )
-
-                Spacer(Modifier.width(AppSpacingTokens.Large))
-                
-                // [新增] 刷新按钮
-                LivePlayerIconButton(
-                    icon = refreshIcon,
-                    label = "刷新直播",
-                    selected = false,
-                    enabled = true,
-                    onClick = onRefresh
-                )
-
-                Spacer(Modifier.width(AppSpacingTokens.Medium))
-
-                LivePlayerIconButton(
-                    icon = Icons.AutoMirrored.Outlined.Send,
-                    label = "发送弹幕",
-                    selected = false,
-                    enabled = true,
-                    onClick = onOpenSend
-                )
-
-                if (onLike != null) {
-                    Spacer(Modifier.width(AppSpacingTokens.Small))
-                    LiveLikeButton(
-                        tint = LiveStatusPalette.MediaContent,
-                        onLike = onLike
-                    )
-                }
-
-                Spacer(Modifier.width(AppSpacingTokens.Medium))
-                
+            BoxWithConstraints {
+                val compact = maxWidth < 520.dp
                 Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(scrollState),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxWidth()
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, palette.scrim.copy(alpha = 0.8f))))
+                        .then(if (applyBottomSystemBarPadding) Modifier.navigationBarsPadding() else Modifier)
+                        .padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.ExtraSmall),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // [新增] 截图当前帧（放入可横滚区域，避免窄屏挤压固定按钮）
-                    LivePlayerIconButton(
-                        icon = Icons.Outlined.PhotoCamera,
-                        label = "截图",
-                        selected = false,
-                        enabled = true,
-                        onClick = onCaptureScreenshot
-                    )
-                    LivePlayerIconButton(
-                        icon = Icons.Outlined.Block,
-                        label = "屏蔽设置",
-                        selected = false,
-                        enabled = true,
-                        onClick = onOpenBlockSettings
-                    )
-                    AppSurface(
-                        onClick = onToggleDanmaku,
-                        shape = AppShapes.container(ContainerLevel.Pill),
-                        color = if (isDanmakuEnabled) {
-                            palette.accentSoft
-                        } else {
-                            palette.scrim.copy(alpha = 0.34f)
-                        },
-                        modifier = Modifier
-                            .height(controlVisualSpec.rowHeightDp.dp)
-                            .semantics {
-                                selected = isDanmakuEnabled
-                                stateDescription = if (isDanmakuEnabled) "已开启" else "已关闭"
-                            }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium)
-                        ) {
-                            AppIcon(
-                                imageVector = commentIcon,
-                                contentDescription = null,
-                                tint = if (isDanmakuEnabled) {
-                                    palette.accentStrong
-                                } else {
-                                    LiveStatusPalette.MediaContent.copy(alpha = 0.5f)
-                                },
-                                modifier = Modifier.size(controlVisualSpec.iconSizeDp.dp)
-                            )
-                            Spacer(Modifier.width(AppSpacingTokens.ExtraSmall))
-                            AppText(
-                                text = if (isDanmakuEnabled) "弹幕 开" else "弹幕 关",
-                                color = if (isDanmakuEnabled) {
-                                    palette.accentStrong
-                                } else {
-                                    LiveStatusPalette.MediaContent.copy(alpha = 0.5f)
-                                },
-                                style = MaterialTheme.typography.labelMedium
-                            )
+                    LivePlayerIconButton(if (isPlaying) Icons.Outlined.Pause else playIcon, if (isPlaying) "暂停" else "播放", false, true, onPlayPause)
+                    LivePlayerIconButton(refreshIcon, "刷新直播", false, true, onRefresh)
+                    Spacer(Modifier.weight(1f))
+                    if (!compact) LivePlayerIconButton(Icons.Outlined.Block, "屏蔽设置", false, true, onOpenBlockSettings)
+                    LivePlayerIconButton(commentIcon, if (isDanmakuEnabled) "关闭弹幕" else "开启弹幕", isDanmakuEnabled, true, onToggleDanmaku, if (isDanmakuEnabled) "已开启" else "已关闭")
+                    LivePlayerIconButton(Icons.Outlined.Settings, "弹幕设置", false, true, onOpenDanmakuSettings)
+                    if (!compact && currentQualityDesc.isNotBlank()) {
+                        AppSurface(onClick = onQualityClick, shape = AppShapes.container(ContainerLevel.Pill), color = palette.scrim.copy(alpha = 0.4f)) {
+                            AppText(currentQualityDesc, color = LiveStatusPalette.MediaContent, modifier = Modifier.padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.Small))
                         }
                     }
-                    
-                    LivePlayerIconButton(
-                        icon = Icons.Outlined.Settings,
-                        label = "弹幕设置",
-                        selected = false,
-                        enabled = true,
-                        onClick = onOpenDanmakuSettings
-                    )
-                    
-                    if (showChatToggle) {
-                        AppSurface(
-                            onClick = {
-                                com.android.purebilibili.core.util.Logger.d("LivePlayerControls", "Chat toggle clicked, current visible: $isChatVisible")
-                                onToggleChat()
-                            },
-                            shape = AppShapes.container(ContainerLevel.Pill),
-                            color = if (isChatVisible) palette.accentSoft else palette.scrim.copy(alpha = 0.34f),
-                            modifier = Modifier
-                                .height(controlVisualSpec.rowHeightDp.dp)
-                                .semantics {
-                                    selected = isChatVisible
-                                    stateDescription = if (isChatVisible) "已展开" else "已收起"
-                                }
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium)
-                            ) {
-                                AppIcon(
-                                    imageVector = commentIcon,
-                                    contentDescription = null,
-                                    tint = if (isChatVisible) palette.accentStrong else LiveStatusPalette.MediaContent.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(controlVisualSpec.iconSizeDp.dp)
-                                )
-                                Spacer(Modifier.width(AppSpacingTokens.ExtraSmall))
-                                AppText(
-                                    text = "互动区",
-                                    color = if (isChatVisible) palette.accentStrong else LiveStatusPalette.MediaContent.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                    }
-
-                    if (videoFitDesc.isNotBlank()) {
-                        AppSurface(
-                            onClick = onVideoFitClick,
-                            shape = AppShapes.container(ContainerLevel.Pill),
-                            color = palette.scrim.copy(alpha = 0.42f),
-                            modifier = Modifier.height(controlVisualSpec.rowHeightDp.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium)
-                            ) {
-                                AppIcon(
-                                    imageVector = Icons.Outlined.AspectRatio,
-                                    contentDescription = null,
-                                    tint = LiveStatusPalette.MediaContent,
-                                    modifier = Modifier.size(controlVisualSpec.iconSizeDp.dp)
-                                )
-                                Spacer(Modifier.width(AppSpacingTokens.ExtraSmall))
-                                AppText(
-                                    text = videoFitDesc,
-                                    color = LiveStatusPalette.MediaContent,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                    }
-
-                    if (currentSourceDesc.isNotBlank()) {
-                        AppSurface(
-                            onClick = onSourceClick,
-                            shape = AppShapes.container(ContainerLevel.Pill),
-                            color = palette.scrim.copy(alpha = 0.42f),
-                            modifier = Modifier.height(controlVisualSpec.rowHeightDp.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium)
-                            ) {
-                                AppIcon(
-                                    imageVector = Icons.Outlined.SettingsInputComponent,
-                                    contentDescription = null,
-                                    tint = LiveStatusPalette.MediaContent,
-                                    modifier = Modifier.size(controlVisualSpec.iconSizeDp.dp)
-                                )
-                                Spacer(Modifier.width(AppSpacingTokens.ExtraSmall))
-                                AppText(
-                                    text = currentSourceDesc,
-                                    color = LiveStatusPalette.MediaContent,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                    }
-
-                    if (currentQualityDesc.isNotBlank()) {
-                        AppSurface(
-                            onClick = onQualityClick,
-                            shape = AppShapes.container(ContainerLevel.Pill),
-                            color = palette.scrim.copy(alpha = 0.42f),
-                            modifier = Modifier.height(controlVisualSpec.rowHeightDp.dp)
-                        ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.padding(horizontal = AppSpacingTokens.Medium)
-                            ) {
-                                AppText(
-                                    text = currentQualityDesc,
-                                    color = LiveStatusPalette.MediaContent,
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
-                        }
-                    }
+                    if (!compact) LivePlayerIconButton(Icons.Outlined.AspectRatio, "画面比例", false, true, onVideoFitClick)
+                    // Compact mode keeps the same tools in one visible menu instead of a tiny scroll strip.
+                    LivePlayerIconButton(Icons.Outlined.MoreHoriz, "更多播放设置", false, true, onOpenMore)
+                    LivePlayerIconButton(if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen, if (isFullscreen) "退出全屏" else "进入全屏", false, true, onToggleFullscreen)
                 }
-
-                Spacer(Modifier.width(AppSpacingTokens.Medium))
-                
-                // 全屏
-                LivePlayerIconButton(
-                    icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                    label = if (isFullscreen) "退出全屏" else "进入全屏",
-                    selected = false,
-                    enabled = true,
-                    onClick = onToggleFullscreen
-                )
             }
         }
-
+        if (effectiveControlsVisible && showLockButton) {
+            LivePlayerIconButton(Icons.Outlined.LockOpen, "锁定", false, true, { isLocked = true }, modifier = Modifier.align(Alignment.CenterStart).padding(start = AppSpacingTokens.Small))
+            LivePlayerIconButton(Icons.Outlined.PhotoCamera, "截图", false, true, onCaptureScreenshot, modifier = Modifier.align(Alignment.CenterEnd).padding(end = AppSpacingTokens.Small))
+        }
+        if (effectiveControlsVisible && videoScale != 1f) {
+            AppSurface(onClick = onResetScale, shape = AppShapes.container(ContainerLevel.Pill), color = palette.scrim.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.CenterEnd).padding(end = 56.dp)) {
+                AppText("恢复缩放", color = LiveStatusPalette.MediaContent, modifier = Modifier.padding(AppSpacingTokens.Small))
+            }
+        }
         // 4. 锁定状态解锁按钮（垂直居左，始终可见）
         if (isLocked) {
             LivePlayerIconButton(

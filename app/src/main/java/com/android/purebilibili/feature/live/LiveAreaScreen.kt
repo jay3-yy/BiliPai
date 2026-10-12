@@ -1,262 +1,160 @@
 package com.android.purebilibili.feature.live
 
-import com.android.purebilibili.navigation.animatePagerSelection
-
+import android.widget.Toast
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
-import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarBorder
-import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
-import com.android.purebilibili.core.ui.AppTopBar
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppSpacingTokens
-import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
-import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
-import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.responsiveContentWidth
-import com.android.purebilibili.core.theme.AppUiStyle
-import com.android.purebilibili.core.theme.LocalAppUiStyle
-import com.android.purebilibili.core.ui.AppChromeSizeTokens
-import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.core.ui.components.AppSegmentOption
-import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import androidx.compose.material3.MaterialTheme
-import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.components.AppTextButton
-import com.android.purebilibili.core.ui.components.AppText
-import com.android.purebilibili.core.ui.skeleton.ContentCategoryGridSkeleton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
-import com.android.purebilibili.data.model.response.LiveAreaChild
-import com.android.purebilibili.data.model.response.LiveFavoriteTagEntry
-import com.android.purebilibili.data.model.response.LiveAreaParent
+import com.android.purebilibili.core.ui.*
+import com.android.purebilibili.core.ui.components.*
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
+import com.android.purebilibili.core.ui.skeleton.ContentCategoryGridSkeleton
+import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
+import com.android.purebilibili.data.model.response.LiveAreaChild
+import com.android.purebilibili.data.model.response.LiveAreaParent
+import com.android.purebilibili.data.model.response.LiveFavoriteTagEntry
 import com.android.purebilibili.data.repository.LiveRepository
-
+import com.android.purebilibili.navigation.animatePagerSelection
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
-fun LiveAreaScreen(
-    onBack: () -> Unit,
-    onAreaClick: (Int, Int, String) -> Unit
-) {
-    val topChromePolicy = rememberAppTopChromePolicy()
-    val visualSpec = remember(topChromePolicy.tabPresentation) {
-        resolveLiveVisualSpec(topChromePolicy.tabPresentation)
-    }
-    val metrics = visualSpec.homeMetrics
-    val windowSizeClass = LocalWindowSizeClass.current
-    val gridColumns = remember(windowSizeClass.widthDp, windowSizeClass.isTablet) {
-        resolveLiveBiliPaiGridColumns(
-            widthDp = windowSizeClass.widthDp.value.toInt(),
-            isTabletLayout = windowSizeClass.isTablet,
-        )
-    }
-    val colorScheme = MaterialTheme.colorScheme
+fun LiveAreaScreen(onBack: () -> Unit, onAreaClick: (Int, Int, String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val palette = rememberLiveChromePalette()
     var areas by remember { mutableStateOf<List<LiveAreaParent>>(emptyList()) }
-    var isEditing by remember { mutableStateOf(false) }
-    var reloadKey by remember { mutableIntStateOf(0) }
-    val favoriteTags by SettingsManager.getLiveFavoriteTags(context).collectAsStateWithLifecycle(emptyList())
-    val pagerState = rememberPagerState(pageCount = { areas.size })
-
-    LaunchedEffect(reloadKey) {
-        isLoading = true
+    var favorites by remember { mutableStateOf<List<LiveFavoriteTagEntry>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var editing by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var reload by remember { mutableIntStateOf(0) }
+    val canSync = !TokenManager.accessTokenCache.isNullOrBlank()
+    val pager = rememberPagerState(pageCount = { areas.size.coerceAtLeast(1) })
+    LaunchedEffect(reload, canSync) {
+        loading = true
         error = null
-        LiveRepository.getLiveAreaIndex()
-            .onSuccess {
-                areas = it
-                isLoading = false
-            }
-            .onFailure {
-                error = it.message ?: "加载标签失败"
-                isLoading = false
-            }
+        favorites = SettingsManager.getLiveFavoriteTags(context).first()
+        if (canSync) {
+            LiveRepository.getLiveFavoriteTags().onSuccess {
+                favorites = it
+                SettingsManager.setLiveFavoriteTags(context, it)
+            }.onFailure { Toast.makeText(context, it.message ?: "常用标签同步失败", Toast.LENGTH_SHORT).show() }
+        }
+        LiveRepository.getLiveAreaIndex().onSuccess { areas = it }.onFailure { error = it.message ?: "加载标签失败" }
+        loading = false
     }
-
+    fun finishEditing() {
+        if (saving) return
+        saving = true
+        val snapshot = favorites
+        scope.launch {
+            try {
+                val result = if (canSync) LiveRepository.setLiveFavoriteTags(snapshot) else Result.success(Unit)
+                result.onSuccess {
+                    SettingsManager.setLiveFavoriteTags(context, snapshot)
+                    editing = false
+                    Toast.makeText(context, "设置成功", Toast.LENGTH_SHORT).show()
+                }.onFailure { Toast.makeText(context, it.message ?: "保存失败，请重试", Toast.LENGTH_SHORT).show() }
+            } finally { saving = false }
+        }
+    }
     AppScaffold(
-        blurContentReady = !isLoading,
-        modifier = Modifier.fillMaxSize(),
+        blurContentReady = !loading,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            Column {
             AppTopBar(
                 title = "全部标签",
-                navigationIcon = {
-                    AppIconButton(onClick = onBack) {
-                        AppIcon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = "返回",
-                        )
-                    }
-                },
+                navigationIcon = { AppIconButton(onClick = onBack) { AppIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
                 actions = {
-                    AppTextButton(onClick = { isEditing = !isEditing }) {
-                        AppText(if (isEditing) "完成" else "编辑")
+                    AppTextButton(enabled = !loading && !saving, onClick = { if (editing) finishEditing() else editing = true }) {
+                        AppText(if (saving) "保存中…" else if (editing) "完成" else "编辑")
                     }
                 },
             )
-                if (!isLoading && error == null && areas.isNotEmpty()) {
-                LiveFavoriteTagsPanel(
-                    favoriteTags = favoriteTags,
-                    isEditing = isEditing,
-                    onTagClick = { child ->
-                        onAreaClick(child.parentAreaId, child.areaId, child.title)
-                    },
-                    onRemove = { child ->
-                        scope.launch {
-                            SettingsManager.setLiveFavoriteTags(
-                                context,
-                                favoriteTags.filterNot {
-                                    it.parentAreaId == child.parentAreaId && it.areaId == child.areaId
-                                }
-                            )
-                        }
-                    }
-                )
-                LiveAreaParentTabRow(
-                    areas = areas,
-                    selectedTab = pagerState.currentPage,
-                    horizontalPadding = metrics.safeSpaceDp.dp,
-                    onTabSelected = { target ->
-                        scope.launch { animatePagerSelection(pagerState, target) }
-                    }
-                )
-                }
-            }
         },
-        containerColor = colorScheme.background,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize(),
-        ) {
-        when {
-            isLoading -> ContentCategoryGridSkeleton(
-                columns = gridColumns,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = metrics.safeSpaceDp.dp,
-                    end = metrics.safeSpaceDp.dp,
-                    top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
-                    bottom = LocalBottomBarContentPadding.current,
-                ),
-            )
-            error != null -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    AppText(text = error ?: "", color = colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(AppSpacingTokens.Small))
-                    AppTextButton(
-                        onClick = {
-                            isLoading = true
-                            error = null
-                            reloadKey += 1
-                        }
-                    ) {
-                        AppText("重试")
-                    }
+    ) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+            if (!loading && error == null) {
+                LiveFavoriteTagsPanel(
+                    favoriteTags = favorites,
+                    isEditing = editing,
+                    enabled = !saving,
+                    onStartEditing = { editing = true },
+                    onTagClick = { onAreaClick(it.parentAreaId, it.areaId, it.title) },
+                    onRemove = { tag -> favorites = favorites.filterNot { it.areaId == tag.areaId && it.parentAreaId == tag.parentAreaId } },
+                    onMove = { from, to -> favorites = favorites.toMutableList().apply { add(to, removeAt(from)) } },
+                )
+                AppThemeAdaptiveTabRow(
+                    role = AppTabRowRole.SECONDARY,
+                    options = areas.mapIndexed { index, parent -> AppSegmentOption(index, parent.name) },
+                    selectedValue = pager.currentPage,
+                    onSelectionChange = { target -> scope.launch { animatePagerSelection(pager, target) } },
+                    scrollable = true,
+                    centerContent = false,
+                    indicatorPositionProvider = { pager.currentPage + pager.currentPageOffsetFraction },
+                    isScrollInProgressProvider = { pager.isScrollInProgress },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            when {
+                loading -> ContentCategoryGridSkeleton(columns = (LocalWindowSizeClass.current.widthDp.value / 110).toInt().coerceAtLeast(1), modifier = Modifier.weight(1f).fillMaxWidth())
+                error != null -> Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    AppText(error.orEmpty(), color = palette.secondaryText)
+                    AppTextButton(onClick = { reload++ }) { AppText("重新加载") }
                 }
-            }
-            areas.isEmpty() -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                AppText(text = "暂无直播标签", color = colorScheme.onSurfaceVariant)
-            }
-            areas.isNotEmpty() -> {
-                HorizontalPager(
-                    state = pagerState,
-                    userScrollEnabled = true,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-
-                ) { page ->
-                    val selectedArea = areas.getOrNull(page)
-                    if (selectedArea != null) {
-                        val displayChildren = remember(selectedArea.list) {
-                            sortLiveAreaChildrenForDisplay(selectedArea.list.orEmpty())
-                        }
+                else -> AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+                    areas.getOrNull(page)?.let { parent ->
                         LazyVerticalGrid(
-                            columns = GridCells.Fixed(gridColumns),
-                            contentPadding = PaddingValues(
-                                start = metrics.safeSpaceDp.dp,
-                                end = metrics.safeSpaceDp.dp,
-                                top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
-                                bottom = LocalBottomBarContentPadding.current,
-                            ),
-                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
-                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
-                            modifier = Modifier
-                                .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
-                                .fillMaxSize()
+                            columns = GridCells.Adaptive(100.dp),
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = maxOf(LocalBottomBarContentPadding.current, 24.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.fillMaxSize(),
                         ) {
-                            items(displayChildren, key = { it.id }) { child ->
-                                val childAreaId = child.id.toIntOrNull() ?: 0
-                                val childParentId = child.parent_id.toIntOrNull() ?: selectedArea.id
-                                val isFavorite = favoriteTags.any {
-                                    it.parentAreaId == childParentId && it.areaId == childAreaId
-                                }
+                            items(parent.list.orEmpty(), key = { it.id }) { child ->
+                                val tag = child.toLiveFavoriteTagEntry(parent)
                                 LiveAreaGridItem(
                                     child = child,
-                                    isEditing = isEditing,
-                                    isFavorite = isFavorite,
+                                    isEditing = editing,
+                                    isFavorite = favorites.any { it.areaId == tag.areaId && it.parentAreaId == tag.parentAreaId },
                                     onClick = {
-                                        if (isEditing && childAreaId != 0) {
-                                            scope.launch {
-                                                val next = toggleLiveFavoriteTag(
-                                                    current = favoriteTags,
-                                                    entry = child.toLiveFavoriteTagEntry(selectedArea)
-                                                )
-                                                SettingsManager.setLiveFavoriteTags(context, next)
-                                            }
-                                        } else {
-                                            onAreaClick(childParentId, childAreaId, child.name)
-                                        }
-                                    }
+                                        if (saving) return@LiveAreaGridItem
+                                        if (editing && tag.areaId > 0) favorites = toggleLiveFavoriteTag(favorites, tag)
+                                        else onAreaClick(tag.parentAreaId, tag.areaId, tag.title)
+                                    },
                                 )
                             }
                         }
@@ -265,161 +163,73 @@ fun LiveAreaScreen(
             }
         }
     }
-    }
 }
 
-@Composable
-private fun LiveAreaParentTabRow(
-    areas: List<LiveAreaParent>,
-    selectedTab: Int,
-    horizontalPadding: androidx.compose.ui.unit.Dp,
-    onTabSelected: (Int) -> Unit
-) {
-    if (areas.isEmpty()) return
-    val safeSelectedTab = selectedTab.coerceIn(0, areas.lastIndex)
-    val options = remember(areas) {
-        areas.mapIndexed { index, area -> AppSegmentOption(index, area.name) }
-    }
-    val uiStyle = LocalAppUiStyle.current
-    val effectiveHorizontalPadding = if (uiStyle == AppUiStyle.MATERIAL3) 0.dp else horizontalPadding
-    AppThemeAdaptiveTabRow(
-        role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-        centerContent = false,
-        options = options,
-        selectedValue = safeSelectedTab,
-        onSelectionChange = onTabSelected,
-        scrollable = true,
-        minTabWidth = AppChromeSizeTokens.MinimumTouchTarget,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = effectiveHorizontalPadding),
-    )
-}
-
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LiveFavoriteTagsPanel(
     favoriteTags: List<LiveFavoriteTagEntry>,
     isEditing: Boolean,
+    enabled: Boolean,
+    onStartEditing: () -> Unit,
     onTagClick: (LiveFavoriteTagEntry) -> Unit,
-    onRemove: (LiveFavoriteTagEntry) -> Unit
+    onRemove: (LiveFavoriteTagEntry) -> Unit,
+    onMove: (Int, Int) -> Unit,
 ) {
-    val colorScheme = MaterialTheme.colorScheme
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = AppSpacingTokens.Medium)
-    ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            AppText(
-                text = "我的常用标签  ",
-                color = colorScheme.onBackground,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
-            )
-            AppText(
-                text = "点击进入标签",
-                color = colorScheme.outline,
-                style = MaterialTheme.typography.bodySmall,
-            )
+    val latestTags by rememberUpdatedState(favoriteTags)
+    val latestMove by rememberUpdatedState(onMove)
+    val latestStart by rememberUpdatedState(onStartEditing)
+    val positions = remember { mutableStateMapOf<Int, Rect>() }
+    var draggedId by remember { mutableStateOf<Int?>(null) }
+    var dragPosition by remember { mutableStateOf(Offset.Zero) }
+    Column(Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AppText("我的常用标签", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(8.dp))
+            AppText(if (isEditing) "长按拖动排序，点击移除" else "点击进入标签", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        Spacer(Modifier.height(AppSpacingTokens.Small))
-        if (favoriteTags.isEmpty()) {
-            AppText(
-                text = "编辑时点亮标签，常用分区会显示在这里",
-                color = colorScheme.outline,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = AppSpacingTokens.Small)
-            )
-        } else {
-            LazyRow(
-                contentPadding = PaddingValues(end = AppSpacingTokens.Medium),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
-            ) {
-                items(favoriteTags, key = { "${it.parentAreaId}_${it.areaId}" }) { child ->
-                    LiveFavoriteTagCard(
-                        child = child,
-                        isEditing = isEditing,
-                        onClick = { onTagClick(child) },
-                        onRemove = { onRemove(child) }
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
-    }
-}
-
-@Composable
-private fun LiveFavoriteTagCard(
-    child: LiveFavoriteTagEntry,
-    isEditing: Boolean,
-    onClick: () -> Unit,
-    onRemove: () -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    Box {
-        AppSurface(
-            onClick = { if (isEditing) onRemove() else onClick() },
-            color = AppSurfaceTokens.cardContainer(),
-            shape = AppShapes.borderedContainer(ContainerLevel.Card),
-            border = androidx.compose.foundation.BorderStroke(
-                AppSurfaceTokens.OutlineWidth,
-                colorScheme.outline.copy(alpha = 0.28f),
-            ),
-            modifier = Modifier
-                .width(AppSpacingTokens.TripleExtraLarge * 2)
-                .height(AppSpacingTokens.TripleExtraLarge * 2)
-        ) {
-            Column(
-                modifier = Modifier.padding(AppSpacingTokens.Small),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                LiveAreaIcon(
-                    imageUrl = child.coverUrl,
-                    title = child.title,
-                    modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge)
-                )
-                Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
-                AppText(
-                    text = child.title,
-                    color = colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-                if (child.parentTitle.isNotBlank()) {
-                    AppText(
-                        text = child.parentTitle,
-                        color = colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        }
-        if (isEditing) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(AppSpacingTokens.TripleExtraLarge)
-                    .clickable(onClick = onRemove),
-                contentAlignment = Alignment.Center,
-            ) {
-                AppSurface(
-                    shape = CircleShape,
-                    color = colorScheme.errorContainer,
-                    modifier = Modifier.size(AppSpacingTokens.ExtraLarge),
-                ) {
-                    AppIcon(
-                        imageVector = Icons.Outlined.StarBorder,
-                        contentDescription = "移除常用标签",
-                        tint = colorScheme.onErrorContainer,
-                        modifier = Modifier.padding(AppSpacingTokens.ExtraSmall)
-                    )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+            favoriteTags.forEach { tag ->
+                key(tag.areaId) {
+                    val bounds = positions[tag.areaId]
+                    val offset = if (draggedId == tag.areaId && bounds != null) dragPosition - bounds.center else Offset.Zero
+                    Box(
+                        Modifier
+                            .zIndex(if (draggedId == tag.areaId) 1f else 0f)
+                            .onGloballyPositioned { coordinates ->
+                                val rect = coordinates.boundsInParent()
+                                if (positions[tag.areaId] != rect) positions[tag.areaId] = rect
+                            }
+                            .pointerInput(tag.areaId, enabled) {
+                                if (enabled) detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        latestStart()
+                                        draggedId = tag.areaId
+                                        dragPosition = positions[tag.areaId]?.center ?: Offset.Zero
+                                    },
+                                    onDragEnd = { draggedId = null },
+                                    onDragCancel = { draggedId = null },
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        dragPosition += amount
+                                        val targetId = positions.entries.firstOrNull { it.key != tag.areaId && latestTags.any { tag -> tag.areaId == it.key } && it.value.contains(dragPosition) }?.key
+                                        val from = latestTags.indexOfFirst { it.areaId == tag.areaId }
+                                        val to = latestTags.indexOfFirst { it.areaId == targetId }
+                                        if (from >= 0 && to >= 0 && from != to) latestMove(from, to)
+                                    },
+                                )
+                            },
+                    ) {
+                        AppSurface(
+                            onClick = { if (isEditing) onRemove(tag) else onTagClick(tag) },
+                            enabled = enabled,
+                            shape = AppShapes.container(ContainerLevel.Pill),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.graphicsLayer(translationX = offset.x, translationY = offset.y),
+                        ) {
+                            AppText(tag.title + if (isEditing) " −" else "", modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                        }
+                    }
                 }
             }
         }

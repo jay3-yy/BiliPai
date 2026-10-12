@@ -431,7 +431,7 @@ fun BottomBarLiquidSegmentedControl(
     val effectiveLabelFontSize = if (labelFontSize.isSpecified) {
         labelFontSize
     } else {
-        MaterialTheme.typography.labelLarge.fontSize
+        com.android.purebilibili.core.ui.appTabLabelFontSize()
     }
 
     val context = LocalContext.current

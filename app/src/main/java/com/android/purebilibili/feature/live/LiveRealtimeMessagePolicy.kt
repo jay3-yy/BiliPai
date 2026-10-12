@@ -118,6 +118,7 @@ private fun parseLiveDanmakuMessage(json: JsonObject, myMid: Long): LiveRealtime
             isAdmin = user.int(2) == 1,
             guardLevel = info.int(7),
             replyToName = extraPayload?.string("reply_uname").orEmpty(),
+            replyToUid = extraPayload?.long("reply_mid") ?: 0L,
             dmType = extraPayload?.int("dm_type") ?: 0,
             idStr = extraPayload?.string("id_str").orEmpty(),
             reportTs = checkInfo?.long("ts") ?: 0L,

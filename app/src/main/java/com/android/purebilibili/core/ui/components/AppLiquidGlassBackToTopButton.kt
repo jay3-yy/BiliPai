@@ -159,10 +159,10 @@ fun AppLiquidGlassBackToTopButton(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    // Keep the observer mounted through long-press drag so release can settle
-                    // its state. Position dragging belongs to the handler below, not elastic stretch.
+                    // Short drags deform the whole glass button and spring back on release.
+                    // The long-press handler below retains ownership of saved positioning.
                     .appElasticPress(
-                        dragEnabled = false,
+                        dragEnabled = true,
                         state = elasticState,
                         transformInBackdrop = glassMotion,
                     )
@@ -242,7 +242,6 @@ fun AppLiquidGlassBackToTopButton(
                 contentAlignment = Alignment.Center,
             ) {
                 AppIcon(
-                    modifier = if (glassMotion) Modifier.graphicsLayer(elasticState.layerBlock) else Modifier,
                     imageVector = rememberAppChevronUpIcon(),
                     contentDescription = contentDescription,
                     tint = MaterialTheme.colorScheme.primary,

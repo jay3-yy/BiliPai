@@ -42,31 +42,37 @@ class GestureLevelOverlayPolicyTest {
     @Test
     fun overlaySpec_differsByThemeLayout() {
         val md3 = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Md3,
             kind = GestureLevelKind.Volume,
             percent = 0.5f
         )
         val ios = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Ios,
             kind = GestureLevelKind.Volume,
             percent = 0.5f
         )
         val iosBrightness = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Ios,
             kind = GestureLevelKind.Brightness,
             percent = 0.5f
         )
         val md3Brightness = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Md3,
             kind = GestureLevelKind.Brightness,
             percent = 0.5f
         )
         val miuixVolume = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Miuix,
             kind = GestureLevelKind.Volume,
             percent = 0.5f
         )
         val miuixBrightness = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Miuix,
             kind = GestureLevelKind.Brightness,
             percent = 0.5f
@@ -93,7 +99,7 @@ class GestureLevelOverlayPolicyTest {
     }
 
     @Test
-    fun md3Colors_followThemeForBothLevels() {
+    fun md3Colors_keepBrightnessIndependentOfTheme() {
         val themes = listOf(
             lightColorScheme(primary = Color(0xFF6750A4)),
             darkColorScheme(primary = Color(0xFF80CBC4))
@@ -101,12 +107,17 @@ class GestureLevelOverlayPolicyTest {
         for (colors in themes) {
             for (kind in GestureLevelKind.entries) {
                 val spec = resolveGestureLevelOverlaySpec(
+                    brightnessColor = Color.Yellow,
                     style = GestureLevelOverlayStyle.Md3,
                     kind = kind,
                     percent = 0.5f,
                     colorScheme = colors
                 )
-                assertEquals(androidx.compose.ui.graphics.lerp(colors.primary, Color.White, 0.30f), spec.fillColor)
+                assertEquals(
+                    if (kind == GestureLevelKind.Brightness) Color.Yellow
+                    else androidx.compose.ui.graphics.lerp(colors.primary, Color.White, 0.30f),
+                    spec.fillColor
+                )
                 assertEquals(Color.White, spec.iconTint)
                 assertEquals(Color(0xFF16181D).copy(alpha = 0.70f), spec.containerColor)
                 assertEquals(Color.White, spec.textColor)
@@ -122,6 +133,7 @@ class GestureLevelOverlayPolicyTest {
         val darkContent = Color(0xFFF5F5F5)
 
         val light = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Miuix,
             kind = GestureLevelKind.Brightness,
             percent = 0.5f,
@@ -129,6 +141,7 @@ class GestureLevelOverlayPolicyTest {
             miuixContentColor = lightContent
         )
         val dark = resolveGestureLevelOverlaySpec(
+            brightnessColor = Color.Yellow,
             style = GestureLevelOverlayStyle.Miuix,
             kind = GestureLevelKind.Volume,
             percent = 0.5f,

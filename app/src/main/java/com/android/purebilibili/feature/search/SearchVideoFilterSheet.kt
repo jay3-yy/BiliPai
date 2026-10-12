@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.search
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +25,6 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -37,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,18 +71,64 @@ import java.util.concurrent.TimeUnit
 
 /**
  * BiliPai-style video filter chrome:
- * horizontal order chips + fixed filter and layout actions. The filter opens a bottom sheet
- * with publish time / duration / zone selectors.
+ * Content-width order labels. Filter and layout actions live in the top bar.
  */
 @Composable
 fun SearchVideoFilterBar(
     currentOrder: SearchOrder,
+    onOrderChange: (SearchOrder) -> Unit,
+    modifier: Modifier = Modifier,
+    miuixBackdrop: MiuixBackdrop? = null,
+) {
+    val orderOptions = remember { resolveSearchVideoOrderOptions() }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 4.dp)
+            .horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        orderOptions.forEach { order ->
+            val selected = currentOrder == order
+            Box(
+                modifier = Modifier
+                    .height(40.dp)
+                    .semantics { this.selected = selected }
+                    .clip(com.android.purebilibili.core.ui.AppShapes.container(
+                        com.android.purebilibili.core.ui.ContainerLevel.Tag
+                    ))
+                    .clickable(role = Role.Button, onClick = { onOrderChange(order) })
+                    .padding(horizontal = 11.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                AppText(
+                    text = resolveSearchOrderChipLabel(order),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (selected) {
+                        if (LocalAppUiStyle.current == com.android.purebilibili.core.theme.AppUiStyle.MIUIX) {
+                            com.android.purebilibili.core.ui.AppSurfaceTokens.onSurface()
+                        } else {
+                            com.android.purebilibili.core.ui.AppSurfaceTokens.primary()
+                        }
+                    } else {
+                        com.android.purebilibili.core.ui.AppSurfaceTokens.onSurfaceVariantSummary()
+                    },
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun SearchVideoFilterActions(
     currentDurations: Set<SearchDuration>,
     currentVideoTid: Int,
     currentPubTimeType: SearchVideoPubTimeType,
     currentPubBegin: Long?,
     currentPubEnd: Long?,
-    onOrderChange: (SearchOrder) -> Unit,
     onDurationSelect: (SearchDuration) -> Unit,
     onVideoTidChange: (Int) -> Unit,
     onPubTimeTypeChange: (SearchVideoPubTimeType) -> Unit,
@@ -90,96 +138,23 @@ fun SearchVideoFilterBar(
     modifier: Modifier = Modifier,
     miuixBackdrop: MiuixBackdrop? = null,
 ) {
+    val componentSpacing = resolveSearchComponentSpacingSpec(LocalAppUiStyle.current)
+    val chromeSpec = resolveSearchChromeVisualSpec(
+        com.android.purebilibili.core.ui.rememberAppTopChromePolicy()
+    )
+    val actionSize = chromeSpec.clearActionSizeDp.dp
+    val iconSize = chromeSpec.actionIconSizeDp.dp
     var showFilterSheet by remember { mutableStateOf(false) }
     val filterActive = hasActiveSearchVideoFilters(
         durations = currentDurations,
         videoTid = currentVideoTid,
         pubTimeType = currentPubTimeType
     )
-    val orderOptions = remember { resolveSearchVideoOrderOptions() }
-    val orderTabs = remember(orderOptions) {
-        orderOptions.map { AppSegmentOption(it, resolveSearchOrderChipLabel(it)) }
-    }
-
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 8.dp, end = 4.dp, top = 2.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(componentSpacing.actionGapDp.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val scrollState = rememberScrollState()
-        val density = LocalDensity.current
-        val selectedIndex = orderOptions.indexOf(currentOrder).coerceAtLeast(0)
-
-        BoxWithConstraints(
-            modifier = Modifier.weight(1f),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            val viewportWidthDp = maxWidth.value.roundToInt()
-            val useScrollableRail = shouldScrollSearchVideoFilter(
-                itemCount = orderTabs.size,
-                viewportWidthDp = viewportWidthDp
-            )
-            val itemWidthDp = resolveSearchVideoFilterAdaptiveItemWidthDp(
-                itemCount = orderTabs.size,
-                viewportWidthDp = viewportWidthDp
-            )
-            val itemWidth = itemWidthDp.dp
-            val viewportWidthPx = with(density) { maxWidth.toPx() }
-            val itemWidthPx = with(density) { itemWidth.toPx() }
-            val containerHorizontalPaddingPx = with(density) { AppSpacingTokens.ExtraSmall.toPx() }
-            val dragFollowEdgePaddingPx = with(density) { 12.dp.toPx() }
-
-            KeepScrollableTabSelectionVisible(
-                scrollState = scrollState,
-                selectedIndex = if (useScrollableRail) selectedIndex else 0,
-                itemWidthPx = itemWidthPx,
-                contentPaddingPx = containerHorizontalPaddingPx,
-            )
-
-            BottomBarLiquidSegmentedControl(
-                items = orderTabs.map { it.label },
-                selectedIndex = selectedIndex,
-                onSelected = { index ->
-                    orderOptions.getOrNull(index)?.let(onOrderChange)
-                },
-                itemWidth = itemWidth.takeIf { useScrollableRail },
-                height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
-                indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
-                labelFontSize = 13.5.sp,
-                allowNativeLabelOverflow = true,
-                miuixBackdrop = miuixBackdrop,
-                liquidGlassEffectsEnabled = true,
-                tapPressRefractionEnabled = !useScrollableRail,
-                dragSelectionEnabled = orderOptions.size > 1,
-                onIndicatorPositionChanged = { position ->
-                    if (useScrollableRail) {
-                        scrollState.dispatchRawDelta(
-                            resolveSearchVideoFilterDragScrollDeltaPx(
-                                indicatorPosition = position,
-                                itemWidthPx = itemWidthPx,
-                                viewportWidthPx = viewportWidthPx,
-                                currentScrollPx = scrollState.value.toFloat(),
-                                containerHorizontalPaddingPx = containerHorizontalPaddingPx,
-                                edgePaddingPx = dragFollowEdgePaddingPx
-                            )
-                        )
-                    }
-                },
-                modifier = if (useScrollableRail) {
-                    Modifier.liquidDockViewport()
-                } else {
-                    Modifier.fillMaxWidth()
-                },
-                scrollState = scrollState.takeIf { useScrollableRail },
-            )
-        }
-        VerticalDivider(
-            modifier = Modifier
-                .height(18.dp)
-                .padding(horizontal = 2.dp),
-            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-        )
         // Always circular Material ripple. Miuix IconButton indication is square;
         // clip + unbounded radius keeps the wave circular under every preset.
         val filterInteraction = remember { MutableInteractionSource() }
@@ -188,12 +163,12 @@ fun SearchVideoFilterBar(
             backdrop = miuixBackdrop,
             reuseEnabled = true,
             useNeutralLiquidContainer = true,
-            shellLensIntensity = resolveFloatingDockGeometryScale(48f),
-            modifier = Modifier.size(48.dp),
+            shellLensIntensity = resolveFloatingDockGeometryScale(chromeSpec.clearActionSizeDp.toFloat()),
+            modifier = Modifier.size(actionSize),
         ) { _ ->
             Box(
                 modifier = Modifier
-                    .size(48.dp)
+                    .size(actionSize)
                     .clip(CircleShape)
                     .clickable(
                         interactionSource = filterInteraction,
@@ -214,24 +189,23 @@ fun SearchVideoFilterBar(
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(iconSize)
                 )
             }
         }
-        Spacer(modifier = Modifier.size(4.dp))
         BottomBarMatchedReusableLiquidDock(
             shape = CircleShape,
             backdrop = miuixBackdrop,
             reuseEnabled = true,
             useNeutralLiquidContainer = true,
-            shellLensIntensity = resolveFloatingDockGeometryScale(48f),
-            modifier = Modifier.size(48.dp),
+            shellLensIntensity = resolveFloatingDockGeometryScale(chromeSpec.clearActionSizeDp.toFloat()),
+            modifier = Modifier.size(actionSize),
         ) { _ ->
             VideoListLayoutToggle(
                 singleColumn = singleColumn,
                 onClick = onLayoutToggle,
-                modifier = Modifier.size(48.dp),
-                iconModifier = Modifier.size(20.dp),
+                modifier = Modifier.size(actionSize),
+                iconModifier = Modifier.size(iconSize),
             )
         }
     }

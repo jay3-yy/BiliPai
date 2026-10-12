@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.Orientation
@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.MutableFloatState
+import kotlinx.coroutines.Job
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -42,52 +46,51 @@ internal fun LandscapeSidePanel(
     width: Dp,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    closeProgress: MutableFloatState = remember { mutableFloatStateOf(1f) },
     content: @Composable (requestDismiss: () -> Unit) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val latestOnDismiss = rememberUpdatedState(onDismiss)
-    val closeProgress = remember { Animatable(1f) }
+    val animationJob = remember { mutableStateOf<Job?>(null) }
+    fun settleTo(target: Float, durationMillis: Int, dismiss: Boolean = false) {
+        animationJob.value?.cancel()
+        animationJob.value = scope.launch {
+            animate(
+                initialValue = closeProgress.floatValue,
+                targetValue = target,
+                animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+            ) { value, _ -> closeProgress.floatValue = value }
+            if (dismiss) latestOnDismiss.value()
+        }
+    }
     val isSettlingToDismiss = remember { mutableStateOf(false) }
     val drawerWidthPx = with(LocalDensity.current) { width.toPx().coerceAtLeast(1f) }
     val edgeDirection = if (edge == LandscapeSidePanelEdge.End) 1f else -1f
 
-    val requestDismiss = remember(scope, closeProgress) {
-        {
-            if (!isSettlingToDismiss.value) {
-                isSettlingToDismiss.value = true
-                scope.launch {
-                    closeProgress.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-                    )
-                    latestOnDismiss.value()
-                }
-            }
+    val requestDismiss: () -> Unit = {
+        if (!isSettlingToDismiss.value) {
+            isSettlingToDismiss.value = true
+            settleTo(1f, 180, dismiss = true)
         }
     }
 
     val dragState = rememberDraggableState { delta ->
-        if (!isSettlingToDismiss.value) {
-            scope.launch {
-                closeProgress.snapTo(
-                    (closeProgress.value + (edgeDirection * delta / drawerWidthPx))
-                        .coerceIn(0f, 1f),
-                )
-            }
-        }
+        closeProgress.floatValue = (closeProgress.floatValue + edgeDirection * delta / drawerWidthPx)
+            .coerceIn(0f, 1f)
     }
 
     LaunchedEffect(visible) {
+        isSettlingToDismiss.value = false
         if (visible) {
-            isSettlingToDismiss.value = false
-            closeProgress.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
-            )
+            settleTo(0f, 220)
         } else {
-            isSettlingToDismiss.value = false
-            closeProgress.snapTo(1f)
+            animationJob.value?.cancel()
+            closeProgress.floatValue = 1f
         }
+    }
+
+    DisposableEffect(closeProgress) {
+        onDispose { closeProgress.floatValue = 1f }
     }
 
     if (!visible) return
@@ -97,7 +100,7 @@ internal fun LandscapeSidePanel(
             .width(width)
             .offset {
                 IntOffset(
-                    x = (edgeDirection * closeProgress.value * drawerWidthPx).roundToInt(),
+                    x = (edgeDirection * closeProgress.floatValue * drawerWidthPx).roundToInt(),
                     y = 0,
                 )
             }
@@ -106,22 +109,14 @@ internal fun LandscapeSidePanel(
                 orientation = Orientation.Horizontal,
                 onDragStarted = {
                     isSettlingToDismiss.value = false
-                    scope.launch { closeProgress.stop() }
+                    animationJob.value?.cancel()
                 },
                 onDragStopped = { velocity ->
                     val closingVelocity = edgeDirection * velocity
-                    if (closeProgress.value >= 0.42f || closingVelocity >= 900f) {
+                    if (closeProgress.floatValue >= 0.42f || closingVelocity >= 900f) {
                         requestDismiss()
                     } else {
-                        scope.launch {
-                            closeProgress.animateTo(
-                                targetValue = 0f,
-                                animationSpec = tween(
-                                    durationMillis = 180,
-                                    easing = FastOutSlowInEasing,
-                                ),
-                            )
-                        }
+                        settleTo(0f, 180)
                     }
                 },
             ),

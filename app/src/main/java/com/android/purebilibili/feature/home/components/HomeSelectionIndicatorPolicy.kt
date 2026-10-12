@@ -12,8 +12,8 @@ internal fun resolveHomeSelectionIndicatorStyle(
     liquidGlassEnabled: Boolean,
     forceMaterialUnderline: Boolean = false,
 ): HomeSelectionIndicatorStyle = when {
-    forceMaterialUnderline -> HomeSelectionIndicatorStyle.MD3_UNDERLINE
     liquidGlassEnabled -> HomeSelectionIndicatorStyle.CAPSULE
+    forceMaterialUnderline -> HomeSelectionIndicatorStyle.MD3_UNDERLINE
     uiStyle == AppUiStyle.MIUIX -> HomeSelectionIndicatorStyle.CAPSULE
     else -> HomeSelectionIndicatorStyle.MD3_UNDERLINE
 }

@@ -142,7 +142,7 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
     )
     SettingsSearchTarget.DONATE -> SettingsDestinationCopy(
         title = "打赏作者",
-        summary = "自愿支持项目后续持续开发和维护",
+        summary = "支持项目后续持续开发和维护",
     )
     SettingsSearchTarget.TELEGRAM -> SettingsDestinationCopy(
         title = "Telegram 频道 / 交流群",

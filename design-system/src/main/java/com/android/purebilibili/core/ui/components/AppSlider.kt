@@ -71,11 +71,8 @@ fun AppSlider(
         }
         onValueChange(nextValue)
     }
-    if (LocalAppUiStyle.current == AppUiStyle.MIUIX &&
-        com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
-        com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
-        android.os.Build.VERSION.SDK_INT >= 33 && enabled && value.isFinite() && valueRange.endInclusive > valueRange.start) {
-        AppLiquidSlider(value, onSliderValueChange, modifier, valueRange, steps, onValueChangeFinished, colors)
+    if (useAppLiquidValueControls() && value.isFinite() && valueRange.endInclusive > valueRange.start) {
+        AppLiquidSlider(value, onSliderValueChange, modifier, valueRange, steps, onValueChangeFinished, colors, enabled, interactionSource)
         return
     }
     when (LocalAppUiStyle.current) {

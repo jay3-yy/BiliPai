@@ -1,68 +1,48 @@
 package com.android.purebilibili.feature.live
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import com.android.purebilibili.core.ui.components.AppFilterChip
-import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.core.ui.components.AppButton
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Photo
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.MaterialTheme
-import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.components.AppText
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
-import com.android.purebilibili.core.ui.skeleton.ContentVideoGridSkeletonFixedColumns
+import com.android.purebilibili.core.ui.*
+import com.android.purebilibili.core.ui.components.*
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
-import com.android.purebilibili.core.ui.AppTopBar
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppSpacingTokens
-import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
-import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
-import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
+import com.android.purebilibili.core.ui.skeleton.ContentVideoGridSkeletonFixedColumns
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.util.responsiveContentWidth
-import com.android.purebilibili.core.util.shouldShowScrollToTop
-import com.android.purebilibili.data.model.response.LiveAreaChild
 import com.android.purebilibili.data.model.response.LiveRoom
+import com.android.purebilibili.data.model.response.LiveSecondSortTag
 import com.android.purebilibili.data.repository.LiveRepository
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
+private data class LiveAreaTab(val id: Int, val parentId: Int, val title: String, val cover: String = "")
+
+private class LiveAreaRoomPageState {
+    var rooms by mutableStateOf<List<LiveRoom>>(emptyList())
+    var tags by mutableStateOf<List<LiveSecondSortTag>>(emptyList())
+    var sortType by mutableStateOf<String?>(null)
+    var loading by mutableStateOf(true)
+    var loadingMore by mutableStateOf(false)
+    var hasMore by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
+    var moreError by mutableStateOf<String?>(null)
+    var initialized = false
+    val requests = LiveBrowseRequestPolicy()
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun LiveAreaDetailScreen(
     parentAreaId: Int,
@@ -71,344 +51,194 @@ fun LiveAreaDetailScreen(
     onBack: () -> Unit,
     onAreaClick: (Int, Int, String) -> Unit,
     onLiveClick: (Long, String, String) -> Unit,
+    onSearchClick: () -> Unit = {},
 ) {
-    var sortType by remember(parentAreaId, areaId) { mutableStateOf("online") }
-    var isLoading by remember(parentAreaId, areaId, sortType) { mutableStateOf(true) }
-    var error by remember(parentAreaId, areaId, sortType) { mutableStateOf<String?>(null) }
-    var loadMoreError by remember(parentAreaId, areaId, sortType) { mutableStateOf<String?>(null) }
-    var rooms by remember(parentAreaId, areaId, sortType) { mutableStateOf<List<LiveRoom>>(emptyList()) }
-    var siblings by remember(parentAreaId) { mutableStateOf<List<LiveAreaChild>>(emptyList()) }
-    var hasMore by remember(parentAreaId, areaId, sortType) { mutableStateOf(false) }
-    var totalCount by remember(parentAreaId, areaId, sortType) { mutableStateOf(0) }
-    var isLoadingMore by remember(parentAreaId, areaId, sortType) { mutableStateOf(false) }
-    val requests = remember(parentAreaId, areaId, sortType) { LiveBrowseRequestPolicy() }
-    val gridState = rememberLazyGridState()
     val scope = rememberCoroutineScope()
-    val backToTopButtonEnabled = rememberBackToTopButtonEnabled()
-    val hasScrolledAwayFromTop by remember(gridState) {
-        derivedStateOf {
-            shouldShowScrollToTop(
-                firstVisibleItemIndex = gridState.firstVisibleItemIndex,
-                firstVisibleItemScrollOffset = gridState.firstVisibleItemScrollOffset,
-            )
-        }
-    }
-    val topChromePolicy = rememberAppTopChromePolicy()
-    val visualSpec = remember(topChromePolicy.tabPresentation) {
-        resolveLiveVisualSpec(topChromePolicy.tabPresentation)
-    }
-    val metrics = visualSpec.homeMetrics
-    val windowSizeClass = LocalWindowSizeClass.current
-    val contentWidth = if (windowSizeClass.isExpandedScreen) {
-        minOf(windowSizeClass.widthDp, visualSpec.maxContentWidthDp.dp)
-    } else {
-        windowSizeClass.widthDp
-    }
-    val gridColumns = remember(contentWidth, windowSizeClass.isTablet) {
-        resolveLiveBiliPaiGridColumns(
-            widthDp = contentWidth.value.toInt(),
-            isTabletLayout = windowSizeClass.isTablet,
+    var parentTitle by remember(parentAreaId) { mutableStateOf(title) }
+    var tabs by remember(parentAreaId) { mutableStateOf<List<LiveAreaTab>>(emptyList()) }
+    var showFirstFrame by rememberSaveable(parentAreaId) { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var metadataLoaded by remember(parentAreaId) { mutableStateOf(false) }
+    // Mount the ready pager at its actual destination; never expose page zero first.
+    val pager = key(parentAreaId, areaId, metadataLoaded) {
+        rememberPagerState(
+            initialPage = tabs.indexOfFirst { it.id == areaId }.coerceAtLeast(0),
+            pageCount = { tabs.size.coerceAtLeast(1) },
         )
     }
-    val roomSummary = buildString {
-        append(if (sortType == "online") "按人气浏览" else "按最新开播浏览")
-        append(" · $totalCount 个直播间")
+    val pageStates = remember(parentAreaId) { mutableMapOf<Int, LiveAreaRoomPageState>() }
+    val spec = resolveLiveVisualSpec(rememberAppTopChromePolicy().tabPresentation)
+    LaunchedEffect(parentAreaId, areaId) {
+        val parent = LiveRepository.getLiveAreaIndex().getOrNull()?.firstOrNull { it.id == parentAreaId }
+        parentTitle = parent?.name ?: title
+        tabs = parent?.list.orEmpty().map {
+            LiveAreaTab(it.id.toIntOrNull() ?: 0, it.parent_id.toIntOrNull() ?: parentAreaId, it.name, it.pic)
+        }.ifEmpty { listOf(LiveAreaTab(areaId, parentAreaId, title)) }
+        metadataLoaded = true
     }
-
-    fun loadPage(reset: Boolean) {
-        val request = if (reset) requests.refresh() else requests.loadMore(hasMore)
-        if (request == null) return
-        if (reset) {
-            isLoading = true
-            error = null
-        }
-        loadMoreError = null
-        isLoadingMore = !reset
-        val requestedSort = sortType
-        scope.launch {
-            LiveRepository.getAreaRoomsPage(
-                parentAreaId = parentAreaId,
-                areaId = areaId,
-                page = request.page,
-                sortType = requestedSort,
-                areaTitle = title,
-            ).onSuccess { result ->
-                if (!requests.succeed(request)) return@onSuccess
-                rooms = (if (reset) result.rooms else rooms + result.rooms).distinctBy { it.roomid }
-                hasMore = result.hasMore
-                totalCount = result.totalCount
-                isLoading = false
-                isLoadingMore = false
-            }.onFailure {
-                if (!requests.fail(request)) return@onFailure
-                if (reset) error = it.message ?: "加载分区直播失败"
-                else loadMoreError = it.message ?: "加载更多失败"
-                isLoading = false
-                isLoadingMore = false
-            }
-        }
-    }
-
-    suspend fun loadSiblings() {
-        LiveRepository.getLiveAreaIndex().onSuccess { list ->
-            siblings = list.firstOrNull { it.id == parentAreaId }?.list.orEmpty()
-        }
-    }
-
-    LaunchedEffect(parentAreaId, areaId, sortType) {
-        loadPage(reset = true)
-    }
-    LaunchedEffect(parentAreaId) { loadSiblings() }
-
-    LaunchedEffect(gridState, rooms.size, hasMore, isLoading, isLoadingMore, loadMoreError, sortType, parentAreaId, areaId) {
-        snapshotFlow { gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
-            .distinctUntilChanged()
-            .collect { lastVisible ->
-                if (
-                    rooms.isNotEmpty() &&
-                    hasMore &&
-                    !isLoading &&
-                    !isLoadingMore &&
-                    loadMoreError == null &&
-                    lastVisible >= rooms.lastIndex - 4
-                ) {
-                    loadPage(reset = false)
-                }
-            }
-    }
-
     AppScaffold(
-        blurContentReady = !isLoading,
-        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column {
-            AppTopBar(
-                title = title,
-                navigationIcon = {
-                    AppIconButton(onClick = onBack) {
-                        AppIcon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = "返回",
-                        )
-                    }
-                },
-            )
-                AppText(
-                    text = roomSummary,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal = metrics.safeSpaceDp.dp,
-                            vertical = AppSpacingTokens.Small,
-                        ),
+                AppTopBar(
+                    title = parentTitle,
+                    navigationIcon = { AppIconButton(onClick = onBack) { AppIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
+                    actions = { AppIconButton(onClick = onSearchClick) { AppIcon(Icons.Outlined.Search, "搜索直播") } },
                 )
-                LazyRow(
-                    modifier = Modifier
-                        .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(
-                        horizontal = metrics.safeSpaceDp.dp,
-                        vertical = AppSpacingTokens.ExtraSmall,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                ) {
-                item {
-                    LiveSortChip(
-                        text = "最热",
-                        selected = sortType == "online",
-                        onClick = { sortType = "online" },
-                    )
-                }
-                item {
-                    LiveSortChip(
-                        text = "最新",
-                        selected = sortType == "live_time",
-                        onClick = { sortType = "live_time" },
-                    )
-                }
-                items(siblings, key = { it.id }) { child ->
-                    LiveSortChip(
-                        text = child.name,
-                        selected = child.id.toIntOrNull() == areaId,
-                        onClick = {
-                            onAreaClick(
-                                child.parent_id.toIntOrNull() ?: parentAreaId,
-                                child.id.toIntOrNull() ?: 0,
-                                child.name,
-                            )
-                        },
-                    )
-                }
+                if (metadataLoaded) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        AppThemeAdaptiveTabRow(
+                            role = AppTabRowRole.SECONDARY,
+                            options = tabs.mapIndexed { index, tab -> AppSegmentOption(index, tab.title) },
+                            selectedValue = pager.currentPage,
+                            scrollable = true,
+                            centerContent = false,
+                            onSelectionChange = { target -> scope.launch { pager.scrollToPage(target) } },
+                            indicatorPositionProvider = { pager.currentPage + pager.currentPageOffsetFraction },
+                            isScrollInProgressProvider = { pager.isScrollInProgress },
+                            modifier = Modifier.weight(1f),
+                        )
+                        AppIconButton(onClick = { showFirstFrame = !showFirstFrame }) {
+                            AppIcon(if (showFirstFrame) Icons.Outlined.Photo else Icons.Outlined.Image, if (showFirstFrame) "显示封面" else "显示首帧")
+                        }
+                        AppIconButton(onClick = { showMenu = true }) { AppIcon(Icons.Outlined.Menu, "显示分区菜单") }
+                    }
                 }
             }
         },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    ) { innerPadding ->
-        val liveAreaBackdrop = rememberLayerBackdrop()
-        // 听视频小横条悬浮时统一上浮避让（与首页/稍后再看一致）
-        val liveAreaBottomPadding = LocalBottomBarContentPadding.current +
-            if (com.android.purebilibili.core.ui.rememberNowPlayingBarOverlayVisible()) {
-                com.android.purebilibili.core.ui.NowPlayingBarOverlayAvoidancePadding
-            } else {
-                0.dp
+    ) { padding ->
+        if (metadataLoaded) {
+            AppHorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(padding)) { page ->
+                tabs.getOrNull(page)?.let { tab ->
+                    LiveAreaRoomPage(
+                        tab = tab,
+                        state = pageStates.getOrPut(tab.id) { LiveAreaRoomPageState() },
+                        showFirstFrame = showFirstFrame,
+                        onLiveClick = onLiveClick,
+                    )
+                }
             }
-        val topContentPadding = innerPadding.calculateTopPadding() + AppSpacingTokens.Small
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                ,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .layerBackdrop(liveAreaBackdrop)
+        }
+    }
+    if (showMenu) {
+        AppModalBottomSheet(onDismissRequest = { showMenu = false }) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(100.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+                contentPadding = PaddingValues(AppSpacingTokens.Large),
             ) {
-                when {
-                isLoading -> ContentVideoGridSkeletonFixedColumns(
-                    columns = gridColumns,
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(
-                        start = metrics.safeSpaceDp.dp,
-                        end = metrics.safeSpaceDp.dp,
-                        top = topContentPadding,
-                        bottom = liveAreaBottomPadding,
-                    ),
-                    spacing = metrics.cardSpaceDp.dp,
-                )
-                error != null -> Column(
-                    modifier = Modifier.weight(1f).padding(top = innerPadding.calculateTopPadding()),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    LiveAreaDetailState(error.orEmpty(), Modifier.weight(1f))
-                    AppButton(onClick = { loadPage(reset = true) }) { AppText("重试") }
-                }
-                rooms.isEmpty() -> LiveAreaDetailState(
-                    "暂无该标签直播",
-                    Modifier.weight(1f).padding(top = innerPadding.calculateTopPadding()),
-                )
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Fixed(gridColumns),
-                    state = gridState,
-                    modifier = Modifier
-                        .weight(1f)
-                        .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
-                        .fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = metrics.safeSpaceDp.dp,
-                        end = metrics.safeSpaceDp.dp,
-                        top = topContentPadding,
-                        bottom = liveAreaBottomPadding,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
-                    verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
-                ) {
-                    items(rooms, key = { it.roomid }) { room ->
-                        LiveRoomCard(
-                            model = room.toLiveRoomCardUiModel(),
-                            onClick = { onLiveClick(room.roomid, room.title, room.uname) },
-                        )
-                    }
-                    if (loadMoreError != null) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            AppButton(
-                                onClick = { loadPage(reset = false) },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                AppText("$loadMoreError · 重试")
-                            }
+                itemsIndexed(tabs) { index, tab ->
+                    AppTextButton(onClick = {
+                        showMenu = false
+                        scope.launch { pager.scrollToPage(index) }
+                    }) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            coil3.compose.AsyncImage(model = tab.cover, contentDescription = null, modifier = Modifier.size(48.dp), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
+                            AppText(tab.title)
                         }
                     }
-                    if (isLoadingMore) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = AppSpacingTokens.Medium),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                AdaptiveLoadingIndicator()
-                            }
-                        }
-                    }
-                }
                 }
             }
-
-            AppLiquidGlassBackToTopButton(
-                visible = backToTopButtonEnabled && rooms.isNotEmpty() && hasScrolledAwayFromTop,
-                onClick = {
-                    scope.launch {
-                        gridState.animateScrollToTop()
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = AppSpacingTokens.Large,
-                        bottom = liveAreaBottomPadding + AppSpacingTokens.Medium,
-                    ),
-                backdrop = liveAreaBackdrop,
-            )
         }
     }
 }
 
 @Composable
-private fun LiveAreaDetailState(
-    message: String,
-    modifier: Modifier = Modifier,
+private fun LiveAreaRoomPage(
+    tab: LiveAreaTab,
+    state: LiveAreaRoomPageState,
+    showFirstFrame: Boolean,
+    onLiveClick: (Long, String, String) -> Unit,
 ) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        AppText(
-            text = message,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-        )
+    val scope = rememberCoroutineScope()
+    val grid = rememberLazyGridState()
+    val spec = resolveLiveVisualSpec(rememberAppTopChromePolicy().tabPresentation)
+    val window = LocalWindowSizeClass.current
+    val columns = resolveLiveBiliPaiGridColumns(minOf(window.widthDp.value.toInt(), spec.maxContentWidthDp), window.isTablet)
+    var saveCover by remember { mutableStateOf<LiveRoomCardUiModel?>(null) }
+    fun load(reset: Boolean) {
+        val request = if (reset) state.requests.refresh(replace = true) else state.requests.loadMore(state.hasMore)
+        if (request == null) return
+        state.loading = reset
+        state.loadingMore = !reset
+        state.error = null
+        state.moreError = null
+        val sort = state.sortType
+        scope.launch {
+            try {
+                LiveRepository.getLiveSecondHome(tab.parentId, tab.id, request.page, sort)
+                    .onSuccess { result ->
+                        if (!state.requests.succeed(request)) return@onSuccess
+                        state.rooms = (if (reset) result.rooms else state.rooms + result.rooms).distinctBy { it.roomid }
+                        if (result.sortTags.isNotEmpty()) state.tags = result.sortTags
+                        state.hasMore = result.hasMore
+                        state.loading = false
+                        state.loadingMore = false
+                        state.initialized = true
+                    }.onFailure {
+                        if (!state.requests.fail(request)) return@onFailure
+                        if (reset) state.error = it.message ?: "加载失败" else state.moreError = it.message ?: "加载更多失败"
+                        state.loading = false
+                        state.loadingMore = false
+                    }
+            } finally {
+                // Pager can dispose offscreen pages; release the request so returning can retry.
+                if (state.requests.owns(request)) {
+                    state.requests.fail(request)
+                    state.loading = false
+                    state.loadingMore = false
+                }
+            }
+        }
     }
+    LaunchedEffect(tab) { if (!state.initialized || state.rooms.isEmpty()) load(true) }
+    AdaptivePullToRefreshBox(
+        isRefreshing = state.loading,
+        onRefresh = { load(true) },
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            state = grid,
+            modifier = Modifier.responsiveContentWidth(maxWidth = spec.maxContentWidthDp.dp).fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = spec.homeMetrics.safeSpaceDp.dp,
+                end = spec.homeMetrics.safeSpaceDp.dp,
+                top = AppSpacingTokens.Small,
+                bottom = maxOf(LocalBottomBarContentPadding.current, AppSpacingTokens.Large),
+            ),
+            horizontalArrangement = Arrangement.spacedBy(spec.homeMetrics.cardSpaceDp.dp),
+            verticalArrangement = Arrangement.spacedBy(spec.homeMetrics.cardSpaceDp.dp),
+        ) {
+            if (state.tags.isNotEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+                LiveSortTagChipRow(state.tags, state.sortType) { sort ->
+                    if (state.sortType != sort) {
+                        state.sortType = sort
+                        state.rooms = emptyList()
+                        load(true)
+                        scope.launch { grid.scrollToItem(0) }
+                    }
+                }
+            }
+            when {
+                state.loading && state.rooms.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    ContentVideoGridSkeletonFixedColumns(columns, modifier = Modifier.fillMaxWidth().height(560.dp))
+                }
+                state.rooms.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        AppText(state.error ?: "暂无该分区直播", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppTextButton(onClick = { load(true) }) { AppText("重新加载") }
+                    }
+                }
+                else -> items(state.rooms, key = { it.roomid }) { room ->
+                    val card = LiveRoomCardUiModel(room.roomid, room.title, room.displayCover(showFirstFrame), room.uname, room.viewerCount(), room.areaName, room.watchedShow?.textLarge.orEmpty())
+                    LiveRoomCard(card, onClick = { onLiveClick(room.roomid, room.title, room.uname) }, onLongPress = { saveCover = card })
+                }
+            }
+            if (state.rooms.isNotEmpty() || state.hasMore) item(span = { GridItemSpan(maxLineSpan) }) {
+                LiveHomeLoadMoreFooter(state.loadingMore, state.rooms.size, state.hasMore, state.moreError) { load(false) }
+            }
+        }
+    }
+    saveCover?.let { card -> LiveCoverSaveDialog(card) { saveCover = null } }
 }
-
-@Composable
-private fun LiveSortChip(
-    text: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val palette = rememberLiveChromePalette()
-    AppFilterChip(
-        selected = selected,
-        onClick = onClick,
-        shape = AppShapes.borderedContainer(ContainerLevel.Pill),
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = palette.surfaceMuted,
-            labelColor = palette.primaryText,
-            selectedContainerColor = palette.accentSoft,
-            selectedLabelColor = palette.accentStrong,
-        ),
-        border = BorderStroke(
-            AppSurfaceTokens.OutlineWidth,
-            if (selected) palette.accent else palette.border,
-        ),
-        label = {
-            AppText(
-                text = text,
-                style = MaterialTheme.typography.labelLarge,
-            )
-        },
-    )
-}
-
-private fun LiveRoom.toLiveRoomCardUiModel() = LiveRoomCardUiModel(
-    roomId = roomid,
-    title = title,
-    coverUrl = displayCover(),
-    hostName = uname,
-    viewerCount = online,
-    areaName = areaName,
-)

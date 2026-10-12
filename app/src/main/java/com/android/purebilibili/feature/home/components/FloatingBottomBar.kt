@@ -475,6 +475,7 @@ fun FloatingBottomBar(
     externalPagerMotionEffectsEnabled: Boolean = false,
     liquidGlassTuning: LiquidGlassTuning = resolveLiquidGlassTuning(progress = 0.5f),
     drawShell: Boolean = true,
+    onDockTranslationProviderChanged: (((() -> Float)) -> Unit)? = null,
     dragScrollState: ScrollState? = null,
     dragScrollViewportWidthPx: () -> Float = { 0f },
     content: @Composable RowScope.() -> Unit
@@ -535,9 +536,6 @@ fun FloatingBottomBar(
         resolveCompactDockIndicatorLensAmountDp(shellHeight.value).dp.toPx()
     }
     val innerShadowRadius = resolveCompactDockInnerShadowRadiusDp(shellHeight.value).dp
-    val tabPressScale = remember(shellHeight) {
-        resolveCompactDockTabPressScale(shellHeight.value)
-    }
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
     val layoutDirection = LocalLayoutDirection.current
     val configuration = LocalConfiguration.current
@@ -578,15 +576,9 @@ fun FloatingBottomBar(
     } else {
         1f
     }
-    // Compact segmented rows capture the full shell. Home top navigation uses the bottom
-    // dock's indicator-height capture so its moving rim can refract
-    // the page beyond the shell instead of sampling an oversized, tinted dock layer.
-    // Keep both captures capsule-shaped to avoid square corners inside the moving lens.
-    val capturedContentHeight = if (geometryMode == FloatingBottomBarGeometryMode.Segmented) {
-        maxOf(shellHeight, fittedIndicatorHeight)
-    } else {
-        fittedIndicatorHeight
-    }
+    // Match the home top dock: capture unscaled labels at indicator height.
+    // The consuming glass layer owns the capsule and label deformation together.
+    val capturedContentHeight = fittedIndicatorHeight
     val matchedGeometry = remember(shellHeight, fittedIndicatorHeight) {
         resolveMatchedLiquidIndicatorGeometry(
             dockHeightDp = shellHeight.value,
@@ -901,10 +893,13 @@ fun FloatingBottomBar(
 
     // Kyant button rubber band, driven by the indicator pointer (including vertical deltas).
     // Releasing the shared light position spring also returns the complete dock to its anchor.
-    val dockDragTranslationY: () -> Float = {
-        val heightPx = with(density) { shellHeight.toPx() }.coerceAtLeast(1f)
-        heightPx * kotlin.math.tanh(0.05f * (interactiveHighlight?.offset?.y ?: 0f) / heightPx) * DOCK_SHELL_ELASTIC_GAIN
+    val dockDragTranslationY: () -> Float = remember(density, shellHeight, interactiveHighlight) {
+        {
+            val heightPx = with(density) { shellHeight.toPx() }.coerceAtLeast(1f)
+            heightPx * kotlin.math.tanh(0.05f * (interactiveHighlight?.offset?.y ?: 0f) / heightPx) * DOCK_SHELL_ELASTIC_GAIN
+        }
     }
+    SideEffect { onDockTranslationProviderChanged?.invoke(dockDragTranslationY) }
 
     val baseHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(extraDegrees = -45f) else null
     val pillHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(
@@ -1069,21 +1064,12 @@ fun FloatingBottomBar(
             )
         }
 
-        val indicatorStretchXProvider: () -> Float = {
-            val scaleY = resolveFloatingDockIndicatorLayerScaleY(
-                baseScaleY = dampedDragAnimation.scaleY,
-                velocity = dampedDragAnimation.velocity,
-            ).coerceAtLeast(0.001f)
-            resolveFloatingDockIndicatorLayerScaleX(
-                baseScaleX = dampedDragAnimation.scaleX,
-                velocity = dampedDragAnimation.velocity,
-            ) / scaleY
-        }
+        // No inverse stretch or extra press zoom in the exported labels. The lens
+        // applies the same single transform as the home top dock's capture path.
+        val indicatorStretchXProvider: () -> Float = { 1f }
         if (isLiquidGlassMode && backdrop != null) {
             CompositionLocalProvider(
-                LocalFloatingBottomBarTabScale provides {
-                    lerp(1f, tabPressScale, dampedDragAnimation.pressProgress)
-                },
+                LocalFloatingBottomBarTabScale provides { 1f },
                 LocalFloatingBottomBarContentColor provides colors.activeContentColor,
                 LocalFloatingBottomBarActiveContent provides true,
                 LocalFloatingBottomBarIndicatorPosition provides visualIndicatorPositionProvider,

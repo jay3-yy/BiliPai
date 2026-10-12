@@ -45,10 +45,12 @@ class LiveBiliPaiVisualPolicyTest {
     }
 
     @Test
-    fun `mobile and tablet grids follow layout class`() {
+    fun `live grids use available width across device classes`() {
         assertEquals(2, resolveLiveBiliPaiGridColumns(widthDp = 390, isTabletLayout = false))
+        assertEquals(1, resolveLiveBiliPaiGridColumns(widthDp = 220, isTabletLayout = false))
+        assertEquals(3, resolveLiveBiliPaiGridColumns(widthDp = 720, isTabletLayout = false))
         assertEquals(3, resolveLiveBiliPaiGridColumns(widthDp = 720, isTabletLayout = true))
-        assertEquals(4, resolveLiveBiliPaiGridColumns(widthDp = 1100, isTabletLayout = true))
+        assertEquals(5, resolveLiveBiliPaiGridColumns(widthDp = 1100, isTabletLayout = true))
         assertEquals(5, resolveLiveBiliPaiGridColumns(widthDp = 1200, isTabletLayout = true))
     }
 

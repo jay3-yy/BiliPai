@@ -20,7 +20,7 @@ internal fun resolveLivePortraitPresentation(
     return LivePortraitPresentation(
         usePortraitControls = portrait,
         clearScreen = cleared,
-        showChrome = portrait && !cleared && controlsVisible,
+        showChrome = portrait && !cleared && !isFullscreen,
         // The full-screen player owns the media overlay area. Keep the chat preview
         // out of it so chat bubbles cannot stack on top of scrolling danmaku.
         showChatPreview = portrait && !cleared && !isFullscreen && chatVisible,
@@ -37,9 +37,8 @@ data class LivePlayerGesturePolicy(
 )
 
 fun resolveLivePlayerGesturePolicy(layoutMode: LiveRoomLayoutMode): LivePlayerGesturePolicy {
-    val portrait = layoutMode == LiveRoomLayoutMode.PortraitVerticalOverlay
     return LivePlayerGesturePolicy(
-        doubleTapPlayback = !portrait,
+        doubleTapPlayback = true,
         centerDragFullscreen = true,
     )
 }

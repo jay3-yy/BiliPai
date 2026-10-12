@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.live
-
 import com.android.purebilibili.core.util.AppDisplayContext
 import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
 import kotlin.math.roundToInt
+
+internal const val LIVE_INPUT_HEIGHT_DP = 70
+internal const val LIVE_CHAT_INPUT_GAP_DP = 55
 
 enum class LiveRoomLayoutMode {
     PortraitPanel,
@@ -89,31 +91,13 @@ fun resolveLiveRoomLayoutMode(
     isPortraitLive: Boolean,
     hasObstructingHinge: Boolean = false,
 ): LiveRoomLayoutMode {
-    // Hinge panes provide the interaction area even when the window is portrait or compact.
-    if (hasObstructingHinge) {
-        return if (isFullscreen) LiveRoomLayoutMode.LandscapeOverlay else LiveRoomLayoutMode.LandscapeSplit
-    }
-    return if (isTablet) {
-        if (isFullscreen) {
-            if (!isLandscape && isPortraitLive) LiveRoomLayoutMode.PortraitVerticalOverlay
-            else LiveRoomLayoutMode.LandscapeOverlay
-        } else if (isLandscape) {
-            LiveRoomLayoutMode.LandscapeSplit
-        } else if (isPortraitLive) {
-            LiveRoomLayoutMode.PortraitVerticalOverlay
-        } else {
-            LiveRoomLayoutMode.PortraitPanel
-        }
-    } else {
-        if (isFullscreen && !isLandscape && isPortraitLive) {
-            LiveRoomLayoutMode.PortraitVerticalOverlay
-        } else if (isLandscape || isFullscreen) {
-            LiveRoomLayoutMode.LandscapeOverlay
-        } else if (isPortraitLive) {
-            LiveRoomLayoutMode.PortraitVerticalOverlay
-        } else {
-            LiveRoomLayoutMode.PortraitPanel
-        }
+    if (hasObstructingHinge) return if (isFullscreen) LiveRoomLayoutMode.LandscapeOverlay else LiveRoomLayoutMode.LandscapeSplit
+    return when {
+        isFullscreen && isPortraitLive && !isLandscape -> LiveRoomLayoutMode.PortraitVerticalOverlay
+        isFullscreen -> LiveRoomLayoutMode.LandscapeOverlay
+        isLandscape -> LiveRoomLayoutMode.LandscapeSplit
+        isPortraitLive -> LiveRoomLayoutMode.PortraitVerticalOverlay
+        else -> LiveRoomLayoutMode.PortraitPanel
     }
 }
 
@@ -126,14 +110,13 @@ fun shouldShowLiveChatToggle(
         layoutMode == LiveRoomLayoutMode.LandscapeSplit
 }
 
-fun defaultLiveInteractionPanelVisible(): Boolean = false
+fun defaultLiveInteractionPanelVisible(): Boolean = true
 
 fun shouldShowLiveSplitChatPanel(
     layoutMode: LiveRoomLayoutMode,
     isInteractionPanelVisible: Boolean
 ): Boolean {
-    // 分栏聊天列跟随用户开关：退出全屏回到分栏布局时不再自动弹出聊天列
-    // （否则大屏设备退出横屏会看到视频被压缩、四周露出暗背景）。
+    // 普通横屏默认展示完整聊天列，用户可从更多菜单收起。
     return layoutMode == LiveRoomLayoutMode.LandscapeSplit && isInteractionPanelVisible
 }
 
@@ -147,9 +130,11 @@ internal const val LIVE_SPLIT_VIDEO_PREFERRED_FRACTION = 0.62f
 internal fun resolveLiveSplitChatPanelWidthDp(
     screenWidthDp: Int,
     contentPaddingDp: Int = 24,
+    screenHeightDp: Int? = null,
 ): Int {
     val available = (screenWidthDp - contentPaddingDp).coerceAtLeast(1)
-    val preferredVideo = (available * LIVE_SPLIT_VIDEO_PREFERRED_FRACTION).roundToInt()
+    val videoFraction = screenHeightDp?.let { (it.toFloat() / screenWidthDp.coerceAtLeast(1) * 1.08f).coerceIn(LIVE_SPLIT_VIDEO_MIN_FRACTION, LIVE_SPLIT_VIDEO_MAX_FRACTION) } ?: LIVE_SPLIT_VIDEO_PREFERRED_FRACTION
+    val preferredVideo = (available * videoFraction).roundToInt()
         .coerceIn(
             (available * LIVE_SPLIT_VIDEO_MIN_FRACTION).roundToInt(),
             (available * LIVE_SPLIT_VIDEO_MAX_FRACTION).roundToInt(),
@@ -163,7 +148,7 @@ fun shouldShowLiveLandscapeChatOverlay(
     layoutMode: LiveRoomLayoutMode,
     isInteractionPanelVisible: Boolean
 ): Boolean {
-    return layoutMode == LiveRoomLayoutMode.LandscapeOverlay && isInteractionPanelVisible
+    return false // Fullscreen hides ordinary chat, matching PiliPlus.
 }
 
 fun shouldReserveLivePortraitInteractionPanel(
@@ -206,9 +191,9 @@ fun resolveLivePortraitOverlayMetrics(
 ): LivePortraitOverlayMetrics {
     val compactHeight = screenHeightDp < 720
     return LivePortraitOverlayMetrics(
-        panelHeightFraction = if (compactHeight) 0.24f else 0.26f,
+        panelHeightFraction = 0.32f,
         minPanelHeightDp = if (compactHeight) 144 else 180,
-        minPlayerClearanceDp = if (compactHeight) 380 else 460,
+        minPlayerClearanceDp = if (compactHeight) 260 else 320,
         playerControlsGapDp = 10,
         topChromeReserveDp = if (compactHeight) 86 else 96,
         playerControlsReserveDp = if (compactHeight) 68 else 74

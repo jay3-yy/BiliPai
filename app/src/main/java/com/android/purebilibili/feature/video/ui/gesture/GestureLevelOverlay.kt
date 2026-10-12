@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.gesture
 
+import androidx.compose.ui.res.colorResource
+import com.android.purebilibili.R
 import android.os.SystemClock
 import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SizeTransform
@@ -103,13 +105,15 @@ fun BoxScope.GestureLevelOverlayHost(
     val playerChromeProfile = rememberAppPlayerChromeProfile()
     val style = rememberGestureLevelOverlayStyle(playerChromeProfile.tabPresentation)
     val motionSpec = remember { resolveVideoGestureMotionSpec() }
+    val brightnessColor = colorResource(R.color.player_brightness_accent)
     val colorScheme = MaterialTheme.colorScheme
     val miuixColorScheme = MiuixTheme.colorScheme
-    val spec = remember(style, kind, percent, colorScheme, miuixColorScheme) {
+    val spec = remember(style, kind, percent, colorScheme, miuixColorScheme, brightnessColor) {
         resolveGestureLevelOverlaySpec(
             style = style,
             kind = kind,
             percent = percent,
+            brightnessColor = brightnessColor,
             colorScheme = colorScheme,
             miuixContainerColor = miuixColorScheme.surfaceContainerHigh,
             miuixContentColor = miuixColorScheme.onSurface
@@ -383,7 +387,8 @@ private fun MiuixGestureLevelSlider(
     // This is feedback for the player's gesture, so disable slider input while
     // retaining a readable active appearance over video.
     val sliderColors = SliderDefaults.sliderColors(
-        disabledForegroundColor = androidx.compose.ui.graphics.lerp(colors.primary, Color.White, 0.30f),
+        disabledForegroundColor = if (spec.kind == GestureLevelKind.Brightness) spec.fillColor
+            else androidx.compose.ui.graphics.lerp(colors.primary, Color.White, 0.30f),
         disabledBackgroundColor = Color.White.copy(alpha = 0.14f),
         disabledThumbColor = Color.White
     )
@@ -533,13 +538,15 @@ fun GestureLevelOverlayContent(
 ) {
     val kind = resolveGestureLevelKind(mode) ?: return
     val motionSpec = remember { resolveVideoGestureMotionSpec() }
+    val brightnessColor = colorResource(R.color.player_brightness_accent)
     val colorScheme = MaterialTheme.colorScheme
     val miuixColorScheme = MiuixTheme.colorScheme
-    val spec = remember(style, kind, percent, colorScheme, miuixColorScheme) {
+    val spec = remember(style, kind, percent, colorScheme, miuixColorScheme, brightnessColor) {
         resolveGestureLevelOverlaySpec(
             style = style,
             kind = kind,
             percent = percent,
+            brightnessColor = brightnessColor,
             colorScheme = colorScheme,
             miuixContainerColor = miuixColorScheme.surfaceContainerHigh,
             miuixContentColor = miuixColorScheme.onSurface

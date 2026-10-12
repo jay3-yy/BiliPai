@@ -1636,9 +1636,6 @@ private fun LightweightHomeTopTabs(
         val shouldUseMovingIosCapsule = effectivePresentation == AppTopTabPresentation.MOVING_CAPSULE &&
             !skinPlainStyle &&
             !hasSkinStickerIcons
-        val shouldUseLiquidGlassIndicator = isLiquidGlassEnabled &&
-            !skinPlainStyle &&
-            !hasSkinStickerIcons
         val homeSelectionIndicatorStyle = resolveHomeSelectionIndicatorStyle(
             uiStyle = LocalAppUiStyle.current,
             liquidGlassEnabled = isLiquidGlassEnabled,
@@ -1646,7 +1643,7 @@ private fun LightweightHomeTopTabs(
         )
         val shouldUseHomeCapsule =
             homeSelectionIndicatorStyle == HomeSelectionIndicatorStyle.CAPSULE
-        // MD3 首页始终使用下划线；Miuix 保留原胶囊策略。
+        // 开启液态玻璃时使用胶囊；关闭后 MD3 使用下划线。
         val shouldUseMd3LiquidCapsule = effectivePresentation == AppTopTabPresentation.MATERIAL_UNDERLINE &&
             !skinPlainStyle &&
             !hasSkinStickerIcons &&
@@ -1661,6 +1658,11 @@ private fun LightweightHomeTopTabs(
             !hasSkinStickerIcons &&
             !shouldUseMd3DockBackedCapsule &&
             !shouldUseMd3LiquidCapsule
+        // Underlines do not render exported glyphs; keep selected labels in the visible row.
+        val shouldUseLiquidGlassIndicator = isLiquidGlassEnabled &&
+            !skinPlainStyle &&
+            !hasSkinStickerIcons &&
+            !shouldUseMd3NativeUnderline
         val shouldPrimeTopTabLiquidGlassCapture =
             isLiquidGlassEnabled &&
                 !skinPlainStyle &&

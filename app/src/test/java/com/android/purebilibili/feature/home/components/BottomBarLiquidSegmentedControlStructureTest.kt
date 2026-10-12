@@ -607,7 +607,7 @@ class BottomBarLiquidSegmentedControlStructureTest {
             "app/src/main/java/com/android/purebilibili/feature/live/LiveAreaScreen.kt"
         )
         assertTrue(liveList.contains("LiveHomeSelectableChip("))
-        assertTrue(liveArea.contains("LiveHomeSelectableChip("))
+        assertTrue(liveArea.contains("AppThemeAdaptiveTabRow("))
     }
 
     private fun loadSource(path: String): String {

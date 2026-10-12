@@ -1781,6 +1781,7 @@ internal fun LandscapeCommentPanel(
     onSwitchSide: () -> Unit,
     isOnLeft: Boolean,
     drawerWidth: Dp,
+    closeProgress: androidx.compose.runtime.MutableFloatState,
     threadContent: (@Composable ((List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -1798,6 +1799,7 @@ internal fun LandscapeCommentPanel(
     ) {
         LandscapeSidePanel(
             visible = true,
+            closeProgress = closeProgress,
             edge = if (isOnLeft) LandscapeSidePanelEdge.Start else LandscapeSidePanelEdge.End,
             width = drawerWidth.coerceAtMost(maxWidth),
             onDismiss = onDismiss,
@@ -2184,7 +2186,7 @@ private fun VideoContentTabBar(
                 compactMiuixWhenTwoOptions = false,
                 height = liquidChromeSpec.segmentedControlHeightDp.dp,
                 indicatorHeight = liquidChromeSpec.segmentedControlIndicatorHeightDp.dp,
-                labelFontSize = liquidChromeSpec.labelFontSizeSp.sp,
+                labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
                 dragSelectionEnabled = true,
                 tapPressRefractionEnabled = true,
                 miuixBackdrop = miuixBackdrop,
@@ -2200,7 +2202,7 @@ private fun VideoContentTabBar(
                 ) {
                     AppText(
                         text = danmakuActionLayoutPolicy.sendLabel,
-                        fontSize = danmakuActionLayoutPolicy.sendTextSizeSp.sp,
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         tapToCopyEnabled = false,
                         modifier = Modifier

@@ -40,7 +40,7 @@ class LivePortraitPresentationPolicyTest {
     }
 
     @Test
-    fun `fullscreen portrait hides chat preview while retaining player chrome`() {
+    fun `fullscreen portrait hides the room header and regular chat`() {
         val presentation = resolveLivePortraitPresentation(
             LiveRoomLayoutMode.PortraitVerticalOverlay,
             clearScreen = false,
@@ -48,7 +48,7 @@ class LivePortraitPresentationPolicyTest {
             isFullscreen = true,
         )
 
-        assertTrue(presentation.showChrome)
+        assertFalse(presentation.showChrome)
         assertFalse(presentation.showChatPreview)
         assertTrue(presentation.showMediaOverlays)
     }
@@ -75,11 +75,10 @@ class LivePortraitPresentationPolicyTest {
     }
 
     @Test
-    fun `vertical portrait keeps like double tap and enables fullscreen center drag`() {
+    fun `all live layouts keep player double tap and fullscreen center drag`() {
         LiveRoomLayoutMode.entries.forEach { mode ->
             val policy = resolveLivePlayerGesturePolicy(mode)
-            val portrait = mode == LiveRoomLayoutMode.PortraitVerticalOverlay
-            assertEquals(!portrait, policy.doubleTapPlayback)
+            assertTrue(policy.doubleTapPlayback)
             assertTrue(policy.centerDragFullscreen)
         }
     }

@@ -222,7 +222,7 @@ fun SearchLandingContent(
                     start = layoutPolicy.splitOuterPaddingDp.dp,
                     end = layoutPolicy.splitInnerGapDp.dp
                 ),
-                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { TrendingSection() }
                 item { DiscoverSection() }
@@ -254,7 +254,7 @@ fun SearchLandingContent(
                 start = layoutPolicy.resultHorizontalPaddingDp.dp,
                 end = layoutPolicy.resultHorizontalPaddingDp.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             sectionOrder.forEach { section ->
                 item(key = section.name) {
@@ -420,7 +420,7 @@ private fun SearchKeywordSection(
                 Spacer(modifier = Modifier.height(12.dp))
                 AppText(
                     text = resolveSearchKeywordSectionHiddenText(title),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -443,7 +443,7 @@ private fun SearchInlineMessage(
     ) {
         AppText(
             text = title,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (!message.isNullOrBlank()) {
@@ -493,8 +493,8 @@ private fun SearchKeywordSectionHeader(
         ) {
             AppText(
                 text = title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -607,7 +607,7 @@ private fun SearchDiscoverOriginalCell(
                     modifier = Modifier.weight(1f, fill = false),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyMedium.copy(
+                    style = MaterialTheme.typography.bodySmall.copy(
                         fontWeight = FontWeight.Medium,
                         color = colors.titleColor
                     )
@@ -662,7 +662,7 @@ private fun SearchKeywordCell(
             modifier = Modifier.weight(1f, fill = false),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodySmall
         )
         Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
         when {
@@ -731,8 +731,8 @@ private fun SearchHistorySectionModern(
         ) {
             AppText(
                 text = "搜索历史",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold
                 )
             )
             AppTextButton(onClick = onClear) {
@@ -764,7 +764,8 @@ private fun SearchHistorySectionModern(
                             .weight(1f)
                             .clip(AppShapes.container(ContainerLevel.Chip))
                             .clickable { onItemClick(history.keyword) }
-                            .padding(horizontal = AppSpacingTokens.ExtraSmall, vertical = 5.dp),
+                            .heightIn(min = 44.dp)
+                            .padding(horizontal = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppText(
@@ -772,12 +773,15 @@ private fun SearchHistorySectionModern(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f, fill = false)
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f)
                         )
-                        AppIconButton(
-                            onClick = { onDelete(history) },
-                            modifier = Modifier.size(28.dp)
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(AppShapes.container(ContainerLevel.Chip))
+                                .clickable { onDelete(history) },
+                            contentAlignment = Alignment.Center,
                         ) {
                             AppIcon(
                                 imageVector = Icons.Outlined.Close,

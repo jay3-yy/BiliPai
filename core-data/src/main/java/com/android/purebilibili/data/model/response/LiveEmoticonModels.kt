@@ -31,5 +31,7 @@ data class LiveDanmakuEmoticon(
     val url: String = "",
     val des: String = "",
     // 独立大表情发送时用作 msg；普通文本表情不使用此 ID。
-    val emoticon_unique: String = ""
+    val emoticon_unique: String = "",
+    val width: Int? = null,
+    val height: Int? = null
 )

@@ -1659,7 +1659,7 @@ private fun SubReplyAuxiliaryBadge(
         if (!decoration.label.isNullOrBlank()) {
             AppText(
                 text = decoration.label.replace("NO.", "NO.\n"),
-                fontSize = visualSpec.labelFontSizeSp.sp,
+                fontSize = androidx.compose.material3.MaterialTheme.typography.labelMedium.fontSize,
                 lineHeight = visualSpec.labelLineHeightSp.sp,
                 color = appearance.auxiliaryTint,
                 fontWeight = FontWeight.SemiBold

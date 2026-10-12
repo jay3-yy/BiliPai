@@ -42,6 +42,20 @@ class HomeSelectionIndicatorPolicyTest {
     }
 
     @Test
+    fun `liquid glass takes priority over forced material underline`() {
+        AppUiStyle.entries.forEach { uiStyle ->
+            assertEquals(
+                HomeSelectionIndicatorStyle.CAPSULE,
+                resolveHomeSelectionIndicatorStyle(
+                    uiStyle = uiStyle,
+                    liquidGlassEnabled = true,
+                    forceMaterialUnderline = true,
+                ),
+            )
+        }
+    }
+
+    @Test
     fun `legacy home tabs force underline in every theme`() {
         AppUiStyle.entries.forEach { uiStyle ->
             assertEquals(

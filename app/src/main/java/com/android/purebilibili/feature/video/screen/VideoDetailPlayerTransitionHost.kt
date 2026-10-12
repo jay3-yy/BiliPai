@@ -69,6 +69,7 @@ internal data class ContinuousPlayerFullscreenExtras(
     val onLandscapeCommentClick: () -> Unit,
     val landscapeCommentPanelVisible: Boolean,
     val landscapeCommentPanelOnLeft: Boolean,
+    val landscapeCommentCloseProgressProvider: () -> Float = { 0f },
 )
 
 /**
@@ -235,6 +236,7 @@ internal fun PortraitInlineVideoPlayerHost(
                 landscapeCommentPanelVisible = isFullscreen &&
                     fullscreenExtras?.landscapeCommentPanelVisible == true,
                 landscapeCommentPanelOnLeft = fullscreenExtras?.landscapeCommentPanelOnLeft ?: true,
+                landscapeCommentCloseProgressProvider = fullscreenExtras?.landscapeCommentCloseProgressProvider ?: { 0f },
                 danmakuComposerVisible = isFullscreen &&
                     fullscreenExtras?.danmakuComposerVisible == true,
                 isSendingDanmakuComposer = fullscreenExtras?.isSendingDanmakuComposer == true,

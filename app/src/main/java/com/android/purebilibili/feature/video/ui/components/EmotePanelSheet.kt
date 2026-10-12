@@ -108,7 +108,7 @@ fun EmotePanelSheet(
                     onSelectionChange = { selectedPackageIndex = it },
                     modifier = Modifier.fillMaxWidth(),
                     scrollable = true,
-                    labelFontSize = 13.sp,
+                    labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
                 )
                 
                 AppHorizontalDivider(

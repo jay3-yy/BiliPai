@@ -16,10 +16,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -209,6 +211,7 @@ internal fun BottomBarFloatingSegmentedControl(
                     .background(AppSurfaceTokens.background())
             )
         }
+        val dockTranslationProvider = remember { mutableStateOf<() -> Float>({ 0f }) }
         if (scrollState != null) {
             BottomBarMatchedLiquidDock(
                 backdrop = effectiveBackdrop,
@@ -221,7 +224,10 @@ internal fun BottomBarFloatingSegmentedControl(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .fillMaxWidth()
-                    .height(effectiveHeight),
+                    .height(effectiveHeight)
+                    // The viewport shell is outside the scrolling labels, but shares
+                    // their actual dock gesture spring rather than a refresh offset.
+                    .graphicsLayer { translationY = dockTranslationProvider.value() },
                 liquidGlassTuning = liquidGlassTuning,
                 isScrollInProgressProvider = isScrollInProgressProvider,
             ) {}
@@ -280,6 +286,9 @@ internal fun BottomBarFloatingSegmentedControl(
             externalPagerMotionEffectsEnabled = externalPagerMotionEffectsEnabled,
             liquidGlassTuning = liquidGlassTuning,
             drawShell = scrollState == null,
+            onDockTranslationProviderChanged = if (scrollState != null) {
+                { dockTranslationProvider.value = it }
+            } else null,
             dragScrollState = scrollState,
             dragScrollViewportWidthPx = { constraints.maxWidth.toFloat() },
         ) {

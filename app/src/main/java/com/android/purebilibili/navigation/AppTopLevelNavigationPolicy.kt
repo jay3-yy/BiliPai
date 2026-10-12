@@ -221,6 +221,13 @@ internal fun resolveBottomPagerSaveableStateKey(item: BottomNavItem): String {
     return "bottom:${item.route}"
 }
 
+internal fun resolveBottomPagerLayoutKey(page: Int, visibleItems: List<BottomNavItem>): String {
+    // 设置缩减底栏时，Pager 的旧布局/预取仍可能查询已移除的页。
+    // 临时空槽必须有独立键，不能复用首页键造成重复。
+    return visibleItems.getOrNull(page)?.let(::resolveBottomPagerSaveableStateKey)
+        ?: "bottom:removed-slot:$page"
+}
+
 internal fun resolveBottomPagerNavigationDurationMillis(pageDistance: Int): Int {
     val distance = pageDistance.coerceAtLeast(2)
     return distance * 100 + 100

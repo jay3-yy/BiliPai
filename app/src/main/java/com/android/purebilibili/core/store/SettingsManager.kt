@@ -1584,6 +1584,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED =
         booleanPreferencesKey("live_surface_card_transition_enabled")
     // 直播间 SC 醒目留言浮层：默认开启；关闭弹幕时一律隐藏，此处提供独立开关
+    private val KEY_LIVE_SUPER_CHAT_PANEL_ENABLED = booleanPreferencesKey("live_super_chat_panel_enabled")
     private val KEY_LIVE_SUPER_CHAT_FLASH_ENABLED =
         booleanPreferencesKey("live_super_chat_flash_enabled")
     private val KEY_LIVE_DANMAKU_ENABLED = booleanPreferencesKey("live_danmaku_enabled")
@@ -3241,6 +3242,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     }
 
     /** 默认开启：SC 浮层跟随弹幕开关显示；关闭后即使弹幕开启也不再弹出 SC 卡片。 */
+    fun getLiveSuperChatPanelEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[KEY_LIVE_SUPER_CHAT_PANEL_ENABLED] ?: true }
+
+    suspend fun setLiveSuperChatPanelEnabled(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { it[KEY_LIVE_SUPER_CHAT_PANEL_ENABLED] = value }
+    }
+
     fun getLiveSuperChatFlashEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_LIVE_SUPER_CHAT_FLASH_ENABLED] ?: true }
@@ -4107,7 +4115,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         val normalized = tags
             .filter { it.parentAreaId > 0 && it.areaId >= 0 && it.title.isNotBlank() }
             .distinctBy { it.parentAreaId to it.areaId }
-            .take(12)
         context.settingsDataStore.edit { prefs ->
             prefs[KEY_LIVE_FAVORITE_TAGS] = if (normalized.isEmpty()) {
                 ""

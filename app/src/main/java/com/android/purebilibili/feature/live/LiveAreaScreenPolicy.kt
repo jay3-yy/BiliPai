@@ -4,7 +4,7 @@ import com.android.purebilibili.data.model.response.LiveAreaChild
 import com.android.purebilibili.data.model.response.LiveAreaParent
 import com.android.purebilibili.data.model.response.LiveFavoriteTagEntry
 
-internal const val LIVE_FAVORITE_TAG_LIMIT = 8
+internal const val LIVE_FAVORITE_TAG_LIMIT = Int.MAX_VALUE
 
 internal fun sortLiveAreaChildrenForDisplay(children: List<LiveAreaChild>): List<LiveAreaChild> {
     return children

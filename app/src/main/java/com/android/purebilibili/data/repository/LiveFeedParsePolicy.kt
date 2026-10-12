@@ -38,6 +38,7 @@ internal fun parseLiveFeedHomeSnapshot(data: LiveFeedIndexData): LiveFeedHomeSna
     val rooms = linkedMapOf<Long, LiveRoom>()
     val followRooms = linkedMapOf<Long, LiveRoom>()
     val areaEntries = linkedMapOf<String, LiveFeedAreaEntry>()
+    var followedLiveCount = 0
 
     data.cardList.orEmpty().forEach { card ->
         val type = card.cardType
@@ -51,6 +52,7 @@ internal fun parseLiveFeedHomeSnapshot(data: LiveFeedIndexData): LiveFeedHomeSna
                 rooms.putIfAbsent(room.roomid, room)
             }
             "my_idol_v1" -> {
+                followedLiveCount = card.cardData?.myIdolV1?.extraInfo?.totalCount ?: 0
                 card.cardData?.myIdolV1?.list.orEmpty().forEach { roomCard ->
                     if (!isUsableLiveFeedRoom(roomCard)) return@forEach
                     val room = roomCard.toLiveRoom()
@@ -82,6 +84,7 @@ internal fun parseLiveFeedHomeSnapshot(data: LiveFeedIndexData): LiveFeedHomeSna
         followRooms = followRooms.values.toList(),
         areaEntries = areaEntries.values.toList(),
         hasMore = data.hasMore == 1,
+        totalCount = followedLiveCount.coerceAtLeast(followRooms.size),
     )
 }
 

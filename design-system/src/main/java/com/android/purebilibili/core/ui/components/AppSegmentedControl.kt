@@ -402,7 +402,7 @@ fun <T> AppNativeTabRow(
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
         )
     } else {
-        MaterialTheme.typography.labelLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
     }
     val labelContentMinWidth = rememberMeasuredTabMinWidth(
         requestedMinWidth = AppChromeSizeTokens.MinimumTouchTarget,

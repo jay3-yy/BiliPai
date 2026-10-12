@@ -142,7 +142,7 @@ internal fun TabletSecondaryDanmakuActions(
     ) {
         AppText(
             text = layoutPolicy.sendLabel,
-            fontSize = layoutPolicy.sendTextSizeSp.sp,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             tapToCopyEnabled = false,
             modifier = Modifier
@@ -184,7 +184,7 @@ internal fun TabletSecondaryLiquidTabRow(
         compactMiuixWhenTwoOptions = false,
         height = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp.dp,
         indicatorHeight = AppChromeSizeTokens.BottomBarMatchedSegmentedIndicatorHeightDp.dp,
-        labelFontSize = 15.sp,
+        labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
         dragSelectionEnabled = true,
         tapPressRefractionEnabled = true,
         indicatorPositionProvider = indicatorPositionProvider,

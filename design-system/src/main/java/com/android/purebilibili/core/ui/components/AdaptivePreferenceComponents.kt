@@ -658,7 +658,7 @@ internal fun AdaptiveSwitchPreferenceContent(
         )
         return
     }
-    if (listItemStyle == AppListItemStyle.NATIVE && uiStyle == AppUiStyle.MIUIX) {
+    if (listItemStyle == AppListItemStyle.NATIVE && uiStyle == AppUiStyle.MIUIX && !useAppLiquidValueControls()) {
         val platformHaptic = LocalHapticFeedback.current
         val effectiveHaptic = if (LocalAppThemeConfig.current.hapticFeedbackEnabled) {
             platformHaptic
@@ -783,7 +783,7 @@ fun AdaptiveSliderPreferenceRenderer(
         iconStyle,
     )
     val iconCornerRadius = visualSpec.iconCornerRadiusDp.dp
-    if (shouldRouteSliderPreferenceToMiuixSliderPreference(uiStyle)) {
+    if (shouldRouteSliderPreferenceToMiuixSliderPreference(uiStyle) && !useAppLiquidValueControls()) {
         MiuixSliderPreference(
             value = value,
             onValueChange = onValueChange,

@@ -492,7 +492,7 @@ private fun WallpaperDeviceTabRow(
         height = 48.dp,
         indicatorHeight = com.android.purebilibili.core.ui
             .roundMatchedLiquidIndicatorHeightDp(48f).dp,
-        labelFontSize = 14.sp,
+        labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
         dragSelectionEnabled = true,
         tapPressRefractionEnabled = true,
     )

@@ -1296,6 +1296,63 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     /**
      * 重试
      */
+    suspend fun sendEpisodeDanmaku(message: String, color: Int, mode: Int, fontSize: Int): Result<Unit> {
+        val state = _uiState.value as? BangumiPlayerState.Success
+            ?: return Result.failure(IllegalStateException("剧集未加载"))
+        if (!state.isLoggedIn) return Result.failure(IllegalStateException("请先登录"))
+        if (state.currentEpisode.aid <= 0 || state.currentEpisode.cid <= 0) {
+            return Result.failure(IllegalStateException("该剧集不支持发送弹幕"))
+        }
+        if (!canShowBangumiDanmaku(state.seasonDetail.rights) ||
+            com.android.purebilibili.data.repository.DanmakuRepository.isDanmakuServerDisabled(state.currentEpisode.cid)) {
+            return Result.failure(IllegalStateException("该剧集已关闭弹幕"))
+        }
+        val gradual = color == com.android.purebilibili.feature.video.ui.components.DANMAKU_SEND_VIP_GRADUAL_COLOR
+        return com.android.purebilibili.data.repository.DanmakuRepository.sendDanmaku(
+            aid = state.currentEpisode.aid, cid = state.currentEpisode.cid, message = message,
+            progress = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L,
+            color = if (gradual) 16777215 else color, colorful = gradual, mode = mode, fontSize = fontSize,
+        ).map { Unit }
+    }
+
+    fun saveCover(context: android.content.Context) {
+        val state = _uiState.value as? BangumiPlayerState.Success ?: return
+        val cover = state.currentEpisode.cover.ifBlank { state.seasonDetail.cover }
+        viewModelScope.launch {
+            val saved = com.android.purebilibili.feature.download.DownloadManager.saveImageToGallery(
+                context, cover, state.seasonDetail.title
+            )
+            _toastEvent.send(if (saved) "封面已保存到相册" else "保存失败")
+        }
+    }
+
+    fun downloadAudio() {
+        val state = _uiState.value as? BangumiPlayerState.Success ?: return
+        val audioUrl = state.audioUrl?.takeIf { it.isNotBlank() }
+        if (audioUrl == null) {
+            viewModelScope.launch { _toastEvent.send("该剧集没有可下载的独立音频") }
+            return
+        }
+        val episode = state.currentEpisode
+        val task = com.android.purebilibili.feature.download.DownloadTask(
+            aid = episode.aid, bvid = episode.bvid.ifBlank { "ep${episode.id}" }, cid = episode.cid,
+            title = state.seasonDetail.title,
+            episodeLabel = listOf(episode.title, episode.longTitle).filter { it.isNotBlank() }.joinToString(" "),
+            groupKey = "bangumi-audio:${state.seasonDetail.seasonId}",
+            groupTitle = state.seasonDetail.title,
+            episodeSortIndex = state.currentEpisodeIndex,
+            episodeCount = state.seasonDetail.episodes.orEmpty().size.coerceAtLeast(1),
+            cover = episode.cover.ifBlank { state.seasonDetail.cover },
+            ownerName = state.seasonDetail.title, ownerFace = "",
+            duration = (episode.duration / 1000L).toInt(), quality = 0, qualityDesc = "音频",
+            videoUrl = "", audioUrl = audioUrl, isAudioOnly = true,
+        )
+        viewModelScope.launch {
+            val started = com.android.purebilibili.feature.download.DownloadManager.addTask(task)
+            _toastEvent.send(if (started) "已开始下载音频" else "该音频已在下载中或已完成")
+        }
+    }
+
     fun retry() {
         loadBangumiPlay(currentSeasonId, currentEpId, isCourse = isCourseMode)
     }

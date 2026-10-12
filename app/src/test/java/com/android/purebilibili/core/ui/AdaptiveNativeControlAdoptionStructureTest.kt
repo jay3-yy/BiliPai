@@ -12,19 +12,19 @@ class AdaptiveNativeControlAdoptionStructureTest {
             "src/main/java/com/android/purebilibili/feature/login/LoginComponents.kt"
         ).readText()
         val liveArea = File(
-            "src/main/java/com/android/purebilibili/feature/live/LiveAreaDetailScreen.kt"
+            "src/main/java/com/android/purebilibili/feature/live/LiveListScreen.kt"
         ).readText()
         val timeline = File(
             "src/main/java/com/android/purebilibili/feature/bangumi/BangumiTimelineScreen.kt"
         ).readText()
 
         val loginButton = login.substringAfter("fun ModernButton(").substringBefore("\n}\n\n@Composable\nfun TopBar")
-        val liveSortChip = liveArea.substringAfter("private fun LiveSortChip(").substringBefore("\n}\n\nprivate fun LiveRoom")
+        val liveSortChip = liveArea.substringAfter("internal fun LiveSortTagChipRow(").substringBefore("\n}\n\n@Composable")
         val dayChip = timeline.substringAfter("private fun DayChip(").substringBefore("\n}\n\n@Composable")
 
         assertTrue(loginButton.contains("AppButton("))
         assertFalse(loginButton.contains(".clickable("))
-        assertTrue(liveSortChip.contains("AppFilterChip("))
+        assertTrue(liveSortChip.contains("AppThemeAdaptiveTabRow("))
         assertFalse(liveSortChip.contains("AppSurface("))
         assertTrue(dayChip.contains("AppFilterChip("))
         assertFalse(dayChip.contains("AppSurface("))

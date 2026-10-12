@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import androidx.compose.foundation.lazy.grid.GridCells
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -58,6 +61,7 @@ fun LiveFollowingScreen(
     onBack: () -> Unit,
     onLiveClick: (Long, String, String) -> Unit
 ) {
+    var coverToSave by remember { mutableStateOf<LiveRoomCardUiModel?>(null) }
     val topChromePolicy = rememberAppTopChromePolicy()
     val visualSpec = remember(topChromePolicy.tabPresentation) {
         resolveLiveVisualSpec(topChromePolicy.tabPresentation)
@@ -79,6 +83,8 @@ fun LiveFollowingScreen(
     var isLoading by remember { mutableStateOf(true) }
     var isLoadingMore by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+    val gridState = rememberLazyGridState()
+    var totalCount by remember { mutableStateOf(0) }
     var hasMore by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loadMoreError by remember { mutableStateOf<String?>(null) }
@@ -106,6 +112,7 @@ fun LiveFollowingScreen(
                 .onSuccess { page ->
                     if (!requests.succeed(request, page.nextPage)) return@onSuccess
                     items = mergeRooms(items, page.items, refresh)
+                    totalCount = page.totalCount
                     hasMore = page.hasMore
                     isLoading = false
                     isRefreshing = false
@@ -129,7 +136,7 @@ fun LiveFollowingScreen(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             AppTopBar(
-                title = if (items.isNotEmpty()) "${items.size}人正在直播" else "关注直播",
+                title = if (!isLoading) "${totalCount}人正在直播" else "关注直播",
                 navigationIcon = {
                     AppIconButton(onClick = onBack) {
                         AppIcon(
@@ -138,47 +145,47 @@ fun LiveFollowingScreen(
                         )
                     }
                 },
-                actions = {
-                    AppIconButton(
-                        enabled = !isLoading && !isRefreshing,
-                        onClick = { loadPage(refresh = true) },
-                    ) {
-                        AppIcon(
-                            imageVector = Icons.Outlined.Refresh,
-                            contentDescription = if (isRefreshing) "正在刷新" else "刷新",
-                        )
-                    }
-                },
+
             )
         },
         containerColor = colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
+        AdaptivePullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { loadPage(refresh = true) },
+            modifier = Modifier.fillMaxSize().padding(innerPadding),
+        ) {
         when {
             isLoading -> ContentVideoGridSkeletonFixedColumns(
                 columns = gridColumns,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+                    .fillMaxSize(),
             )
-            error != null && items.isEmpty() -> Box(
+            error != null && items.isEmpty() && !hasMore -> Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+                    .fillMaxSize(),
                 contentAlignment = Alignment.Center,
             ) {
                 AppText(text = error ?: "", color = colorScheme.onSurfaceVariant)
             }
+            items.isEmpty() && !hasMore -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AppText("关注的主播暂时都未开播", color = colorScheme.onSurfaceVariant)
+                    AppButton(onClick = { loadPage(refresh = true) }) { AppText("重新加载") }
+                }
+            }
             else -> {
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(gridColumns),
+                    state = gridState,
                     modifier = Modifier
                         .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
                         .fillMaxSize(),
                     contentPadding = PaddingValues(
                         start = metrics.safeSpaceDp.dp,
                         end = metrics.safeSpaceDp.dp,
-                        top = innerPadding.calculateTopPadding() + AppSpacingTokens.Small,
+                        top = AppSpacingTokens.Small,
                         bottom = maxOf(innerPadding.calculateBottomPadding(), LocalBottomBarContentPadding.current),
                     ),
                     horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
@@ -195,29 +202,23 @@ fun LiveFollowingScreen(
                                 coverUrl = listOf(item.cover, item.userCover, item.keyframe, item.face)
                                     .firstOrNull { it.isNotBlank() }.orEmpty(),
                                 hostName = item.uname,
-                                viewerCount = item.online,
+                                viewerCount = item.viewerCount(),
+                                viewerText = item.watchedShow?.textLarge.orEmpty(),
                                 areaName = item.areaName,
                             ),
                             onClick = { onLiveClick(item.roomid, item.title, item.uname) },
+                            onLongPress = { coverToSave = LiveRoomCardUiModel(item.roomid, item.title, item.displayCover(), item.uname, item.online, item.areaName) },
                         )
                     }
-                    item {
-                        if (hasMore || isLoadingMore) {
-                            AppButton(
-                                enabled = !isLoading && !isRefreshing && !isLoadingMore,
-                                modifier = Modifier.fillMaxWidth(),
-                                onClick = { loadPage(refresh = false) },
-                            ) {
-                                AppText(
-                                    if (isLoadingMore) "加载中"
-                                    else if (loadMoreError != null) "$loadMoreError · 重试"
-                                    else "加载更多"
-                                )
-                            }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LiveHomeLoadMoreFooter(isLoadingMore, items.size, hasMore, loadMoreError) {
+                            loadPage(refresh = false)
                         }
                     }
                 }
             }
         }
+        }
     }
+    coverToSave?.let { card -> LiveCoverSaveDialog(card) { coverToSave = null } }
 }

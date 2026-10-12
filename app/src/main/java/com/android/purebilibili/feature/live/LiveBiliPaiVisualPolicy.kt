@@ -182,8 +182,8 @@ internal fun resolveLiveBiliPaiGridColumns(
     widthDp: Int,
     isTabletLayout: Boolean,
 ): Int {
-    if (!isTabletLayout) return 2
-    return (widthDp / 240).coerceIn(3, 5)
+    // Same density rule for phones, tablets and resizable windows.
+    return ((widthDp.coerceAtLeast(1) + 239) / 240).coerceAtLeast(1)
 }
 
 internal fun resolveLiveBiliPaiChipColors(

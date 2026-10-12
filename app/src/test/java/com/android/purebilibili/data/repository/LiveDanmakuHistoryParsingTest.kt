@@ -41,4 +41,17 @@ class LiveDanmakuHistoryParsingTest {
         assertEquals("赛事", item.text)
         assertNull(item.emoticonUrl)
     }
+    @Test
+    fun `history preserves reply identity for profile navigation`() {
+        val result = parseLiveDanmakuHistoryItems(
+            """{"code":0,"data":{"room":[
+                {"text":"回复","reply":{"reply_uname":"Carol","reply_mid":"123"}},
+                {"text":"普通消息"}
+            ]}}"""
+        ).getOrThrow()
+        assertEquals("Carol", result[0].replyToName)
+        assertEquals(123L, result[0].replyToUid)
+        assertEquals(0L, result[1].replyToUid)
+    }
+
 }

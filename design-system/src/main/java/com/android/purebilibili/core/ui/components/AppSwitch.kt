@@ -18,11 +18,8 @@ fun AppSwitch(
     interactionSource: MutableInteractionSource? = null,
     showThumbIcon: Boolean = true,
 ) {
-    if (LocalAppUiStyle.current == AppUiStyle.MIUIX &&
-        com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
-        com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
-        android.os.Build.VERSION.SDK_INT >= 33 && enabled && onCheckedChange != null && thumbContent == null) {
-        AppLiquidSwitch(checked, onCheckedChange, modifier)
+    if (useAppLiquidValueControls()) {
+        AppLiquidSwitch(checked, onCheckedChange, modifier, enabled, thumbContent, interactionSource)
         return
     }
     when (LocalAppUiStyle.current) {

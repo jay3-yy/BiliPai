@@ -652,6 +652,27 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
+    fun bottomPagerLayoutKeys_allowOldLayoutQueriesAfterSettingsRemoveTab() {
+        val before = listOf(
+            BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY,
+            BottomNavItem.PROFILE, BottomNavItem.SETTINGS
+        )
+        val after = before.dropLast(1)
+        // 旧布局仍查询五页，新配置已经只剩四页。
+        val keys = before.indices.map { resolveBottomPagerLayoutKey(it, after) }
+        assertEquals(keys.size, keys.toSet().size)
+        after.forEachIndexed { index, item ->
+            assertEquals(resolveBottomPagerSaveableStateKey(item), keys[index])
+        }
+        assertFalse(keys.last() in before.map(::resolveBottomPagerSaveableStateKey))
+        // 重新启用时恢复标签自身的键，保留原页面状态。
+        assertEquals(
+            resolveBottomPagerSaveableStateKey(BottomNavItem.SETTINGS),
+            resolveBottomPagerLayoutKey(4, before)
+        )
+    }
+
+    @Test
     fun bottomPagerUserScroll_isDisabledToAvoidAccidentalTabSwitch() {
         assertFalse(shouldEnableBottomPagerUserScroll())
     }

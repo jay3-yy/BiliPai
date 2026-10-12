@@ -63,6 +63,9 @@ fun <T> AppTonalPillTabRow(
     height: Dp = resolveTonalPillTabDefaultHeight(),
     labelFontSize: TextUnit = TextUnit.Unspecified,
     scrollState: ScrollState? = null,
+    selectedContainerColor: androidx.compose.ui.graphics.Color? = null,
+    selectedContentColor: androidx.compose.ui.graphics.Color? = null,
+    unselectedContentColor: androidx.compose.ui.graphics.Color? = null,
     indicatorPositionProvider: (() -> Float)? = null,
 ) {
     if (options.isEmpty()) return
@@ -120,7 +123,7 @@ fun <T> AppTonalPillTabRow(
         return bounds.leftDp.dp to bounds.widthDp.dp
     }
 
-    val pillColor = colorScheme.secondaryContainer
+    val pillColor = selectedContainerColor ?: colorScheme.secondaryContainer
     val pillShape = RoundedCornerShape(resolveTonalPillTabCornerRadius())
     val verticalInset = resolveTonalPillTabVerticalInset()
 
@@ -157,9 +160,9 @@ fun <T> AppTonalPillTabRow(
                         selected = index == selectedIndex,
                         enabled = enabled,
                         labelColor = if (index == selectedIndex) {
-                            colorScheme.onSecondaryContainer
+                            selectedContentColor ?: colorScheme.onSecondaryContainer
                         } else {
-                            colorScheme.outline
+                            unselectedContentColor ?: colorScheme.outline
                         },
                         textStyle = textStyle,
                         onClick = { onSelectionChange(option.value) },
@@ -192,9 +195,9 @@ fun <T> AppTonalPillTabRow(
                         selected = index == selectedIndex,
                         enabled = enabled,
                         labelColor = if (index == selectedIndex) {
-                            colorScheme.onSecondaryContainer
+                            selectedContentColor ?: colorScheme.onSecondaryContainer
                         } else {
-                            colorScheme.outline
+                            unselectedContentColor ?: colorScheme.outline
                         },
                         textStyle = textStyle,
                         onClick = { onSelectionChange(option.value) },

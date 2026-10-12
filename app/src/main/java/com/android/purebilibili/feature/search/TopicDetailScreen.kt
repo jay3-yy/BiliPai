@@ -368,7 +368,7 @@ private fun TopicSortControl(
             itemWidth = itemWidth,
             height = 40.dp,
             indicatorHeight = 34.dp,
-            labelFontSize = 13.sp,
+            labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
             backdrop = null,
             modifier = Modifier.width(resolveTopicSortControlWidthDp(options.size).dp),
         )

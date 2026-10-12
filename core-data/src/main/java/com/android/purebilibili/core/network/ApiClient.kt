@@ -19,6 +19,8 @@ import okhttp3.Protocol
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.Retrofit
+import retrofit2.http.FieldMap
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
@@ -610,6 +612,13 @@ interface BilibiliApi {
     //  [新增] 获取直播分区列表
     @GET("https://api.live.bilibili.com/room/v1/Area/getList")
     suspend fun getLiveAreaList(): LiveAreaListResponse
+
+    @GET("https://api.live.bilibili.com/xlive/app-interface/v2/second/get_fav_tag")
+    suspend fun getLiveFavoriteTagsRaw(@QueryMap params: Map<String, String>): okhttp3.ResponseBody
+
+    @FormUrlEncoded
+    @POST("https://api.live.bilibili.com/xlive/app-interface/v2/second/set_fav_tag")
+    suspend fun setLiveFavoriteTagsRaw(@FieldMap params: Map<String, String>): okhttp3.ResponseBody
     
     //  [新增] 分区推荐直播列表 (xlive API)
     @GET("https://api.live.bilibili.com/xlive/web-interface/v1/second/getList")

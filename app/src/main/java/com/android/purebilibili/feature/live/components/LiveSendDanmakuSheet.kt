@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -54,6 +55,9 @@ import com.android.purebilibili.feature.live.LiveDanmakuItem
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.EmojiEmotions
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
 
 /** 弹幕默认颜色（白色） */
 private const val LIVE_DANMAKU_DEFAULT_COLOR = 16777215
@@ -78,14 +82,25 @@ fun LiveSendDanmakuSheet(
     permission: LiveDanmakuPermission = LiveDanmakuPermission(),
     replyTarget: LiveDanmakuItem? = null,
     onOpenEmote: (() -> Unit)? = null,
+    isSending: Boolean = false,
+    selectedColor: Int = LIVE_DANMAKU_DEFAULT_COLOR,
+    selectedMode: Int = LIVE_DANMAKU_DEFAULT_MODE,
+    onColorSelected: (Int) -> Unit = {},
+    onModeSelected: (Int) -> Unit = {},
+    onClearReply: () -> Unit = {},
+    emoticonContent: (@Composable () -> Unit)? = null,
 ) {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    androidx.compose.runtime.LaunchedEffect(emoticonContent == null) {
+        if (emoticonContent == null) { focusRequester.requestFocus(); keyboard?.show() } else keyboard?.hide()
+    }
+    androidx.compose.runtime.LaunchedEffect(permission.availableColors, permission.availableModes) {
+        if (permission.availableColors.isNotEmpty() && permission.availableColors.none { it.color == selectedColor }) onColorSelected(permission.availableColors.first().color)
+        if (permission.availableModes.isNotEmpty() && permission.availableModes.none { it.mode == selectedMode }) onModeSelected(permission.availableModes.first().mode)
+    }
     val maxLength = permission.maxLength.takeIf { it > 0 } ?: 40
-    val defaultColor = permission.availableColors.firstOrNull()?.color ?: LIVE_DANMAKU_DEFAULT_COLOR
-    val defaultMode = permission.availableModes.firstOrNull { it.mode == LIVE_DANMAKU_DEFAULT_MODE }?.mode
-        ?: permission.availableModes.firstOrNull()?.mode
-        ?: LIVE_DANMAKU_DEFAULT_MODE
-    var selectedColor by remember { mutableIntStateOf(defaultColor) }
-    var selectedMode by remember { mutableIntStateOf(defaultMode) }
+    var showStyle by rememberSaveable { mutableStateOf(false) }
     val canChooseStyle = permission.availableColors.isNotEmpty() && permission.availableModes.isNotEmpty()
 
     AppModalBottomSheet(onDismissRequest = onDismiss) {
@@ -102,7 +117,7 @@ fun LiveSendDanmakuSheet(
             verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Large)
         ) {
             AppText(
-                text = if (replyTarget == null) "发弹幕" else "回复 @${replyTarget.uname.ifBlank { replyTarget.uid.toString() }}",
+                text = "发弹幕",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
@@ -117,32 +132,47 @@ fun LiveSendDanmakuSheet(
                         .padding(AppSpacingTokens.Large),
                     verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
                 ) {
+                    if (replyTarget != null) {
+                        AppSurface(shape = AppShapes.container(ContainerLevel.Pill), color = MaterialTheme.colorScheme.secondaryContainer) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = AppSpacingTokens.Medium)) {
+                                AppText("@${replyTarget.uname.ifBlank { replyTarget.uid.toString() }}", modifier = Modifier.weight(1f))
+                                AppIconButton(onClick = onClearReply, enabled = !isSending) { AppIcon(Icons.Outlined.Close, "取消回复，保留正文") }
+                            }
+                        }
+                    }
                     AppOutlinedTextField(
                         value = message,
                         onValueChange = { onMessageChange(it.take(maxLength)) },
                         modifier = Modifier.fillMaxWidth(),
+                        focusRequester = focusRequester,
+                        enabled = !isSending,
                         minLines = 2,
                         maxLines = 4,
                         placeholderText = if (replyTarget == null) "输入弹幕内容" else "输入回复内容",
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = {
                             val content = message.trim()
-                            if (content.isNotEmpty() && permission.canSend) {
+                            if (content.isNotEmpty() && permission.canSend && !isSending) {
                                 onSend(content, selectedColor, selectedMode)
                             }
                         })
                     )
                     if (canChooseStyle) {
+                        com.android.purebilibili.core.ui.components.AppTextButton(onClick = { showStyle = !showStyle }) {
+                            AppText(if (showStyle) "收起弹幕样式" else "弹幕样式")
+                        }
+                    }
+                    if (canChooseStyle && showStyle) {
                         DanmakuColorSelector(
                             options = permission.availableColors,
                             selectedColor = selectedColor,
-                            onColorSelected = { selectedColor = it },
+                            onColorSelected = onColorSelected,
                             modifier = Modifier.fillMaxWidth(),
                         )
                         DanmakuModeSelector(
                             options = permission.availableModes,
                             selectedMode = selectedMode,
-                            onModeSelected = { selectedMode = it },
+                            onModeSelected = onModeSelected,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -171,7 +201,7 @@ fun LiveSendDanmakuSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (onOpenEmote != null) {
-                            AppIconButton(onClick = onOpenEmote) {
+                            AppIconButton(enabled = !isSending, onClick = onOpenEmote) {
                                 AppIcon(
                                     imageVector = Icons.Outlined.EmojiEmotions,
                                     contentDescription = "表情",
@@ -181,14 +211,15 @@ fun LiveSendDanmakuSheet(
                             Box(Modifier)
                         }
                         AppButton(
-                            enabled = permission.canSend && message.trim().isNotEmpty(),
+                            enabled = !isSending && permission.canSend && message.trim().isNotEmpty(),
                             onClick = { onSend(message.trim(), selectedColor, selectedMode) }
                         ) {
-                            AppText("发送")
+                            AppText(if (isSending) "发送中…" else "发送")
                         }
                     }
                 }
             }
+            emoticonContent?.invoke()
         }
     }
 }

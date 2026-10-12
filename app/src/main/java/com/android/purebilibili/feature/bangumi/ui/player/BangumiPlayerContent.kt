@@ -81,14 +81,20 @@ fun BangumiPlayerContent(
     onUserClick: ((Long) -> Unit)? = null,
     onCommentUrlClick: ((String) -> Unit)? = null,
     onDownloadClick: () -> Unit = {},
-    onShareClick: () -> Unit = {}
+    onShareClick: () -> Unit = {},
+    commentsOnly: Boolean = false,
+    onTimestampClick: ((Long) -> Unit)? = null,
+    currentVideoPositionMsProvider: () -> Long = { 0L }
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val showIdentityDecorations by com.android.purebilibili.core.store.SettingsManager
+        .getCommentMemberDecorationsEnabled(context).collectAsStateWithLifecycle(initialValue = false)
     val isCourse = detail.seasonType == 10
     val isFollowing = isBangumiFollowed(detail.userStatus)
     val followedIcon = rememberAppCheckCircleIcon()
     val followIcon = rememberAppProfileAddIcon()
     var showFollowStatusDialog by remember { mutableStateOf(false) }
-    val tabs = listOf("简介", "评论")
+    val tabs = if (commentsOnly) listOf("评论") else listOf("简介", "评论")
     val useCapsuleTabs = LocalAppUiStyle.current == AppUiStyle.MIUIX
     val liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
     val pagerState = rememberPagerState(pageCount = { tabs.size })
@@ -136,7 +142,7 @@ fun BangumiPlayerContent(
                 if (subReplyState.visible) subReplyCoveredBlurProgress.floatValue else 0f
             }
         ) {
-        Row(
+        if (!commentsOnly) Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -165,11 +171,11 @@ fun BangumiPlayerContent(
 
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = true,
+            userScrollEnabled = !commentsOnly,
             modifier = Modifier.weight(1f)
 
         ) { page ->
-            when (page) {
+            when (if (commentsOnly) 1 else page) {
                 0 -> LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 32.dp)
@@ -618,12 +624,12 @@ fun BangumiPlayerContent(
                     if (hasComments) {
                         VideoCommentMainList(
                             viewModel = commentViewModel,
-                            showIdentityDecorations = false,
+                            showIdentityDecorations = showIdentityDecorations,
                             onRootCommentClick = ::openRootCommentComposer,
                             onReplyClick = ::openReplyComposer,
                             onUserClick = onUserClick ?: {},
                             onCommentUrlClick = { url -> onCommentUrlClick?.invoke(url) },
-                            onTimestampClick = null,
+                            onTimestampClick = onTimestampClick,
                             maxTimestampMs = currentEpisode.duration.takeIf { it > 0L },
                             onImagePreview = { images, index, rect, textContent ->
                                 previewImages = images
@@ -702,12 +708,19 @@ fun BangumiPlayerContent(
         onRefresh = commentViewModel::refreshSubReplies,
         onSortModeChange = commentViewModel::setSubReplySortMode,
         onCommentLike = commentViewModel::likeComment,
+        onCommentHate = commentViewModel::hateComment,
+        hatedComments = commentState.hatedComments,
+        onDeleteComment = commentViewModel::deleteComment,
+        onDissolveStart = commentViewModel::startDissolve,
+        showIdentityDecorations = showIdentityDecorations,
+        onAvatarClick = { mid -> mid.toLongOrNull()?.let { onUserClick?.invoke(it) } },
         likedComments = commentState.likedComments,
         currentMid = commentState.currentMid,
         showUpFlag = commentState.showUpFlag,
         onReplyClick = ::openReplyComposer,
         onRootCommentClick = ::openRootCommentComposer,
         onUrlClick = { url -> onCommentUrlClick?.invoke(url) },
+        onTimestampClick = onTimestampClick,
         onImagePreview = { images, index, rect, textContent ->
             previewImages = images
             previewIndex = index
@@ -743,7 +756,7 @@ fun BangumiPlayerContent(
         replyToName = commentState.replyTarget?.member?.uname,
         inputHint = if (commentState.replyTarget == null) commentState.rootInputHint else commentState.childInputHint,
         canInputComment = commentState.canInputComment,
-        currentVideoPositionMsProvider = { 0L }
+        currentVideoPositionMsProvider = currentVideoPositionMsProvider
     )
 }
 }

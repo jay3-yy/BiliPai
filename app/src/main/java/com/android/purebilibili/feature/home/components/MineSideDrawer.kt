@@ -344,7 +344,7 @@ fun MineSideDrawer(
                                             label = user.vipLabel,
                                             vipType = user.vipType,
                                         ),
-                                        fontSize = maxOf(layoutPolicy.badgeFontSp, 10).sp,
+                                        fontSize = androidx.compose.material3.MaterialTheme.typography.labelSmall.fontSize,
                                         compact = true,
                                     )
                                 }

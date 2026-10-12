@@ -84,8 +84,10 @@ class AppElasticPressState internal constructor(
 
     val layerBlock: GraphicsLayerScope.() -> Unit = {
         if (motionEnabled) {
-            val width = visibleSizePx ?: size.width
-            val height = visibleSizePx ?: size.height
+            // A shared state may drive sibling surface/content layers. Geometry belongs
+            // to the observed control, never to an icon or text layer's smaller bounds.
+            val width = visibleSizePx ?: gestureSize.width.takeIf { it > 0f } ?: size.width
+            val height = visibleSizePx ?: gestureSize.height.takeIf { it > 0f } ?: size.height
             if (width > 0f && height > 0f) {
                 val minDimension = minOf(width, height)
                 val maxDimension = maxOf(width, height)
@@ -138,6 +140,8 @@ fun Modifier.appSearchElasticPress(
  * app's reduced-motion setting opt out. Repeated applications on one chain do not stack.
  * [visualSize] overrides geometry for a square surface inside a larger touch target.
  * With [transformInBackdrop], callers must pass [state] and render its layerBlock in drawBackdrop.
+ * That renderer transforms its whole subtree; descendants must not repeat the same transform.
+ * Sibling content layers may share the state and its observed control geometry.
  */
 fun Modifier.appElasticPress(
     enabled: Boolean = true,

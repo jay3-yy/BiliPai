@@ -32,7 +32,7 @@ fun feedContentTypography(
     // 行高倍数、字重与 tabular 数字等规则在 design-tokens 的 FeedContentTextRoles 唯一维护，
     // TV 卡片用 tv-material 字阶装配同一规则；此处只保留手机 Material 字阶与 Miuix 分档。
     val statisticBase = if (isMiuix) MaterialTheme.typography.labelMedium
-    else MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp)
+    else MaterialTheme.typography.labelSmall
     val badgeBase = if (isMiuix) MaterialTheme.typography.labelMedium
     else MaterialTheme.typography.labelSmall
     return FeedContentTypography(

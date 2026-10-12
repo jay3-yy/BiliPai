@@ -26,7 +26,7 @@ internal fun <T> AppSegmentedControl(
     enabled: Boolean = true,
     height: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP.dp,
     indicatorHeight: Dp = BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP.dp,
-    labelFontSize: TextUnit = 14.sp,
+    labelFontSize: TextUnit = TextUnit.Unspecified,
     tapPressRefractionEnabled: Boolean = true,
     dragSelectionEnabled: Boolean = true,
     containerColorOverride: Color? = null,
@@ -91,12 +91,12 @@ private fun <T> AppLiquidSegmentedControlHost(
     val usesDefaultBottomBarSizing =
         height == BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_HEIGHT_DP.dp &&
             indicatorHeight == BOTTOM_BAR_LIQUID_SEGMENTED_CONTROL_INDICATOR_HEIGHT_DP.dp &&
-            labelFontSize == 14.sp
+            labelFontSize == TextUnit.Unspecified
     val resolvedHeight = if (usesDefaultBottomBarSizing) spec.heightDp.dp else height
     val resolvedIndicatorHeight =
         if (usesDefaultBottomBarSizing) spec.indicatorHeightDp.dp else indicatorHeight
     val resolvedLabelFontSize =
-        if (usesDefaultBottomBarSizing) spec.labelFontSizeSp.sp else labelFontSize
+        if (labelFontSize == TextUnit.Unspecified) com.android.purebilibili.core.ui.appTabLabelFontSize() else labelFontSize
     val resolvedTapPressRefractionEnabled =
         if (usesDefaultBottomBarSizing) spec.tapPressRefractionEnabled else tapPressRefractionEnabled
 

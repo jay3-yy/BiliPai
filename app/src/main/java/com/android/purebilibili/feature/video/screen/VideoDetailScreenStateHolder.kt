@@ -766,6 +766,7 @@ internal fun VideoDetailScreenStateHolder(
     var currentBvidCid by presentationState.currentCidState
     var landscapeCommentPanelVisible by rememberSaveable(currentBvid) { mutableStateOf(false) }
     var landscapeCommentPanelOnLeft by rememberSaveable(currentBvid) { mutableStateOf(false) }
+    val landscapeCommentCloseProgress = remember(currentBvid) { mutableFloatStateOf(1f) }
     // Episode cover captured at collection/playlist in-page switch (survives Loading.Initial).
     var pendingInPageSwitchCoverUrl by rememberSaveable { mutableStateOf("") }
     var isPipMode by presentationState.pipModeState
@@ -3581,6 +3582,7 @@ internal fun VideoDetailScreenStateHolder(
                 },
                 landscapeCommentPanelVisible = canShowLandscapeComments && landscapeCommentPanelVisible,
                 landscapeCommentPanelOnLeft = landscapeCommentPanelOnLeft,
+                landscapeCommentCloseProgressProvider = { landscapeCommentCloseProgress.floatValue },
             ),
         )
         }
@@ -3670,6 +3672,7 @@ internal fun VideoDetailScreenStateHolder(
                             },
                             onSwitchSide = { landscapeCommentPanelOnLeft = !landscapeCommentPanelOnLeft },
                             isOnLeft = landscapeCommentPanelOnLeft,
+                            closeProgress = landscapeCommentCloseProgress,
                             drawerWidth = com.android.purebilibili.feature.video.ui.overlay
                                 .resolveLandscapeEndDrawerLayoutPolicy(configuration.screenWidthDp)
                                 .drawerWidthDp.dp,
@@ -3728,6 +3731,7 @@ internal fun VideoDetailScreenStateHolder(
                         transitionEnabled = detailChildTransitionEnabled,
                         landscapeCommentPanelVisible = canShowLandscapeComments && landscapeCommentPanelVisible,
                         landscapeCommentPanelOnLeft = landscapeCommentPanelOnLeft,
+                landscapeCommentCloseProgressProvider = { landscapeCommentCloseProgress.floatValue },
                         danmakuComposerVisible = showDanmakuDialog && useInlineDanmakuComposer,
                         isSendingDanmakuComposer = isSendingDanmaku,
                         danmakuComposerInitialText = composerDrafts.danmaku.text,
@@ -3919,6 +3923,7 @@ internal fun VideoDetailScreenStateHolder(
                             },
                             onSwitchSide = { landscapeCommentPanelOnLeft = !landscapeCommentPanelOnLeft },
                             isOnLeft = landscapeCommentPanelOnLeft,
+                            closeProgress = landscapeCommentCloseProgress,
                             drawerWidth = com.android.purebilibili.feature.video.ui.overlay
                                 .resolveLandscapeEndDrawerLayoutPolicy(configuration.screenWidthDp)
                                 .drawerWidthDp.dp,

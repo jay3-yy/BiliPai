@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -41,6 +42,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntSize
@@ -1081,18 +1083,23 @@ fun VideoPlayerOverlay(
             compact = playerControlVisibility.compactPlayerChrome
         )
     }
-    val landscapeCommentReservedWidth = if (landscapeCommentPanelVisible) {
+    val landscapeCommentReservedWidth = if (landscapeCommentPanelVisible && !state.landscapeCommentViewportAlreadyReserved) {
         resolveLandscapeEndDrawerLayoutPolicy(configuration.screenWidthDp).drawerWidthDp.dp
     } else {
         0.dp
     }
     val overlayContentModifier = Modifier
         .fillMaxSize()
-        .padding(
-            start = if (landscapeCommentPanelOnLeft) landscapeCommentReservedWidth else 0.dp,
-            end = endDrawerReservedWidth +
-                if (landscapeCommentPanelOnLeft) 0.dp else landscapeCommentReservedWidth,
-        )
+        .layout { measurable, constraints ->
+            val commentInset = (landscapeCommentReservedWidth.toPx() *
+                (1f - state.landscapeCommentCloseProgressProvider().coerceIn(0f, 1f))).toInt()
+            val endInset = endDrawerReservedWidth.roundToPx()
+            val totalInset = (commentInset + endInset).coerceAtMost(constraints.maxWidth)
+            val placeable = measurable.measure(constraints.offset(horizontal = -totalInset))
+            layout(placeable.width + totalInset, placeable.height) {
+                placeable.placeRelative(if (landscapeCommentPanelOnLeft) commentInset else 0, 0)
+            }
+        }
 
     // 先打开设备面板；只有用户选择搜索 DLNA 时才请求原始局域网权限。
     val onCastClickAction = { showCastDialog = true }

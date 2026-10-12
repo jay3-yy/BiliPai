@@ -12,4 +12,6 @@
     <color name="splash_bilipai_monet_background">#FFD3E3FD</color>
     <color name="splash_bilipai_monet_foreground">#FF0842A0</color>
     <color name="shortcut_icon_tint">@color/bili_pink</color>
+    <!-- Semantic accent for brightness feedback, independent of the app theme. -->
+    <color name="player_brightness_accent">#FFFFD60A</color>
 </resources>

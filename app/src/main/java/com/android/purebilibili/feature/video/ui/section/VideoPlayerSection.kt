@@ -138,6 +138,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.alpha
@@ -162,6 +163,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
@@ -1731,11 +1733,6 @@ private fun VideoPlayerSectionContent(
             0
         }
     }
-    val animatedLandscapeCommentReservedWidth by animateDpAsState(
-        targetValue = landscapeCommentReservedWidthDp.dp,
-        animationSpec = tween(durationMillis = 220),
-        label = "landscape_comment_panel_reserved_width",
-    )
 
     fun commitExplicitSeek(positionMs: Long) {
         val commitResult = commitPlaybackSeekInteraction(
@@ -2081,11 +2078,16 @@ private fun VideoPlayerSectionContent(
     val playerContentModifier = Modifier
         .fillMaxSize()
         .padding(top = contentTopInset)
-        .padding(
-            start = if (landscapeCommentPanelOnLeft) animatedLandscapeCommentReservedWidth else 0.dp,
-            end = animatedEndDrawerReservedWidth +
-                if (landscapeCommentPanelOnLeft) 0.dp else animatedLandscapeCommentReservedWidth,
-        )
+        .layout { measurable, constraints ->
+            val commentInset = (landscapeCommentReservedWidthDp.dp.toPx() *
+                (1f - state.landscapeCommentCloseProgressProvider().coerceIn(0f, 1f))).toInt()
+            val endInset = animatedEndDrawerReservedWidth.roundToPx()
+            val totalInset = (commentInset + endInset).coerceAtMost(constraints.maxWidth)
+            val placeable = measurable.measure(constraints.offset(horizontal = -totalInset))
+            layout(placeable.width + totalInset, placeable.height) {
+                placeable.placeRelative(if (landscapeCommentPanelOnLeft) commentInset else 0, 0)
+            }
+        }
 
     // HDR 下 SurfaceView 不能参与 Compose sharedElement；实时 morph 仅 SDR TextureView 路径。
     val navigationHdrSurfaceRequired = requiresHdrSurfaceOutput(
@@ -5576,6 +5578,7 @@ private fun VideoPlayerSectionContent(
                     ambientVideoBoundsInWindow = ambientPresentation?.videoBoundsInWindow,
                     landscapeCommentPanelVisible = landscapeCommentPanelVisible,
                     landscapeCommentPanelOnLeft = landscapeCommentPanelOnLeft,
+                    landscapeCommentCloseProgressProvider = state.landscapeCommentCloseProgressProvider,
                 )
                 val overlayActions = VideoPlayerOverlayActions(
                     onToggleVisible = { showControls = !showControls },

@@ -1962,7 +1962,7 @@ fun CommonListScreen(
                                 scrollable = FavoriteSection.entries.size > 4,
                                 height = historyFilterChrome.heightDp.dp,
                                 indicatorHeight = historyFilterChrome.indicatorHeightDp.dp,
-                                labelFontSize = historyFilterChrome.labelFontSizeSp.sp,
+                                labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
                                 dragSelectionEnabled = historyFilterChrome.dragSelectionEnabled,
                                 tapPressRefractionEnabled = true,
                                 modifier = Modifier
@@ -2052,7 +2052,7 @@ fun CommonListScreen(
                                 minTabWidth = historyFilterChrome.itemWidthDp?.dp ?: Dp.Unspecified,
                                 height = historyFilterChrome.heightDp.dp,
                                 indicatorHeight = historyFilterChrome.indicatorHeightDp.dp,
-                                labelFontSize = historyFilterChrome.labelFontSizeSp.sp,
+                                labelFontSize = com.android.purebilibili.core.ui.appTabLabelFontSize(),
                                 dragSelectionEnabled = historyFilterChrome.dragSelectionEnabled,
                                 tapPressRefractionEnabled = true,
                                 modifier = Modifier

@@ -36,6 +36,7 @@ internal data class VideoPlayerSectionState(
     val endDrawerRequestKey: Int = 0,
     val landscapeCommentPanelVisible: Boolean = false,
     val landscapeCommentPanelOnLeft: Boolean = true,
+    val landscapeCommentCloseProgressProvider: () -> Float = { 0f },
     val danmakuComposerVisible: Boolean = false,
     val isSendingDanmakuComposer: Boolean = false,
     val danmakuComposerInitialText: String = "",

@@ -36,6 +36,7 @@ data class LivePrefetchDanmaku(
     val text: String = "",
     val emoticonUrl: String? = null,
     val replyToName: String = "",
+    val replyToUid: Long = 0L,
     val dmType: Int = 0,
     val idStr: String = "",
     val reportTs: Long = 0,
@@ -152,6 +153,7 @@ internal fun parseLiveDanmakuHistoryItems(rawJson: String): Result<List<LivePref
                         ?.string("url")
                         ?.takeIf { it.isNotBlank() },
                     replyToName = reply?.string("reply_uname").orEmpty(),
+                    replyToUid = reply?.long("reply_mid") ?: 0L,
                     dmType = obj.int("dm_type"),
                     idStr = obj.string("id_str"),
                     reportTs = checkInfo?.long("ts") ?: 0L,
@@ -264,6 +266,7 @@ internal fun parseLiveShieldInfo(rawJson: String): Result<LiveShieldInfo> {
                 shieldInfo.optJSONArray("user_list")
                     ?: shieldInfo.optJSONArray("shield_user_list")
                     ?: data.optJSONArray("user_list")
+                    ?: data.optJSONArray("shield_user_list")
             )
         )
     }
@@ -328,12 +331,13 @@ private fun firstPositiveLong(json: JSONObject, vararg names: String): Long {
 
 enum class LiveContributionRankType(
     val title: String,
-    val switchValue: String
+    val switchValue: String,
+    val apiValue: String,
 ) {
-    ONLINE("在线榜", "contribution_rank"),
-    DAILY("日榜", "today_rank"),
-    WEEKLY("周榜", "current_week_rank"),
-    MONTHLY("月榜", "current_month_rank")
+    ONLINE("在线榜", "contribution_rank", "online_rank"),
+    DAILY("日榜", "today_rank", "daily_rank"),
+    WEEKLY("周榜", "current_week_rank", "weekly_rank"),
+    MONTHLY("月榜", "current_month_rank", "monthly_rank")
 }
 
 private val liveRepositoryJson = Json {
@@ -629,6 +633,47 @@ object LiveRepository {
         return AppSignUtils.signForAndroidApi(params)
     }
 
+    private fun buildLiveFavoriteTagParams(tags: List<LiveFavoriteTagEntry>? = null): Map<String, String> {
+        val params = buildLiveAppFeedParams(1, false).toMutableMap()
+        params.remove("sign")
+        params.remove("page")
+        params.remove("relation_page")
+        if (tags != null) params["tags"] = tags.joinToString(",") { it.areaId.toString() }
+        return AppSignUtils.signForAndroidApi(params)
+    }
+
+    suspend fun getLiveFavoriteTags(): Result<List<LiveFavoriteTagEntry>> = withContext(Dispatchers.IO) {
+        try {
+            val root = JSONObject(api.getLiveFavoriteTagsRaw(buildLiveFavoriteTagParams()).use { it.string() })
+            if (root.optInt("code", -1) != 0) return@withContext Result.failure(Exception(root.optString("message", "获取常用标签失败")))
+            val tags = root.optJSONObject("data")?.optJSONArray("tags")
+            Result.success(buildList {
+                for (index in 0 until (tags?.length() ?: 0)) {
+                    val tag = tags?.optJSONObject(index) ?: continue
+                    val id = tag.optInt("id")
+                    if (id <= 0) continue
+                    add(LiveFavoriteTagEntry(tag.optInt("parent_id"), id, tag.optString("name"), tag.optString("pic"), tag.optString("parent_name")))
+                }
+            })
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setLiveFavoriteTags(tags: List<LiveFavoriteTagEntry>): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val root = JSONObject(api.setLiveFavoriteTagsRaw(buildLiveFavoriteTagParams(tags)).use { it.string() })
+            if (root.optInt("code", -1) == 0) Result.success(Unit)
+            else Result.failure(Exception(root.optString("message", "保存常用标签失败")))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private fun buildLiveAppSecondListParams(
         page: Int,
         parentAreaId: Int,
@@ -673,7 +718,8 @@ object LiveRepository {
 
     private suspend fun fallbackLiveFeedHome(): Result<LiveFeedHomeSnapshot> {
         val recommend = getRecommendedLiveRooms().getOrElse { emptyList() }
-        val follow = getFollowedLive(page = 1).getOrElse { emptyList() }
+        val followedPage = getFollowedLivePage(page = 1).getOrNull()
+        val follow = followedPage?.items.orEmpty()
         val areas = getLiveAreaIndex().getOrElse { emptyList() }
             .map {
                 LiveFeedAreaEntry(
@@ -686,6 +732,7 @@ object LiveRepository {
             LiveFeedHomeSnapshot(
                 rooms = recommend,
                 followRooms = follow,
+                totalCount = followedPage?.totalCount ?: follow.size,
                 areaEntries = areas,
                 hasMore = recommend.size >= 20,
             )
@@ -1001,7 +1048,7 @@ object LiveRepository {
                     "room_id" to realRoomId.toString(),
                     "page" to page.toString(),
                     "page_size" to "100",
-                    "type" to type.name.lowercase(),
+                    "type" to type.apiValue,
                     "switch" to type.switchValue,
                     "platform" to "web",
                     "web_location" to "444.8"

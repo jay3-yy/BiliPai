@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.live.components
 
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,12 +12,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Delete
@@ -117,118 +121,73 @@ fun LiveEmoticonSheet(
     onSendEmoticon: (LiveEmoticonItem) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val visualSpec = remember { resolveLiveSheetVisualSpec() }
-    var selectedPkgIndex by remember { mutableIntStateOf(0) }
-
     AppModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = AppSpacingTokens.Large,
-                    vertical = AppSpacingTokens.Small,
-                ),
-            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
-        ) {
-            AppText(
-                text = "直播表情",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = AppSpacingTokens.Small)
-            )
-            if (packages.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(200.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AppText(
-                        text = "当前直播间暂无可用表情",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+        LiveEmoticonPanel(packages, onInsertText, onSendEmoticon)
+    }
+}
+
+@Composable
+fun LiveEmoticonPanel(
+    packages: List<LiveEmoticonPackage>,
+    onInsertText: (LiveEmoticonItem) -> Unit,
+    onSendEmoticon: (LiveEmoticonItem) -> Unit,
+    enabled: Boolean = true,
+) {
+    val visualSpec = remember { resolveLiveSheetVisualSpec() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { packages.size.coerceAtLeast(1) })
+    Column(Modifier.fillMaxWidth().height(visualSpec.emoticonListMaxHeightDp.dp)) {
+        com.android.purebilibili.core.ui.components.AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+            val pkg = packages.getOrNull(page)
+            val emotes = pkg?.items.orEmpty()
+            if (emotes.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                AppText("当前直播间暂无可用表情", color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                // 表情包分类 Tab 栏（对齐 PiliPlus / B站表情选择体验）
-                if (packages.size > 1) {
-                    val safeIndex = selectedPkgIndex.coerceIn(0, packages.lastIndex)
-                    AppThemeAdaptiveTabRow(
-                        role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                        centerContent = false,
-                        options = packages.mapIndexed { index, pkg ->
-                            AppSegmentOption(index, pkg.name)
-                        },
-                        selectedValue = safeIndex,
-                        onSelectionChange = { selectedPkgIndex = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        scrollable = true,
-                        labelFontSize = 13.sp,
-                    )
-                    AppHorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
-                        thickness = 0.5.dp
-                    )
-                }
-
-                val currentPackage = packages.getOrNull(selectedPkgIndex.coerceIn(0, packages.lastIndex))
-                val currentEmotes = currentPackage?.items.orEmpty()
-
-                if (currentEmotes.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AppText(
-                            text = "该表情包暂无表情",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(6),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(visualSpec.emoticonListMaxHeightDp.dp),
-                        contentPadding = PaddingValues(AppSpacingTokens.ExtraSmall),
-                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
-                    ) {
-                        itemsIndexed(
-                            items = currentEmotes,
-                            key = { index, item ->
-                                "${currentPackage?.id ?: 0}-${item.emoticonUnique}-$index"
-                            }
-                        ) { _, item ->
-                            LiveEmoticonGridCell(
-                                item = item,
-                                onClick = {
-                                    if (item.dmType == 0) onInsertText(item)
-                                    else onSendEmoticon(item)
-                                }
-                            )
+                val first = emotes.first()
+                val width = (first.width.coerceAtLeast(80) / 80f * 40f).dp
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(width),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    itemsIndexed(emotes, key = { index, item -> "${pkg?.id}-${item.emoticonUnique}-$index" }) { _, item ->
+                        LiveEmoticonGridCell(item, enabled) {
+                            if (item.dmType == 0) onInsertText(item) else onSendEmoticon(item)
                         }
                     }
                 }
             }
         }
+        if (packages.size > 1) AppThemeAdaptiveTabRow(
+            role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+            options = packages.mapIndexed { index, pkg -> AppSegmentOption(index, pkg.name) },
+            selectedValue = pager.currentPage,
+            onSelectionChange = { scope.launch { com.android.purebilibili.navigation.animatePagerSelection(pager, it) } },
+            scrollable = true,
+            centerContent = false,
+            enabled = enabled,
+            indicatorPositionProvider = { pager.currentPage + pager.currentPageOffsetFraction },
+            isScrollInProgressProvider = { pager.isScrollInProgress },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
 @Composable
 private fun LiveEmoticonGridCell(
     item: LiveEmoticonItem,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
+    var showPreview by remember { mutableStateOf(false) }
+    Box(Modifier.combinedClickable(enabled = enabled, onClick = onClick, onLongClick = { showPreview = true })) {
     AppSurface(
-        onClick = onClick,
         color = AppSurfaceTokens.cardContainer(),
         shape = AppShapes.container(ContainerLevel.Chip),
         modifier = Modifier
-            .aspectRatio(1f)
+            .aspectRatio(item.width.coerceAtLeast(1).toFloat() / item.height.coerceAtLeast(1))
             .clip(AppShapes.container(ContainerLevel.Chip))
     ) {
         Box(
@@ -254,83 +213,122 @@ private fun LiveEmoticonGridCell(
             }
         }
     }
+    }
+    if (showPreview) AppAlertDialog(
+        onDismissRequest = { showPreview = false },
+        title = { AppText(item.description.ifBlank { item.emoji }) },
+        text = { AsyncImage(model = item.url, contentDescription = item.displayText, modifier = Modifier.fillMaxWidth().height(160.dp), contentScale = ContentScale.Fit) },
+        confirmButton = { AppTextButton(onClick = { showPreview = false }) { AppText("关闭") } },
+    )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LiveDmBlockSheet(
     shieldInfo: LiveShieldInfo?,
     isLoggedIn: Boolean,
     onAddKeyword: (String) -> Unit,
+    onAddUser: (Long) -> Unit,
     onDeleteKeyword: (String) -> Unit,
     onUnblockUser: (LiveShieldUser) -> Unit,
     onSetRule: (String, Int) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
-    var keyword by remember { mutableStateOf("") }
-    AppModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    horizontal = AppSpacingTokens.ExtraLarge,
-                    vertical = AppSpacingTokens.Small,
+    var showAdd by remember { mutableStateOf(false) }
+    var value by remember { mutableStateOf("") }
+    var pendingKeyword by remember { mutableStateOf<String?>(null) }
+    var pendingUser by remember { mutableStateOf<LiveShieldUser?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 2 })
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        com.android.purebilibili.core.ui.ImmersiveAppScaffold(
+            topBar = {
+                com.android.purebilibili.core.ui.AppTopBar(
+                    title = "弹幕屏蔽",
+                    navigationIcon = {
+                        AppIconButton(onClick = onDismiss) { AppIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
+                    },
+                    actions = {
+                        AppTextButton(enabled = isLoggedIn, onClick = { value = ""; showAdd = true }) { AppText("添加") }
+                    },
                 )
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Large)
-        ) {
-            AppText(
-                text = "弹幕屏蔽",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
-            if (!isLoggedIn) {
-                AppText(
-                    text = "登录后可同步直播间屏蔽词、屏蔽用户和规则。",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                AppOutlinedTextField(
-                    value = keyword,
-                    onValueChange = { keyword = it.take(20) },
-                    enabled = isLoggedIn,
-                    modifier = Modifier.weight(1f),
-                    singleLine = true,
-                    placeholder = { AppText("新增屏蔽词") }
-                )
-                AppButton(
-                    enabled = isLoggedIn && keyword.trim().isNotBlank(),
-                    onClick = {
-                        onAddKeyword(keyword.trim())
-                        keyword = ""
+            },
+        ) { padding ->
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+                val landscape = maxWidth > maxHeight
+                val rules: @Composable () -> Unit = {
+                    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(12.dp)) {
+                        if (!isLoggedIn) AppText("登录后可同步屏蔽设置", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LiveRuleSection(shieldInfo, isLoggedIn, onSetRule)
                     }
-                ) {
-                    AppText("添加")
+                }
+                val lists: @Composable () -> Unit = {
+                    Column(Modifier.fillMaxSize()) {
+                        AppThemeAdaptiveTabRow(
+                            role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+                            options = listOf(AppSegmentOption(0, "关键词"), AppSegmentOption(1, "用户")),
+                            selectedValue = pager.currentPage,
+                            onSelectionChange = { scope.launch { com.android.purebilibili.navigation.animatePagerSelection(pager, it) } },
+                            indicatorPositionProvider = { pager.currentPage + pager.currentPageOffsetFraction },
+                            isScrollInProgressProvider = { pager.isScrollInProgress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        com.android.purebilibili.core.ui.components.AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+                            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp)) {
+                                if (page == 0) LiveKeywordSection(shieldInfo, isLoggedIn) { pendingKeyword = it }
+                                else LiveShieldUserSection(shieldInfo, isLoggedIn) { pendingUser = it }
+                            }
+                        }
+                    }
+                }
+                if (landscape) Row(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f)) { rules() }
+                    Box(Modifier.weight(1f)) { lists() }
+                } else Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxWidth().heightIn(max = 260.dp)) { rules() }
+                    Box(Modifier.weight(1f)) { lists() }
                 }
             }
-            LiveRuleSection(
-                shieldInfo = shieldInfo,
-                enabled = isLoggedIn,
-                onSetRule = onSetRule
-            )
-            LiveKeywordSection(
-                shieldInfo = shieldInfo,
-                enabled = isLoggedIn,
-                onDeleteKeyword = onDeleteKeyword
-            )
-            LiveShieldUserSection(
-                shieldInfo = shieldInfo,
-                enabled = isLoggedIn,
-                onUnblockUser = onUnblockUser
-            )
-            Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
         }
     }
+    if (showAdd) AppAlertDialog(
+        onDismissRequest = { showAdd = false },
+        title = { AppText(if (pager.currentPage == 0) "添加屏蔽词" else "屏蔽用户") },
+        text = {
+            AppOutlinedTextField(
+                value = value,
+                onValueChange = { value = if (pager.currentPage == 0) it.take(20) else it.filter(Char::isDigit).take(20) },
+                singleLine = true,
+                placeholder = { AppText(if (pager.currentPage == 0) "关键词" else "用户 UID") },
+            )
+        },
+        confirmButton = {
+            AppTextButton(
+                enabled = if (pager.currentPage == 0) value.trim().isNotBlank() else (value.toLongOrNull() ?: 0L) > 0L,
+                onClick = {
+                    if (pager.currentPage == 0) onAddKeyword(value.trim()) else value.toLongOrNull()?.let(onAddUser)
+                    showAdd = false
+                },
+            ) { AppText("确定") }
+        },
+        dismissButton = { AppTextButton(onClick = { showAdd = false }) { AppText("取消") } },
+    )
+    if (pendingKeyword != null || pendingUser != null) AppAlertDialog(
+        onDismissRequest = { pendingKeyword = null; pendingUser = null },
+        title = { AppText("确定删除该规则？") },
+        text = { AppText(pendingKeyword ?: pendingUser?.uname.orEmpty()) },
+        confirmButton = {
+            AppTextButton(onClick = {
+                pendingKeyword?.let(onDeleteKeyword)
+                pendingUser?.let(onUnblockUser)
+                pendingKeyword = null
+                pendingUser = null
+            }) { AppText("删除") }
+        },
+        dismissButton = { AppTextButton(onClick = { pendingKeyword = null; pendingUser = null }) { AppText("取消") } },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -340,39 +338,43 @@ private fun LiveRuleSection(
     enabled: Boolean,
     onSetRule: (String, Int) -> Unit
 ) {
+    var level by remember(shieldInfo?.level) { androidx.compose.runtime.mutableFloatStateOf((shieldInfo?.level ?: 0).toFloat()) }
+    val active = (shieldInfo?.level ?: 0) > 0 || (shieldInfo?.rank ?: 0) > 0 || (shieldInfo?.verify ?: 0) > 0
     Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)) {
-        AppText("规则", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        // FlowRow：5 个规则 chip 在窄屏自动换行
+        AppText("全局屏蔽", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AppText(if (active) "屏蔽已开启" else "屏蔽未开启", modifier = Modifier.weight(1f))
+            com.android.purebilibili.core.ui.components.AppSwitch(
+                checked = active,
+                enabled = enabled,
+                onCheckedChange = { on ->
+                    if (on) { onSetRule("rank", 1); onSetRule("verify", 1) }
+                    else { onSetRule("level", 0); onSetRule("rank", 0); onSetRule("verify", 0) }
+                },
+            )
+        }
+        AppText("用户等级：${level.toInt()} 以下")
+        com.android.purebilibili.core.ui.components.AppSlider(
+            value = level,
+            onValueChange = { level = it },
+            valueRange = 0f..60f,
+            steps = 59,
+            enabled = enabled,
+            onValueChangeFinished = { if (level.toInt() != shieldInfo?.level) onSetRule("level", level.toInt()) },
+            modifier = Modifier.fillMaxWidth(),
+        )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)) {
             AppFilterChip(
-                selected = (shieldInfo?.level ?: 0) > 0,
+                selected = (shieldInfo?.rank ?: 0) > 0,
                 enabled = enabled,
-                onClick = { onSetRule("level", if ((shieldInfo?.level ?: 0) > 0) 0 else 5) },
-                label = { AppText("等级") }
-            )
-            AppFilterChip(
-                selected = (shieldInfo?.medal ?: 0) > 0,
-                enabled = enabled,
-                onClick = { onSetRule("medal", if ((shieldInfo?.medal ?: 0) > 0) 0 else 1) },
-                label = { AppText("勋章") }
+                onClick = { onSetRule("rank", if ((shieldInfo?.rank ?: 0) > 0) 0 else 1) },
+                label = { AppText("非正式会员") },
             )
             AppFilterChip(
                 selected = (shieldInfo?.verify ?: 0) > 0,
                 enabled = enabled,
                 onClick = { onSetRule("verify", if ((shieldInfo?.verify ?: 0) > 0) 0 else 1) },
-                label = { AppText("认证") }
-            )
-            AppFilterChip(
-                selected = (shieldInfo?.rank ?: 0) > 0,
-                enabled = enabled,
-                onClick = { onSetRule("rank", if ((shieldInfo?.rank ?: 0) > 0) 0 else 1) },
-                label = { AppText("非正式会员") }
-            )
-            AppFilterChip(
-                selected = (shieldInfo?.phone ?: 0) > 0,
-                enabled = enabled,
-                onClick = { onSetRule("phone", if ((shieldInfo?.phone ?: 0) > 0) 0 else 1) },
-                label = { AppText("未绑定手机") }
+                label = { AppText("未绑定手机用户") },
             )
         }
     }

@@ -1,82 +1,47 @@
 package com.android.purebilibili.feature.live
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Search
-import com.android.purebilibili.core.ui.components.AppButton
-import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.core.ui.components.AppSegmentOption
-import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import androidx.compose.material3.MaterialTheme
-import com.android.purebilibili.core.ui.components.appSearchElasticPress
-import com.android.purebilibili.core.ui.components.AppOutlinedTextField
-import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.components.AppText
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.android.purebilibili.core.ui.*
+import com.android.purebilibili.core.ui.components.*
+import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
+import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
 import com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton
 import com.android.purebilibili.core.ui.skeleton.ContentVideoGridSkeletonFixedColumns
-import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
-import com.android.purebilibili.core.ui.AppTopBar
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppSpacingTokens
-import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.LocalBottomBarContentPadding
-import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
-import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
 import com.android.purebilibili.core.util.LocalWindowSizeClass
-import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.util.responsiveContentWidth
-import com.android.purebilibili.core.util.shouldShowScrollToTop
 import com.android.purebilibili.data.model.response.LiveRoomSearchItem
-import com.android.purebilibili.data.model.response.SearchUpItem
+import com.android.purebilibili.data.model.response.SearchLiveUserItem
 import com.android.purebilibili.data.repository.SearchLiveOrder
 import com.android.purebilibili.data.repository.SearchRepository
+import com.android.purebilibili.navigation.animatePagerSelection
 import kotlinx.coroutines.launch
 
 @Composable
@@ -85,467 +50,282 @@ fun LiveSearchScreen(
     onLiveClick: (Long, String, String) -> Unit,
     onUserClick: (Long) -> Unit,
 ) {
-    val keyboard = LocalSoftwareKeyboardController.current
     val scope = rememberCoroutineScope()
-    val backToTopButtonEnabled = rememberBackToTopButtonEnabled()
-    val liveGridState = rememberLazyGridState()
-    val userListState = rememberLazyListState()
-    val topChromePolicy = rememberAppTopChromePolicy()
-    val visualSpec = remember(topChromePolicy.tabPresentation) {
-        resolveLiveVisualSpec(topChromePolicy.tabPresentation)
-    }
-    val metrics = visualSpec.homeMetrics
-    val windowSizeClass = LocalWindowSizeClass.current
-    val contentWidth = if (windowSizeClass.isExpandedScreen) {
-        minOf(windowSizeClass.widthDp, visualSpec.maxContentWidthDp.dp)
-    } else {
-        windowSizeClass.widthDp
-    }
-    val gridColumns = remember(contentWidth, windowSizeClass.isTablet) {
-        resolveLiveBiliPaiGridColumns(
-            widthDp = contentWidth.value.toInt(),
-            isTabletLayout = windowSizeClass.isTablet,
-        )
-    }
-    var query by remember { mutableStateOf("") }
-    var hasSubmitted by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var isLoading by remember { mutableStateOf(false) }
-    var liveLoadingMore by remember { mutableStateOf(false) }
-    var userLoadingMore by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusRequester = remember { FocusRequester() }
+    val pager = rememberPagerState(pageCount = { 2 })
+    val liveGrid = rememberLazyGridState()
+    val userList = androidx.compose.foundation.lazy.rememberLazyListState()
+    val chrome = rememberAppTopChromePolicy()
+    val spec = resolveLiveVisualSpec(chrome.tabPresentation)
+    val window = LocalWindowSizeClass.current
+    val columns = resolveLiveBiliPaiGridColumns(minOf(window.widthDp.value.toInt(), spec.maxContentWidthDp), window.isTablet)
+    var coverToSave by remember { mutableStateOf<LiveRoomCardUiModel?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var keyword by rememberSaveable { mutableStateOf("") }
+    var submitted by rememberSaveable { mutableStateOf(false) }
+    var liveLoading by remember { mutableStateOf(false) }
+    var userLoading by remember { mutableStateOf(false) }
+    var liveMoreLoading by remember { mutableStateOf(false) }
+    var userMoreLoading by remember { mutableStateOf(false) }
     var liveHasMore by remember { mutableStateOf(false) }
     var userHasMore by remember { mutableStateOf(false) }
-    var activeKeyword by remember { mutableStateOf("") }
+    var liveTotal by remember { mutableStateOf<Int?>(null) }
+    var userTotal by remember { mutableStateOf<Int?>(null) }
     var liveError by remember { mutableStateOf<String?>(null) }
     var userError by remember { mutableStateOf<String?>(null) }
+    val rooms = remember { mutableStateListOf<LiveRoomSearchItem>() }
+    val users = remember { mutableStateListOf<SearchLiveUserItem>() }
     val liveRequests = remember { LiveBrowseRequestPolicy() }
     val userRequests = remember { LiveBrowseRequestPolicy() }
-    val liveResults = remember { mutableStateListOf<LiveRoomSearchItem>() }
-    val userResults = remember { mutableStateListOf<SearchUpItem>() }
-    val hasScrolledAwayFromTop by remember(selectedTab, liveGridState, userListState) {
-        derivedStateOf {
-            if (selectedTab == 0) {
-                shouldShowScrollToTop(
-                    firstVisibleItemIndex = liveGridState.firstVisibleItemIndex,
-                    firstVisibleItemScrollOffset = liveGridState.firstVisibleItemScrollOffset,
-                )
-            } else {
-                shouldShowScrollToTop(
-                    firstVisibleItemIndex = userListState.firstVisibleItemIndex,
-                    firstVisibleItemScrollOffset = userListState.firstVisibleItemScrollOffset,
-                )
-            }
+
+    fun loadRooms(reset: Boolean) {
+        if (keyword.isBlank()) return
+        val request = if (reset) liveRequests.refresh(replace = true) else liveRequests.loadMore(liveHasMore)
+        if (request == null) return
+        val requestedKeyword = keyword
+        liveError = null
+        liveLoading = reset
+        liveMoreLoading = !reset
+        scope.launch {
+            SearchRepository.searchLive(requestedKeyword, request.page, SearchLiveOrder.ONLINE)
+                .onSuccess { (items, info) ->
+                    if (!liveRequests.succeed(request, info.currentPage + 1)) return@onSuccess
+                    if (reset) rooms.clear()
+                    val ids = rooms.map { it.roomid }.toSet()
+                    rooms.addAll(items.distinctBy { it.roomid }.filterNot { it.roomid in ids })
+                    liveTotal = info.totalResults
+                    liveHasMore = info.hasMore
+                    liveLoading = false
+                    liveMoreLoading = false
+                }.onFailure {
+                    if (!liveRequests.fail(request)) return@onFailure
+                    liveError = it.message ?: "直播搜索失败"
+                    liveLoading = false
+                    liveMoreLoading = false
+                }
         }
     }
-
+    fun loadUsers(reset: Boolean) {
+        if (keyword.isBlank()) return
+        val request = if (reset) userRequests.refresh(replace = true) else userRequests.loadMore(userHasMore)
+        if (request == null) return
+        val requestedKeyword = keyword
+        userError = null
+        userLoading = reset
+        userMoreLoading = !reset
+        scope.launch {
+            SearchRepository.searchLiveUser(requestedKeyword, request.page)
+                .onSuccess { (items, info) ->
+                    if (!userRequests.succeed(request, info.currentPage + 1)) return@onSuccess
+                    if (reset) users.clear()
+                    val ids = users.map { it.uid }.toSet()
+                    users.addAll(items.distinctBy { it.uid }.filterNot { it.uid in ids })
+                    userTotal = info.totalResults
+                    userHasMore = info.hasMore
+                    userLoading = false
+                    userMoreLoading = false
+                }.onFailure {
+                    if (!userRequests.fail(request)) return@onFailure
+                    userError = it.message ?: "主播搜索失败"
+                    userLoading = false
+                    userMoreLoading = false
+                }
+        }
+    }
+    fun clear() {
+        query = ""
+        keyword = ""
+        submitted = false
+        liveRequests.invalidate()
+        userRequests.invalidate()
+        rooms.clear()
+        users.clear()
+        liveTotal = null
+        userTotal = null
+        liveLoading = false
+        userLoading = false
+        liveMoreLoading = false
+        userMoreLoading = false
+        liveHasMore = false
+        userHasMore = false
+        liveError = null
+        userError = null
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
     fun submit() {
-        val normalized = query.trim()
-        if (normalized.isEmpty()) return
-        normalized.takeIf { it.all { character -> character.isDigit() } }?.toLongOrNull()?.let {
+        val value = query.trim()
+        if (value.isEmpty()) return
+        keyboard?.hide()
+        value.takeIf { it.all(Char::isDigit) }?.toLongOrNull()?.takeIf { it > 0 }?.let {
             onLiveClick(it, "", "")
             return
         }
-        if (isLoading && normalized == activeKeyword) return
-        val liveRequest = liveRequests.refresh(replace = true) ?: return
-        val userRequest = userRequests.refresh(replace = true) ?: return
-        keyboard?.hide()
-        hasSubmitted = true
-        isLoading = true
-        liveLoadingMore = false
-        userLoadingMore = false
-        liveError = null
-        userError = null
-        activeKeyword = normalized
-        liveResults.clear()
-        userResults.clear()
+        keyword = value
+        submitted = true
+        rooms.clear()
+        users.clear()
+        liveTotal = null
+        userTotal = null
         liveHasMore = false
         userHasMore = false
-        scope.launch {
-            launch { liveGridState.scrollToItem(0) }
-            launch { userListState.scrollToItem(0) }
-            if (!liveRequests.owns(liveRequest)) return@launch
-            SearchRepository.searchLive(normalized, liveRequest.page, SearchLiveOrder.ONLINE)
-                .onSuccess { (rooms, pageInfo) ->
-                    if (!liveRequests.succeed(liveRequest, pageInfo.currentPage + 1)) return@onSuccess
-                    liveResults.addAll(rooms.distinctBy { it.roomid })
-                    liveHasMore = pageInfo.hasMore
-                }
-                .onFailure {
-                    if (liveRequests.fail(liveRequest)) liveError = it.message ?: "直播搜索失败"
-                }
-            if (!userRequests.owns(userRequest)) return@launch
-            SearchRepository.searchUp(normalized, userRequest.page)
-                .onSuccess { (ups, pageInfo) ->
-                    if (!userRequests.succeed(userRequest, pageInfo.currentPage + 1)) return@onSuccess
-                    userResults.addAll(ups.distinctBy { it.mid })
-                    userHasMore = pageInfo.hasMore
-                    isLoading = false
-                }
-                .onFailure {
-                    if (!userRequests.fail(userRequest)) return@onFailure
-                    userError = it.message ?: "主播搜索失败"
-                    isLoading = false
-                }
+        loadRooms(true)
+        loadUsers(true)
+        scope.launch { liveGrid.scrollToItem(0) }
+        scope.launch { userList.scrollToItem(0) }
+    }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        if (submitted && keyword.isNotBlank()) {
+            loadRooms(true)
+            loadUsers(true)
         }
     }
-
-    fun loadMoreLive() {
-        if (isLoading || activeKeyword.isBlank()) return
-        val request = liveRequests.loadMore(liveHasMore) ?: return
-        val keyword = activeKeyword
-        liveLoadingMore = true
-        liveError = null
-        scope.launch {
-            SearchRepository.searchLive(keyword, request.page, SearchLiveOrder.ONLINE)
-                .onSuccess { (rooms, pageInfo) ->
-                    if (!liveRequests.succeed(request, pageInfo.currentPage + 1)) return@onSuccess
-                    val currentIds = liveResults.map { it.roomid }.toSet()
-                    liveResults.addAll(rooms.distinctBy { it.roomid }.filterNot { it.roomid in currentIds })
-                    liveHasMore = pageInfo.hasMore
-                    liveLoadingMore = false
-                }
-                .onFailure {
-                    if (!liveRequests.fail(request)) return@onFailure
-                    liveError = it.message ?: "直播加载更多失败"
-                    liveLoadingMore = false
-                }
-        }
-    }
-
-    fun loadMoreUser() {
-        if (isLoading || activeKeyword.isBlank()) return
-        val request = userRequests.loadMore(userHasMore) ?: return
-        val keyword = activeKeyword
-        userLoadingMore = true
-        userError = null
-        scope.launch {
-            SearchRepository.searchUp(keyword, request.page)
-                .onSuccess { (ups, pageInfo) ->
-                    if (!userRequests.succeed(request, pageInfo.currentPage + 1)) return@onSuccess
-                    val currentIds = userResults.map { it.mid }.toSet()
-                    userResults.addAll(ups.distinctBy { it.mid }.filterNot { it.mid in currentIds })
-                    userHasMore = pageInfo.hasMore
-                    userLoadingMore = false
-                }
-                .onFailure {
-                    if (!userRequests.fail(request)) return@onFailure
-                    userError = it.message ?: "主播加载更多失败"
-                    userLoadingMore = false
-                }
-        }
-    }
-
+    val tabs = listOf(
+        AppSegmentOption(0, "正在直播" + (liveTotal?.let { " $it" } ?: "")),
+        AppSegmentOption(1, "主播" + (userTotal?.let { " $it" } ?: "")),
+    )
     AppScaffold(
-        blurContentReady = !isLoading,
-        modifier = Modifier.fillMaxSize(),
+        blurContentReady = !liveLoading || !userLoading,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
-            Column {
-            AppTopBar(
-                title = "搜索直播",
-                navigationIcon = {
-                    AppIconButton(onClick = onBack) {
-                        AppIcon(
-                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                            contentDescription = "返回",
-                        )
-                    }
-                },
-            )
+            Column(Modifier.statusBarsPadding()) {
                 Row(
                     modifier = Modifier
-                        .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
+                        .responsiveContentWidth(maxWidth = spec.maxContentWidthDp.dp)
                         .fillMaxWidth()
-                        .padding(
-                            horizontal = metrics.safeSpaceDp.dp,
-                            vertical = AppSpacingTokens.Small,
-                        ),
+                        .padding(horizontal = spec.homeMetrics.safeSpaceDp.dp, vertical = AppSpacingTokens.ExtraSmall),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
                 ) {
+                    AppIconButton(onClick = onBack) { AppIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
                     AppOutlinedTextField(
                         value = query,
-                        onValueChange = {
-                            query = it
-                            if (it.isBlank()) {
-                                hasSubmitted = false
-                                liveRequests.invalidate()
-                                userRequests.invalidate()
-                                activeKeyword = ""
-                                isLoading = false
-                                liveLoadingMore = false
-                                userLoadingMore = false
-                                liveHasMore = false
-                                userHasMore = false
-                                liveError = null
-                                userError = null
-                                liveResults.clear()
-                                userResults.clear()
-                            }
-                        },
-                        modifier = Modifier.weight(1f).appSearchElasticPress(),
+                        onValueChange = { if (it.isEmpty()) clear() else query = it },
+                        modifier = Modifier.weight(1f),
+                        placeholderText = "搜索房间或主播",
                         singleLine = true,
-                        placeholder = { AppText("搜索房间或主播") },
-                        trailingIcon = {
-                            AppIcon(imageVector = Icons.Outlined.Search, contentDescription = null)
-                        },
-                        shape = AppShapes.borderedContainer(ContainerLevel.Field),
+                        focusRequester = focusRequester,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { submit() }),
+                        trailingIcon = {
+                            AppIconButton(onClick = { if (query.isEmpty()) onBack() else clear() }) {
+                                AppIcon(Icons.Outlined.Close, "清空")
+                            }
+                        },
                     )
-                    AppIconButton(
-                        onClick = { submit() },
-                        enabled = query.isNotBlank(),
-                        modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge),
-                    ) {
-                        AppIcon(
-                            imageVector = Icons.Outlined.Search,
-                            contentDescription = "搜索",
-                        )
+                    AppIconButton(onClick = { submit() }, enabled = query.isNotBlank()) {
+                        AppIcon(Icons.Outlined.Search, "搜索")
                     }
                 }
-
-                if (hasSubmitted) {
-                    val searchTabs = remember(liveResults.size, userResults.size) {
-                        listOf(
-                            AppSegmentOption(
-                                value = 0,
-                                label = buildString {
-                                    append("正在直播")
-                                    if (liveResults.isNotEmpty()) {
-                                        append(' ')
-                                        append(liveResults.size)
-                                    }
-                                },
-                            ),
-                            AppSegmentOption(
-                                value = 1,
-                                label = buildString {
-                                    append("主播")
-                                    if (userResults.isNotEmpty()) {
-                                        append(' ')
-                                        append(userResults.size)
-                                    }
-                                },
-                            ),
-                        )
-                    }
+                if (submitted) {
                     AppThemeAdaptiveTabRow(
-                        role = com.android.purebilibili.core.ui.components.AppTabRowRole.PRIMARY,
-                        options = searchTabs,
-                        selectedValue = selectedTab,
-                        onSelectionChange = { selectedTab = it },
-                        dragSelectionEnabled = searchTabs.size > 1,
-                        tapPressRefractionEnabled = true,
-                        modifier = Modifier
-                            .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
-                            .fillMaxWidth()
-                            .padding(horizontal = metrics.safeSpaceDp.dp),
+                        role = AppTabRowRole.SECONDARY,
+                        options = tabs,
+                        selectedValue = pager.currentPage,
+                        onSelectionChange = { target ->
+                            scope.launch {
+                                if (pager.currentPage == target) {
+                                    if (target == 0) liveGrid.animateScrollToItem(0) else userList.animateScrollToItem(0)
+                                } else animatePagerSelection(pager, target)
+                            }
+                        },
+                        indicatorPositionProvider = { pager.currentPage + pager.currentPageOffsetFraction },
+                        isScrollInProgressProvider = { pager.isScrollInProgress },
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
             }
         },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-    ) { innerPadding ->
-        val liveSearchBackdrop = rememberLayerBackdrop()
-        // 听视频小横条悬浮时统一上浮避让（与首页/稍后再看一致）
-        val liveSearchBottomPadding = LocalBottomBarContentPadding.current +
-            if (com.android.purebilibili.core.ui.rememberNowPlayingBarOverlayVisible()) {
-                com.android.purebilibili.core.ui.NowPlayingBarOverlayAvoidancePadding
-            } else {
-                0.dp
-            }
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                ,
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .layerBackdrop(liveSearchBackdrop)
-            ) {
-                if (!hasSubmitted) {
-                    LiveSearchState("输入关键词后搜索直播间或主播")
-                } else {
+    ) { padding ->
+        if (!submitted) {
+            LiveSearchState("输入关键词后搜索直播间或主播", modifier = Modifier.fillMaxSize().padding(padding))
+        } else {
+            AppHorizontalPager(state = pager, modifier = Modifier.fillMaxSize().padding(padding)) { page ->
+                AdaptivePullToRefreshBox(
+                    isRefreshing = if (page == 0) liveLoading else userLoading,
+                    onRefresh = { if (page == 0) loadRooms(true) else loadUsers(true) },
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     when {
-                    isLoading -> if (selectedTab == 0) {
-                        ContentVideoGridSkeletonFixedColumns(
-                            columns = gridColumns,
-                            contentPadding = PaddingValues(
-                                start = metrics.safeSpaceDp.dp,
-                                end = metrics.safeSpaceDp.dp,
-                                top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
-                                bottom = liveSearchBottomPadding,
-                            ),
-                            spacing = metrics.cardSpaceDp.dp,
-                        )
-                    } else {
-                        ContentMediaListSkeleton(
-                            useUserRow = true,
-                            contentPadding = PaddingValues(
-                                start = metrics.safeSpaceDp.dp,
-                                end = metrics.safeSpaceDp.dp,
-                                top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
-                                bottom = liveSearchBottomPadding,
-                            ),
-                        )
-                    }
-                    selectedTab == 0 && liveError != null && liveResults.isEmpty() -> LiveSearchState(liveError.orEmpty())
-                    selectedTab != 0 && userError != null && userResults.isEmpty() -> LiveSearchState(userError.orEmpty())
-                    selectedTab == 0 -> LazyVerticalGrid(
-                        columns = GridCells.Fixed(gridColumns),
-                        state = liveGridState,
-                        modifier = Modifier
-                            .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
-                            .fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = metrics.safeSpaceDp.dp,
-                            end = metrics.safeSpaceDp.dp,
-                            top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
-                            bottom = liveSearchBottomPadding,
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
-                        verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
-                    ) {
-                        gridItems(liveResults, key = { it.roomid }) { room ->
-                            LiveRoomCard(
-                                model = room.toLiveRoomCardUiModel(),
-                                onClick = { onLiveClick(room.roomid, room.title, room.uname) },
-                            )
-                        }
-                        if (liveHasMore || liveLoadingMore) {
+                        page == 0 && liveLoading && rooms.isEmpty() -> ContentVideoGridSkeletonFixedColumns(columns = columns)
+                        page == 1 && userLoading && users.isEmpty() -> ContentMediaListSkeleton(useUserRow = true)
+                        page == 0 && rooms.isEmpty() -> LiveSearchState(liveError ?: "暂无相关直播间", onRetry = { loadRooms(true) })
+                        page == 1 && users.isEmpty() -> LiveSearchState(userError ?: "暂无相关主播", onRetry = { loadUsers(true) })
+                        page == 0 -> LazyVerticalGrid(
+                            columns = GridCells.Fixed(columns),
+                            state = liveGrid,
+                            modifier = Modifier.responsiveContentWidth(maxWidth = spec.maxContentWidthDp.dp).fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = spec.homeMetrics.safeSpaceDp.dp, vertical = AppSpacingTokens.Small),
+                            horizontalArrangement = Arrangement.spacedBy(spec.homeMetrics.cardSpaceDp.dp),
+                            verticalArrangement = Arrangement.spacedBy(spec.homeMetrics.cardSpaceDp.dp),
+                        ) {
+                            gridItems(rooms, key = { it.roomid }) { room ->
+                                LiveRoomCard(
+                                    model = LiveRoomCardUiModel(room.roomid, room.title, room.cover.ifBlank { room.uface }, room.uname, room.online, room.area_v2_name),
+                                    onClick = { onLiveClick(room.roomid, room.title, room.uname) },
+                                    onLongPress = { coverToSave = LiveRoomCardUiModel(room.roomid, room.title, room.cover, room.uname, room.online, room.area_v2_name) },
+                                )
+                            }
                             item(span = { GridItemSpan(maxLineSpan) }) {
-                                AppButton(
-                                    enabled = !liveLoadingMore,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = { loadMoreLive() },
-                                ) {
-                                    AppText(
-                                        if (liveLoadingMore) "加载中"
-                                        else if (liveError != null) "$liveError · 重试"
-                                        else "加载更多"
-                                    )
-                                }
+                                LiveHomeLoadMoreFooter(liveMoreLoading, rooms.size, liveHasMore, liveError) { loadRooms(false) }
                             }
                         }
-                    }
-                    else -> LazyColumn(
-                        state = userListState,
-                        modifier = Modifier
-                            .responsiveContentWidth(maxWidth = visualSpec.maxContentWidthDp.dp)
-                            .fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = metrics.safeSpaceDp.dp,
-                            end = metrics.safeSpaceDp.dp,
-                            top = innerPadding.calculateTopPadding() + AppSpacingTokens.Medium,
-                            bottom = liveSearchBottomPadding,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
-                    ) {
-                        items(userResults, key = { it.mid }) { user ->
-                            LiveSearchUserCard(user, onClick = { onUserClick(user.mid) })
-                        }
-                        item {
-                            if (userHasMore || userLoadingMore) {
-                                AppButton(
-                                    enabled = !userLoadingMore,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    onClick = { loadMoreUser() },
-                                ) {
-                                    AppText(
-                                        if (userLoadingMore) "加载中"
-                                        else if (userError != null) "$userError · 重试"
-                                        else "加载更多"
-                                    )
-                                }
+                        else -> LazyColumn(
+                            state = userList,
+                            modifier = Modifier.responsiveContentWidth(maxWidth = spec.maxContentWidthDp.dp).fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = spec.homeMetrics.safeSpaceDp.dp, vertical = AppSpacingTokens.Small),
+                            verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                        ) {
+                            items(users, key = { it.uid }) { user ->
+                                LiveSearchUserCard(
+                                    user,
+                                    onClick = { if (user.roomid > 0) onLiveClick(user.roomid, "", user.uname) else onUserClick(user.uid) },
+                                    onAvatarClick = { onUserClick(user.uid) },
+                                )
                             }
+                            item { LiveHomeLoadMoreFooter(userMoreLoading, users.size, userHasMore, userError) { loadUsers(false) } }
                         }
-                    }
                     }
                 }
             }
-
-            AppLiquidGlassBackToTopButton(
-                visible = backToTopButtonEnabled && hasSubmitted && !isLoading && hasScrolledAwayFromTop,
-                onClick = {
-                    scope.launch {
-                        if (selectedTab == 0) {
-                            liveGridState.animateScrollToTop()
-                        } else {
-                            userListState.animateScrollToTop()
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = AppSpacingTokens.Large,
-                        bottom = liveSearchBottomPadding + AppSpacingTokens.Medium,
-                    ),
-                backdrop = liveSearchBackdrop,
-            )
         }
     }
+    coverToSave?.let { card -> LiveCoverSaveDialog(card) { coverToSave = null } }
 }
 
 @Composable
-private fun LiveSearchState(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        AppText(
-            text = message,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+private fun LiveSearchState(message: String, modifier: Modifier = Modifier.fillMaxSize(), onRetry: (() -> Unit)? = null) {
+    Column(modifier, verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        AppText(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (onRetry != null) AppTextButton(onClick = onRetry) { AppText("重新加载") }
     }
 }
 
 @Composable
-private fun LiveSearchUserCard(item: SearchUpItem, onClick: () -> Unit) {
-    AppSurface(
-        onClick = onClick,
-        shape = AppShapes.borderedContainer(ContainerLevel.Card),
-        color = AppSurfaceTokens.cardContainer(),
-        border = BorderStroke(AppSurfaceTokens.OutlineWidth, AppSurfaceTokens.divider()),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(AppSpacingTokens.Medium),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+private fun LiveSearchUserCard(item: SearchLiveUserItem, onClick: () -> Unit, onAvatarClick: () -> Unit) {
+    AppSurface(onClick = onClick, color = MaterialTheme.colorScheme.background) {
+        Row(Modifier.fillMaxWidth().padding(AppSpacingTokens.Medium), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
-                model = item.upic,
-                contentDescription = null,
+                model = item.uface,
+                contentDescription = "查看${item.uname}的空间",
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(AppSpacingTokens.TripleExtraLarge)
-                    .clip(CircleShape),
+                modifier = Modifier.size(42.dp).clip(CircleShape).clickable(onClick = onAvatarClick),
             )
-            Spacer(modifier = Modifier.size(AppSpacingTokens.Medium))
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(Modifier.width(AppSpacingTokens.Medium))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppText(item.uname, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (item.liveStatus == 1 || item.isLive) AppText("直播中", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                }
                 AppText(
-                    text = item.uname,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-                AppText(
-                    text = item.usign.ifBlank { "${item.fans} 粉丝 · ${item.videos} 投稿" },
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "分区：${item.areaName.ifBlank { item.tags.ifBlank { "未分类" } }} · 关注数：${item.attentions}",
                     style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
         }
     }
 }
-
-private fun LiveRoomSearchItem.toLiveRoomCardUiModel() = LiveRoomCardUiModel(
-    roomId = roomid,
-    title = title,
-    coverUrl = cover.ifBlank { uface },
-    hostName = uname,
-    viewerCount = online,
-    areaName = area_v2_name,
-)
