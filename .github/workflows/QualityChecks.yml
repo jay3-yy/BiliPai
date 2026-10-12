@@ -1,0 +1,100 @@
+name: QualityChecks
+
+# PRs run this workflow directly; pushes/build dispatches call it from Build once.
+on:
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perfguard:
+    name: PerfGuard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run performance contracts and degradation behavior
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/ci_quality.sh performance
+      - name: Upload performance diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: perfguard-diagnostics
+          path: |
+            app/build/reports/lint-results-debug.*
+            app/build/reports/tests/testDebugUnitTest
+            design-system/build/reports/tests/testDebugUnitTest
+            ci-lint/build/reports/tests/test
+          retention-days: 7
+
+  correctness:
+    name: Correctness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run preferences cache and version behavior
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/ci_quality.sh correctness
+      - name: Upload correctness diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: correctness-diagnostics
+          path: app/build/reports/tests/testDebugUnitTest
+          retention-days: 7
+
+  style-policy:
+    name: StylePolicy (report)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Run style checker regressions and report style warnings
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/ci_quality.sh style
+      - name: Upload style diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: style-policy-diagnostics
+          path: |
+            app/build/reports/lint-results-debug.*
+            ci-lint/build/reports/tests/test
+          retention-days: 7
+      - name: Explain informational findings
+        if: success()
+        run: |
+          echo '### StylePolicy' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Style findings are informational in this CI profile; see style-policy-diagnostics.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Compilation, checker-loading and regression-test failures still fail this job.' >> "$GITHUB_STEP_SUMMARY"

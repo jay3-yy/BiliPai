@@ -218,7 +218,7 @@ UI 主题、组件、页面状态和设备宽度的专项矩阵见 [UI 设计规
 
 ### CI 质量门的职责
 
-`Build` 与 `PerfGuard` 共用 `bash scripts/ci_quality.sh`，分别执行验证器的 Lint fixture 回归、生产源码的语义检查，以及真实策略行为测试。`--continue` 保留独立任务的报告，不会吞掉失败退出码。这个命令不打包 APK，也不是全量单元测试。
+`QualityChecks` 使用三个独立 job：`PerfGuard` 只检查分配风险、模型稳定性承诺和运行时降级；`Correctness` 检查版本排序、偏好迁移/映射及缓存写入；`StylePolicy (report)` 检查样式解析器回归并发布设计规范 warning。PR 直接触发此工作流，push / Build 手动构建只通过可复用 `workflow_call` 调用一次，不再让 Build 和另一个 PerfGuard 工作流重复执行整组检查。每个入口必须显式指定 `bash scripts/ci_quality.sh performance|correctness|style`，不保留隐式全量模式；这些命令不打包 APK，也不是全量单元测试。`--continue` 只保留独立报告，不吞掉失败退出码。
 
 源码策略由 `ci-lint` 模块通过 Android Lint / UAST / Kotlin 类型解析执行，不再放在 JUnit 中读仓库源码做正则断言：
 
@@ -226,10 +226,10 @@ UI 主题、组件、页面状态和设备宽度的专项矩阵见 [UI 设计规
 - `BiliPaiModelStability` 检查 `compose_stability.conf` 承诺的模型包及子包，涵盖 `core-data` 等依赖模块；区分属性与函数/getter/init 局部变量。只读集合接口仍不证明深度不可变或运行时从未修改。
 - 六类样式规则仍限定 `live/home/dynamic/following/list/watchlater` 包及子包。命名 `Spec/Palette/Policy` 不可变 token 属性 initializer 可豁免；非 `@Composable` 的具名规格工厂还可定义已解析的样式返回值及默认参数。支持表达式体、`return` 分支、Compose 值类型及 `Style/Spec/Palette/Policy/Geometry/Tuning/Metrics/Padding` 命名的数据规格，不豁免中间局部语句、嵌套回调或同文件 UI 函数，也不因同名测试存在而豁免。泛型或匿名类型没有可识别类名时保守保留诊断，不令检查器崩溃；这不是跨函数无副作用证明。
 - `BiliPaiHardcodedDimension` 描述尺寸、间距、位移及效果半径，不把所有 `dp` 都称为间距。零值仅按已解析 API 角色处理：取消阴影、padding/offset/blur、最小边界及 `letterSpacing` 等恒等选择不要求 token；`width(0.dp)`、`fontSize = 0.sp`、最大边界及同名伪 API 仍受检查。`RoundedCornerShape` 只报 shape，不再重复报 dimension；全零 `dp` 圆角表示方形，不报 shape。
-- 对比度计算的 `resolveAccessibleContainerColors(backgroundColor = …)` 可读取真实主题背景；显示容器、其他参数或同名函数不获得豁免。样式诊断归类为可用性约束，仍是 `ERROR`，既不证明实际掉帧，也不直接证明视觉缺陷。
+- 对比度计算的 `resolveAccessibleContainerColors(backgroundColor = …)` 可读取真实主题背景；显示容器、其他参数或同名函数不获得豁免。样式诊断归类为可用性约束，规则默认仍是 `ERROR`；仅样式 CI profile 将六类规范显式报告为 warning，不进入性能 job。它们既不证明实际掉帧，也不直接证明视觉缺陷。
 - 原审批文件豁免按规则迁入 `app/lint.xml`，不自动收录当前违规、不更新数量上限或集合摘要。新的豁免仍需要解释具体设计理由。
 
-Gradle 将检查器挂到 app 和 Android library 的 `lintChecks`，并启用依赖分析，避免只检查 app 而漏掉拆出的模型。CI 的 `-Pbili.ciChecks=true` 仅选择这些策略及检查器故障诊断，不使用旧平台 Lint baseline；普通 `lintDebug` 仍保留平台检查和原 baseline。`ObsoleteLintCustomCheck` 在 CI 中为 fatal，检查器不兼容而被整体跳过不能再产生假绿。
+Gradle 将检查器挂到 app 和 Android library 的 `lintChecks`，并启用依赖分析，避免漏掉拆出的模型。`-Pbili.ciChecks=performance` 仅选择分配风险与模型稳定性；`-Pbili.ciChecks=style` 仅选择六类设计规范并将其报告为 warning。两个 profile 都移除旧平台 baseline，并把 `LintError` / `ObsoleteLintCustomCheck` 设为 fatal；编译、检查器崩溃/加载故障及回归失败仍导致 job 失败，没有 `continue-on-error`、`abortOnError=false` 或忽略失败的包装。普通 `lintDebug` 仍保留平台检查、默认规则严重性和原 baseline。旧 `bili.ciChecks=true` 已删除；下文出现它的命令仅是历史执行记录，不是当前入口。
 
 行为验证从所属模块执行：app 包含更新版本排序、刷新率选择、运行时掉帧窗口与降级恢复、真实 Preferences 映射、主题迁移及缓存写入顺序/取消边界；design-system 执行运行时降级决策和信号合并策略。不能用 app 的 `--tests` 筛选代替 design-system 的测试任务。
 
@@ -324,16 +324,40 @@ gradlew.bat :ci-lint:test --rerun :app:lintDebug -Pbili.ciChecks=true --continue
 
 本轮没有生成 baseline、扩大路径豁免或降级规则，也没有批量调整页面尺寸来消除命中。剩余样式位置仍需逐项审查及复用 token，不能全部解释为产品漏洞。未执行全量单元测试、APK 打包或 Android 界面/设备帧耗时验证；远程结果以 PR checks 为准。
 
+### 2026-10-12 CI 职责拆分（PR #899）
+
+在 `0df2ea5dc` 上追加 CI 拆分，重命名旧 `PerfGuard.yml` 为可复用的 `QualityChecks.yml`。Build 的原质量 job 改为调用它，打包 job 仍依赖质量 job 与 FCM 检查；三类检查不再在两个工作流中重复执行。模型稳定性属于 Compose 性能承诺，不是设备帧耗时测量；样式报告不再决定性能检查的成败。三个 job 各自上传报告，样式 warning 也会上传，不等失败才保留证据。
+
+使用 Windows Git Bash、`D:/Java/jdk-21` 与 gh 认证，直接执行真实 `scripts/ci_quality.sh` 入口：
+
+| 入口 | 实际测试 | 原生 Lint | 退出 |
+| --- | --- | --- | --- |
+| performance | 性能/模型 fixture 22、app 19、design-system 12，共 53 个全部通过 | 仅原有 4 处分配错误；无样式命中 | 1 |
+| correctness | app 37 个全部通过 | 不执行 Lint | 0 |
+| style | 样式 fixture 20 个全部通过 | 保留 447 个样式 warning；无分配或模型诊断 | 0 |
+
+这里的候选不含本地主题或模糊业务修复，因此性能入口依然正确阻止 4 处分配风险，不能声称完整质量门通过。前述 451 项旧统计没有消失，而是分成了性能错误与样式报告；没有清空 baseline、偷偷删除规则或改页面参数凑绿。无模式调用实际退出 2，防止旧调用者意外运行一组含糊的检查。
+
+另用同一个 `style` 入口做故障 smoke：临时令检查器只在真实生产 `CiStyleFaultProbe.kt` 中抛出异常，20 个 fixture 仍全部通过，但 `:app:lintAnalyzeDebug` 因检查器故障退出 1，未被 warning profile 吞掉。随后移除临时源文件及异常注入，检查器恢复原内容，再运行 `style` 入口恢复退出 0、447 个 warning 和 20 个回归通过。临时故障代码不进入提交。
+
+工作流经 actionlint 1.7.12 校验，Shell 入口通过 `bash -n`。校验同时发现 Build 原有的 `github.run_started_at` 不是有效上下文字段，改为在既有发布证据脚本中生成实际 UTC 时间；已直接消费该脚本确认生成可解析的 UTC `generatedAt`，没有打包 APK。
+
+本次工作流与 job 名称变化；若维护者设置了旧 required-check 名称，需要同步分支保护，不在本 PR 中修改仓库保护设置。本地主题、模糊复用及缓存测试保留在独立分支，不加入 #899；未运行全量测试、设备视觉或帧耗时验证。
+
+
 
 
 按变更面选择最小验证集：
 
 ```bash
-# 与 GitHub Actions 相同的质量门，不包含 APK 构建
-bash scripts/ci_quality.sh
+# 与 GitHub Actions 相同的三个职责入口，不包含 APK 构建
+bash scripts/ci_quality.sh performance
+bash scripts/ci_quality.sh correctness
+bash scripts/ci_quality.sh style
 
-# 仅检查 CI 源码策略；真实违规会使任务失败
-./gradlew :app:lintDebug -Pbili.ciChecks=true
+# 只执行相应源码策略；样式 profile 为报告，检查器故障仍失败
+./gradlew :app:lintDebug -Pbili.ciChecks=performance
+./gradlew :app:lintDebug -Pbili.ciChecks=style
 
 # 验证解析器的误报、漏报、缓存、模块与豁免边界
 ./gradlew :ci-lint:test

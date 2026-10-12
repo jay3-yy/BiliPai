@@ -25,41 +25,11 @@ env:
 
 jobs:
   quality-guards:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Set up Gradle cache
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Run semantic policies and behavior checks
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: bash scripts/ci_quality.sh
-
-      - name: Upload quality diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: quality-diagnostics
-          path: |
-            app/build/reports/lint-results-debug.*
-            app/build/reports/tests/testDebugUnitTest
-            design-system/build/reports/tests/testDebugUnitTest
-            ci-lint/build/reports/tests/test
-          retention-days: 7
+    name: Quality checks
+    uses: ./.github/workflows/QualityChecks.yml
+    permissions:
+      contents: read
+      packages: read
 
   check-fcm:
     runs-on: ubuntu-latest
@@ -168,6 +138,7 @@ jobs:
           import hashlib
           import json
           import os
+          from datetime import datetime, timezone
           from pathlib import Path
 
           dist_dir = Path(os.environ["DIST_DIR"])
@@ -183,7 +154,7 @@ jobs:
               "workflowRunId": os.environ["GITHUB_RUN_ID"],
               "workflowRunUrl": os.environ["WORKFLOW_RUN_URL"],
               "releaseTag": os.environ["RELEASE_TAG"],
-              "generatedAt": os.environ["GENERATED_AT"],
+              "generatedAt": datetime.now(timezone.utc).isoformat(),
               "artifacts": []
           }
           for apk in apk_files:
@@ -203,7 +174,6 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
         env:
           DIST_DIR: ${{ github.workspace }}/build/release-evidence
-          GENERATED_AT: ${{ github.run_started_at }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
           GITHUB_RUN_ID: ${{ github.run_id }}

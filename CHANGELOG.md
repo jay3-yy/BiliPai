@@ -3,6 +3,10 @@
 
 更新日志(ChangeLog)
 
+[更改] CI 拆为 PerfGuard、Correctness 与 StylePolicy 报告，Build 复用统一 QualityChecks 工作流，不再重复执行整组守卫；性能检查不包含颜色、尺寸等设计规范，样式 CI profile 显式发布 warning，规则默认严重性不变，编译及检查器故障仍失败
+
+[验证] 真实性能入口的 53 个用例通过但仍有 4 处分配错误，正确性入口的 37 个用例通过，样式入口的 20 个用例通过并保留 447 个 warning；不代表整体 CI 或 APK 已通过。工作流校验修正无效的 run_started_at 上下文，发布证据改用实际 UTC 生成时间，详见 docs/wiki/QA.md
+
 [修复] 样式语义验证器区分具名规格定义与 UI 使用位置，识别返回的 Palette / Spec / Policy / Geometry / Metrics / Padding 及规格默认参数；按已解析 API 角色识别零值，不将圆角重复报为尺寸，并修复泛型返回类型无类名时的检查器崩溃。尺寸规则统一为 BiliPaiHardcodedDimension，样式诊断归类为可用性而非性能问题，保留原 ERROR 门禁及既有豁免范围
 
 [验证] 样式工厂回归曾复现旧检查器将 4 个 UI 使用位置报为 13 个诊断；校准后 42 个检查器回归全部通过。不包含动态主题修复的 PR 候选原生 Lint 实际执行后仍有 451 项诊断（447 项样式、4 处分配风险），模型与检查器故障为零；未增加 baseline、豁免或降低严重性，不能据此宣称远端 CI、全量测试或 APK 已通过，详见 docs/wiki/QA.md

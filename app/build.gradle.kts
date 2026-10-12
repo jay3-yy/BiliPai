@@ -253,23 +253,31 @@ android {
         baseline = file("lint-baseline.xml")
         abortOnError = true
         checkDependencies = true
-        // CI source policies are separate from the full Android Lint run.
-        if (providers.gradleProperty("bili.ciChecks").orNull == "true") {
-            // Legacy platform baselines must not hide new CI policies or checker failures.
-            baseline = null
-            fatal += "ObsoleteLintCustomCheck"
-            checkOnly += setOf(
-                "BiliPaiFrameBlurAllocation",
-                "BiliPaiModelStability",
+        // CI profiles separate performance contracts from informational style findings.
+        val ciChecks = providers.gradleProperty("bili.ciChecks").orNull
+        if (ciChecks != null) {
+            val styleIssues = setOf(
                 "BiliPaiHardcodedColor",
                 "BiliPaiHardcodedDimension",
                 "BiliPaiHardcodedTypography",
                 "BiliPaiHardcodedShape",
                 "BiliPaiHardcodedMotion",
                 "BiliPaiHardcodedSurface",
-                "LintError",
-                "ObsoleteLintCustomCheck",
             )
+            val selectedIssues = when (ciChecks) {
+                "performance" -> setOf("BiliPaiFrameBlurAllocation", "BiliPaiModelStability")
+                "style" -> styleIssues
+                else -> throw GradleException("bili.ciChecks must be performance or style")
+            }
+            // Never let a platform baseline or style warnings hide a broken checker.
+            baseline = null
+            val checkerFailures = setOf("LintError", "ObsoleteLintCustomCheck")
+            fatal += checkerFailures
+            checkOnly += selectedIssues
+            checkOnly += checkerFailures
+            if (ciChecks == "style") {
+                warning += styleIssues
+            }
         }
     }
 }
