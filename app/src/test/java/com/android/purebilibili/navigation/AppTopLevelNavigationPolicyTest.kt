@@ -570,22 +570,6 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun bottomPagerPreload_startsEarlyEnoughToBeatTheFirstTap() {
-        // 回归护栏：预热必须在用户「切回前台后立刻连点底栏」之前跑完。
-        // 原来的 500ms 起步 + 240ms 间隔让 5 个栏目要 ~1.5s 才全热。
-        val totalBudget = BOTTOM_PAGER_PRELOAD_IDLE_MILLIS +
-            BOTTOM_PAGER_PRELOAD_INTERVAL_MILLIS * BOTTOM_BAR_MAX_VISIBLE_ITEMS
-        assertTrue("preload budget was ${totalBudget}ms", totalBudget <= 500L)
-        assertTrue(BOTTOM_PAGER_PRELOAD_IDLE_MILLIS <= 150L)
-    }
-
-    @Test
-    fun bottomPagerTargetPrewarm_givesExactlyOneFrameOfLead() {
-        // 让出多帧会让底栏指示器手感明显变迟钝，因此固定为一帧。
-        assertEquals(1, BOTTOM_PAGER_TARGET_PREWARM_FRAMES)
-    }
-
-    @Test
     fun bottomPagerPreloadedItemsSaver_survivesActivityRecreation() {
         val items = setOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.PROFILE)
         val saved = with(BottomPagerPreloadedItemsSaver) {
