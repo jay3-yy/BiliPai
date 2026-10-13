@@ -322,16 +322,21 @@ class RuntimeVisualGuardTrackerTest {
 
     @Test
     fun beginSession_isIdempotentForTheSameSession() {
-        val tracker = RuntimeVisualGuardTracker()
+        val tracker = RuntimeVisualGuardTracker(minimumFrameCount = 12)
         val session = Any()
 
-        // 同一会话内先累积一个高掉帧窗口（尚未降级）。
+        tracker.beginSession(session)
         tracker.finishWindow(totalFrames = 12, jankyFrames = 1, nowMs = 100L)
+
+        // 同会话重入须同时保留已结算的降级历史和当前未结算的采样窗口。
+        repeat(6) { index ->
+            tracker.onFrame(tracked = true, isJank = index == 0, nowMs = 200L)
+        }
         tracker.beginSession(session)
-        // 重入同一会话（onStart 因配置变化重入）不能清掉正在累积的窗口。
-        tracker.beginSession(session)
-        // 第二个高掉帧窗口仍然生效 → 证明窗口没有被重入清空。
-        tracker.finishWindow(totalFrames = 12, jankyFrames = 1, nowMs = 200L)
+        repeat(6) {
+            tracker.onFrame(tracked = true, isJank = false, nowMs = 200L)
+        }
+        tracker.onFrame(tracked = false, isJank = false, nowMs = 200L)
 
         assertTrue(tracker.decision.value.downgraded)
     }

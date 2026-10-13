@@ -4685,7 +4685,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     private fun normalizeDanmakuDuplicateMergeWindowMs(value: Int?): Int {
         val raw = value ?: DEFAULT_DANMAKU_DUPLICATE_MERGE_WINDOW_MS
-        return raw.coerceIn(100, 15_000)
+        return raw.coerceIn(1_000, 15_000)
     }
 
     private fun normalizeDanmakuDuplicateMergeCountThreshold(value: Int?): Int {

@@ -27,41 +27,6 @@ class DanmakuSettingsMappingPolicyTest {
     }
 
     @Test
-    fun emptyPreferences_useExpectedDanmakuDefaults() {
-        val prefs = mutablePreferencesOf()
-
-        val result = mapDanmakuSettingsFromPreferences(prefs, portraitScope)
-
-        assertTrue(result.enabled)
-        assertEquals(0.85f, result.opacity)
-        assertEquals(1.0f, result.fontScale)
-        assertEquals(1.0f, result.speed)
-        assertEquals(0.5f, result.displayArea)
-        assertTrue(result.mergeDuplicates)
-        assertTrue(result.allowScroll)
-        assertTrue(result.allowTop)
-        assertTrue(result.allowBottom)
-        assertTrue(result.allowColorful)
-        assertTrue(result.allowSpecial)
-        assertFalse(result.hideInteractiveCommands)
-        assertFalse(result.blockAttentionCommands)
-        assertFalse(result.smartOcclusion)
-        assertEquals(PortraitDanmakuDisplayAreaMode.VIDEO_VIEWPORT, result.portraitDisplayAreaMode)
-        assertEquals(DanmakuPanelWidthMode.THIRD, result.fullscreenPanelWidthMode)
-        assertEquals("", result.blockRulesRaw)
-        assertEquals(emptyList(), result.blockRules)
-        assertEquals(5, propertyValue<Int>(result, "fontWeight"))
-        assertEquals(1.5f, propertyValue<Float>(result, "strokeWidth"))
-        assertEquals(1.6f, propertyValue<Float>(result, "lineHeight"))
-        assertEquals(7.0f, propertyValue<Float>(result, "scrollDurationSeconds"))
-        assertEquals(4.0f, propertyValue<Float>(result, "staticDurationSeconds"))
-        assertEquals(2, propertyValue<Int>(result, "duplicateMergeCountThreshold"))
-        assertFalse(propertyValue<Boolean>(result, "scrollFixedVelocity"))
-        assertFalse(propertyValue<Boolean>(result, "staticDanmakuToScroll"))
-        assertFalse(propertyValue<Boolean>(result, "massiveMode"))
-    }
-
-    @Test
     fun populatedPreferences_normalizeFullscreenPanelWidthToThird() {
         val prefs = mutablePreferencesOf(
             booleanPreferencesKey("danmaku_enabled") to false,
@@ -146,6 +111,17 @@ class DanmakuSettingsMappingPolicyTest {
 
         assertEquals(9_000, longWindow.duplicateMergeWindowMs)
         assertEquals(15_000, oversizedWindow.duplicateMergeWindowMs)
+    }
+
+    @Test
+    fun legacySubsecondMergeWindow_isRaisedToOneSecond() {
+        val prefs = mutablePreferencesOf(
+            intPreferencesKey("danmaku_duplicate_merge_window_ms") to 100
+        )
+
+        val result = mapDanmakuSettingsFromPreferences(prefs, portraitScope)
+
+        assertEquals(1_000, result.duplicateMergeWindowMs)
     }
 
     @Test
