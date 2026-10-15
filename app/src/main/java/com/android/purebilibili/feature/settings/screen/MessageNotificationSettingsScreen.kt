@@ -399,7 +399,7 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
                     SettingSwitchItem(
                         icon = rememberSettingsSemanticIcon(SettingsIconRole.NOTIFICATION_SCOPE_DYNAMIC_UP),
                         title = settingItemTitle("notification.notify_dynamic_updates"),
-                        subtitle = if (!settings.enabled) "先开启“后台消息通知”" else "关注的 UP 主发视频或动态时通知",
+                        subtitle = if (!settings.enabled) "先开启“后台消息通知”" else "需 App 授权；UP 红点消失才清除通知，未知状态保留",
                         checked = settings.notifyDynamicUpdates,
                         onCheckedChange = { enabled ->
                             scope.launch {

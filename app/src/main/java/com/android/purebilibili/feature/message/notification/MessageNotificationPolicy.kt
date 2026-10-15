@@ -62,10 +62,6 @@ internal const val MAX_DYNAMIC_NOTIFICATION_PREVIEWS = 3
 internal fun isNewerDynamicNotificationId(id: String, baseline: String): Boolean =
     id.isNotEmpty() && (id.length > baseline.length || (id.length == baseline.length && id > baseline))
 
-internal fun isDynamicNotificationRead(id: String, readOffset: String): Boolean =
-    readOffset.isNotEmpty() && readOffset.all { it in '0'..'9' } &&
-        !isNewerDynamicNotificationId(id, readOffset.trimStart('0').ifEmpty { "0" })
-
 internal fun addNewestDynamicNotificationPreview(items: MutableList<DynamicItem>, item: DynamicItem) {
     var index = 0
     while (index < items.size && !isNewerDynamicNotificationId(item.id_str, items[index].id_str)) index++

@@ -19,7 +19,8 @@ internal val messageNotificationMutex = Mutex()
 @Serializable
 internal data class AccountNotificationState(
     val initialized: Set<String> = emptySet(),
-    val dynamicBaseline: String = "",
+    // Ignore the legacy end-of-scan maximum on upgrade; null forces a safe full scan.
+    val dynamicProbeBaseline: String? = null,
     // A present empty value means that this UP was scanned successfully but had no dynamics.
     val dynamicUpBaselines: Map<Long, String> = emptyMap(),
     // Includes overflow entries represented only by the Android group summary.

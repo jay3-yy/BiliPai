@@ -20,6 +20,8 @@ import com.android.purebilibili.data.model.response.SystemNoticeItem
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -124,7 +126,7 @@ class MessageNotificationPolicyTest {
         val poller = MessageNotificationPoller(source)
         val initial = poller.check(enabled, AccountNotificationState(), 1)
         assertEquals(emptyList(), initial.notifications)
-        assertEquals("100", initial.state.dynamicBaseline)
+        assertEquals(mapOf(9L to "100"), initial.state.dynamicUpBaselines)
         assertEquals(emptyList(), poller.check(enabled, initial.state, 1).notifications)
     }
 
@@ -214,14 +216,16 @@ class MessageNotificationPolicyTest {
     }
 
     @Test
-    fun dynamicNoUpdatesNeverFetchesPersonalFeedsOrAdvancesBaseline() = runTest {
-        val source = Source().apply { updates = 0 }
-        val previous = AccountNotificationState(initialized = setOf("dynamic"),
-            dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100"))
+    fun initializedAuthorWithUnreadUpdatesNotifiesNewPublication() = runTest {
+        val source = Source().apply {
+            authorUpdates = mapOf(9L to true)
+            pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("110"), dynamic("100"))))
+        }
+        val previous = AccountNotificationState(dynamicUpBaselines = mapOf(9L to "100"))
         val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1)
-        assertEquals(previous, result.state)
-        assertEquals(emptyList(), source.feedRequests)
-        assertEquals(emptyList(), result.notifications)
+        assertEquals(listOf("dynamic:110"), result.notifications.map { it.key })
+        assertEquals(mapOf("110" to 9L), result.state.pendingDynamicIds)
+        assertEquals(mapOf(9L to "110"), result.state.dynamicUpBaselines)
     }
 
     @Test
@@ -232,10 +236,9 @@ class MessageNotificationPolicyTest {
                 items = listOf(dynamic("120")), hasMore = true, offset = "next"))
             feedErrorOffset = "next"
         }
-        val previous = AccountNotificationState(initialized = setOf("dynamic"), dynamicBaseline = "100",
+        val previous = AccountNotificationState(initialized = setOf("dynamic"),
             dynamicUpBaselines = mapOf(9L to "100"), replyUnreadCount = 0)
         val result = MessageNotificationPoller(source).check(enabled, previous, 1)
-        assertEquals("100", result.state.dynamicBaseline)
         assertEquals(mapOf(9L to "100"), result.state.dynamicUpBaselines)
         assertEquals(listOf("reply"), result.notifications.map { it.key })
         assertTrue(result.shouldRetry)
@@ -243,7 +246,7 @@ class MessageNotificationPolicyTest {
         source.pages = source.pages + ((9L to "next") to DynamicPersonalFeedPage(
             items = listOf(dynamic("110"), dynamic("100"))))
         val recovered = MessageNotificationPoller(source).check(enabled, result.state, 1)
-        assertEquals("120", recovered.state.dynamicBaseline)
+        assertEquals("120", recovered.state.dynamicUpBaselines[9L])
         assertEquals(listOf("dynamic:120", "dynamic:110"), recovered.notifications.map { it.key })
         assertEquals(emptyList(), MessageNotificationPoller(source).check(enabled, recovered.state, 1).notifications)
     }
@@ -259,7 +262,7 @@ class MessageNotificationPolicyTest {
             )
         }
         val previous = AccountNotificationState(initialized = setOf("dynamic"),
-            dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100"))
+            dynamicUpBaselines = mapOf(9L to "100"))
         val poller = MessageNotificationPoller(source)
         val failed = poller.check(dynamicOnly, previous, 1)
         assertEquals(previous, failed.state)
@@ -273,17 +276,22 @@ class MessageNotificationPolicyTest {
     }
 
     @Test
-    fun newlyFollowedUpEstablishesSilentBaselineEvenWithoutGlobalUpdates() = runTest {
+    fun newlyFollowedUpInitializesSilentlyWithoutAdvancingTheExistingProbe() = runTest {
         val source = Source().apply {
-            updates = 0
+            defaultUpdateCount = 0
             followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
-            pages = mapOf((10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("50", 10))))
+            pages = mapOf(
+                (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("100"))),
+                (10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("50", 10))),
+            )
         }
-        val previous = AccountNotificationState(dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100"))
+        val previous = AccountNotificationState(
+            dynamicProbeBaseline = "80", dynamicUpBaselines = mapOf(9L to "100"),
+        )
         val initial = MessageNotificationPoller(source).check(dynamicOnly, previous, 1)
         assertEquals(emptyList(), initial.notifications)
         assertEquals(mapOf(9L to "100", 10L to "50"), initial.state.dynamicUpBaselines)
-        source.updates = 1
+        source.updateCounts = mapOf("80" to 1, "100" to 0)
         source.pages = mapOf(
             (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("100"))),
             (10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("110", 10))),
@@ -293,42 +301,39 @@ class MessageNotificationPolicyTest {
     }
 
     @Test
-    fun oneUpFailureDoesNotDiscardOtherUpsOrAdvanceGlobalProbePastTheFailure() = runTest {
+    fun oneUpFailureDoesNotDiscardOtherUpsAndRecoveryOnlyNotifiesTheFailedUp() = runTest {
         val source = Source().apply {
             followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
             pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("110"))))
             feedErrorHost = 10L
         }
-        val previous = AccountNotificationState(dynamicBaseline = "100",
-            dynamicUpBaselines = mapOf(9L to "100", 10L to "90"))
+        val previous = AccountNotificationState(dynamicUpBaselines = mapOf(9L to "100", 10L to "90"))
         val poller = MessageNotificationPoller(source)
         val partial = poller.check(dynamicOnly, previous, 1)
         assertEquals(listOf("dynamic:110"), partial.notifications.map { it.key })
         assertEquals(mapOf(9L to "110", 10L to "90"), partial.state.dynamicUpBaselines)
-        assertEquals("100", partial.state.dynamicBaseline)
         assertTrue(partial.shouldRetry)
         source.feedErrorHost = null
         source.pages = source.pages + ((10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120", 10))))
         val recovered = poller.check(dynamicOnly, partial.state, 1)
         assertEquals(listOf("dynamic:120"), recovered.notifications.map { it.key })
-        assertEquals("120", recovered.state.dynamicBaseline)
+        assertEquals(mapOf(9L to "110", 10L to "120"), recovered.state.dynamicUpBaselines)
     }
 
     @Test
     fun followingPaginationIncludesLaterUpsAndIncompleteRefreshNeverPrunesState() = runTest {
         val source = Source().apply {
-            updates = 0
             followingPages = mapOf(
                 1 to FollowingsData(list = (9L..58L).map { FollowingUser(mid = it) }, total = 51),
                 2 to FollowingsData(list = listOf(FollowingUser(mid = 59)), total = 51),
             )
-            pages = (10L..59L).associate { (it to "") to DynamicPersonalFeedPage(items = listOf(dynamic("$it", it))) }
+            pages = (9L..59L).associate { (it to "") to DynamicPersonalFeedPage(items = listOf(dynamic("$it", it))) } +
+                ((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("100"))))
         }
-        val previous = AccountNotificationState(dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100"))
+        val previous = AccountNotificationState(dynamicUpBaselines = mapOf(9L to "100"))
         val poller = MessageNotificationPoller(source)
         val initial = poller.check(dynamicOnly, previous, 1)
         assertEquals(emptyList(), initial.notifications)
-        source.updates = 1
         source.pages = source.pages + mapOf(
             (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("100"))),
             (59L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("110", 59))),
@@ -352,7 +357,7 @@ class MessageNotificationPolicyTest {
             )
         }
         val result = MessageNotificationPoller(source).check(dynamicOnly,
-            AccountNotificationState(dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100")), 1)
+            AccountNotificationState(dynamicUpBaselines = mapOf(9L to "100")), 1)
         assertEquals(listOf("dynamic:130", "dynamic:120"), result.notifications.map { it.key })
         assertEquals("130", result.state.dynamicUpBaselines[9L])
     }
@@ -368,7 +373,7 @@ class MessageNotificationPolicyTest {
             )
         }
         val result = MessageNotificationPoller(source).check(dynamicOnly,
-            AccountNotificationState(dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100")), 1)
+            AccountNotificationState(dynamicUpBaselines = mapOf(9L to "100")), 1)
         assertEquals(4, result.notifications.last().text.filter(Char::isDigit).toInt())
         assertEquals("140", result.state.dynamicUpBaselines[9L])
     }
@@ -433,7 +438,7 @@ class MessageNotificationPolicyTest {
             initialized = setOf("dm", "sysmsg", "dynamic", "live"),
             sessionMsgKeys = mapOf("90_1" to 999L),
             replyUnreadCount = 1, atUnreadCount = 1, likeUnreadCount = 1,
-            seenSystemCursors = listOf(1L), dynamicUpBaselines = mapOf(9L to "100"), dynamicBaseline = "100",
+            seenSystemCursors = listOf(1L), dynamicUpBaselines = mapOf(9L to "100"),
         )
         // Master enabled, all five subcategories on: every category reports one new item.
         val allOn = MessageNotificationPoller(source).check(enabled.copy(notifyDynamicUpdates = false, notifyLiveAlerts = false), baseline, 1)
@@ -536,100 +541,321 @@ class MessageNotificationPolicyTest {
     }
 
     @Test
-    fun pendingDynamicsPollReadProgressWithoutNewPublicationsAndRetainOtherUpsOnFailure() = runTest {
+    fun zeroUpdateCountStillClearsOnlyTheReadAuthorsPendingNotices() = runTest {
         val source = Source().apply {
-            updates = 0
-            followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
-            pages = mapOf((9L to "") to DynamicPersonalFeedPage(readOffset = "110"))
-            feedErrorHost = 10L
+            defaultUpdateCount = 0
+            feedErrorHost = 9L
+            followingPages = mapOf(1 to FollowingsData(list = (9L..11L).map { FollowingUser(mid = it) }, total = 3))
+            pages = (9L..11L).associate { (it to "") to DynamicPersonalFeedPage(items = listOf(dynamic("${it}0", it))) }
+            authorUpdates = mapOf(9L to false, 10L to true)
         }
         val previous = AccountNotificationState(
-            dynamicBaseline = "130", dynamicUpBaselines = mapOf(9L to "120", 10L to "130"),
-            pendingDynamicIds = mapOf("110" to 9L, "120" to 9L, "130" to 10L),
+            dynamicProbeBaseline = "110",
+            dynamicUpBaselines = mapOf(9L to "90", 10L to "100", 11L to "110"),
+            pendingDynamicIds = mapOf("90" to 9L, "100" to 10L, "110" to 11L),
         )
-        val first = MessageNotificationPoller(source).check(
-            dynamicOnly, previous, 1, setOf("dynamic:110", "dynamic:120", "dynamic:130", "dynamic:summary"),
+        val result = MessageNotificationPoller(source).check(
+            dynamicOnly, previous, 1, setOf("dynamic:90", "dynamic:100", "dynamic:110", "dynamic:summary"),
         )
-        assertEquals(setOf("dynamic:110"), first.cancelNotificationKeys)
-        assertEquals(mapOf("120" to 9L, "130" to 10L), first.state.pendingDynamicIds)
-        assertEquals(previous.dynamicUpBaselines, first.state.dynamicUpBaselines)
-        assertTrue(first.shouldRetry)
+        assertEquals(setOf("dynamic:90"), result.cancelNotificationKeys)
+        assertEquals(mapOf("100" to 10L, "110" to 11L), result.state.pendingDynamicIds)
+        assertEquals(previous.dynamicUpBaselines, result.state.dynamicUpBaselines)
+        assertEquals(emptyList(), result.notifications)
+        assertFalse(result.shouldRetry)
+    }
 
-        source.feedErrorHost = null
-        source.pages = mapOf(
-            (9L to "") to DynamicPersonalFeedPage(readOffset = "120"),
-            (10L to "") to DynamicPersonalFeedPage(readOffset = "130"),
+    @Test
+    fun readAuthorSuppressesNewNoticesButAdvancesItsBaselineWithoutAffectingOtherAuthors() = runTest {
+        val source = Source().apply {
+            followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
+            pages = mapOf(
+                (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120"), dynamic("110"), dynamic("100"))),
+                (10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("220", 10), dynamic("200", 10))),
+            )
+            authorUpdates = mapOf(9L to false, 10L to true)
+        }
+        val previous = AccountNotificationState(
+            dynamicUpBaselines = mapOf(9L to "100", 10L to "200"),
+            pendingDynamicIds = mapOf("105" to 9L, "205" to 10L),
         )
-        val read = MessageNotificationPoller(source).check(
-            dynamicOnly, first.state, 1, setOf("dynamic:120", "dynamic:130", "dynamic:summary"),
+        val poller = MessageNotificationPoller(source)
+        val result = poller.check(dynamicOnly, previous, 1, setOf("dynamic:105", "dynamic:205"))
+        assertEquals(setOf("dynamic:105"), result.cancelNotificationKeys)
+        assertEquals(listOf("dynamic:220"), result.notifications.map { it.key })
+        assertEquals(mapOf("205" to 10L, "220" to 10L), result.state.pendingDynamicIds)
+        assertEquals(mapOf(9L to "120", 10L to "220"), result.state.dynamicUpBaselines)
+
+        source.authorUpdates = mapOf(9L to true, 10L to true)
+        val unreadAgain = poller.check(dynamicOnly, result.state, 1, setOf("dynamic:205", "dynamic:220"))
+        assertEquals(emptyList(), unreadAgain.notifications)
+        assertEquals(emptySet(), unreadAgain.cancelNotificationKeys)
+        assertEquals(result.state.pendingDynamicIds, unreadAgain.state.pendingDynamicIds)
+    }
+
+    @Test
+    fun unknownAuthorStatePreservesPendingAndNotifiesNewPublications() = runTest {
+        for (snapshot in listOf(emptyMap(), mapOf(10L to false))) {
+            val source = Source().apply {
+                authorUpdates = snapshot
+                pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120"), dynamic("100"))))
+            }
+            val previous = AccountNotificationState(
+                dynamicUpBaselines = mapOf(9L to "100"), pendingDynamicIds = mapOf("105" to 9L),
+            )
+            val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1, setOf("dynamic:105"))
+            assertEquals(emptySet(), result.cancelNotificationKeys)
+            assertEquals(listOf("dynamic:120"), result.notifications.map { it.key })
+            assertEquals(mapOf("105" to 9L, "120" to 9L), result.state.pendingDynamicIds)
+            assertEquals("120", result.state.dynamicUpBaselines[9L])
+        }
+    }
+
+    @Test
+    fun failedAuthorSnapshotDoesNotCancelOrRollBackSuccessfulPublicationScans() = runTest {
+        for (failure in listOf(IOException("snapshot interrupted"), IllegalStateException("missing snapshot"))) {
+            val source = Source().apply {
+                authorUpdatesError = failure
+                pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120"), dynamic("100"))))
+            }
+            val previous = AccountNotificationState(
+                dynamicUpBaselines = mapOf(9L to "100"), pendingDynamicIds = mapOf("105" to 9L),
+            )
+            val poller = MessageNotificationPoller(source)
+            val result = poller.check(dynamicOnly, previous, 1, setOf("dynamic:105"))
+            assertEquals(emptySet(), result.cancelNotificationKeys)
+            assertEquals(listOf("dynamic:120"), result.notifications.map { it.key })
+            assertEquals(mapOf("105" to 9L, "120" to 9L), result.state.pendingDynamicIds)
+            assertEquals("120", result.state.dynamicUpBaselines[9L])
+            assertEquals(failure is IOException, result.shouldRetry)
+
+            source.authorUpdatesError = null
+            source.authorUpdates = mapOf(9L to true)
+            val recovered = poller.check(dynamicOnly, result.state, 1, setOf("dynamic:105", "dynamic:120"))
+            assertEquals(emptyList(), recovered.notifications)
+            assertEquals(result.state.pendingDynamicIds, recovered.state.pendingDynamicIds)
+        }
+    }
+
+    @Test
+    fun newestPreviewsAreGlobalAndReadingOneAuthorRemovesItsOverflowToo() = runTest {
+        val source = Source().apply {
+            followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
+            pages = mapOf(
+                (9L to "") to DynamicPersonalFeedPage(items = (104 downTo 100).map { dynamic("$it") }),
+                (10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("205", 10), dynamic("200", 10))),
+            )
+            authorUpdates = mapOf(9L to true, 10L to true)
+        }
+        val previous = AccountNotificationState(dynamicUpBaselines = mapOf(9L to "100", 10L to "200"))
+        val poller = MessageNotificationPoller(source)
+        val fresh = poller.check(dynamicOnly, previous, 1)
+        assertEquals(listOf("dynamic:205", "dynamic:104", "dynamic:103", "dynamic:summary"),
+            fresh.notifications.map { it.key })
+        assertEquals(5, fresh.notifications.last().text.filter(Char::isDigit).toInt())
+        assertEquals(mapOf("101" to 9L, "102" to 9L, "103" to 9L, "104" to 9L, "205" to 10L),
+            fresh.state.pendingDynamicIds)
+
+        source.authorUpdates = mapOf(9L to false, 10L to true)
+        val read = poller.check(
+            dynamicOnly, fresh.state, 1, setOf("dynamic:205", "dynamic:104", "dynamic:103", "dynamic:summary"),
         )
-        assertEquals(setOf("dynamic:120", "dynamic:130"), read.cancelNotificationKeys)
-        assertEquals(emptyMap(), read.state.pendingDynamicIds)
+        assertEquals(setOf("dynamic:101", "dynamic:102", "dynamic:103", "dynamic:104"), read.cancelNotificationKeys)
+        assertEquals(mapOf("205" to 10L), read.state.pendingDynamicIds)
         assertEquals(emptyList(), read.notifications)
     }
 
     @Test
-    fun dynamicsReadBeforePollingAreNotNotifiedButThePublicationBaselineAdvances() = runTest {
+    fun authorReadSnapshotCanClearPendingDespiteThatAuthorsFailedContentRange() = runTest {
         val source = Source().apply {
-            pages = mapOf((9L to "") to DynamicPersonalFeedPage(
-                items = listOf(dynamic("120"), dynamic("110"), dynamic("100")), readOffset = "110",
-            ))
-        }
-        val previous = AccountNotificationState(
-            dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100"),
-            pendingDynamicIds = mapOf("105" to 9L),
-        )
-        val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1, setOf("dynamic:105"))
-        assertEquals(setOf("dynamic:105"), result.cancelNotificationKeys)
-        assertEquals(listOf("dynamic:120"), result.notifications.map { it.key })
-        assertEquals(mapOf("120" to 9L), result.state.pendingDynamicIds)
-        assertEquals("120", result.state.dynamicBaseline)
-    }
-
-    @Test
-    fun overflowDynamicsRemainTrackedUntilTheirOwnReadProgressCoversThem() = runTest {
-        val source = Source().apply {
-            pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = (104 downTo 100).map { dynamic("$it") }))
-        }
-        val previous = AccountNotificationState(dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100"))
-        val fresh = MessageNotificationPoller(source).check(dynamicOnly, previous, 1)
-        assertEquals(setOf("101", "102", "103", "104"), fresh.state.pendingDynamicIds.keys)
-        source.updates = 0
-        source.pages = mapOf((9L to "") to DynamicPersonalFeedPage(readOffset = "102"))
-        val read = MessageNotificationPoller(source).check(
-            dynamicOnly, fresh.state, 1, setOf("dynamic:104", "dynamic:103", "dynamic:102", "dynamic:summary"),
-        )
-        assertEquals(setOf("dynamic:101", "dynamic:102"), read.cancelNotificationKeys)
-        assertEquals(setOf("103", "104"), read.state.pendingDynamicIds.keys)
-    }
-
-    @Test
-    fun failedDynamicRangeDoesNotCommitReadCancellationsOrDropPendingNotices() = runTest {
-        val source = Source().apply {
-            pages = mapOf((9L to "") to DynamicPersonalFeedPage(
-                items = listOf(dynamic("120")), offset = "next", hasMore = true, readOffset = "110",
-            ))
+            followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
+            pages = mapOf(
+                (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120")), offset = "next", hasMore = true),
+                (10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("220", 10), dynamic("200", 10))),
+            )
             feedErrorOffset = "next"
+            authorUpdates = mapOf(9L to false, 10L to true)
         }
         val previous = AccountNotificationState(
-            initialized = setOf("dynamic"), dynamicBaseline = "100", dynamicUpBaselines = mapOf(9L to "100"),
-            pendingDynamicIds = mapOf("105" to 9L),
+            dynamicUpBaselines = mapOf(9L to "100", 10L to "200"),
+            pendingDynamicIds = mapOf("105" to 9L, "205" to 10L),
         )
-        val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1, setOf("dynamic:105"))
-        assertEquals(previous, result.state)
-        assertEquals(emptySet(), result.cancelNotificationKeys)
-        assertEquals(emptyList(), result.notifications)
+        val result = MessageNotificationPoller(source).check(
+            dynamicOnly, previous, 1, setOf("dynamic:105", "dynamic:205"),
+        )
+        assertEquals(setOf("dynamic:105"), result.cancelNotificationKeys)
+        assertEquals(listOf("dynamic:220"), result.notifications.map { it.key })
+        assertEquals(mapOf(9L to "100", 10L to "220"), result.state.dynamicUpBaselines)
+        assertEquals(mapOf("205" to 10L, "220" to 10L), result.state.pendingDynamicIds)
         assertTrue(result.shouldRetry)
     }
 
     @Test
-    fun invalidReadProgressDoesNotClearDynamicsAndUnsignedIdsUseExactDecimalOrdering() {
-        assertFalse(isDynamicNotificationRead("100", ""))
-        assertFalse(isDynamicNotificationRead("100", "opaque-offset"))
-        assertFalse(isDynamicNotificationRead("100", "-1"))
-        assertFalse(isDynamicNotificationRead("18446744073709551615", "18446744073709551614"))
-        assertTrue(isDynamicNotificationRead("18446744073709551615", "18446744073709551615"))
-        assertTrue(isDynamicNotificationRead("100", "000100"))
+    fun simultaneousContentAndAuthorSnapshotFailuresPreserveFailedAuthorAndCommitOtherAuthors() = runTest {
+        val source = Source().apply {
+            followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
+            feedErrorHost = 9L
+            authorUpdatesError = IOException("author snapshot interrupted")
+            pages = mapOf((10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("220", 10), dynamic("200", 10))))
+        }
+        val previous = AccountNotificationState(
+            dynamicUpBaselines = mapOf(9L to "100", 10L to "200"),
+            pendingDynamicIds = mapOf("105" to 9L, "205" to 10L),
+        )
+        val result = MessageNotificationPoller(source).check(
+            dynamicOnly, previous, 1, setOf("dynamic:105", "dynamic:205"),
+        )
+        assertEquals(emptySet(), result.cancelNotificationKeys)
+        assertEquals(listOf("dynamic:220"), result.notifications.map { it.key })
+        assertEquals(mapOf(9L to "100", 10L to "220"), result.state.dynamicUpBaselines)
+        assertEquals(mapOf("105" to 9L, "205" to 10L, "220" to 10L), result.state.pendingDynamicIds)
+        assertTrue(result.shouldRetry)
+    }
+
+    @Test
+    fun absentOrUnfollowedAuthorsAreNotTreatedAsRead() = runTest {
+        for (followed in listOf(listOf(FollowingUser(mid = 9)), emptyList())) {
+            val source = Source().apply {
+                followingPages = mapOf(1 to FollowingsData(list = followed, total = followed.size))
+                pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("100"))))
+                authorUpdates = emptyMap()
+            }
+            val previous = AccountNotificationState(
+                dynamicUpBaselines = mapOf(9L to "100", 10L to "200"),
+                pendingDynamicIds = mapOf("100" to 9L, "200" to 10L),
+            )
+            val result = MessageNotificationPoller(source).check(
+                dynamicOnly, previous, 1, setOf("dynamic:100", "dynamic:200", "dynamic:summary"),
+            )
+            assertEquals(emptySet(), result.cancelNotificationKeys)
+            assertEquals(previous.pendingDynamicIds, result.state.pendingDynamicIds)
+            assertEquals(emptyList(), result.notifications)
+        }
+    }
+
+    @Test
+    fun authorBecomingUnreadWhileContentIsFetchedDoesNotLoseItsNewPublication() = runTest {
+        val source = Source().apply {
+            authorUpdates = mapOf(9L to false)
+            pages = mapOf(
+                (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120")), offset = "next", hasMore = true),
+                (9L to "next") to DynamicPersonalFeedPage(items = listOf(dynamic("110"), dynamic("100"))),
+            )
+            onPersonalFeed = { _, offset ->
+                if (offset == "next") authorUpdates = mapOf(9L to true)
+            }
+        }
+        val previous = AccountNotificationState(
+            dynamicUpBaselines = mapOf(9L to "100"), pendingDynamicIds = mapOf("105" to 9L),
+        )
+        val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1, setOf("dynamic:105"))
+        assertEquals(listOf("dynamic:120", "dynamic:110"), result.notifications.map { it.key })
+        assertEquals(emptySet(), result.cancelNotificationKeys)
+        assertEquals(mapOf("105" to 9L, "110" to 9L, "120" to 9L), result.state.pendingDynamicIds)
+        assertEquals("120", result.state.dynamicUpBaselines[9L])
+    }
+
+    @Test
+    fun publicationDuringAnotherAuthorsScanIsFoundDespiteAZeroCountAtTheNewerGlobalId() = runTest {
+        val source = Source().apply {
+            followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
+            updateCounts = mapOf("100" to 1, "120" to 0)
+            pages = mapOf(
+                (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("100"))),
+                (10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120", 10), dynamic("90", 10))),
+            )
+            authorUpdates = mapOf(9L to true, 10L to true)
+            onPersonalFeed = { mid, _ ->
+                if (mid == 10L) {
+                    pages = pages + ((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("110"), dynamic("100"))))
+                }
+            }
+        }
+        val poller = MessageNotificationPoller(source)
+        val previous = AccountNotificationState(
+            dynamicProbeBaseline = "100", dynamicUpBaselines = mapOf(9L to "100", 10L to "90"),
+        )
+        val first = poller.check(dynamicOnly, previous, 1)
+        assertEquals(listOf("dynamic:120"), first.notifications.map { it.key })
+        assertEquals(mapOf(9L to "100", 10L to "120"), first.state.dynamicUpBaselines)
+        val second = poller.check(dynamicOnly, first.state, 1, setOf("dynamic:120"))
+        assertEquals(listOf("dynamic:110"), second.notifications.map { it.key })
+        assertEquals(mapOf(9L to "110", 10L to "120"), second.state.dynamicUpBaselines)
+        assertEquals(mapOf("110" to 9L, "120" to 10L), second.state.pendingDynamicIds)
+    }
+
+    @Test
+    fun missingProbeAfterUpgradeFindsNewPublicationsEvenWhenUpdateCountIsZero() = runTest {
+        val source = Source().apply {
+            defaultUpdateCount = 0
+            pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("110"), dynamic("100"))))
+            authorUpdates = mapOf(9L to true)
+        }
+        val previous = Json { ignoreUnknownKeys = true }.decodeFromString<AccountNotificationState>(
+            """{"initialized":["dynamic"],"dynamicBaseline":"120","dynamicUpBaselines":{"9":"100"}}"""
+        )
+        val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1)
+        assertEquals(listOf("dynamic:110"), result.notifications.map { it.key })
+        assertEquals(mapOf("110" to 9L), result.state.pendingDynamicIds)
+        assertEquals(mapOf(9L to "110"), result.state.dynamicUpBaselines)
+        assertFalse(result.shouldRetry)
+    }
+
+    @Test
+    fun failedUpdateCountStillScansPublicationsAndSynchronizesAuthorReadState() = runTest {
+        for (failure in listOf(IOException("count interrupted"), IllegalStateException("count unavailable"))) {
+            val source = Source().apply {
+                updateCountError = failure
+                followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9), FollowingUser(mid = 10)), total = 2))
+                pages = mapOf(
+                    (9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("110"), dynamic("100"))),
+                    (10L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("120", 10), dynamic("90", 10))),
+                )
+                authorUpdates = mapOf(9L to true, 10L to false)
+            }
+            val previous = AccountNotificationState(
+                dynamicProbeBaseline = "100", dynamicUpBaselines = mapOf(9L to "100", 10L to "90"),
+                pendingDynamicIds = mapOf("95" to 10L),
+            )
+            val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1, setOf("dynamic:95"))
+            assertEquals(listOf("dynamic:110"), result.notifications.map { it.key })
+            assertEquals(setOf("dynamic:95"), result.cancelNotificationKeys)
+            assertEquals(mapOf("110" to 9L), result.state.pendingDynamicIds)
+            assertEquals(mapOf(9L to "110", 10L to "120"), result.state.dynamicUpBaselines)
+            assertEquals(failure is IOException, result.shouldRetry)
+        }
+    }
+
+    @Test
+    fun newAuthorInitializesSilentlyFromOnlyTheFirstPage() = runTest {
+        val source = Source().apply {
+            authorUpdates = mapOf(9L to true)
+            pages = mapOf((9L to "") to DynamicPersonalFeedPage(
+                items = listOf(dynamic("120")), offset = "older", hasMore = true,
+            ))
+        }
+        val poller = MessageNotificationPoller(source)
+        val initial = poller.check(dynamicOnly, AccountNotificationState(), 1)
+        assertEquals(mapOf(9L to "120"), initial.state.dynamicUpBaselines)
+        assertEquals(emptyList(), initial.notifications)
+        assertFalse(initial.shouldRetry)
+        source.pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(dynamic("130"), dynamic("120"))))
+        val next = poller.check(dynamicOnly, initial.state, 1)
+        assertEquals(listOf("dynamic:130"), next.notifications.map { it.key })
+    }
+
+    @Test
+    fun unsignedPublicationIdsKeepExactOrderingAndRealNotificationRoutes() = runTest {
+        val source = Source().apply {
+            pages = mapOf((9L to "") to DynamicPersonalFeedPage(items = listOf(
+                dynamic("18446744073709551615"), dynamic("18446744073709551614"),
+            )))
+        }
+        val previous = AccountNotificationState(dynamicUpBaselines = mapOf(9L to "18446744073709551614"))
+        val result = MessageNotificationPoller(source).check(dynamicOnly, previous, 1)
+        assertEquals(listOf("dynamic:18446744073709551615"), result.notifications.map { it.key })
+        assertEquals("18446744073709551615", result.state.dynamicUpBaselines[9L])
+        assertEquals("video_player/BV1xx411c7mD?cid=0&aid=0&commentRootRpid=0&commentTargetRpid=0",
+            result.notifications.single().route)
     }
 
     private fun dynamic(id: String, mid: Long = 9L) = DynamicItem(
@@ -650,7 +876,12 @@ class MessageNotificationPolicyTest {
         var unread = MessageFeedUnreadData(sysMsg = 1)
         var notices = emptyList<SystemNoticeItem>()
         var unreadError: Exception? = null
-        var updates = 1
+        var defaultUpdateCount = 1
+        var updateCounts = emptyMap<String, Int>()
+        var updateCountError: Exception? = null
+        var authorUpdates = emptyMap<Long, Boolean>()
+        var authorUpdatesError: Exception? = null
+        var onPersonalFeed: ((Long, String) -> Unit)? = null
         var followingPages = mapOf(1 to FollowingsData(list = listOf(FollowingUser(mid = 9, uname = "UP")), total = 1))
         var pages = mapOf((9L to "") to DynamicPersonalFeedPage())
         var rooms = emptyMap<Int, FollowedLiveData>()
@@ -658,7 +889,6 @@ class MessageNotificationPolicyTest {
         var feedErrorHost: Long? = null
         var followingErrorPage: Int? = null
         var liveErrorPage: Int? = null
-        val feedRequests = mutableListOf<Triple<Long, String, Int>>()
         override suspend fun sessions() = sessions
         override suspend fun sessionDetail(talkerId: Long, sessionType: Int): SessionItem {
             if ((talkerId to sessionType) in sessionDetailErrors) throw IOException("session detail interrupted")
@@ -666,13 +896,20 @@ class MessageNotificationPolicyTest {
         }
         override suspend fun feedUnread(): MessageFeedUnreadData { unreadError?.let { throw it }; return unread }
         override suspend fun systemNotices() = notices
-        override suspend fun dynamicUpdateCount(baseline: String) = updates
+        override suspend fun dynamicUpdateCount(baseline: String): Int {
+            updateCountError?.let { throw it }
+            return updateCounts[baseline] ?: defaultUpdateCount
+        }
+        override suspend fun dynamicAuthorUpdates(): Map<Long, Boolean> {
+            authorUpdatesError?.let { throw it }
+            return authorUpdates
+        }
         override suspend fun followings(selfMid: Long, page: Int): FollowingsData {
             if (page == followingErrorPage) throw IOException("following list interrupted")
             return followingPages[page] ?: FollowingsData()
         }
         override suspend fun personalDynamicFeed(hostUid: Long, offset: String, page: Int): DynamicPersonalFeedPage {
-            feedRequests += Triple(hostUid, offset, page)
+            onPersonalFeed?.invoke(hostUid, offset)
             if (offset == feedErrorOffset || hostUid == feedErrorHost) throw IOException("network interrupted")
             return pages.getValue(hostUid to offset)
         }

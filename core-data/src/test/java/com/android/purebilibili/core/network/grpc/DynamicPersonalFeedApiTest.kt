@@ -24,7 +24,7 @@ class DynamicPersonalFeedApiTest {
         val item = card("18446744073709551615", 2, ProtoWire.bytes(2, video))
         val reply = ProtoWire.message(
             ProtoWire.bytes(1, item), ProtoWire.string(2, "next-page"), ProtoWire.bool(3, true),
-            ProtoWire.string(4, "read-progress-is-not-a-dynamic-id"), ProtoWire.string(63, "future field"),
+            ProtoWire.string(4, "18446744073709551615"), ProtoWire.string(63, "future field"),
         )
         val page = parseDynamicPersonalFeedReply(reply)
         val parsed = page.items.single()
@@ -38,7 +38,6 @@ class DynamicPersonalFeedApiTest {
         assertEquals("123", parsed.modules.module_dynamic?.major?.archive?.aid)
         assertEquals("Video title", parsed.modules.module_dynamic?.major?.archive?.title)
         assertEquals("next-page", page.offset)
-        assertEquals("read-progress-is-not-a-dynamic-id", page.readOffset)
         assertTrue(page.hasMore)
     }
 
@@ -112,13 +111,6 @@ class DynamicPersonalFeedApiTest {
         val item = top + card("100", 6, null)
         val parsed = parseDynamicPersonalFeedReply(ProtoWire.message(ProtoWire.bytes(1, item))).items.single()
         assertEquals("置顶", parsed.modules.module_tag?.text)
-    }
-
-    @Test
-    fun readProgressCanBeObservedEvenWhenThereAreNoDynamicCards() {
-        val page = parseDynamicPersonalFeedReply(ProtoWire.message(ProtoWire.string(4, "18446744073709551615")))
-        assertEquals("18446744073709551615", page.readOffset)
-        assertEquals("", page.offset)
     }
 
     @Test

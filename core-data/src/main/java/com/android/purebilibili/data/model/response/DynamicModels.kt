@@ -897,6 +897,37 @@ data class ReplyInteractionStatus(
     val can_modify: Boolean = false
 )
 
+// Read-only recent-author flags. Missing flags remain unknown, unlike the legacy integer uplist.
+@Serializable
+data class DynamicAuthorUpdatesPortalResponse(
+    val code: Int? = null,
+    val data: DynamicAuthorUpdatesPortalData? = null
+)
+
+@Serializable
+data class DynamicAuthorUpdatesPortalData(
+    @SerialName("up_list") val upList: DynamicAuthorUpdatesPage? = null
+)
+
+@Serializable
+data class DynamicAuthorUpdatesPageResponse(
+    val code: Int? = null,
+    val data: DynamicAuthorUpdatesPage? = null
+)
+
+@Serializable
+data class DynamicAuthorUpdatesPage(
+    @SerialName("has_more") val hasMore: Boolean? = null,
+    val items: List<DynamicAuthorUpdateItem>? = null,
+    val offset: String? = null
+)
+
+@Serializable
+data class DynamicAuthorUpdateItem(
+    val mid: Long? = null,
+    @SerialName("has_update") val hasUpdate: Boolean? = null
+)
+
 // --- 关注 UP 列表（含未读标记，供 UP 列表红点） ---
 // API: dynamic_svr/v1/dynamic_svr/w_dyn_uplist
 @Serializable

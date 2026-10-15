@@ -1962,6 +1962,20 @@ interface DynamicApi {
     @GET("https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/w_dyn_uplist")
     suspend fun getDynamicUplist(): UplistResponse
 
+    // Recent authors, not the complete followed-author list. Reading these flags is read-only.
+    @GET("x/polymer/web-dynamic/v1/portal")
+    suspend fun getDynamicAuthorUpdatesPortal(
+        @Query("up_list_more") upListMore: Int = 1,
+        @Query("web_location") webLocation: String = "333.1365"
+    ): DynamicAuthorUpdatesPortalResponse
+
+    @GET("x/polymer/web-dynamic/v1/uplist")
+    suspend fun getDynamicAuthorUpdatesPage(
+        @Query("offset") offset: String,
+        @Query("platform") platform: String = "web",
+        @Query("web_location") webLocation: String = "333.1365"
+    ): DynamicAuthorUpdatesPageResponse
+
     @retrofit2.http.POST("x/dynamic/feed/operate/remove")
     suspend fun deleteDynamic(
         @Query("csrf") csrf: String,

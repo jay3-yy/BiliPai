@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.network.grpc
 
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.ArchiveMajor
 import com.android.purebilibili.data.model.response.ArticleMajor
 import com.android.purebilibili.data.model.response.CommonMajor
@@ -26,8 +27,6 @@ data class DynamicPersonalFeedPage(
     val items: List<DynamicItem> = emptyList(),
     val offset: String = "",
     val hasMore: Boolean = false,
-    // Server read progress observed by preload; never submit it as an acknowledgement.
-    val readOffset: String = "",
 )
 
 object DynamicPersonalFeedApi {
@@ -35,6 +34,7 @@ object DynamicPersonalFeedApi {
 
     suspend fun load(hostUid: Long, offset: String = "", page: Int = 1): DynamicPersonalFeedPage =
         withContext(Dispatchers.IO) {
+            check(!TokenManager.accessTokenCache.isNullOrBlank()) { "动态预加载需要 App 登录授权，网页 Cookie 不能替代" }
             parseDynamicPersonalFeedReply(BiliGrpcClient.request(PATH, buildDynamicPersonalFeedRequest(hostUid, offset, page)))
         }
 }
@@ -55,7 +55,6 @@ internal fun parseDynamicPersonalFeedReply(bytes: ByteArray): DynamicPersonalFee
     val items = ArrayList<DynamicItem>()
     var offset = ""
     var hasMore = false
-    var readOffset = ""
     for (field in ProtoWire.parseFields(bytes)) {
         when (field.number) {
             1 -> if (field.wireType == ProtoWire.WIRE_LENGTH_DELIMITED) {
@@ -63,11 +62,12 @@ internal fun parseDynamicPersonalFeedReply(bytes: ByteArray): DynamicPersonalFee
             }
             2 -> offset = ProtoWire.stringValue(field)
             3 -> hasMore = field.varint != 0L
-            4 -> readOffset = ProtoWire.stringValue(field)
+            // Field 4 is the token submitted by DynAllUpdOffset, not a committed read watermark.
+            // Background polling must neither submit it nor use it to suppress or clear notices.
         }
     }
     check(!hasMore || offset.isNotBlank()) { "动态预加载分页游标为空" }
-    return DynamicPersonalFeedPage(items, offset, hasMore, readOffset)
+    return DynamicPersonalFeedPage(items, offset, hasMore)
 }
 
 private fun parsePersonalDynamicItem(bytes: ByteArray, depth: Int = 0): DynamicItem? {
