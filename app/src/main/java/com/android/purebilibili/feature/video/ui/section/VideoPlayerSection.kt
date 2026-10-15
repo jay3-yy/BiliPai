@@ -3740,8 +3740,8 @@ private fun VideoPlayerSectionContent(
                 requiresHdrSurfaceOutput = requiresHdrSurface,
             ),
         )
-        // 输出面能否参与 alpha 叠化：SurfaceView 不行（独立硬件层，alpha 无效），
-        // TextureView 可以。供封面垫底与揭开时序在 key 外统一引用。
+        // 输出面能力仅控制封面退场方式：SurfaceView/HDR 硬切，TextureView 保留淡出。
+        // 玻璃与原生路径都在揭开落定后移除封面，不改变各自的布局和尺寸。
         val surfaceCanCrossfade = canSurfaceParticipateInAlphaCrossfade(
             usesTextureSurface = useTextureSurface,
         )
@@ -4166,8 +4166,6 @@ private fun VideoPlayerSectionContent(
         shouldKeepCoverForManualStart = keepCoverForManualStart,
         hasStartedSmoothReveal = hasStartedSmoothReveal,
         isSurfaceRevealSettling = isSurfaceRevealSettling,
-        // SurfaceView 无法叠化：首帧到后必须继续垫封面，否则露出整块黑。
-        surfaceCanCrossfade = surfaceCanCrossfade,
     )
     val showCover = shouldShowCoverImage(
         isFirstFrameRendered = isFirstFrameRendered,
@@ -4175,7 +4173,6 @@ private fun VideoPlayerSectionContent(
         shouldKeepCoverForManualStart = keepCoverForManualStart,
         hasStartedSmoothReveal = hasStartedSmoothReveal,
         isSurfaceRevealSettling = isSurfaceRevealSettling,
-        surfaceCanCrossfade = surfaceCanCrossfade,
     )
     val manualStartPlayButtonLayoutSpec = remember {
         resolveManualStartPlayButtonLayoutSpec()
@@ -4271,16 +4268,18 @@ private fun VideoPlayerSectionContent(
     val coverMotionSpec = remember(
         suppressCoverFade,
         holdEntryCoverUnderlay,
+        surfaceCanCrossfade,
         revealMotionSpec.surfaceRevealDurationMillis,
     ) {
         resolveVideoPlayerCoverMotionSpec(
             forceCoverDuringReturnAnimation = suppressCoverFade,
             holdEntryCoverUnderlay = holdEntryCoverUnderlay,
-            // 封面淡出与 surface 淡入锁死同一条时间轴：避免中间露出 PlayerView 黑底。
+            // 保留 TextureView 的原有时长，SurfaceView/HDR 在落定后直接移除。
             surfaceRevealDurationMillis = revealMotionSpec.surfaceRevealDurationMillis,
+            surfaceCanCrossfade = surfaceCanCrossfade,
         )
     }
-    // 返回强制封面 / 垫底 hold 时硬切；揭开阶段允许淡出，避免「永远盖着封面」。
+    // 强制封面、垫底和 SurfaceView/HDR 禁止淡出，但不阻止封面在揭开落定后退出。
     val disableCoverFadeAnimation = !coverMotionSpec.shouldAnimateFade
     val coverOverlaySharedBoundsEnabled = shouldEnableCoverOverlaySharedBounds(
         useCoverOverlaySharedBounds = entryPresentationSpec.coverUsesSharedBounds,

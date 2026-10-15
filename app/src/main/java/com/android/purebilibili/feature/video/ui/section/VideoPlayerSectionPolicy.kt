@@ -1169,7 +1169,6 @@ internal fun shouldShowCoverImage(
     shouldKeepCoverForManualStart: Boolean,
     hasStartedSmoothReveal: Boolean,
     isSurfaceRevealSettling: Boolean = false,
-    surfaceCanCrossfade: Boolean = true,
 ): Boolean {
     return shouldHoldEntryCoverUnderlay(
         isFirstFrameRendered = isFirstFrameRendered,
@@ -1177,7 +1176,6 @@ internal fun shouldShowCoverImage(
         shouldKeepCoverForManualStart = shouldKeepCoverForManualStart,
         hasStartedSmoothReveal = hasStartedSmoothReveal,
         isSurfaceRevealSettling = isSurfaceRevealSettling,
-        surfaceCanCrossfade = surfaceCanCrossfade,
     )
 }
 
@@ -1215,16 +1213,8 @@ internal fun resolveVideoPlayerCoverLayerZIndex(
 }
 
 /**
- * 视频输出面是否支持 alpha 叠化。
- *
- * `SurfaceView` 属于独立硬件层，`graphicsLayer.alpha` 对它无效：一旦它开始出帧就是
- * 不透明整块。若此时让封面同步淡出，中间帧会是「不透明黑/帧 + 半透明封面」——即用户
- * 看到的「叠一层黑」，且这个窗口长度 = 封面淡出时长（300ms），非常明显。
- * `TextureView` 参与 Compose 合成，可以真正淡入，此时才允许封面同步淡出叠化。
- *
- * 统一策略、不按设备能力分档：这里依据的只是**当前实际使用的 surface 类型**这一客观事实，
- * 与机型性能无关。HDR 必须 SurfaceView，因此 HDR 走硬切；SDR + 支持 TextureView 的设备
- * 走叠化，两边都是各自最优，且不引入任何性能守卫。
+ * TextureView 参与 Compose 合成，允许封面叠化；SurfaceView/HDR 保留硬切退场。
+ * 输出面能力只决定退场方式，不应延长封面生命周期。
  */
 internal fun canSurfaceParticipateInAlphaCrossfade(
     usesTextureSurface: Boolean,
@@ -1239,9 +1229,7 @@ internal fun canSurfaceParticipateInAlphaCrossfade(
  * 下方黑底，产生「先变暗再亮起」的亮度凹陷。正确时序是封面全程垫住，等视频完全不透明
  * 后再无声移除（此时移除不可见）。
  *
- * [surfaceCanCrossfade] = 输出面支持 alpha 叠化（TextureView）。为 false（SurfaceView /
- * HDR）时不存在「视频在封面上方淡入」这一步——surface 一出现就是不透明帧——因此封面
- * 必须**保持不透明直到首帧真正落定**，否则会露出黑底窗口。
+ * SurfaceView/HDR 同样必须在揭开落定后移除封面，仅退场时不做 alpha 叠化。
  */
 internal fun shouldHoldEntryCoverUnderlay(
     isFirstFrameRendered: Boolean,
@@ -1249,12 +1237,9 @@ internal fun shouldHoldEntryCoverUnderlay(
     shouldKeepCoverForManualStart: Boolean,
     hasStartedSmoothReveal: Boolean,
     isSurfaceRevealSettling: Boolean = false,
-    surfaceCanCrossfade: Boolean = true,
 ): Boolean {
     if (forceCoverDuringReturnAnimation || shouldKeepCoverForManualStart) return true
     if (!isFirstFrameRendered) return true
-    // 不支持 alpha 的输出面没有叠化窗口可等，首帧到就必须继续垫住整块。
-    if (!surfaceCanCrossfade) return true
     return isSurfaceRevealSettling || !hasStartedSmoothReveal
 }
 
@@ -1496,23 +1481,19 @@ internal data class VideoPlayerSurfaceRevealSpec(
 )
 
 /**
- * 封面退场动效。
- *
- * [exitFadeDurationMillis] 必须与 [surfaceRevealDurationMillis] **同源同时长**：
- * 视频 surface 是在封面**之上**从 0 淡入的，PlayerView 首帧前自身带不透明黑底。
- * 若封面淡出（300ms）比 surface 淡入（140ms）慢，中间的窗口会同时存在
- * 「已不透明的黑底 + 半透明封面」——这正是进场时视频位置"叠一层黑"的来源。
- *
- * 两者锁死到同一条时间轴后，封面与视频画面是同一对互补曲线：任何一帧
- * `coverAlpha + surfaceAlpha` 都接近 1，黑底没有露出的窗口。
+ * 封面在揭开落定前保持不透明，落定后才退场。
+ * TextureView 沿用与 [surfaceRevealDurationMillis] 同源的淡出时长；
+ * [surfaceCanCrossfade] 为 false 时直接移除，不能为避免淡出而永久保留封面。
  */
 internal fun resolveVideoPlayerCoverMotionSpec(
     forceCoverDuringReturnAnimation: Boolean,
     holdEntryCoverUnderlay: Boolean = false,
     surfaceRevealDurationMillis: Int = VIDEO_PLAYER_SURFACE_REVEAL_DURATION_MILLIS,
+    surfaceCanCrossfade: Boolean = true,
 ): VideoPlayerCoverMotionSpec {
     return VideoPlayerCoverMotionSpec(
-        shouldAnimateFade = !forceCoverDuringReturnAnimation && !holdEntryCoverUnderlay,
+        shouldAnimateFade = surfaceCanCrossfade &&
+            !forceCoverDuringReturnAnimation && !holdEntryCoverUnderlay,
         enterFadeDurationMillis = VIDEO_PLAYER_COVER_FADE_ENTER_DURATION_MILLIS,
         // 与 surface 淡入同时长，避免中间出现「黑底 + 半透明封面」叠加。
         exitFadeDurationMillis = surfaceRevealDurationMillis.coerceAtLeast(0),
