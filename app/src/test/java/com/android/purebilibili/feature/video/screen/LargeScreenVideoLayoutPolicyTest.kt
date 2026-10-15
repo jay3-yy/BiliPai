@@ -169,9 +169,9 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
-    fun regularPhone_keepsFullWidthSixteenByTenPlayer() {
+    fun regularPhone_keepsFullWidthSixteenByNinePlayer() {
         assertEquals(
-            393f * 10f / 16f,
+            393f * 9f / 16f,
             resolvePhoneInlineVideoViewportHeightDp(
                 windowWidthDp = 393f,
                 windowHeightDp = 851f,

@@ -162,6 +162,9 @@ internal fun Modifier.biliPaiFloatingDockShell(
     interactionState: com.android.purebilibili.core.ui.components.AppElasticPressState? = null,
     tint: Color = Color.Unspecified,
     darkTheme: Boolean? = null,
+    // Opt-in for surfaces following an already animated theme palette. Keep the
+    // native/default dock's existing black/white material unchanged.
+    readabilitySurfaceColor: Color = Color.Unspecified,
 ): Modifier {
     val isDark = darkTheme ?: com.android.purebilibili.core.ui.isAppInDarkTheme()
     val density = LocalDensity.current
@@ -180,7 +183,9 @@ internal fun Modifier.biliPaiFloatingDockShell(
     if (enabled && backdrop != null) {
         val baseHighlight = rememberBiliPaiGravityHighlight(extraDegrees = -45f)
         val surfaceColor = containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
-        val readabilityScrimColor = if (isDark) Color.Black else Color.White
+        val readabilityScrimColor = if (readabilitySurfaceColor != Color.Unspecified) {
+            readabilitySurfaceColor
+        } else if (isDark) Color.Black else Color.White
         val resolvedLensIntensity = lensIntensity.coerceIn(0f, 1f) *
             liquidGlassTuning.contentDistortionScale.coerceIn(0f, 1.8f)
         val shouldDrawLens = drawLens && resolvedLensIntensity > 0.001f

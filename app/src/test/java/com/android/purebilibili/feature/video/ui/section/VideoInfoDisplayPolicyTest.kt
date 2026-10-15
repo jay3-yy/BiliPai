@@ -16,6 +16,20 @@ import kotlin.test.assertTrue
 class VideoInfoDisplayPolicyTest {
 
     @Test
+    fun ownerStats_placesCountsBeforeLabels() {
+        assertEquals(listOf("9粉丝", "2视频"), resolveVideoDetailOwnerStatsLabels(9, 2))
+    }
+
+    @Test
+    fun ownerStats_preservesZeroAndHidesUnknownCounts() {
+        assertEquals(listOf("0粉丝", "0视频"), resolveVideoDetailOwnerStatsLabels(0, 0))
+        assertEquals(listOf("2视频"), resolveVideoDetailOwnerStatsLabels(null, 2))
+        assertEquals(listOf("9粉丝"), resolveVideoDetailOwnerStatsLabels(9, -1))
+        assertEquals(emptyList(), resolveVideoDetailOwnerStatsLabels(null, null))
+        assertEquals(emptyList(), resolveVideoDetailOwnerStatsLabels(-1, -1))
+    }
+
+    @Test
     fun videoInfoInitialExpanded_whenDescriptionOrTagsExist() {
         assertTrue(
             resolveVideoInfoInitialExpandedState(

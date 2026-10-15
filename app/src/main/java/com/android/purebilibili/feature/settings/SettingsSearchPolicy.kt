@@ -625,6 +625,15 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         focusId = SettingsSearchFocusIds.APPEARANCE_THEME
     ),
     SettingsSearchEntry(
+        settingId = "appearance.dark_theme_schedule",
+        target = SettingsSearchTarget.APPEARANCE,
+        title = "定时深色模式",
+        subtitle = "自选开始和结束时间，支持跨午夜自动切换",
+        section = settingsDestinationCopy(SettingsSearchTarget.APPEARANCE).title,
+        aliases = listOf("自动深色", "夜间模式", "深色时间", "定时夜间", "深色定时"),
+        focusId = "appearance.dark_theme_schedule",
+    ),
+    SettingsSearchEntry(
         settingId = "legacy.038",
         target = SettingsSearchTarget.APPEARANCE,
         title = "界面风格与明暗模式",

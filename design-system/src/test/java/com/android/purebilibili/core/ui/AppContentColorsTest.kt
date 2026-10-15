@@ -14,6 +14,20 @@ import kotlin.test.assertTrue
 
 class AppContentColorsTest {
     @Test
+    fun glassSelectionUsesExactCustomAccentWhileNativeSelectionKeepsGeneratedPalette() {
+        val pickedBlue = Color(0xFF007AFF)
+        val generatedBlue = Color(0xFF4A608A)
+        assertEquals(pickedBlue, resolveSelectionAccentColor(true, generatedBlue, pickedBlue))
+        assertEquals(generatedBlue, resolveSelectionAccentColor(false, generatedBlue, pickedBlue))
+    }
+
+    @Test
+    fun glassSelectionFallsBackToNativeAccentWhenNoExactColorIsProvided() {
+        val wallpaperAccent = Color(0xFF4A608A)
+        assertEquals(wallpaperAccent, resolveSelectionAccentColor(true, wallpaperAccent, Color.Unspecified))
+    }
+
+    @Test
     fun supportingTextIsReadableAcrossCanvasAndCardSurfaces() {
         listOf(lightColorScheme(), darkColorScheme()).forEach { scheme ->
             val requested = scheme.onSurface.copy(alpha = 0.25f)

@@ -1,6 +1,8 @@
 // File: feature/video/ui/components/DanmakuSettingsPanel.kt
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.liquidControlThemeColor
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -40,8 +42,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -57,8 +57,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -67,15 +65,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import kotlin.math.hypot
-import kotlin.math.max
 import kotlin.math.roundToInt
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
@@ -411,12 +406,11 @@ fun DanmakuSettingsPanel(
         resolveDanmakuBlockRuleCount(blockManagerSections)
     }
     val configuration = LocalConfiguration.current
-    val viewConfiguration = LocalViewConfiguration.current
     val colorScheme = MaterialTheme.colorScheme
-    val panelColors = remember(colorScheme) {
-        resolveDanmakuSettingsPanelSurfaceColors(colorScheme)
-    }
+    val panelColors = rememberDanmakuPanelColors(colorScheme)
     val isFullscreenStyle = isFullscreen
+    val glass = LocalAppThemeConfig.current.liquidGlassEnabled
+    val syncShape = if (glass) AppShapes.container(ContainerLevel.Chip) else AppShapes.container(ContainerLevel.Field)
     // 横屏分区 Tab（基础/高级/屏蔽）；竖屏不分区，全部展示。
     var fullscreenActiveSection by remember { mutableIntStateOf(0) }
     val showSectionBasic = !isFullscreenStyle || fullscreenActiveSection == 0
@@ -435,59 +429,11 @@ fun DanmakuSettingsPanel(
             fullscreenWidthMode = fullscreenWidthMode
         )
     }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            dismissOnClickOutside = false
-        )
-    ) {
-        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect(enabled = false)
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = when (layoutPolicy.anchor) {
-                DanmakuSettingsPanelAnchor.Bottom -> Alignment.BottomCenter
-                DanmakuSettingsPanelAnchor.End -> Alignment.CenterEnd
-                DanmakuSettingsPanelAnchor.Center -> Alignment.Center
-            }
-        ) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(
-                        Color.Black.copy(alpha = if (isFullscreenStyle) 0.08f else 0.22f)
-                    )
-                    .pointerInput(onDismiss, viewConfiguration.touchSlop) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            var maxDragDistancePx = 0f
-                            var active = true
-                            while (active) {
-                                val event = awaitPointerEvent(PointerEventPass.Final)
-                                event.changes.forEach { change ->
-                                    val distance = hypot(
-                                        (change.position.x - down.position.x).toDouble(),
-                                        (change.position.y - down.position.y).toDouble()
-                                    ).toFloat()
-                                    maxDragDistancePx = max(maxDragDistancePx, distance)
-                                    if (change.pressed || change.previousPressed) {
-                                        change.consume()
-                                    }
-                                }
-                                active = event.changes.any { it.pressed }
-                            }
-                            if (
-                                shouldDismissDanmakuSettingsPanelFromBackdropGesture(
-                                    maxDragDistancePx = maxDragDistancePx,
-                                    touchSlopPx = viewConfiguration.touchSlop
-                                )
-                            ) {
-                                onDismiss()
-                            }
-                        }
-                    }
-            )
-
+    DanmakuSettingsPanelHost(
+        isFullscreen = isFullscreenStyle,
+        layoutPolicy = layoutPolicy,
+        onDismiss = onDismiss,
+    ) { requestPanelDismiss ->
             AppSurface(
                 modifier = Modifier
                     .then(
@@ -528,7 +474,7 @@ fun DanmakuSettingsPanel(
                 ) {
                     // Header：窄侧栏只放标题+徽章+关闭，长副标题不挤进横排（避免竖字）
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 0),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -561,7 +507,7 @@ fun DanmakuSettingsPanel(
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         AppIconButton(
-                            onClick = onDismiss,
+                            onClick = requestPanelDismiss,
                             modifier = Modifier
                                 .size(32.dp)
                                 .background(panelColors.resetButtonBackgroundColor, CircleShape)
@@ -597,7 +543,7 @@ fun DanmakuSettingsPanel(
                             onSelectionChange = { fullscreenActiveSection = it },
                             dragSelectionEnabled = true,
                             tapPressRefractionEnabled = true,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 1),
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                     }
@@ -605,6 +551,7 @@ fun DanmakuSettingsPanel(
                     if (showSectionBasic && onShowDanmakuPool != null) {
                         AppSurface(
                             modifier = Modifier
+                                .landscapeControlCenterGroup(index = 2)
                                 .fillMaxWidth()
                                 .clickable {
                                     onDismiss()
@@ -646,7 +593,7 @@ fun DanmakuSettingsPanel(
 
                     if (showSectionBasic && showSyncSection) {
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 3),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card)
                         ) {
@@ -714,9 +661,11 @@ fun DanmakuSettingsPanel(
                                         ) {
                                             Box(
                                                 modifier = Modifier
-                                                    .clip(AppShapes.container(ContainerLevel.Pill))
+                                                    .then(if (glass) Modifier.size(width = 100.dp, height = 36.dp) else Modifier)
+                                                    .clip(if (glass) syncShape else AppShapes.container(ContainerLevel.Pill))
                                                     .background(panelColors.badgeBackgroundColor)
-                                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                                contentAlignment = Alignment.Center,
                                             ) {
                                                 AppText(
                                                     text = resolveDanmakuSyncStatusBadgeText(syncUiState),
@@ -724,11 +673,11 @@ fun DanmakuSettingsPanel(
                                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold)
                                                 )
                                             }
-                                            AppOutlinedButton(
+                                            DanmakuSyncButton(
                                                 onClick = onSyncNowClick,
                                                 enabled = syncUiState.status != DanmakuCloudSyncStatus.SYNCING,
                                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                                shape = AppShapes.container(ContainerLevel.Field)
+                                                accent = panelColors.sliderActiveTrackColor
                                             ) {
                                                 AppText(
                                                     text = if (shouldShowDanmakuSyncRetry(syncUiState.status)) {
@@ -751,7 +700,7 @@ fun DanmakuSettingsPanel(
                     // Settings Card（基础分区：字体/透明度/速度）
                     if (showSectionBasic) {
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 4),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card)
                         ) {
@@ -866,7 +815,7 @@ fun DanmakuSettingsPanel(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 5),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card)
                         ) {
@@ -1027,7 +976,7 @@ fun DanmakuSettingsPanel(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 6),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card),
                             onClick = { onMergeDuplicatesChange(!mergeDuplicates) }
@@ -1063,7 +1012,7 @@ fun DanmakuSettingsPanel(
                     if (mergeDuplicates) {
                         Spacer(modifier = Modifier.height(12.dp))
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 7),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card)
                         ) {
@@ -1106,7 +1055,7 @@ fun DanmakuSettingsPanel(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 8),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card),
                             onClick = { onSmartOcclusionChange(!smartOcclusion) }
@@ -1146,7 +1095,7 @@ fun DanmakuSettingsPanel(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 9),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card)
                         ) {
@@ -1230,7 +1179,7 @@ fun DanmakuSettingsPanel(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         AppSurface(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().landscapeControlCenterGroup(index = 10),
                             color = panelColors.itemColor,
                             shape = AppShapes.container(ContainerLevel.Card)
                         ) {
@@ -1309,7 +1258,6 @@ fun DanmakuSettingsPanel(
                     }
                 }
             }
-        }
     }
 
     if (showBlockManager) {
@@ -1330,9 +1278,7 @@ private fun DanmakuBlockManagerDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val colorScheme = MaterialTheme.colorScheme
-    val panelColors = remember(colorScheme) {
-        resolveDanmakuSettingsPanelSurfaceColors(colorScheme)
-    }
+    val panelColors = rememberDanmakuPanelColors(colorScheme)
     val initialSections = remember(rawRules) {
         resolveDanmakuBlockManagerSections(rawRules)
     }
@@ -1819,6 +1765,15 @@ private fun DanmakuAreaSelector(
     colors: DanmakuSettingsPanelSurfaceColors,
     fullscreenStyle: Boolean
 ) {
+    val glass = LocalAppThemeConfig.current.liquidGlassEnabled
+    val optionShape = AppShapes.container(if (glass) ContainerLevel.Chip else ContainerLevel.Card)
+    val accent = if (glass) liquidControlThemeColor() else AppContentColors.accent()
+    val onAccent = if (glass) resolveAccessibleContainerColors(
+        containerColor = accent,
+        contentColor = AppContentColors.onAccent(),
+        backgroundColor = colors.itemColor,
+        fallbackContentColors = listOf(Color.White, Color.Black),
+    ).contentColor else AppContentColors.onAccent()
     //  本地状态确保即时 UI 响应
     var localArea by remember(currentArea) { mutableFloatStateOf(currentArea) }
 
@@ -1864,21 +1819,22 @@ private fun DanmakuAreaSelector(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .clip(AppShapes.container(ContainerLevel.Card))
+                                .then(if (glass) Modifier.height(80.dp) else Modifier)
+                                .clip(optionShape)
                                 .then(
                                     if (isSelected) {
                                         Modifier.background(
                                             brush = Brush.verticalGradient(
                                                 colors = listOf(
-                                                    AppContentColors.accent(),
-                                                    AppContentColors.accent().copy(alpha = 0.8f)
+                                                    accent,
+                                                    if (glass) accent else accent.copy(alpha = 0.8f)
                                                 )
                                             )
                                         )
                                     } else {
                                         Modifier
                                             .background(colors.fieldBackgroundColor)
-                                            .border(1.dp, colors.fieldBorderColor, AppShapes.container(ContainerLevel.Card))
+                                            .border(1.dp, colors.fieldBorderColor, optionShape)
                                     }
                                 )
                                 .clickable {
@@ -1894,7 +1850,7 @@ private fun DanmakuAreaSelector(
                                 AppText(
                                     text = option.label,
                                     color = if (isSelected) {
-                                        AppContentColors.onAccent()
+                                        onAccent
                                     } else {
                                         colors.titleColor
                                     },
@@ -1907,7 +1863,7 @@ private fun DanmakuAreaSelector(
                                 AppText(
                                     text = option.subLabel,
                                     color = if (isSelected) {
-                                        AppContentColors.onAccent().copy(alpha = 0.8f)
+                                        onAccent.copy(alpha = 0.8f)
                                     } else {
                                         colors.supportingColor
                                     },
@@ -2042,9 +1998,9 @@ private fun DanmakuSliderItem(
                 },
                 valueRange = valueRange,
                 steps = steps,
-                // Glass uses the same resource palette and lens as settings controls.
+                // Glass uses the exact custom accent while retaining the shared lens geometry.
                 // Native themes retain the panel's existing contrast palette.
-                colors = if (liquidSlider) null else AppSliderDefaults.colors(
+                colors = AppSliderDefaults.colors(
                     thumbColor = colors.sliderThumbColor,
                     activeTrackColor = colors.sliderActiveTrackColor,
                     inactiveTrackColor = colors.sliderInactiveTrackColor

@@ -13,6 +13,7 @@ import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.animation.*
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -278,7 +280,11 @@ internal data class VideoContentTabSwitchAnimationSpec(
 
 internal fun resolveVideoContentTabSwitchAnimationSpec(
     presentation: AppTopTabPresentation,
+    liquidGlassEnabled: Boolean = false,
 ): VideoContentTabSwitchAnimationSpec {
+    // Glass reuses the moving dock even when the underlying native style is underline.
+    // Keep native MD3/Miuix timing unchanged when glass is disabled.
+    if (liquidGlassEnabled) return VideoContentTabSwitchAnimationSpec(durationMs = 360)
     return when (presentation) {
         AppTopTabPresentation.MOVING_CAPSULE -> VideoContentTabSwitchAnimationSpec(durationMs = 360)
         AppTopTabPresentation.MATERIAL_UNDERLINE,
@@ -756,14 +762,25 @@ internal fun VideoContentSection(
         )
     }
     val playerChromeProfile = rememberAppPlayerChromeProfile()
-    val tabSwitchAnimationSpec = remember(playerChromeProfile.tabPresentation) {
-        resolveVideoContentTabSwitchAnimationSpec(playerChromeProfile.tabPresentation)
+    val tabSwitchAnimationSpec = remember(playerChromeProfile.tabPresentation, liquidGlassEnabled) {
+        resolveVideoContentTabSwitchAnimationSpec(playerChromeProfile.tabPresentation, liquidGlassEnabled)
     }
+    val componentMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+    val tabSelectionAnimationSpec = remember(tabSwitchAnimationSpec, liquidGlassEnabled, componentMotionEnabled) {
+        if (liquidGlassEnabled && !componentMotionEnabled) snap<Float>() else tween<Float>(
+            durationMillis = tabSwitchAnimationSpec.durationMs,
+            easing = FastOutSlowInEasing,
+        )
+    }
+    // Only glass opts into shared tap/release timing. Native pagers keep their default fling.
+    val glassTabFlingBehavior = if (liquidGlassEnabled) {
+        PagerDefaults.flingBehavior(pagerState, snapAnimationSpec = tabSelectionAnimationSpec)
+    } else null
     val latestOnSelectedTabChange by rememberUpdatedState(onSelectedTabChange)
 
     val onTabSelected: (Int) -> Unit = { index ->
         scope.launch {
-            if (pagerState.isScrollInProgress) {
+            if (!liquidGlassEnabled && pagerState.isScrollInProgress) {
                 // 横向拖拽已经由 Pager 驱动时，不要再次启动一段从 currentPage
                 // 出发的动画；否则 offset 会先归零回弹到左侧，再动画到目标页。
                 pagerState.scrollToPage(index)
@@ -771,10 +788,9 @@ internal fun VideoContentSection(
                 animatePagerSelection(
                     pagerState = pagerState,
                     targetPage = index,
-                    animationSpec = tween(
-                        durationMillis = tabSwitchAnimationSpec.durationMs,
-                        easing = FastOutSlowInEasing
-                    )
+                    // A second glass tap retargets from the current offset rather than
+                    // snapping to the destination while the capsule is still moving.
+                    animationSpec = tabSelectionAnimationSpec,
                 )
             }
         }
@@ -943,6 +959,7 @@ internal fun VideoContentSection(
 
             HorizontalPager(
                 state = pagerState,
+                flingBehavior = glassTabFlingBehavior,
                 beyondViewportPageCount = resolveVideoDetailBeyondViewportPageCount(
                     selectedTabIndex = pagerState.currentPage
                 ),

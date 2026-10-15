@@ -1436,6 +1436,16 @@ interface BilibiliApi {
         @Query("order_type") orderType: String = ""  // 按关注顺序
     ): FollowingsResponse
     
+    // 对齐桌面 PiliPlus FanHttp.fans / Api.fans。
+    @GET("x/relation/fans")
+    suspend fun getFollowers(
+        @Query("vmid") vmid: Long,
+        @Query("pn") pn: Int = 1,
+        @Query("ps") ps: Int = 20,
+        @Query("order") order: String = "desc",
+        @Query("order_type") orderType: String = "attention",
+    ): FollowingsResponse
+
     //  [官方适配] 获取视频在线观看人数
     @GET("x/player/online/total")
     suspend fun getOnlineCount(

@@ -295,7 +295,8 @@ internal fun LinkedBottomDock(
 
         val shape = resolveSharedBottomBarCapsuleShape()
         val contentColor = AppContentColors.primaryText()
-        val accentColor = AppContentColors.accent()
+        // Only glass accents use the exact picked color; native and neutral actions retain their roles.
+        val accentColor = AppContentColors.selectionAccent(glassEnabled)
         BoxWithConstraints(
             modifier = modifier.fillMaxWidth().imePadding().navigationBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp),

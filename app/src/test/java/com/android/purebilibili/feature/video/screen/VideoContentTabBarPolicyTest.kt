@@ -342,6 +342,21 @@ class VideoContentTabBarPolicyTest {
     }
 
     @Test
+    fun `glass timing follows the visible moving capsule for every native presentation`() {
+        for (presentation in AppTopTabPresentation.entries) {
+            val glassSpec = resolveVideoContentTabSwitchAnimationSpec(presentation, liquidGlassEnabled = true)
+            assertEquals(360, glassSpec.durationMs)
+            assertEquals(glassSpec.durationMs, resolveInlinePortraitPlayerCommentCollapseDurationMillis(glassSpec))
+        }
+        assertEquals(240, resolveVideoContentTabSwitchAnimationSpec(
+            AppTopTabPresentation.MATERIAL_UNDERLINE, liquidGlassEnabled = false,
+        ).durationMs)
+        assertEquals(240, resolveVideoContentTabSwitchAnimationSpec(
+            AppTopTabPresentation.TONAL_CAPSULE, liquidGlassEnabled = false,
+        ).durationMs)
+    }
+
+    @Test
     fun `effective selected tab follows target while pager is switching`() {
         assertEquals(
             1,

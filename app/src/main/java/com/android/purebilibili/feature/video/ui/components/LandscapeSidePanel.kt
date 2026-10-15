@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.components
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -10,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -21,10 +24,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.offset
+import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -49,19 +57,39 @@ internal fun LandscapeSidePanel(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     closeProgress: MutableFloatState = remember { mutableFloatStateOf(1f) },
+    enableControlCenterMotion: Boolean = false,
     content: @Composable (requestDismiss: () -> Unit) -> Unit,
 ) {
+    // Only explicitly opted-in glass drawers receive group motion. Comment drawers
+    // and non-glass MD3/Miuix retain the original drag limits and tween timings.
+    val reduceMotion = rememberSystemReduceMotion()
+    val groupMotionEnabled = enableControlCenterMotion && LocalAppThemeConfig.current.liquidGlassEnabled &&
+        LocalComponentMotionEnabled.current && !reduceMotion
+    val groupProgress = remember(closeProgress) { mutableFloatStateOf(closeProgress.floatValue) }
+    val activeProgress = if (groupMotionEnabled) groupProgress else closeProgress
+    fun updateProgress(value: Float) {
+        activeProgress.floatValue = value
+        // Layout reservations and scrims must never receive the negative over-pull.
+        closeProgress.floatValue = value.coerceIn(0f, 1f)
+    }
     val scope = rememberCoroutineScope()
     val latestOnDismiss = rememberUpdatedState(onDismiss)
     val animationJob = remember { mutableStateOf<Job?>(null) }
-    fun settleTo(target: Float, durationMillis: Int, dismiss: Boolean = false) {
+    fun settleTo(target: Float, durationMillis: Int, dismiss: Boolean = false, velocity: Float = 0f) {
         animationJob.value?.cancel()
         animationJob.value = scope.launch {
+            val spec: AnimationSpec<Float> = if (groupMotionEnabled) {
+                ControlCenterMotionSpec.springSpec(closing = dismiss)
+            } else {
+                tween(durationMillis = durationMillis, easing = FastOutSlowInEasing)
+            }
             animate(
-                initialValue = closeProgress.floatValue,
+                initialValue = activeProgress.floatValue,
                 targetValue = target,
-                animationSpec = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
-            ) { value, _ -> closeProgress.floatValue = value }
+                initialVelocity = if (groupMotionEnabled) ControlCenterMotionSpec.releaseVelocity(velocity) else 0f,
+                animationSpec = spec,
+            ) { value, _ -> updateProgress(value) }
+            updateProgress(target)
             if (dismiss) latestOnDismiss.value()
         }
     }
@@ -69,25 +97,32 @@ internal fun LandscapeSidePanel(
     val drawerWidthPx = with(LocalDensity.current) { width.toPx().coerceAtLeast(1f) }
     val edgeDirection = if (edge == LandscapeSidePanelEdge.End) 1f else -1f
 
-    val requestDismiss: () -> Unit = {
+    fun dismissWithVelocity(velocity: Float = 0f) {
         if (!isSettlingToDismiss.value) {
             isSettlingToDismiss.value = true
-            settleTo(1f, 180, dismiss = true)
+            settleTo(1f, 180, dismiss = true, velocity = velocity)
         }
     }
+    val requestDismiss: () -> Unit = { dismissWithVelocity() }
 
     val dragState = rememberDraggableState { delta ->
-        closeProgress.floatValue = (closeProgress.floatValue + edgeDirection * delta / drawerWidthPx)
-            .coerceIn(0f, 1f)
+        val change = edgeDirection * delta / drawerWidthPx
+        val current = activeProgress.floatValue
+        updateProgress(
+            if (groupMotionEnabled) {
+                1f - ControlCenterMotionSpec.dragProgress(1f - current, -change)
+            } else (current + change).coerceIn(0f, 1f)
+        )
     }
 
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, groupMotionEnabled, closeProgress) {
+        activeProgress.floatValue = closeProgress.floatValue
         isSettlingToDismiss.value = false
         if (visible) {
             settleTo(0f, 220)
         } else {
             animationJob.value?.cancel()
-            closeProgress.floatValue = 1f
+            updateProgress(1f)
         }
     }
 
@@ -115,16 +150,55 @@ internal fun LandscapeSidePanel(
                 },
                 onDragStopped = { velocity ->
                     val closingVelocity = edgeDirection * velocity
-                    if (closeProgress.floatValue >= 0.42f || closingVelocity >= 900f) {
-                        requestDismiss()
+                    val normalizedVelocity = closingVelocity / drawerWidthPx
+                    val shouldDismiss = if (groupMotionEnabled) {
+                        ControlCenterMotionSpec.shouldClose(1f - activeProgress.floatValue, -normalizedVelocity)
+                    } else closeProgress.floatValue >= 0.42f || closingVelocity >= 900f
+                    if (shouldDismiss) {
+                        dismissWithVelocity(normalizedVelocity)
                     } else {
-                        settleTo(0f, 180)
+                        settleTo(0f, 180, velocity = closingVelocity / drawerWidthPx)
                     }
                 },
             ),
     ) {
-        content(requestDismiss)
+        if (groupMotionEnabled) {
+            val groupMotion = remember(groupProgress, edgeDirection) {
+                LandscapeControlCenterGroups(groupProgress, edgeDirection)
+            }
+            CompositionLocalProvider(LocalLandscapeControlCenterGroups provides groupMotion) {
+                content(requestDismiss)
+            }
+        } else {
+            content(requestDismiss)
+        }
     }
+}
+
+private class LandscapeControlCenterGroups(val progress: MutableFloatState, val direction: Float)
+private val LocalLandscapeControlCenterGroups = staticCompositionLocalOf<LandscapeControlCenterGroups?> { null }
+
+/** Groups read the same drawer clock only in layout/draw, including during interrupted springs. */
+@Composable
+internal fun Modifier.landscapeControlCenterGroup(index: Int): Modifier {
+    val motion = LocalLandscapeControlCenterGroups.current ?: return this
+    return this
+        .layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints)
+            val stretch = (-motion.progress.floatValue).coerceIn(0f, ControlCenterMotionSpec.MaxOverExpansion)
+            val gap = (32.dp.toPx() * stretch).roundToInt()
+            layout(placeable.width, (placeable.height + gap).coerceIn(constraints.minHeight, constraints.maxHeight)) {
+                placeable.placeRelative(0, 0)
+            }
+        }
+        .graphicsLayer {
+            val close = motion.progress.floatValue.coerceIn(0f, 1f)
+            val stretch = (-motion.progress.floatValue).coerceIn(0f, ControlCenterMotionSpec.MaxOverExpansion)
+            alpha = (1f - close) * (1f - close)
+            translationX = motion.direction * close * (8 * index).dp.toPx()
+            scaleX = 1f + stretch * 0.12f
+            scaleY = 1f - stretch * 0.08f
+        }
 }
 
 /** Read the occupied drawer width during measurement so drag updates only relayout content. */

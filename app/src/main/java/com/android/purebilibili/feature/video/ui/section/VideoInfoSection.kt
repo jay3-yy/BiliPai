@@ -74,7 +74,6 @@ import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
 import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.core.ui.components.resolveUpNameColor
 import com.android.purebilibili.core.ui.components.UserUpBadge
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -1105,7 +1104,8 @@ fun UpInfoSection(
             speedSettings = sharedTransitionSpeedSettings
         )
     }
-    val upStatsText = resolveUpStatsText(
+    // 统计是所有材质共有的详情信息，不调整 MD3、Miuix 或玻璃的原生控件参数。
+    val upStatsLabels = resolveVideoDetailOwnerStatsLabels(
         followerCount = followerCount,
         videoCount = videoCount
     )
@@ -1353,26 +1353,24 @@ fun UpInfoSection(
                     Column(modifier = Modifier.weight(1f)) {
                         upNameContent(Modifier.fillMaxWidth())
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        if (upStatsLabels.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(2.dp))
+                            OwnerStatsRow(labels = upStatsLabels)
+                        }
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (playerControlVisibility.showFollowButton) {
-                                followButtonContent()
-                            }
-                            if (!upStatsText.isNullOrBlank()) {
-                                AppText(
-                                    text = upStatsText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = AppContentColors.secondaryText(),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            if (trailingContent != null) {
-                                trailingContent()
+                        if (playerControlVisibility.showFollowButton || trailingContent != null) {
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (playerControlVisibility.showFollowButton) {
+                                    followButtonContent()
+                                }
+                                if (trailingContent != null) {
+                                    trailingContent()
+                                }
                             }
                         }
                     }
@@ -1392,15 +1390,9 @@ fun UpInfoSection(
                     // UP owner name row
                     Column(modifier = Modifier.weight(1f)) {
                         upNameContent(Modifier)
-                        if (!upStatsText.isNullOrBlank()) {
+                        if (upStatsLabels.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(2.dp))
-                            AppText(
-                                text = upStatsText,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = AppContentColors.secondaryText(),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            OwnerStatsRow(labels = upStatsLabels)
                         }
                     }
 
@@ -2642,4 +2634,24 @@ private fun mergeBgmRecommendedVideos(
         seenKeys.add(key)
     }
     return existing + appended
+}
+
+/** 数量与标签跟随主题字体，项间距使用布局单位，不依赖空格宽度。 */
+@Composable
+private fun OwnerStatsRow(labels: List<String>, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        labels.forEach { label ->
+            AppText(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = AppContentColors.secondaryText(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }

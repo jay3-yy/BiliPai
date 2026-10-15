@@ -37,6 +37,15 @@ object AppContentColors {
     @ReadOnlyComposable
     fun accent(): Color = AppSurfaceTokens.primary()
 
+    /** Glass selection keeps the picked accent; native MD3/Miuix retain their palette roles. */
+    @Composable
+    @ReadOnlyComposable
+    fun selectionAccent(liquidGlassEnabled: Boolean): Color = resolveSelectionAccentColor(
+        liquidGlassEnabled = liquidGlassEnabled,
+        nativeAccent = accent(),
+        glassAccent = LocalLiquidControlThemeColor.current,
+    )
+
     @Composable
     @ReadOnlyComposable
     fun onAccent(): Color = MaterialTheme.colorScheme.onPrimary
@@ -118,3 +127,9 @@ fun resolveReadableNeutralContent(candidate: Color, scheme: ColorScheme): Color 
     }
     return scheme.onSurface
 }
+
+internal fun resolveSelectionAccentColor(
+    liquidGlassEnabled: Boolean,
+    nativeAccent: Color,
+    glassAccent: Color,
+): Color = if (liquidGlassEnabled && glassAccent != Color.Unspecified) glassAccent else nativeAccent

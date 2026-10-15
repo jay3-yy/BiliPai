@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.ui.AppSemanticIconFamily
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppTopChromePolicy
 import com.android.purebilibili.core.ui.AppTopTabPresentation
 import com.android.purebilibili.core.ui.CompactCapsuleChromeSpec
@@ -20,10 +21,10 @@ class HistoryFilterTabChromePolicyTest {
         )
 
         assertTrue(spec.useLiquidDock)
-        assertEquals(36, spec.heightDp)
+        assertEquals(AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp, spec.heightDp)
         assertEquals(14, spec.horizontalPaddingDp)
         assertEquals(
-            com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(36f),
+            com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(spec.heightDp.toFloat()),
             spec.indicatorHeightDp,
         )
         assertTrue(spec.dragSelectionEnabled)
@@ -38,6 +39,9 @@ class HistoryFilterTabChromePolicyTest {
 
         assertFalse(spec.useLiquidDock)
         assertFalse(spec.dragSelectionEnabled)
+        assertEquals(36, spec.heightDp)
+        assertEquals(30, spec.indicatorHeightDp)
+        assertEquals(56, spec.itemWidthDp)
     }
 
     @Test

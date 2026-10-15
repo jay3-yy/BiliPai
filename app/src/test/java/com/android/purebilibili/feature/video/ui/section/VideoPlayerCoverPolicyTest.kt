@@ -472,6 +472,20 @@ class VideoPlayerCoverPolicyTest {
     }
 
     @Test
+    fun horizontalLoadingCoverFillsInlineSlotButKeepsFullscreenFit() {
+        for (manualStart in listOf(false, true)) {
+            for (target in listOf(VideoSharedTransitionTargetMode.InlineCover, VideoSharedTransitionTargetMode.InlinePlayer)) {
+                val spec = resolveVideoPlayerEntryPresentationSpec(manualStart, false, false, target)
+                assertEquals(VideoPlayerCoverContentScaleMode.Crop, spec.coverContentScaleMode)
+            }
+            val fullscreen = resolveVideoPlayerEntryPresentationSpec(
+                manualStart, false, false, VideoSharedTransitionTargetMode.LandscapeFullscreen,
+            )
+            assertEquals(VideoPlayerCoverContentScaleMode.Fit, fullscreen.coverContentScaleMode)
+        }
+    }
+
+    @Test
     fun verticalManualStartCover_usesViewportFillAndFitContentScale() {
         val spec = resolveVideoPlayerEntryPresentationSpec(
             shouldKeepCoverForManualStart = true,

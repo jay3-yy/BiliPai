@@ -112,14 +112,14 @@ class VideoDetailDemandLoadingStructureTest {
     }
 
     @Test
-    fun commentInitializationAndShimmerWaitForEntryCompletion() {
+    fun commentInitializationWaitsForEntryButShimmerBypassesDisabledTransitions() {
         val screen = source("screen/VideoDetailScreenStateHolder.kt")
         val commentEffect = screen.substringAfter(
             "LaunchedEffect(detailContentState?.info?.aid, preferredCommentSortMode, isVisible, entryTransitionFinished)"
         ).substringBefore("    //  核心修改")
         assertTrue(commentEffect.contains("if (!isVisible || !entryTransitionFinished) return@LaunchedEffect"))
         assertTrue(commentEffect.contains("commentViewModel.init("))
-        assertTrue(screen.contains("animated = entryTransitionFinished"))
+        assertTrue(screen.contains("animated = !transitionEnabled || entryTransitionFinished"))
     }
 
     @Test

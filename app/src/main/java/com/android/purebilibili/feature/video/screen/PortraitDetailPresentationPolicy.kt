@@ -284,7 +284,7 @@ internal fun resolvePortraitInlinePlayerLayoutSpec(
 }
 
 /**
- * 普通视频竖屏详情播放器内容高度：按**真实布局宽度**算 10/16，
+ * 普通视频竖屏详情播放器内容高度：按真实布局宽度计算，加载封面与播放画面均为 16:9，
  * 避免 configuration.screenWidthDp 与窗口可用宽度不一致时左右黑边。
  */
 internal fun resolvePhoneDetailPlayerContentHeightPx(

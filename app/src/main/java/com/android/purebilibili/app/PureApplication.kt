@@ -631,7 +631,14 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         val appLanguage = SettingsManager.getAppLanguageSync(this)
         val themeMode = resolveThemeModePreference(themeModeValue)
         
-        val nightMode = when (themeMode) {
+        val schedule = SettingsManager.getCachedDarkThemeSchedule(this)
+        val localTime = java.util.Calendar.getInstance()
+        val minuteOfDay = localTime.get(java.util.Calendar.HOUR_OF_DAY) * 60 + localTime.get(java.util.Calendar.MINUTE)
+        val nightMode = if (schedule.enabled) {
+            if (com.android.purebilibili.feature.settings.isScheduledDarkTheme(schedule, minuteOfDay)) {
+                androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+            } else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+        } else when (themeMode) {
             AppThemeMode.FOLLOW_SYSTEM -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
             AppThemeMode.LIGHT -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
             AppThemeMode.DARK -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES

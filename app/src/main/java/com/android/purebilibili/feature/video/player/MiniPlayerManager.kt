@@ -52,6 +52,7 @@ import com.android.purebilibili.core.player.HiResCompatibleRenderersFactory
 import com.android.purebilibili.core.player.PlaybackMediaCache
 import com.android.purebilibili.core.player.PlayerVolumeController
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.AppThemeSettings
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.player.PlayerSettingsStore
 import com.android.purebilibili.core.store.normalizeAppIconKey
@@ -66,6 +67,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.video.VideoActivity
@@ -84,7 +86,6 @@ import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUs
 private const val TAG = "MiniPlayerManager"
 private const val NOTIFICATION_ID = 1002
 private const val CHANNEL_ID = "mini_player_channel"
-private const val THEME_COLOR = 0xFFFB7299.toInt()
 private const val FOREGROUND_START_DEBOUNCE_MS = 1500L
 private const val USER_LEAVE_HINT_WINDOW_MS = 1500L
 private const val SESSION_COMMAND_SKIP_TO_PREVIOUS = "SKIP_TO_PREVIOUS"
@@ -794,6 +795,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
     private val backgroundPlaybackUseCase = VideoPlaybackUseCase()
     private var backgroundSkipJob: kotlinx.coroutines.Job? = null
     private var notificationMetadataJob: kotlinx.coroutines.Job? = null
+    private var notificationThemeJob: Job? = null
+    private var notificationThemeSettings: AppThemeSettings? = null
+    private var notificationThemeMetadata: Pair<String, String>? = null
     
     // 🔋 [后台优化] 低内存模式状态
     private var isLowMemoryMode = false
@@ -2263,6 +2267,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     private fun clearPlaybackNotificationArtifacts() {
+        notificationThemeMetadata = null
+        notificationThemeJob?.cancel()
+        notificationThemeJob = null
+        notificationThemeSettings = null
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(NOTIFICATION_ID)
         currentNotification = null
@@ -2950,6 +2958,21 @@ class MiniPlayerManager private constructor(private val context: Context) :
             cachedArtworkBitmap = effectiveArtworkBitmap
         }
 
+        // Observe only while a notification is requested. Release/clear cancels this
+        // owner; do not launch settings work in init or block the main thread to read it.
+        notificationThemeMetadata = title to artist
+        if (notificationThemeJob?.isActive != true) {
+            notificationThemeJob = scope.launch {
+                SettingsManager.getAppThemeSettings(context).collect { settings ->
+                    notificationThemeSettings = settings
+                    notificationThemeMetadata?.let { (latestTitle, latestArtist) ->
+                        pushNotification(latestTitle, latestArtist, bitmap = null)
+                    }
+                }
+            }
+        }
+        val themeSettings = notificationThemeSettings ?: return
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
                 val channel = NotificationChannel(CHANNEL_ID, "小窗播放", NotificationManager.IMPORTANCE_LOW).apply {
@@ -2977,7 +3000,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             .setContentTitle(title)
             .setContentText(artist)
             .setLargeIcon(effectiveArtworkBitmap)
-            .setColor(THEME_COLOR)
+            .setColor(resolvePlaybackNotificationColor(context, themeSettings))
             .setColorized(true)
             .setOngoing(notificationIsPlaying)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

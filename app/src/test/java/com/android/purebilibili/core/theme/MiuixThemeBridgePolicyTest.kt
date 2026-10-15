@@ -3,12 +3,36 @@ package com.android.purebilibili.core.theme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import com.android.purebilibili.core.ui.AppSurfaceTokens
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.assertNotEquals
 
 class MiuixThemeBridgePolicyTest {
+    @Test
+    fun `page background entrances share native canvas without changing container roles`() {
+        for ((dark, amoled) in listOf(false to false, true to false, true to true)) {
+            val scheme = if (dark) darkColorScheme() else lightColorScheme()
+            val colors = resolveNativeMiuixColors(scheme, dark, amoled)
+            val material = alignMaterialSurfacesWithMiuix(scheme, colors)
+            val canvas = when {
+                !dark -> Color(0xFFF7F7F7)
+                amoled -> Color.Black
+                else -> Color(0xFF121212)
+            }
+            assertEquals(canvas, AppSurfaceTokens.resolveBackground(material))
+            assertEquals(canvas, AppSurfaceTokens.resolveGroupedListContainer(material))
+            assertEquals(canvas, AppSurfaceTokens.resolveChromeBackground(material))
+            assertEquals(colors.surfaceContainer, AppSurfaceTokens.resolveCardContainer(material))
+            assertEquals(colors.surfaceContainerHigh, AppSurfaceTokens.resolveSearchContainer(material))
+            if (!dark) {
+                assertEquals(Color.White, colors.background)
+                assertEquals(Color.White, AppSurfaceTokens.resolveCardContainer(material))
+            }
+        }
+    }
+
     @Test
     fun `native miuix distinguishes ordinary dark from amoled in both theme APIs`() {
         val scheme = darkColorScheme(primary = Color(0xFFB3261E))
@@ -117,7 +141,7 @@ class MiuixThemeBridgePolicyTest {
             assertEquals(scheme.primary, colors.primary)
             val material = alignMaterialSurfacesWithMiuix(scheme, colors)
             assertEquals(colors.surface, material.surface)
-            assertEquals(colors.background, material.background)
+            assertEquals(colors.surface, material.background)
             assertEquals(colors.surfaceContainerHigh, material.surfaceContainerHigh)
             assertEquals(colors.secondary, material.secondary)
             assertEquals(colors.secondaryContainer, material.secondaryContainer)

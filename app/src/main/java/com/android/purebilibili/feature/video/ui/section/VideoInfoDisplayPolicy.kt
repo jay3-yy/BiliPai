@@ -68,6 +68,17 @@ internal fun shouldUseCompactUpInfoLayout(widthDp: Int): Boolean {
     return widthDp in 1 until UP_INFO_COMPACT_WIDTH_THRESHOLD_DP
 }
 
+/** 详情页统计数量在前；未知值隐藏，真实的零值保留。 */
+internal fun resolveVideoDetailOwnerStatsLabels(
+    followerCount: Int?,
+    videoCount: Int?
+): List<String> {
+    return listOfNotNull(
+        followerCount?.takeIf { it >= 0 }?.let { "${FormatUtils.formatStat(it.toLong())}粉丝" },
+        videoCount?.takeIf { it >= 0 }?.let { "${FormatUtils.formatStat(it.toLong())}视频" }
+    )
+}
+
 internal fun resolveVideoDetailOnlineCountText(
     showOnlineCount: Boolean,
     onlineCount: String

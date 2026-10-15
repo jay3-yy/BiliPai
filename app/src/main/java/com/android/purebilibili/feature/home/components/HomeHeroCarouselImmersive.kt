@@ -175,7 +175,9 @@ internal fun HomeHeroCarouselImmersive(
                         .size(width = if (i == pagerState.currentPage) 16.dp else 5.dp, height = 5.dp)
                         .clip(CircleShape)
                         .background(
-                            if (i == pagerState.currentPage) AppContentColors.accent()
+                            if (i == pagerState.currentPage) AppContentColors.selectionAccent(
+                                com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                            )
                             else Color(0x80FFFFFF)
                         ),
                 )

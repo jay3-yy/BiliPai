@@ -2025,7 +2025,9 @@ fun AppNavigation(
         val shouldCaptureBottomBarBackdrop =
             homeSettings.androidNativeLiquidGlassEnabled || isBottomBarBlurEnabled
         val bottomBarBackdropSource = if (shouldCaptureBottomBarBackdrop) {
-            rememberChromeBackdropSource()
+            // Bind the shared recording to every frame of the app theme palette,
+            // rather than waiting for navigation/layout to invalidate a static page.
+            rememberChromeBackdropSource(recordingBackground = backgroundColor)
         } else {
             null
         }
@@ -2596,10 +2598,7 @@ fun AppNavigation(
                         },
                         onFansClick = { fansMid ->
                             pushNavigation3Key(
-                                BiliPaiNavKey.Web(
-                                    url = "https://space.bilibili.com/$fansMid/fans/fans",
-                                    title = "粉丝"
-                                )
+                                BiliPaiNavKey.Following(mid = fansMid, fans = true)
                             )
                         },
                         onUpowerRankClick = { upMid, upName, upCount ->
@@ -3347,6 +3346,11 @@ fun AppNavigation(
                                     )
                                 },
                                 onFollowingClick = { mid -> navigateFromProfile(ScreenRoutes.Following.createRoute(mid)) },
+                                onFansClick = { mid ->
+                                    pushNavigation3Key(
+                                        BiliPaiNavKey.Following(mid = mid, fans = true)
+                                    )
+                                },
                                 onDownloadClick = { navigateFromProfile(ScreenRoutes.DownloadList.route) },
                                 onWatchLaterClick = { navigateFromProfile(ScreenRoutes.WatchLater.route) },
                                 onInboxClick = { navigateFromProfile(ScreenRoutes.Inbox.route) },
@@ -3876,9 +3880,17 @@ fun AppNavigation(
                             }
                         BiliPaiNavEntryContentRole.FOLLOWING -> {
                                 val followingKey = key as BiliPaiNavKey.Following
-                                com.android.purebilibili.feature.following.FollowingListScreen(
+                                if (followingKey.fans) {
+                                    com.android.purebilibili.feature.following.FansListScreen(
+                                        mid = followingKey.mid,
+                                        onBack = { performSystemBackAction() },
+                                        onUserClick = { userMid -> pushNavigation3Key(BiliPaiNavKey.Space(userMid)) },
+                                        onFansClick = { userMid -> pushNavigation3Key(BiliPaiNavKey.Following(userMid, fans = true)) },
+                                    )
+                                } else com.android.purebilibili.feature.following.FollowingListScreen(
                                     mid = followingKey.mid,
                                     onBack = { performSystemBackAction() },
+                                    onFansClick = { userMid -> pushNavigation3Key(BiliPaiNavKey.Following(userMid, fans = true)) },
                                     onUserClick = { userMid -> pushNavigation3Key(BiliPaiNavKey.Space(userMid)) }
                                 )
                             }

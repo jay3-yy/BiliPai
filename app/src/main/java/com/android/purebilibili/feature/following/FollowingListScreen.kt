@@ -654,6 +654,7 @@ fun FollowingListScreen(
     mid: Long,
     onBack: () -> Unit,
     onUserClick: (Long) -> Unit,  // 点击跳转到 UP 主空间
+    onFansClick: (Long) -> Unit,
     viewModel: FollowingListViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -700,6 +701,9 @@ fun FollowingListScreen(
                     }
                 },
                 actions = {
+                    if (!isEditMode) {
+                        AppTextButton(onClick = { onFansClick(mid) }) { AppText("粉丝") }
+                    }
                     if (uiState is FollowingListUiState.Success) {
                         if ((uiState as? FollowingListUiState.Success)?.hasMore == true) {
                             AppTextButton(onClick = { viewModel.loadAllForSearch() }) {
@@ -947,6 +951,7 @@ fun FollowingListScreen(
                                             user = user,
                                             isEditMode = isEditMode,
                                             isSelected = selectedMids.contains(user.mid),
+                                            onFansClick = { onFansClick(user.mid) },
                                             modifier = Modifier.animateItem(),
                                             onClick = {
                                                 if (isEditMode) {
@@ -1328,6 +1333,7 @@ private fun FollowingUserItem(
     user: FollowingUser,
     isEditMode: Boolean,
     isSelected: Boolean,
+    onFansClick: () -> Unit,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -1420,6 +1426,8 @@ private fun FollowingUserItem(
                 checked = isSelected,
                 onCheckedChange = { onClick() }
             )
+        } else {
+            AppTextButton(onClick = onFansClick) { AppText("粉丝") }
         }
     }
 }

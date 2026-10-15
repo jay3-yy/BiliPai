@@ -801,7 +801,7 @@ private fun PartitionSideRail(
                             iconFamily = iconFamily,
                             onClick = {},
                             interactive = false,
-                            contentColorOverride = AppContentColors.accent(),
+                            contentColorOverride = AppContentColors.selectionAccent(liquidGlassIndicatorEnabled),
                             itemHeight = PartitionSideRailIndicatorHeight,
                             modifier = Modifier.width(indicatorWidth),
                         )
@@ -831,6 +831,7 @@ private fun PartitionSideRail(
                     showIcon = showIcon,
                     showText = showText,
                     iconFamily = iconFamily,
+                    selectedAccent = AppContentColors.selectionAccent(liquidGlassIndicatorEnabled),
                     onClick = { onPartitionSelected(partition) }
                 )
             }
@@ -1018,10 +1019,12 @@ private fun PartitionSideRailItem(
     onClick: () -> Unit,
     interactive: Boolean = true,
     contentColorOverride: Color? = null,
+    selectedAccent: Color? = null,
     itemHeight: androidx.compose.ui.unit.Dp = PartitionSideRailItemHeight,
     modifier: Modifier = Modifier,
 ) {
-    val selectedColor = AppContentColors.accent()
+    // Glass uses the exact custom accent; native MD3/Miuix retain their existing palette.
+    val selectedColor = selectedAccent ?: AppContentColors.accent()
     val unselectedColor = AppContentColors.secondaryText()
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()

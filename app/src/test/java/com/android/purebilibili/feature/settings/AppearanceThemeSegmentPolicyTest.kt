@@ -111,6 +111,15 @@ class AppearanceThemeSegmentPolicyTest {
     fun `advanced palette controls are only shown for custom color source`() {
         assertTrue(shouldShowMd3CustomColorControls(Md3ColorSource.CUSTOM))
         assertFalse(shouldShowMd3CustomColorControls(Md3ColorSource.FOLLOW_WALLPAPER))
+        assertFalse(shouldShowMd3CustomColorControls(Md3ColorSource.WALLPAPER_RETONED))
+    }
+
+    @Test
+    fun `retone exposes style choices without exposing manual overrides`() {
+        assertTrue(shouldShowMd3PaletteStyleControls(Md3ColorSource.WALLPAPER_RETONED))
+        assertTrue(shouldShowMd3PaletteStyleControls(Md3ColorSource.CUSTOM))
+        assertFalse(shouldShowMd3PaletteStyleControls(Md3ColorSource.FOLLOW_WALLPAPER))
+        assertEquals(Md3ColorSource.entries.toSet(), resolveMd3ColorSourceOptions().map { it.value }.toSet())
     }
 
     @Test

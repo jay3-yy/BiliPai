@@ -1433,7 +1433,13 @@ private fun LightweightHomeTopTabs(
             else -> md3ContentPadding
         }
         val textMeasurer = rememberTextMeasurer()
-        val md3ContentWidths = remember(categories, normalizedLabelMode, density, textMeasurer) {
+        val md3ContentWidths = remember(
+            categories,
+            normalizedLabelMode,
+            isLiquidGlassEnabled,
+            density,
+            textMeasurer,
+        ) {
             categories.map { category ->
                 val textWidth = if (showText) {
                     with(density) {
@@ -1450,7 +1456,10 @@ private fun LightweightHomeTopTabs(
                     0.dp
                 }
                 val iconWidth = if (showIcon) {
-                    resolveTopTabIconSizeDp(normalizedLabelMode).dp
+                    resolveHomeTopDockIconSizeDp(
+                        normalizedLabelMode,
+                        liquidGlassEnabled = isLiquidGlassEnabled,
+                    ).dp
                 } else {
                     0.dp
                 }
@@ -1739,7 +1748,7 @@ private fun LightweightHomeTopTabs(
             liquidGlassEnabled = shouldUseLiquidGlassIndicator,
         )
         val topTabVisibleContentZIndex = if (useTopTabGlassColorPath) 0f else 2f
-        val topTabThemeColor = AppContentColors.accent()
+        val topTabThemeColor = AppContentColors.selectionAccent(shouldUseLiquidGlassIndicator)
         val stableTopTabExportTintColor = resolveAndroidNativeExportTintColor(
             themeColor = topTabThemeColor,
             darkTheme = isDarkTheme
@@ -2826,7 +2835,10 @@ private fun LightweightTopTabItem(
                         selectedAlpha = selectionFraction,
                         tint = contentColor,
                         modifier = Modifier.size(
-                            resolveTopTabIconSizeDp(if (showText) 0 else 1).dp
+                            resolveHomeTopDockIconSizeDp(
+                                if (showText) 0 else 1,
+                                liquidGlassEnabled = colorMode != TopTabLiquidColorMode.NORMAL,
+                            ).dp
                         )
                     )
                 }
@@ -3333,7 +3345,10 @@ fun CategoryTabItem(
          iconFamily = chromePolicy.effectiveIconFamily,
          selected = true
      )
-     val iconSize = resolveTopTabIconSizeDp(normalizedLabelMode).dp
+     val iconSize = resolveHomeTopDockIconSizeDp(
+         normalizedLabelMode,
+         liquidGlassEnabled = false,
+     ).dp
      val textSize = resolveTopTabLabelTextSizeSp(normalizedLabelMode).sp
      val textLineHeight = resolveTopTabLabelLineHeightSp(normalizedLabelMode).sp
      val contentMinHeight = resolveTopTabContentMinHeightDp(normalizedLabelMode).dp

@@ -55,6 +55,8 @@ internal fun ThemeCustomColorPickerDialog(
     roleTarget: ThemeRoleColorTarget? = null,
     paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
     colorSpec: ColorSpec.SpecVersion = ColorSpec.SpecVersion.SPEC_2025,
+    exactRoleTitle: String? = null,
+    onReset: (() -> Unit)? = null,
 ) {
     val initialHsv = remember(initialHex) {
         FloatArray(3).also { android.graphics.Color.colorToHSV(parseMd3CustomColorHex(initialHex).toArgb(), it) }
@@ -77,8 +79,15 @@ internal fun ThemeCustomColorPickerDialog(
         ThemeRoleColorTarget.DARK_CONTROL -> true
         else -> AppSurfaceTokens.background().luminance() < 0.5f
     }
-    val previewScheme = remember(color, previewDark, paletteStyle, colorSpec) {
-        createBiliPaiStyleColorScheme(color, previewDark, false, paletteStyle, colorSpec)
+    val previewUiStyle = LocalAppUiStyle.current
+    val previewScheme = remember(color, previewDark, paletteStyle, colorSpec, previewUiStyle) {
+        resolveAppThemeEndpointPalette(
+            base = createBiliPaiStyleColorScheme(color, previewDark, false, paletteStyle, colorSpec),
+            uiStyle = previewUiStyle,
+            source = Md3ColorSource.CUSTOM,
+            darkTheme = previewDark,
+            customSeed = color,
+        ).material
     }
     val previewMiuixController = remember(previewScheme, previewDark) {
         val colors = resolveNativeMiuixColors(previewScheme, previewDark)
@@ -131,7 +140,7 @@ internal fun ThemeCustomColorPickerDialog(
         ) {
             Column {
                 Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
-                    AppText(roleTarget?.label ?: "自定义主题颜色", style = MaterialTheme.typography.titleLarge)
+                    AppText(exactRoleTitle ?: roleTarget?.label ?: "自定义主题颜色", style = MaterialTheme.typography.titleLarge)
                     AppText("先预览，再保存", style = MaterialTheme.typography.bodySmall,
                         color = AppContentColors.secondaryText(), modifier = Modifier.padding(top = 4.dp))
                 }
@@ -150,11 +159,19 @@ internal fun ThemeCustomColorPickerDialog(
                                     .border(1.dp, AppSurfaceTokens.divider(), CircleShape))
                                 Column(Modifier.weight(1f)) {
                                     AppText(colorHex, style = MaterialTheme.typography.titleMedium)
-                                    AppText(if (controlColorPreview) "输入颜色（精确值）" else roleTarget?.label.orEmpty(), style = MaterialTheme.typography.bodySmall,
+                                    AppText(if (exactRoleTitle != null) "角色颜色（精确值）" else if (controlColorPreview) "输入颜色（精确值）" else roleTarget?.label.orEmpty(), style = MaterialTheme.typography.bodySmall,
                                         color = AppContentColors.secondaryText())
                                 }
                             }
-                            if (controlColorPreview) {
+                            if (exactRoleTitle != null) {
+                                AppSurface(color = color, contentColor = foreground,
+                                    shape = AppShapes.container(ContainerLevel.Field)) {
+                                    AppText("Aa 示例文字", color = foreground,
+                                        modifier = Modifier.fillMaxWidth().padding(12.dp))
+                                }
+                                AppText("按所选色值应用，配套文字自动匹配明暗。",
+                                    style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
+                            } else if (controlColorPreview) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Box(Modifier.size(28.dp).background(previewTrackColor, CircleShape)
                                         .border(1.dp, AppSurfaceTokens.divider(), CircleShape))
@@ -170,7 +187,7 @@ internal fun ThemeCustomColorPickerDialog(
                                 }
                                 AppText(
                                     if (previewUsesLiquidControls) "液态控件跟随主题色时使用输入颜色。"
-                                    else "输入颜色用于生成浅深主题色板；控件使用当前主题生成的颜色。",
+                                    else "主色使用输入色值；容器保留主题层级，配套文字自动匹配明暗。",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = AppContentColors.secondaryText(),
                                 )
@@ -255,6 +272,11 @@ internal fun ThemeCustomColorPickerDialog(
                     Spacer(Modifier.height(4.dp))
                 }
                 AppHorizontalDivider(modifier = Modifier.padding(top = 12.dp))
+                if (onReset != null) {
+                    AppTextButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
+                        AppText("恢复此项壁纸配色")
+                    }
+                }
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     AppTextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { AppText("取消") }

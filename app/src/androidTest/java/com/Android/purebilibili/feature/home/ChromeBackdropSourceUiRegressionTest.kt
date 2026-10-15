@@ -6,11 +6,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -24,10 +26,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
+import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
 import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -46,6 +50,57 @@ class ChromeBackdropSourceUiRegressionTest {
     @Test
     fun nestedNavigationAndHomeSourcesDoNotMultiplyChildDrawing() =
         verifySource(nested = true)
+
+    @Test
+    fun themeBackgroundUpdatesKeepVisibleSourceAndModifierStable() =
+        verifyRecordingBackground(drawContentToScreen = true)
+
+    @Test
+    fun themeBackgroundUpdatesKeepHiddenCaptureAndModifierStable() =
+        verifyRecordingBackground(drawContentToScreen = false)
+
+    private fun verifyRecordingBackground(drawContentToScreen: Boolean) {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val background = mutableStateOf(Color.Red)
+        val drawCalls = AtomicInteger()
+        lateinit var currentSource: ChromeBackdropSource
+        composeRule.setContent {
+            val source = rememberChromeBackdropSource(
+                drawContentToScreen = drawContentToScreen,
+                recordingBackground = background.value,
+            )
+            SideEffect { currentSource = source }
+            Box(Modifier.size(80.dp).testTag("backdrop-result").background(Color.Blue)) {
+                Box(Modifier.matchParentSize().then(source.modifier).drawWithContent {
+                    drawCalls.incrementAndGet()
+                    drawContent()
+                })
+                Box(Modifier.matchParentSize().drawBackdrop(
+                    backdrop = source.backdrop,
+                    shape = { RectangleShape },
+                    effects = {},
+                ))
+            }
+        }
+        composeRule.waitForIdle()
+        val originalSource = currentSource
+        val originalModifier = originalSource.modifier
+        assertCenterColor(Color.Red)
+        // Include removing the explicit background: the previous frame must not linger.
+        for (color in listOf(Color.Green, Color.Unspecified, Color.Red)) {
+            composeRule.runOnIdle {
+                drawCalls.set(0)
+                background.value = color
+            }
+            composeRule.waitForIdle()
+            composeRule.runOnIdle {
+                assertSame(originalSource, currentSource)
+                assertSame(originalModifier, currentSource.modifier)
+                assertEquals("Each theme frame records children once", 1, drawCalls.get())
+            }
+            assertCenterColor(if (color == Color.Unspecified) Color.Blue else color)
+        }
+    }
 
     @Test
     fun wallpaperStaysAlignedWhenRetainedPageMovesAndReturns() {

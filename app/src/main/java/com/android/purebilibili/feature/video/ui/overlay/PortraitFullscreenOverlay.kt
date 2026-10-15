@@ -276,40 +276,43 @@ fun PortraitFullscreenOverlay(
                         }
                 ) {
                     // 视频信息 (Video Info)
-                    PlayerControlGlassDock(
-                        enabled = true,
-                        shape = RoundedCornerShape(24.dp),
-                        modifier = Modifier
-                            .fillMaxWidth(layoutPolicy.infoWidthFraction)
-                            .padding(horizontal = layoutPolicy.infoHorizontalPaddingDp.dp)
-                            .padding(bottom = layoutPolicy.infoBottomPaddingDp.dp),
+                    // Portrait metadata stays plain, including nested follow/collection controls.
+                    // Scope the opt-out here so player chrome keeps its configured glass material.
+                    val infoThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+                    CompositionLocalProvider(
+                        com.android.purebilibili.core.ui.LocalAppThemeConfig provides infoThemeConfig.copy(liquidGlassEnabled = false),
+                        LocalPlayerControlGlassEnabled provides false,
                     ) {
-                        PortraitVideoInfo(
-                            layoutPolicy = layoutPolicy,
-                            authorName = authorName,
-                            authorFace = authorFace,
-                            staff = staff,
-                            ownerMid = ownerMid,
-                            onStaffMemberClick = onStaffMemberClick,
-                            title = title,
-                            declarations = declarations,
-                            ugcSeason = ugcSeason,
-                            currentBvid = currentBvid,
-                            currentCid = currentCid,
-                            isPlaying = isPlaying,
-                            onCollectionClick = onDetailClick,
-                            isFollowing = isFollowing,
-                            followStatusKnown = followStatusKnown,
-                            onFollowClick = onFollowClick,
-                            onTitleClick = onTitleClick,
-                            onAuthorClick = onAuthorClick,
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(
-                                    horizontal = if (LocalPlayerControlGlassEnabled.current) 12.dp else 0.dp,
-                                    vertical = if (LocalPlayerControlGlassEnabled.current) 8.dp else 0.dp,
-                                )
-                        )
+                                .fillMaxWidth(layoutPolicy.infoWidthFraction)
+                                .padding(horizontal = layoutPolicy.infoHorizontalPaddingDp.dp)
+                                .padding(bottom = layoutPolicy.infoBottomPaddingDp.dp),
+                        ) {
+                            PortraitVideoInfo(
+                                layoutPolicy = layoutPolicy,
+                                authorName = authorName,
+                                authorFace = authorFace,
+                                staff = staff,
+                                ownerMid = ownerMid,
+                                onStaffMemberClick = onStaffMemberClick,
+                                title = title,
+                                declarations = declarations,
+                                ugcSeason = ugcSeason,
+                                currentBvid = currentBvid,
+                                currentCid = currentCid,
+                                isPlaying = isPlaying,
+                                onCollectionClick = onDetailClick,
+                                isFollowing = isFollowing,
+                                followStatusKnown = followStatusKnown,
+                                onFollowClick = onFollowClick,
+                                onTitleClick = onTitleClick,
+                                onAuthorClick = onAuthorClick,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            )
+                        }
+
                     }
 
                     PortraitProgressControlStrip(

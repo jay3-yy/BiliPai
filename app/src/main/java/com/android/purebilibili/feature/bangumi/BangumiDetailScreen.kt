@@ -742,8 +742,11 @@ private fun MobileBangumiDetailContent(
         orderBangumiEpisodes(detail.episodes.orEmpty(), episodesDescending)
     }
 
+    val detailListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val heroHeight = 320.dp
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
+            state = detailListState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
@@ -752,29 +755,36 @@ private fun MobileBangumiDetailContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(320.dp)  //  [修复] 增大高度防止文字被裁切
+                        .height(heroHeight)
                 ) {
-                    // 封面背景（模糊）
-                    AsyncImage(
-                        model = coverUrl,
-                        contentDescription = null,
+                    BangumiDetailHeroBackdrop(
+                        listState = detailListState,
+                        height = heroHeight,
+                        topInset = paddingValues.calculateTopPadding(),
                         modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    ) {
+                        // 封面背景（模糊）
+                        AsyncImage(
+                            model = coverUrl,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
 
-                    // 渐变遮罩
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Black.copy(alpha = 0.3f),
-                                        Color.Black.copy(alpha = 0.8f)
+                        // 渐变遮罩
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = 0.3f),
+                                            Color.Black.copy(alpha = 0.8f)
+                                        )
                                     )
                                 )
-                            )
-                    )
+                        )
+                    }
 
                     // 信息区域
                     Row(

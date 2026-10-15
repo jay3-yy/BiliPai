@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -244,7 +243,7 @@ fun AppLiquidGlassBackToTopButton(
                 AppIcon(
                     imageVector = rememberAppChevronUpIcon(),
                     contentDescription = contentDescription,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = com.android.purebilibili.core.ui.AppContentColors.selectionAccent(glassActive),
                 )
             }
         }

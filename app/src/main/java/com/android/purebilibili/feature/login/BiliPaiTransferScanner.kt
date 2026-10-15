@@ -17,9 +17,17 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.AppOutlinedButton
+import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -57,6 +65,9 @@ fun BiliPaiTransferScanner(
     singleShot: Boolean = false,
     acceptAnyQr: Boolean = false,
     onError: (String) -> Unit = {},
+    // Explicit opt-in: authorization places actions below the preview; existing
+    // session-transfer callers retain their overlay layout and original sizing.
+    previewModifier: Modifier? = null,
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -254,29 +265,67 @@ fun BiliPaiTransferScanner(
             executor.shutdown()
         }
     }
-    androidx.compose.foundation.layout.Box(
-        modifier = modifier
-            // Defense in depth: never let the camera layer paint outside the slot.
-            .clipToBounds()
-    ) {
-        AndroidView(factory = { previewView }, modifier = Modifier.matchParentSize())
-        ScannerViewfinderOverlay(appear = appear.value, pulse = pulse.value)
-        androidx.compose.foundation.layout.Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp),
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    val previewContent: @Composable (Modifier) -> Unit = { cameraModifier ->
+        Box(
+            modifier = cameraModifier
+                // Never let the camera layer paint outside the preview slot.
+                .clipToBounds()
         ) {
-            AppTextButton(onClick = { launchGalleryPicker() }) {
-                androidx.compose.material3.Text("从相册识别")
+            AndroidView(factory = { previewView }, modifier = Modifier.matchParentSize())
+            ScannerViewfinderOverlay(appear = appear.value, pulse = pulse.value)
+            if (previewModifier == null) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AppTextButton(onClick = { launchGalleryPicker() }) {
+                        androidx.compose.material3.Text("从相册识别")
+                    }
+                    if (cameraControl != null) {
+                        AppTextButton(onClick = {
+                            val next = !torchEnabled
+                            torchEnabled = next
+                            cameraControl?.enableTorch(next)
+                        }) {
+                            androidx.compose.material3.Text(if (torchEnabled) "关闭手电筒" else "手电筒")
+                        }
+                    }
+                }
             }
-            if (cameraControl != null) {
-                AppTextButton(onClick = {
-                    val next = !torchEnabled
-                    torchEnabled = next
-                    cameraControl?.enableTorch(next)
-                }) {
-                    androidx.compose.material3.Text(if (torchEnabled) "关闭手电筒" else "手电筒")
+        }
+    }
+    if (previewModifier == null) {
+        previewContent(modifier)
+    } else {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            previewContent(previewModifier)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                AppOutlinedButton(
+                    onClick = { launchGalleryPicker() },
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    AppText("相册识别", style = MaterialTheme.typography.labelLarge)
+                }
+                AppOutlinedButton(
+                    onClick = {
+                        val next = !torchEnabled
+                        torchEnabled = next
+                        cameraControl?.enableTorch(next)
+                    },
+                    enabled = cameraControl != null,
+                    modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                ) {
+                    AppText(
+                        if (torchEnabled) "关闭手电筒" else "手电筒",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
             }
         }

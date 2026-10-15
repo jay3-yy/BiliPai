@@ -6,9 +6,11 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import kotlinx.coroutines.CompletableDeferred
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
@@ -38,8 +40,15 @@ class ChromeBackdropSource internal constructor(
  * that can cause the renderer to skip drawing the source content.
  */
 @Composable
-fun rememberChromeBackdropSource(drawContentToScreen: Boolean = true): ChromeBackdropSource {
+fun rememberChromeBackdropSource(
+    drawContentToScreen: Boolean = true,
+    recordingBackground: Color = Color.Unspecified,
+): ChromeBackdropSource {
     val contentLayer = rememberGraphicsLayer()
+    // Theme frames update the recording in draw, without replacing the source passed
+    // to consumers or rebuilding its modifier chain. Child-layer invalidations still
+    // record fresh content; this is not a frozen backdrop cache.
+    val recordingBackgroundState = rememberUpdatedState(recordingBackground)
     val recorded = remember(contentLayer) { mutableStateOf(false) }
     val firstRecording = remember(contentLayer) { CompletableDeferred<Unit>() }
     LaunchedEffect(firstRecording) {
@@ -58,7 +67,14 @@ fun rememberChromeBackdropSource(drawContentToScreen: Boolean = true): ChromeBac
             modifier = Modifier
                 .layerBackdrop(backdrop)
                 .drawWithContent {
-                    contentLayer.record { this@drawWithContent.drawContent() }
+                    contentLayer.record {
+                        // An explicit animated background invalidates this recording even
+                        // when the page updates only its own child graphics layers. Keep
+                        // the backdrop/layer identities stable throughout theme changes.
+                        val background = recordingBackgroundState.value
+                        if (background != Color.Unspecified) drawRect(background)
+                        this@drawWithContent.drawContent()
+                    }
                     if (drawContentToScreen) drawLayer(contentLayer)
                 },
         )

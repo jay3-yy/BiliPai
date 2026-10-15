@@ -436,6 +436,9 @@ internal fun AudioNowPlayingBar(
                         blurEnabled = blurEnabled,
                         hazeState = hazeState,
                         liquidGlassTuning = liquidGlassTuning,
+                        // Use the app's current animated palette directly: a luminance
+                        // threshold would flip this scrim halfway through a theme change.
+                        readabilitySurfaceColor = AppSurfaceTokens.background(),
                     )
             )
             CompositionLocalProvider(LocalElasticPressEnabled provides false) {

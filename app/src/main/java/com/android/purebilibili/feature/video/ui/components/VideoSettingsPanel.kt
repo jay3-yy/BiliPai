@@ -299,7 +299,10 @@ fun VideoSettingsPanel(
         }
     }
 
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val controlCenterMotion = rememberVideoControlCenterMotion()
+    // Glass opens fully so its header can stretch the groups upward without competing
+    // with a half-expanded anchor. Non-glass retains the original partial-sheet behavior.
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = controlCenterMotion != null)
     val useMiuixNonGlassPresentation = isMiuixNonGlassEnabled()
     val panelSpec = rememberVideoSettingsPanelVisualSpec()
     val customSectionHorizontalPadding = if (useMiuixNonGlassPresentation) {
@@ -385,8 +388,19 @@ fun VideoSettingsPanel(
 
     AppModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        // Glass alone supplies a gesture header; native hosts keep their original handle.
+        dragHandle = if (controlCenterMotion != null) null else {
+            { BottomSheetDefaults.DragHandle() }
+        },
     ) {
+        if (controlCenterMotion != null) {
+            VideoControlCenterHandle(
+                motion = controlCenterMotion,
+                onDismiss = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -402,8 +416,10 @@ fun VideoSettingsPanel(
                 }
             )
         ) {
+            val groups = VideoControlCenterGroups(this, controlCenterMotion)
+
             //  定时关闭 - 垂直布局，选项在下一行
-            item {
+            groups.item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -444,7 +460,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 //  重载视频
                 SettingsItem(
                     icon = refreshIcon,
@@ -457,7 +473,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 SettingsItem(
                     icon = settingsIcon,
                     title = "弹幕设置",
@@ -467,7 +483,7 @@ fun VideoSettingsPanel(
             }
 
             if (onShowDanmakuPool != null) {
-                item {
+                groups.item {
                     SettingsItem(
                         icon = rememberAppCommentIcon(),
                         title = "查看弹幕列表",
@@ -481,7 +497,7 @@ fun VideoSettingsPanel(
                 }
             }
 
-            item {
+            groups.item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     VideoSettingsSwitchRow(
                         icon = qualityIcon,
@@ -528,7 +544,7 @@ fun VideoSettingsPanel(
             }
 
             // [New] 资源下载
-            item {
+            groups.item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -591,7 +607,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 //  镜像翻转按钮组
                 Row(
                     modifier = Modifier
@@ -644,7 +660,7 @@ fun VideoSettingsPanel(
 
             //  选择画质 - 内联选择
             if (qualityLabels.isNotEmpty()) {
-                item {
+                groups.item {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -732,7 +748,7 @@ fun VideoSettingsPanel(
             }
 
             // [New] 编码格式选择
-            item {
+            groups.item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -814,7 +830,7 @@ fun VideoSettingsPanel(
             }
 
             // [New] 次选编码格式选择
-            item {
+            groups.item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -896,7 +912,7 @@ fun VideoSettingsPanel(
             }
 
             // 音质入口始终保留，具体选项仍以当前播放资源真实返回的数据为准。
-            item {
+            groups.item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -975,7 +991,7 @@ fun VideoSettingsPanel(
 
              // [New] 音频语言选择 (AI Translation)
             if (aiAudioInfo?.items?.isNotEmpty() == true) {
-                item {
+                groups.item {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1048,7 +1064,7 @@ fun VideoSettingsPanel(
 
             // CDN 设置始终可见；候选线路由当前 playurl 会话提供。
             if (cdnCount > 0) {
-                item {
+                groups.item {
                     val diagnosticsByIndex = cdnLineDiagnostics.associateBy { it.index }
                     Column(
                         modifier = Modifier
@@ -1128,7 +1144,7 @@ fun VideoSettingsPanel(
             }
 
             //  播放倍速 - 内联选择
-            item {
+            groups.item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1179,7 +1195,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     VideoSettingsSwitchRow(
                         icon = settingsIcon,
@@ -1223,7 +1239,7 @@ fun VideoSettingsPanel(
             }
 
             //  [新增] 双击跳转秒数设置 (带开关)
-            item {
+            groups.item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     val doubleTapSeekEnabled by com.android.purebilibili.core.store.SettingsManager
                         .getDoubleTapSeekEnabled(context)
@@ -1297,7 +1313,7 @@ fun VideoSettingsPanel(
             }
 
             //  [新增] 长按倍速设置
-            item {
+            groups.item {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1345,7 +1361,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 VideoSettingsSwitchRow(
                     icon = gestureTapIcon,
                     title = "长按倍速锁定",
@@ -1365,7 +1381,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     VideoSettingsSwitchRow(
                         icon = flipVerticalIcon,
@@ -1396,7 +1412,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 VideoSettingsSwitchRow(
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.PROGRESS_PEAK_DANMAKU),
                     title = "高能进度条趋势",
@@ -1412,7 +1428,7 @@ fun VideoSettingsPanel(
                 SettingsDivider()
             }
 
-            item {
+            groups.item {
                 VideoSettingsSwitchRow(
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.PROGRESS_PEAK_DANMAKU),
                     title = "显示计数弹幕",

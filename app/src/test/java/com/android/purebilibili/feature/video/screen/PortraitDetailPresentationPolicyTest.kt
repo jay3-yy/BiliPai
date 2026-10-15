@@ -334,10 +334,10 @@ class PortraitDetailPresentationPolicyTest {
     }
 
     @Test
-    fun phoneDetailPlayerHeight_matchesActualLayoutWidthFor16By10() {
-        // vivo 类窄机：按真实布局宽算 10/16，避免 screenWidthDp 偏差导致左右黑边
-        assertEquals(675, resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = 1080))
-        assertEquals(760, resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = 1216))
+    fun phoneDetailPlayerHeight_keepsLoadingCoverAndPlayback16By9() {
+        // Loading cover and playback share 16:9 at the actual layout width.
+        assertEquals(608, resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = 1080))
+        assertEquals(684, resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = 1216))
         assertEquals(1, resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = 0))
     }
 
@@ -679,17 +679,17 @@ class PortraitDetailPresentationPolicyTest {
             layoutExpanded,
             resolveContinuousPlayerInlineHeightPx(
                 layoutWidthPx = layoutWidth,
-                preferLayoutWidth16x10Inline = true,
+                preferLayoutWidthInline = true,
                 callerInlineHeightPx = layoutExpanded + 40,
                 inlineTopInsetPx = 80,
             ),
         )
-        // 评论上滑折叠：caller 更小 → 必须跟着缩小，不能卡死在 16:10
+        // 评论上滑折叠：caller 更小 → 必须跟着缩小，不能卡死在展开高度
         assertEquals(
             120,
             resolveContinuousPlayerInlineHeightPx(
                 layoutWidthPx = layoutWidth,
-                preferLayoutWidth16x10Inline = true,
+                preferLayoutWidthInline = true,
                 callerInlineHeightPx = 120,
                 inlineTopInsetPx = 80,
             ),
@@ -699,7 +699,7 @@ class PortraitDetailPresentationPolicyTest {
             200,
             resolveContinuousPlayerInlineHeightPx(
                 layoutWidthPx = layoutWidth,
-                preferLayoutWidth16x10Inline = false,
+                preferLayoutWidthInline = false,
                 callerInlineHeightPx = 200,
                 inlineTopInsetPx = 80,
             ),

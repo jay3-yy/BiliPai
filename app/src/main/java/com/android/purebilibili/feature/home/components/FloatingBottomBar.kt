@@ -55,6 +55,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -850,9 +851,26 @@ fun FloatingBottomBar(
         )
     }
     val indicatorWidthPxProvider: () -> Float = {
-        resolveFloatingDockContentIndicatorWidthPx(
-            rawIndicatorPositionProvider(), contentIndicatorWidthsPx, fittedIndicatorWidthPx,
-        )
+        // Fixed-width docks do not depend on animated position during measurement.
+        if (contentIndicatorWidthsPx.isEmpty()) fittedIndicatorWidthPx else {
+            resolveFloatingDockContentIndicatorWidthPx(
+                rawIndicatorPositionProvider(), contentIndicatorWidthsPx, fittedIndicatorWidthPx,
+            )
+        }
+    }
+    // Material boundary: native/blur and fixed-width docks retain their original width
+    // modifier. Glass keeps continuous optical interpolation, while measurement observes
+    // only the rounded pixel width, not every position/velocity update along the gesture.
+    val indicatorWidthModifier = if (!isLiquidGlassMode || contentIndicatorWidthsPx.isEmpty()) {
+        Modifier.width(fittedIndicatorWidth)
+    } else {
+        val latestWidthProvider = rememberUpdatedState(indicatorWidthPxProvider)
+        val measuredWidth = remember {
+            derivedStateOf(structuralEqualityPolicy()) {
+                latestWidthProvider.value().roundToInt()
+            }
+        }
+        Modifier.liquidIndicatorWidth { measuredWidth.value }
     }
     val shellContentInsetProvider: (Boolean) -> Float = { leading ->
         if (contentIndicatorWidthsPx.isEmpty() || !drawShell) 0f else {
@@ -1397,7 +1415,7 @@ fun FloatingBottomBar(
                             )
                         }
                         .height(fittedIndicatorHeight)
-                        .liquidIndicatorWidth(indicatorWidthPxProvider)
+                        .then(indicatorWidthModifier)
                 )
             } else {
                 Box(
@@ -1432,7 +1450,7 @@ fun FloatingBottomBar(
                             }
                         )
                         .height(fittedIndicatorHeight)
-                        .liquidIndicatorWidth(indicatorWidthPxProvider),
+                        .then(indicatorWidthModifier),
                     contentAlignment = Alignment.CenterStart
                 ) {
                     CompositionLocalProvider(
@@ -1514,8 +1532,8 @@ fun FloatingBottomBar(
 }
 
 /** Read animated width during measurement so the tab row itself stays stable. */
-private fun Modifier.liquidIndicatorWidth(widthPx: () -> Float): Modifier = layout { measurable, constraints ->
-    val width = widthPx().roundToInt().coerceIn(constraints.minWidth, constraints.maxWidth)
+private fun Modifier.liquidIndicatorWidth(widthPx: () -> Int): Modifier = layout { measurable, constraints ->
+    val width = widthPx().coerceIn(constraints.minWidth, constraints.maxWidth)
     val placeable = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
     layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
 }

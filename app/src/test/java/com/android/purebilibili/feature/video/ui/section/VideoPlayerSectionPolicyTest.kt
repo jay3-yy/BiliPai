@@ -2213,7 +2213,7 @@ class VideoPlayerSectionPolicyTest {
 
         assertTrue(spec.coverUsesSharedBounds)
         assertTrue(spec.fillCoverViewport)
-        assertEquals(VideoPlayerCoverContentScaleMode.Fit, spec.coverContentScaleMode)
+        assertEquals(VideoPlayerCoverContentScaleMode.Crop, spec.coverContentScaleMode)
         assertTrue(spec.showManualStartPlayButton)
     }
 

@@ -70,6 +70,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.viewinterop.AndroidView
@@ -337,6 +338,7 @@ fun ProfileScreen(
     onSubscriptionClick: () -> Unit = {},
     onFavoriteFolderClick: (Long, Long, String) -> Unit = { _, _, _ -> },
     onFollowingClick: (Long) -> Unit = {},  //  关注列表点击
+    onFansClick: (Long) -> Unit = {},
     onDownloadClick: () -> Unit = {},  //  离线缓存点击
     onWatchLaterClick: () -> Unit = {}, // 稍后再看点击
     onInboxClick: () -> Unit = {},  //  [新增] 私信入口点击
@@ -809,6 +811,7 @@ fun ProfileScreen(
                         onSubscriptionClick = onSubscriptionClick,
                         onFavoriteFolderClick = onFavoriteFolderClick,
                         onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
+                        onFansClick = { onFansClick(currentUiState.user.mid) },
                         onDownloadClick = onDownloadClick,
                         onWatchLaterClick = onWatchLaterClick,
                         onInboxClick = onInboxClick,
@@ -1083,6 +1086,7 @@ private fun ProfileSpaceContent(
     onSubscriptionClick: () -> Unit,
     onFavoriteFolderClick: (Long, Long, String) -> Unit,
     onFollowingClick: () -> Unit,
+    onFansClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
     onInboxClick: () -> Unit,
@@ -1226,10 +1230,6 @@ private fun ProfileSpaceContent(
     val tabletRailScrollState = rememberScrollState()
     val tabletFeedListState = rememberLazyListState()
     val mobileListState = rememberLazyListState()
-    val profileHeroHeight = resolveProfileHeroHeightDp(
-        screenHeightDp = LocalConfiguration.current.screenHeightDp,
-        widthSizeClass = LocalWindowSizeClass.current.widthSizeClass,
-    ).dp
     val density = LocalDensity.current
     // Keep this anchor independent of the expanding details height. Details grow downward.
     val profileStatsTopProvider: () -> Float = {
@@ -1285,6 +1285,8 @@ private fun ProfileSpaceContent(
                         onEditClick = { showEditDialog = true },
                         onWallpaperActionClick = { showWallpaperActionSheet = true },
                         onFollowingClick = onFollowingClick,
+                        onFansClick = onFansClick,
+                        onDynamicsClick = { onTabSelected(ProfileSpaceMainTab.DYNAMIC) },
                         modifier = Modifier.heightIn(min = tabletWallpaperRevealHeight)
                     )
                     ProfileQuickAccessDashboard(
@@ -1366,6 +1368,8 @@ private fun ProfileSpaceContent(
                         onEditClick = { showEditDialog = true },
                         onWallpaperActionClick = { showWallpaperActionSheet = true },
                         onFollowingClick = onFollowingClick,
+                        onFansClick = onFansClick,
+                        onDynamicsClick = { onTabSelected(ProfileSpaceMainTab.DYNAMIC) },
                         showIdentity = false,
                         topClipProvider = {
                             with(density) { (statusBarTopPadding + 56.dp).toPx() } +
@@ -1455,7 +1459,29 @@ private fun ProfileSpaceContent(
                 listState = mobileListState,
                 flingBehavior = profileHeaderFling,
                 onAvatarClick = { showEditDialog = true },
-                modifier = Modifier.fillMaxWidth().height(profileHeroHeight).align(Alignment.TopCenter),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .layout { measurable, constraints ->
+                        // The native avatar host must stop above the scrolling statistics.
+                        // A full-hero AndroidView intercepts taps even in its transparent area.
+                        val toolbarHeight = (statusBarTopPadding + 56.dp).roundToPx()
+                        val statsTop = if (mobileListState.firstVisibleItemIndex > 0) {
+                            toolbarHeight
+                        } else {
+                            profileStatsTopProvider().toInt() - mobileListState.firstVisibleItemScrollOffset
+                        }
+                        val height = statsTop.coerceIn(
+                            toolbarHeight.coerceAtMost(constraints.maxHeight),
+                            constraints.maxHeight,
+                        )
+                        val placeable = measurable.measure(
+                            constraints.copy(minHeight = height, maxHeight = height)
+                        )
+                        layout(placeable.width, placeable.height) {
+                            placeable.placeRelative(0, 0)
+                        }
+                    },
             )
         }
     }
@@ -1763,6 +1789,8 @@ private fun ProfileSpaceHeroHeader(
     onEditClick: () -> Unit,
     onWallpaperActionClick: () -> Unit,
     onFollowingClick: () -> Unit,
+    onFansClick: () -> Unit,
+    onDynamicsClick: () -> Unit,
     showIdentity: Boolean = true,
     topClipProvider: () -> Float = { 0f },
 ) {
@@ -1795,6 +1823,8 @@ private fun ProfileSpaceHeroHeader(
             onEditClick = onEditClick,
             onWallpaperActionClick = onWallpaperActionClick,
             onFollowingClick = onFollowingClick,
+            onFansClick = onFansClick,
+            onDynamicsClick = onDynamicsClick,
             modifier = Modifier
                 .align(if (showIdentity) Alignment.BottomStart else Alignment.TopStart)
                 .padding(
@@ -1844,6 +1874,8 @@ private fun ProfileSpaceHeader(
     onEditClick: () -> Unit,
     onWallpaperActionClick: () -> Unit,
     onFollowingClick: () -> Unit,
+    onFansClick: () -> Unit,
+    onDynamicsClick: () -> Unit,
     modifier: Modifier = Modifier,
     showIdentity: Boolean = true,
 ) {
@@ -1907,9 +1939,9 @@ private fun ProfileSpaceHeader(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ProfileSpaceStat("动态", user.dynamic, textColor)
+            ProfileSpaceStat("动态", user.dynamic, textColor, onClick = onDynamicsClick)
             ProfileSpaceStat("关注", user.following, textColor, onClick = onFollowingClick)
-            ProfileSpaceStat("粉丝", user.follower, textColor)
+            ProfileSpaceStat("粉丝", user.follower, textColor, onClick = onFansClick)
             AppIconButton(onClick = { identityExpanded = !identityExpanded }) {
                 AppIcon(
                     imageVector = if (identityExpanded) rememberAppChevronUpIcon() else rememberAppChevronDownIcon(),

@@ -79,6 +79,19 @@ internal fun shouldUseOfficialMiuixHomeTopTabs(
     liquidGlassEnabled: Boolean,
 ): Boolean = uiStyle == AppUiStyle.MIUIX && !liquidGlassEnabled
 
+/** Glass exports the selected glyph in the exact accent, matching the bottom dock.
+ * Its translucent shell alone is not the composited backdrop for contrast checks.
+ * Native renderers retain the existing readable-foreground policy.
+ */
+internal fun resolveHomeTopTabSelectedContentColor(
+    accent: Color,
+    shellColor: Color,
+    liquidGlassEnabled: Boolean,
+): Color = if (liquidGlassEnabled) accent else resolveReadableBottomBarSkinForeground(
+    preferredColor = accent,
+    backgroundColor = shellColor,
+)
+
 /** Uses shared dock width policy with the top shell's own corner geometry. */
 internal fun resolveHomeTopTabFloatingDockWidth(
     containerWidth: Dp,
@@ -166,6 +179,13 @@ internal fun HomeTopTabFloatingDock(
                                 selected = selected,
                             ),
                             contentDescription = if (showText) null else label,
+                            modifier = if (showIcon && !showText) {
+                                Modifier.size(
+                                    resolveHomeTopDockIconSizeDp(1, liquidGlassEnabled = false).dp,
+                                )
+                            } else {
+                                Modifier
+                            },
                         )
                     }
                     val onClick = {
@@ -224,9 +244,10 @@ internal fun HomeTopTabFloatingDock(
         darkTheme = isDarkTheme,
         liquidGlassTuning = liquidGlassTuning,
     )
-    val selectedContentColor = resolveReadableBottomBarSkinForeground(
-        preferredColor = AppContentColors.accent(),
-        backgroundColor = shellColor,
+    val selectedContentColor = resolveHomeTopTabSelectedContentColor(
+        accent = AppContentColors.selectionAccent(liquidGlassEffectsEnabled),
+        shellColor = shellColor,
+        liquidGlassEnabled = liquidGlassEffectsEnabled,
     )
     val unselectedContentColor = resolveReadableBottomBarSkinForeground(
         preferredColor = AppContentColors.secondaryText(),
@@ -269,6 +290,13 @@ internal fun HomeTopTabFloatingDock(
         itemContent = { index, label, selected ->
             val contentColor = LocalFloatingBottomBarContentColor.current
             val selectionScale = LocalFloatingBottomBarItemSelectionScale.current
+            // Glass renders this slot twice: an idle rail and a lens-clipped active
+            // copy. The active copy must stay filled even before the pager commits
+            // the hovered tab; its visible selection is owned by the moving mask.
+            // Non-glass rails retain the native selected-index contract.
+            val iconSelected = if (liquidGlassEffectsEnabled) {
+                LocalFloatingBottomBarActiveContent.current
+            } else selected
             val categoryKey = categoryKeys.getOrNull(index) ?: label
             if (showIcon) {
                 Box(
@@ -284,7 +312,7 @@ internal fun HomeTopTabFloatingDock(
                         imageVector = resolveTopTabCategoryIcon(
                             categoryKey = categoryKey,
                             iconFamily = iconFamily,
-                            selected = selected,
+                            selected = iconSelected,
                         ),
                         contentDescription = label,
                         // Standalone glass icons use AppIcon's default dimensions, just

@@ -3062,7 +3062,7 @@ private fun MiuixBottomBar(
             defaultWindowInsetsPadding = true,
             mode = displayMode
         ) {
-            val selectedItemColor = AppContentColors.accent()
+            val selectedItemColor = AppContentColors.selectionAccent(sharedLiquidGlassEnabled)
             val unselectedItemColor = AppContentColors.secondaryText()
             val dockedIndicatorColor = resolveDockedBottomBarIndicatorColor(
                 defaultColor = if (!sharedLiquidGlassEnabled) AppSurfaceTokens.selectionContainer()
@@ -3647,7 +3647,7 @@ private fun BiliPaiFloatingBottomBarChrome(
     val isValidSelection = currentItem in visibleItems
     val themedMiuixSelection = LocalAppUiStyle.current == AppUiStyle.MIUIX &&
         !effectiveGlassEnabled && uiSkinDecoration == null
-    val baseSelectedColor = AppContentColors.accent()
+    val baseSelectedColor = AppContentColors.selectionAccent(effectiveGlassEnabled)
     val baseUnselectedColor = if (!effectiveGlassEnabled && (themedMiuixSelection || iconStyle == SharedFloatingBottomBarIconStyle.MATERIAL)) {
         AppContentColors.secondaryText()
     } else {

@@ -1425,7 +1425,9 @@ internal fun resolveVideoPlayerEntryPresentationSpec(
         fillCoverViewport = fillCoverViewport,
         showManualStartPlayButton = shouldKeepCoverForManualStart,
         enableManualStartCoverOverlay = shouldKeepCoverForManualStart,
-        coverContentScaleMode = if ((!isVerticalVideo && !forceCoverDuringReturnAnimation) ||
+        // Inline landscape-video covers fill the shared 16:9 placeholder. Fullscreen
+        // and vertical-video covers retain their existing fit behavior.
+        coverContentScaleMode = if ((!isVerticalVideo && !forceCoverDuringReturnAnimation && targetFillsViewport) ||
             (fillCoverViewport && isVerticalVideo)
         ) {
             VideoPlayerCoverContentScaleMode.Fit

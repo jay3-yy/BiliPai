@@ -16,7 +16,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 让 AMOLED、动态取色与 Miuix 桥接在两种主题风格下保持一致。
  *
  * - 卡片容器 = surfaceContainer（Miuix 桥接映射到同名上游语义角色）。
- * - 分组列表 / chrome 背景 = background。
+ * - 页面 / 分组列表 / chrome 背景 = 桥接后的 Material background。
+ *   Miuix 的原生 background 是另一种表面，不能作为页面画布使用。
  */
 object AppSurfaceTokens {
 
@@ -28,9 +29,11 @@ object AppSurfaceTokens {
 
     fun resolveCardContainer(colorScheme: ColorScheme): Color = colorScheme.surfaceContainer
 
-    fun resolveGroupedListContainer(colorScheme: ColorScheme): Color = colorScheme.background
+    fun resolveBackground(colorScheme: ColorScheme): Color = colorScheme.background
 
-    fun resolveChromeBackground(colorScheme: ColorScheme): Color = colorScheme.background
+    fun resolveGroupedListContainer(colorScheme: ColorScheme): Color = resolveBackground(colorScheme)
+
+    fun resolveChromeBackground(colorScheme: ColorScheme): Color = resolveBackground(colorScheme)
 
     fun resolveDivider(colorScheme: ColorScheme): Color = colorScheme.outlineVariant
 
@@ -98,10 +101,9 @@ object AppSurfaceTokens {
 
     @Composable
     @ReadOnlyComposable
-    fun background(): Color = resolveMiuixSemanticColorComposable(
-        miuixColor = MiuixTheme.colorScheme.background,
-        materialFallback = MaterialTheme.colorScheme.background
-    )
+    // 页面基础色不随玻璃开关分流：MD3 保留生成色板，Miuix 使用桥接后的原生 surface。
+    // 卡片、搜索框与原生组件仍分别读取各自的容器角色。
+    fun background(): Color = resolveBackground(MaterialTheme.colorScheme)
 
     @Composable
     @ReadOnlyComposable

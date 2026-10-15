@@ -1,10 +1,9 @@
 package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppTopChromePolicy
-import com.android.purebilibili.feature.home.components.resolveHomeTopSearchPillHeight
 import com.android.purebilibili.feature.home.components.resolveHomeTopSearchRowHorizontalPadding
-import com.android.purebilibili.feature.home.components.resolveHomeTopTabRowHeight
 import kotlin.math.roundToInt
 
 internal const val HISTORY_FILTER_LIQUID_DOCK_LABEL_FONT_SIZE_SP = 15
@@ -41,20 +40,17 @@ internal fun resolveHistoryFilterTabChromeSpec(
     )
     val compactChrome = topChromePolicy.compactChromeSpec
     return if (useLiquidDock) {
-        val sharedDockHeightDp = minOf(
-            resolveHomeTopSearchPillHeight(topChromePolicy),
-            resolveHomeTopTabRowHeight(
-                isTabFloating = true,
-                chromePolicy = topChromePolicy,
-            ),
-        ).value.roundToInt()
+        // Glass filters share the compact category dock height. Search/header height
+        // makes short, content-sized labels produce circular selection indicators.
+        // Keep this sizing inside the glass branch; native chip sizing stays unchanged.
+        val sharedDockHeightDp = AppChromeSizeTokens.BottomBarMatchedSegmentedControlHeightDp
         HistoryFilterTabChromeSpec(
             useLiquidDock = true,
             heightDp = sharedDockHeightDp,
             indicatorHeightDp = com.android.purebilibili.core.ui.roundMatchedLiquidIndicatorHeightDp(
                 sharedDockHeightDp.toFloat(),
             ),
-            // 全宽 dock：固定 itemWidth 会把指示器压扁，导致整体显得过小。
+            // Use the shared measured label width and padding for the compact glass capsule.
             itemWidthDp = null,
             horizontalPaddingDp = resolveHomeTopSearchRowHorizontalPadding(topChromePolicy)
                 .value

@@ -147,6 +147,7 @@ import com.android.purebilibili.feature.settings.resolveUpdateReleaseNotesText
 import com.android.purebilibili.feature.settings.selectPreferredAppUpdateAsset
 import com.android.purebilibili.feature.settings.shouldRunAppEntryAutoCheck
 import com.android.purebilibili.feature.settings.resolveThemePreferenceState
+import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.core.theme.resolveMd3DynamicColorEnabled
 import com.android.purebilibili.feature.screenshot.AppScreenshotCaptureMode
 import com.android.purebilibili.feature.screenshot.AppScreenshotGestureBlockState
@@ -1445,11 +1446,29 @@ open class MainActivity : AppCompatActivity() {
             val systemInDark = systemInDarkThemeSnapshot
 
             // 5. 根据枚举值决定是否开启 DarkTheme
+            val scheduledDarkTheme = com.android.purebilibili.core.theme.rememberScheduledDarkTheme(
+                appThemeSettings.darkThemeSchedule,
+            )
             val themePreferenceState = resolveThemePreferenceState(
                 themeMode = themeMode,
                 darkThemeStyle = darkThemeStyle,
-                systemInDark = systemInDark
+                systemInDark = systemInDark,
+                scheduledDarkTheme = scheduledDarkTheme.takeIf { appThemeSettings.darkThemeSchedule.enabled },
             )
+            LaunchedEffect(appThemeSettings.darkThemeSchedule.enabled, scheduledDarkTheme, themeMode) {
+                // Keep native resources in step too, without recreating the retained page tree.
+                val nightMode = if (appThemeSettings.darkThemeSchedule.enabled) {
+                    if (scheduledDarkTheme) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                    else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+                } else when (themeMode) {
+                    AppThemeMode.FOLLOW_SYSTEM -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                    AppThemeMode.LIGHT -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+                    AppThemeMode.DARK -> androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                }
+                if (androidx.appcompat.app.AppCompatDelegate.getDefaultNightMode() != nightMode) {
+                    androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(nightMode)
+                }
+            }
             val useDarkTheme = themePreferenceState.useDarkTheme
             val useAmoledDarkTheme = themePreferenceState.useAmoledDarkTheme
             val effectiveDynamicColor = resolveEffectiveDynamicColorEnabled(
@@ -1521,6 +1540,7 @@ open class MainActivity : AppCompatActivity() {
 
             // 6. 传入参数
             PureBiliBiliTheme(
+                themeTransitionEnabled = uiEntranceAnimationEnabled,
                 liquidGlassEnabled = liquidGlassEnabled,
                 uiStyle = appThemeSettings.uiStyle,
                 themeMode = themeMode,
@@ -1531,6 +1551,7 @@ open class MainActivity : AppCompatActivity() {
                 md3ColorSource = md3ColorSource,
                 md3CustomColorHex = md3CustomColorHex,
                 themeRoleOverrides = themeRoleOverrides,
+                wallpaperPaletteOverrides = appThemeSettings.wallpaperPaletteOverrides,
                 colorStyle = colorStyle,
                 colorSpec = colorSpec,
                 fontSizePreset = appFontSizePreset,

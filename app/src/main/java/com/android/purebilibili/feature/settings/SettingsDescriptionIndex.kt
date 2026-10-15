@@ -51,7 +51,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "appearance.is_header_collapse_enabled" to "向下滚动时收起搜索框和标签，点底栏「首页」回顶后重新出现",
     "appearance.is_splash_enabled" to "应用启动时显示官方或相册壁纸",
     "appearance.liquid_controls_use_theme_color" to "开启后开关和滑块使用主题色；关闭保留默认绿色开关、蓝色滑块",
-    "appearance.md3_color_source" to "跟随时直接使用系统当前壁纸配色；自定义模式可选择色彩风格；系统不支持壁纸取色，请选择自定义颜色",
+    "appearance.md3_color_source" to "跟随系统壁纸直接使用系统配色；系统壁纸重新调色可自选色彩风格与色彩标准；自定义颜色可使用取色器或输入色值；壁纸取色需要 Android 12 及以上",
     "appearance.pinch_to_change_grid_columns_enabled" to "在视频列表上双指捏合即可调节列数",
     "appearance.show_online_count" to "在视频卡片和视频页显示“xx 人正在看”；关闭后隐藏卡片和视频页的同时观看人数",
     "appearance.show_pgc_timeline" to "番剧与影视页显示最近更新时间表",

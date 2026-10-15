@@ -38,6 +38,9 @@ internal fun resolveColorSpecOptions(): List<AppSegmentOption<ColorSpec.SpecVers
 internal fun shouldShowMd3CustomColorControls(source: Md3ColorSource): Boolean =
     source == Md3ColorSource.CUSTOM
 
+internal fun shouldShowMd3PaletteStyleControls(source: Md3ColorSource): Boolean =
+    source != Md3ColorSource.FOLLOW_WALLPAPER
+
 internal fun resolveAdvancedPaletteSubtitle(uiStyle: AppUiStyle): String =
     if (uiStyle == AppUiStyle.MIUIX) {
         "已保留配置，仅切换到 Material 3 后生效"
@@ -48,6 +51,7 @@ internal fun resolveAdvancedPaletteSubtitle(uiStyle: AppUiStyle): String =
 internal fun resolveMd3ColorSourceOptions(): List<AppSegmentOption<Md3ColorSource>> {
     return listOf(
         AppSegmentOption(Md3ColorSource.FOLLOW_WALLPAPER, Md3ColorSource.FOLLOW_WALLPAPER.label),
+        AppSegmentOption(Md3ColorSource.WALLPAPER_RETONED, Md3ColorSource.WALLPAPER_RETONED.label),
         AppSegmentOption(Md3ColorSource.CUSTOM, Md3ColorSource.CUSTOM.label)
     )
 }

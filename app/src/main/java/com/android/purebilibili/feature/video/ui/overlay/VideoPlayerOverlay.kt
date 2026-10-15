@@ -76,6 +76,7 @@ import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.PagesSelector
 import com.android.purebilibili.feature.video.ui.components.resolveCurrentUgcEpisodeLazyListIndex
 import com.android.purebilibili.feature.video.ui.components.LandscapeSidePanel
+import com.android.purebilibili.feature.video.ui.components.landscapeControlCenterGroup
 import com.android.purebilibili.feature.video.ui.components.landscapeEndDrawerPadding
 import com.android.purebilibili.feature.video.ui.components.LandscapeSidePanelEdge
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
@@ -2938,6 +2939,7 @@ fun LandscapeEndDrawer(
                 edge = LandscapeSidePanelEdge.End,
                 width = layoutPolicy.drawerWidthDp.dp,
                 closeProgress = closeProgress,
+                enableControlCenterMotion = true,
                 onDismiss = onDismiss,
                 modifier = Modifier.fillMaxHeight(),
             ) { requestDismiss ->
@@ -2966,6 +2968,7 @@ fun LandscapeEndDrawer(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .landscapeControlCenterGroup(index = 0)
                             .padding(layoutPolicy.headerPaddingDp.dp)
                     ) {
                         // Row 1: UP主头像、名字、关注按钮
@@ -3044,6 +3047,7 @@ fun LandscapeEndDrawer(
                             onSelectionChange = { selectedTab = it },
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .landscapeControlCenterGroup(index = 1)
                                 .padding(horizontal = layoutPolicy.listContentPaddingDp.dp),
                             labelFontSize = layoutPolicy.followButtonFontSp.sp,
                             dragSelectionEnabled = false,
@@ -3054,12 +3058,13 @@ fun LandscapeEndDrawer(
                             text = "推荐视频",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(layoutPolicy.listContentPaddingDp.dp)
+                            modifier = Modifier.landscapeControlCenterGroup(index = 1)
+                                .padding(layoutPolicy.listContentPaddingDp.dp)
                         )
                     }
 
                     // 3. 列表内容
-                    Box(modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.weight(1f).landscapeControlCenterGroup(index = 2)) {
                         if (selectedTab == 0) {
                             // 推荐视频列表（滚动位置跨抽屉开关保留）
                             val relatedListState = rememberSaveable(

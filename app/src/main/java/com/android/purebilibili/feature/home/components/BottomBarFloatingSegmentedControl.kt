@@ -123,7 +123,8 @@ internal fun BottomBarFloatingSegmentedControl(
     val itemCount = items.size
     val maxTabIndex = (itemCount - 1).coerceAtLeast(0)
     val safeSelectedIndex = selectedIndex.coerceIn(0, maxTabIndex)
-    val selectedTextColor = selectedTextColorOverride ?: AppContentColors.accent()
+    val selectedTextColor = selectedTextColorOverride
+        ?: AppContentColors.selectionAccent(liquidGlassEnabled)
     // 液态玻璃模式下与首页底栏保持一致，使用纯净中性玻璃材质，不走主题色
     val themedIndicatorSurface = indicatorIdleSurfaceColorOverride
     val unselectedTextColor = unselectedTextColorOverride

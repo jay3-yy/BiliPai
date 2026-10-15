@@ -18,6 +18,14 @@ class AppSurfaceTokensTest {
     )
 
     @Test
+    fun pageBackground_preservesMaterialPalette() {
+        assertEquals(scheme.background, AppSurfaceTokens.resolveBackground(scheme))
+        assertEquals(scheme.background, AppSurfaceTokens.resolveGroupedListContainer(scheme))
+        assertEquals(scheme.background, AppSurfaceTokens.resolveChromeBackground(scheme))
+        assertEquals(scheme.surfaceContainer, AppSurfaceTokens.resolveCardContainer(scheme))
+    }
+
+    @Test
     fun cardContainer_returnsSurfaceContainer() {
         val color = AppSurfaceTokens.resolveCardContainer(scheme)
         assertEquals(Color(0xFFEEEEEE), color)

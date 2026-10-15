@@ -589,6 +589,9 @@ class TopTabStylePolicyTest {
     fun `ios top tab icon modes use readable glyph sizes`() {
         assertEquals(18f, resolveTopTabIconSizeDp(labelMode = 0), 0.001f)
         assertEquals(18f, resolveTopTabIconSizeDp(labelMode = 1), 0.001f)
+        assertEquals(24f, resolveHomeTopDockIconSizeDp(labelMode = 1, liquidGlassEnabled = false), 0.001f)
+        assertEquals(18f, resolveHomeTopDockIconSizeDp(labelMode = 1, liquidGlassEnabled = true), 0.001f)
+        assertEquals(18f, resolveHomeTopDockIconSizeDp(labelMode = 0, liquidGlassEnabled = false), 0.001f)
         assertEquals(6f, resolveTopTabIconTextSpacingDp(labelMode = 0), 0.001f)
         // Must match compact chrome track (HomeTopPresetStyle 32/36) or labels clip to "...".
         assertEquals(32.dp, resolveIosTopTabRowHeight(isFloatingStyle = false))

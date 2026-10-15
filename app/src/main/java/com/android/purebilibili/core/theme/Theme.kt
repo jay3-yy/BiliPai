@@ -22,9 +22,8 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -142,19 +141,23 @@ internal fun resolveMd3DynamicColorEnabled(
     source: Md3ColorSource,
     sdkInt: Int
 ): Boolean {
-    return source == Md3ColorSource.FOLLOW_WALLPAPER && sdkInt >= Build.VERSION_CODES.S
+    return source != Md3ColorSource.CUSTOM && sdkInt >= Build.VERSION_CODES.S
 }
 
 internal fun resolveMd3ThemeSeedColor(
     source: Md3ColorSource,
     customColorHex: String,
-    themeColorIndex: Int
+    themeColorIndex: Int,
+    wallpaperSeed: Color? = null,
 ): Color {
     return when (source) {
         Md3ColorSource.FOLLOW_WALLPAPER -> ThemeColors.getOrElse(
             normalizeThemeColorIndex(themeColorIndex)
         ) { iOSSystemBlue }
         Md3ColorSource.CUSTOM -> parseMd3CustomColorHex(customColorHex)
+        Md3ColorSource.WALLPAPER_RETONED -> wallpaperSeed ?: ThemeColors.getOrElse(
+            normalizeThemeColorIndex(themeColorIndex)
+        ) { iOSSystemBlue }
     }
 }
 
@@ -399,6 +402,7 @@ internal fun resolveNativeMiuixColors(
 internal fun alignMaterialSurfacesWithMiuix(
     scheme: ColorScheme,
     colors: top.yukonga.miuix.kmp.theme.Colors,
+    preserveMaterialAccentRoles: Boolean = false,
 ): ColorScheme {
     val isDark = colors.background.luminance() < 0.5f
     return scheme.copy(
@@ -408,12 +412,12 @@ internal fun alignMaterialSurfacesWithMiuix(
         onPrimaryFixed = colors.onPrimaryVariant,
         primaryContainer = colors.primaryContainer,
         onPrimaryContainer = colors.onPrimaryContainer,
-        secondary = colors.secondary,
-        onSecondary = colors.onSecondary,
+        secondary = if (preserveMaterialAccentRoles) scheme.secondary else colors.secondary,
+        onSecondary = if (preserveMaterialAccentRoles) scheme.onSecondary else colors.onSecondary,
         secondaryContainer = colors.secondaryContainer,
         onSecondaryContainer = colors.onSecondaryContainer,
-        tertiary = colors.primary,
-        onTertiary = colors.onPrimary,
+        tertiary = if (preserveMaterialAccentRoles) scheme.tertiary else colors.primary,
+        onTertiary = if (preserveMaterialAccentRoles) scheme.onTertiary else colors.onPrimary,
         tertiaryContainer = colors.tertiaryContainer,
         onTertiaryContainer = colors.onTertiaryContainer,
         error = colors.error,
@@ -829,6 +833,8 @@ fun PureBiliBiliTheme(
     },
     md3CustomColorHex: String = "#007AFF",
     themeRoleOverrides: ThemeRoleOverrides = ThemeRoleOverrides(),
+    wallpaperPaletteOverrides: com.android.purebilibili.core.store.WallpaperPaletteOverrides =
+        com.android.purebilibili.core.store.WallpaperPaletteOverrides(),
     colorStyle: PaletteStyle = PaletteStyle.TonalSpot,
     colorSpec: ColorSpec.SpecVersion = ColorSpec.SpecVersion.SPEC_2025,
     fontSizePreset: AppFontSizePreset = AppFontSizePreset.DEFAULT,
@@ -837,16 +843,10 @@ fun PureBiliBiliTheme(
     appIconStyle: AppIconStyle = AppIconStyle.AUTO,
     appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     liquidGlassEnabled: Boolean = true,
+    themeTransitionEnabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
-
-    //  获取 MD3 主题种子色。跟随壁纸时仍保留旧预设色作为非 S 设备后备。
-    val customPrimaryColor = resolveMd3ThemeSeedColor(
-        source = md3ColorSource,
-        customColorHex = md3CustomColorHex,
-        themeColorIndex = themeColorIndex
-    )
 
     val isDynamicColorActive = resolveEffectiveDynamicColorEnabled(
         dynamicColorEnabled = resolveMd3DynamicColorEnabled(
@@ -875,19 +875,36 @@ fun PureBiliBiliTheme(
             .withFontWeight(appFontWeightPreset.fontWeight)
     }
     val systemWallpaperRefreshToken = rememberSystemWallpaperRefreshToken(isDynamicColorActive)
+    val customPrimaryColor = remember(
+        context, md3ColorSource, md3CustomColorHex, themeColorIndex, systemWallpaperRefreshToken,
+    ) {
+        resolveMd3ThemeSeedColor(
+            source = md3ColorSource,
+            customColorHex = md3CustomColorHex,
+            themeColorIndex = themeColorIndex,
+            wallpaperSeed = if (md3ColorSource == Md3ColorSource.WALLPAPER_RETONED) {
+                readSystemWallpaperSeed(context)
+            } else null,
+        )
+    }
     val dynamicLightBaseScheme = if (
+        md3ColorSource == Md3ColorSource.FOLLOW_WALLPAPER &&
         isDynamicColorActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     ) {
-        key(systemWallpaperRefreshToken) {
+        // key() only groups composition; it does not cache these resource-backed
+        // palettes. A new ColorScheme on each theme frame changes the transition
+        // endpoint by identity and can keep the entire app recomposing indefinitely.
+        remember(context, systemWallpaperRefreshToken) {
             dynamicLightColorScheme(context)
         }
     } else {
         null
     }
     val dynamicDarkBaseScheme = if (
+        md3ColorSource == Md3ColorSource.FOLLOW_WALLPAPER &&
         isDynamicColorActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     ) {
-        key(systemWallpaperRefreshToken) {
+        remember(context, systemWallpaperRefreshToken) {
             dynamicDarkColorScheme(context)
         }
     } else {
@@ -921,85 +938,114 @@ fun PureBiliBiliTheme(
             enableThemeRoleOverrides(effective, baseThemeRoleOverrides, md3CustomColorHex)
         } else effective
     }
-    val resolvedLightMaterialScheme = remember(lightMaterialScheme, effectiveThemeRoleOverrides, colorStyle, colorSpec) {
-        applyThemeRoleOverrides(
+    val resolvedLightMaterialScheme = remember(
+        lightMaterialScheme, effectiveThemeRoleOverrides, colorStyle, colorSpec,
+        liquidGlassEnabled, md3ColorSource, customPrimaryColor,
+    ) {
+        val overridden = applyThemeRoleOverrides(
             lightMaterialScheme, effectiveThemeRoleOverrides, darkTheme = false,
             paletteStyle = colorStyle, colorSpec = colorSpec,
         )
+        alignLiquidAccentColorScheme(
+            scheme = overridden,
+            accent = resolveLiquidControlAccentColor(
+                source = md3ColorSource,
+                customSeed = customPrimaryColor,
+                generatedAccent = overridden.primary,
+                roleOverridesEnabled = effectiveThemeRoleOverrides.enabled,
+                roleControlHex = effectiveThemeRoleOverrides.light.controlAccentHex,
+            ),
+            liquidGlassEnabled = liquidGlassEnabled,
+            source = md3ColorSource,
+        )
     }
-    val resolvedDarkMaterialScheme = remember(darkMaterialScheme, effectiveThemeRoleOverrides, colorStyle, colorSpec) {
-        applyThemeRoleOverrides(
+    val resolvedDarkMaterialScheme = remember(
+        darkMaterialScheme, effectiveThemeRoleOverrides, colorStyle, colorSpec,
+        liquidGlassEnabled, md3ColorSource, customPrimaryColor,
+    ) {
+        val overridden = applyThemeRoleOverrides(
             darkMaterialScheme, effectiveThemeRoleOverrides, darkTheme = true,
             paletteStyle = colorStyle, colorSpec = colorSpec,
         )
-    }
-    val staticMaterialScheme = if (darkTheme) resolvedDarkMaterialScheme else resolvedLightMaterialScheme
-    // Liquid glass changes chrome rendering, not the app's base palette. Keep Miuix's
-    // native light-gray surfaces stable when the effect is toggled on or off.
-    val useNativeMiuix = shouldUseNativeMiuixPalette(uiStyle)
-    val miuixLightColors = remember(resolvedLightMaterialScheme, useNativeMiuix) {
-        if (useNativeMiuix) {
-            resolveNativeMiuixColors(
-                resolvedLightMaterialScheme,
-                darkTheme = false,
-            )
-        } else {
-            resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(resolvedLightMaterialScheme), false)
-        }
-    }
-    val miuixDarkColors = remember(resolvedDarkMaterialScheme, useNativeMiuix, amoledDarkTheme) {
-        if (useNativeMiuix) {
-            resolveNativeMiuixColors(
-                resolvedDarkMaterialScheme,
-                darkTheme = true,
-                amoledDarkTheme = amoledDarkTheme,
-            )
-        } else {
-            resolveMiuixColorsFromMaterialBridge(createMiuixMaterialBridge(resolvedDarkMaterialScheme), true)
-        }
-    }
-    val controller = remember(
-        themeMode,
-        dynamicColor,
-        darkTheme,
-        customPrimaryColor,
-        themeRoleOverrides,
-        amoledDarkTheme,
-        colorStyle,
-        colorSpec,
-        systemWallpaperRefreshToken,
-        miuixLightColors,
-        miuixDarkColors
-    ) {
-        ThemeController(
-            colorSchemeMode = resolveMiuixColorSchemeMode(
-                themeMode = themeMode,
-                dynamicColorEnabled = dynamicColor
+        alignLiquidAccentColorScheme(
+            scheme = overridden,
+            accent = resolveLiquidControlAccentColor(
+                source = md3ColorSource,
+                customSeed = customPrimaryColor,
+                generatedAccent = overridden.primary,
+                roleOverridesEnabled = effectiveThemeRoleOverrides.enabled,
+                roleControlHex = effectiveThemeRoleOverrides.dark.controlAccentHex,
             ),
-            lightColors = miuixLightColors,
-            darkColors = miuixDarkColors,
-            isDark = darkTheme
+            liquidGlassEnabled = liquidGlassEnabled,
+            source = md3ColorSource,
         )
     }
-    val activeMiuixColors = if (darkTheme) miuixDarkColors else miuixLightColors
-    val materialColorScheme = remember(staticMaterialScheme, useNativeMiuix, activeMiuixColors) {
-        if (useNativeMiuix) alignMaterialSurfacesWithMiuix(staticMaterialScheme, activeMiuixColors)
-        else staticMaterialScheme
+    val lightEndpointPalette = remember(
+        resolvedLightMaterialScheme, uiStyle, md3ColorSource, amoledDarkTheme,
+        wallpaperPaletteOverrides, customPrimaryColor, effectiveThemeRoleOverrides,
+    ) {
+        resolveAppThemeEndpointPalette(
+            base = resolvedLightMaterialScheme,
+            uiStyle = uiStyle,
+            source = md3ColorSource,
+            darkTheme = false,
+            amoledDarkTheme = false,
+            wallpaperOverrides = wallpaperPaletteOverrides,
+            customSeed = customPrimaryColor,
+            roleOverrides = effectiveThemeRoleOverrides,
+        )
+    }
+    val darkEndpointPalette = remember(
+        resolvedDarkMaterialScheme, uiStyle, md3ColorSource, amoledDarkTheme,
+        wallpaperPaletteOverrides, customPrimaryColor, effectiveThemeRoleOverrides,
+    ) {
+        resolveAppThemeEndpointPalette(
+            base = resolvedDarkMaterialScheme,
+            uiStyle = uiStyle,
+            source = md3ColorSource,
+            darkTheme = true,
+            amoledDarkTheme = amoledDarkTheme,
+            wallpaperOverrides = wallpaperPaletteOverrides,
+            customSeed = customPrimaryColor,
+            roleOverrides = effectiveThemeRoleOverrides,
+        )
+    }
+    // Only immutable settings/resource endpoints enter the transition. Animated frame
+    // palettes flow down to components and never become new generation inputs.
+    val targetPalette = if (darkTheme) darkEndpointPalette else lightEndpointPalette
+    val reduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion()
+    val animatedPalette = rememberAnimatedAppThemePalette(
+        target = targetPalette,
+        enabled = themeTransitionEnabled && !reduceMotion,
+    )
+    val materialColorScheme = animatedPalette.material
+    val colorSchemeMode = resolveMiuixColorSchemeMode(themeMode, dynamicColor)
+    val controller = remember(colorSchemeMode, animatedPalette.miuix, darkTheme) {
+        // Both modes expose the already resolved active frame. Letting the controller
+        // choose an unanimated endpoint would desynchronize native Miuix and Material.
+        ThemeController(
+            colorSchemeMode = colorSchemeMode,
+            lightColors = animatedPalette.miuix,
+            darkColors = animatedPalette.miuix,
+            isDark = darkTheme,
+        )
     }
 
     //  [新增] 动态设置状态栏图标颜色
     val view = LocalView.current
+    val themeDefaultLightBars = materialColorScheme.background.luminance() > 0.5f
     if (!view.isInEditMode) {
-        SideEffect {
-            val window = view.context.findHostActivity()?.window ?: return@SideEffect
+        // Apply only when the brightness boundary changes. Reapplying on every color
+        // frame would overwrite player/immersive pages that own their system-bar style.
+        LaunchedEffect(view, themeDefaultLightBars) {
+            val window = view.context.findHostActivity()?.window ?: return@LaunchedEffect
             val controller = WindowCompat.getInsetsController(window, view)
             // 设置状态栏图标颜色：
             // - 深色模式：使用浅色图标 (isAppearanceLightStatusBars = false)
             // - 浅色模式：使用深色图标 (isAppearanceLightStatusBars = true)
             // 这里是主题默认外观的兜底出口；有场景外观的页面（首页皮肤、视频沉浸等）
-            // 会在自己的 effect 中覆盖。仅在当前值与主题默认不一致时写入，
-            // 避免每次重组都重复设置与页面 effect 形成无谓竞争。
-            val themeDefaultLightBars = !darkTheme
+            // 会在自己的 effect 中覆盖。仅在明暗边界变化时更新主题默认值，
+            // 避免逐帧配色更新与页面 effect 争抢状态栏外观。
             if (controller.isAppearanceLightStatusBars != themeDefaultLightBars) {
                 controller.isAppearanceLightStatusBars = themeDefaultLightBars
             }
@@ -1010,14 +1056,7 @@ fun PureBiliBiliTheme(
         LocalAppUiStyle provides uiStyle,
         LocalDynamicColorActive provides isDynamicColorActive,
         LocalBaseThemeRoleOverrides provides baseThemeRoleOverrides,
-        com.android.purebilibili.core.ui.LocalLiquidControlThemeColor provides resolveLiquidControlAccentColor(
-            source = md3ColorSource,
-            customSeed = customPrimaryColor,
-            generatedAccent = materialColorScheme.primary,
-            roleOverridesEnabled = effectiveThemeRoleOverrides.enabled,
-            roleControlHex = if (darkTheme) effectiveThemeRoleOverrides.dark.controlAccentHex
-                else effectiveThemeRoleOverrides.light.controlAccentHex,
-        ),
+        com.android.purebilibili.core.ui.LocalLiquidControlThemeColor provides animatedPalette.liquidAccent,
         LocalAppIconStyle provides resolveAppIconStyle(
             iconStyle = appIconStyle,
             uiStyle = uiStyle

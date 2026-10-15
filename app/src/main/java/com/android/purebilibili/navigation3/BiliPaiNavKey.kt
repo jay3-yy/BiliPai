@@ -225,9 +225,10 @@ internal sealed interface BiliPaiNavKey : NavKey {
 
     @Serializable
     data class Following(
-        val mid: Long
+        val mid: Long,
+        val fans: Boolean = false,
     ) : BiliPaiNavKey {
-        override val routeBase: String = "following"
+        override val routeBase: String = if (fans) "fans" else "following"
     }
 
     @Serializable
