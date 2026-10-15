@@ -18,7 +18,13 @@ import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.feature.message.MessagePreviewParser
 import com.android.purebilibili.navigation.ScreenRoutes
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.withLock
 
@@ -80,6 +86,12 @@ private data class DynamicNotificationCandidates(
     val previews: List<DynamicItem>,
 )
 
+private data class DynamicUpScanResult(
+    val baseline: String?,
+    val candidates: DynamicNotificationCandidates? = null,
+    val shouldRetry: Boolean = false,
+)
+
 private class NotificationSessionChanged : Exception()
 
 internal class MessageNotificationPoller(
@@ -87,10 +99,52 @@ internal class MessageNotificationPoller(
     private val ensureSession: () -> Unit = {},
 ) {
     private suspend fun <T> fetch(block: suspend () -> T): T {
+        currentCoroutineContext().ensureActive()
         ensureSession()
         val result = block()
+        currentCoroutineContext().ensureActive()
         ensureSession()
         return result
+    }
+
+    private suspend fun scanDynamicUp(mid: Long, previousBaseline: String?, selfMid: Long): DynamicUpScanResult = try {
+        val initializing = previousBaseline == null
+        val baseline = previousBaseline.orEmpty()
+        var newest = baseline
+        var offset = ""
+        var pageNumber = 1
+        val offsets = hashSetOf("")
+        val seen = hashSetOf<String>()
+        val previews = ArrayList<DynamicItem>(MAX_DYNAMIC_NOTIFICATION_PREVIEWS)
+        val ids = ArrayList<String>()
+        while (true) {
+            val page = fetch { source.personalDynamicFeed(mid, offset, pageNumber) }
+            var lastRegularId: String? = null
+            for (item in page.items) {
+                if (item.type == "DYNAMIC_TYPE_AD" || item.type == "DYNAMIC_TYPE_BANNER" ||
+                    item.type == "0" || item.type == "5" || item.id_str.isBlank()) continue
+                if (isNewerDynamicNotificationId(item.id_str, newest)) newest = item.id_str
+                if (item.modules.module_tag?.text != "置顶") lastRegularId = item.id_str
+                if (!initializing && isNewerDynamicNotificationId(item.id_str, baseline) &&
+                    seen.add(item.id_str) && item.modules.module_author?.mid == mid &&
+                    shouldNotifyDynamicItem(item, selfMid)) {
+                    ids += item.id_str
+                    addNewestDynamicNotificationPreview(previews, item)
+                }
+            }
+            if (initializing || !page.hasMore ||
+                (lastRegularId != null && !isNewerDynamicNotificationId(lastRegularId, baseline))) break
+            check(page.offset.isNotBlank() && offsets.add(page.offset)) { "动态预加载分页未推进" }
+            offset = page.offset
+            pageNumber++
+        }
+        DynamicUpScanResult(newest, if (ids.isEmpty()) null else DynamicNotificationCandidates(ids, previews))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: NotificationSessionChanged) {
+        throw e
+    } catch (e: Exception) {
+        DynamicUpScanResult(null, shouldRetry = e is IOException)
     }
 
     private suspend fun dynamicFollowingUsers(selfMid: Long): Map<Long, FollowingUser> {
@@ -265,47 +319,48 @@ internal class MessageNotificationPoller(
             val baselines = LinkedHashMap(retained)
             val freshByUp = LinkedHashMap<Long, DynamicNotificationCandidates>()
             var complete = true
-            for (mid in users.keys) {
-                if (!scanAll && mid in retained) continue
-                val success = category(null) {
-                    val initializing = mid !in retained
-                    val baseline = retained[mid].orEmpty()
-                    var newest = baseline
-                    var offset = ""
-                    var pageNumber = 1
-                    val offsets = hashSetOf("")
-                    val seen = hashSetOf<String>()
-                    val hostPreviews = ArrayList<DynamicItem>(MAX_DYNAMIC_NOTIFICATION_PREVIEWS)
-                    val hostPendingIds = ArrayList<String>()
-                    while (true) {
-                        val page = fetch { source.personalDynamicFeed(mid, offset, pageNumber) }
-                        var lastRegularId: String? = null
-                        for (item in page.items) {
-                            if (item.type == "DYNAMIC_TYPE_AD" || item.type == "DYNAMIC_TYPE_BANNER" ||
-                                item.type == "0" || item.type == "5" || item.id_str.isBlank()) continue
-                            if (isNewerDynamicNotificationId(item.id_str, newest)) newest = item.id_str
-                            if (item.modules.module_tag?.text != "置顶") lastRegularId = item.id_str
-                            if (!initializing && isNewerDynamicNotificationId(item.id_str, baseline) &&
-                                seen.add(item.id_str) && item.modules.module_author?.mid == mid &&
-                                shouldNotifyDynamicItem(item, selfMid)) {
-                                hostPendingIds += item.id_str
-                                addNewestDynamicNotificationPreview(hostPreviews, item)
+            val targets = when {
+                scanAll -> users.keys.toList()
+                retained.size == users.size -> emptyList()
+                else -> users.keys.filterNot { it in retained }
+            }
+            if (targets.isNotEmpty()) {
+                val nextIndex = AtomicInteger()
+                val scans = arrayOfNulls<DynamicUpScanResult>(targets.size)
+                coroutineScope {
+                    // Fixed workers avoid allocating one coroutine per followed UP. Each UP owns
+                    // its entire sequential page scan; transaction state is untouched until join.
+                    repeat(minOf(MAX_DYNAMIC_NOTIFICATION_CONCURRENCY, targets.size)) {
+                        launch {
+                            try {
+                                while (true) {
+                                    ensureActive()
+                                    val index = nextIndex.getAndIncrement()
+                                    if (index >= targets.size) break
+                                    val mid = targets[index]
+                                    scans[index] = scanDynamicUp(mid, retained[mid], selfMid)
+                                }
+                            } catch (e: CancellationException) {
+                                // A child cancellation alone does not cancel a launch-based scope.
+                                this@coroutineScope.cancel(e)
+                                throw e
                             }
                         }
-                        // IDs are local publish baselines, not server read progress.
-                        if (initializing || !page.hasMore ||
-                            (lastRegularId != null && !isNewerDynamicNotificationId(lastRegularId, baseline))) break
-                        check(page.offset.isNotBlank() && offsets.add(page.offset)) { "动态预加载分页未推进" }
-                        offset = page.offset
-                        pageNumber++
-                    }
-                    // Only a complete new range may advance this UP; other UPs can still succeed.
-                    baselines[mid] = newest
-                    if (hostPendingIds.isNotEmpty()) {
-                        freshByUp[mid] = DynamicNotificationCandidates(hostPendingIds, hostPreviews)
                     }
                 }
-                if (!success) complete = false
+                // All writers have joined. Merge in following-list order, never completion order.
+                for (index in targets.indices) {
+                    val mid = targets[index]
+                    val scan = checkNotNull(scans[index])
+                    val baseline = scan.baseline
+                    if (baseline == null) {
+                        complete = false
+                        if (scan.shouldRetry) shouldRetry = true
+                    } else {
+                        baselines[mid] = baseline
+                        scan.candidates?.let { freshByUp[mid] = it }
+                    }
+                }
             }
 
             // Query after scanning content: an earlier false snapshot must not suppress a later post.
