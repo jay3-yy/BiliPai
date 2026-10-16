@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,6 +24,17 @@ import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.feature.video.screen.VideoContentSection
+import com.android.purebilibili.feature.video.screen.VideoContentData
+import com.android.purebilibili.feature.video.screen.VideoContentEngagementState
+import com.android.purebilibili.feature.video.screen.VideoContentCommentState
+import com.android.purebilibili.feature.video.screen.VideoContentNoteState
+import com.android.purebilibili.feature.video.screen.VideoContentPresentationState
+import com.android.purebilibili.feature.video.screen.VideoContentPrimaryActions
+import com.android.purebilibili.feature.video.screen.VideoContentCommentActions
+import com.android.purebilibili.feature.video.screen.VideoContentNoteActions
+import com.android.purebilibili.feature.video.screen.VideoContentUiActions
+import com.android.purebilibili.feature.video.note.VideoNoteUiState
+import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
@@ -47,44 +60,135 @@ class VideoContentDanmakuSettingsUiRegressionTest {
                         .background(Color.Black)
                 ) {
                     VideoContentSection(
-                        info = ViewInfo(
-                            bvid = "BV_TEST",
-                            title = "UI regression",
-                            desc = "verify danmaku settings overlay layering",
-                            owner = Owner(mid = 1L, name = "Tester"),
-                            stat = Stat(view = 10, reply = 1)
+                        data = VideoContentData(
+                            info = ViewInfo(
+                                bvid = "BV_TEST",
+                                title = "UI regression",
+                                desc = "verify danmaku settings overlay layering",
+                                owner = Owner(mid = 1L, name = "Tester"),
+                                stat = Stat(view = 10, reply = 1),
+                            ),
+                            introListState = rememberLazyListState(),
+                            commentListState = rememberLazyListState(),
+                            pagerState = rememberPagerState { 2 },
+                            relatedVideos = listOf(
+                                RelatedVideo(
+                                    bvid = "BV_RELATED",
+                                    title = relatedTitle,
+                                    owner = Owner(mid = 2L, name = "Related UP"),
+                                    stat = Stat(view = 12, reply = 2),
+                                )
+                            ),
+                            replies = emptyList(),
+                            replyCount = 0,
+                            emoteMap = emptyMap(),
+                            followingMids = emptySet(),
+                            videoTags = emptyList(),
+                            bgmInfo = null,
+                            bgmInfoList = emptyList(),
                         ),
-                        relatedVideos = listOf(
-                            RelatedVideo(
-                                bvid = "BV_RELATED",
-                                title = relatedTitle,
-                                owner = Owner(mid = 2L, name = "Related UP"),
-                                stat = Stat(view = 12, reply = 2)
-                            )
+                        engagementState = VideoContentEngagementState(
+                            isLoggedIn = false,
+                            isFollowing = false,
+                            isFavorited = false,
+                            isLiked = false,
+                            coinCount = 0,
+                            currentPageIndex = 0,
+                            downloadProgress = 0f,
+                            isInWatchLater = false,
                         ),
-                        replies = emptyList(),
-                        replyCount = 0,
-                        emoteMap = emptyMap(),
-                        isRepliesLoading = false,
-                        isFollowing = false,
-                        isFavorited = false,
-                        isLiked = false,
-                        coinCount = 0,
-                        currentPageIndex = 0,
-                        onFollowClick = {},
-                        onFavoriteClick = {},
-                        onLikeClick = {},
-                        onCoinClick = {},
-                        onTripleClick = {},
-                        onPageSelect = {},
-                        onUpClick = {},
-                        onRelatedVideoClick = { bvid, bundle ->
-                            clickedBvid = bvid
-                            clickedBundle = bundle
-                        },
-                        onSubReplyClick = {},
-                        onLoadMoreReplies = {},
-                        showInteractionActions = false
+                        commentState = VideoContentCommentState(
+                            isRepliesLoading = false,
+                            isRepliesRefreshing = false,
+                            repliesError = null,
+                            isRepliesEnd = true,
+                            voteCard = null,
+                            sortMode = CommentSortMode.HOT,
+                            currentMid = 0L,
+                            showUpFlag = false,
+                            showIdentityDecorations = false,
+                            dissolvingIds = emptySet(),
+                            likedComments = emptySet(),
+                            hatedComments = emptySet(),
+                        ),
+                        noteState = VideoContentNoteState(
+                            aiSummary = null,
+                            aiSummaryPrompt = null,
+                            videoNoteState = VideoNoteUiState(),
+                        ),
+                        presentationState = VideoContentPresentationState(
+                            sponsorVideoLabel = "",
+                            danmakuEnabled = true,
+                            transitionEnabled = false,
+                            isQuickReturnLimitedForSharedElements = false,
+                            sourceRouteForSharedElement = null,
+                            isPlayerCollapsed = false,
+                            onlineCount = "",
+                            showOnlineCount = false,
+                            ownerFollowerCount = null,
+                            ownerVideoCount = null,
+                            showUpBadge = false,
+                            showInteractionActions = false,
+                            isVideoPlaying = false,
+                            bottomContentPadding = 0.dp,
+                        ),
+                        primaryActions = VideoContentPrimaryActions(
+                            onFollowClick = {},
+                            onFavoriteClick = {},
+                            onLikeClick = {},
+                            onCoinClick = {},
+                            onTripleClick = {},
+                            onPageSelect = {},
+                            onUpClick = {},
+                            onRelatedVideoClick = { bvid, bundle ->
+                                clickedBvid = bvid
+                                clickedBundle = bundle
+                            },
+                            onDownloadClick = {},
+                            onWatchLaterClick = {},
+                            onShareClick = {},
+                            onTimestampClick = null,
+                            onDanmakuSendClick = {},
+                            onDanmakuToggle = {},
+                            onFavoriteLongClick = {},
+                            onBgmClick = {},
+                        ),
+                        commentActions = VideoContentCommentActions(
+                            onSortModeChange = {},
+                            onSubReplyClick = { _, _ -> },
+                            onCommentReplyClick = {},
+                            onLoadMoreReplies = {},
+                            onRefreshReplies = {},
+                            onDeleteComment = {},
+                            onDissolveStart = {},
+                            onCommentLike = {},
+                            onCommentHate = {},
+                            onCommentUrlClick = {},
+                            onDescriptionUrlClick = null,
+                            onSearchKeywordClick = {},
+                            onReportComment = { _, _ -> },
+                            onToggleTopComment = {},
+                            onCheckCommentFraud = {},
+                        ),
+                        noteActions = VideoContentNoteActions(
+                            onRetryAiSummary = {},
+                            onCreateNoteDraftFromAiSummary = {},
+                            onOpenVideoNoteEditor = {},
+                            onCloseVideoNoteEditor = {},
+                            onVideoNoteDocumentChange = {},
+                            onInsertVideoNoteTimestamp = { null },
+                            onVideoNoteTimestampClick = {},
+                            onSaveVideoNote = {},
+                            onDeleteVideoNote = {},
+                            onRetryVideoNote = {},
+                            onLoadMorePublicVideoNotes = {},
+                            onPublicVideoNoteClick = { _, _ -> },
+                        ),
+                        uiActions = VideoContentUiActions(
+                            onSelectedTabChange = {},
+                            onIntroScrollThresholdChange = {},
+                            onCommentScrollStateChange = { _, _ -> },
+                        ),
                     )
                 }
             }

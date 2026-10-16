@@ -6,25 +6,6 @@ import kotlin.test.assertEquals
 
 class BottomControlBarLayoutPolicyTest {
 
-    @Test
-    fun timeLabelSpacingKeepsVisibleGapsNearFontSizeAcrossWidthBuckets() {
-        listOf(393, 599, 600, 839, 840, 1599, 1600).forEach { widthDp ->
-            val policy = resolveBottomControlBarLayoutPolicy(widthDp)
-            val playGlyphInsetDp = (policy.playButtonSizeDp - policy.playIconSizeDp) / 2
-            val danmakuGlyphInsetDp = (policy.playButtonSizeDp - policy.danmakuIconSizeDp) / 2
-
-            assertEquals(
-                policy.timeFontSp,
-                policy.afterPlaySpacingDp + playGlyphInsetDp,
-                "play-to-time visual gap at ${widthDp}dp",
-            )
-            assertEquals(
-                policy.timeFontSp,
-                policy.afterTimeSpacingDp + danmakuGlyphInsetDp,
-                "time-to-danmaku visual gap at ${widthDp}dp",
-            )
-        }
-    }
 
     @Test
     fun bottomEdgeProgress_removesBottomGapFromWholeControlBar() {

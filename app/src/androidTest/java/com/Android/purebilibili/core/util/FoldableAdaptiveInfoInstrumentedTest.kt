@@ -9,7 +9,6 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.window.layout.FoldingFeature.OcclusionType.Companion.FULL
 import androidx.window.layout.FoldingFeature.Orientation.Companion.HORIZONTAL
 import androidx.window.layout.FoldingFeature.Orientation.Companion.VERTICAL
 import androidx.window.layout.FoldingFeature.State.Companion.FLAT
@@ -117,14 +116,12 @@ class FoldableAdaptiveInfoInstrumentedTest {
                         state = FLAT,
                         orientation = VERTICAL,
                         size = 24,
-                        occlusionType = FULL,
                     ),
                     FoldingFeature(
                         activity = composeRule.activity,
                         state = FLAT,
                         orientation = VERTICAL,
                         size = 24,
-                        occlusionType = FULL,
                     ),
                 )
             )

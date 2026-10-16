@@ -19,6 +19,7 @@ import com.android.purebilibili.feature.dynamic.components.DynamicSubReplyPrevie
 import com.android.purebilibili.feature.dynamic.components.IMAGE_PREVIEW_PAGE_TAG
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewOverlayHost
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
+import kotlinx.collections.immutable.persistentListOf
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -60,7 +61,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                                     )
                                 )
                             ),
-                            items = listOf(
+                            items = persistentListOf(
                                 ReplyItem(
                                     rpid = 2L,
                                     mid = 3L,
@@ -133,7 +134,7 @@ class DynamicSubReplyImagePreviewUiRegressionTest {
                                     )
                                 )
                             ),
-                            items = listOf(
+                            items = persistentListOf(
                                 ReplyItem(
                                     rpid = 2L,
                                     mid = 3L,

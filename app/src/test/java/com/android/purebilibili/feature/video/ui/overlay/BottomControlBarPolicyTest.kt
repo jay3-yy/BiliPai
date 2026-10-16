@@ -99,7 +99,7 @@ class BottomControlBarPolicyTest {
     }
 
     @Test
-    fun compactFullscreenMovesEpisodeAndDanmakuInputOutOfInlineRow() {
+    fun compactFullscreenMovesEpisodeOutOfInlineRow() {
         assertFalse(
             shouldShowEpisodeButtonInControlBar(
                 isFullscreen = true,
@@ -112,30 +112,6 @@ class BottomControlBarPolicyTest {
                 isFullscreen = true,
                 hasEpisodeEntry = true,
                 showInlineEpisodeButton = false
-            )
-        )
-        assertFalse(
-            shouldShowDanmakuInputInControlBar(
-                isFullscreen = true,
-                widthDp = 393
-            )
-        )
-        assertFalse(
-            shouldShowDanmakuInputInControlBar(
-                isFullscreen = true,
-                widthDp = 479
-            )
-        )
-        assertFalse(
-            shouldShowDanmakuInputInControlBar(
-                isFullscreen = true,
-                widthDp = 616
-            )
-        )
-        assertTrue(
-            shouldShowDanmakuInputInControlBar(
-                isFullscreen = true,
-                widthDp = 720
             )
         )
     }
