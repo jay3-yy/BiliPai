@@ -3,6 +3,8 @@ package com.android.purebilibili.core.theme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
+import com.materialkolor.hct.Hct
 import com.android.purebilibili.core.store.ThemeRoleOverrides
 import com.android.purebilibili.core.store.WallpaperPaletteOverrides
 import com.android.purebilibili.core.store.WallpaperPaletteRole
@@ -27,18 +29,22 @@ internal fun resolveAppThemeEndpointPalette(
     // Wallpaper edits can change a role's backdrop. Repair only extended foregrounds
     // before either native bridge; glass on/off consumes the same corrected palette.
     val configured = if (preserveGeneratedPalette) enforceSeedTextContrast(overridden) else overridden
-    val selectedAccent = resolveLiquidControlAccentColor(
+    val pickedAccent = resolveLiquidControlAccentColor(
         source = source,
         customSeed = customSeed,
         generatedAccent = configured.primary,
         roleOverridesEnabled = roleOverrides.enabled,
         roleControlHex = if (darkTheme) roleOverrides.dark.controlAccentHex else roleOverrides.light.controlAccentHex,
     )
-    // Exact manual primary is a color-source contract, independent of glass rendering.
-    // Keep the selected primary independent of material. Selection containers are
-    // resolved separately below; glass treatment stays in alignLiquidAccentColorScheme.
-    // Extended palettes retain generated accent/container roles and corrected
-    // foregrounds for both native renderers and glass. Standard keeps its picked-color rules.
+    // Native Miuix Standard adapts the picked seed for dark surfaces. Explicit dark
+    // role edits, generated palettes and glass retain their own color contracts.
+    // This shared endpoint also drives previews; light mode keeps the exact pick.
+    val adaptMiuixDarkAccent = uiStyle == AppUiStyle.MIUIX && darkTheme &&
+        !liquidGlassEnabled && !preserveGeneratedPalette && source == Md3ColorSource.CUSTOM &&
+        !roleOverrides.enabled
+    val selectedAccent = if (adaptMiuixDarkAccent) {
+        resolveMiuixDarkCustomAccent(pickedAccent)
+    } else pickedAccent
     val exactPrimary = if (!preserveGeneratedPalette && source == Md3ColorSource.CUSTOM) configured.copy(
         primary = selectedAccent,
         onPrimary = resolveReadableForeground(selectedAccent),
@@ -99,4 +105,13 @@ internal fun resolveCustomSelectionContentColor(accent: Color, container: Color)
         }
     }
     return target
+}
+
+/** Lower bright accents gently while lifting very dark picks to remain visible.
+ * HCT retains the seed hue; tones 55–60 keep white switch handles above 3:1.
+ * Text on the resulting fill is resolved independently via onPrimary.
+ */
+internal fun resolveMiuixDarkCustomAccent(accent: Color): Color {
+    val seed = Hct.fromInt(accent.toArgb())
+    return Color(Hct.from(seed.hue, seed.chroma * 0.90, (seed.tone * 0.90).coerceIn(55.0, 60.0)).toInt())
 }

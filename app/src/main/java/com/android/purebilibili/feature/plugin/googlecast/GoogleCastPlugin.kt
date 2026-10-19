@@ -1,8 +1,11 @@
 package com.android.purebilibili.feature.plugin.googlecast
 
 import android.content.Context
+import android.os.Build
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.core.plugin.CastPluginApi
+import com.android.purebilibili.core.plugin.CastDiscoveryRequirement
+import com.android.purebilibili.feature.cast.hasRawLocalNetworkAccess
 import com.android.purebilibili.core.plugin.CastPluginMediaRequest
 import com.android.purebilibili.core.plugin.CastPluginPlaybackState
 import com.android.purebilibili.core.plugin.CastPluginRoute
@@ -17,6 +20,9 @@ import kotlinx.coroutines.flow.StateFlow
 const val GOOGLE_CAST_PLUGIN_ID = "google_cast"
 private const val TAG = "GoogleCastPlugin"
 
+internal fun resolveGoogleCastDiscoveryRequirement(sdkInt: Int): CastDiscoveryRequirement =
+    if (sdkInt >= 37) CastDiscoveryRequirement.RAW_LOCAL_NETWORK else CastDiscoveryRequirement.NONE
+
 class GoogleCastPlugin : CastPluginApi {
 
     override val id = GOOGLE_CAST_PLUGIN_ID
@@ -24,6 +30,9 @@ class GoogleCastPlugin : CastPluginApi {
     override val description = "将视频投屏到 Chromecast / Google Cast 设备"
     override val version = "0.1.1"
     override val author = "Leko (lekoOwO)"
+    // This plugin uses an app-owned route list, not the system Output Switcher.
+    override val discoveryRequirement: CastDiscoveryRequirement
+        get() = resolveGoogleCastDiscoveryRequirement(Build.VERSION.SDK_INT)
     override val icon: ImageVector = Icons.Rounded.Cast
     override val capabilityManifest: PluginCapabilityManifest = PluginCapabilityManifest(
         pluginId = id,
@@ -56,6 +65,10 @@ class GoogleCastPlugin : CastPluginApi {
         route: CastPluginRoute,
         media: CastPluginMediaRequest
     ): Result<Unit> {
+        if (Build.VERSION.SDK_INT >= 37 && !hasRawLocalNetworkAccess(context)) {
+            onDiscoveryAccessRevoked()
+            return Result.failure(SecurityException("请先允许本地网络权限，再连接 Google Cast 设备"))
+        }
         val result = GoogleCastMediaLoader.loadMedia(
             context = context,
             routeId = route.routeId,

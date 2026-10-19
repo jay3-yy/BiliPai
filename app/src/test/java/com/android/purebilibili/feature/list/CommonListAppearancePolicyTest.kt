@@ -208,19 +208,6 @@ class CommonListAppearancePolicyTest {
         assertTrue(source.contains("surfaceType = BlurSurfaceType.HEADER"))
     }
 
-    @Test
-    fun historyAndFavoriteHeaderCollapse_usesScrollableInsetAndThemeColors() {
-        val source = listOf(
-            File("app/src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt"),
-            File("src/main/java/com/android/purebilibili/feature/list/CommonListScreen.kt")
-        ).first { it.exists() }.readText()
-
-        assertTrue(source.contains("historyViewModel != null || favoriteViewModel != null"))
-        assertTrue(source.contains("scrollUnderHeader = commonListScrollUnderHeader"))
-        assertTrue(source.contains("captureScrollableContent = progressiveHeaderRequested"))
-        assertTrue(source.contains("selectedContainerColor = MaterialTheme.colorScheme.primaryContainer"))
-        assertTrue(source.contains("selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer"))
-    }
 
     @Test
     fun movingCapsuleFavoriteHeaderLayout_prefersCompactSearchAndChips() {

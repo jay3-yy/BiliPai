@@ -88,6 +88,8 @@ internal fun PlayerControlGlassDock(
     enabled: Boolean,
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(50),
+    // Opt in per control: keep readability in the translucent material, not its content.
+    minimumReadabilityScrimAlpha: Float = 0f,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val glass = enabled && LocalAppThemeConfig.current.liquidGlassEnabled
@@ -96,6 +98,14 @@ internal fun PlayerControlGlassDock(
     val elastic = rememberAppElasticPressState(feedbackStrength = if (shape == CircleShape) 1f else 0.6f)
     val ownsDrag = remember { mutableStateOf(false) }
     val providedBackdrop = LocalPlayerControlBackdrop.current
+    val shellTuning = if (
+        glass && providedBackdrop != null &&
+        minimumReadabilityScrimAlpha > tuning.contentReadabilityScrimAlpha
+    ) {
+        remember(tuning, minimumReadabilityScrimAlpha) {
+            tuning.copy(contentReadabilityScrimAlpha = maxOf(tuning.contentReadabilityScrimAlpha, minimumReadabilityScrimAlpha))
+        }
+    } else tuning
     Box(
         modifier = modifier
             .appElasticPress(
@@ -117,15 +127,15 @@ internal fun PlayerControlGlassDock(
                 )
             } else Modifier)
             .then(if (glass && providedBackdrop == null) {
-                Modifier.background(Color.Black.copy(alpha = 0.32f), shape)
+                Modifier.background(Color.Black.copy(alpha = maxOf(0.32f, minimumReadabilityScrimAlpha)), shape)
             } else if (glass) Modifier.biliPaiFloatingDockShell(
                 backdrop = providedBackdrop,
                 shape = shape,
                 // Match the bottom dock's neutral material; player glyphs remain white.
-                containerColor = resolveBiliPaiBottomBarContainerColor(darkTheme = true, liquidGlassTuning = tuning),
+                containerColor = resolveBiliPaiBottomBarContainerColor(darkTheme = true, liquidGlassTuning = shellTuning),
                 pressProgress = 0f,
                 lensIntensity = 1f,
-                liquidGlassTuning = tuning,
+                liquidGlassTuning = shellTuning,
                 darkTheme = true,
                 interactionLayerBlock = elastic.layerBlock,
                 interactionState = elastic,

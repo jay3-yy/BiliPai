@@ -110,7 +110,6 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureIndicator
 import com.android.purebilibili.feature.video.ui.gesture.rememberPlayerGestureState
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -344,23 +343,14 @@ fun FullscreenPlayerOverlay(
     var seekCancelPending by remember { mutableStateOf(false) }
     var swipeExitAccumulatedY by remember { mutableFloatStateOf(0f) }
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
-    // Default to 15s so seek UI/haptics work immediately before prefs load (null blocked delta).
-    val fullscreenSwipeSeekSeconds by produceState(initialValue = 0, context) {
-        SettingsManager.getFullscreenSwipeSeekSeconds(context)
-            .collectLatest { value = it }
-    }
-    val doubleTapSeekEnabled by SettingsManager
-        .getDoubleTapSeekEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false
+    val playerInteractionSettings by SettingsManager
+        .getPlayerInteractionSettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings()
         )
-    val seekForwardSeconds by SettingsManager
-        .getSeekForwardSeconds(context)
-        .collectAsStateWithLifecycle(initialValue = 10
-        )
-    val seekBackwardSeconds by SettingsManager
-        .getSeekBackwardSeconds(context)
-        .collectAsStateWithLifecycle(initialValue = 10
-        )
+    val doubleTapSeekEnabled = playerInteractionSettings.doubleTapSeekEnabled
+    val seekForwardSeconds = playerInteractionSettings.seekForwardSeconds
+    val seekBackwardSeconds = playerInteractionSettings.seekBackwardSeconds
 
     // 亮度状态
     var currentBrightness by remember {
@@ -785,7 +775,11 @@ fun FullscreenPlayerOverlay(
                     }
                 )
             }
-            .pointerInput(gesturesEnabled, fullscreenSwipeSeekSeconds, showControls) {
+            .pointerInput(player, gesturesEnabled, playerInteractionSettings, showControls) {
+                if (gestureMode == FullscreenGestureMode.Seek) {
+                    gestureMode = FullscreenGestureMode.None
+                    seekCancelPending = false
+                }
                 if (!gesturesEnabled) {
                     return@pointerInput
                 }
@@ -912,12 +906,15 @@ fun FullscreenPlayerOverlay(
                             FullscreenGestureMode.Seek -> {
                                 val seekDelta = resolveHorizontalSeekDeltaMs(
                                     isFullscreen = true,
-                                    fullscreenSwipeSeekEnabled = true,
+                                    fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
                                     totalDragDistanceX = dragDelta,
                                     containerWidthPx = screenWidth,
-                                    fullscreenSwipeSeekSeconds = fullscreenSwipeSeekSeconds,
-                                    inlineSwipeSeekSeconds = 0,
-                                    gestureSensitivity = 1f
+                                    fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds,
+                                    inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds,
+                                    gestureSensitivity = playerInteractionSettings.gestureSensitivity,
+                                    durationMs = duration,
+                                    useRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration,
+                                    relativeSeekPercent = playerInteractionSettings.swipeSeekRelativePercent
                                 )
                                 if (seekDelta != null) {
                                     seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)

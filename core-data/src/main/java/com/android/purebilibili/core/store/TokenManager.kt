@@ -6,7 +6,13 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import androidx.datastore.core.DataMigration
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -19,7 +25,10 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_prefs")
+val Context.dataStore: DataStore<Preferences>
+    get() = MultiProcessPreferences.get(
+        this, "user_prefs", listOf(TokenManager.notificationSessionMigration(applicationContext))
+    )
 
 data class AccountSessionIdentity(val mid: Long? = null, val generation: Long = 0L)
 
@@ -35,6 +44,75 @@ object TokenManager {
     }
     private val SESSDATA_KEY = stringPreferencesKey("sessdata")
     private val BUVID3_KEY = stringPreferencesKey("buvid3")
+    private val MID_KEY = longPreferencesKey("session_mid")
+    private val CSRF_KEY = stringPreferencesKey("session_csrf")
+    private val ACCESS_KEY = stringPreferencesKey("session_access_token")
+    private val REFRESH_KEY = stringPreferencesKey("session_refresh_token")
+    private val PLATFORM_KEY = stringPreferencesKey("session_access_platform")
+    private val SESSION_MIGRATED_KEY = booleanPreferencesKey("notification_session_migrated")
+    private var lastNotificationPreferences: Preferences? = null
+    private val notificationSessionRefreshMutex = Mutex()
+
+    internal fun notificationSessionMigration(context: Context) = object : DataMigration<Preferences> {
+        override suspend fun shouldMigrate(currentData: Preferences): Boolean =
+            currentData[SESSION_MIGRATED_KEY] != true
+
+        override suspend fun migrate(currentData: Preferences): Preferences {
+            val backup = context.applicationContext.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+            return currentData.toMutablePreferences().apply {
+                // Preserve existing encrypted session values and the original file location.
+                if (this[SESSDATA_KEY] == null) backup.getString(SP_KEY_SESS, null)?.let { this[SESSDATA_KEY] = it }
+                if (this[BUVID3_KEY] == null) backup.getString(SP_KEY_BUVID, null)?.let { this[BUVID3_KEY] = it }
+                this[MID_KEY] = backup.getLong(SP_KEY_MID, 0L)
+                backup.getString(SP_KEY_CSRF, null)?.let { this[CSRF_KEY] = it }
+                backup.getString(SP_KEY_ACCESS_TOKEN, null)?.let { this[ACCESS_KEY] = it }
+                backup.getString(SP_KEY_REFRESH_TOKEN, null)?.let { this[REFRESH_KEY] = it }
+                this[PLATFORM_KEY] = backup.getString(SP_KEY_ACCESS_TOKEN_PLATFORM, ACCESS_TOKEN_PLATFORM_TV)
+                    ?: ACCESS_TOKEN_PLATFORM_TV
+                this[SESSION_MIGRATED_KEY] = true
+            }.toPreferences()
+        }
+
+        override suspend fun cleanUp() = Unit
+    }
+
+    /** Read-only service-process session; never restores or writes SharedPreferences. */
+    suspend fun refreshServiceSession(context: Context): Unit = notificationSessionRefreshMutex.withLock {
+        applyNotificationSession(context.dataStore.data.first())
+    }
+
+    /** The caller owns this collection and cancels it with its Service lifecycle. */
+    suspend fun observeServiceSession(context: Context, onAccountChanged: () -> Unit) {
+        var observedMid: Long? = null
+        var initialized = false
+        context.dataStore.data.collect {
+            // A queued observer emission must not overwrite a newer on-demand refresh.
+            refreshServiceSession(context)
+            val currentMid = midCache
+            if (!initialized || observedMid != currentMid) onAccountChanged()
+            observedMid = currentMid
+            initialized = true
+        }
+    }
+
+    private fun applyNotificationSession(prefs: Preferences) {
+        synchronized(this) {
+            if (prefs == lastNotificationPreferences) return
+            val previousSession = sessDataCache
+            sessDataCache = prefs[SESSDATA_KEY]?.let(SessionStorageCipher::decrypt)?.ifBlank { null }
+            buvid3Cache = prefs[BUVID3_KEY]?.let(SessionStorageCipher::decrypt)?.ifBlank { null }
+            csrfCache = prefs[CSRF_KEY]?.let(SessionStorageCipher::decrypt)?.ifBlank { null }
+            midCache = prefs[MID_KEY]?.takeIf { it > 0L }
+            accessTokenCache = prefs[ACCESS_KEY]?.let(SessionStorageCipher::decrypt)?.ifBlank { null }
+            refreshTokenCache = prefs[REFRESH_KEY]?.let(SessionStorageCipher::decrypt)?.ifBlank { null }
+            accessTokenPlatformCache = prefs[PLATFORM_KEY] ?: ACCESS_TOKEN_PLATFORM_TV
+            if (previousSession != sessDataCache) com.android.purebilibili.core.network.NetworkModule.clearRuntimeCookies()
+            publishAccountIdentity()
+            // Retry decryption on transient Keystore failures instead of caching an empty session.
+            if (prefs[SESSDATA_KEY].isNullOrBlank() || sessDataCache != null) lastNotificationPreferences = prefs
+        }
+    }
+
 
     //  [新增] SharedPreferences 备份，解决冷启动时 DataStore 异步加载慢导致 ApiClient 无 Cookie 的问题
     private const val SP_NAME = "token_backup_sp"
@@ -173,26 +251,31 @@ object TokenManager {
     }
     
     //  [新增] 保存 CSRF Token
-    fun saveCsrf(context: Context, csrf: String) {
+    suspend fun saveCsrf(context: Context, csrf: String) {
         csrfCache = csrf
-        SessionStorageCipher.encrypt(csrf)?.let { encrypted ->
+        val encryptedCsrf = SessionStorageCipher.encrypt(csrf)
+        encryptedCsrf?.let { encrypted ->
             context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
                 .edit().putString(SP_KEY_CSRF, encrypted).apply()
+        }
+        context.dataStore.edit { prefs ->
+            encryptedCsrf?.let { prefs[CSRF_KEY] = it }
         }
         com.android.purebilibili.core.network.CoreDataLog.d("TokenManager", "saveCsrf")
     }
     
     //  [新增] 保存用户 MID
-    fun saveMid(context: Context, mid: Long) {
+    suspend fun saveMid(context: Context, mid: Long) {
         midCache = mid.takeIf { it > 0L }
         context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
             .edit().putLong(SP_KEY_MID, mid).apply()
+        context.dataStore.edit { it[MID_KEY] = midCache ?: 0L }
         publishAccountIdentity()
         com.android.purebilibili.core.network.CoreDataLog.d("TokenManager", " saveMid: $mid")
     }
     
     //  [新增] 保存 APP access_token 和 refresh_token - 高画质鉴权登录后调用
-    fun saveAccessToken(
+    suspend fun saveAccessToken(
         context: Context,
         accessToken: String,
         refreshToken: String,
@@ -207,10 +290,15 @@ object TokenManager {
         encryptedAccessToken?.let { editor.putString(SP_KEY_ACCESS_TOKEN, it) }
         encryptedRefreshToken?.let { editor.putString(SP_KEY_REFRESH_TOKEN, it) }
         editor.putString(SP_KEY_ACCESS_TOKEN_PLATFORM, platform).apply()
+        context.dataStore.edit { prefs ->
+            encryptedAccessToken?.let { prefs[ACCESS_KEY] = it }
+            encryptedRefreshToken?.let { prefs[REFRESH_KEY] = it }
+            prefs[PLATFORM_KEY] = platform
+        }
         com.android.purebilibili.core.network.CoreDataLog.d("TokenManager", "saveAccessToken")
     }
 
-    fun clearAccessToken(context: Context) {
+    suspend fun clearAccessToken(context: Context) {
         accessTokenCache = null
         refreshTokenCache = null
         accessTokenPlatformCache = ACCESS_TOKEN_PLATFORM_TV
@@ -220,6 +308,11 @@ object TokenManager {
             .remove(SP_KEY_REFRESH_TOKEN)
             .remove(SP_KEY_ACCESS_TOKEN_PLATFORM)
             .apply()
+        context.dataStore.edit {
+            it.remove(ACCESS_KEY)
+            it.remove(REFRESH_KEY)
+            it.remove(PLATFORM_KEY)
+        }
     }
 
     fun saveVipStatus(isVip: Boolean) {
@@ -268,27 +361,41 @@ object TokenManager {
         buvid3: String,
         isVip: Boolean
     ) {
-        saveCookies(context, sessData)
-
-        val sp = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+        val encryptedSession = SessionStorageCipher.encrypt(sessData)
+        val encryptedCsrf = SessionStorageCipher.encrypt(csrf)
+        val encryptedAccess = SessionStorageCipher.encrypt(accessToken)
+        val encryptedRefresh = SessionStorageCipher.encrypt(refreshToken)
+        val selectedBuvid = buvid3.ifBlank { buvid3Cache?.takeIf { it.isNotBlank() } ?: generateBuvid3() }
+        val encryptedBuvid = SessionStorageCipher.encrypt(selectedBuvid)
+        sessDataCache = sessData
         csrfCache = csrf.ifBlank { null }
         midCache = mid.takeIf { it > 0L }
+        buvid3Cache = selectedBuvid
         accessTokenCache = accessToken.ifBlank { null }
         refreshTokenCache = refreshToken.ifBlank { null }
         this.accessTokenPlatformCache = accessTokenPlatform
         isVipCache = isVip
 
-        val editor = sp.edit().putLong(SP_KEY_MID, midCache ?: 0L)
+        val editor = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE).edit()
+            .putLong(SP_KEY_MID, midCache ?: 0L)
             .putString(SP_KEY_ACCESS_TOKEN_PLATFORM, accessTokenPlatformCache)
-        csrfCache?.let(SessionStorageCipher::encrypt)?.let { editor.putString(SP_KEY_CSRF, it) }
-        accessTokenCache?.let(SessionStorageCipher::encrypt)?.let { editor.putString(SP_KEY_ACCESS_TOKEN, it) }
-        refreshTokenCache?.let(SessionStorageCipher::encrypt)?.let { editor.putString(SP_KEY_REFRESH_TOKEN, it) }
+        encryptedSession?.let { editor.putString(SP_KEY_SESS, it) }
+        encryptedBuvid?.let { editor.putString(SP_KEY_BUVID, it) }
+        encryptedCsrf?.let { editor.putString(SP_KEY_CSRF, it) }
+        encryptedAccess?.let { editor.putString(SP_KEY_ACCESS_TOKEN, it) }
+        encryptedRefresh?.let { editor.putString(SP_KEY_REFRESH_TOKEN, it) }
         editor.apply()
 
-        if (buvid3.isNotBlank()) {
-            saveBuvid3(context, buvid3)
-        } else if (buvid3Cache.isNullOrBlank()) {
-            saveBuvid3(context, generateBuvid3())
+        // One transaction prevents the main observer or :message from combining identities.
+        // If encryption is unavailable, keep the active in-memory login but suspend remote auth.
+        context.dataStore.edit { prefs ->
+            if (encryptedSession != null) prefs[SESSDATA_KEY] = encryptedSession else prefs.remove(SESSDATA_KEY)
+            if (encryptedBuvid != null) prefs[BUVID3_KEY] = encryptedBuvid else prefs.remove(BUVID3_KEY)
+            if (encryptedCsrf != null) prefs[CSRF_KEY] = encryptedCsrf else prefs.remove(CSRF_KEY)
+            if (encryptedAccess != null) prefs[ACCESS_KEY] = encryptedAccess else prefs.remove(ACCESS_KEY)
+            if (encryptedRefresh != null) prefs[REFRESH_KEY] = encryptedRefresh else prefs.remove(REFRESH_KEY)
+            prefs[MID_KEY] = midCache ?: 0L
+            prefs[PLATFORM_KEY] = accessTokenPlatformCache
         }
         publishAccountIdentity()
     }
@@ -323,6 +430,11 @@ object TokenManager {
         context.dataStore.edit {
             it.remove(SESSDATA_KEY)
             it.remove(BUVID3_KEY)
+            it.remove(MID_KEY)
+            it.remove(CSRF_KEY)
+            it.remove(ACCESS_KEY)
+            it.remove(REFRESH_KEY)
+            it.remove(PLATFORM_KEY)
         }
     }
 

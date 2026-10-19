@@ -604,8 +604,22 @@ internal fun resolveHorizontalSeekDeltaMs(
     containerWidthPx: Float,
     fullscreenSwipeSeekSeconds: Int?,
     inlineSwipeSeekSeconds: Int,
-    gestureSensitivity: Float
+    gestureSensitivity: Float,
+    durationMs: Long,
+    useRelativeDuration: Boolean,
+    relativeSeekPercent: Int
 ): Long? {
+    if (containerWidthPx <= 0f || !containerWidthPx.isFinite()) return null
+    // Surface drags share this policy across all player/material variants; sliders stay absolute.
+    // Relative mode uses a full viewport width, independently of the fixed half-width range.
+    if (useRelativeDuration) {
+        if (durationMs <= 0L) return null
+        val maxDeltaMs = (durationMs * (relativeSeekPercent.coerceIn(1, 100) / 100.0)).toLong()
+        val rawDeltaMs = (
+            totalDragDistanceX.toDouble() / containerWidthPx * maxDeltaMs * gestureSensitivity
+        ).toLong()
+        return rawDeltaMs.coerceIn(-maxDeltaMs, maxDeltaMs)
+    }
     if (isFullscreen && fullscreenSwipeSeekEnabled) {
         val seekSeconds = fullscreenSwipeSeekSeconds ?: return null
         if (seekSeconds == 0) return (totalDragDistanceX * 200f * gestureSensitivity).toLong()

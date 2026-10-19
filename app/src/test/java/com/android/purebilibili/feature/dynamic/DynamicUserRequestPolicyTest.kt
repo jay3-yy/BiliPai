@@ -42,6 +42,16 @@ class DynamicUserRequestPolicyTest {
     }
 
     @Test
+    fun `leaving and returning to an author rejects both old success and failure scopes`() {
+        // The UID alone is insufficient after A → B → A: the previous A request is stale.
+        assertFalse(shouldApplyUserDynamicsResult(123L, 123L, 12L, 10L))
+        assertFalse(shouldApplyUserDynamicsResult(123L, 456L, 12L, 11L))
+        assertTrue(shouldApplyUserDynamicsResult(123L, 123L, 12L, 12L))
+        // Clearing the author filter invalidates pending pagination as well.
+        assertFalse(shouldApplyUserDynamicsResult(null, 123L, 13L, 12L))
+    }
+
+    @Test
     fun `selected user reload policy retries same user when scoped state is empty or failed`() {
         assertFalse(
             shouldReloadSelectedUserDynamics(

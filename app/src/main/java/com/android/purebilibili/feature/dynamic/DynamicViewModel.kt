@@ -512,13 +512,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 selectedTab = selectedTab,
                 selectedUserId = _selectedUserId.value
             )
+            val userRequestToken = activeUserDynamicsRequestToken
             coroutineScope {
                 val dynamicJob = async {
                     if (refreshUserId != null) {
                         loadUserDynamics(
                             uid = refreshUserId,
                             refresh = true,
-                            requestToken = activeUserDynamicsRequestToken
+                            requestToken = userRequestToken
                         )
                     } else {
                         loadDynamicFeedInternal(
@@ -767,6 +768,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             // 切换用户时废弃旧请求；同一用户失败重试时保留当前可见内容。
             userDynamicsJob?.cancel()
             activeUserDynamicsRequestToken += 1L
+            isUserLoadingLocked = false
             val requestToken = activeUserDynamicsRequestToken
             _uiState.value = _uiState.value.copy(userIsLoading = true)
             userDynamicsJob = launchAccount {
@@ -778,6 +780,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             // 清空用户动态
             userDynamicsJob?.cancel()
             activeUserDynamicsRequestToken += 1L
+            isUserLoadingLocked = false
             _uiState.value = _uiState.value.copy(
                 userItems = emptyList<DynamicItem>().toImmutableList(),
                 hasUserMore = true,
@@ -801,6 +804,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         refresh: Boolean = false,
         requestToken: Long = activeUserDynamicsRequestToken
     ) {
+        // Queued pagination/retry work can start after an author switch (including A → B → A).
+        if (!shouldApplyUserDynamicsResult(
+                selectedUid = _selectedUserId.value,
+                requestUid = uid,
+                activeRequestToken = activeUserDynamicsRequestToken,
+                requestToken = requestToken
+            )
+        ) return
         if (isUserLoadingLocked && !refresh) return
         isUserLoadingLocked = true
         
@@ -847,7 +858,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 }
             )
         } finally {
-            isUserLoadingLocked = false
+            // A cancelled/late request must not unlock its successor.
+            if (activeUserDynamicsRequestToken == requestToken) {
+                isUserLoadingLocked = false
+            }
         }
     }
     
@@ -858,11 +872,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         val uid = _selectedUserId.value ?: return
         if (!_uiState.value.hasUserMore || _uiState.value.userIsLoading ||
             _uiState.value.userError != null || isUserLoadingLocked) return
+        val requestToken = activeUserDynamicsRequestToken
         launchAccount {
             loadUserDynamics(
                 uid = uid,
                 refresh = false,
-                requestToken = activeUserDynamicsRequestToken
+                requestToken = requestToken
             )
         }
     }
@@ -1131,11 +1146,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         val uid = resolveDynamicRefreshUserId(selectedTab, _selectedUserId.value)
         if (uid != null) {
             if (isUserLoadingLocked || _isRefreshing.value) return
+            val requestToken = activeUserDynamicsRequestToken
             launchAccount {
                 loadUserDynamics(
                     uid = uid,
                     refresh = _uiState.value.userItems.isEmpty(),
-                    requestToken = activeUserDynamicsRequestToken
+                    requestToken = requestToken
                 )
             }
             return

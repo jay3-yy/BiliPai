@@ -7,6 +7,9 @@ import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.repository.CommentFraudRepository
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.repository.CommentRepository
+import com.android.purebilibili.feature.video.viewmodel.CommentComposerDraft
+import com.android.purebilibili.feature.video.viewmodel.CommentComposerDraftState
+import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import com.android.purebilibili.feature.video.viewmodel.isSortedSubReplyPageEnd
@@ -14,6 +17,9 @@ import com.android.purebilibili.feature.video.viewmodel.resetForSort
 import com.android.purebilibili.feature.video.viewmodel.resolveRoutedCommentRootReply
 import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyLoadedTotalCount
 import com.android.purebilibili.feature.video.viewmodel.resolveSubReplyRemoteTotalCount
+import com.android.purebilibili.feature.video.viewmodel.resolveSentSubReply
+import com.android.purebilibili.feature.video.viewmodel.withSentSubReply
+import com.android.purebilibili.feature.video.viewmodel.shouldApplySentSubReplyResult
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toPersistentSet
 import kotlinx.coroutines.Job
@@ -42,6 +48,9 @@ class CommentDetailViewModel : ViewModel() {
 
     private val _replyingTo = MutableStateFlow<ReplyItem?>(null)
     val replyingTo = _replyingTo.asStateFlow()
+
+    private val _composerDrafts = MutableStateFlow(CommentComposerDraftState())
+    val composerDrafts = _composerDrafts.asStateFlow()
 
     private val _isSending = MutableStateFlow(false)
     val isSending = _isSending.asStateFlow()
@@ -87,6 +96,7 @@ class CommentDetailViewModel : ViewModel() {
     private var currentRootId: Long = 0L
     private var currentTargetReplyId: Long = 0L
     private var subReplyLoadJob: Job? = null
+    private var threadSession = 0L
 
     fun loadInitial(
         oid: Long,
@@ -101,6 +111,12 @@ class CommentDetailViewModel : ViewModel() {
             return
         }
 
+        if (currentOid != oid || currentRootId != rootId || currentType != type) {
+            _composerDrafts.update { it.reset() }
+            hideReplyInput()
+            _isSending.value = false
+        }
+        threadSession++
         currentOid = oid
         currentType = type
         currentRootId = rootId
@@ -230,6 +246,7 @@ class CommentDetailViewModel : ViewModel() {
     }
 
     fun showReplyInput(reply: ReplyItem? = null) {
+        _composerDrafts.update { it.open() }
         _replyingTo.value = reply ?: _subReplyState.value.rootReply
         _showCommentInput.value = true
     }
@@ -239,20 +256,38 @@ class CommentDetailViewModel : ViewModel() {
         _replyingTo.value = null
     }
 
+    fun updateCommentDraft(
+        sessionId: Long,
+        replyRpid: Long?,
+        text: String,
+        imageUris: List<Uri>,
+        syncToDynamic: Boolean
+    ) {
+        _composerDrafts.update {
+            it.update(sessionId, replyRpid, CommentComposerDraft(text, imageUris, syncToDynamic))
+        }
+    }
+
     fun sendReply(
         message: String,
         pictures: List<Uri> = emptyList(),
         syncToDynamic: Boolean = false,
         onSuccess: () -> Unit = {}
     ) {
+        if (_isSending.value) return
         val rootReply = _subReplyState.value.rootReply ?: return
         val replying = _replyingTo.value ?: rootReply
         val parentId = if (replying.rpid == rootReply.rpid) 0L else replying.rpid
         val oid = currentOid
         val type = currentType
+        val sendSession = threadSession
+        val sendDraftSession = _composerDrafts.value.sessionId
+        val sendDraftReplyRpid = replying.rpid
+        val sentDraft = _composerDrafts.value.drafts[commentComposerDraftKey(sendDraftReplyRpid)]
+        _isSending.value = true
 
         viewModelScope.launch {
-            _isSending.value = true
+            // Bind the result to the thread that opened this composer, not the current destination.
             CommentRepository.addCommentForSubject(
                 oid = oid,
                 type = type,
@@ -261,20 +296,40 @@ class CommentDetailViewModel : ViewModel() {
                 parent = parentId,
                 syncToDynamic = syncToDynamic
             ).onSuccess { newReply ->
-                _isSending.value = false
-                hideReplyInput()
-                onSuccess()
-                if (newReply != null) {
-                    val currentItems = _subReplyState.value.items
-                    _subReplyState.value = _subReplyState.value.copy(
-                        items = (listOf(newReply) + currentItems).distinctBy { it.rpid }.toImmutableList(),
-                        totalCount = _subReplyState.value.totalCount + 1
+                if (currentOid == oid && currentType == type && currentRootId == rootReply.rpid &&
+                    threadSession == sendSession
+                ) {
+                    _isSending.value = false
+                }
+                if (currentOid != oid || currentType != type || !shouldApplySentSubReplyResult(
+                        rootReply.rpid, sendSession, threadSession, _subReplyState.value
                     )
+                ) return@onSuccess
+                _composerDrafts.update {
+                    it.complete(sendDraftSession, sendDraftReplyRpid, sentDraft)
+                }
+                if (_composerDrafts.value.sessionId == sendDraftSession) {
+                    hideReplyInput()
+                }
+                if (newReply != null) {
+                    _subReplyState.update {
+                        it.withSentSubReply(
+                            resolveSentSubReply(newReply, rootReply.rpid, parentId, replying),
+                            conversationItemsAreFiltered = false
+                        )
+                    }
                 } else {
                     loadSubReplies(page = 1, paginationOffset = null)
                 }
+                if (_composerDrafts.value.sessionId == sendDraftSession) {
+                    onSuccess()
+                }
             }.onFailure {
-                _isSending.value = false
+                if (currentOid == oid && currentType == type && currentRootId == rootReply.rpid &&
+                    threadSession == sendSession
+                ) {
+                    _isSending.value = false
+                }
             }
         }
     }

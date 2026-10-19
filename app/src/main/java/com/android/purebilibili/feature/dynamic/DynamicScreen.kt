@@ -188,9 +188,10 @@ fun DynamicScreen(
     val videoListState = rememberCompatibleStaggeredGridState()
     val pgcListState = rememberCompatibleStaggeredGridState()
     val articleListState = rememberCompatibleStaggeredGridState()
-    val userListState = rememberCompatibleStaggeredGridState()
-    val userVideoListState = rememberCompatibleStaggeredGridState()
-    val userArticleListState = rememberCompatibleStaggeredGridState()
+    // Author switches start a fresh masonry layout; category timelines retain their own state.
+    val userListState = rememberDynamicUserGridState(selectedUserId)
+    val userVideoListState = rememberDynamicUserGridState(selectedUserId)
+    val userArticleListState = rememberDynamicUserGridState(selectedUserId)
     val listStates = remember(
         allListState,
         videoListState,
@@ -491,14 +492,6 @@ fun DynamicScreen(
         if (selectedTab != activeSelectedTab) {
             viewModel.setSelectedTab(activeSelectedTab)
         }
-    }
-    var handledScrollUserId by rememberSaveable { mutableStateOf(selectedUserId) }
-    LaunchedEffect(selectedUserId) {
-        if (handledScrollUserId == selectedUserId) return@LaunchedEffect
-        userListState.scrollToItem(0)
-        userVideoListState.scrollToItem(0)
-        userArticleListState.scrollToItem(0)
-        handledScrollUserId = selectedUserId
     }
     val handleUserSelection = remember(selectedUserId, displayedLogicalTab) {
         { clickedUserId: Long? ->
@@ -893,6 +886,7 @@ fun DynamicScreen(
                                         onRetry = { viewModel.retryDynamicFeed(tab.logicalIndex) },
                                         hasMore = pagePresentation.hasMore,
                                         isSelectedUserTabActive = pagePresentation.isSelectedUserFeed,
+                                        selectedUserId = selectedUserId,
                                         selectedUserName = selectedUserName,
                                         logicalTab = tab.logicalIndex,
                                         onOpenSelectedUser = {
@@ -1086,6 +1080,7 @@ fun DynamicScreen(
                                     onRetry = { viewModel.retryDynamicFeed(tab.logicalIndex) },
                                     hasMore = pagePresentation.hasMore,
                                     isSelectedUserTabActive = pagePresentation.isSelectedUserFeed,
+                                    selectedUserId = selectedUserId,
                                     selectedUserName = selectedUserName,
                                     logicalTab = tab.logicalIndex,
                                     onOpenSelectedUser = {
@@ -1437,17 +1432,22 @@ fun DynamicScreen(
     }
 }
 
+@Composable
+internal fun rememberDynamicUserGridState(selectedUserId: Long?): LazyStaggeredGridState =
+    key(selectedUserId) { rememberCompatibleStaggeredGridState() }
+
 /**
  *  动态列表内容
  */
 @Composable
-private fun DynamicList(
+internal fun DynamicList(
     state: DynamicUiState,
     activeLoading: Boolean,
     activeError: String?,
     onRetry: () -> Unit,
     hasMore: Boolean,
     isSelectedUserTabActive: Boolean,
+    selectedUserId: Long?,
     selectedUserName: String,
     logicalTab: Int,
     onOpenSelectedUser: () -> Unit,
@@ -1493,6 +1493,9 @@ private fun DynamicList(
     feedLayoutMode: SettingsManager.DynamicFeedLayoutMode = SettingsManager.DynamicFeedLayoutMode.WATERFALL,
     modifier: Modifier = Modifier
 ) {
+    // Discard old-owner item animations, lane measurements and remembered card state together.
+    // Refreshes within the same owner keep animateItem and prepend anchoring unchanged.
+    key(selectedUserId.takeIf { isSelectedUserTabActive }) {
     val dynamicCard: @Composable (com.android.purebilibili.data.model.response.DynamicItem) -> Unit = { item ->
         DynamicCardV2(
             item = item,
@@ -1724,6 +1727,7 @@ private fun DynamicList(
                 )
             }
         }
+    }
     }
     }
 }

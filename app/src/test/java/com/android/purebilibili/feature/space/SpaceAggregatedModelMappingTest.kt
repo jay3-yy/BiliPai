@@ -210,7 +210,7 @@ class SpaceAggregatedModelMappingTest {
         assertEquals("7788", seed.homeComicItems.single().param)
         assertEquals(SpaceMainTab.HOME, seed.defaultMainTab)
         assertEquals(SpaceSubTab.VIDEO, seed.defaultSubTab)
-        assertEquals(listOf("主页", "动态", "投稿", "收藏", "追番"), seed.mainTabs.map { it.title })
+        assertEquals(listOf("主页", "动态", "投稿", "合集", "收藏", "追番"), seed.mainTabs.map { it.title })
         assertEquals(listOf("视频", "图文", "赛季合集"), seed.contributionTabs.map { it.title })
         assertEquals(88L, seed.contributionTabs.last().seasonId)
     }

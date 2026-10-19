@@ -137,6 +137,28 @@ class PureApplicationTrimPolicyTest {
     }
 
     @Test
+    fun `image cache retains proportional budget on modest heaps`() {
+        val heapBytes = 256L * 1024 * 1024
+        assertEquals(
+            (heapBytes * 0.10).toLong(),
+            PureApplicationRuntimeConfig.resolveImageMemoryCacheMaxBytes(256, false)
+        )
+    }
+
+    @Test
+    fun `large heaps cannot grow image cache beyond absolute budget`() {
+        assertEquals(
+            96L * 1024 * 1024,
+            PureApplicationRuntimeConfig.resolveImageMemoryCacheMaxBytes(2048, false)
+        )
+        assertEquals(
+            32L * 1024 * 1024,
+            PureApplicationRuntimeConfig.resolveImageMemoryCacheMaxBytes(1024, true)
+        )
+        assertTrue(PureApplicationRuntimeConfig.resolveImageMemoryCacheMaxBytes(0, true) > 0L)
+    }
+
+    @Test
     fun `background memory pressure should notify player heavy optimization`() {
         assertTrue(
             PureApplicationRuntimeConfig.shouldNotifyPlayerHeavyOptimizationOnTrimLevel(

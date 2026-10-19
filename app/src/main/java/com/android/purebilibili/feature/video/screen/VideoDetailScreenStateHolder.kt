@@ -1180,6 +1180,10 @@ internal fun VideoDetailScreenStateHolder(
     val commentState by commentViewModel.commentState.collectAsStateWithLifecycle()
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
     var subReplyCoveredBlurProgress by remember { mutableFloatStateOf(0f) }
+    // 楼中楼是正文的兄弟覆盖层，必须显式复用播放器滚动连接；其他弹层不参与。
+    var commentThreadPlayerScrollConnection by remember {
+        mutableStateOf<NestedScrollConnection?>(null)
+    }
 
     LaunchedEffect(
         openCommentRootRpidFromRoute,
@@ -4518,6 +4522,14 @@ internal fun VideoDetailScreenStateHolder(
                                 }
                             }
                         }
+                        DisposableEffect(nestedScrollConnection) {
+                            commentThreadPlayerScrollConnection = nestedScrollConnection
+                            onDispose {
+                                if (commentThreadPlayerScrollConnection === nestedScrollConnection) {
+                                    commentThreadPlayerScrollConnection = null
+                                }
+                            }
+                        }
 
                         Column(
                             modifier = Modifier
@@ -5856,6 +5868,9 @@ internal fun VideoDetailScreenStateHolder(
 
         val successState = uiState as? VideoPlaybackUiState.Success
         DetachedVideoCommentThreadHost(
+            threadListModifier = commentThreadPlayerScrollConnection?.let {
+                Modifier.nestedScroll(it)
+            } ?: Modifier,
             visible = shouldShowDetachedVideoCommentThreadHost(useTabletLayout = useTabletLayout) &&
                 !(canShowLandscapeComments && landscapeCommentPanelVisible),
             successState = successState,

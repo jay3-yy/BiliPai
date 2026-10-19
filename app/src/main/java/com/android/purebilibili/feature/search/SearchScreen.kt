@@ -22,6 +22,8 @@ import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.appElasticPress
 import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppIconButtonDefaults
+import com.android.purebilibili.core.ui.components.LocalAppTopBarIconDecorationEnabled
 import com.android.purebilibili.core.ui.components.AppInputChip
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppTab
@@ -778,6 +780,7 @@ fun SearchScreen(
         com.android.purebilibili.core.store.SearchHintSettingsStore.isEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = true)
     val displayedSearchHint = state.defaultSearchHint.takeIf { searchHintEnabled }.orEmpty()
+    val suggestedSearchKeyword = state.defaultSearchKeyword.takeIf { searchHintEnabled }.orEmpty()
     val scope = rememberCoroutineScope()
     val savedSearchFilterTabOrder by SettingsManager
         .getSearchFilterTabOrder(context)
@@ -1115,8 +1118,11 @@ fun SearchScreen(
         }
         viewModel.onQueryChange(query)
     }
-    // Clearing by button and deleting by keyboard share one edit path; neither navigates.
+    // Clear is an edit action, including when invoked from an unfocused result field.
     val clearSearchQuery = {
+        pendingLandingFocusRestore = true
+        searchQueryClearedAtElapsedMs = android.os.SystemClock.elapsedRealtime()
+        if (state.showResults) viewModel.exitResultsToLanding()
         updateSearchQuery("")
     }
     LaunchedEffect(retainSearchImeAfterClear) {
@@ -1257,6 +1263,11 @@ fun SearchScreen(
             searchFieldFocused = focused
             if (focused) {
                 autoFocusConsumed = true
+                if (state.showResults) {
+                    pendingLandingFocusRestore = true
+                    viewModel.exitResultsToLanding()
+                    viewModel.onQueryChange(state.query)
+                }
             }
         },
         onEntryMotionFinished = onEntryMotionConsumed,
@@ -1426,7 +1437,7 @@ fun SearchScreen(
                                                 SearchTopBarPlacement(
                                                     focusRequester = searchFocusRequester,
                                                     placeholder = displayedSearchHint.ifBlank { resolveSearchDefaultPlaceholder() },
-                                                    suggestedKeyword = displayedSearchHint,
+                                                    suggestedKeyword = suggestedSearchKeyword,
                                                     autoFocusEnabled = false,
                                                     reducedMotionBudget = effectiveSearchMotionBudget == SearchMotionBudget.REDUCED,
                                                     entryMotionSpec = entryMotionSpec,
@@ -1948,7 +1959,13 @@ fun SearchScreen(
                                                                         title = video.title,
                                                                     )
                                                                 ) {
-                                                                    is SearchResultNavigationTarget.Video -> onVideoClick(target.bvid, 0L, video.pic)
+                                                                    is SearchResultNavigationTarget.Video -> {
+                                                                        com.android.purebilibili.core.util.AnalyticsHelper.logSearchResultClick(
+                                                                            position = relatedIndex,
+                                                                            resultSection = "creator_related"
+                                                                        )
+                                                                        onVideoClick(target.bvid, 0L, video.pic)
+                                                                    }
                                                                     is SearchResultNavigationTarget.Course -> onCheeseClick?.invoke(target.seasonId, target.epId)
                                                                         ?: onBangumiClick(target.seasonId)
                                                                     is SearchResultNavigationTarget.Web -> onWebClick(target.url, target.title)
@@ -2029,8 +2046,10 @@ fun SearchScreen(
                                                             title = video.title
                                                         )
                                                     ) {
-                                                        is SearchResultNavigationTarget.Video ->
+                                                        is SearchResultNavigationTarget.Video -> {
+                                                            com.android.purebilibili.core.util.AnalyticsHelper.logSearchResultClick(position = index)
                                                             onVideoClick(target.bvid, 0, video.pic)
+                                                        }
                                                         is SearchResultNavigationTarget.Course -> {
                                                             if (onCheeseClick != null) {
                                                                 onCheeseClick(target.seasonId, target.epId)
@@ -2650,7 +2669,7 @@ fun SearchScreen(
                 SearchTopBarPlacement(
                     focusRequester = searchFocusRequester,
                     placeholder = displayedSearchHint.ifBlank { resolveSearchDefaultPlaceholder() },
-                    suggestedKeyword = displayedSearchHint,
+                    suggestedKeyword = suggestedSearchKeyword,
                     autoFocusEnabled = shouldAutoFocusSearchField(
                         startupSettled = startupSettled,
                         query = state.query,
@@ -2984,6 +3003,7 @@ fun SearchTopBar(
                     onSearch = {
                         if (canSubmit) onSearch(resolvedSubmitKeyword)
                     },
+                    onClear = onClearQuery,
                     placeholder = placeholder,
                     containerColor = containerColor,
                     fieldShape = inputShape,
@@ -3003,7 +3023,6 @@ fun SearchTopBar(
                     trailingActions()
                 } else {
                     val submitElasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState()
-                    val clearElasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState()
                     Spacer(modifier = Modifier.width(chromeSpec.horizontalGapDp.dp))
                     SearchTopBarIconButton(
                         onClick = { onSearch(resolvedSubmitKeyword) },
@@ -3019,25 +3038,6 @@ fun SearchTopBar(
                             imageVector = rememberAppSearchIcon(),
                             contentDescription = stringResource(R.string.common_search),
                             tint = AppContentColors.secondaryText().copy(alpha = if (canSubmit) 1f else 0.35f),
-                            modifier = Modifier.size(chromeSpec.actionIconSizeDp.dp),
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(chromeSpec.horizontalGapDp.dp))
-                    SearchTopBarIconButton(
-                        onClick = onClearQuery,
-                        elasticState = clearElasticState,
-                        shape = actionShape,
-                        transformInBackdrop = glassActive,
-                        enabled = query.isNotEmpty(),
-                        elasticFeedbackEnabled = true,
-                        modifier = Modifier
-                            .size(chromeSpec.clearActionSizeDp.dp)
-                            .searchTopChromeGlass(actionShape, chromeSpec.clearActionSizeDp, clearElasticState),
-                    ) {
-                        AppIcon(
-                            imageVector = rememberAppClearIcon(),
-                            contentDescription = stringResource(R.string.common_clear),
-                            tint = AppContentColors.secondaryText().copy(alpha = if (query.isNotEmpty()) 1f else 0.35f),
                             modifier = Modifier.size(chromeSpec.actionIconSizeDp.dp),
                         )
                     }
@@ -3095,6 +3095,7 @@ private fun SearchTopBarInputField(
     value: androidx.compose.ui.text.input.TextFieldValue,
     onValueChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
     onSearch: () -> Unit,
+    onClear: () -> Unit,
     placeholder: String,
     containerColor: Color,
     fieldShape: androidx.compose.ui.graphics.Shape,
@@ -3147,27 +3148,50 @@ private fun SearchTopBarInputField(
         keyboardActions = KeyboardActions(onSearch = { onSearch() }),
         interactionSource = interactionSource,
         decorationBox = { innerTextField ->
-            Box(
-                contentAlignment = Alignment.CenterStart,
+            // This is the search page's shared edit affordance, not a glass geometry override.
+            // Native MD3/Miuix and liquid chrome keep their existing field dimensions and padding.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 12.dp)
             ) {
-                if (value.text.isEmpty()) {
-                    AppText(
-                        text = placeholder,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = textStyle,
-                        color = placeholderColor
-                    )
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (value.text.isEmpty()) {
+                        AppText(
+                            text = placeholder,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = textStyle,
+                            color = placeholderColor
+                        )
+                    }
+                    // Keep text contrast inside the transparent liquid capsule.
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        androidx.compose.material3.LocalContentColor provides contentColor
+                    ) {
+                        innerTextField()
+                    }
                 }
-                // Provide LocalContentColor so platform text paint never falls back to
-                // a low-contrast Miuix default inside the transparent liquid capsule.
-                androidx.compose.runtime.CompositionLocalProvider(
-                    androidx.compose.material3.LocalContentColor provides contentColor
-                ) {
-                    innerTextField()
+                if (value.text.isNotEmpty()) {
+                    // The field owns the only surface; never decorate its clear icon as a top-bar dock.
+                    CompositionLocalProvider(LocalAppTopBarIconDecorationEnabled provides false) {
+                        AppIconButton(
+                            onClick = onClear,
+                            modifier = Modifier.size(32.dp),
+                            colors = AppIconButtonDefaults.colors(
+                                containerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                            ),
+                        ) {
+                            AppIcon(
+                                imageVector = rememberAppClearIcon(),
+                                contentDescription = stringResource(R.string.common_clear),
+                                tint = placeholderColor,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -9,6 +9,16 @@ import kotlin.test.assertTrue
 class PlaybackServicePolicyTest {
 
     @Test
+    fun `notification media control should promote foreground before handling playback`() {
+        assertTrue(
+            shouldRefreshPlaybackServiceForeground(
+                action = PlaybackService.ACTION_MEDIA_CONTROL,
+                isForegroundStarted = true
+            )
+        )
+    }
+
+    @Test
     fun `foreground service should refresh promotion even when already started`() {
         assertTrue(
             shouldRefreshPlaybackServiceForeground(

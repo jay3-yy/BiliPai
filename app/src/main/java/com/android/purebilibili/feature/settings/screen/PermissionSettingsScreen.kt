@@ -136,11 +136,11 @@ fun PermissionSettingsContent(
             ),
             //  DLNA 投屏所需权限
             PermissionInfo(
-                name = "本地网络（DLNA）",
+                name = if (Build.VERSION.SDK_INT >= 37) "本地网络（投屏）" else "本地网络（DLNA）",
                 permission = localNetworkRuntimePermissions().firstOrNull()
                     ?: "android.permission.ACCESS_LOCAL_NETWORK",
                 description = if (Build.VERSION.SDK_INT >= 37) {
-                    "仅在搜索和连接局域网 DLNA 设备时使用；Google Cast 不需要此权限"
+                    "用于搜索和连接局域网中的 DLNA、Google Cast 投屏设备"
                 } else {
                     "用于搜索和连接附近的 DLNA 投屏设备"
                 },

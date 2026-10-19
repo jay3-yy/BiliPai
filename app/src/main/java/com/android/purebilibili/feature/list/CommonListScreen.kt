@@ -133,6 +133,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -523,8 +525,6 @@ fun CommonListScreen(
         ?: remember { mutableStateOf(emptyMap<String, FavoriteViewModel.SubscribedFolderActionState>()) }
     val selectedFolderIndex by favoriteViewModel?.selectedFolderIndex?.collectAsStateWithLifecycle()
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    val favoriteOrder by favoriteViewModel?.favoriteOrderState?.collectAsStateWithLifecycle()
-        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(FavoriteResourceOrder.FAVORITE_TIME) }
     val isFavoriteManaging by favoriteViewModel?.isFavoriteManagingState?.collectAsStateWithLifecycle()
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val favoriteSearchUiState by favoriteViewModel?.searchUiState?.collectAsStateWithLifecycle()
@@ -547,6 +547,27 @@ fun CommonListScreen(
     var favoriteFolderEditorIntro by rememberSaveable { androidx.compose.runtime.mutableStateOf("") }
     var favoriteFolderEditorPrivate by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var showFavoriteFolderDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    var isFavoriteFolderSelectionMode by rememberSaveable { mutableStateOf(false) }
+    var selectedFavoriteFolderIds by rememberSaveable { mutableStateOf(setOf<Long>()) }
+    val selectedFavoriteFolders = foldersState.filter { resolveFavoriteFolderMediaId(it) in selectedFavoriteFolderIds }
+    val favoriteFolderPermissions = favoriteFolderBatchPermissions(
+        selectedFavoriteFolders,
+        foldersState.firstOrNull()?.let(::resolveFavoriteFolderMediaId),
+        accountIdentity.mid,
+    )
+    val exitFavoriteFolderSelection: () -> Unit = {
+        isFavoriteFolderSelectionMode = false
+        selectedFavoriteFolderIds = emptySet()
+        showFavoriteFolderDeleteConfirm = false
+        showFavoriteCleanInvalidConfirm = false
+    }
+    LaunchedEffect(favoriteBrowseSection, favoriteSection, accountIdentity) {
+        exitFavoriteFolderSelection()
+    }
+    LaunchedEffect(foldersState) {
+        val validIds = foldersState.mapTo(HashSet(), ::resolveFavoriteFolderMediaId)
+        selectedFavoriteFolderIds = selectedFavoriteFolderIds.intersect(validIds)
+    }
     // 浏览分区由入口和用户操作决定。目录并行加载，不能用暂时为空的收藏夹列表切换到订阅。
     val isSubscribedBrowse = favoriteViewModel != null &&
         favoriteSection == FavoriteSection.VIDEO &&
@@ -587,7 +608,6 @@ fun CommonListScreen(
         selectedFolderItems = selectedFolderUiState.items,
         singleFolderItems = singleFolderUiState.items
     ).takeUnless { isSubscribedBrowse }.orEmpty()
-    val selectedFavoriteFolder = foldersState.getOrNull(selectedFolderIndex)
     LaunchedEffect(selectedFolderIndex, favoriteBrowseSection, favoriteSection) {
         isFavoriteBatchMode = false
         selectedFavoriteResourceIds = emptySet()
@@ -646,7 +666,7 @@ fun CommonListScreen(
         0.dp
     }
     val commonListBottomPadding = bottomOverlayPadding +
-        if (isFavoriteBatchMode || isHistoryBatchMode || isFavoriteDetailBatchMode) 80.dp else 0.dp
+        if (isFavoriteBatchMode || isHistoryBatchMode || isFavoriteDetailBatchMode || isFavoriteFolderSelectionMode) 80.dp else 0.dp
     val activeCommonListScrollState = remember(
         favoriteViewModel,
         favoriteSection,
@@ -1368,6 +1388,19 @@ fun CommonListScreen(
                         padding = PaddingValues(top = headerHeightDp, bottom = commonListBottomPadding),
                         transitionEnabled = favoriteCollectionSharedTransitionEnabled,
                         listState = favoriteFolderListState,
+                        selectionMode = isFavoriteFolderSelectionMode,
+                        selectedMediaIds = selectedFavoriteFolderIds,
+                        selectionEnabled = !isFavoriteManaging,
+                        onToggleSelection = { folder ->
+                            val id = resolveFavoriteFolderMediaId(folder)
+                            selectedFavoriteFolderIds = if (id in selectedFavoriteFolderIds) {
+                                selectedFavoriteFolderIds - id
+                            } else selectedFavoriteFolderIds + id
+                        },
+                        onStartSelection = { folder ->
+                            isFavoriteFolderSelectionMode = true
+                            selectedFavoriteFolderIds = selectedFavoriteFolderIds + resolveFavoriteFolderMediaId(folder)
+                        },
                         onFolderClick = { folder ->
                             onFavoriteFolderClick?.invoke(
                                 resolveFavoriteFolderMediaId(folder),
@@ -1576,6 +1609,12 @@ fun CommonListScreen(
                                     }
                                 }
                             } else null,
+                            onFavoriteDragSelectionChange = if (canCopyFavoriteDetailResources && !isFavoriteDetailBusy) {
+                                { keys ->
+                                    selectedFavoriteDetailKeys = keys
+                                    isFavoriteDetailBatchMode = true
+                                }
+                            } else null,
                             gridState = primaryGridState,
                             pinchEnabled = pinchToZoomColumnsEnabled,
                             pinchBounds = pinchColumnBounds,
@@ -1587,7 +1626,7 @@ fun CommonListScreen(
             }
 
             // 2. 顶层：悬浮顶栏 (使用 onGloballyPositioned 测量高度)
-            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode || isFavoriteDetailBatchMode
+            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode || isFavoriteDetailBatchMode || isFavoriteFolderSelectionMode
             val exitFavoriteBatchMode: () -> Unit = {
                 isFavoriteBatchMode = false
                 selectedFavoriteResourceIds = emptySet()
@@ -1602,12 +1641,33 @@ fun CommonListScreen(
             }
             androidx.activity.compose.BackHandler(enabled = isBatchActionMode) {
                 when {
+                    isFavoriteFolderSelectionMode -> exitFavoriteFolderSelection()
                     isFavoriteBatchMode -> exitFavoriteBatchMode()
                     isHistoryBatchMode -> exitHistoryBatchMode()
                     else -> exitFavoriteDetailBatchMode()
                 }
             }
             val batchActions: @Composable () -> Unit = {
+                if (isFavoriteFolderSelectionMode) {
+                    FavoriteFolderBatchActions(
+                        folders = filterFavoriteFoldersByQuery(foldersState, searchQuery),
+                        selectedIds = selectedFavoriteFolderIds,
+                        permissions = favoriteFolderPermissions,
+                        busy = isFavoriteManaging,
+                        onSelectionChange = { selectedFavoriteFolderIds = it },
+                        onDelete = { showFavoriteFolderDeleteConfirm = true },
+                        onClean = { showFavoriteCleanInvalidConfirm = true },
+                        onShare = {
+                            com.android.purebilibili.core.util.ShareUtils.shareText(
+                                context = context,
+                                subject = "分享收藏夹",
+                                text = favoriteFolderShareText(selectedFavoriteFolders),
+                                chooserTitle = "分享收藏夹",
+                            )
+                            exitFavoriteFolderSelection()
+                        },
+                    )
+                }
                 if (isFavoriteBatchMode) {
                     val selectableIds = activeFavoriteItems
                         .filterNot { it.isCollectionResource }
@@ -1760,6 +1820,7 @@ fun CommonListScreen(
                     content = {
                     AppTopBar(
                         title = when {
+                            isFavoriteFolderSelectionMode -> "已选收藏夹: ${selectedFavoriteFolderIds.size}"
                             isFavoriteBatchMode -> "已选: ${selectedFavoriteResourceIds.size}"
                             isHistoryBatchMode -> "已选: ${selectedHistoryKeys.size}"
                             isFavoriteDetailBatchMode -> "已选: ${selectedFavoriteDetailKeys.size}"
@@ -1778,6 +1839,7 @@ fun CommonListScreen(
                                 onClick = {
                                     if (isBatchActionMode) {
                                         when {
+                                            isFavoriteFolderSelectionMode -> exitFavoriteFolderSelection()
                                             isFavoriteBatchMode -> exitFavoriteBatchMode()
                                             isHistoryBatchMode -> exitHistoryBatchMode()
                                             else -> exitFavoriteDetailBatchMode()
@@ -1806,7 +1868,7 @@ fun CommonListScreen(
                                     }
                                 }
                                 if (favoriteViewModel != null && favoriteSection == FavoriteSection.VIDEO) {
-                                    if (!isFavoriteBatchMode) {
+                                    if (!isBatchActionMode) {
                                     AppIconButton(
                                         enabled = activeFavoriteItems.any { it.bvid.isNotBlank() } && !isSubscribedBrowse,
                                         onClick = {
@@ -1851,67 +1913,19 @@ fun CommonListScreen(
                                     }
 
                                     if (!isSubscribedBrowse) {
-                                        AppWindowActionMenu(
-                                            enabled = !isFavoriteManaging,
-                                            groups = listOf(
-                                                listOf(
-                                                    AppWindowAction(
-                                                        label = "新建收藏夹",
-                                                        enabled = !isFavoriteManaging,
-                                                        onClick = {
-                                                            showCreateFavoriteFolder = true
-                                                            favoriteFolderEditorTitle = ""
-                                                            favoriteFolderEditorIntro = ""
-                                                            favoriteFolderEditorPrivate = false
-                                                        },
-                                                    ),
-                                                    AppWindowAction(
-                                                        label = "删除收藏夹",
-                                                        enabled = selectedFolderIndex > 0 && !isFavoriteManaging,
-                                                        onClick = { showFavoriteFolderDeleteConfirm = true },
-                                                    ),
-                                                ),
-                                                listOf(
-                                                    AppWindowAction(
-                                                        label = "排序：${favoriteOrder.label}",
-                                                        enabled = !isFavoriteManaging,
-                                                        children = FavoriteResourceOrder.entries.map { order ->
-                                                            AppWindowAction(
-                                                                label = order.label,
-                                                                enabled = !isFavoriteManaging,
-                                                                selected = order == favoriteOrder,
-                                                                onClick = { favoriteViewModel.changeFavoriteOrder(order) },
-                                                            )
-                                                        },
-                                                    ),
-                                                ),
-                                                listOf(
-                                                    AppWindowAction(
-                                                        label = "分享收藏夹",
-                                                        enabled = selectedFavoriteFolder?.let { !isFavoriteFolderPrivate(it.attr) } == true && !isFavoriteManaging,
-                                                        onClick = {
-                                                            selectedFavoriteFolder?.let { folder ->
-                                                                com.android.purebilibili.core.util.ShareUtils.shareText(
-                                                                    context = context,
-                                                                    subject = folder.title,
-                                                                    text = "https://www.bilibili.com/medialist/detail/ml${resolveFavoriteFolderMediaId(folder)}",
-                                                                    chooserTitle = "分享收藏夹",
-                                                                )
-                                                            }
-                                                        },
-                                                    ),
-                                                    AppWindowAction(
-                                                        label = "分享至动态",
-                                                        enabled = selectedFavoriteFolder?.let { !isFavoriteFolderPrivate(it.attr) } == true && !isFavoriteManaging,
-                                                        onClick = { showFavoriteDynamicShareConfirm = true },
-                                                    ),
-                                                    AppWindowAction(
-                                                        label = "清理失效内容",
-                                                        enabled = canCleanInvalidFavoriteResources(selectedFavoriteFolder) && !isFavoriteManaging,
-                                                        onClick = { showFavoriteCleanInvalidConfirm = true },
-                                                    ),
-                                                ),
-                                            ),
+                                        FavoriteFolderOverviewMenu(
+                                            busy = isFavoriteManaging,
+                                            canSelect = foldersState.isNotEmpty(),
+                                            onCreate = {
+                                                showCreateFavoriteFolder = true
+                                                favoriteFolderEditorTitle = ""
+                                                favoriteFolderEditorIntro = ""
+                                                favoriteFolderEditorPrivate = false
+                                            },
+                                            onSelect = {
+                                                selectedFavoriteFolderIds = emptySet()
+                                                isFavoriteFolderSelectionMode = true
+                                            },
                                         ) {
                                             AppIcon(
                                                 imageVector = Icons.Filled.MoreVert,
@@ -1928,6 +1942,18 @@ fun CommonListScreen(
                                     AppWindowActionMenu(
                                         enabled = !isFavoriteDetailBusy,
                                         groups = buildList {
+                                            add(favoriteDetailManagementActions(
+                                                canCopy = canCopyFavoriteDetailResources,
+                                                canManage = canManageFavoriteDetailResources,
+                                                canShare = seasonSeriesDetailViewModel.canShareFavoriteFolder,
+                                                hasItems = state.items.isNotEmpty(),
+                                                busy = isFavoriteDetailBusy,
+                                                onShare = { showFavoriteDynamicShareConfirm = true },
+                                                onSelect = {
+                                                    selectedFavoriteDetailKeys = emptySet()
+                                                    isFavoriteDetailBatchMode = true
+                                                },
+                                            ))
                                             add(listOf(
                                                 AppWindowAction(
                                                     label = "收藏时间：${favoriteDetailSortOrder.label}",
@@ -2367,21 +2393,20 @@ fun CommonListScreen(
         )
     }
 
-    if (showFavoriteCleanInvalidConfirm && favoriteViewModel != null) {
+    if (showFavoriteCleanInvalidConfirm && favoriteViewModel != null && isFavoriteFolderSelectionMode) {
         AppAlertDialog(
             onDismissRequest = { showFavoriteCleanInvalidConfirm = false },
             title = { AppText("清理失效内容") },
             text = {
                 AppText(
-                    resolveFavoriteCleanInvalidConfirmText(
-                        selectedFavoriteFolder?.title.orEmpty()
-                    )
+                    "确认清理已选择的 ${selectedFavoriteFolderIds.size} 个收藏夹里的失效内容吗？本操作会修改远端收藏夹。"
                 )
             },
             confirmButton = {
                 AppTextButton(
+                    enabled = favoriteFolderPermissions.canClean && !isFavoriteManaging,
                     onClick = {
-                        favoriteViewModel.cleanInvalidResourcesInSelectedFolder()
+                        favoriteViewModel.cleanInvalidFavoriteFolders(selectedFavoriteFolderIds, exitFavoriteFolderSelection)
                         showFavoriteCleanInvalidConfirm = false
                     }
                 ) {
@@ -2473,16 +2498,16 @@ fun CommonListScreen(
         }
     }
 
-    if (showFavoriteFolderDeleteConfirm && favoriteViewModel != null) {
+    if (showFavoriteFolderDeleteConfirm && favoriteViewModel != null && isFavoriteFolderSelectionMode) {
         AppAlertDialog(
             onDismissRequest = { showFavoriteFolderDeleteConfirm = false },
             title = { AppText("删除收藏夹") },
-            text = { AppText("确认删除“${selectedFavoriteFolder?.title.orEmpty()}”吗？收藏内容不会从站点删除。") },
+            text = { AppText("确认删除已选择的 ${selectedFavoriteFolderIds.size} 个收藏夹吗？收藏内容不会从站点删除。") },
             confirmButton = {
                 AppTextButton(
-                    enabled = selectedFolderIndex > 0 && !isFavoriteManaging,
+                    enabled = favoriteFolderPermissions.canDelete && !isFavoriteManaging,
                     onClick = {
-                        favoriteViewModel.deleteSelectedFavoriteFolder()
+                        favoriteViewModel.deleteFavoriteFolders(selectedFavoriteFolderIds, exitFavoriteFolderSelection)
                         showFavoriteFolderDeleteConfirm = false
                     },
                 ) {
@@ -2497,19 +2522,18 @@ fun CommonListScreen(
         )
     }
 
-    if (showFavoriteDynamicShareConfirm && favoriteViewModel != null) {
+    if (showFavoriteDynamicShareConfirm && seasonSeriesDetailViewModel != null && seasonSeriesDetailViewModel.canShareFavoriteFolder) {
         AppAlertDialog(
             onDismissRequest = { showFavoriteDynamicShareConfirm = false },
             title = { AppText("分享至动态") },
             text = {
-                AppText("将“${selectedFavoriteFolder?.title.orEmpty()}”作为收藏夹卡片发布到动态？")
+                AppText("将“${state.title}”作为收藏夹卡片发布到动态？")
             },
             confirmButton = {
                 AppTextButton(
+                    enabled = !isFavoriteDetailBusy && seasonSeriesDetailViewModel.canShareFavoriteFolder,
                     onClick = {
-                        favoriteViewModel.shareSelectedFolderToDynamic(
-                            content = "分享收藏夹：${selectedFavoriteFolder?.title.orEmpty()}",
-                        )
+                        seasonSeriesDetailViewModel.shareFavoriteFolderToDynamic()
                         showFavoriteDynamicShareConfirm = false
                     }
                 ) {
@@ -2768,7 +2792,7 @@ fun CommonListScreen(
 
 // 提取通用列表内容组件
 @Composable
-private fun CommonListContent(
+internal fun CommonListContent(
     items: List<com.android.purebilibili.data.model.response.VideoItem>,
     allowAutomaticLoadMore: Boolean = true,
     isLoading: Boolean,
@@ -2809,6 +2833,7 @@ private fun CommonListContent(
     onHistoryAddToWatchLater: ((HistoryItem) -> Unit)? = null,
     onHistoryDissolveComplete: ((String) -> Unit)? = null,
     onHistoryToggleSelect: ((String) -> Unit)? = null,
+    onFavoriteDragSelectionChange: ((Set<String>) -> Unit)? = null,
     onUpClick: ((Long) -> Unit)? = null,
     searchPaginationFallbackEnabled: Boolean = false,
     hasMoreSearchResults: Boolean = false,
@@ -2912,6 +2937,15 @@ private fun CommonListContent(
         val renderKeys = androidx.compose.runtime.remember(filteredItems) {
             resolveCommonListRenderKeys(filteredItems.map(resolveHistoryItemKey))
         }
+        val favoriteDragResources = remember(filteredItems, renderKeys, onFavoriteDragSelectionChange != null) {
+            if (onFavoriteDragSelectionChange == null) emptyMap() else buildMap {
+                filteredItems.forEachIndexed { index, video ->
+                    if (!video.isCollectionResource && video.aid > 0L) {
+                        put(renderKeys[index], resolveHistoryItemKey(video))
+                    }
+                }
+            }
+        }
         LaunchedEffect(
             searchPaginationFallbackEnabled,
             allowAutomaticLoadMore,
@@ -2977,6 +3011,13 @@ private fun CommonListContent(
                 ) onLoadMore()
             }
 
+            // 收藏详情由网格独占同指长按拖选，避免子卡片预览/取消收藏长按抢走手势。
+            // 其他列表保持原有长按开关和原生组件行为，不修改共享默认值。
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.android.purebilibili.core.ui.LocalVideoCardLongPressEnabled provides
+                    (onFavoriteDragSelectionChange == null &&
+                        com.android.purebilibili.core.ui.LocalVideoCardLongPressEnabled.current),
+            ) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = resolvedGridState,
@@ -2995,6 +3036,13 @@ private fun CommonListContent(
                         bounds = pinchBounds,
                         onColumnsChange = onPinchColumnsChange,
                         onGestureEnd = onPinchColumnsEnd,
+                    )
+                    .favoriteDragSelection(
+                        state = resolvedGridState,
+                        resourceKeys = favoriteDragResources,
+                        selectedKeys = historySelectedKeys,
+                        enabled = onFavoriteDragSelectionChange != null,
+                        onSelectionChange = { onFavoriteDragSelectionChange?.invoke(it) },
                     )
             ) LazyVerticalGrid@{
                 // 首屏骨架直接铺在内容网格里：与真实卡片共用同一个 gridState 与同一种
@@ -3085,7 +3133,11 @@ private fun CommonListContent(
                         }
 
                         val cardContent: @Composable () -> Unit = {
-                            Box {
+                            Box(
+                                modifier = if (onFavoriteDragSelectionChange != null) {
+                                    Modifier.semantics { selected = isSelected }
+                                } else Modifier,
+                            ) {
                                 if (video.isCollectionResource) {
                                     FavoriteCollectionRow(
                                         item = video,
@@ -3273,6 +3325,7 @@ private fun CommonListContent(
                         )
                     }
                 }
+            }
             }
         }
     }

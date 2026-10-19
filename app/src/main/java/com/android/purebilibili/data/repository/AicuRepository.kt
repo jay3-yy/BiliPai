@@ -1,5 +1,6 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.core.network.buildAppDns
 import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
@@ -34,6 +35,7 @@ internal class AicuCookieJar : CookieJar {
 }
 
 internal fun buildAicuClient(): OkHttpClient = OkHttpClient.Builder()
+    .dns(buildAppDns())
     .cookieJar(AicuCookieJar())
     .followRedirects(false)
     .followSslRedirects(false)

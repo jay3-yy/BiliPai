@@ -66,6 +66,7 @@ data class SearchUiState(
     val suggestions: List<SearchSuggestionUiModel> = emptyList(),
     // 默认搜索占位词（来自 API-collect: /wbi/search/default）
     val defaultSearchHint: String = "",
+    val defaultSearchKeyword: String = "",
     //  搜索发现 / 猜你想搜
     val discoverList: List<SearchKeywordUiModel> = emptyList(),
     val discoverTitle: String = "搜索发现",
@@ -1342,8 +1343,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private suspend fun loadDefaultSearchHintInternal() {
         SearchRepository.getDefaultSearchHint()
             .onSuccess { hint ->
-                if (hint.isNotBlank()) {
-                    _uiState.update { it.copy(defaultSearchHint = hint) }
+                _uiState.update {
+                    it.copy(defaultSearchHint = hint.hint, defaultSearchKeyword = hint.keyword)
                 }
             }
     }

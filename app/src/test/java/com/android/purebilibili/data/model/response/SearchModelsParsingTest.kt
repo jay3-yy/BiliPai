@@ -13,6 +13,36 @@ class SearchModelsParsingTest {
     }
 
     @Test
+    fun defaultSearch_usesCanonicalKeywordInsteadOfDecoratedHint() {
+        val response = json.decodeFromString<SearchDefaultResponse>(
+            """{"code":0,"data":{"show_name":"番剧 · 3小时前更新","name":" 番剧 "}}"""
+        )
+
+        assertEquals("番剧", response.data?.keyword)
+        assertEquals("番剧 · 3小时前更新", response.data?.hint)
+    }
+
+    @Test
+    fun defaultSearch_doesNotStripUpdateWordsFromCanonicalKeyword() {
+        val response = json.decodeFromString<SearchDefaultResponse>(
+            """{"code":0,"data":{"name":"3小时前更新是什么梗"}}"""
+        )
+
+        assertEquals("3小时前更新是什么梗", response.data?.keyword)
+        assertEquals("3小时前更新是什么梗", response.data?.hint)
+    }
+
+    @Test
+    fun defaultSearch_keepsLegacyHintWhenCanonicalKeywordIsUnavailable() {
+        val response = json.decodeFromString<SearchDefaultResponse>(
+            """{"code":0,"data":{"show_name":" 旧接口关键词 ","name":" "}}"""
+        )
+
+        assertEquals("旧接口关键词", response.data?.keyword)
+        assertEquals("旧接口关键词", response.data?.hint)
+    }
+
+    @Test
     fun decodeSearchTypeResponse_acceptsStringAndNumericFields() {
         val payload = """
             {

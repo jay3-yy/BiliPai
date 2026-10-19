@@ -156,6 +156,15 @@ internal object MessageNotificationNotifier {
             .mapNotNullTo(linkedSetOf()) { it.tag?.takeIf { tag -> tag.startsWith(prefix) }?.removePrefix(prefix) }
     }
 
+    fun cancelOtherAccounts(context: Context, currentMid: Long?) {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val currentPrefix = currentMid?.let { "message:$it:" }
+        manager.activeNotifications.filter {
+            val tag = it.tag
+            tag != null && tag.startsWith("message:") && (currentPrefix == null || !tag.startsWith(currentPrefix))
+        }.forEach { manager.cancel(it.tag, it.id) }
+    }
+
     fun cancelMessages(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.activeNotifications.filter { it.tag?.startsWith("message:") == true }

@@ -992,6 +992,8 @@ private fun VideoPlayerSectionContent(
     val seekBackwardSeconds = playerInteractionSettings.seekBackwardSeconds
     val inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds
     val fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds
+    val swipeSeekUseRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration
+    val swipeSeekRelativePercent = playerInteractionSettings.swipeSeekRelativePercent
     val fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled
     val fullscreenGestureReverse = playerInteractionSettings.fullscreenGestureReverse
     val autoEnterFullscreenEnabled = playerInteractionSettings.autoEnterFullscreenEnabled
@@ -2347,6 +2349,8 @@ private fun VideoPlayerSectionContent(
                 gestureSensitivity,
                 inlineSwipeSeekSeconds,
                 fullscreenSwipeSeekSeconds,
+                swipeSeekUseRelativeDuration,
+                swipeSeekRelativePercent,
                 fullscreenGestureReverse,
                 bottomGestureExclusionHeightDp,
                 gestureSeekFallbackDurationMs,
@@ -2354,6 +2358,15 @@ private fun VideoPlayerSectionContent(
             ) {
                 if (!shouldEnableInlinePlayerGestures(isPortraitFullscreen)) {
                     return@pointerInput
+                }
+                // A settings/viewport re-key cancels the old pointer coroutine, not necessarily
+                // its drag callback. Discard that preview rather than carrying it into a new mode.
+                if (gestureMode == VideoGestureMode.Seek) {
+                    sharedSeekSession = cancelPlaybackSeekInteraction(sharedSeekSession)
+                    isGestureVisible = false
+                    seekCancelPending = false
+                    gestureMode = VideoGestureMode.None
+                    dragStartX = -1f
                 }
                 if (!isInPipMode) {
                     detectDragGestures(
@@ -2700,7 +2713,10 @@ private fun VideoPlayerSectionContent(
                                         containerWidthPx = size.width.toFloat(),
                                         fullscreenSwipeSeekSeconds = fullscreenSwipeSeekSeconds,
                                         inlineSwipeSeekSeconds = inlineSwipeSeekSeconds,
-                                        gestureSensitivity = gestureSensitivity
+                                        gestureSensitivity = gestureSensitivity,
+                                        durationMs = duration,
+                                        useRelativeDuration = swipeSeekUseRelativeDuration,
+                                        relativeSeekPercent = swipeSeekRelativePercent
                                     )
                                     if (seekDelta != null) {
                                         seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
@@ -4676,12 +4692,14 @@ private fun VideoPlayerSectionContent(
                         controlsReserveHeightPx = commandControlsReservePx,
                     ),
                     state = commandState,
-                    renderingPaused = suppressTransientOverlaysForTransition,
+                    visible = shouldShowDanmakuLayer,
                     fontScale = danmakuFontScale,
                     items = visibleCommandDanmakuList,
                     player = playerState.player,
                     onFollowClick = onFollow,
-                    onTripleClick = onTriple,
+                    onLikeClick = onToggleLike,
+                    onCoinClick = onCoin,
+                    onFavoriteClick = onToggleFavorite,
                     onLinkClick = { item ->
                         val targetBvid = item.linkBvid.ifBlank {
                             if (item.linkAid > 0L) {

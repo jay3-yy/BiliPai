@@ -1100,6 +1100,11 @@ fun FloatingBottomBar(
     ) {
         CompositionLocalProvider(
             LocalFloatingBottomBarContentColor provides resolvedContentColor,
+            // In glass mode the moving capture owns the accent. The base row must
+            // not leave a route-selected accent behind while the capsule is dragged.
+            LocalFloatingBottomBarSelectedContentColor provides if (isLiquidGlassMode) {
+                Color.Unspecified
+            } else LocalFloatingBottomBarSelectedContentColor.current,
             LocalFloatingBottomBarTapFeedback provides selectionTapFeedback,
             LocalFloatingBottomBarIndicatorPosition provides visualIndicatorPositionProvider,
             LocalFloatingBottomBarItemAlignmentOffset provides itemAlignmentOffsetProvider,
@@ -1279,6 +1284,7 @@ fun FloatingBottomBar(
             CompositionLocalProvider(
                 LocalFloatingBottomBarTabScale provides { 1f },
                 LocalFloatingBottomBarContentColor provides colors.activeContentColor,
+                LocalFloatingBottomBarSelectedContentColor provides colors.activeContentColor,
                 LocalFloatingBottomBarActiveContent provides true,
                 LocalFloatingBottomBarIndicatorPosition provides visualIndicatorPositionProvider,
                 LocalFloatingBottomBarItemAlignmentOffset provides itemAlignmentOffsetProvider,

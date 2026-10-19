@@ -23,10 +23,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -34,6 +34,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 class MessageNotificationService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var polling: Job? = null
+    private var sessionObserver: Job? = null
+    private var settingsObserver: Job? = null
     private var foregroundStarted = false
     private var powerReceiverRegistered = false
     private val screenOn = MutableStateFlow(true)
@@ -111,6 +113,32 @@ class MessageNotificationService : Service() {
             }
             return START_NOT_STICKY
         }
+        if (settingsObserver?.isActive != true) settingsObserver = scope.launch(Dispatchers.IO) {
+            try {
+                MessageNotificationSettingsStore.getSettings(this@MessageNotificationService).collect { settings ->
+                    if (!settings.enabled || !settings.residentEnabled) stopSelf()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Logger.e("MessageNotification", "Unable to observe resident settings", e)
+                stopSelf()
+            }
+        }
+        if (sessionObserver?.isActive != true) sessionObserver = scope.launch(Dispatchers.IO) {
+            try {
+                com.android.purebilibili.core.store.TokenManager.observeServiceSession(this@MessageNotificationService) {
+                    MessageNotificationNotifier.cancelOtherAccounts(
+                        this@MessageNotificationService,
+                        com.android.purebilibili.core.store.TokenManager.midCache
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Logger.e("MessageNotification", "Session observation unavailable; checks still refresh the session", e)
+            }
+        }
         if (polling?.isActive != true) polling = scope.launch(Dispatchers.IO) {
             try {
                 while (isActive) {
@@ -124,15 +152,16 @@ class MessageNotificationService : Service() {
                         Logger.e("MessageNotification", "Resident check failed", e)
                     }
                     refreshPowerState()
-                    when (val idleMs = resolveResidentPollDelayMs(settings.mode, screenOn.value, charging.value)) {
-                        RESIDENT_IDLE_POLL_MS -> {
-                            // Screen off and discharging: sleep on the idle floor, but wake as soon
-                            // as the user comes back or power connects.
-                            withTimeoutOrNull(idleMs) {
-                                combine(screenOn, charging) { on, plugged -> on || plugged }.first { it }
-                            }
-                        }
-                        else -> delay(idleMs)
+                    val idleMs = resolveResidentPollDelayMs(settings.mode, screenOn.value, charging.value)
+                    withTimeoutOrNull(idleMs) {
+                        // Settings changes wake every mode immediately, including stop/mode changes
+                        // while the screen is off. Power changes only wake the long idle wait.
+                        combine(
+                            screenOn, charging,
+                            MessageNotificationSettingsStore.getSettings(this@MessageNotificationService)
+                        ) { on, plugged, latest ->
+                            latest != settings || (idleMs == RESIDENT_IDLE_POLL_MS && (on || plugged))
+                        }.first { it }
                     }
                 }
             } catch (e: CancellationException) {

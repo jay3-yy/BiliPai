@@ -77,6 +77,7 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayCont
 import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelIcon
 import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
 import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
+import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FastForward
@@ -146,6 +147,11 @@ fun OfflineVideoPlayerScreen(
     val longPressSpeed by SettingsManager
         .getLongPressSpeed(context)
         .collectAsStateWithLifecycle(initialValue = DEFAULT_LONG_PRESS_SPEED)
+    val playerInteractionSettings by SettingsManager
+        .getPlayerInteractionSettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings()
+        )
     val task = tasks[currentTaskId]
 
     // === 状态管理 ===
@@ -567,7 +573,11 @@ fun OfflineVideoPlayerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
                 // 🎛️ 拖拽手势：亮度/音量/进度
-                .pointerInput(player, playbackFailure) {
+                .pointerInput(player, playbackFailure, isFullscreen, playerInteractionSettings) {
+                    if (gestureMode == GestureMode.Seek) {
+                        isGestureVisible = false
+                        gestureMode = GestureMode.None
+                    }
                     if (playbackFailure != null) return@pointerInput
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -588,6 +598,7 @@ fun OfflineVideoPlayerScreen(
 
                                 startVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
                                 startPosition = player.currentPosition
+                                seekTargetTime = startPosition
 
                                 val attributes = getActivity()?.window?.attributes
                                 val currentWindowBrightness = attributes?.screenBrightness ?: -1f
@@ -627,7 +638,7 @@ fun OfflineVideoPlayerScreen(
                                     if (abs(dragAmount.x) > abs(dragAmount.y)) {
                                         gestureMode = GestureMode.Seek
                                     } else {
-                                        val screenWidth = context.resources.displayMetrics.widthPixels
+                                        val screenWidth = size.width
                                         gestureMode = if (change.position.x < screenWidth / 2) {
                                             GestureMode.Brightness
                                         } else {
@@ -640,8 +651,21 @@ fun OfflineVideoPlayerScreen(
                                     GestureMode.Seek -> {
                                         totalDragDistanceX += dragAmount.x
                                         val duration = player.duration.coerceAtLeast(0L)
-                                        val seekDelta = (totalDragDistanceX * 200).toLong()
-                                        seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
+                                        val seekDelta = resolveHorizontalSeekDeltaMs(
+                                            isFullscreen = isFullscreen,
+                                            fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
+                                            totalDragDistanceX = totalDragDistanceX,
+                                            containerWidthPx = size.width.toFloat(),
+                                            fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds,
+                                            inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds,
+                                            gestureSensitivity = playerInteractionSettings.gestureSensitivity,
+                                            durationMs = duration,
+                                            useRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration,
+                                            relativeSeekPercent = playerInteractionSettings.swipeSeekRelativePercent
+                                        )
+                                        if (seekDelta != null) {
+                                            seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
+                                        }
                                     }
                                     GestureMode.Brightness -> {
                                         totalDragDistanceY -= dragAmount.y

@@ -63,94 +63,13 @@ fun buildDefaultSpaceMainTabs(): List<SpaceMainTabItem> {
         SpaceMainTabItem(SpaceMainTab.HOME, "主页"),
         SpaceMainTabItem(SpaceMainTab.DYNAMIC, "动态"),
         SpaceMainTabItem(SpaceMainTab.CONTRIBUTION, "投稿"),
+        SpaceMainTabItem(SpaceMainTab.COLLECTIONS, "合集"),
+        SpaceMainTabItem(SpaceMainTab.FAVORITE, "收藏"),
+        SpaceMainTabItem(SpaceMainTab.BANGUMI, "追番"),
     )
 }
 
-internal fun resolveSpacePrimaryTab(selectedTab: SpaceMainTab): SpaceMainTab {
-    return when (selectedTab) {
-        SpaceMainTab.FAVORITE,
-        SpaceMainTab.BANGUMI,
-        SpaceMainTab.COLLECTIONS -> SpaceMainTab.CONTRIBUTION
-        else -> selectedTab
-    }
-}
-
-internal fun shouldShowSpaceSecondarySwitch(selectedTab: SpaceMainTab): Boolean {
-    return selectedTab == SpaceMainTab.CONTRIBUTION ||
-        selectedTab == SpaceMainTab.FAVORITE ||
-        selectedTab == SpaceMainTab.BANGUMI ||
-        selectedTab == SpaceMainTab.COLLECTIONS
-}
-
-data class SpaceSecondarySwitchItem(
-    val id: String,
-    val title: String,
-    val targetTab: SpaceMainTab,
-    val contributionTabId: String? = null,
-)
-
-internal const val SPACE_SECONDARY_COLLECTIONS_ID = "library_collections"
-internal const val SPACE_SECONDARY_FAVORITE_ID = "library_favorite"
-internal const val SPACE_SECONDARY_BANGUMI_ID = "library_bangumi"
-internal const val SPACE_SECONDARY_CHEESE_ID = "library_cheese"
-
-internal fun resolveSpaceSecondarySwitchItems(
-    contributionTabs: List<SpaceContributionTab>,
-    hasCheese: Boolean = false,
-    cheeseTitle: String = "课堂",
-): List<SpaceSecondarySwitchItem> {
-    val items = contributionTabs.map { tab ->
-        SpaceSecondarySwitchItem(
-            id = tab.id,
-            title = tab.title,
-            targetTab = SpaceMainTab.CONTRIBUTION,
-            contributionTabId = tab.id,
-        )
-    }.toMutableList()
-    if (items.none { it.targetTab == SpaceMainTab.COLLECTIONS }) {
-        items += SpaceSecondarySwitchItem(
-            id = SPACE_SECONDARY_COLLECTIONS_ID,
-            title = "合集",
-            targetTab = SpaceMainTab.COLLECTIONS,
-        )
-    }
-    items += SpaceSecondarySwitchItem(
-        id = SPACE_SECONDARY_FAVORITE_ID,
-        title = "收藏",
-        targetTab = SpaceMainTab.FAVORITE,
-    )
-    items += SpaceSecondarySwitchItem(
-        id = SPACE_SECONDARY_BANGUMI_ID,
-        title = "追番",
-        targetTab = SpaceMainTab.BANGUMI,
-    )
-    if (hasCheese) {
-        items += SpaceSecondarySwitchItem(
-            id = SPACE_SECONDARY_CHEESE_ID,
-            title = cheeseTitle.ifBlank { "课堂" },
-            targetTab = SpaceMainTab.CHEESE,
-        )
-    }
-    return items
-}
-
-internal fun resolveSelectedSpaceSecondarySwitchId(
-    selectedTab: SpaceMainTab,
-    selectedContributionTabId: String,
-): String {
-    return when (selectedTab) {
-        SpaceMainTab.FAVORITE -> SPACE_SECONDARY_FAVORITE_ID
-        SpaceMainTab.BANGUMI -> SPACE_SECONDARY_BANGUMI_ID
-        SpaceMainTab.COLLECTIONS -> SPACE_SECONDARY_COLLECTIONS_ID
-        SpaceMainTab.CHEESE -> SPACE_SECONDARY_CHEESE_ID
-        else -> selectedContributionTabId
-    }
-}
-
-/**
- * PiliPlus 一级栏保留 主页 / 动态 / 投稿，以及课堂 (若存在)。
- * 收藏、追番、合集进入投稿下的二级开关。
- */
+/** All library destinations share the primary rail; only contribution categories are secondary. */
 internal fun resolveSpaceDisplayedMainTabs(
     tabs: List<SpaceMainTabItem>,
     selectedTab: SpaceMainTab,
@@ -273,9 +192,7 @@ internal fun resolveSpaceMainTabs(tab2: List<SpaceAggregateTab>): List<SpaceMain
         resolved.firstOrNull { it.tab == default.tab } ?: default
     }.toMutableList()
 
-    resolved.firstOrNull { it.tab == SpaceMainTab.CHEESE }?.let {
-        result.add(it)
-    }
+    resolved.firstOrNull { it.tab == SpaceMainTab.CHEESE }?.let(result::add)
 
     return result
 }

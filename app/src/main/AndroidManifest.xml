@@ -80,6 +80,15 @@
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="31">
 
+        <!-- Collection starts only after the stored app preference is applied. SDK initialization
+             remains automatic so Crashlytics can retain the original uncaught exception handler. -->
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+        <meta-data
+            android:name="firebase_crashlytics_collection_enabled"
+            android:value="false" />
+
         <meta-data
             android:name="com.google.android.gms.cast.framework.OPTIONS_PROVIDER_CLASS_NAME"
             android:value="com.android.purebilibili.feature.plugin.googlecast.CastOptionsProvider" />
@@ -1009,7 +1018,18 @@
         </provider>
 
         <service
+            android:name=".feature.audio.player.BackgroundAudioService"
+            android:process=":playback"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".feature.message.notification.MessageNotificationService"
+            android:process=":message"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property

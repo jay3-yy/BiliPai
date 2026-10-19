@@ -63,7 +63,7 @@ internal fun BgmDetailScreen(
     val comments by commentViewModel.commentState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var composer by rememberSaveable(musicId) { mutableStateOf(false) }
-    var submitted by remember { mutableStateOf(false) }
+    var submittedSessionId by remember(musicId) { mutableStateOf<Long?>(null) }
     var emotePackages by remember { mutableStateOf<List<EmotePackage>>(emptyList()) }
     LaunchedEffect(composer) {
         if (composer && emotePackages.isEmpty()) emotePackages = com.android.purebilibili.data.repository.CommentRepository.getEmotePackages().getOrDefault(emptyList())
@@ -76,17 +76,22 @@ internal fun BgmDetailScreen(
         }
     }
     LaunchedEffect(viewModel) { viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() } }
-    LaunchedEffect(comments.isSending, comments.sendError) {
-        if (submitted && !comments.isSending) {
-            submitted = false
-            if (comments.sendError == null) { composer = false; commentViewModel.cancelReply() }
-            else Toast.makeText(context, comments.sendError, Toast.LENGTH_LONG).show()
+    LaunchedEffect(comments.isSending, comments.sendError, comments.composerDrafts.completedSessionId) {
+        if (submittedSessionId != null && !comments.isSending) {
+            submittedSessionId = null
+            comments.sendError?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show() }
+        }
+    }
+    LaunchedEffect(comments.composerDrafts.sessionId, comments.composerDrafts.completedSessionId) {
+        if (comments.composerDrafts.completedSessionId == comments.composerDrafts.sessionId) {
+            composer = false
         }
     }
     fun compose(reply: ReplyItem? = null) {
         if (TokenManager.sessDataCache.isNullOrBlank()) { onLogin(); return }
         if (!comments.canInputComment) { Toast.makeText(context, "当前评论区暂不可发言", Toast.LENGTH_SHORT).show(); return }
         if (reply == null) commentViewModel.cancelReply() else commentViewModel.replyTo(reply)
+        commentViewModel.beginCommentDraft()
         composer = true
     }
     BgmDetailContent(
@@ -108,13 +113,41 @@ internal fun BgmDetailScreen(
         onCommentDelete = commentViewModel::deleteComment, onCommentReport = commentViewModel::reportComment,
         onLinkClick = onLinkClick, modifier = modifier,
     )
+    val composerSessionId = comments.composerDrafts.sessionId
+    val composerReplyRpid = comments.replyTarget?.rpid
+    val composerDraft = comments.composerDrafts.drafts[commentComposerDraftKey(composerReplyRpid)]
+    val composerKey = remember(info?.oid, info?.pageType, composerReplyRpid, composerSessionId) {
+        "bgm:${info?.oid}:${info?.let(::resolveBgmCommentType)}:$composerReplyRpid:$composerSessionId"
+    }
     CommentInputDialog(
         visible = composer,
-        onDismiss = { composer = false; commentViewModel.cancelReply() },
-        onSend = { text, images, sync -> submitted = true; commentViewModel.sendComment(text, images, sync) },
+        draftKey = composerKey,
+        onDismiss = {
+            if (commentViewModel.commentState.value.composerDrafts.sessionId == composerSessionId) {
+                composer = false
+                commentViewModel.cancelReply()
+            }
+        },
+        onSend = { text, images, sync ->
+            val latest = commentViewModel.commentState.value
+            if (composer && latest.composerDrafts.sessionId == composerSessionId &&
+                latest.composerDrafts.completedSessionId != composerSessionId &&
+                latest.replyTarget?.rpid == composerReplyRpid && !latest.isSending
+            ) {
+                submittedSessionId = composerSessionId
+                commentViewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
+                commentViewModel.sendComment(text, images, sync)
+            }
+        },
         isSending = comments.isSending, replyToName = comments.replyTarget?.member?.uname,
         inputHint = if (comments.replyTarget == null) comments.rootInputHint else comments.childInputHint,
         canInputComment = comments.canInputComment, emotePackages = emotePackages,
+        initialText = composerDraft?.text.orEmpty(),
+        initialImageUris = composerDraft?.imageUris.orEmpty(),
+        initialSyncToDynamic = composerDraft?.syncToDynamic ?: false,
+        onDraftChange = { text, images, sync ->
+            commentViewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
+        },
     )
 }
 

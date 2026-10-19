@@ -45,6 +45,7 @@ import com.android.purebilibili.feature.message.feed.MessageFeedError
 import com.android.purebilibili.feature.video.ui.components.CommentInputDialog
 import com.android.purebilibili.feature.video.ui.components.SubReplyDetailContent
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
+import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,6 +66,7 @@ fun CommentDetailScreen(
     val showCommentInput by viewModel.showCommentInput.collectAsStateWithLifecycle()
     val replyingTo by viewModel.replyingTo.collectAsStateWithLifecycle()
     val isSending by viewModel.isSending.collectAsStateWithLifecycle()
+    val composerDrafts by viewModel.composerDrafts.collectAsStateWithLifecycle()
     val fraudResult by viewModel.fraudResult.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var emotePackages by remember { mutableStateOf<List<EmotePackage>>(emptyList()) }
@@ -239,15 +241,39 @@ fun CommentDetailScreen(
                 )
             }
 
+            val composerSessionId = composerDrafts.sessionId
+            val composerReplyRpid = replyingTo?.rpid
+            val composerDraft = composerDrafts.drafts[commentComposerDraftKey(composerReplyRpid)]
+            val composerKey = remember(oid, type, rootId, composerReplyRpid, composerSessionId) {
+                "thread:$oid:$type:$rootId:$composerReplyRpid:$composerSessionId"
+            }
             CommentInputDialog(
                 visible = showCommentInput,
-                onDismiss = viewModel::hideReplyInput,
+                draftKey = composerKey,
+                onDismiss = {
+                    if (viewModel.composerDrafts.value.sessionId == composerSessionId) {
+                        viewModel.hideReplyInput()
+                    }
+                },
                 onSend = { text, uris, sync ->
-                    viewModel.sendReply(text, uris, sync)
+                    if (viewModel.showCommentInput.value &&
+                        viewModel.composerDrafts.value.sessionId == composerSessionId &&
+                        viewModel.composerDrafts.value.completedSessionId != composerSessionId &&
+                        viewModel.replyingTo.value?.rpid == composerReplyRpid && !viewModel.isSending.value
+                    ) {
+                        viewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, uris, sync)
+                        viewModel.sendReply(text, uris, sync)
+                    }
                 },
                 isSending = isSending,
                 replyToName = replyingTo?.member?.uname,
                 emotePackages = emotePackages,
+                initialText = composerDraft?.text.orEmpty(),
+                initialImageUris = composerDraft?.imageUris.orEmpty(),
+                initialSyncToDynamic = composerDraft?.syncToDynamic ?: false,
+                onDraftChange = { text, images, sync ->
+                    viewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
+                }
             )
         }
     }

@@ -84,8 +84,16 @@ data class SearchDefaultResponse(
 data class SearchDefaultData(
     @SerialName("show_name")
     val showName: String = "",
-    val url: String = ""
-)
+    val url: String = "",
+    val name: String = ""
+) {
+    // show_name may contain promotional/update suffixes; prefer name for submission.
+    val keyword: String
+        get() = name.trim().ifBlank { showName.trim() }
+
+    val hint: String
+        get() = showName.trim().ifBlank { keyword }
+}
 
 // --- 2. 搜索结果模型 ---
 @Serializable

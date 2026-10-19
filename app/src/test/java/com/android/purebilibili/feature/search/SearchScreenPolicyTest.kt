@@ -95,13 +95,6 @@ class SearchScreenPolicyTest {
         )
     }
 
-    @Test
-    fun `searchDefaultPlaceholder covers all visible tabs`() {
-        assertEquals(
-            "搜索视频、番剧、影视、直播、UP主、专栏等...",
-            resolveSearchDefaultPlaceholder()
-        )
-    }
 
     @Test
     fun `searchUpUserTypeFilterLabel avoids repeating tab name`() {

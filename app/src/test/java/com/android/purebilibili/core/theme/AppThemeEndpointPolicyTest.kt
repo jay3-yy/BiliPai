@@ -14,7 +14,16 @@ import kotlin.test.assertEquals
 
 class AppThemeEndpointPolicyTest {
     @Test
-    fun nativeSelectionUsesThePickedAccentAcrossBothRenderersAndModes() {
+    fun darkMiuixPinkIsSofterAndWhiteHandlesRemainReadable() {
+        val pink = Color(0xFFF36595)
+        val adapted = resolveMiuixDarkCustomAccent(pink)
+        assertTrue(calculateContrastRatio(Color.Black, adapted) < calculateContrastRatio(Color.Black, pink))
+        assertTrue(calculateContrastRatio(Color.White, adapted) >= ACCESSIBLE_UI_MIN_CONTRAST)
+        assertTrue(calculateContrastRatio(adapted, Color(0xFF212121)) >= ACCESSIBLE_TEXT_MIN_CONTRAST)
+    }
+
+    @Test
+    fun nativeSelectionUsesTheModeAdjustedAccentAcrossBothRenderers() {
         for (style in AppUiStyle.entries) for (dark in listOf(false, true)) {
             for (accent in listOf(Color(0xFF007AFF), Color(0xFF34C759), Color.White, Color.Black)) {
                 val base = createBiliPaiStyleColorScheme(
@@ -24,16 +33,19 @@ class AppThemeEndpointPolicyTest {
                     base, style, Md3ColorSource.CUSTOM, dark,
                     customSeed = accent, liquidGlassEnabled = false,
                 )
-                assertEquals(accent, endpoint.material.primary)
-                assertEquals(accent, endpoint.miuix.primary)
+                val expectedAccent = if (style == AppUiStyle.MIUIX && dark) {
+                    resolveMiuixDarkCustomAccent(accent)
+                } else accent
+                assertEquals(expectedAccent, endpoint.material.primary)
+                assertEquals(expectedAccent, endpoint.miuix.primary)
                 // A bright custom accent legitimately needs dark text. Fixing
                 // Miuix handles must not force the shared foreground to white;
                 // MD3's native SwitchDefaults also consumes this semantic role.
-                assertEquals(resolveReadableForeground(accent), endpoint.material.onPrimary)
+                assertEquals(resolveReadableForeground(expectedAccent), endpoint.material.onPrimary)
                 assertTrue(calculateContrastRatio(
                     endpoint.material.onPrimary, endpoint.material.primary,
                 ) >= ACCESSIBLE_TEXT_MIN_CONTRAST)
-                val expectedContainer = opaqueCompositeOver(accent.copy(alpha = 0.14f), endpoint.material.surface)
+                val expectedContainer = opaqueCompositeOver(expectedAccent.copy(alpha = 0.14f), endpoint.material.surface)
                 assertEquals(expectedContainer, endpoint.material.secondaryContainer)
                 assertEquals(expectedContainer, endpoint.miuix.secondaryContainer)
                 assertEquals(endpoint.material.onSecondaryContainer, endpoint.miuix.onSecondaryContainer)

@@ -4,6 +4,13 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +76,11 @@ internal fun FavoriteFolderCardList(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     onCoverPrefetch: (List<FavFolder>) -> Unit = {},
+    selectionMode: Boolean = false,
+    selectedMediaIds: Set<Long> = emptySet(),
+    selectionEnabled: Boolean = true,
+    onToggleSelection: (FavFolder) -> Unit = {},
+    onStartSelection: (FavFolder) -> Unit = {},
 ) {
     // 只在列表真正可见时跟踪滚动前沿，避免未挂载时反复回调。
     val coverPrefetchFrontier by remember(listState) {
@@ -118,10 +130,17 @@ internal fun FavoriteFolderCardList(
             FavoriteFolderCard(
                 folder = folder,
                 transitionEnabled = transitionEnabled,
-                onClick = { onFolderClick(folder) },
+                onClick = {
+                    if (selectionMode) {
+                        if (selectionEnabled) onToggleSelection(folder)
+                    } else onFolderClick(folder)
+                },
+                selectionMode = selectionMode,
+                selected = resolveFavoriteFolderMediaId(folder) in selectedMediaIds,
+                onLongClick = { if (selectionEnabled) onStartSelection(folder) },
             )
         }
-        if (subscribedFoldersCount > 0 && searchQuery.isBlank()) {
+        if (!selectionMode && subscribedFoldersCount > 0 && searchQuery.isBlank()) {
             item(key = "favorite_folder_subscribed_entry") {
                 FavoriteSubscribedEntryRow(onClick = onSubscribedClick)
             }
@@ -130,16 +149,20 @@ internal fun FavoriteFolderCardList(
 }
 
 /** 单张收藏夹卡片，布局对齐 PiliPlus fav/video/item.dart。 */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FavoriteFolderCard(
     folder: FavFolder,
     transitionEnabled: Boolean,
     onClick: () -> Unit,
+    selectionMode: Boolean,
+    selected: Boolean,
+    onLongClick: () -> Unit,
 ) {
     val coverUrl = remember(folder.cover) {
         resolveFavoriteFolderPreviewCover(folder, emptyList())
     }
-    val privacyLabel = if (folder.attr != 0) "私密" else "公开"
+    val privacyLabel = if (isFavoriteFolderPrivate(folder.attr)) "私密" else "公开"
     val metaLine = buildString {
         append(folder.media_count)
         append("个内容 · ")
@@ -151,10 +174,19 @@ private fun FavoriteFolderCard(
             .fillMaxWidth()
             .heightIn(min = 96.dp)
             .clip(AppShapes.container(ContainerLevel.Card))
-            .clickable(onClick = onClick)
+            .semantics { if (selectionMode) this.selected = selected }
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = AppSpacingTokens.ExtraSmall),
         horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small + AppSpacingTokens.Micro),
     ) {
+        if (selectionMode) {
+            AppIcon(
+                imageVector = if (selected) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = if (selected) "已选择" else "未选择",
+                tint = if (selected) AppContentColors.accent() else AppContentColors.secondaryText(),
+                modifier = Modifier.align(Alignment.CenterVertically),
+            )
+        }
         Box(
             modifier = Modifier
                 .width(150.dp)

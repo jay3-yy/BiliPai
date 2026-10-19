@@ -366,6 +366,7 @@ private data class SubReplyDetailPage(
     val listState: LazyListState,
     val isRefreshing: Boolean,
     val isLoading: Boolean,
+    val isEnd: Boolean,
     val error: String?,
     val showManualLoadMore: Boolean,
     val replyDisplayCount: Int,
@@ -414,6 +415,8 @@ internal fun SubReplyDetailContent(
     remoteReplyCount: Int = 0,
     targetReplyId: Long = 0,
     headerDragModifier: Modifier = Modifier,
+    // 嵌入楼中楼的列表先还原播放器，再将剩余下拉交给刷新和拖拽关闭；窗口弹层保持默认。
+    listModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     val layoutPolicy = remember {
@@ -666,6 +669,7 @@ internal fun SubReplyDetailContent(
                 listState = listState,
                 isRefreshing = isRefreshing,
                 isLoading = isLoading,
+                isEnd = isEnd || localConversationMode,
                 error = error,
                 showManualLoadMore = showManualLoadMore,
                 replyDisplayCount = detailReplyDisplayCount,
@@ -682,6 +686,7 @@ internal fun SubReplyDetailContent(
             val listState = page.listState
             val isRefreshing = page.isRefreshing
             val isLoading = page.isLoading
+            val isEnd = page.isEnd
             val error = page.error
             val showManualLoadMore = page.showManualLoadMore
             val detailReplyDisplayCount = page.replyDisplayCount
@@ -693,7 +698,7 @@ internal fun SubReplyDetailContent(
             ) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
+                    modifier = listModifier
                         .fillMaxSize()
                         .testTag(SUB_REPLY_DETAIL_LIST_TAG),
                     contentPadding = PaddingValues(bottom = layoutPolicy.listBottomPaddingDp.dp)
@@ -915,6 +920,20 @@ internal fun SubReplyDetailContent(
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                     color = appearance.sortTint
                                 )
+                            }
+                            isEnd && !isLoading && !isRefreshing -> {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 24.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AppText(
+                                        text = "—— end ——",
+                                        color = appearance.secondaryTextColor,
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
                             }
                         }
                     }

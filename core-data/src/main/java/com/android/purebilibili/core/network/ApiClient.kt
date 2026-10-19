@@ -3,7 +3,6 @@ package com.android.purebilibili.core.network
 
 import android.content.Context
 import com.android.purebilibili.core.network.policy.HomeFeedAnonymizerRuntime
-import com.android.purebilibili.core.network.policy.resolveHardcodedDnsFallback
 import com.android.purebilibili.core.network.policy.resolveHomeFeedCookieAnonymizerDecision
 import com.android.purebilibili.core.network.policy.shouldStripMergedAppFeedCookies
 import com.android.purebilibili.core.network.policy.shouldEnableTrustAllCertificates
@@ -3185,30 +3184,9 @@ object NetworkModule {
         }
         
         builder
-            //  [Fix] 自定义 DNS 实现，绕过 OkHttp 可能被混淆内部类的问题，并添加日志
-            .dns(object : okhttp3.Dns {
-                override fun lookup(hostname: String): List<java.net.InetAddress> {
-                try {
-                    val addresses = java.net.InetAddress.getAllByName(hostname).toList()
-                    com.android.purebilibili.core.network.CoreDataLog.d("ApiClient", "DNS resolved: $hostname -> $addresses")
-                    return addresses
-                } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                    com.android.purebilibili.core.network.CoreDataLog.e("ApiClient", "DNS failed for $hostname: ${e.message}")
-                    val fallback = resolveHardcodedDnsFallback(
-                        hostname = hostname,
-                        allowHardcodedIpFallback = CoreNetworkRuntime.config.allowHardcodedDnsFallback
-                    )
-                    if (fallback != null) {
-                        com.android.purebilibili.core.network.CoreDataLog.w(
-                            "ApiClient",
-                            "⚠️ Using Hardcoded IP for ${fallback.description}: ${fallback.ipAddress}"
-                        )
-                        return listOf(java.net.InetAddress.getByName(fallback.ipAddress))
-                    }
-                    throw e
-                }
-            }})
+            .dns(buildAppDns(
+                allowHardcodedIpFallback = CoreNetworkRuntime.config.allowHardcodedDnsFallback
+            ))
             //  [关键] 添加 CookieJar 自动管理 Cookie（参考 PiliPala）
             .cookieJar(appSessionCookieJar)
             .addInterceptor { chain ->
@@ -3406,6 +3384,8 @@ object NetworkModule {
     // 当登录用户遭遇风控 (-351) 时，可以尝试以游客身份获取视频
     val guestOkHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            // Guest requests use the same platform ECH support without debug IP fallback.
+            .dns(buildAppDns(allowHardcodedIpFallback = false))
             .protocols(resolveSharedNetworkProtocols())
             .proxySelector(buildAppProxySelector())
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)

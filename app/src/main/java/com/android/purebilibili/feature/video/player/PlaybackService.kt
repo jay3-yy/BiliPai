@@ -22,7 +22,8 @@ internal fun shouldRefreshPlaybackServiceForeground(
     action: String?,
     isForegroundStarted: Boolean
 ): Boolean {
-    return action == PlaybackService.ACTION_START_FOREGROUND
+    return action == PlaybackService.ACTION_START_FOREGROUND ||
+        action == PlaybackService.ACTION_MEDIA_CONTROL
 }
 
 internal fun shouldStopPlaybackServiceForStartId(
@@ -47,6 +48,7 @@ class PlaybackService : MediaSessionService() {
         private const val CHANNEL_ID = "mini_player_channel"
         const val ACTION_START_FOREGROUND = "com.android.purebilibili.action.START_FOREGROUND"
         const val ACTION_STOP_FOREGROUND = "com.android.purebilibili.action.STOP_FOREGROUND"
+        const val ACTION_MEDIA_CONTROL = "com.android.purebilibili.action.MEDIA_CONTROL"
         const val NOTIFICATION_ID = 1002 // 必须与 MiniPlayerManager 中的 ID 一致
         @Volatile private var isForegroundStarted = false
         @Volatile private var latestHandledStartId = 0
@@ -79,7 +81,7 @@ class PlaybackService : MediaSessionService() {
         Logger.d(TAG, "onStartCommand: action=$action")
 
         when (action) {
-            ACTION_START_FOREGROUND -> {
+            ACTION_START_FOREGROUND, ACTION_MEDIA_CONTROL -> {
                 if (shouldRefreshPlaybackServiceForeground(action, isForegroundStarted)) {
                     try {
                         // 获取 MiniPlayerManager 中构建好的通知
@@ -92,6 +94,14 @@ class PlaybackService : MediaSessionService() {
                         }
                         startAsForeground(notification)
                         isForegroundStarted = true
+                        // A notification action must promote the service before resuming audio.
+                        if (action == ACTION_MEDIA_CONTROL) {
+                            resolveMediaControlType(
+                                intent?.getIntExtra(MiniPlayerManager.EXTRA_CONTROL_TYPE, 0) ?: 0
+                            )?.let { control ->
+                                MiniPlayerManager.getInstance(applicationContext).performMediaControl(control)
+                            }
+                        }
                     } catch (e: Exception) {
                         isForegroundStarted = false
                         Logger.e(TAG, "Failed to start foreground service", e)

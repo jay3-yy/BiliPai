@@ -177,13 +177,13 @@ fun DeviceListDialog(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 ) {
-                    AppText("DLNA 需要本地网络权限", style = MaterialTheme.typography.bodyMedium)
+                    AppText("搜索投屏设备需要本地网络权限", style = MaterialTheme.typography.bodyMedium)
                     Spacer(Modifier.height(6.dp))
                     AppText(
                         if (permissionRequested) {
-                            "权限未开启，DLNA 搜索已停止。Google Cast 仍可正常使用。"
+                            "权限未开启，需要本地网络权限的设备搜索已停止。"
                         } else {
-                            "仅在搜索局域网中的 DLNA 电视时使用，不会上传局域网信息。"
+                            "用于搜索和连接同一网络中的投屏设备，不会上传局域网信息。"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = AppContentColors.secondaryText(),
@@ -200,7 +200,7 @@ fun DeviceListDialog(
                             }
                         }
                     ) {
-                        AppText("允许并搜索 DLNA")
+                        AppText("允许并搜索设备")
                     }
                     if (permissionRequested) {
                         AppTextButton(
@@ -256,7 +256,7 @@ fun DeviceListDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppText(
-                                "Google Cast 已可用；授权后可继续搜索 DLNA",
+                                "授权本地网络后可搜索更多投屏设备",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = AppContentColors.secondaryText(),
                                 modifier = Modifier.weight(1f)
@@ -264,7 +264,7 @@ fun DeviceListDialog(
                             AppTextButton(
                                 onClick = { permissionLauncher.launch(localNetworkRuntimePermissions()) }
                             ) {
-                                AppText("启用 DLNA")
+                                AppText("允许本地网络")
                             }
                         }
                     }

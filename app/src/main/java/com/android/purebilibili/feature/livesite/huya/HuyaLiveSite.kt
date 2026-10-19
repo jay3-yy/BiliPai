@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.livesite.huya
 
+import com.android.purebilibili.core.network.buildAppDns
 import com.android.purebilibili.feature.livesite.LiveSite
 import com.android.purebilibili.feature.livesite.LiveSiteArea
 import com.android.purebilibili.feature.livesite.LiveSiteCategory
@@ -327,6 +328,7 @@ class HuyaLiveSite(
             isLenient = true
         }
         private fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
+            .dns(buildAppDns())
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .build()

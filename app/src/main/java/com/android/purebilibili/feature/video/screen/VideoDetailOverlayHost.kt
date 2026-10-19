@@ -975,12 +975,14 @@ internal fun DetachedVideoCommentThreadHost(
     onTimestampClick: (Long) -> Unit,
     onBackToTop: () -> Unit = {},
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
+    threadListModifier: Modifier = Modifier,
 ) {
     if (!visible) return
 
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
 
     VideoCommentSheetHost(
+        threadListModifier = threadListModifier,
         mainSheetVisible = resolveVideoDetailCommentThreadHostMainSheetVisible(
             useEmbeddedPresentation = com.android.purebilibili.feature.video.ui.pager
                 .shouldUseEmbeddedVideoSubReplyPresentation(),

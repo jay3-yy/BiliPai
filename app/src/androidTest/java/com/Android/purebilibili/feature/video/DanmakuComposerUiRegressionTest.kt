@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
@@ -8,9 +9,11 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextRange
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.android.purebilibili.core.ui.AppThemeConfig
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.feature.video.ui.components.CommentInputDialog
 import com.android.purebilibili.feature.video.ui.components.DanmakuSendDialog
-import com.android.purebilibili.feature.video.ui.components.PlainLandscapeDanmakuComposer
+import com.android.purebilibili.feature.video.ui.components.LandscapeDanmakuComposer
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -29,6 +32,7 @@ class DanmakuComposerUiRegressionTest {
             MaterialTheme {
                 CommentInputDialog(
                     visible = true,
+                    draftKey = "restored-comment",
                     initialText = "旧评论",
                     onDismiss = {},
                     onSend = { _, _, _ -> },
@@ -106,33 +110,46 @@ class DanmakuComposerUiRegressionTest {
     }
 
     @Test
-    fun plainLandscapeComposer_styleSwitchesPreserveDraftAndSendSelectedOptions() {
+    fun landscapeComposer_nativeStyleSwitchesPreserveDraftAndSendSelectedOptions() {
+        assertLandscapeComposerPreservesDraftAndOptions(liquidGlassEnabled = false)
+    }
+
+    @Test
+    fun landscapeComposer_glassStyleSwitchesPreserveDraftAndSendSelectedOptions() {
+        assertLandscapeComposerPreservesDraftAndOptions(liquidGlassEnabled = true)
+    }
+
+    private fun assertLandscapeComposerPreservesDraftAndOptions(liquidGlassEnabled: Boolean) {
         val draft = mutableStateOf("")
         val selection = mutableStateOf(Triple(16777215, 1, 25))
         var sentText: String? = null
         var sentSelection: Triple<Int, Int, Int>? = null
         var sentAttention: Boolean? = null
         composeTestRule.setContent {
-            MaterialTheme {
-                PlainLandscapeDanmakuComposer(
-                    visible = true,
-                    onDismiss = {},
-                    onSend = { text, color, mode, size, attention ->
-                        sentText = text
-                        sentSelection = Triple(color, mode, size)
-                        sentAttention = attention
-                    },
-                    isSending = false,
-                    initialColor = selection.value.first,
-                    initialMode = selection.value.second,
-                    initialFontSize = selection.value.third,
-                    initialText = draft.value,
-                    initialAttentionCommand = false,
-                    onDraftChange = { text, _ -> draft.value = text },
-                    onSelectionChange = { color, mode, size ->
-                        selection.value = Triple(color, mode, size)
-                    },
-                )
+            CompositionLocalProvider(
+                LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = liquidGlassEnabled),
+            ) {
+                MaterialTheme {
+                    LandscapeDanmakuComposer(
+                        visible = true,
+                        onDismiss = {},
+                        onSend = { text, color, mode, size, attention ->
+                            sentText = text
+                            sentSelection = Triple(color, mode, size)
+                            sentAttention = attention
+                        },
+                        isSending = false,
+                        initialColor = selection.value.first,
+                        initialMode = selection.value.second,
+                        initialFontSize = selection.value.third,
+                        initialText = draft.value,
+                        initialAttentionCommand = false,
+                        onDraftChange = { text, _ -> draft.value = text },
+                        onSelectionChange = { color, mode, size ->
+                            selection.value = Triple(color, mode, size)
+                        },
+                    )
+                }
             }
         }
         val input = composeTestRule.onNodeWithTag("danmaku_landscape_composer_input")

@@ -17,7 +17,14 @@ class GoogleCastPluginTest {
     fun `plugin is CastPluginApi`() {
         val api: CastPluginApi = plugin
         assertEquals(plugin.id, api.id)
-        assertEquals(CastDiscoveryRequirement.NONE, api.discoveryRequirement)
+        assertEquals(resolveGoogleCastDiscoveryRequirement(android.os.Build.VERSION.SDK_INT), api.discoveryRequirement)
+    }
+
+    @Test
+    fun `app owned discovery requires local network permission starting with android 17`() {
+        assertEquals(CastDiscoveryRequirement.NONE, resolveGoogleCastDiscoveryRequirement(36))
+        assertEquals(CastDiscoveryRequirement.RAW_LOCAL_NETWORK, resolveGoogleCastDiscoveryRequirement(37))
+        assertEquals(CastDiscoveryRequirement.RAW_LOCAL_NETWORK, resolveGoogleCastDiscoveryRequirement(38))
     }
 
     @Test

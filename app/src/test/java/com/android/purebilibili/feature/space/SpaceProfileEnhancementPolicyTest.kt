@@ -172,6 +172,9 @@ class SpaceProfileEnhancementPolicyTest {
                 SpaceMainTab.HOME,
                 SpaceMainTab.DYNAMIC,
                 SpaceMainTab.CONTRIBUTION,
+                SpaceMainTab.COLLECTIONS,
+                SpaceMainTab.FAVORITE,
+                SpaceMainTab.BANGUMI,
             ),
             mainTabs.map { it.tab }
         )
@@ -183,97 +186,75 @@ class SpaceProfileEnhancementPolicyTest {
     }
 
     @Test
-    fun `resolveSpaceDisplayedMainTabs keeps only PiliPlus primary destinations and cheese when present`() {
-        val tabs = listOf(
-            SpaceMainTabItem(SpaceMainTab.HOME, "主页"),
-            SpaceMainTabItem(SpaceMainTab.DYNAMIC, "动态"),
-            SpaceMainTabItem(SpaceMainTab.CONTRIBUTION, "投稿"),
-            SpaceMainTabItem(SpaceMainTab.COLLECTIONS, "合集"),
-            SpaceMainTabItem(SpaceMainTab.FAVORITE, "收藏"),
-            SpaceMainTabItem(SpaceMainTab.BANGUMI, "追番"),
-            SpaceMainTabItem(SpaceMainTab.CHEESE, "课堂")
-        )
+    fun `library destinations stay primary before and after remote tabs arrive`() {
         val expected = listOf(
             SpaceMainTab.HOME,
             SpaceMainTab.DYNAMIC,
             SpaceMainTab.CONTRIBUTION,
+            SpaceMainTab.COLLECTIONS,
+            SpaceMainTab.FAVORITE,
+            SpaceMainTab.BANGUMI,
+        )
+        val remoteTabs = listOf(
+            SpaceMainTabItem(SpaceMainTab.BANGUMI, "订阅番剧"),
+            SpaceMainTabItem(SpaceMainTab.CONTRIBUTION, "作品"),
+            SpaceMainTabItem(SpaceMainTab.FAVORITE, "公开收藏"),
+        )
+
+        for (selected in expected) {
+            val loadingTabs = resolveSpaceDisplayedMainTabs(emptyList(), selectedTab = selected)
+            val loadedTabs = resolveSpaceDisplayedMainTabs(
+                resolveSpaceMainTabs(remoteTabs.map { item ->
+                    SpaceAggregateTab(
+                        title = item.title,
+                        param = when (item.tab) {
+                            SpaceMainTab.BANGUMI -> "bangumi"
+                            SpaceMainTab.FAVORITE -> "favorite"
+                            else -> "contribute"
+                        },
+                    )
+                }),
+                selectedTab = selected,
+            )
+            assertEquals(expected, loadingTabs.map { it.tab })
+            assertEquals(expected, loadedTabs.map { it.tab })
+            assertEquals(expected.indexOf(selected), resolveSpaceMainTabChromeSpec(loadedTabs, selected).selectedIndex)
+            assertEquals("公开收藏", loadedTabs.first { it.tab == SpaceMainTab.FAVORITE }.title)
+        }
+    }
+
+
+    @Test
+    fun `optional classroom does not displace library destinations`() {
+        val selected = SpaceMainTab.CHEESE
+        val tabs = resolveSpaceDisplayedMainTabs(
+            tabs = listOf(SpaceMainTabItem(selected, "课程")),
+            selectedTab = selected,
+        )
+        assertEquals(
+            listOf("主页", "动态", "投稿", "合集", "收藏", "追番", "课程"),
+            tabs.map { it.title },
+        )
+        assertEquals(
             SpaceMainTab.CHEESE,
-        )
-
-        assertEquals(
-            expected,
-            resolveSpaceDisplayedMainTabs(tabs, selectedTab = SpaceMainTab.HOME).map { it.tab }
-        )
-        assertEquals(
-            expected,
-            resolveSpaceDisplayedMainTabs(tabs, selectedTab = SpaceMainTab.COLLECTIONS).map { it.tab }
-        )
-        assertEquals(
-            expected,
-            resolveSpaceDisplayedMainTabs(tabs, selectedTab = SpaceMainTab.CHEESE).map { it.tab }
+            resolveSpaceDisplayedMainTabs(emptyList(), selectedTab = selected).last().tab,
         )
     }
 
     @Test
-    fun `resolveSpacePrimaryTab maps library tabs back to contribution but keeps cheese primary`() {
-        assertEquals(SpaceMainTab.CONTRIBUTION, resolveSpacePrimaryTab(SpaceMainTab.FAVORITE))
-        assertEquals(SpaceMainTab.CONTRIBUTION, resolveSpacePrimaryTab(SpaceMainTab.BANGUMI))
-        assertEquals(SpaceMainTab.CONTRIBUTION, resolveSpacePrimaryTab(SpaceMainTab.COLLECTIONS))
-        assertEquals(SpaceMainTab.CHEESE, resolveSpacePrimaryTab(SpaceMainTab.CHEESE))
-        assertEquals(SpaceMainTab.DYNAMIC, resolveSpacePrimaryTab(SpaceMainTab.DYNAMIC))
-    }
-
-    @Test
-    fun `resolveSpaceSecondarySwitchItems appends library destinations after contribution tabs`() {
-        val items = resolveSpaceSecondarySwitchItems(buildDefaultSpaceContributionTabs())
-
-        assertEquals(
-            listOf("video", "article", "audio", SPACE_SECONDARY_COLLECTIONS_ID, SPACE_SECONDARY_FAVORITE_ID, SPACE_SECONDARY_BANGUMI_ID),
-            items.map { it.id }
+    fun `saved library tab ids still select their own primary destination`() {
+        val savedTabs = listOf(
+            3 to SpaceMainTab.FAVORITE,
+            4 to SpaceMainTab.BANGUMI,
+            5 to SpaceMainTab.COLLECTIONS,
         )
-        assertEquals(SpaceMainTab.CONTRIBUTION, items.first().targetTab)
-        assertEquals(SpaceMainTab.COLLECTIONS, items.first { it.id == SPACE_SECONDARY_COLLECTIONS_ID }.targetTab)
-        assertEquals(SpaceMainTab.FAVORITE, items.first { it.id == SPACE_SECONDARY_FAVORITE_ID }.targetTab)
-        assertEquals(SpaceMainTab.BANGUMI, items.first { it.id == SPACE_SECONDARY_BANGUMI_ID }.targetTab)
-    }
-
-    @Test
-    fun `resolveSpaceSecondarySwitchItems includes cheese when available`() {
-        val items = resolveSpaceSecondarySwitchItems(
-            contributionTabs = buildDefaultSpaceContributionTabs(),
-            hasCheese = true
-        )
-
-        assertTrue(items.any { it.id == SPACE_SECONDARY_CHEESE_ID && it.targetTab == SpaceMainTab.CHEESE && it.title == "课堂" })
-        assertEquals(
-            listOf("video", "article", "audio", SPACE_SECONDARY_COLLECTIONS_ID, SPACE_SECONDARY_FAVORITE_ID, SPACE_SECONDARY_BANGUMI_ID, SPACE_SECONDARY_CHEESE_ID),
-            items.map { it.id }
-        )
-    }
-
-    @Test
-    fun `resolveSelectedSpaceSecondarySwitchId tracks library tabs`() {
-        assertEquals(
-            SPACE_SECONDARY_FAVORITE_ID,
-            resolveSelectedSpaceSecondarySwitchId(
-                selectedTab = SpaceMainTab.FAVORITE,
-                selectedContributionTabId = "video",
-            )
-        )
-        assertEquals(
-            SPACE_SECONDARY_CHEESE_ID,
-            resolveSelectedSpaceSecondarySwitchId(
-                selectedTab = SpaceMainTab.CHEESE,
-                selectedContributionTabId = "video",
-            )
-        )
-        assertEquals(
-            "article",
-            resolveSelectedSpaceSecondarySwitchId(
-                selectedTab = SpaceMainTab.CONTRIBUTION,
-                selectedContributionTabId = "article",
-            )
-        )
+        for ((savedId, destination) in savedTabs) {
+            val selected = tabIndexToMainTab(savedId)
+            val displayed = resolveSpaceDisplayedMainTabs(emptyList(), selectedTab = selected)
+            val chrome = resolveSpaceMainTabChromeSpec(displayed, selected)
+            assertEquals(destination, displayed[chrome.selectedIndex].tab)
+            assertEquals(savedId, mainTabToTabIndex(selected))
+        }
     }
 
     @Test

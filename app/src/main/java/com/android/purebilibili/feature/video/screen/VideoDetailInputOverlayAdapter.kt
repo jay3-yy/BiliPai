@@ -57,6 +57,7 @@ private data class DanmakuInputActions(
 @Immutable
 private data class CommentInputSnapshot(
     val visible: Boolean,
+    val draftKey: String,
     val isSending: Boolean,
     val replyToName: String?,
     val inputHint: String,
@@ -164,11 +165,18 @@ internal fun VideoDetailInputOverlayAdapter(
     val replyingToComment by viewModel.replyingToComment.collectAsStateWithLifecycle()
     val emotePackages by viewModel.emotePackages.collectAsStateWithLifecycle()
     val mentionSearchState by viewModel.commentMentionSearchState.collectAsStateWithLifecycle()
-    val commentDraft = composerDrafts.comments[commentComposerDraftKey(replyingToComment?.rpid)]
+    val draftVideoId = composerDrafts.videoId
+    val draftSessionId = composerDrafts.comments.sessionId
+    val draftReplyRpid = replyingToComment?.rpid
+    val draftKey = remember(draftVideoId, draftSessionId, draftReplyRpid) {
+        "$draftVideoId:$draftReplyRpid:$draftSessionId"
+    }
+    val commentDraft = composerDrafts.comments.drafts[commentComposerDraftKey(draftReplyRpid)]
         ?: CommentComposerDraft()
     VideoDetailCommentInputOverlayContent(
         snapshot = CommentInputSnapshot(
             visible = showCommentInput,
+            draftKey = draftKey,
             isSending = isSendingComment,
             replyToName = replyingToComment?.member?.uname,
             inputHint = if (replyingToComment != null) commentState.childInputHint else commentState.rootInputHint,
@@ -180,11 +188,24 @@ internal fun VideoDetailInputOverlayAdapter(
             draft = commentDraft,
         ),
         actions = CommentInputActions(
-            dismiss = viewModel::hideCommentInputDialog,
+            dismiss = {
+                val current = viewModel.composerDrafts.value
+                if (current.videoId == draftVideoId && current.comments.sessionId == draftSessionId) {
+                    viewModel.hideCommentInputDialog()
+                }
+            },
             searchMentions = viewModel::searchCommentMentionUsers,
-            updateDraft = viewModel::updateCommentDraft,
+            updateDraft = { text, images, sync ->
+                viewModel.updateCommentDraft(draftVideoId, draftSessionId, draftReplyRpid, text, images, sync)
+            },
             send = { message, imageUris, syncToDynamic ->
-                viewModel.sendComment(message, imageUris, syncToDynamic)
+                val current = viewModel.composerDrafts.value
+                if (current.videoId == draftVideoId && current.comments.sessionId == draftSessionId &&
+                    viewModel.replyingToComment.value?.rpid == draftReplyRpid &&
+                    viewModel.showCommentDialog.value
+                ) {
+                    viewModel.sendComment(message, imageUris, syncToDynamic)
+                }
             },
         ),
         currentVideoPositionMsProvider = currentVideoPositionMsProvider,
@@ -223,6 +244,7 @@ private fun VideoDetailCommentInputOverlayContent(
 ) {
     CommentInputDialog(
         visible = snapshot.visible,
+        draftKey = snapshot.draftKey,
         onDismiss = actions.dismiss,
         isSending = snapshot.isSending,
         replyToName = snapshot.replyToName,

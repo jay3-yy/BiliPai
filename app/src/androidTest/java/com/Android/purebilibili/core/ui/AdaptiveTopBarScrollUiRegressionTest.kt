@@ -1,9 +1,11 @@
 package com.Android.purebilibili.core.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -18,9 +20,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
@@ -30,6 +35,9 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AppThemeConfig
+import com.android.purebilibili.core.ui.ProvideAppThemeConfig
+import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.AppScaffold
 import com.android.purebilibili.core.ui.AppTopBar
 import org.junit.Assert.assertEquals
@@ -38,6 +46,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @RunWith(AndroidJUnit4::class)
@@ -143,5 +152,59 @@ class AdaptiveTopBarScrollUiRegressionTest {
                 ),
             )
         }
+    }
+
+    @Test
+    fun materialActionsKeepPixelsAlignedWhenSearchAppearsAndDisappears() {
+        assertChangingActionPositions(AppUiStyle.MATERIAL3)
+    }
+
+    @Test
+    fun miuixActionsKeepPixelsAlignedWhenSearchAppearsAndDisappears() {
+        assertChangingActionPositions(AppUiStyle.MIUIX)
+    }
+
+    private fun assertChangingActionPositions(uiStyle: AppUiStyle) {
+        var showSearch by mutableStateOf(false)
+        rule.setContent {
+            CompositionLocalProvider(LocalAppUiStyle provides uiStyle) {
+                ProvideAppThemeConfig(AppThemeConfig(liquidGlassEnabled = false)) {
+                    MaterialTheme {
+                        MiuixTheme {
+                            AppTopBar(
+                                title = "",
+                                modifier = Modifier.testTag("changing-action-bar"),
+                                actions = {
+                                    if (showSearch) {
+                                        AppIconButton(onClick = {}, modifier = Modifier.testTag("search-action")) {
+                                            Box(Modifier.size(18.dp).background(Color.Red))
+                                        }
+                                    }
+                                    AppIconButton(onClick = {}, modifier = Modifier.testTag("more-action")) {
+                                        Box(Modifier.size(18.dp).background(Color.Green))
+                                    }
+                                },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        assertActionPixel("more-action", Color.Green)
+        rule.runOnIdle { showSearch = true }
+        assertActionPixel("search-action", Color.Red)
+        assertActionPixel("more-action", Color.Green)
+        rule.runOnIdle { showSearch = false }
+        assertActionPixel("more-action", Color.Green)
+    }
+
+    private fun assertActionPixel(tag: String, expected: Color) {
+        val bar = rule.onNodeWithTag("changing-action-bar")
+        val origin = bar.fetchSemanticsNode().boundsInRoot.topLeft
+        val center = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot.center - origin
+        val pixel = bar.captureToImage().toPixelMap()[center.x.roundToInt(), center.y.roundToInt()]
+        assertEquals("$tag red", expected.red, pixel.red, 0.02f)
+        assertEquals("$tag green", expected.green, pixel.green, 0.02f)
+        assertEquals("$tag blue", expected.blue, pixel.blue, 0.02f)
     }
 }

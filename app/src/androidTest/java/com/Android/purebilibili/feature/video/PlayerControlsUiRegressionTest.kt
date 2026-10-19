@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
@@ -37,70 +38,73 @@ class PlayerControlsUiRegressionTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun fullscreenGlassSwitch_routesBottomActionsAndPreservesPortraitControls() {
+    fun fullscreenMaterialSwitch_preservesPrimaryActionOrderAndPortraitSettings() {
         val glass = mutableStateOf(false)
         val fullscreen = mutableStateOf(true)
         var sends = 0
         var settings = 0
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glass.value)) {
-                MaterialTheme {
-                    BottomControlBar(
-                        isPlaying = false,
-                        isFullscreen = fullscreen.value,
-                        viewportWidthDpOverride = 960,
-                        fullscreenDanmakuActionsInDedicatedDocks = fullscreen.value,
-                        onPlayPauseClick = {},
-                        onSeek = {},
-                        onToggleFullscreen = {},
-                        onDanmakuInputClick = { sends++ },
-                        onDanmakuSettingsClick = { settings++ },
-                    )
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val density = LocalDensity.current.density * maxWidth.value / 960f
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density),
+                    LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glass.value),
+                ) {
+                    MaterialTheme {
+                        Box(Modifier.fillMaxWidth().height(240.dp)) {
+                            if (fullscreen.value) {
+                                TopControlBar(
+                                    title = "测试视频",
+                                    isFullscreen = true,
+                                    likeStatusKnown = false,
+                                    showCurrentTime = false,
+                                    showInteractiveActions = false,
+                                    onBack = {},
+                                    modifier = Modifier.align(Alignment.TopCenter),
+                                )
+                            }
+                            BottomControlBar(
+                                isPlaying = false,
+                                isFullscreen = fullscreen.value,
+                                viewportWidthDpOverride = 960,
+                                onPlayPauseClick = {},
+                                onSeek = {},
+                                onToggleFullscreen = {},
+                                onDanmakuInputClick = { sends++ },
+                                onDanmakuSettingsClick = { settings++ },
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            )
+                        }
+                    }
                 }
             }
         }
-        composeTestRule.onNodeWithTag("player_play_pause").assertExists()
-        composeTestRule.onNodeWithTag("player_danmaku_settings").performClick()
-        composeTestRule.onNodeWithTag("player_danmaku_send").performClick()
-        composeTestRule.runOnIdle {
-            assertTrue(sends == 1 && settings == 1)
-            glass.value = true
-        }
-        composeTestRule.onNodeWithTag("player_play_pause").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("player_danmaku_settings").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("player_danmaku_send").performClick()
-        composeTestRule.runOnIdle {
-            assertTrue(sends == 2 && settings == 1)
-            fullscreen.value = false
-        }
-        composeTestRule.onNodeWithTag("player_play_pause").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("player_danmaku_settings").performClick()
-        composeTestRule.runOnIdle { glass.value = false }
-        composeTestRule.onNodeWithTag("player_play_pause").assertDoesNotExist()
-        composeTestRule.onNodeWithTag("player_danmaku_settings").performClick()
-        composeTestRule.runOnIdle { assertTrue(sends == 2 && settings == 3) }
-    }
-
-    @Test
-    fun glassFullscreenTopDanmakuAction_opensSettings() {
-        var settings = 0
-        composeTestRule.setContent {
-            CompositionLocalProvider(LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = true)) {
-                MaterialTheme {
-                    TopControlBar(
-                        title = "测试视频",
-                        isFullscreen = true,
-                        likeStatusKnown = false,
-                        showCurrentTime = false,
-                        showInteractiveActions = false,
-                        onBack = {},
-                        onDanmakuSettingsClick = { settings++ },
-                    )
-                }
+        repeat(2) { index ->
+            composeTestRule.runOnIdle { glass.value = index == 1 }
+            assertFullscreenPrimaryActionOrder()
+            composeTestRule.onAllNodesWithContentDescription("弹幕设置").assertCountEquals(1)
+            composeTestRule.onNodeWithTag("player_danmaku_settings").performClick()
+            composeTestRule.onNodeWithTag("player_danmaku_send").performClick()
+            composeTestRule.runOnIdle {
+                assertEquals(index + 1, sends)
+                assertEquals(index + 1, settings)
             }
         }
-        composeTestRule.onNodeWithTag("player_top_danmaku_settings").performClick()
-        composeTestRule.runOnIdle { assertTrue(settings == 1) }
+        composeTestRule.runOnIdle { fullscreen.value = false }
+        listOf(true, false).forEachIndexed { index, liquidGlassEnabled ->
+            composeTestRule.runOnIdle { glass.value = liquidGlassEnabled }
+            // Inline play/pause sits at the bottom-left, before the danmaku actions.
+            val play = composeTestRule.onNodeWithTag("player_play_pause").assertIsDisplayed()
+                .fetchSemanticsNode().boundsInRoot
+            val settingsBounds = composeTestRule.onNodeWithTag("player_danmaku_settings")
+                .fetchSemanticsNode().boundsInRoot
+            assertTrue("Inline play/pause must stay left of danmaku actions", play.right <= settingsBounds.left)
+            composeTestRule.onNodeWithTag("player_danmaku_settings").performClick()
+            composeTestRule.runOnIdle {
+                assertEquals(2, sends)
+                assertEquals(index + 3, settings)
+            }
+        }
     }
 
     @Test
@@ -223,10 +227,20 @@ class PlayerControlsUiRegressionTest {
     }
 
     @Test
-    fun nativeFullscreen_resizeAndLargeFontsKeepPrimaryActionsUsableAndToolsReachable() {
+    fun nativeFullscreen_rightAlignedFixedToolsAndResizeKeepPrimaryActionsUsable() {
+        assertFullscreenResizeKeepsActionsReachable(liquidGlassEnabled = false)
+    }
+
+    @Test
+    fun glassFullscreen_rightAlignedFixedToolsAndResizeKeepPrimaryActionsUsable() {
+        assertFullscreenResizeKeepsActionsReachable(liquidGlassEnabled = true)
+    }
+
+    private fun assertFullscreenResizeKeepsActionsReachable(liquidGlassEnabled: Boolean) {
         val widthFraction = mutableStateOf(1f)
         val fontScale = mutableStateOf(1f)
         val calls = IntArray(6)
+        var previousGapPx: Float? = null
         composeTestRule.setContent {
             // Keep a 960dp test viewport on any host display; shrink its content to
             // 624dp and 384dp without depending on the device's orientation or size.
@@ -234,7 +248,7 @@ class PlayerControlsUiRegressionTest {
                 val density = LocalDensity.current.density * maxWidth.value / 960f
                 CompositionLocalProvider(
                     LocalDensity provides Density(density, fontScale.value),
-                    LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = false),
+                    LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = liquidGlassEnabled),
                 ) {
                     MaterialTheme {
                         BottomControlBar(
@@ -257,12 +271,36 @@ class PlayerControlsUiRegressionTest {
                 }
             }
         }
-        // The native action row adapts spacing, then scrolls when necessary.
-        // Assert access and callback routing rather than the superseded fixed gap.
+        // Fullscreen labels ignore system font scale: gaps stay fixed across widths and scales.
         listOf(1f to 1f, 0.65f to 1f, 0.65f to 1.5f, 0.4f to 1.5f).forEachIndexed { index, (width, scale) ->
             composeTestRule.runOnIdle {
                 widthFraction.value = width
                 fontScale.value = scale
+            }
+            assertFullscreenPrimaryActionOrder()
+            if (liquidGlassEnabled) {
+                composeTestRule.onNodeWithTag("player_time_viewport").assertIsDisplayed()
+            }
+            if (index < 3) {
+                composeTestRule.onNodeWithText("1080P").performScrollTo()
+                val tools = listOf("1080P", "分集", "倍速").map { label ->
+                    composeTestRule.onNodeWithText(label).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                }
+                val gapPx = tools[1].left - tools[0].right
+                assertTrue("Tool gaps must remain positive", gapPx > 0f)
+                assertEquals(gapPx, tools[2].left - tools[1].right, 1f)
+                previousGapPx?.let { assertEquals(it, gapPx, 1f) }
+                previousGapPx = gapPx
+                if (index == 0 || index == 2) {
+                    // Unused width belongs before the tools, not between them or after "更多".
+                    val send = composeTestRule.onNodeWithTag("player_danmaku_send").fetchSemanticsNode().boundsInRoot
+                    val more = composeTestRule.onNodeWithText("更多").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                    val exit = composeTestRule.onNodeWithTag("player_fullscreen_toggle").fetchSemanticsNode().boundsInRoot
+                    assertTrue(
+                        "Fullscreen tools must stay right-aligned at content width",
+                        exit.left - more.right < tools[0].left - send.right,
+                    )
+                }
             }
             listOf(
                 "player_play_pause", "player_danmaku_toggle", "player_danmaku_settings",
@@ -287,6 +325,18 @@ class PlayerControlsUiRegressionTest {
             composeTestRule.runOnIdle {
                 calls.forEach { count -> assertEquals(index + 1, count) }
             }
+        }
+    }
+
+    private fun assertFullscreenPrimaryActionOrder() {
+        val bounds = listOf(
+            "player_play_pause", "player_danmaku_toggle",
+            "player_danmaku_settings", "player_danmaku_send",
+        ).map { tag ->
+            composeTestRule.onNodeWithTag(tag).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        }
+        bounds.zipWithNext().forEach { (left, right) ->
+            assertTrue("Fullscreen actions must stay in reading order", left.center.x < right.center.x)
         }
     }
 

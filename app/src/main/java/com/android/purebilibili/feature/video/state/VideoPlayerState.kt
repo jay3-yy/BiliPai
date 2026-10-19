@@ -1571,6 +1571,21 @@ fun rememberVideoPlayerState(
             return@LaunchedEffect
         }
 
+        // Wait for the remote audio owner to pause and acknowledge before local playback starts.
+        val remoteResume = try {
+            miniPlayerManager.reclaimRemoteAudioForVideo()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Logger.w("VideoPlayerState", "Remote audio return was not acknowledged", e)
+            android.widget.Toast.makeText(context, "后台音频暂未交回，请稍后重新打开视频", android.widget.Toast.LENGTH_SHORT).show()
+            return@LaunchedEffect
+        }
+        val resumeSameRemoteItem = remoteResume?.current?.let {
+            it.bvid == bvid && (cid <= 0L || it.cid == cid)
+        } == true
+        if (resumeSameRemoteItem && remoteResume != null) player.setPlaybackSpeed(remoteResume.speed)
+
         // 冷启动进场：仅 attach/prepare 等待 morph 门控，网络请求立即启动。
         // 小窗复用则立即 attach，保证 live morph 能带上已在播的 surface。
         // 1️⃣ 首先绑定 player
@@ -1620,8 +1635,8 @@ fun rememberVideoPlayerState(
         viewModel.loadVideo(
             bvid = bvid,
             cid = cid,
-            fallbackResumePositionMs = fallbackResumePositionMs,
-            autoPlay = SettingsManager.getClickToPlaySync(context),
+            fallbackResumePositionMs = if (resumeSameRemoteItem) remoteResume?.positionMs ?: fallbackResumePositionMs else fallbackResumePositionMs,
+            autoPlay = if (resumeSameRemoteItem) remoteResume?.playing else SettingsManager.getClickToPlaySync(context),
         )
     }
 

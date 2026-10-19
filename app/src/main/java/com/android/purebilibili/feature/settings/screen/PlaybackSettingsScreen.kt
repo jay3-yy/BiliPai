@@ -2029,11 +2029,15 @@ private fun PlaybackFullscreenGestureSettingsSection(
         }
     }
     val inlineSwipeSeekSeconds by com.android.purebilibili.core.store.SettingsManager
-        .getInlineSwipeSeekSeconds(context).collectAsStateWithLifecycle(initialValue = 0)
+        .getInlineSwipeSeekSeconds(context).collectAsStateWithLifecycle(initialValue = 30)
     val fullscreenSwipeSeekEnabled by com.android.purebilibili.core.store.SettingsManager
         .getFullscreenSwipeSeekEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val fullscreenSwipeSeekSeconds by com.android.purebilibili.core.store.SettingsManager
-        .getFullscreenSwipeSeekSeconds(context).collectAsStateWithLifecycle(initialValue = 0)
+        .getFullscreenSwipeSeekSeconds(context).collectAsStateWithLifecycle(initialValue = 15)
+    val swipeSeekUseRelativeDuration by SettingsManager
+        .getSwipeSeekUseRelativeDuration(context).collectAsStateWithLifecycle(initialValue = false)
+    val swipeSeekRelativePercent by SettingsManager
+        .getSwipeSeekRelativePercent(context).collectAsStateWithLifecycle(initialValue = 90)
     val doubleTapSeekEnabled by com.android.purebilibili.core.store.SettingsManager
         .getDoubleTapSeekEnabled(context).collectAsStateWithLifecycle(initialValue = false)
     val seekForwardSeconds by com.android.purebilibili.core.store.SettingsManager
@@ -2399,6 +2403,43 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
             }
 
         AppPreferenceDivider()
+        SettingsItemAnchor("playback.swipe_seek_use_relative_duration") {
+            AppSwitchPreference(
+                title = settingItemTitle("playback.swipe_seek_use_relative_duration"),
+                subtitle = if (swipeSeekUseRelativeDuration) {
+                    "按视频总时长比例快进快退，视频越长跳转越大；需要精确调整时建议关闭"
+                } else {
+                    "使用固定秒数，不受视频长短影响；需要精确调整时建议保持关闭"
+                },
+                checked = swipeSeekUseRelativeDuration,
+                onCheckedChange = { enabled ->
+                    scope.launch {
+                        SettingsManager.setSwipeSeekUseRelativeDuration(context, enabled)
+                    }
+                }
+            )
+        }
+        AppPreferenceDivider()
+        if (swipeSeekUseRelativeDuration) {
+            SettingsItemAnchor("playback.swipe_seek_relative_percent") {
+                SettingsSingleChoicePreference(
+                    title = settingItemTitle("playback.swipe_seek_relative_percent"),
+                    subtitle = "灵敏度为 1 时，横向拖过整个播放器宽度可调整视频总时长的所选比例；各播放场景共用，忽略固定秒数及横屏精细调节开关",
+                    options = listOf(
+                        AppSegmentOption(25, "25%"),
+                        AppSegmentOption(50, "50%"),
+                        AppSegmentOption(90, "90%"),
+                        AppSegmentOption(100, "100%")
+                    ),
+                    selectedValue = swipeSeekRelativePercent,
+                    onSelectionChange = { percent ->
+                        scope.launch {
+                            SettingsManager.setSwipeSeekRelativePercent(context, percent)
+                        }
+                    }
+                )
+            }
+        } else {
 SettingsItemAnchor("playback.inline_swipe_seek_seconds") {
         SettingsSingleChoicePreference(
             title = settingItemTitle("playback.inline_swipe_seek_seconds"),
@@ -2426,9 +2467,9 @@ SettingsItemAnchor("playback.inline_swipe_seek_seconds") {
             AppSwitchPreference(
                 title = playbackSettingTitle("playback.fullscreen_swipe_seek_enabled"),
                 subtitle = if (fullscreenSwipeSeekEnabled) {
-                    if (fullscreenSwipeSeekSeconds == 0) "已开启，调整范围不限制" else "已开启，当前范围 ${fullscreenSwipeSeekSeconds} 秒"
+                    if (fullscreenSwipeSeekSeconds == 0) "精细调节已开启，但当前仍为“不限制”；选择较小秒数可减少误跳" else "已开启，约半屏最多调整 ${fullscreenSwipeSeekSeconds} 秒"
                 } else {
-                    if (fullscreenSwipeSeekSeconds == 0) "已关闭，重新开启后调整范围不限制" else "已关闭，重新开启后继续使用 ${fullscreenSwipeSeekSeconds} 秒范围"
+                    "精细调节已关闭，使用不限范围的拖动调节；需要精确调整时建议开启"
                 },
                 checked = fullscreenSwipeSeekEnabled,
                 onCheckedChange = {
@@ -2463,6 +2504,7 @@ SettingsItemAnchor("playback.fullscreen_swipe_seek_seconds") {
             },
         )
 }
+        }
         AppPreferenceDivider()
         val autoRotateEnabled by com.android.purebilibili.core.store.SettingsManager
             .getAutoRotateEnabled(context).collectAsStateWithLifecycle(initialValue = false)

@@ -54,6 +54,7 @@ class FavoriteSubscribedFoldersViewModelTest {
     @AfterEach
     fun tearDown() {
         store.clear()
+        dispatcher.scheduler.runCurrent()
         unmockkAll()
         Dispatchers.resetMain()
     }

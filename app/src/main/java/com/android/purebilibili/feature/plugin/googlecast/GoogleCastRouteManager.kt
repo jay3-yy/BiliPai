@@ -3,10 +3,12 @@ package com.android.purebilibili.feature.plugin.googlecast
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.Build
 import androidx.mediarouter.media.MediaRouteSelector
 import androidx.mediarouter.media.MediaRouter
 import com.android.purebilibili.core.plugin.CastPluginRoute
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.feature.cast.hasRawLocalNetworkAccess
 import com.google.android.gms.cast.CastMediaControlIntent
 import com.google.android.gms.cast.framework.CastContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +43,10 @@ internal object GoogleCastRouteManager {
     private val routeCache = mutableMapOf<String, MediaRouter.RouteInfo>()
 
     fun startDiscovery(context: Context) {
+        if (Build.VERSION.SDK_INT >= 37 && !hasRawLocalNetworkAccess(context)) {
+            stopDiscovery()
+            return
+        }
         ensureCastContext(context)
         if (mediaRouter == null) {
             val router = MediaRouter.getInstance(context.applicationContext)
@@ -80,9 +86,9 @@ internal object GoogleCastRouteManager {
 
     fun stopDiscovery() {
         mainHandler.removeCallbacks(endDiscoveryRunnable)
-        val router = mediaRouter ?: return
-        val cb = callback ?: return
-        router.removeCallback(cb)
+        val router = mediaRouter
+        val cb = callback
+        if (router != null && cb != null) router.removeCallback(cb)
         mediaRouter = null
         selector = null
         callback = null

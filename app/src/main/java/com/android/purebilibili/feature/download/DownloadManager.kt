@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.download
 
+import com.android.purebilibili.core.network.buildAppDns
 import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
@@ -58,6 +59,7 @@ object DownloadManager {
     
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = true }
     private val client = OkHttpClient.Builder()
+        .dns(buildAppDns())
         .protocols(com.android.purebilibili.core.network.NetworkModule.resolveSharedNetworkProtocols())
         .followRedirects(true)
         .build()

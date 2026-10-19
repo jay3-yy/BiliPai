@@ -107,11 +107,21 @@ jobs:
             "-Pbili.build.releaseTag=${BILI_BUILD_RELEASE_TAG}"
           )
           if [ "${{ steps.set_build_type.outputs.build_type }}" = "release" ]; then
-            ./gradlew "${COMMON_ARGS[@]}" assembleRelease
+            ./gradlew "${COMMON_ARGS[@]}" -Pbili.firebase.uploadMapping=true assembleRelease
           else
             ./gradlew "${COMMON_ARGS[@]}" assembleDev
           fi
   
+      # Keep mapping outside public release assets; upload even if Firebase upload fails.
+      - name: Preserve release mapping
+        if: always() && steps.set_build_type.outputs.build_type == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: crashlytics-mapping-${{ github.sha }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          retention-days: 30
+          if-no-files-found: warn
+
       - name: Collect release evidence
         id: collect_release_assets
         run: |

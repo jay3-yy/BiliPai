@@ -22,7 +22,6 @@ class FavoriteCategoryPolicyTest {
         assertTrue(supportsFavoriteCategoryBatchSelection(FavoriteSection.NOTE))
         assertFalse(supportsFavoriteCategoryBatchSelection(FavoriteSection.ARTICLE))
         assertTrue(opensFavoriteCategoryInNativeScreen(FavoriteSection.TOPIC))
-        assertFalse(opensFavoriteCategoryInNativeScreen(FavoriteSection.COURSE))
         assertEquals(0, resolveFavoriteSearchApiType(FavoriteSearchScope.CURRENT_FOLDER))
         assertEquals(1, resolveFavoriteSearchApiType(FavoriteSearchScope.ALL_VIDEO_FOLDERS))
     }

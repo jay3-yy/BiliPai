@@ -1,5 +1,6 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.core.network.buildAppDns
 import com.android.purebilibili.data.model.response.SplashItem
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
@@ -31,6 +32,7 @@ internal object WallpaperArchiveRepository {
         .baseUrl("https://api.github.com/")
         .client(
             OkHttpClient.Builder()
+                .dns(buildAppDns())
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(25, TimeUnit.SECONDS)
                 .callTimeout(35, TimeUnit.SECONDS)

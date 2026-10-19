@@ -125,8 +125,8 @@ android {
         targetSdk = 37
         // 版本名按发行计划确定；versionCode 每次发布单调 +1
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 488
-        versionName = "0.4.7"
+        versionCode = 489
+        versionName = "0.4.8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -443,7 +443,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
     // Official converter since Retrofit 2.10; binary-compatible with Retrofit 3
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:3.0.0")
-    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:okhttp:5.5.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
     // 🔥 Brotli Decompression (for Bilibili Live Danmaku ProtoVer=3)
@@ -627,10 +627,14 @@ tasks.register("installFastRelease") {
 if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
     apply(plugin = "com.google.firebase.crashlytics")
-    tasks.matching { task ->
-        task.name.startsWith("uploadCrashlyticsMappingFile")
-    }.configureEach {
-        // 本地构建不上传 mapping，避免 release/dev 在离线环境失败。
-        enabled = false
+    // Offline/local builds stay opt-in. The release workflow explicitly supplies this flag.
+    val uploadReleaseMapping = providers.gradleProperty("bili.firebase.uploadMapping")
+        .map { it.toBoolean() }
+        .getOrElse(false)
+    android.buildTypes.configureEach {
+        val uploadMappingForBuildType = name == "release" && uploadReleaseMapping
+        configure<com.google.firebase.crashlytics.buildtools.gradle.CrashlyticsExtension> {
+            mappingFileUploadEnabled = uploadMappingForBuildType
+        }
     }
 }

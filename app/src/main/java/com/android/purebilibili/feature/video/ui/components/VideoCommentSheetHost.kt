@@ -356,6 +356,7 @@ fun VideoCommentSheetHost(
     forceInitialize: Boolean = false,
     handleFraudEvents: Boolean = true,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
+    threadListModifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -798,6 +799,7 @@ fun VideoCommentSheetHost(
                                         .background(appearance.panelColor),
                                 ) {
                                     SubReplyDetailContent(
+                                        listModifier = threadListModifier,
                                         headerDragModifier = threadDrag.headerModifier,
                                         rootReply = rootReply,
                                         subReplies = subReplyState.items,

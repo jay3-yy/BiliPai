@@ -5,12 +5,9 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import com.android.purebilibili.BuildConfig
-import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.store.TokenManager
 import com.google.firebase.analytics.FirebaseAnalytics
 import java.time.LocalDate
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
 
 private val ANALYTICS_DEDUPE_WHITESPACE_REGEX = Regex("\\s+")
 private val SENSITIVE_ANALYTICS_PARAM_KEYS = setOf(
@@ -68,21 +65,38 @@ object AnalyticsHelper {
     private const val ANALYTICS_PREFS_NAME = "analytics_tracking"
     private const val KEY_LAST_DAILY_ACTIVE_DATE = "last_daily_active_date"
     
+    @Volatile
     private var analytics: FirebaseAnalytics? = null
     private var appContext: Context? = null
-    private var isEnabled: Boolean = true
+    private var analyticsReady = false
+    @Volatile
+    private var isEnabled: Boolean = false
+    @Volatile
+    private var collectionGeneration: Long = 0L
     private var isInForeground: Boolean = false
     private var sessionStartMs: Long = 0L
-    private val eventRateLimiter = ConcurrentHashMap<String, Long>()
-
+    private val telemetryLock = Any()
+    private const val MAX_PENDING_EVENTS = 32
     private const val EVENT_RATE_LIMIT_MAX_KEYS = 512
-    private const val EVENT_RATE_LIMIT_STALE_MS = 180_000L
+    private val startupEvents = StartupTelemetryBuffer<Pair<String, Bundle>>(MAX_PENDING_EVENTS)
+    private val eventRateLimiter = TelemetryRateLimiter(EVENT_RATE_LIMIT_MAX_KEYS)
 
-    private inline fun logAnalyticsEvent(
+    // Only built, privacy-filtered parameters are retained; closures never enter the queue.
+    private fun logAnalyticsEvent(
         name: String,
         buildParams: Bundle.() -> Unit = {}
-    ) {
-        analytics?.logEvent(name, Bundle().apply(buildParams))
+    ): Boolean = synchronized(telemetryLock) {
+        if (!isEnabled) return@synchronized false
+        val params = Bundle().apply(buildParams)
+        startupEvents.submit(name to params)
+    }
+
+    /** Apply the stored preference before any screen can emit events, without initializing SDKs. */
+    fun prepare(context: Context, enabled: Boolean): Unit = synchronized(telemetryLock) {
+        appContext = context.applicationContext
+        if (isEnabled != enabled) collectionGeneration++
+        isEnabled = enabled
+        startupEvents.setEnabled(enabled)
     }
 
     private fun Bundle.param(key: String, value: String) {
@@ -123,55 +137,62 @@ object AnalyticsHelper {
         if (normalizedToken.isBlank()) return false
 
         val key = "${eventName.take(48)}:$normalizedToken"
-        val now = SystemClock.elapsedRealtime()
-        val lastTs = eventRateLimiter[key]
-        if (shouldSkipAnalyticsEvent(lastTs, now, minIntervalMs)) {
-            return true
-        }
-        eventRateLimiter[key] = now
-
-        if (eventRateLimiter.size > EVENT_RATE_LIMIT_MAX_KEYS) {
-            val expireBefore = now - EVENT_RATE_LIMIT_STALE_MS
-            eventRateLimiter.entries.removeIf { it.value < expireBefore }
-        }
-        return false
+        return eventRateLimiter.shouldDrop(key, SystemClock.elapsedRealtime(), minIntervalMs)
     }
     
     /**
      * 初始化 Analytics (在 Application 中调用)
      */
-    fun init(context: Context) {
+    fun init(context: Context, enabled: Boolean): Unit = synchronized(telemetryLock) {
         try {
             appContext = context.applicationContext
-            analytics = FirebaseAnalytics.getInstance(context)
-            analytics?.setUserProperty("app_version", BuildConfig.VERSION_NAME)
-            analytics?.setUserProperty("build_type", BuildConfig.BUILD_TYPE)
-            analytics?.setUserProperty("locale", Locale.getDefault().toLanguageTag())
-            syncUserContext(
-                mid = TokenManager.midCache,
-                isVip = TokenManager.isVipCache,
-                privacyModeEnabled = SettingsManager.isPrivacyModeEnabledSync(context)
-            )
+            val instance = FirebaseAnalytics.getInstance(context)
+            // Collection state must be applied before properties or queued events.
+            instance.setAnalyticsCollectionEnabled(enabled)
+            if (isEnabled != enabled) collectionGeneration++
+            isEnabled = enabled
+            analytics = instance
+            startupEvents.setEnabled(enabled)
+            if (enabled) {
+                writeAppProperties(instance)
+            }
+            startupEvents.activate { (name, params) -> instance.logEvent(name, params) }
+            analyticsReady = true
             Logger.d(TAG, " Firebase Analytics initialized")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to init Firebase Analytics", e)
         }
     }
-    
-    /**
-     * 启用/禁用 Analytics 收集
-     */
-    fun setEnabled(enabled: Boolean) {
+
+    /** Disabling collection also discards startup events and duplicate suppression history. */
+    fun setEnabled(enabled: Boolean): Unit = synchronized(telemetryLock) {
+        if (isEnabled != enabled) collectionGeneration++
         isEnabled = enabled
+        startupEvents.setEnabled(enabled)
+        if (!enabled) eventRateLimiter.clear()
         try {
-            analytics?.setAnalyticsCollectionEnabled(enabled)
+            analytics?.let { instance ->
+                instance.setAnalyticsCollectionEnabled(enabled)
+                if (enabled) writeAppProperties(instance)
+                startupEvents.activate { (name, params) -> instance.logEvent(name, params) }
+                analyticsReady = true
+            }
             CrashReporter.setLastEvent("analytics_collection_${if (enabled) "enabled" else "disabled"}")
-            Logger.d(TAG, " Analytics collection ${if (enabled) "enabled" else "disabled"}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set Analytics enabled state", e)
         }
     }
-    
+
+    internal fun isCollectionEnabled(): Boolean = isEnabled
+
+    internal fun collectionGeneration(): Long = collectionGeneration
+
+    private fun writeAppProperties(instance: FirebaseAnalytics) {
+        instance.setUserProperty("app_version", BuildConfig.VERSION_NAME)
+        instance.setUserProperty("build_type", BuildConfig.BUILD_TYPE)
+        instance.setUserProperty("locale", Locale.getDefault().toLanguageTag())
+    }
+
     /**
      * 设置用户 ID (用于关联用户行为)
      * 注意：请勿设置可识别个人身份的信息
@@ -188,8 +209,8 @@ object AnalyticsHelper {
     /**
      * 设置用户属性 (用于用户分群分析)
      */
-    fun setUserProperty(name: String, value: String?) {
-        if (!isEnabled) return
+    fun setUserProperty(name: String, value: String?): Unit = synchronized(telemetryLock) {
+        if (!isEnabled) return@synchronized
         try {
             analytics?.setUserProperty(name, value)
         } catch (e: Exception) {
@@ -204,13 +225,13 @@ object AnalyticsHelper {
         try {
             CrashReporter.syncUserContext(mid, isVip, privacyModeEnabled)
             if (!isEnabled) return
-            analytics?.setUserProperty(
+            setUserProperty(
                 "login_state",
                 if (mid != null && mid > 0) "logged_in" else "guest"
             )
-            isVip?.let { analytics?.setUserProperty("vip_state", if (it) "vip" else "normal") }
+            isVip?.let { setUserProperty("vip_state", if (it) "vip" else "normal") }
             privacyModeEnabled?.let {
-                analytics?.setUserProperty("privacy_mode", if (it) "on" else "off")
+                setUserProperty("privacy_mode", if (it) "on" else "off")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync user context", e)
@@ -221,17 +242,16 @@ object AnalyticsHelper {
      * App 进入前台
      */
     fun onAppForeground() {
-        if (!isEnabled) return
         if (isInForeground) return
-        sessionStartMs = System.currentTimeMillis()
+        sessionStartMs = SystemClock.elapsedRealtime()
         isInForeground = true
+        CrashReporter.setAppForegroundState(true)
+        CrashReporter.setLastEvent("app_foreground")
         try {
             logAnalyticsEvent("app_foreground") {
                 param("source", "process_lifecycle")
             }
             logDailyActive(source = "foreground")
-            CrashReporter.setAppForegroundState(true)
-            CrashReporter.setLastEvent("app_foreground")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log app foreground", e)
         }
@@ -241,19 +261,18 @@ object AnalyticsHelper {
      * App 进入后台
      */
     fun onAppBackground() {
-        if (!isEnabled) return
         if (!isInForeground) return
-        val now = System.currentTimeMillis()
+        val now = SystemClock.elapsedRealtime()
         val sessionDurationSec = if (sessionStartMs > 0L) ((now - sessionStartMs) / 1000L).coerceAtLeast(0L) else 0L
         isInForeground = false
+        CrashReporter.setAppForegroundState(false)
+        CrashReporter.setLastEvent("app_background")
+        CrashReporter.setCustomKey("last_session_duration_sec", sessionDurationSec)
         try {
             logAnalyticsEvent("app_background") {
                 param("source", "process_lifecycle")
                 param("session_duration_sec", sessionDurationSec)
             }
-            CrashReporter.setAppForegroundState(false)
-            CrashReporter.setLastEvent("app_background")
-            CrashReporter.setCustomKey("last_session_duration_sec", sessionDurationSec)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log app background", e)
         }
@@ -262,21 +281,24 @@ object AnalyticsHelper {
     /**
      * 记录每日活跃心跳。只上报匿名版本与日期信息，同一自然日最多一次。
      */
-    fun logDailyActive(source: String) {
-        if (!isEnabled) return
-        val context = appContext ?: return
+    fun logDailyActive(source: String): Unit = synchronized(telemetryLock) {
+        // A daily marker must never be consumed by an event that is only buffered.
+        if (!isEnabled) return@synchronized
+        if (!analyticsReady) return@synchronized
+        val context = appContext ?: return@synchronized
         try {
             val todayLocalDate = LocalDate.now().toString()
             val prefs = context.getSharedPreferences(ANALYTICS_PREFS_NAME, Context.MODE_PRIVATE)
             val lastLoggedDate = prefs.getString(KEY_LAST_DAILY_ACTIVE_DATE, null)
-            if (lastLoggedDate == todayLocalDate) return
+            if (lastLoggedDate == todayLocalDate) return@synchronized
 
-            logAnalyticsEvent("daily_active") {
+            val accepted = logAnalyticsEvent("daily_active") {
                 param("app_version", BuildConfig.VERSION_NAME)
                 param("build_type", BuildConfig.BUILD_TYPE)
                 param("local_date", todayLocalDate)
                 param("source", source)
             }
+            if (!accepted) return@synchronized
             prefs.edit().putString(KEY_LAST_DAILY_ACTIVE_DATE, todayLocalDate).apply()
             CrashReporter.setLastEvent("daily_active")
         } catch (e: Exception) {
@@ -292,6 +314,8 @@ object AnalyticsHelper {
      * @param screenClass 屏幕类名 (可选)
      */
     fun logScreenView(screenName: String, screenClass: String? = null) {
+        CrashReporter.setLastScreen(screenName)
+        CrashReporter.setLastEvent("screen_view")
         if (!isEnabled) return
         if (shouldDropByRateLimit("screen_view", screenName, minIntervalMs = 500L)) return
         try {
@@ -299,8 +323,6 @@ object AnalyticsHelper {
                 param(FirebaseAnalytics.Param.SCREEN_NAME, screenName)
                 screenClass?.let { param(FirebaseAnalytics.Param.SCREEN_CLASS, it) }
             }
-            CrashReporter.setLastScreen(screenName)
-            CrashReporter.setLastEvent("screen_view")
             Logger.d(TAG, " Screen view: $screenName")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log screen view", e)
@@ -352,7 +374,7 @@ object AnalyticsHelper {
     ) {
         if (!isEnabled) return
         // 只在关键节点记录: 25%, 50%, 75%, 100%
-        if (progress !in listOf(25, 50, 75, 100)) return
+        if (progress != 25 && progress != 50 && progress != 75 && progress != 100) return
         if (shouldDropByRateLimit("video_progress", "$videoId:$progress", minIntervalMs = 10_000L)) return
         try {
             logAnalyticsEvent("video_progress") {
@@ -408,12 +430,13 @@ object AnalyticsHelper {
      * 记录搜索结果点击
      * 🔒 隐私保护：不记录搜索词和视频ID
      */
-    fun logSearchResultClick(query: String, videoId: String, position: Int) {
+    fun logSearchResultClick(position: Int, resultSection: String = "video_results") {
         if (!isEnabled) return
         try {
             logAnalyticsEvent("search_result_click") {
                 // 🔒 仅记录点击位置用于分析搜索结果质量
-                param("position", position.toLong())
+                param("position", position.coerceAtLeast(0).toLong())
+                param("result_section", resultSection)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log search result click", e)
@@ -652,19 +675,21 @@ object AnalyticsHelper {
     /**
      * 记录视频播放错误 (Analytics 层面，用于统计)
      */
-    fun logVideoError(videoId: String, errorType: String) {
+    fun logVideoError(errorType: String, stage: String, errorCode: Int? = null) {
         if (!isEnabled) return
+        if (shouldDropByRateLimit("video_error", "$stage:$errorType:$errorCode", 10_000L)) return
         try {
             logAnalyticsEvent("video_error") {
-                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
                 param("error_type", errorType)
+                param("stage", stage)
+                errorCode?.let { param("error_code", it.toLong()) }
             }
             CrashReporter.setLastEvent("video_error")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to log video error", e)
         }
     }
-    
+
     /**
      * 记录直播播放错误
      */
@@ -701,19 +726,36 @@ object AnalyticsHelper {
     /**
      * 记录画质切换
      */
-    fun logQualityChange(videoId: String, fromQuality: Int, toQuality: Int) {
+    internal fun logQualitySwitchRequest(fromQuality: Int, requestedQuality: Int, source: String) {
         if (!isEnabled) return
         try {
-            logAnalyticsEvent("quality_change") {
-                maybeLogAnalyticsParam("video_id") { param("video_id", videoId) }
+            logAnalyticsEvent("quality_switch_request") {
                 param("from_quality", fromQuality.toLong())
-                param("to_quality", toQuality.toLong())
+                param("requested_quality", requestedQuality.toLong())
+                param("source", source)
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to log quality change", e)
+            Log.e(TAG, "Failed to log quality switch request", e)
         }
     }
-    
+
+    internal fun logQualitySwitchResult(result: QualitySwitchTelemetryResult) {
+        if (!isEnabled) return
+        try {
+            logAnalyticsEvent("quality_switch_result") {
+                param("from_quality", result.fromQuality.toLong())
+                param("requested_quality", result.requestedQuality.toLong())
+                result.actualQuality?.let { param("actual_quality", it.toLong()) }
+                param("source", result.source)
+                param("outcome", result.outcome)
+                param("reason", result.reason)
+                param("duration_ms", result.durationMs)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log quality switch result", e)
+        }
+    }
+
     /**
      * 记录弹幕开关
      */

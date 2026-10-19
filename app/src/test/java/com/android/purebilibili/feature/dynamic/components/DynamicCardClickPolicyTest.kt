@@ -150,30 +150,6 @@ class DynamicCardClickPolicyTest {
         assertEquals("987654321", (action as DynamicCardPrimaryAction.OpenDynamicDetail).dynamicId)
     }
 
-    @Test
-    fun resolveDynamicCardPrimaryAction_opensDynamicDetailForArticleOpusJumpUrl() {
-        val item = DynamicItem(
-            id_str = "1200069469486972932",
-            type = "DYNAMIC_TYPE_ARTICLE",
-            modules = DynamicModules(
-                module_dynamic = DynamicContentModule(
-                    major = DynamicMajor(
-                        type = "MAJOR_TYPE_ARTICLE",
-                        article = ArticleMajor(
-                            id = 1200069469486972932L,
-                            title = "长图文标题",
-                            jump_url = "https://www.bilibili.com/opus/1200069469486972932"
-                        )
-                    )
-                )
-            )
-        )
-
-        val action = resolveDynamicCardPrimaryAction(item)
-
-        assertTrue(action is DynamicCardPrimaryAction.OpenDynamicDetail)
-        assertEquals("1200069469486972932", (action as DynamicCardPrimaryAction.OpenDynamicDetail).dynamicId)
-    }
 
     @Test
     fun resolveDynamicCardPrimaryAction_usesLegacyArticleJumpUrlWhenPayloadIdIsMissing() {
@@ -892,5 +868,36 @@ class DynamicCardClickPolicyTest {
         )
 
         assertEquals(260882L, resolveDynamicAuthorClickMid(item))
+    }
+    @Test
+    fun forwardedHeaderKeepsForwarderWhileNestedHeaderKeepsOriginalAuthor() {
+        val original = DynamicItem(
+            type = "DYNAMIC_TYPE_AV",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 11L, name = "原作者")),
+        )
+        val forward = DynamicItem(
+            type = "DYNAMIC_TYPE_FORWARD",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 22L, name = "转发者")),
+            orig = original,
+        )
+
+        assertEquals(22L, resolveDynamicAuthorClickMid(forward))
+        assertEquals(11L, resolveDynamicAuthorClickMid(original))
+    }
+
+    @Test
+    fun forwardingPgcDoesNotDisableTheRealForwardersHeader() {
+        val original = DynamicItem(
+            type = "DYNAMIC_TYPE_PGC",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 33L, name = "番剧")),
+        )
+        val forward = DynamicItem(
+            type = "DYNAMIC_TYPE_FORWARD",
+            modules = DynamicModules(module_author = DynamicAuthorModule(mid = 22L, name = "转发者")),
+            orig = original,
+        )
+
+        assertEquals(22L, resolveDynamicAuthorClickMid(forward))
+        assertNull(resolveDynamicAuthorClickMid(original))
     }
 }

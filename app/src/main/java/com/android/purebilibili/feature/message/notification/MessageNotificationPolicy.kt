@@ -132,3 +132,14 @@ internal data class PendingMessageNotification(
     val group: String,
     val isGroupSummary: Boolean = false,
 )
+
+// Suppress adjacent Worker/resident scans, without carrying elapsed timestamps across reboots.
+internal fun shouldSkipRecentNotificationCheck(
+    mid: Long,
+    lastMid: Long?,
+    nowElapsedMs: Long,
+    lastElapsedMs: Long?,
+    boot: Long,
+    lastBoot: Long?
+): Boolean = mid == lastMid && boot >= 0L && boot == lastBoot && lastElapsedMs != null &&
+    nowElapsedMs >= lastElapsedMs && nowElapsedMs - lastElapsedMs < 30_000L

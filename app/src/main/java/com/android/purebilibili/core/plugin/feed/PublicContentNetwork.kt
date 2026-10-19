@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.plugin.feed
 
+import com.android.purebilibili.core.network.buildAppDns
 import okhttp3.Authenticator
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -11,6 +12,7 @@ import java.util.concurrent.TimeUnit
 internal val publicContentHttpClient: OkHttpClient by lazy { createPublicContentHttpClient() }
 
 internal fun createPublicContentHttpClient(): OkHttpClient = OkHttpClient.Builder()
+    .dns(buildAppDns())
     .cookieJar(CookieJar.NO_COOKIES)
     .authenticator(Authenticator.NONE)
     .proxyAuthenticator(Authenticator.NONE)

@@ -5,6 +5,7 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.HotItem
+import com.android.purebilibili.data.model.response.SearchDefaultData
 import com.android.purebilibili.data.model.response.SearchArticleItem
 import com.android.purebilibili.data.model.response.SearchLiveUserItem
 import com.android.purebilibili.data.model.response.SearchPhotoItem
@@ -353,21 +354,21 @@ object SearchRepository {
     }
 
     // 默认搜索占位词
-    suspend fun getDefaultSearchHint(): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getDefaultSearchHint(): Result<SearchDefaultData> = withContext(Dispatchers.IO) {
         try {
             val signedParams = signWithWbi(emptyMap())
             val wbiResp = api.getDefaultSearch(signedParams)
             if (wbiResp.code == 0) {
-                val hint = wbiResp.data?.showName?.trim().orEmpty()
-                if (hint.isNotEmpty()) {
+                val hint = wbiResp.data
+                if (hint != null && hint.keyword.isNotEmpty()) {
                     return@withContext Result.success(hint)
                 }
             }
 
             val legacyResp = api.getDefaultSearchLegacy()
             if (legacyResp.code == 0) {
-                val hint = legacyResp.data?.showName?.trim().orEmpty()
-                if (hint.isNotEmpty()) {
+                val hint = legacyResp.data
+                if (hint != null && hint.keyword.isNotEmpty()) {
                     return@withContext Result.success(hint)
                 }
             }

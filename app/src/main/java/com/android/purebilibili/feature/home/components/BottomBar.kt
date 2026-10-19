@@ -1024,6 +1024,113 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     val hasBackdrop = backdrop != null && (renderGlassEffects || blurEnabled)
     val hasHazeBlur = !hasBackdrop && useHazeBlur && hazeState != null
 
+    // Keep optical callbacks stable when navigation or unrelated rim animation
+    // recomposes chrome. Each callback is keyed only by the inputs it draws.
+    val backdropShape = remember(shape) { { shape } }
+    val backdropEffects = remember(
+        renderGlassEffects, blurEnabled, blurRadius, drawShellLens,
+        effectiveShellLensIntensity, materialSpec.vibrancy, materialSpec.blurRadiusDp,
+        materialSpec.shellRefractionHeightDp, materialSpec.shellRefractionAmountDp,
+        materialSpec.shellChromaticAberration, liquidGlassTuning.saturation,
+    ) {
+        val block: top.yukonga.miuix.kmp.blur.BackdropEffectScope.() -> Unit = {
+            if (renderGlassEffects) {
+                val resolvedShellRefractionAmountDp = if (drawShellLens) {
+                    materialSpec.shellRefractionAmountDp *
+                        effectiveShellLensIntensity
+                } else {
+                    0f
+                }
+                padding = maxOf(
+                    padding,
+                    resolveFloatingDockEffectPaddingDp(
+                        refractionAmountDp = resolvedShellRefractionAmountDp,
+                        pressBloomDp = AppSpacingTokens.Large.value,
+                    ).dp.toPx(),
+                )
+                if (materialSpec.vibrancy) {
+                    miuixVibrancy(liquidGlassTuning.saturation)
+                }
+                val resolvedBlurRadius =
+                    materialSpec.blurRadiusDp?.dp ?: AppSpacingTokens.ExtraSmall
+                miuixBlur(resolvedBlurRadius.toPx(), resolvedBlurRadius.toPx())
+                if (
+                    drawShellLens &&
+                    effectiveShellLensIntensity > 0f &&
+                    materialSpec.shellRefractionHeightDp > 0f &&
+                    materialSpec.shellRefractionAmountDp > 0f
+                ) {
+                    miuixLens(
+                        refractionHeight = (
+                            materialSpec.shellRefractionHeightDp *
+                                effectiveShellLensIntensity
+                            ).dp.toPx(),
+                        refractionAmount = (
+                            materialSpec.shellRefractionAmountDp *
+                                effectiveShellLensIntensity
+                            ).dp.toPx(),
+                        chromaticAberration = materialSpec.shellChromaticAberration
+                    )
+                }
+            } else if (blurEnabled) {
+                val resolvedBlurRadius = maxOf(blurRadius, 25.dp)
+                val radiusPx = resolvedBlurRadius.toPx()
+                miuixBlur(radiusPx, radiusPx)
+            }
+        }
+        block
+    }
+    val backdropHighlight = remember(
+        baseHighlight, renderGlassEffects, materialSpec.highlightWidthScale, effectiveShellLensIntensity,
+    ) {
+        val block: top.yukonga.miuix.kmp.blur.BackdropEffectScope.() -> MiuixHighlight? = {
+            baseHighlight?.value?.copy(
+                alpha = if (renderGlassEffects) {
+                    0.75f * materialSpec.highlightWidthScale *
+                        effectiveShellLensIntensity
+                } else {
+                    0f
+                }
+            )
+        }
+        block
+    }
+    val backdropLayer = remember(interactionState, renderGlassEffects, materialPressProgress) {
+        val block: (androidx.compose.ui.graphics.GraphicsLayerScope.() -> Unit)? = interactionState?.layerBlock ?: if (renderGlassEffects) {
+            {
+                val width = size.width.coerceAtLeast(1f)
+                val s = lerp(1f, 1f + AppSpacingTokens.Large.toPx() / width, materialPressProgress)
+                scaleX = s
+                scaleY = s
+            }
+        } else null
+        block
+    }
+    val backdropSurface = remember(
+        renderGlassEffects, containerColor, liquidGlassTuning.contentReadabilityScrimAlpha,
+        isDarkTheme, materialSpec.foregroundTint, interactionState,
+    ) {
+        val block: androidx.compose.ui.graphics.drawscope.DrawScope.() -> Unit = {
+            if (renderGlassEffects) {
+                drawRect(containerColor)
+                if (liquidGlassTuning.contentReadabilityScrimAlpha > 0f) {
+                    drawRect(
+                        (if (isDarkTheme) Color.Black else Color.White).copy(
+                            alpha = liquidGlassTuning.contentReadabilityScrimAlpha
+                        )
+                    )
+                }
+                if (materialSpec.foregroundTint.alpha > 0f) {
+                    drawRect(materialSpec.foregroundTint)
+                }
+            } else {
+                drawRect(containerColor.copy(alpha = 0.65f))
+            }
+            interactionState?.drawHighlight(this)
+        }
+        block
+    }
+
     this
         .then(
             if (hasHazeBlur) {
@@ -1054,88 +1161,11 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
                     )
                     .miuixDrawBackdrop(
                         backdrop = backdrop,
-                        shape = { shape },
-                        effects = {
-                            if (renderGlassEffects) {
-                                val resolvedShellRefractionAmountDp = if (drawShellLens) {
-                                    materialSpec.shellRefractionAmountDp *
-                                        effectiveShellLensIntensity
-                                } else {
-                                    0f
-                                }
-                                padding = maxOf(
-                                    padding,
-                                    resolveFloatingDockEffectPaddingDp(
-                                        refractionAmountDp = resolvedShellRefractionAmountDp,
-                                        pressBloomDp = AppSpacingTokens.Large.value,
-                                    ).dp.toPx(),
-                                )
-                                if (materialSpec.vibrancy) {
-                                    miuixVibrancy(liquidGlassTuning.saturation)
-                                }
-                                val resolvedBlurRadius =
-                                    materialSpec.blurRadiusDp?.dp ?: AppSpacingTokens.ExtraSmall
-                                miuixBlur(resolvedBlurRadius.toPx(), resolvedBlurRadius.toPx())
-                                if (
-                                    drawShellLens &&
-                                    effectiveShellLensIntensity > 0f &&
-                                    materialSpec.shellRefractionHeightDp > 0f &&
-                                    materialSpec.shellRefractionAmountDp > 0f
-                                ) {
-                                    miuixLens(
-                                        refractionHeight = (
-                                            materialSpec.shellRefractionHeightDp *
-                                                effectiveShellLensIntensity
-                                            ).dp.toPx(),
-                                        refractionAmount = (
-                                            materialSpec.shellRefractionAmountDp *
-                                                effectiveShellLensIntensity
-                                            ).dp.toPx(),
-                                        chromaticAberration = materialSpec.shellChromaticAberration
-                                    )
-                                }
-                            } else if (blurEnabled) {
-                                val resolvedBlurRadius = maxOf(blurRadius, 25.dp)
-                                val radiusPx = resolvedBlurRadius.toPx()
-                                miuixBlur(radiusPx, radiusPx)
-                            }
-                        },
-                        highlight = {
-                            baseHighlight?.value?.copy(
-                                alpha = if (renderGlassEffects) {
-                                    0.75f * materialSpec.highlightWidthScale *
-                                        effectiveShellLensIntensity
-                                } else {
-                                    0f
-                                }
-                            )
-                        },
-                        layerBlock = interactionState?.layerBlock ?: if (renderGlassEffects) {
-                            {
-                                val width = size.width.coerceAtLeast(1f)
-                                val s = lerp(1f, 1f + AppSpacingTokens.Large.toPx() / width, materialPressProgress)
-                                scaleX = s
-                                scaleY = s
-                            }
-                        } else null,
-                        onDrawSurface = {
-                            if (renderGlassEffects) {
-                                drawRect(containerColor)
-                                if (liquidGlassTuning.contentReadabilityScrimAlpha > 0f) {
-                                    drawRect(
-                                        (if (isDarkTheme) Color.Black else Color.White).copy(
-                                            alpha = liquidGlassTuning.contentReadabilityScrimAlpha
-                                        )
-                                    )
-                                }
-                                if (materialSpec.foregroundTint.alpha > 0f) {
-                                    drawRect(materialSpec.foregroundTint)
-                                }
-                            } else {
-                                drawRect(containerColor.copy(alpha = 0.65f))
-                            }
-                            interactionState?.drawHighlight(this)
-                        }
+                        shape = backdropShape,
+                        effects = backdropEffects,
+                        highlight = backdropHighlight,
+                        layerBlock = backdropLayer,
+                        onDrawSurface = backdropSurface
                     )
                     .run {
                         val innerRimGlow = materialSpec.innerRimGlow
@@ -3946,6 +3976,9 @@ private fun BiliPaiFloatingBottomBarChrome(
                             visibleItems.forEachIndexed { index, item ->
                                 val label = resolveBottomNavItemLabel(item, itemLabels)
                                 val routeSelected = currentItem == item
+                                // Export filled accent glyphs for every slot. The moving
+                                // capsule reveals the active copy at its current position;
+                                // the base row continues to reflect the selected route.
                                 val selected = index == selectedIndexForBar ||
                                     LocalFloatingBottomBarActiveContent.current
                                 val skinIconPath = uiSkinDecoration?.iconPathFor(
@@ -5105,11 +5138,13 @@ private fun BottomBarBlendedMaterialIcon(
             AppIcon(
                 imageVector = resolveMaterialBottomBarIcon(item, selected = false),
                 contentDescription = contentDescription,
+                tint = contentColor,
                 modifier = Modifier.alpha(1f - clampedSelectedAlpha)
             )
             AppIcon(
                 imageVector = resolveMaterialBottomBarIcon(item, selected = true),
                 contentDescription = null,
+                tint = contentColor,
                 modifier = Modifier.alpha(clampedSelectedAlpha)
             )
         }

@@ -78,6 +78,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -1776,6 +1777,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     // including switches whose network request has not completed yet.
     internal var playbackRecoveryGeneration: Long = 0L
         private set
+    private data class PendingQualityTelemetry(
+        val bvid: String,
+        val cid: Long,
+        val requestToken: Long,
+        val collectionGeneration: Long,
+        val attempt: com.android.purebilibili.core.util.QualitySwitchTelemetryAttempt
+    )
+    private var pendingQualityTelemetry: PendingQualityTelemetry? = null
+    private val playbackAnalyticsTracker = com.android.purebilibili.core.util.PlaybackAnalyticsTracker()
     private var heartbeatJob: Job? = null
     private var heartbeatSessionStartTsSec: Long = 0L
     private var heartbeatAccumulatedPlayMs: Long = 0L
@@ -2324,6 +2334,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     //  [新增] 播放完成监听器
     private val playbackEndListener = object : Player.Listener {
         override fun onPlaybackStateChanged(playbackState: Int) {
+            pollQualitySwitchTelemetry()
             if (CdnTransferRuntime.enabled) {
                 CdnTransferRuntime.playback(
                     exoPlayer?.let { (it.bufferedPosition - it.currentPosition).coerceAtLeast(0) } ?: 0L,
@@ -2346,6 +2357,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 cancelPlaybackStallRecovery()
             }
             if (playbackState == Player.STATE_ENDED) {
+                samplePlaybackAnalytics(ended = true)
                 if (shouldSuppressPlaybackCompletionForCommentInteraction(isCommentInteractionActive)) {
                     _showPlaybackEndedDialog.value = false
                     Logger.d("PlayerVM", "评论交互进行中，保持当前视频结束态")
@@ -2424,6 +2436,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
         
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            samplePlaybackAnalytics()
             syncHeartbeatPlaybackTracking(
                 isActivelyPlaying = isPlaying && !BackgroundManager.isInBackground
             )
@@ -2449,6 +2462,20 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             }
         }
 
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION &&
+                exoPlayer?.repeatMode == Player.REPEAT_MODE_ONE
+            ) {
+                samplePlaybackAnalytics(ended = true, positionMs = oldPosition.positionMs)
+            }
+            // Rebase on every position jump, including source replacement and plugin skips.
+            samplePlaybackAnalytics(discontinuity = true, positionMs = newPosition.positionMs)
+        }
+
         override fun onMediaItemTransition(
             mediaItem: androidx.media3.common.MediaItem?,
             reason: Int
@@ -2468,6 +2495,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             Logger.w("PlayerVM", "Playback error: ${error.errorCodeName}, message=${error.message}")
             val current = _uiState.value as? VideoPlaybackUiState.Success
             val exoPlaybackError = error as? ExoPlaybackException
+            val errorCategory = com.android.purebilibili.core.util.playbackErrorCategory(error.errorCode)
+            AnalyticsHelper.logVideoError(errorCategory, "playback", error.errorCode)
+            finishQualitySwitchTelemetry("failed", errorCategory)
             if (
                 current != null &&
                 isPremiumAudioPlaybackFailure(
@@ -3697,12 +3727,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
                         //  [新增] 更新播放列表
                         updatePlaylist(result.info, readyState.related)
-
-                        AnalyticsHelper.logVideoPlay(
-                            playbackRequest.bvid,
-                            result.info.title,
-                            result.info.owner.name
-                        )
+                        samplePlaybackAnalytics()
                     }
                     is PlaybackLoadResult.Error -> {
                         if (!shouldApplyVideoLoadResult(
@@ -3715,6 +3740,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             Logger.d("PlayerVM", "⏭️ Ignore stale load error: bvid=${playbackRequest.bvid} token=$requestToken")
                             return@launch
                         }
+                        AnalyticsHelper.logVideoError(
+                            com.android.purebilibili.core.util.loadErrorCategory(loadResult.error), "load"
+                        )
                         CrashReporter.reportVideoError(
                             playbackRequest.bvid,
                             "load_failed",
@@ -3738,6 +3766,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     Logger.d("PlayerVM", "⏭️ Ignore stale timeout: bvid=${playbackRequest.bvid} token=$requestToken")
                     return@launch
                 }
+                AnalyticsHelper.logVideoError("timeout", "load")
                 Logger.e("PlayerVM", "⚠️ Video load timed out for ${playbackRequest.bvid}")
                 PlaybackCooldownManager.recordFailure(playbackRequest.bvid, "timeout")
                 _uiState.value = VideoPlaybackUiState.Error(VideoLoadError.Timeout)
@@ -3755,6 +3784,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     Logger.d("PlayerVM", "⏭️ Ignore stale exception: bvid=${playbackRequest.bvid} token=$requestToken")
                     return@launch
                 }
+                AnalyticsHelper.logVideoError(
+                    com.android.purebilibili.core.util.loadErrorCategory(VideoLoadError.fromException(e)), "load"
+                )
                 Logger.e("PlayerVM", "⚠️ Unexpected load exception", e)
                 _uiState.value = VideoPlaybackUiState.Error(VideoLoadError.UnknownError(e))
             } finally {
@@ -4648,9 +4680,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     private fun ensureComposerDraftVideo() {
         val videoId = (_uiState.value as? VideoPlaybackUiState.Success)?.info?.bvid.orEmpty()
-        if (_composerDrafts.value.videoId != videoId) {
-            _composerDrafts.value = VideoComposerDraftState(videoId = videoId)
-        }
+        _composerDrafts.update { it.forVideo(videoId) }
     }
 
     // 表情包数据
@@ -4674,6 +4704,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     fun showCommentInputDialog() {
         android.util.Log.d("VideoPlaybackViewModel", "📝 showCommentInputDialog called")
         ensureComposerDraftVideo()
+        _composerDrafts.update { it.copy(comments = it.comments.open()) }
         _showCommentDialog.value = true
         // 懒加载表情包
         loadEmotes()
@@ -4743,15 +4774,29 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     }
 
     fun updateCommentDraft(
+        videoId: String,
+        sessionId: Long,
+        replyRpid: Long?,
         text: String,
         imageUris: List<Uri>,
         syncToDynamic: Boolean
     ) {
+        val currentVideoId = (_uiState.value as? VideoPlaybackUiState.Success)?.info?.bvid.orEmpty()
+        if (videoId.isBlank() || (currentVideoId.isNotBlank() && currentVideoId != videoId)) return
         ensureComposerDraftVideo()
-        val key = commentComposerDraftKey(_replyingToComment.value?.rpid)
-        val draft = CommentComposerDraft(text, imageUris, syncToDynamic)
         _composerDrafts.update { state ->
-            state.copy(comments = state.comments + (key to draft))
+            if (
+                state.videoId != videoId ||
+                state.comments.sessionId != sessionId ||
+                sessionId <= state.comments.completedSessionId
+            ) state
+            else state.copy(
+                comments = state.comments.update(
+                    sessionId,
+                    replyRpid,
+                    CommentComposerDraft(text, imageUris, syncToDynamic)
+                )
+            )
         }
     }
     
@@ -5149,6 +5194,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         syncToDynamic: Boolean = false,
         targetAid: Long? = null
     ) {
+        if (_isSendingComment.value) return
         if (inputMessage != null) {
             _commentInput.value = inputMessage
         }
@@ -5168,64 +5214,85 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         // this call; reading the StateFlow later used to lose the reply target and publish a
         // new root comment instead.
         val replyTo = _replyingToComment.value
+        ensureComposerDraftVideo()
+        val draftState = _composerDrafts.value
+        val sendVideoId = draftState.videoId
+        val sendSessionId = draftState.comments.sessionId
+        val sentDraft = draftState.comments.drafts[commentComposerDraftKey(replyTo?.rpid)]
         val outgoingMessage = resolveCommentReplyMessage(
             message = message,
             replyName = replyTo?.member?.uname,
             replyRoot = replyTo?.root
         )
 
+        if (!_isSendingComment.compareAndSet(false, true)) return
         viewModelScope.launch {
-            _isSendingComment.value = true
-            
-            val (root, parent) = resolveCommentReplyTargets(
-                replyRpid = replyTo?.rpid,
-                replyRoot = replyTo?.root
-            )
-            val picturesResult = uploadCommentPictures(imageUris)
-            val pictures = picturesResult.getOrElse { uploadError ->
-                Logger.e(
-                    "PlayerVM",
-                    "Comment image upload failed: aid=$sendAid, imageCount=${imageUris.size}, message=${uploadError.message}",
-                    uploadError
+            try {
+                val (root, parent) = resolveCommentReplyTargets(
+                    replyRpid = replyTo?.rpid,
+                    replyRoot = replyTo?.root
                 )
-                toast(uploadError.message ?: "图片上传失败")
-                _isSendingComment.value = false
-                return@launch
-            }
-            
-            com.android.purebilibili.data.repository.CommentRepository
-                .addComment(
-                    aid = sendAid,
-                    message = outgoingMessage,
-                    root = root,
-                    parent = parent,
-                    pictures = pictures,
-                    syncToDynamic = syncToDynamic
-                )
-                .onSuccess { reply ->
-                    toast(if (replyTo != null) "回复成功" else "评论成功")
-                    _commentInput.value = ""
-                    val sentDraftKey = commentComposerDraftKey(replyTo?.rpid)
-                    _composerDrafts.update { state ->
-                        state.copy(comments = state.comments - sentDraftKey)
-                    }
-                    _replyingToComment.value = null
-                    _showCommentDialog.value = false
-                    clearCommentMentionSearch()
-                    
-                    // 通知 UI 刷新评论列表
-                    _commentSentEvent.trySend(reply)
-                }
-                .onFailure { error ->
+                val picturesResult = uploadCommentPictures(imageUris)
+                val pictures = picturesResult.getOrElse { uploadError ->
                     Logger.e(
                         "PlayerVM",
-                        "Comment send failed: aid=$sendAid, root=$root, parent=$parent, pictureCount=${pictures.size}, message=${error.message}",
-                        error
+                        "Comment image upload failed: aid=$sendAid, imageCount=${imageUris.size}, message=${uploadError.message}",
+                        uploadError
                     )
-                    toast(error.message ?: "发送失败")
+                    toast(uploadError.message ?: "图片上传失败")
+                    return@launch
                 }
-            
-            _isSendingComment.value = false
+
+                com.android.purebilibili.data.repository.CommentRepository
+                    .addComment(
+                        aid = sendAid,
+                        message = outgoingMessage,
+                        root = root,
+                        parent = parent,
+                        pictures = pictures,
+                        syncToDynamic = syncToDynamic
+                    )
+                    .onSuccess { reply ->
+                        toast(if (replyTo != null) "回复成功" else "评论成功")
+                        val currentVideoId = (_uiState.value as? VideoPlaybackUiState.Success)
+                            ?.info?.bvid.orEmpty()
+                        val isSameVideo = currentVideoId.isBlank() || currentVideoId == sendVideoId
+                        _composerDrafts.update { state ->
+                            if (!isSameVideo || state.videoId != sendVideoId) state
+                            else state.copy(
+                                comments = state.comments.complete(
+                                    sendSessionId,
+                                    replyTo?.rpid,
+                                    sentDraft
+                                )
+                            )
+                        }
+                        val activeDraftState = _composerDrafts.value
+                        if (
+                            isSameVideo &&
+                            activeDraftState.videoId == sendVideoId &&
+                            activeDraftState.comments.sessionId == sendSessionId
+                        ) {
+                            _commentInput.value = ""
+                            _replyingToComment.value = null
+                            _showCommentDialog.value = false
+                            clearCommentMentionSearch()
+                        }
+
+                        // 通知 UI 刷新评论列表
+                        _commentSentEvent.trySend(reply)
+                    }
+                    .onFailure { error ->
+                        Logger.e(
+                            "PlayerVM",
+                            "Comment send failed: aid=$sendAid, root=$root, parent=$parent, pictureCount=${pictures.size}, message=${error.message}",
+                            error
+                        )
+                        toast(error.message ?: "发送失败")
+                    }
+            } finally {
+                _isSendingComment.value = false
+            }
         }
     }
 
@@ -7398,7 +7465,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
     }
     
-    fun changeQuality(qualityId: Int) {
+    fun changeQuality(qualityId: Int) = requestQuality(qualityId, source = "user")
+
+    private fun requestQuality(qualityId: Int, source: String) {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
         if (current.isQualitySwitching) {
             toast("正在切换中...", PlayerToastPresentation.CenteredHighlight)
@@ -7407,6 +7476,30 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         if (current.currentQuality == qualityId) {
             toast("已是当前清晰度", PlayerToastPresentation.CenteredHighlight)
             return
+        }
+        finishQualitySwitchTelemetry("canceled", "superseded")
+        val requestBvid = current.info.bvid
+        val requestCid = current.info.cid
+        val requestToken = currentLoadRequestToken
+        val telemetryAttempt = if (AnalyticsHelper.isCollectionEnabled()) {
+            com.android.purebilibili.core.util.QualitySwitchTelemetryAttempt(
+                current.currentQuality, qualityId, source, android.os.SystemClock.elapsedRealtime()
+            ).also { attempt ->
+                pendingQualityTelemetry = PendingQualityTelemetry(
+                    requestBvid, requestCid, requestToken, AnalyticsHelper.collectionGeneration(), attempt
+                )
+                AnalyticsHelper.logQualitySwitchRequest(current.currentQuality, qualityId, source)
+            }
+        } else null
+        fun finishAttempt(outcome: String, reason: String) {
+            if (pendingQualityTelemetry?.attempt === telemetryAttempt) {
+                finishQualitySwitchTelemetry(outcome, reason)
+            }
+        }
+        fun isCurrentRequest(): Boolean {
+            val latest = _uiState.value as? VideoPlaybackUiState.Success ?: return false
+            return currentLoadRequestToken == requestToken && currentBvid == requestBvid &&
+                currentCid == requestCid && latest.info.bvid == requestBvid && latest.info.cid == requestCid
         }
         playbackRecoveryGeneration++
 
@@ -7450,6 +7543,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
         when (permissionResult) {
             is QualityPermissionResult.RequiresVip -> {
+                finishAttempt("blocked", "vip_required")
                 showQualitySwitchFailureDialog(
                     requestedQualityId = qualityId,
                     permissionResult = permissionResult
@@ -7463,11 +7557,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     isDolbyVisionSupported = isDolbyVisionSupported
                 )
                 if (fallbackQuality != current.currentQuality) {
-                    changeQuality(fallbackQuality)
+                    requestQuality(fallbackQuality, source = "permission_fallback")
                 }
                 return
             }
             is QualityPermissionResult.RequiresLogin -> {
+                finishAttempt("blocked", "login_required")
                 showQualitySwitchFailureDialog(
                     requestedQualityId = qualityId,
                     permissionResult = permissionResult
@@ -7475,6 +7570,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 return
             }
             is QualityPermissionResult.UnsupportedByDevice -> {
+                finishAttempt("blocked", "unsupported_device")
                 showQualitySwitchFailureDialog(
                     requestedQualityId = qualityId,
                     permissionResult = permissionResult
@@ -7487,7 +7583,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     isDolbyVisionSupported = isDolbyVisionSupported
                 )
                 if (fallbackQuality != current.currentQuality && fallbackQuality != qualityId) {
-                    changeQuality(fallbackQuality)
+                    requestQuality(fallbackQuality, source = "permission_fallback")
                 }
                 return
             }
@@ -7506,6 +7602,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 appApiCooldownRemainingMs = appApiCooldownRemainingMs
             )
         ) {
+            finishAttempt("blocked", "cooldown")
             showQualitySwitchFailureDialog(
                 requestedQualityId = qualityId,
                 hasCachedDashTracks = hasCachedDashTracks,
@@ -7554,10 +7651,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     videoSecondCodecPreference = videoSecondCodecPreference,
                     isHevcSupported = isHevcSupported,
                     isAv1Supported = isAv1Supported,
-                    playWhenReady = playWhenReadyAfterSwitch
+                    playWhenReady = playWhenReadyAfterSwitch,
+                    applyToPlayer = false
                 ) ?: playbackUseCase.changeQualityFromApi(
-                    bvid = currentBvid,
-                    cid = currentCid,
+                    bvid = requestBvid,
+                    cid = requestCid,
                     qualityId = qualityId,
                     currentPos = currentPos,
                     playbackQualityMode = playbackQualityMode,
@@ -7566,9 +7664,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     videoSecondCodecPreference = videoSecondCodecPreference,
                     isHevcSupported = isHevcSupported,
                     isAv1Supported = isAv1Supported,
-                    playWhenReady = playWhenReadyAfterSwitch
+                    playWhenReady = playWhenReadyAfterSwitch,
+                    applyToPlayer = false
                 )
                 
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                if (!isCurrentRequest()) {
+                    finishAttempt("canceled", "media_changed")
+                    return@launch
+                }
                 if (result != null) {
                     val nextCachedDashVideos = result.cachedDashVideos.ifEmpty { current.cachedDashVideos }
                     val nextCachedDashAudios = result.cachedDashAudios.ifEmpty { current.cachedDashAudios }
@@ -7603,9 +7707,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             playbackQualityMode = playbackQualityMode
                         ),
                         reason = QualityChangeReason.USER_EXPLICIT,
-                        cdnSelection = cdnSelection
+                        cdnSelection = cdnSelection,
+                        sourceAlreadyApplied = false
                     )
+                    telemetryAttempt?.applied(result.actualQuality, result.wasFallback)
+                    pollQualitySwitchTelemetry()
                 } else {
+                    finishAttempt("failed", "no_playable_quality")
                     _uiState.value = current.copy(
                         isQualitySwitching = false,
                         requestedQuality = null,
@@ -7617,7 +7725,19 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         cacheContainsRequestedQuality = cacheContainsRequestedQuality
                     )
                 }
+            } catch (e: CancellationException) {
+                finishAttempt("canceled", "request_canceled")
+                if (isCurrentRequest()) {
+                    _uiState.value = current.copy(
+                        isQualitySwitching = false,
+                        requestedQuality = null,
+                        pendingPlaybackTransitionPositionMs = null
+                    )
+                }
+                throw e
             } catch (e: Exception) {
+                finishAttempt("failed", com.android.purebilibili.core.util.loadErrorCategory(VideoLoadError.fromException(e)))
+                if (!isCurrentRequest()) return@launch
                 _uiState.value = current.copy(
                     isQualitySwitching = false,
                     requestedQuality = null,
@@ -8159,14 +8279,89 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             }
     }
 
-    /**
-     * 定期检查插件（约500ms一次）
-     */
+    private fun finishQualitySwitchTelemetry(outcome: String, reason: String) {
+        val pending = pendingQualityTelemetry ?: return
+        pendingQualityTelemetry = null
+        if (!AnalyticsHelper.isCollectionEnabled() ||
+            pending.collectionGeneration != AnalyticsHelper.collectionGeneration()
+        ) return
+        val isCurrent = pending.bvid == currentBvid && pending.cid == currentCid &&
+            pending.requestToken == currentLoadRequestToken
+        pending.attempt.finish(
+            if (isCurrent) outcome else "canceled",
+            if (isCurrent) reason else "media_changed",
+            android.os.SystemClock.elapsedRealtime()
+        )?.let(AnalyticsHelper::logQualitySwitchResult)
+    }
+
+    private fun pollQualitySwitchTelemetry() {
+        val pending = pendingQualityTelemetry ?: return
+        if (!AnalyticsHelper.isCollectionEnabled() ||
+            pending.collectionGeneration != AnalyticsHelper.collectionGeneration()
+        ) {
+            pendingQualityTelemetry = null
+            return
+        }
+        val result = pending.attempt.poll(
+            nowMs = android.os.SystemClock.elapsedRealtime(),
+            isCurrent = pending.bvid == currentBvid && pending.cid == currentCid &&
+                pending.requestToken == currentLoadRequestToken,
+            ready = exoPlayer?.playbackState == Player.STATE_READY && exoPlayer?.playerError == null
+        ) ?: return
+        pendingQualityTelemetry = null
+        AnalyticsHelper.logQualitySwitchResult(result)
+    }
+
+    /** Sample locally using existing player callbacks and the plugin polling tick. */
+    private fun samplePlaybackAnalytics(
+        discontinuity: Boolean = false,
+        ended: Boolean = false,
+        positionMs: Long? = null
+    ) {
+        if (!AnalyticsHelper.isCollectionEnabled()) {
+            playbackAnalyticsTracker.reset()
+            return
+        }
+        val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
+        if (current.info.bvid != currentBvid || current.info.cid != currentCid) return
+        val player = exoPlayer ?: return
+        val durationMs = player.duration
+        val update = playbackAnalyticsTracker.sample(
+            key = "${current.info.bvid}:${current.info.cid}",
+            positionMs = positionMs ?: player.currentPosition,
+            durationMs = durationMs,
+            isPlaying = player.isPlaying,
+            nowMs = android.os.SystemClock.elapsedRealtime(),
+            discontinuity = discontinuity,
+            ended = ended
+        )
+        if (update.started) {
+            AnalyticsHelper.logVideoPlay(
+                videoId = current.info.bvid,
+                title = "",
+                duration = durationMs / 1000L
+            )
+        }
+        update.checkpoints.forEach { checkpoint ->
+            AnalyticsHelper.logVideoProgress(
+                videoId = "${current.info.bvid}:${current.info.cid}",
+                progress = checkpoint,
+                watchTime = update.watchTimeSeconds
+            )
+        }
+        if (update.completed) {
+            AnalyticsHelper.logVideoComplete(current.info.bvid, update.watchTimeSeconds)
+        }
+    }
+
     private fun startPluginCheck() {
         pluginCheckJob?.cancel()
         lastPluginDispatchPositionMs = null
         pluginCheckJob = viewModelScope.launch {
             while (true) {
+                // Reuse the existing progress tick, including sessions without active plugins.
+                samplePlaybackAnalytics()
+                pollQualitySwitchTelemetry()
                 if (CdnTransferRuntime.enabled) {
                     exoPlayer?.let { player ->
                         CdnTransferRuntime.playback(
@@ -9235,8 +9430,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     
     @SuppressLint("UnsafeOptInUsageError")
     override fun onCleared() {
+        finishQualitySwitchTelemetry("canceled", "screen_closed")
         cancelPendingVideoLoad()
         exoPlayer?.removeAnalyticsListener(videoBandwidthListener)
+        // A player retained for listening must not retain this cleared screen through its listener.
+        exoPlayer?.removeListener(playbackEndListener)
         super.onCleared()
         onPageIdentityCommitted = null
         recordCreatorWatchProgressSnapshot()
@@ -9285,13 +9483,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private fun applyQualityChangeResult(
         payload: QualityChangePayload,
         reason: QualityChangeReason,
-        cdnSelection: PlaybackCdnCandidateSelection
+        cdnSelection: PlaybackCdnCandidateSelection,
+        sourceAlreadyApplied: Boolean = true
     ) {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
 
         val cdnSelectionChangedUrl =
             cdnSelection.playUrl != payload.playUrl || cdnSelection.audioUrl != payload.audioUrl
-        if (shouldReplacePlaybackSourceForQualityChange(reason, cdnSelectionChangedUrl)) {
+        // Manual requests select first, validate media identity, then apply the source once here.
+        if (!sourceAlreadyApplied || shouldReplacePlaybackSourceForQualityChange(reason, cdnSelectionChangedUrl)) {
             playResolvedPlayback(
                 videoUrl = cdnSelection.playUrl,
                 audioUrl = cdnSelection.audioUrl,
@@ -9349,9 +9549,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         "✓ 已切换至 $label"
                     },
                     PlayerToastPresentation.CenteredHighlight
-                )
-                AnalyticsHelper.logQualityChange(
-                    currentBvid, current.currentQuality, payload.actualQuality
                 )
             }
 

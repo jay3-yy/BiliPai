@@ -129,6 +129,7 @@ import com.android.purebilibili.feature.video.ui.section.shouldKeepVideoPlayback
 import com.android.purebilibili.feature.video.ui.section.shouldShowLongPressSpeedFeedback
 import com.android.purebilibili.feature.video.ui.section.shouldShowLongPressSpeedHintCloseButton
 import com.android.purebilibili.feature.video.ui.section.shouldUseTextureSurfaceForFlip
+import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
 import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import androidx.media3.common.VideoSize
@@ -2206,6 +2207,11 @@ private fun VideoPageItem(
         .getPipNoDanmakuEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false)
     val pipDanmakuVisible = !(isInPipMode && pipNoDanmakuEnabled)
+    val playerInteractionSettings by SettingsManager
+        .getPlayerInteractionSettings(context)
+        .collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings()
+        )
     val currentAudioQuality = requestedAudioQuality
     val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
     val itemAid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid
@@ -2638,8 +2644,8 @@ private fun VideoPageItem(
     
     // 手势调整进度状态
     var isSeekGesture by remember { mutableStateOf(false) }
-    var seekStartPosition by remember { mutableFloatStateOf(0f) }
-    var seekTargetPosition by remember { mutableFloatStateOf(0f) }
+    var seekStartPosition by remember { mutableLongStateOf(0L) }
+    var seekTargetPosition by remember { mutableLongStateOf(0L) }
     var isLongPressing by remember { mutableStateOf(false) }
     var longPressOriginPlaybackParameters by remember { mutableStateOf(PlaybackParameters.DEFAULT) }
     var effectiveLongPressSpeed by remember { mutableFloatStateOf(longPressSpeed) }
@@ -3008,40 +3014,73 @@ private fun VideoPageItem(
             }
             // 进度调整手势
             .pointerInput(
+                bvid,
+                exoPlayer,
                 progressState.duration,
                 scale,
                 isCurrentPage,
-                playerGesturesEnabled
+                playerGesturesEnabled,
+                playerInteractionSettings
             ) {
-                detectHorizontalDragGestures(
-                    onDragStart = { 
-                        if (
-                            isCurrentPage &&
-                            playerGesturesEnabled &&
-                            progressState.duration > 0 &&
-                            shouldHandlePortraitSeekGesture(scale = scale)
-                        ) {
-                            isSeekGesture = true
-                            seekStartPosition = exoPlayer.currentPosition.toFloat()
-                            seekTargetPosition = seekStartPosition
-                        }
-                    },
-                    onDragEnd = {
-                        if (isCurrentPage && isSeekGesture) {
-                            val targetPosition = seekTargetPosition.toLong()
-                            seekPlayerFromUserAction(exoPlayer, targetPosition)
-                            danmakuManager.seekTo(targetPosition)
+                var totalDragDistanceX = 0f
+                try {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
                             isSeekGesture = false
+                            totalDragDistanceX = 0f
+                            if (
+                                isCurrentPage &&
+                                playerGesturesEnabled &&
+                                progressState.duration > 0L &&
+                                size.width > 0 &&
+                                shouldHandlePortraitSeekGesture(scale = scale)
+                            ) {
+                                seekStartPosition = exoPlayer.currentPosition
+                                    .coerceIn(0L, progressState.duration)
+                                seekTargetPosition = seekStartPosition
+                                isSeekGesture = true
+                            }
+                        },
+                        onDragEnd = {
+                            try {
+                                if (isCurrentPage && isSeekGesture) {
+                                    seekPlayerFromUserAction(exoPlayer, seekTargetPosition)
+                                    danmakuManager.seekTo(seekTargetPosition)
+                                }
+                            } finally {
+                                isSeekGesture = false
+                                totalDragDistanceX = 0f
+                            }
+                        },
+                        onDragCancel = {
+                            isSeekGesture = false
+                            totalDragDistanceX = 0f
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            if (isCurrentPage && isSeekGesture && progressState.duration > 0L) {
+                                totalDragDistanceX += dragAmount
+                                val seekDelta = resolveHorizontalSeekDeltaMs(
+                                    isFullscreen = true,
+                                    fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
+                                    totalDragDistanceX = totalDragDistanceX,
+                                    containerWidthPx = size.width.toFloat(),
+                                    fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds,
+                                    inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds,
+                                    gestureSensitivity = playerInteractionSettings.gestureSensitivity,
+                                    durationMs = progressState.duration,
+                                    useRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration,
+                                    relativeSeekPercent = playerInteractionSettings.swipeSeekRelativePercent
+                                )
+                                if (seekDelta != null) {
+                                    seekTargetPosition = (seekStartPosition + seekDelta)
+                                        .coerceIn(0L, progressState.duration)
+                                }
+                            }
                         }
-                    },
-                    onDragCancel = { isSeekGesture = false },
-                    onHorizontalDrag = { _, dragAmount ->
-                        if (isCurrentPage && isSeekGesture && progressState.duration > 0) {
-                            val seekDelta = (dragAmount / size.width) * progressState.duration * 0.75f
-                            seekTargetPosition = (seekTargetPosition + seekDelta).coerceIn(0f, progressState.duration.toFloat())
-                        }
-                    }
-                )
+                    )
+                } finally {
+                    isSeekGesture = false
+                }
             }
     ) {
         // The portrait pager hides system bars for immersive playback. In that state the
@@ -3316,7 +3355,7 @@ private fun VideoPageItem(
                 val previewBottomOffsetPx = with(density) { 120.dp.roundToPx() }
                 com.android.purebilibili.feature.video.ui.components.CompactSeekPreview(
                     videoshotData = gestureVideoshotData,
-                    targetPositionMs = seekTargetPosition.toLong(),
+                    targetPositionMs = seekTargetPosition,
                     durationMs = progressState.duration,
                     videoAspectRatio = currentVideoAspect,
                     modifier = Modifier
@@ -3329,9 +3368,9 @@ private fun VideoPageItem(
                         }
                 )
             } else {
-                val targetTimeText = FormatUtils.formatDuration(seekTargetPosition.toLong())
+                val targetTimeText = FormatUtils.formatDuration(seekTargetPosition)
                 val totalTimeText = FormatUtils.formatDuration(progressState.duration)
-                val deltaMs = (seekTargetPosition - seekStartPosition).toLong()
+                val deltaMs = seekTargetPosition - seekStartPosition
                 val deltaText = if (deltaMs >= 0) {
                     "+${FormatUtils.formatDuration(deltaMs)}"
                 } else {
@@ -4075,10 +4114,15 @@ private fun VideoPageItem(
             val emotePackages by viewModel.emotePackages.collectAsStateWithLifecycle()
             val mentionSearchState by viewModel.commentMentionSearchState.collectAsStateWithLifecycle()
             val composerDrafts by viewModel.composerDrafts.collectAsStateWithLifecycle()
-            val commentDraftKey = com.android.purebilibili.feature.video.viewmodel
-                .commentComposerDraftKey(replyingToComment?.rpid)
-            val commentDraft = composerDrafts.comments[commentDraftKey]
-                ?: com.android.purebilibili.feature.video.viewmodel.CommentComposerDraft()
+            val draftVideoId = composerDrafts.videoId
+            val draftSessionId = composerDrafts.comments.sessionId
+            val draftReplyRpid = replyingToComment?.rpid
+            val draftKey = remember(draftVideoId, draftSessionId, draftReplyRpid) {
+                "$draftVideoId:$draftReplyRpid:$draftSessionId"
+            }
+            val commentDraft = composerDrafts.comments.drafts[
+                com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey(draftReplyRpid)
+            ] ?: com.android.purebilibili.feature.video.viewmodel.CommentComposerDraft()
             val commentState by commentViewModel.commentState.collectAsStateWithLifecycle()
             val commentFraudDetectionEnabled by com.android.purebilibili.core.store.SettingsManager
                 .getCommentFraudDetectionEnabled(context)
@@ -4097,7 +4141,13 @@ private fun VideoPageItem(
 
             com.android.purebilibili.feature.video.ui.components.CommentInputDialog(
                 visible = showCommentInput,
-                onDismiss = { viewModel.hideCommentInputDialog() },
+                draftKey = draftKey,
+                onDismiss = {
+                    val current = viewModel.composerDrafts.value
+                    if (current.videoId == draftVideoId && current.comments.sessionId == draftSessionId) {
+                        viewModel.hideCommentInputDialog()
+                    }
+                },
                 isSending = isSendingComment,
                 replyToName = replyingToComment?.member?.uname,
                 inputHint = if (replyingToComment != null) commentState.childInputHint else commentState.rootInputHint,
@@ -4110,15 +4160,23 @@ private fun VideoPageItem(
                 initialText = commentDraft.text,
                 initialImageUris = commentDraft.imageUris,
                 initialSyncToDynamic = commentDraft.syncToDynamic,
-                onDraftChange = viewModel::updateCommentDraft,
+                onDraftChange = { text, images, sync ->
+                    viewModel.updateCommentDraft(draftVideoId, draftSessionId, draftReplyRpid, text, images, sync)
+                },
                 currentVideoPositionMsProvider = { exoPlayer.currentPosition.coerceAtLeast(0L) },
                 onSend = { message, imageUris, syncToDynamic ->
-                    viewModel.sendComment(
-                        inputMessage = message,
-                        imageUris = imageUris,
-                        syncToDynamic = syncToDynamic,
-                        targetAid = activeAid
-                    )
+                    val current = viewModel.composerDrafts.value
+                    if (current.videoId == draftVideoId && current.comments.sessionId == draftSessionId &&
+                        viewModel.replyingToComment.value?.rpid == draftReplyRpid &&
+                        viewModel.showCommentDialog.value
+                    ) {
+                        viewModel.sendComment(
+                            inputMessage = message,
+                            imageUris = imageUris,
+                            syncToDynamic = syncToDynamic,
+                            targetAid = activeAid
+                        )
+                    }
                 }
             )
         }

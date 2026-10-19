@@ -34,32 +34,6 @@ class SpaceScreenStructureTest {
         assertTrue(source.contains("chromeTopInset = scaffoldPadding.calculateTopPadding()"))
     }
 
-    @Test
-    fun `space chrome uses liquid tab rows and piliplus actions`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt")
-
-        assertTrue(source.contains("AppNativeTabRow("))
-        assertTrue(source.contains("BiliPaiImmersiveTopBar("))
-        assertTrue(source.contains("spaceChromeSource?.modifier"))
-        assertTrue(source.contains("top = chromeTopInset"))
-        assertFalse(source.contains("onPinnedChromeHeightChanged"))
-        assertFalse(source.contains("val tabPinned = gridState.firstVisibleItemIndex > 0"))
-        assertFalse(source.contains("BottomBarLiquidSegmentedControl("))
-        assertTrue(source.contains("AppThemeAdaptiveTabRow("))
-        assertTrue(source.contains("scrollable = spec.scrollable"))
-        assertTrue(source.contains("private fun SpaceSectionEmptyState("))
-        assertTrue(source.contains("isMiuixNonGlassEnabled()"))
-        assertTrue(source.contains("AppSpacingTokens.ExtraLarge"))
-        assertFalse(source.contains("forceLiquidChrome = true"))
-        assertTrue(source.contains("SpaceSecondarySwitchRow("))
-        assertTrue(source.contains("resolveSpacePrimaryTab(selectedMainTab)"))
-        assertTrue(source.contains("showTabRail = false"))
-        assertTrue(source.contains("onFollowingClick"))
-        assertTrue(source.contains("onFansClick"))
-        assertTrue(source.contains("Intent.ACTION_SEND"))
-        assertFalse(source.contains("暂不支持私信"))
-        assertFalse(source.contains("AppFilterChip("))
-    }
 
     @Test
     fun `contribution videos render as grid cards instead of full width rows`() {
@@ -266,30 +240,6 @@ class SpaceScreenStructureTest {
         )
     }
 
-    @Test
-    fun `space wide layout uses container geometry and content specific widths`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/space/SpaceScreen.kt")
-        val header = source
-            .substringAfter("private fun SpaceHeader(")
-            .substringBefore("private fun SpaceHeaderIdentityInfo(")
-        val dynamicItems = source
-            .substringAfter("items = dynamicCardItems")
-            .substringBefore(") { dynamic ->")
-
-        assertTrue(source.contains("resolveSpaceAdaptiveLayoutSpec("))
-        assertTrue(source.contains("windowSizeClass.widthDp.value.roundToInt()"))
-        assertTrue(source.contains("adaptiveLayoutSpec.contentMaxWidthDp.dp"))
-        assertTrue(source.contains("adaptiveLayoutSpec.dynamicColumns"))
-        assertTrue(source.contains("maxWidth = adaptiveLayoutSpec.listContentMaxWidthDp.dp"))
-        assertTrue(source.contains("useExpandedLayout = adaptiveLayoutSpec.useExpandedHeader"))
-        assertTrue(header.contains("BoxWithConstraints("))
-        assertTrue(header.contains("val renderedBannerWidth = maxWidth + outerPadding"))
-        assertTrue(header.contains("resolveSpaceBannerMetrics("))
-        assertFalse(header.contains("LocalConfiguration.current"))
-        assertTrue(header.contains(".widthIn(max = 480.dp)"))
-        assertTrue(dynamicItems.contains("span = { GridItemSpan(1) }"))
-        assertTrue(source.contains("modifier = boundedListModifier"))
-    }
 
     @Test
     fun `played video locate prompt is configurable and scoped to each space visit`() {

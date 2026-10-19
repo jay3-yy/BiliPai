@@ -1119,8 +1119,10 @@ data class PlayerInteractionSettings(
     val pipNoDanmakuEnabled: Boolean = false,
     val seekForwardSeconds: Int = 10,
     val seekBackwardSeconds: Int = 10,
-    val inlineSwipeSeekSeconds: Int = 0,
-    val fullscreenSwipeSeekSeconds: Int = 0,
+    val inlineSwipeSeekSeconds: Int = 30,
+    val fullscreenSwipeSeekSeconds: Int = 15,
+    val swipeSeekUseRelativeDuration: Boolean = false,
+    val swipeSeekRelativePercent: Int = 90,
     val fullscreenSwipeSeekEnabled: Boolean = true,
     val fullscreenGestureReverse: Boolean = false,
     val hideVideoPageStatusBar: Boolean = false,
@@ -1950,10 +1952,14 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             seekForwardSeconds = (preferences[KEY_SEEK_FORWARD_SECONDS] ?: 10).coerceIn(1, 60),
             seekBackwardSeconds = (preferences[KEY_SEEK_BACKWARD_SECONDS] ?: 10).coerceIn(1, 60),
             inlineSwipeSeekSeconds = normalizeInlineSwipeSeekSeconds(
-                preferences[KEY_INLINE_SWIPE_SEEK_SECONDS] ?: 0
+                preferences[KEY_INLINE_SWIPE_SEEK_SECONDS] ?: 30
             ),
             fullscreenSwipeSeekSeconds = normalizeFullscreenSwipeSeekSeconds(
-                preferences[KEY_FULLSCREEN_SWIPE_SEEK_SECONDS] ?: 0
+                preferences[KEY_FULLSCREEN_SWIPE_SEEK_SECONDS] ?: 15
+            ),
+            swipeSeekUseRelativeDuration = preferences[KEY_SWIPE_SEEK_USE_RELATIVE_DURATION] ?: false,
+            swipeSeekRelativePercent = normalizeSwipeSeekRelativePercent(
+                preferences[KEY_SWIPE_SEEK_RELATIVE_PERCENT] ?: 90
             ),
             fullscreenSwipeSeekEnabled = preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] ?: true,
             fullscreenGestureReverse = preferences[KEY_FULLSCREEN_GESTURE_REVERSE] ?: false,
@@ -7353,6 +7359,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_INLINE_SWIPE_SEEK_SECONDS = intPreferencesKey("inline_swipe_seek_seconds")
     private val KEY_FULLSCREEN_SWIPE_SEEK_ENABLED = booleanPreferencesKey("fullscreen_swipe_seek_enabled")
     private val KEY_FULLSCREEN_SWIPE_SEEK_SECONDS = intPreferencesKey("fullscreen_swipe_seek_seconds")
+    private val KEY_SWIPE_SEEK_USE_RELATIVE_DURATION =
+        booleanPreferencesKey("swipe_seek_use_relative_duration")
+    private val KEY_SWIPE_SEEK_RELATIVE_PERCENT = intPreferencesKey("swipe_seek_relative_percent")
     private val KEY_FULLSCREEN_GESTURE_REVERSE = booleanPreferencesKey("fullscreen_gesture_reverse")
     private val KEY_HIDE_VIDEO_PAGE_STATUS_BAR = booleanPreferencesKey("hide_video_page_status_bar")
     private val KEY_PORTRAIT_LETTERBOX_AMBIENT_HAZE =
@@ -7402,6 +7411,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_FULLSCREEN_ASPECT_RATIO = intPreferencesKey("fullscreen_aspect_ratio")
     private val INLINE_SWIPE_SEEK_OPTIONS = listOf(5, 10, 15, 30, 60)
     private val FULLSCREEN_SWIPE_SEEK_OPTIONS = listOf(10, 15, 20, 30)
+    private val SWIPE_SEEK_RELATIVE_PERCENT_OPTIONS = listOf(25, 50, 90, 100)
     const val DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT = 3
     private const val COMMENT_PREVIEW_CACHE_PREFS = "comment_preview_cache"
     private const val CACHE_KEY_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT = "comment_collapsed_reply_preview_limit"
@@ -7491,7 +7501,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     // --- 非全屏左右滑动调进度范围（秒，默认 30） ---
     fun getInlineSwipeSeekSeconds(context: Context): Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            val raw = preferences[KEY_INLINE_SWIPE_SEEK_SECONDS] ?: 0
+            val raw = preferences[KEY_INLINE_SWIPE_SEEK_SECONDS] ?: 30
             normalizeInlineSwipeSeekSeconds(raw)
         }
 
@@ -7519,7 +7529,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     // --- 横屏左右滑动调进度范围（秒，默认 15） ---
     fun getFullscreenSwipeSeekSeconds(context: Context): Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            val raw = preferences[KEY_FULLSCREEN_SWIPE_SEEK_SECONDS] ?: 0
+            val raw = preferences[KEY_FULLSCREEN_SWIPE_SEEK_SECONDS] ?: 15
             normalizeFullscreenSwipeSeekSeconds(raw)
         }
 
@@ -7533,6 +7543,33 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         if (seconds == 0) return 0
         return FULLSCREEN_SWIPE_SEEK_OPTIONS.minByOrNull { option -> abs(option - seconds) } ?: 15
     }
+
+    fun getSwipeSeekUseRelativeDuration(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { preferences ->
+            preferences[KEY_SWIPE_SEEK_USE_RELATIVE_DURATION] ?: false
+        }
+
+    suspend fun setSwipeSeekUseRelativeDuration(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SWIPE_SEEK_USE_RELATIVE_DURATION] = enabled
+        }
+    }
+
+    fun getSwipeSeekRelativePercent(context: Context): Flow<Int> =
+        context.settingsDataStore.data.map { preferences ->
+            normalizeSwipeSeekRelativePercent(preferences[KEY_SWIPE_SEEK_RELATIVE_PERCENT] ?: 90)
+        }
+
+    suspend fun setSwipeSeekRelativePercent(context: Context, percent: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SWIPE_SEEK_RELATIVE_PERCENT] = normalizeSwipeSeekRelativePercent(percent)
+        }
+    }
+
+    private fun normalizeSwipeSeekRelativePercent(percent: Int): Int =
+        SWIPE_SEEK_RELATIVE_PERCENT_OPTIONS.minByOrNull { option ->
+            abs(option.toLong() - percent.toLong())
+        } ?: 90
 
     private fun isLargeScreenOrFoldableConfiguration(context: Context): Boolean {
         return context.isLargeScreenOrFoldableConfiguration()

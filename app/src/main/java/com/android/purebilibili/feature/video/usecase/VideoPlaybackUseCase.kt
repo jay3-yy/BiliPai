@@ -859,7 +859,8 @@ class VideoPlaybackUseCase(
             com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
         isDolbyAudioSoftwareDecoded: Boolean =
             com.android.purebilibili.core.util.MediaUtils.isDolbySoftwareAudioDecoderRequired(),
-        playWhenReady: Boolean = true
+        playWhenReady: Boolean = true,
+        applyToPlayer: Boolean = true
     ): QualitySwitchResult? {
         if (cachedVideos.isEmpty()) {
             Logger.d("VideoPlaybackUseCase", " changeQualityFromCache: cache is EMPTY, returning null")
@@ -930,13 +931,15 @@ class VideoPlaybackUseCase(
             isDolbyAudioSupported = isDolbyAudioSupported
         )
         if (videoUrl.isNotEmpty()) {
-            playDashVideo(
-                videoUrl = videoUrl,
-                audioUrl = audioUrl,
-                adaptiveDashSource = adaptiveDashSource,
-                seekTo = currentPos,
-                playWhenReady = playWhenReady
-            )
+            if (applyToPlayer) {
+                playDashVideo(
+                    videoUrl = videoUrl,
+                    audioUrl = audioUrl,
+                    adaptiveDashSource = adaptiveDashSource,
+                    seekTo = currentPos,
+                    playWhenReady = playWhenReady
+                )
+            }
             return QualitySwitchResult(
                 videoUrl = videoUrl,
                 audioUrl = audioUrl,
@@ -982,7 +985,8 @@ class VideoPlaybackUseCase(
             com.android.purebilibili.core.util.MediaUtils.isDolbyAtmosAudioSupported(),
         isDolbyAudioSoftwareDecoded: Boolean =
             com.android.purebilibili.core.util.MediaUtils.isDolbySoftwareAudioDecoderRequired(),
-        playWhenReady: Boolean = true
+        playWhenReady: Boolean = true,
+        applyToPlayer: Boolean = true
     ): QualitySwitchResult? {
         Logger.d("VideoPlaybackUseCase", " changeQualityFromApi: bvid=$bvid, cid=$cid, target=$qualityId")
         val effectivePlaybackQualityMode = if (
@@ -1022,7 +1026,7 @@ class VideoPlaybackUseCase(
             return null
         }
         
-        if (selection.isDashPlayback) {
+        if (applyToPlayer && selection.isDashPlayback) {
             playDashVideo(
                 videoUrl = selection.videoUrl,
                 audioUrl = selection.audioUrl,
@@ -1030,7 +1034,7 @@ class VideoPlaybackUseCase(
                 seekTo = currentPos,
                 playWhenReady = playWhenReady
             )
-        } else {
+        } else if (applyToPlayer) {
             playVideo(selection.videoUrl, currentPos, playWhenReady = playWhenReady)
         }
         

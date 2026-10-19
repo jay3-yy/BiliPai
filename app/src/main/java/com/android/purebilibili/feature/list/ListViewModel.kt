@@ -1736,57 +1736,71 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
         loadMoreForFolder(currentFolderIndex)
     }
 
-    internal fun changeFavoriteOrder(order: FavoriteResourceOrder) {
-        if (_favoriteOrderState.value == order) return
-        _favoriteOrderState.value = order
-        _folderStates.forEach { (_, stateFlow) ->
-            stateFlow.value = stateFlow.value.copy(isLoading = false, error = null)
-        }
-        folderLoadedOrders.clear()
-        invalidateAllFolderRequests()
-        _fetchingIndices.clear()
-        reloadFavoriteFolder(_selectedFolderIndex.value)
+
+    internal fun cleanInvalidFavoriteFolders(mediaIds: Set<Long>, onComplete: () -> Unit) {
+        manageFavoriteFolders(mediaIds, delete = false, onComplete = onComplete)
     }
 
-    internal fun cleanInvalidResourcesInSelectedFolder() {
-        if (_isFavoriteManagingState.value) return
-        val folderIndex = _selectedFolderIndex.value
-        val folder = _folders.value.getOrNull(folderIndex)
-        if (!canCleanInvalidFavoriteResources(folder)) return
-        val mediaId = allFolderIds.getOrNull(folderIndex) ?: return
+    internal fun deleteFavoriteFolders(mediaIds: Set<Long>, onComplete: () -> Unit) {
+        manageFavoriteFolders(mediaIds, delete = true, onComplete = onComplete)
+    }
+
+    private fun manageFavoriteFolders(
+        mediaIds: Set<Long>,
+        delete: Boolean,
+        onComplete: () -> Unit,
+    ) {
+        if (_isFavoriteManagingState.value || mediaIds.isEmpty()) return
+        val selected = _folders.value.filter { resolveFavoriteFolderMediaId(it) in mediaIds }
+        if (selected.size != mediaIds.size) return
+        val permissions = favoriteFolderBatchPermissions(
+            selected,
+            _folders.value.firstOrNull()?.let(::resolveFavoriteFolderMediaId),
+            com.android.purebilibili.core.store.TokenManager.midCache,
+        )
+        if (if (delete) !permissions.canDelete else !permissions.canClean) return
         _isFavoriteManagingState.value = true
         accountRequests.launch {
-            val result = com.android.purebilibili.data.repository.FavoriteRepository.cleanInvalidResources(mediaId)
-            if (result.isSuccess) {
-                android.widget.Toast.makeText(getApplication(), "已清理失效内容", android.widget.Toast.LENGTH_SHORT).show()
-                reloadFavoriteFolder(folderIndex)
-            } else {
-                android.widget.Toast.makeText(
-                    getApplication(),
-                    "清理失败: ${result.exceptionOrNull()?.message ?: "请稍后重试"}",
-                    android.widget.Toast.LENGTH_SHORT
-                ).show()
+            var succeeded = 0
+            val failures = mutableListOf<String>()
+            try {
+                for (folder in selected) {
+                    val mediaId = resolveFavoriteFolderMediaId(folder)
+                    // Recheck server ownership immediately before each destructive request.
+                    val result = try {
+                        val info = com.android.purebilibili.data.repository.FavoriteRepository
+                            .getFolderInfo(mediaId).getOrThrow()
+                        val owner = info.upper?.mid?.takeIf { it > 0L } ?: info.mid
+                        check(owner > 0L && owner == com.android.purebilibili.core.store.TokenManager.midCache) {
+                            "无权管理此收藏夹"
+                        }
+                        if (delete) {
+                            com.android.purebilibili.data.repository.FavoriteRepository.deleteFolder(mediaId)
+                        } else {
+                            com.android.purebilibili.data.repository.FavoriteRepository
+                                .cleanInvalidResources(mediaId).map { Unit }
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                    result.fold(
+                        onSuccess = { succeeded++ },
+                        onFailure = { failures += "${folder.title}：${it.message ?: "操作失败"}" },
+                    )
+                }
+                val operation = if (delete) "删除" else "清理"
+                finishFolderMutation(
+                    if (succeeded > 0) Result.success(Unit)
+                    else Result.failure(IllegalStateException(failures.joinToString("\n"))),
+                    "已${operation} $succeeded 个收藏夹" +
+                        if (failures.isEmpty()) "" else "\n${failures.joinToString("\n")}",
+                )
+                onComplete()
+            } finally {
+                _isFavoriteManagingState.value = false
             }
-            _isFavoriteManagingState.value = false
-        }
-    }
-
-    internal fun shareSelectedFolderToDynamic(content: String) {
-        if (_isFavoriteManagingState.value) return
-        val mediaId = allFolderIds.getOrNull(_selectedFolderIndex.value) ?: return
-        _isFavoriteManagingState.value = true
-        accountRequests.launch {
-            val result = com.android.purebilibili.data.repository.FavoriteRepository
-                .shareFolderToDynamic(mediaId = mediaId, content = content)
-            android.widget.Toast.makeText(
-                getApplication(),
-                result.fold(
-                    onSuccess = { "已分享至动态" },
-                    onFailure = { it.message ?: "分享失败" },
-                ),
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
-            _isFavoriteManagingState.value = false
         }
     }
 
@@ -1808,19 +1822,6 @@ class FavoriteViewModel(application: Application) : BaseListViewModel(applicatio
     }
 
 
-    internal fun deleteSelectedFavoriteFolder() {
-        if (_isFavoriteManagingState.value) return
-        val folderIndex = _selectedFolderIndex.value
-        if (folderIndex <= 0) return
-        val folder = _folders.value.getOrNull(folderIndex) ?: return
-        _isFavoriteManagingState.value = true
-        accountRequests.launch {
-            val result = com.android.purebilibili.data.repository.FavoriteRepository.deleteFolder(
-                resolveFavoriteFolderMediaId(folder),
-            )
-            finishFolderMutation(result, "已删除收藏夹")
-        }
-    }
 
     private suspend fun finishFolderMutation(result: Result<Unit>, successMessage: String) {
         android.widget.Toast.makeText(

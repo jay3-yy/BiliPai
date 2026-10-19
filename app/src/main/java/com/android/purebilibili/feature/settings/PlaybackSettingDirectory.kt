@@ -78,7 +78,23 @@ internal val playbackSettingDirectory = listOf(
     PlaybackSettingItem("playback.center_swipe_to_fullscreen_enabled", "中部滑动切换全屏", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getCenterSwipeToFullscreenEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.slide_volume_brightness_enabled", "滑动调亮度和音量", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getSlideVolumeBrightnessEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.set_system_brightness_enabled", "调节系统亮度", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getSetSystemBrightnessEnabled(context).map { if (it) "开启" else "关闭" } }),
-    PlaybackSettingItem("playback.fullscreen_swipe_seek_enabled", "横屏滑动调进度", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getFullscreenSwipeSeekEnabled(context).map { if (it) "开启" else "关闭" } }),
+    PlaybackSettingItem("playback.fullscreen_swipe_seek_enabled", "横屏精细调进度", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getFullscreenSwipeSeekEnabled(context).map { if (it) "开启" else "关闭" } }, aliases = listOf("横屏滑动调进度")),
+    PlaybackSettingItem(
+        "playback.swipe_seek_use_relative_duration",
+        "按视频时长比例调进度",
+        SettingsRootCategory.FULLSCREEN_GESTURE,
+        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN,
+        { context -> com.android.purebilibili.core.store.SettingsManager.getSwipeSeekUseRelativeDuration(context).map { if (it) "开启" else "关闭" } },
+        aliases = listOf("相对时长", "相对进度", "固定秒数", "快进快退", "横向拖动", "滑动进度模式", "视频长度", "精准调节")
+    ),
+    PlaybackSettingItem(
+        "playback.swipe_seek_relative_percent",
+        "滑动调进度时长比例",
+        SettingsRootCategory.FULLSCREEN_GESTURE,
+        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN,
+        { context -> com.android.purebilibili.core.store.SettingsManager.getSwipeSeekRelativePercent(context).map { "$it%" } },
+        aliases = listOf("进度百分比", "快进比例", "快退比例", "滑动范围", "总时长比例", "25%", "50%", "90%", "100%")
+    ),
     PlaybackSettingItem("playback.auto_rotate_enabled", "自动横竖屏切换", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getAutoRotateEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.horizontal_adaptation_enabled", "横屏适配", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getHorizontalAdaptationEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.player_control_visibility.show_cast_button", "显示投屏按钮", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager.getPlayerControlVisibilitySettings(context).map { if (it.showCastButton) "开启" else "关闭" } }),

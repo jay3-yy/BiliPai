@@ -4,11 +4,12 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import com.android.purebilibili.core.store.MultiProcessPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
-private val Context.messageNotificationSettingsStore by preferencesDataStore(name = "message_notification_settings")
+private val Context.messageNotificationSettingsStore
+    get() = MultiProcessPreferences.get(this, "message_notification_settings")
 
 internal enum class MessageNotificationMode { POWER_SAVING, MORE_TIMELY }
 
@@ -44,7 +45,7 @@ internal object MessageNotificationSettingsStore {
             // all five subcategories. If it exists, propagate its value to every new
             // granular key that hasn't been set yet, then delete the legacy key so the
             // store never carries it again.
-            if (legacyMessageCenterKey in prefs) {
+            val resolved = if (legacyMessageCenterKey in prefs) {
                 val legacyValue = prefs[legacyMessageCenterKey] != false
                 context.applicationContext.messageNotificationSettingsStore.edit { mutable ->
                     if (privateMessagesKey !in mutable) mutable[privateMessagesKey] = legacyValue
@@ -54,19 +55,19 @@ internal object MessageNotificationSettingsStore {
                     if (systemNoticesKey !in mutable) mutable[systemNoticesKey] = legacyValue
                     mutable.remove(legacyMessageCenterKey)
                 }
-            }
+            } else prefs
             MessageNotificationSettings(
-                enabled = prefs[enabledKey] ?: false,
-                mode = MessageNotificationMode.entries.firstOrNull { it.name == prefs[modeKey] }
+                enabled = resolved[enabledKey] ?: false,
+                mode = MessageNotificationMode.entries.firstOrNull { it.name == resolved[modeKey] }
                     ?: MessageNotificationMode.POWER_SAVING,
-                residentEnabled = prefs[residentKey] ?: false,
-                notifyPrivateMessages = prefs[privateMessagesKey] ?: true,
-                notifyReplies = prefs[repliesKey] ?: true,
-                notifyAtMe = prefs[atMeKey] ?: true,
-                notifyLikes = prefs[likesKey] ?: true,
-                notifySystemNotices = prefs[systemNoticesKey] ?: true,
-                notifyDynamicUpdates = prefs[dynamicKey] ?: true,
-                notifyLiveAlerts = prefs[liveKey] ?: true,
+                residentEnabled = resolved[residentKey] ?: false,
+                notifyPrivateMessages = resolved[privateMessagesKey] ?: true,
+                notifyReplies = resolved[repliesKey] ?: true,
+                notifyAtMe = resolved[atMeKey] ?: true,
+                notifyLikes = resolved[likesKey] ?: true,
+                notifySystemNotices = resolved[systemNoticesKey] ?: true,
+                notifyDynamicUpdates = resolved[dynamicKey] ?: true,
+                notifyLiveAlerts = resolved[liveKey] ?: true,
             )
         }
 

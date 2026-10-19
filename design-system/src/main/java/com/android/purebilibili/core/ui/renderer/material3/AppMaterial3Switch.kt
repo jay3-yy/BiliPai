@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -12,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.theme.ACCESSIBLE_UI_MIN_CONTRAST
 import com.android.purebilibili.core.theme.calculateContrastRatio
 import com.android.purebilibili.core.theme.opaqueCompositeOver
@@ -31,10 +33,17 @@ internal fun AppMaterial3Switch(
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
     val interactive = enabled && onCheckedChange != null
     val nativeColors = SwitchDefaults.colors()
-    val checkedThumbBackground = opaqueCompositeOver(nativeColors.checkedThumbColor, nativeColors.checkedTrackColor)
-    // Native MD3 only: a custom onPrimary can make the handle dark while
-    // onPrimaryContainer stays dark too. Repair the checked icon against its
-    // actual handle; glass and Miuix own their colors in separate renderers.
+    // Native MD3 only: onPrimary is a text role and may be black for a light
+    // custom accent. Keep light-surface handles light independently of that role.
+    // Glass and Miuix retain their separate renderer policies and geometry.
+    val scheme = MaterialTheme.colorScheme
+    val checkedThumbColor = if (scheme.surface.luminance() > 0.5f) {
+        Color.White
+    } else {
+        nativeColors.checkedThumbColor
+    }
+    val checkedThumbBackground = opaqueCompositeOver(checkedThumbColor, nativeColors.checkedTrackColor)
+    // Resolve the check mark against the actual handle, including custom accents.
     val checkedIconColor = if (calculateContrastRatio(
             opaqueCompositeOver(nativeColors.checkedIconColor, checkedThumbBackground),
             checkedThumbBackground,
@@ -43,10 +52,10 @@ internal fun AppMaterial3Switch(
         nativeColors.checkedIconColor
     } else {
         resolveAccessibleContainerColors(
-            containerColor = nativeColors.checkedThumbColor,
+            containerColor = checkedThumbColor,
             contentColor = nativeColors.checkedIconColor,
             backgroundColor = nativeColors.checkedTrackColor,
-            fallbackContentColors = listOf(nativeColors.checkedTrackColor, Color.White, Color.Black),
+            fallbackContentColors = listOf(nativeColors.checkedTrackColor, scheme.onSurface, Color.White, Color.Black),
             minimumContrast = ACCESSIBLE_UI_MIN_CONTRAST,
         ).contentColor
     }
@@ -66,7 +75,10 @@ internal fun AppMaterial3Switch(
             null
         },
         enabled = enabled,
-        colors = nativeColors.copy(checkedIconColor = checkedIconColor),
+        colors = nativeColors.copy(
+            checkedThumbColor = checkedThumbColor,
+            checkedIconColor = checkedIconColor,
+        ),
         interactionSource = resolvedInteractionSource,
     )
 }

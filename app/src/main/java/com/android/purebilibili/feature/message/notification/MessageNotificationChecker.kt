@@ -26,7 +26,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.withLock
 
 // Interaction polling queries unread counts; list viewing and acknowledgements stay in message pages.
 internal interface MessageNotificationSource {
@@ -96,7 +95,7 @@ private class NotificationSessionChanged : Exception()
 
 internal class MessageNotificationPoller(
     private val source: MessageNotificationSource,
-    private val ensureSession: () -> Unit = {},
+    private val ensureSession: suspend () -> Unit = {},
 ) {
     private suspend fun <T> fetch(block: suspend () -> T): T {
         currentCoroutineContext().ensureActive()
@@ -440,14 +439,34 @@ internal class MessageNotificationPoller(
 }
 
 internal class MessageNotificationChecker(private val context: Context) {
-    suspend fun runCheck(): Boolean = messageNotificationMutex.withLock {
+    companion object {
+        // Only accessed while holding MessageNotificationTransaction.
+        private var verifiedSession: Pair<Long, String>? = null
+    }
+
+    suspend fun runCheck(): Boolean = MessageNotificationTransaction.withLock(context) {
         val settings = MessageNotificationSettingsStore.getSettings(context).first()
         if (!settings.enabled || !MessageNotificationNotifier.canPost(context)) return@withLock true
+        val remoteSession = isMessageNotificationProcess(context)
+        if (remoteSession) TokenManager.refreshServiceSession(context) else TokenManager.awaitRestore()
         val mid = TokenManager.midCache?.takeIf { it > 0 } ?: return@withLock true
         val session = TokenManager.sessDataCache?.takeIf { it.isNotBlank() } ?: return@withLock true
         fun isSameSession() = TokenManager.midCache == mid && TokenManager.sessDataCache == session
+        // Login's cookie and profile saves can be separate. Do not pair a new cookie with
+        // a previous account's MID while that transition is being persisted.
+        if (remoteSession && verifiedSession != (mid to session)) {
+            val response = NetworkModule.api.getNavInfo()
+            TokenManager.refreshServiceSession(context)
+            if (!isSameSession()) return@withLock true
+            if (response.code != 0 || response.data?.isLogin != true || response.data?.mid != mid) {
+                return@withLock false
+            }
+            verifiedSession = mid to session
+        }
+        if (MessageNotificationStateStore.checkedRecently(context, mid)) return@withLock true
         val result = try {
             MessageNotificationPoller(NetworkMessageNotificationSource) {
+                if (remoteSession) TokenManager.refreshServiceSession(context)
                 if (!isSameSession()) throw NotificationSessionChanged()
             }.check(
                 settings, MessageNotificationStateStore.getState(context, mid), mid,
@@ -456,10 +475,12 @@ internal class MessageNotificationChecker(private val context: Context) {
         } catch (_: NotificationSessionChanged) {
             return@withLock true
         }
+        if (remoteSession) TokenManager.refreshServiceSession(context)
         if (!isSameSession() || MessageNotificationSettingsStore.getSettings(context).first() != settings ||
             !MessageNotificationNotifier.canPost(context)) return@withLock true
         MessageNotificationStateStore.putState(context, mid, result.state)
         MessageNotificationNotifier.postAll(context, mid, result, ::isSameSession)
+        if (!result.shouldRetry) MessageNotificationStateStore.markChecked(context, mid)
         !result.shouldRetry
     }
 }

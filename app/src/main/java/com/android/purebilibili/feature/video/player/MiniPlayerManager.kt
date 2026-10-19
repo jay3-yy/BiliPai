@@ -68,6 +68,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.launch
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 import com.android.purebilibili.feature.video.VideoActivity
@@ -792,6 +795,182 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     // --- 协程作用域 ---
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val remoteAudio = com.android.purebilibili.feature.audio.player.BackgroundAudioConnection(context) { remote ->
+        val extras = remote.currentMediaItem?.mediaMetadata?.extras ?: android.os.Bundle.EMPTY
+        val bvid = extras.getString("bvid")
+        if (!bvid.isNullOrBlank()) {
+            if (currentBvid != bvid || currentCid != extras.getLong("cid")) {
+                cachedUiState = null
+                val item = PlaylistManager.playlist.value.firstOrNull { it.bvid == bvid }
+                item?.let { PlaylistManager.adoptCurrentPlayback(it.copy(cid = extras.getLong("cid"))) }
+            }
+            currentCover = extras.getString("cover").orEmpty().ifBlank { currentCover }
+            currentBvid = bvid
+            currentCid = extras.getLong("cid")
+            currentTitle = remote.mediaMetadata.title?.toString().orEmpty()
+            currentOwner = remote.mediaMetadata.artist?.toString().orEmpty()
+        }
+        isPlaying = remote.isPlaying
+        currentPosition = remote.currentPosition.coerceAtLeast(0L)
+        duration = remote.duration.takeIf { it > 0L } ?: duration
+        progress = if (duration > 0L) currentPosition.toFloat() / duration else 0f
+    }
+    private var remoteTransferJob: Job? = null
+    private var remotePreferencesJob: Job? = null
+    private val remoteReclaimMutex = kotlinx.coroutines.sync.Mutex()
+
+    /** Only detached listen-video sessions enter this path; mounted video/PiP keeps its player. */
+    private fun tryTransferDetachedAudio() {
+        if (remoteAudio.active || remoteTransferJob?.isActive == true) return
+        val local = player ?: return
+        val state = cachedUiState ?: return
+        if (!local.playWhenReady || !shouldContinueBackgroundAudio()) return
+        // Preserve the native loudness pipeline until it has a separate-process equivalent.
+        if (SettingsManager.getLoudnessNormalizationEnabledSync(context)) return
+        val queue = PlaylistManager.playlist.value
+        val index = queue.indexOfFirst { it.bvid == currentBvid && (it.cid == currentCid || it.cid == 0L) }
+        val request = com.android.purebilibili.feature.audio.player.BackgroundAudioSnapshot(
+            queue = queue.toMutableList().also { if (index in it.indices) it[index] = it[index].copy(cid = currentCid) },
+            index = index, positionMs = local.currentPosition.coerceAtLeast(0L), playing = true,
+            speed = local.playbackParameters.speed, accountMid = TokenManager.midCache,
+            playMode = PlaylistManager.playMode.value, shuffle = PlaylistManager.shuffleEnabled.value,
+            quality = state.currentQuality, audioQuality = state.selectedAudioQuality,
+            audioUrl = state.audioUrl.orEmpty(), audioLanguage = state.currentAudioLang,
+            volume = local.volume, handleAudioFocus = SettingsManager.getAudioFocusEnabledSync(context),
+            reportHistory = !SettingsManager.isPrivacyModeEnabledSync(context)
+        )
+        if (!com.android.purebilibili.feature.audio.player.canTransferBackgroundAudio(
+                listening = AudioNowPlayingSession.active.value,
+                hasPageOwner = pageOwnership.isRetained(local),
+                liveOrPip = isLiveMode || isSystemPipActive || isMiniMode,
+                hasSeparatePlaybackAccount = NetworkModule.playbackAccount() != null,
+                snapshot = request
+            )) return
+        remoteTransferJob = scope.launch {
+            var stoppedLocal = false
+            var transferred = false
+            try {
+                transferred = remoteAudio.transfer(request) {
+                    if (player !== local || pageOwnership.isRetained(local) || !AudioNowPlayingSession.active.value) null else {
+                        val handoffPosition = local.currentPosition.coerceAtLeast(0L)
+                        resetBackgroundOptimizationState()
+                        stoppedLocal = true
+                        local.pause()
+                        local.clearVideoSurface()
+                        local.stop()
+                        releaseMediaSession()
+                        handoffPosition
+                    }
+                }
+                if (transferred) {
+                    clearPlaybackNotificationArtifacts(stopServiceDirectly = true)
+                    cachedUiState = null
+                    if (player === local && !pageOwnership.isRetained(local)) {
+                        local.removeListener(playerListener)
+                        if (_externalPlayer === local) _externalPlayer = null
+                        if (_player === local) _player = null
+                        local.release()
+                    }
+                    observeRemoteAudioPreferences()
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Logger.w(TAG, "Remote audio transfer unavailable; retaining local playback", e)
+            } finally {
+                if (!transferred) {
+                    remoteAudio.close()
+                    if (stoppedLocal && player === local && !pageOwnership.isRetained(local)) {
+                        local.prepare()
+                        local.playWhenReady = true
+                        updateMediaSession(local)
+                    }
+                }
+            }
+        }
+    }
+
+    /** Called by the video entry effect before preparing its local player. */
+    internal suspend fun reclaimRemoteAudioForVideo(): com.android.purebilibili.feature.audio.player.BackgroundAudioSnapshot? =
+        remoteReclaimMutex.withLock {
+            remoteTransferJob?.cancel()
+            remoteTransferJob?.join()
+            if (!remoteAudio.active) recoverRemoteAudioIfPresent(failOnError = true)
+            if (!remoteAudio.active) return@withLock null
+            remotePreferencesJob?.cancel()
+            val state = remoteAudio.reclaim() ?: return@withLock null
+            state.current?.let { item ->
+                com.android.purebilibili.core.player.PlaybackProgressManager.getInstance(context).apply {
+                    // A return near the beginning must replace an older (>5s) cached position too.
+                    clearPosition(item.bvid, item.cid)
+                    savePosition(item.bvid, item.cid, state.positionMs)
+                }
+                PlaylistManager.adoptCurrentPlayback(item)
+            }
+            cachedUiState = null
+            isPlaying = false
+            state
+        }
+
+    internal suspend fun recoverRemoteAudioIfPresent(failOnError: Boolean = false) {
+        if (remoteAudio.active) return
+        val hasSaved = kotlinx.coroutines.withContext(Dispatchers.IO) {
+            TokenManager.awaitRestore(timeoutMs = 5000L)
+            com.android.purebilibili.core.store.MultiProcessPreferences.get(context, "background_audio")
+                .data.first()[androidx.datastore.preferences.core.stringPreferencesKey("snapshot")] != null
+        }
+        if (!hasSaved) return
+        try {
+            val state = remoteAudio.recover()
+            if (state == null || state.accountMid != TokenManager.midCache) {
+                remoteAudio.close()
+                return
+            }
+            state.current?.let { item ->
+                currentBvid = item.bvid; currentCid = item.cid; currentTitle = item.title
+                currentOwner = item.owner; currentCover = item.cover
+                PlaylistManager.adoptCurrentPlayback(item)
+            }
+            isActive = true
+            AudioNowPlayingSession.markListening()
+            observeRemoteAudioPreferences()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            remoteAudio.close()
+            throw e
+        } catch (e: Exception) {
+            remoteAudio.close()
+            Logger.w(TAG, "Unable to reconnect background audio", e)
+            if (failOnError) throw e
+        }
+    }
+
+    private fun observeRemoteAudioPreferences() {
+        remotePreferencesJob?.cancel()
+        remotePreferencesJob = scope.launch {
+            combine(PlaylistManager.playMode, PlaylistManager.shuffleEnabled,
+                SettingsManager.getPrivacyModeEnabled(context), PlaylistManager.playlist) { mode, shuffle, privacy, queue ->
+                Triple(mode, shuffle, privacy) to queue
+            }.collect { (preferences, queue) ->
+                val (mode, shuffle, privacy) = preferences
+                if (!remoteAudio.active) return@collect
+                remoteAudio.controller?.sendCustomCommand(
+                    androidx.media3.session.SessionCommand(
+                        com.android.purebilibili.feature.audio.player.AUDIO_TRANSPORT, android.os.Bundle.EMPTY
+                    ), android.os.Bundle().apply {
+                        putString("mode", mode.name); putBoolean("shuffle", shuffle)
+                        putBoolean("report_history", !privacy)
+                        if (queue.size in 1..128 && queue.none { it.isBangumi }) {
+                            val json = com.android.purebilibili.feature.audio.player.backgroundAudioJson.encodeToString(
+                                kotlinx.serialization.builtins.ListSerializer(PlaylistItem.serializer()), queue
+                            )
+                            if (json.toByteArray(Charsets.UTF_8).size <= 256 * 1024) putString("queue", json)
+                        }
+                    }
+                )
+            }
+        }
+    }
+
     private val backgroundPlaybackUseCase = VideoPlaybackUseCase()
     private var backgroundSkipJob: kotlinx.coroutines.Job? = null
     private var notificationMetadataJob: kotlinx.coroutines.Job? = null
@@ -900,6 +1079,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     override fun onEnterBackground() {
+        if (remoteAudio.active) return
+        tryTransferDetachedAudio()
         if (!isActive) return
         val currentPlayer = player ?: return
         resetBackgroundOptimizationState()
@@ -1040,6 +1221,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
     
     override fun onEnterForeground() {
+        if (remoteAudio.active) return
         backgroundPausedReleaseJob?.cancel()
         backgroundPausedReleaseJob = null
         if (!isLowMemoryMode) return
@@ -1412,11 +1594,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     internal fun retainPlayerForPage(target: ExoPlayer) {
+        remoteTransferJob?.cancel()
         pageOwnership.retain(target)
     }
 
     internal fun releasePlayerFromPage(target: ExoPlayer) {
         pageOwnership.release(target)
+        tryTransferDetachedAudio()
     }
 
     internal fun isPlayerRetainedByPage(target: ExoPlayer): Boolean =
@@ -2225,6 +2409,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     fun dismiss() {
+        remoteTransferJob?.cancel()
+        remotePreferencesJob?.cancel()
+        remoteAudio.close()
         resetBackgroundOptimizationState()
         Logger.d(TAG) { "Dismissing mini player (isLiveMode=$isLiveMode)" }
         
@@ -2275,7 +2462,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         mediaSessionNavigationAvailability = null
     }
 
-    private fun clearPlaybackNotificationArtifacts() {
+    private fun clearPlaybackNotificationArtifacts(stopServiceDirectly: Boolean = false) {
         notificationThemeMetadata = null
         notificationThemeJob?.cancel()
         notificationThemeJob = null
@@ -2289,7 +2476,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             val serviceIntent = Intent(context, PlaybackService::class.java).apply {
                 action = PlaybackService.ACTION_STOP_FOREGROUND
             }
-            context.startService(serviceIntent)
+            if (stopServiceDirectly) context.stopService(serviceIntent) else context.startService(serviceIntent)
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to stop playback service", e)
         }
@@ -2298,6 +2485,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
 
     private fun replaceExternalPlayer(incomingPlayer: ExoPlayer) {
+        if (remoteAudio.active) {
+            remotePreferencesJob?.cancel()
+            remoteAudio.close()
+        }
         if (player !== incomingPlayer) resetBackgroundOptimizationState()
         val previousPlayer = _externalPlayer
         if (previousPlayer != null && previousPlayer !== incomingPlayer) {
@@ -2468,19 +2659,31 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 暂停/播放切换
      */
     fun togglePlayPause(): Boolean {
-        if (player == null) return false
+        if (!remoteAudio.active && player == null) return false
         performMediaControl(MediaControlType.PLAY_PAUSE)
         return true
     }
 
     /** Explicit pause also clears playback intent while the player is buffering. */
     fun pausePlayback(): Boolean {
-        if (player == null) return false
+        if (!remoteAudio.active && player == null) return false
         performMediaControl(MediaControlType.PAUSE)
         return true
     }
 
-    private fun performMediaControl(controlType: MediaControlType) {
+    internal fun performMediaControl(controlType: MediaControlType) {
+        if (remoteAudio.active) {
+            remoteAudio.controller?.let { remote ->
+                when (controlType) {
+                    MediaControlType.PLAY -> remote.play()
+                    MediaControlType.PAUSE -> remote.pause()
+                    MediaControlType.PLAY_PAUSE -> if (remote.playWhenReady) remote.pause() else remote.play()
+                    MediaControlType.NEXT -> remote.seekToNextMediaItem()
+                    MediaControlType.PREVIOUS -> remote.seekToPreviousMediaItem()
+                }
+            }
+            return
+        }
         when (controlType) {
             MediaControlType.PREVIOUS -> playPrevious()
             MediaControlType.PLAY,
@@ -2626,7 +2829,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * Seek 到指定位置
      */
     fun seekTo(position: Long) {
-        player?.seekTo(position)
+        if (remoteAudio.active) remoteAudio.controller?.seekTo(position) else player?.seekTo(position)
     }
     
     // ==========  [新增] 播放列表控制 ==========
@@ -2635,6 +2838,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
      *  播放下一曲
      */
     fun playNext(): Boolean {
+        if (remoteAudio.active) {
+            remoteAudio.controller?.seekToNextMediaItem()
+            return true
+        }
         onNavigateNextCallback?.let { navigate ->
             if (navigate()) {
                 Logger.d(TAG, "🎵 navigation callback handled next request")
@@ -2697,6 +2904,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
      *  播放上一曲
      */
     fun playPrevious(): Boolean {
+        if (remoteAudio.active) {
+            remoteAudio.controller?.seekToPreviousMediaItem()
+            return true
+        }
         onNavigatePreviousCallback?.let { navigate ->
             if (navigate()) {
                 Logger.d(TAG, "🎵 navigation callback handled previous request")
@@ -2758,10 +2969,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
     /**
      *  切换播放模式
      */
-    fun togglePlayMode(): PlayMode {
-        return PlaylistManager.togglePlayMode()
-    }
-    
+    fun togglePlayMode(): PlayMode = PlaylistManager.togglePlayMode()
+
     /**
      *  获取当前播放模式
      */
@@ -2802,12 +3011,14 @@ class MiniPlayerManager private constructor(private val context: Context) :
     // --- 播放器监听器 ---
     private val playerListener = object : Player.Listener {
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (remoteAudio.active) return
             if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
                 onBackgroundPlayWhenReadyChanged(playWhenReady)
             }
         }
 
         override fun onIsPlayingChanged(playing: Boolean) {
+            if (remoteAudio.active) return
             isPlaying = playing
             Logger.d(TAG, "isPlaying changed: $playing")
             if (!shouldRefreshNotificationOnPlaybackStateChange(isActive = isActive, title = currentTitle)) {
@@ -2934,6 +3145,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     private fun pushNotification(title: String, artist: String, bitmap: Bitmap?) {
+        if (remoteAudio.active) return
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notificationIsPlaying = resolveNotificationIsPlaying(
             playerIsPlaying = player?.isPlaying,
@@ -3020,11 +3232,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
         builder.setContentIntent(contentIntent)
         
         compactActionOrder.forEach { actionType ->
-            val intent = android.app.PendingIntent.getBroadcast(
+            val intent = android.app.PendingIntent.getForegroundService(
                 context,
                 actionType,
-                android.content.Intent(ACTION_MEDIA_CONTROL)
-                    .setPackage(context.packageName)
+                android.content.Intent(context, PlaybackService::class.java)
+                    .setAction(PlaybackService.ACTION_MEDIA_CONTROL)
                     .putExtra(EXTRA_CONTROL_TYPE, actionType),
                 android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
             )

@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import com.android.purebilibili.feature.video.ui.feedback.canSubmitVideoFollowAction
-import com.android.purebilibili.feature.video.ui.feedback.canSubmitVideoTripleAction
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.Test
@@ -10,71 +9,11 @@ import kotlin.test.assertEquals
 class CommandDanmakuOverlayPolicyTest {
 
     @Test
-    fun `triple action never implicitly follows the author`() {
-        for (isFollowing in listOf(false, true)) {
-            val action = resolveAttentionCommandClickAction(
-                attentionType = 2,
-                action = AttentionCommandAction.TRIPLE,
-                isFollowing = isFollowing,
-            )
-
-            assertEquals(false, action.shouldFollow)
-            assertEquals(true, action.shouldTriple)
-        }
-    }
-
-    @Test
-    fun `follow action is independent and ignores existing followers`() {
-        for (isFollowing in listOf(false, true)) {
-            val action = resolveAttentionCommandClickAction(
-                attentionType = 2,
-                action = AttentionCommandAction.FOLLOW,
-                isFollowing = isFollowing,
-            )
-
-            assertEquals(!isFollowing, action.shouldFollow)
-            assertEquals(false, action.shouldTriple)
-        }
-    }
-
-    @Test
-    fun `follow only command cannot trigger triple action`() {
-        val action = resolveAttentionCommandClickAction(
-            attentionType = 0,
-            action = AttentionCommandAction.TRIPLE,
-            isFollowing = false,
-        )
-
-        assertEquals(false, action.shouldFollow)
-        assertEquals(false, action.shouldTriple)
-    }
-
-    @Test
-    fun `triple only command cannot trigger follow action`() {
-        val action = resolveAttentionCommandClickAction(
-            attentionType = 1,
-            action = AttentionCommandAction.FOLLOW,
-            isFollowing = false,
-        )
-
-        assertEquals(false, action.shouldFollow)
-        assertEquals(false, action.shouldTriple)
-    }
-
-    @Test
     fun `attention follow is disabled while unknown submitting or already followed`() {
         assertFalse(canSubmitVideoFollowAction(false, false, false))
         assertTrue(canSubmitVideoFollowAction(true, false, false))
         assertFalse(canSubmitVideoFollowAction(true, false, true))
         assertFalse(canSubmitVideoFollowAction(true, true, false))
-    }
-
-    @Test
-    fun `partial triple permits retry but pending and complete states block submission`() {
-        assertFalse(canSubmitVideoTripleAction(false, true, false, true, false))
-        assertTrue(canSubmitVideoTripleAction(true, true, false, true, false))
-        assertFalse(canSubmitVideoTripleAction(true, true, false, true, true))
-        assertFalse(canSubmitVideoTripleAction(true, true, true, true, false))
     }
 
     @Test

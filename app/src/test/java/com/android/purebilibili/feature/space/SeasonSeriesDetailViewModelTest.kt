@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.space
 
 import android.app.Application
+import android.widget.Toast
 import androidx.lifecycle.ViewModelStore
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.AccountSessionIdentity
@@ -15,6 +16,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkAll
+import io.mockk.mockkStatic
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,6 +43,8 @@ class SeasonSeriesDetailViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         mockkObject(TokenManager, NetworkModule, FavoriteRepository)
+        mockkStatic(Toast::class)
+        every { Toast.makeText(any(), any<CharSequence>(), any()) } returns mockk(relaxed = true)
         every { TokenManager.accountIdentity } returns MutableStateFlow(AccountSessionIdentity(101L, 1L))
         every { TokenManager.midCache } returns 101L
         every { NetworkModule.spaceApi } returns mockk(relaxed = true)
@@ -230,7 +234,6 @@ class SeasonSeriesDetailViewModelTest {
         viewModel.init("favorite", 900L, 202L, "路由标题")
         runCurrent()
         assertTrue(viewModel.canEditFavoriteFolder)
-        assertNull(viewModel.favoriteFolderInfo.value)
         var opened = false
         viewModel.loadFavoriteFolderForEditing { opened = true }
         assertTrue(viewModel.isManagingState.value)
@@ -242,6 +245,38 @@ class SeasonSeriesDetailViewModelTest {
         assertEquals(complete, viewModel.favoriteFolderInfo.value)
         assertEquals("完整标题", viewModel.uiState.value.title)
         coVerify(exactly = 1) { FavoriteRepository.getFolderInfo(900L) }
+    }
+
+    @Test
+    fun `private folder cannot be posted to dynamics`() = runTest(dispatcher) {
+        runCurrent()
+        coEvery { FavoriteRepository.getFavoriteList(mediaId = 900L, pn = 1) } returns
+            Result.success(resources(1..2, false).copy(info = FavoriteInfo(id = 900L, mid = 101L, attr = 1)))
+        viewModel.init("favorite", 900L, 101L, "私密收藏")
+        runCurrent()
+        assertFalse(viewModel.canShareFavoriteFolder)
+        viewModel.shareFavoriteFolderToDynamic()
+        runCurrent()
+        coVerify(exactly = 0) { FavoriteRepository.shareFolderToDynamic(any(), any()) }
+        assertFalse(viewModel.isManagingState.value)
+    }
+
+    @Test
+    fun `sharing rechecks remote privacy before posting and releases busy state on refusal`() = runTest(dispatcher) {
+        runCurrent()
+        val info = FavoriteInfo(id = 900L, mid = 101L, attr = 0)
+        coEvery { FavoriteRepository.getFavoriteList(mediaId = 900L, pn = 1) } returns
+            Result.success(resources(1..2, false).copy(info = info))
+        coEvery { FavoriteRepository.getFolderInfo(900L) } returns Result.success(info.copy(attr = 1))
+        viewModel.init("favorite", 900L, 101L, "公开收藏")
+        runCurrent()
+        assertTrue(viewModel.canShareFavoriteFolder)
+        viewModel.shareFavoriteFolderToDynamic()
+        assertTrue(viewModel.isManagingState.value)
+        runCurrent()
+        assertFalse(viewModel.canShareFavoriteFolder)
+        assertFalse(viewModel.isManagingState.value)
+        coVerify(exactly = 0) { FavoriteRepository.shareFolderToDynamic(any(), any()) }
     }
 
     private fun resources(ids: IntProgression, hasMore: Boolean) = FavoriteResourceData(

@@ -38,6 +38,7 @@ import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.ThumbUp
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppExactTouchTargets
 import com.android.purebilibili.core.ui.components.AppIconButtonDefaults
 import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
@@ -45,7 +46,6 @@ import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -98,19 +98,21 @@ import com.android.purebilibili.feature.video.danmaku.DanmakuViewport
 import com.android.purebilibili.data.model.response.DynamicVoteInfo
 import com.android.purebilibili.data.repository.DynamicVoteRepository
 import com.android.purebilibili.feature.video.ui.feedback.canSubmitVideoFollowAction
-import com.android.purebilibili.feature.video.ui.feedback.canSubmitVideoTripleAction
 import com.android.purebilibili.feature.video.ui.feedback.resolveVideoActionTint
 
 @Composable
 internal fun CommandDanmakuOverlay(
     items: List<CommandDanmakuItem>,
     player: Player,
+    visible: Boolean,
     viewport: DanmakuViewport,
     bottomInsetPx: Int,
     state: CommandDanmakuOverlayState,
     fontScale: Float,
     onFollowClick: () -> Unit,
-    onTripleClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     onVoteSubmit: (CommandDanmakuItem, VoteOption, Int) -> Unit,
     onLinkClick: (CommandDanmakuItem) -> Unit = {},
     isFollowing: Boolean = false,
@@ -122,14 +124,13 @@ internal fun CommandDanmakuOverlay(
     isFollowSubmitting: Boolean,
     isTripleSubmitting: Boolean,
     modifier: Modifier = Modifier,
-    renderingPaused: Boolean = false,
 ) {
+    if (!visible) return
     val placementHeightPx = (viewport.heightPx - bottomInsetPx.coerceAtLeast(0)).coerceAtLeast(0)
     if (placementHeightPx == 0) return
     val currentPosition by produceState(
-        initialValue = player.currentPosition, key1 = player, key2 = renderingPaused,
+        initialValue = player.currentPosition, key1 = player,
     ) {
-        if (renderingPaused) awaitDispose { }
         while (true) {
             value = player.currentPosition
             kotlinx.coroutines.delay(80)
@@ -148,7 +149,9 @@ internal fun CommandDanmakuOverlay(
                     state = state,
                     fontScale = fontScale,
                     onFollowClick = onFollowClick,
-                    onTripleClick = onTripleClick,
+                    onLikeClick = onLikeClick,
+                    onCoinClick = onCoinClick,
+                    onFavoriteClick = onFavoriteClick,
                     onVoteSubmit = onVoteSubmit,
                     onLinkClick = onLinkClick,
                     isFollowing = isFollowing,
@@ -174,7 +177,9 @@ private fun CommandDanmakuCard(
     state: CommandDanmakuOverlayState,
     fontScale: Float,
     onFollowClick: () -> Unit,
-    onTripleClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     onVoteSubmit: (CommandDanmakuItem, VoteOption, Int) -> Unit,
     onLinkClick: (CommandDanmakuItem) -> Unit,
     isFollowing: Boolean,
@@ -304,7 +309,9 @@ private fun CommandDanmakuCard(
                     isFollowSubmitting = isFollowSubmitting,
                     isTripleSubmitting = isTripleSubmitting,
                     onFollowClick = onFollowClick,
-                    onTripleClick = onTripleClick,
+                    onLikeClick = onLikeClick,
+                    onCoinClick = onCoinClick,
+                    onFavoriteClick = onFavoriteClick,
                     onDismiss = onDismiss,
                 )
             } else {
@@ -395,24 +402,13 @@ private fun AttentionCommandCard(
     isFollowSubmitting: Boolean,
     isTripleSubmitting: Boolean,
     onFollowClick: () -> Unit,
-    onTripleClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val showTriple = item.attentionType == 1 || item.attentionType == 2
     val followEnabled = canSubmitVideoFollowAction(followStatusKnown, isFollowing, isFollowSubmitting)
-    val tripleEnabled = canSubmitVideoTripleAction(
-        likeStatusKnown, isLiked, isCoined, isFavorited, isTripleSubmitting
-    )
-
-    fun dispatchAction(target: AttentionCommandAction) {
-        val action = resolveAttentionCommandClickAction(
-            attentionType = item.attentionType,
-            action = target,
-            isFollowing = isFollowing,
-        )
-        if (action.shouldFollow && followEnabled) onFollowClick()
-        if (action.shouldTriple && tripleEnabled) onTripleClick()
-    }
 
     AppSurface(
         modifier = Modifier.fillMaxWidth(),
@@ -420,54 +416,57 @@ private fun AttentionCommandCard(
         contentColor = Color.White,
         shape = RoundedCornerShape(4.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = ATTENTION_HORIZONTAL_PADDING_DP.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (showTriple) {
-                AttentionCommandTripleButton(
-                    enabled = tripleEnabled,
-                    statusKnown = likeStatusKnown,
-                    isLiked = isLiked,
-                    isCoined = isCoined,
-                    isFavorited = isFavorited,
-                    isSubmitting = isTripleSubmitting,
-                    onClick = { dispatchAction(AttentionCommandAction.TRIPLE) },
-                )
-            } else {
-                Box(
-                    modifier = Modifier.size(width = ATTENTION_ICON_SLOT_DP.dp, height = 28.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (item.iconUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = item.iconUrl,
-                            contentDescription = null,
-                            modifier = Modifier.size(24.dp).clip(CircleShape),
-                        )
-                    } else {
-                        AppIcon(Icons.Rounded.Person, contentDescription = null, tint = Color.White)
+        AppExactTouchTargets {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = ATTENTION_HORIZONTAL_PADDING_DP.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (showTriple) {
+                    AttentionCommandActions(
+                        likeStatusKnown = likeStatusKnown,
+                        isLiked = isLiked,
+                        isCoined = isCoined,
+                        isFavorited = isFavorited,
+                        isSubmitting = isTripleSubmitting,
+                        onLikeClick = onLikeClick,
+                        onCoinClick = onCoinClick,
+                        onFavoriteClick = onFavoriteClick,
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.size(width = ATTENTION_ICON_SLOT_DP.dp, height = 28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (item.iconUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = item.iconUrl,
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp).clip(CircleShape),
+                            )
+                        } else {
+                            AppIcon(Icons.Rounded.Person, contentDescription = null, tint = Color.White)
+                        }
                     }
                 }
-            }
-            if (item.attentionType != 1) {
-                Spacer(Modifier.width(ATTENTION_ACTION_SPACING_DP.dp))
-                AttentionCommandFollowButton(
-                    isFollowing = isFollowing,
-                    followStatusKnown = followStatusKnown,
-                    enabled = followEnabled,
-                    isSubmitting = isFollowSubmitting,
-                    onClick = { dispatchAction(AttentionCommandAction.FOLLOW) },
-                )
-            }
-            if (!showTriple) {
-                CommandDanmakuCloseButton(
-                    onDismiss = onDismiss,
-                    containerColor = Color.Transparent,
-                )
+                if (item.attentionType != 1) {
+                    Spacer(Modifier.width(ATTENTION_ACTION_SPACING_DP.dp))
+                    AttentionCommandFollowButton(
+                        isFollowing = isFollowing,
+                        followStatusKnown = followStatusKnown,
+                        enabled = followEnabled,
+                        isSubmitting = isFollowSubmitting,
+                        onClick = onFollowClick,
+                    )
+                }
+                if (!showTriple) {
+                    CommandDanmakuCloseButton(
+                        onDismiss = onDismiss,
+                        containerColor = Color.Transparent,
+                    )
+                }
             }
         }
     }
@@ -496,92 +495,56 @@ private fun CommandDanmakuCloseButton(
 }
 
 @Composable
-private fun AttentionCommandTripleButton(
-    enabled: Boolean,
-    statusKnown: Boolean,
+private fun AttentionCommandActions(
+    likeStatusKnown: Boolean,
     isLiked: Boolean,
     isCoined: Boolean,
     isFavorited: Boolean,
     isSubmitting: Boolean,
-    onClick: () -> Unit,
+    onLikeClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
 ) {
-    var pulseKey by remember(enabled) { mutableIntStateOf(0) }
-    var pressed by remember(enabled) { mutableStateOf(false) }
-    val scale = animateFloatAsState(
-        targetValue = if (pressed) 1.1f else 1f,
-        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
-        label = "attentionTriplePressScale",
-    )
-    LaunchedEffect(pulseKey, enabled) {
-        if (enabled && pulseKey > 0) {
-            pressed = true
-            delay(420)
-            pressed = false
-        }
-    }
     val activeColor = AppContentColors.accent()
-    val inactiveColor = if (statusKnown) Color.White else Color.White.copy(alpha = 0.38f)
-    val completed = statusKnown && isLiked && isCoined && isFavorited
-    val interactionDescription = remember(statusKnown, isLiked, isCoined, isFavorited, isSubmitting) {
-        when {
-            isSubmitting -> "三连提交中"
-            !statusKnown -> "三连状态尚未确认"
-            completed -> "已完成三连"
-            else -> {
-                val like = if (isLiked) "已点赞" else "未点赞"
-                val coin = if (isCoined) "已投币" else "未投币"
-                val favorite = if (isFavorited) "已收藏" else "未收藏"
-                "$like，$coin，$favorite"
-            }
-        }
-    }
-    Box(
-        modifier = Modifier
-            .width((ATTENTION_ICON_SLOT_DP * 3).dp)
-            .height(28.dp)
-            .clickable(enabled = enabled, role = Role.Button) {
-                pulseKey += 1
-                onClick()
-            }
-            .semantics {
-                contentDescription = "一键三连：点赞、投币、收藏"
-                stateDescription = interactionDescription
-                selected = completed
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AttentionCommandIconSlot(
+            icon = Icons.Rounded.ThumbUp,
+            iconSize = 24.dp,
+            enabled = likeStatusKnown && !isSubmitting,
+            selected = likeStatusKnown && isLiked,
+            description = "点赞",
+            stateDescription = when {
+                !likeStatusKnown -> "点赞状态尚未确认"
+                isLiked -> "已点赞"
+                else -> "未点赞"
             },
-    ) {
-        Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-            AttentionCommandIconSlot(
-                Icons.Rounded.ThumbUp, 24.dp, scale,
-                resolveVideoActionTint(statusKnown && isLiked, activeColor, inactiveColor),
-            )
-            AttentionCommandIconSlot(
-                attentionFilledCoinIcon(), 24.dp, scale,
-                Color.Unspecified,
-                backgroundColor = if (statusKnown && isCoined) {
-                    activeColor.copy(alpha = 0.22f)
-                } else Color.Unspecified,
-                contentAlpha = if (statusKnown) 1f else 0.38f,
-            )
-            AttentionCommandIconSlot(
-                Icons.Rounded.Star, 30.dp, scale,
-                resolveVideoActionTint(statusKnown && isFavorited, activeColor, inactiveColor),
-            )
-        }
-        if (isSubmitting) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(24.dp)
-                    .background(Color.Black.copy(alpha = 0.8f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                AppCircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    color = Color.White,
-                    strokeWidth = 2.dp,
-                )
-            }
-        }
+            tint = resolveVideoActionTint(
+                likeStatusKnown && isLiked, activeColor,
+                if (likeStatusKnown) Color.White else Color.White.copy(alpha = 0.38f),
+            ),
+            onClick = onLikeClick,
+        )
+        AttentionCommandIconSlot(
+            icon = attentionFilledCoinIcon(),
+            iconSize = 24.dp,
+            enabled = !isSubmitting,
+            selected = isCoined,
+            description = "投币",
+            stateDescription = if (isCoined) "已投币" else "未投币",
+            tint = Color.Unspecified,
+            backgroundColor = if (isCoined) activeColor.copy(alpha = 0.22f) else Color.Unspecified,
+            onClick = onCoinClick,
+        )
+        AttentionCommandIconSlot(
+            icon = Icons.Rounded.Star,
+            iconSize = 30.dp,
+            enabled = !isSubmitting,
+            selected = isFavorited,
+            description = "收藏",
+            stateDescription = if (isFavorited) "已收藏" else "未收藏",
+            tint = resolveVideoActionTint(isFavorited, activeColor, Color.White),
+            onClick = onFavoriteClick,
+        )
     }
 }
 
@@ -624,6 +587,7 @@ private fun AttentionCommandFollowButton(
             .background(containerColor)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics {
+                contentDescription = "关注"
                 selected = followed
                 stateDescription = if (!followStatusKnown && !isSubmitting) "关注状态尚未确认" else label
             }
@@ -654,14 +618,40 @@ private fun AttentionCommandFollowButton(
 private fun AttentionCommandIconSlot(
     icon: ImageVector,
     iconSize: Dp,
-    scale: State<Float>,
+    enabled: Boolean,
+    selected: Boolean,
+    description: String,
+    stateDescription: String,
     tint: Color = Color.White,
     backgroundColor: Color = Color.Unspecified,
-    contentAlpha: Float = 1f,
+    onClick: () -> Unit,
 ) {
+    var pulseKey by remember { mutableIntStateOf(0) }
+    var pressed by remember { mutableStateOf(false) }
+    val scale = animateFloatAsState(
+        targetValue = if (pressed) 1.1f else 1f,
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
+        label = "attentionActionPressScale",
+    )
+    LaunchedEffect(pulseKey) {
+        if (pulseKey > 0) {
+            pressed = true
+            delay(420)
+            pressed = false
+        }
+    }
     Box(
         modifier = Modifier
             .size(width = ATTENTION_ICON_SLOT_DP.dp, height = 28.dp)
+            .clickable(enabled = enabled, role = Role.Button) {
+                pulseKey += 1
+                onClick()
+            }
+            .semantics {
+                contentDescription = description
+                this.stateDescription = stateDescription
+                this.selected = selected
+            }
             .then(
                 if (backgroundColor != Color.Unspecified) Modifier.background(backgroundColor, CircleShape)
                 else Modifier
@@ -676,7 +666,6 @@ private fun AttentionCommandIconSlot(
                 val currentScale = scale.value
                 scaleX = currentScale
                 scaleY = currentScale
-                alpha = contentAlpha
             },
         )
     }
@@ -711,37 +700,6 @@ private fun attentionFilledCoinIcon(): ImageVector {
             lineTo(12f, 19f)
         }
     }.build().also { cachedAttentionCoinIcon = it }
-}
-
-internal enum class AttentionCommandAction {
-    FOLLOW,
-    TRIPLE,
-}
-
-internal data class AttentionCommandClickAction(
-    val shouldFollow: Boolean,
-    val shouldTriple: Boolean
-)
-
-private val attentionFollowAction = AttentionCommandClickAction(shouldFollow = true, shouldTriple = false)
-private val attentionTripleAction = AttentionCommandClickAction(shouldFollow = false, shouldTriple = true)
-private val attentionNoAction = AttentionCommandClickAction(shouldFollow = false, shouldTriple = false)
-
-internal fun resolveAttentionCommandClickAction(
-    attentionType: Int,
-    action: AttentionCommandAction,
-    isFollowing: Boolean,
-): AttentionCommandClickAction = when (action) {
-    AttentionCommandAction.FOLLOW -> if (attentionType != 1 && !isFollowing) {
-        attentionFollowAction
-    } else {
-        attentionNoAction
-    }
-    AttentionCommandAction.TRIPLE -> if (attentionType == 1 || attentionType == 2) {
-        attentionTripleAction
-    } else {
-        attentionNoAction
-    }
 }
 
 internal fun resolveAttentionCommandCardWidthDp(attentionType: Int, fontScale: Float): Int {

@@ -9,6 +9,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.data.model.response.EmoteItem
 import com.android.purebilibili.data.model.response.EmotePackage
+import com.android.purebilibili.feature.video.viewmodel.CommentComposerDraft
+import com.android.purebilibili.feature.video.viewmodel.CommentComposerDraftState
 import kotlin.math.abs
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -21,11 +23,67 @@ class CommentInputDialogUiRegressionTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun replySessions_restoreTheirOwnDraftAndClearOnlyThePublishedReply() {
+        val drafts = mutableStateOf(CommentComposerDraftState().open())
+        val target = mutableStateOf(20L)
+        composeRule.setContent {
+            val session = drafts.value
+            val replyRpid = target.value
+            val draft = session.drafts[replyRpid] ?: CommentComposerDraft()
+            MaterialTheme {
+                CommentInputDialog(
+                    visible = true,
+                    draftKey = "$replyRpid:${session.sessionId}",
+                    initialText = draft.text,
+                    initialImageUris = draft.imageUris,
+                    initialSyncToDynamic = draft.syncToDynamic,
+                    onDraftChange = { text, images, sync ->
+                        drafts.value = drafts.value.update(
+                            session.sessionId, replyRpid, CommentComposerDraft(text, images, sync)
+                        )
+                    },
+                    onDismiss = {},
+                    onSend = { _, _, _ ->
+                        drafts.value = drafts.value.complete(
+                            session.sessionId, replyRpid, session.drafts[replyRpid]
+                        ).open()
+                    },
+                )
+            }
+        }
+
+        composeRule.onNodeWithTag("comment_composer_input").performTextReplacement("给甲的草稿")
+        composeRule.onNodeWithTag("comment_composer_input").performTextInputSelection(TextRange(1, 3))
+        composeRule.onNodeWithTag("comment_composer_input").assert(
+            SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(1, 3))
+        )
+        composeRule.runOnIdle {
+            target.value = 30L
+            drafts.value = drafts.value.open()
+        }
+        composeRule.onNodeWithTag("comment_composer_input").assertTextEquals("")
+        composeRule.onNodeWithTag("comment_composer_input").performTextReplacement("给乙的草稿")
+        composeRule.runOnIdle {
+            target.value = 20L
+            drafts.value = drafts.value.open()
+        }
+        composeRule.onNodeWithTag("comment_composer_input").assertTextEquals("给甲的草稿")
+        composeRule.onNodeWithText("发布").performClick()
+        composeRule.onNodeWithTag("comment_composer_input").assertTextEquals("")
+        composeRule.runOnIdle {
+            target.value = 30L
+            drafts.value = drafts.value.open()
+        }
+        composeRule.onNodeWithTag("comment_composer_input").assertTextEquals("给乙的草稿")
+    }
+
+    @Test
     fun selectingEmotes_preservesChooserModeAndReturnsToEditingOnInputTap() {
         composeRule.setContent {
             MaterialTheme {
                 CommentInputDialog(
                     visible = true,
+                    draftKey = "emotes",
                     initialText = "@pending",
                     emotePackages = listOf(
                         emotePackage(1, "小黄脸", listOf("[doge]")),
@@ -73,6 +131,7 @@ class CommentInputDialogUiRegressionTest {
             MaterialTheme {
                 CommentInputDialog(
                     visible = true,
+                    draftKey = "kaomoji",
                     initialText = "AB",
                     emotePackages = listOf(emotePackage(1, "小黄脸", listOf("[doge]"))),
                     onDismiss = {},
@@ -116,6 +175,7 @@ class CommentInputDialogUiRegressionTest {
             MaterialTheme {
                 CommentInputDialog(
                     visible = true,
+                    draftKey = "compact",
                     emotePackages = listOf(
                         emotePackage(1, "小黄脸", faces),
                         emotePackage(2, "tv_小电视", televisions),
@@ -140,6 +200,7 @@ class CommentInputDialogUiRegressionTest {
             MaterialTheme {
                 CommentInputDialog(
                     visible = true,
+                    draftKey = "api-kaomoji",
                     emotePackages = packages.value,
                     onDismiss = {},
                     onSend = { _, _, _ -> },
@@ -185,6 +246,7 @@ class CommentInputDialogUiRegressionTest {
             MaterialTheme {
                 CommentInputDialog(
                     visible = true,
+                    draftKey = "categories",
                     emotePackages = packages.value,
                     onDismiss = {},
                     onSend = { _, _, _ -> },
@@ -215,11 +277,12 @@ class CommentInputDialogUiRegressionTest {
     }
 
     @Test
-    fun longReplyAndDraft_neverOverlapExpandIcon() {
+    fun longReplyAndDraft_useFullWidthBelowExpandButton() {
         composeRule.setContent {
             MaterialTheme {
                 CommentInputDialog(
                     visible = true,
+                    draftKey = "long-reply",
                     replyToName = "很长的回复对象昵称".repeat(8),
                     initialText = "这是一段需要自动换行的评论正文。".repeat(20),
                     onDismiss = {},
@@ -230,9 +293,52 @@ class CommentInputDialogUiRegressionTest {
 
         val input = composeRule.onNodeWithTag("comment_composer_input")
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        val expand = composeRule.onNodeWithContentDescription("Expand")
+        val editor = composeRule.onNodeWithTag("comment_composer_editor")
             .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
-        assertTrue("正文应在全屏图标左侧结束", input.right < expand.left)
+        val expand = composeRule.onNodeWithTag("comment_composer_expand_toggle")
+            .assertHasClickAction().assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        assertTrue("展开按钮应位于正文上方留白", expand.bottom <= input.top)
+        assertTrue(
+            "正文两侧只保留对称内边距，不应为按钮另留右侧槽位",
+            abs((input.left - editor.left) - (editor.right - input.right)) < 1f
+        )
+    }
+
+    @Test
+    fun expandAndCollapse_preserveEditedDraftAndSelection() {
+        composeRule.setContent {
+            MaterialTheme {
+                CommentInputDialog(
+                    visible = true,
+                    draftKey = "expand-editor",
+                    initialText = "原始草稿",
+                    onDismiss = {},
+                    onSend = { _, _, _ -> },
+                )
+            }
+        }
+        val input = composeRule.onNodeWithTag("comment_composer_input")
+        input.performTouchInput { click() }
+        input.performTextReplacement("编辑后的评论草稿")
+        input.performTextInputSelection(TextRange(1, 4))
+        val compact = input.fetchSemanticsNode().boundsInRoot
+
+        composeRule.onNodeWithContentDescription("展开输入区").assertHasClickAction()
+            .performTouchInput { click() }
+        composeRule.onNodeWithContentDescription("收起输入区").assertIsDisplayed()
+        input.assertTextEquals("编辑后的评论草稿")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(1, 4)))
+        val expanded = input.fetchSemanticsNode().boundsInRoot
+        assertTrue("展开应增加可编辑高度", expanded.height > compact.height)
+        composeRule.onNodeWithText("发布").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("收起输入区").performTouchInput { click() }
+        composeRule.onNodeWithContentDescription("展开输入区").assertIsDisplayed()
+        input.assertTextEquals("编辑后的评论草稿")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(1, 4)))
+        val collapsed = input.fetchSemanticsNode().boundsInRoot
+        assertTrue("收起应恢复紧凑高度", abs(collapsed.height - compact.height) < 1f)
+        composeRule.onNodeWithText("发布").assertIsDisplayed()
     }
 
     private fun assertChooserMode(expectKaomojiGrid: Boolean = false) {

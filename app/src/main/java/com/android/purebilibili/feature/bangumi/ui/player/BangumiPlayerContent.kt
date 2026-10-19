@@ -55,6 +55,7 @@ import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.feature.video.ui.components.CommentInputDialog
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
@@ -128,26 +129,30 @@ fun BangumiPlayerContent(
             emotePackages = CommentRepository.getEmotePackages().getOrDefault(emptyList())
         }
     }
-    var sendPending by remember(currentEpisode.id) { mutableStateOf(false) }
     var previewImages by remember(currentEpisode.id) { mutableStateOf<List<String>>(emptyList()) }
     var previewIndex by remember(currentEpisode.id) { mutableIntStateOf(0) }
     var previewSourceRect by remember(currentEpisode.id) { mutableStateOf<ImagePreviewSourceAnchor?>(null) }
     var previewTextContent by remember(currentEpisode.id) { mutableStateOf<ImagePreviewTextContent?>(null) }
 
-    LaunchedEffect(currentEpisode.id, commentState.isSending, commentState.sendError) {
-        if (sendPending && !commentState.isSending) {
-            if (commentState.sendError == null) commentInputVisible = false
-            sendPending = false
+    LaunchedEffect(
+        currentEpisode.id,
+        commentState.composerDrafts.sessionId,
+        commentState.composerDrafts.completedSessionId
+    ) {
+        if (commentState.composerDrafts.completedSessionId == commentState.composerDrafts.sessionId) {
+            commentInputVisible = false
         }
     }
 
     fun openRootCommentComposer() {
         commentViewModel.cancelReply()
+        commentViewModel.beginCommentDraft()
         commentInputVisible = true
     }
 
     fun openReplyComposer(reply: com.android.purebilibili.data.model.response.ReplyItem) {
         commentViewModel.replyTo(reply)
+        commentViewModel.beginCommentDraft()
         commentInputVisible = true
     }
 
@@ -799,20 +804,43 @@ fun BangumiPlayerContent(
         )
     }
 
+    val composerSessionId = commentState.composerDrafts.sessionId
+    val composerReplyRpid = commentState.replyTarget?.rpid
+    val composerDraft = commentState.composerDrafts.drafts[commentComposerDraftKey(composerReplyRpid)]
+    val composerKey = remember(currentEpisode.id, currentEpisode.aid, isCourse, composerReplyRpid, composerSessionId) {
+        "bangumi:${if (isCourse) currentEpisode.id else currentEpisode.aid}:${if (isCourse) 33 else 1}:$composerReplyRpid:$composerSessionId"
+    }
     CommentInputDialog(
         visible = commentInputVisible,
+        draftKey = composerKey,
         onDismiss = {
-            commentInputVisible = false
-            commentViewModel.cancelReply()
+            if (commentViewModel.commentState.value.composerDrafts.sessionId == composerSessionId) {
+                commentInputVisible = false
+                commentViewModel.cancelReply()
+            }
         },
         onSend = { message, imageUris, syncToDynamic ->
-            sendPending = true
-            commentViewModel.sendComment(message, imageUris, syncToDynamic)
+            val latest = commentViewModel.commentState.value
+            if (commentInputVisible && latest.composerDrafts.sessionId == composerSessionId &&
+                latest.composerDrafts.completedSessionId != composerSessionId &&
+                latest.replyTarget?.rpid == composerReplyRpid && !latest.isSending
+            ) {
+                commentViewModel.updateCommentDraft(
+                    composerSessionId, composerReplyRpid, message, imageUris, syncToDynamic
+                )
+                commentViewModel.sendComment(message, imageUris, syncToDynamic)
+            }
         },
         isSending = commentState.isSending,
         replyToName = commentState.replyTarget?.member?.uname,
         inputHint = if (commentState.replyTarget == null) commentState.rootInputHint else commentState.childInputHint,
         canInputComment = commentState.canInputComment,
+        initialText = composerDraft?.text.orEmpty(),
+        initialImageUris = composerDraft?.imageUris.orEmpty(),
+        initialSyncToDynamic = composerDraft?.syncToDynamic ?: false,
+        onDraftChange = { text, images, sync ->
+            commentViewModel.updateCommentDraft(composerSessionId, composerReplyRpid, text, images, sync)
+        },
         currentVideoPositionMsProvider = currentVideoPositionMsProvider,
         emotePackages = emotePackages,
     )

@@ -349,7 +349,8 @@ internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLi
  * 对于合集/系列/番剧等非独立 UP 主发布的动态，避免将虚拟 ID / 赛季 ID 误当作个人 UID 打开个人空间导致“获取用户信息失败”报错。
  */
 internal fun resolveDynamicAuthorClickMid(item: DynamicItem): Long? {
-    val target = item.orig ?: item
+    // Resolve the author of this rendered header, not the forwarded content's author.
+    val target = item
     val type = target.type.trim()
     val major = target.modules.module_dynamic?.major
 

@@ -40,7 +40,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         get() = id > 0L && mid > 0L && canCopySpaceFavoriteResources(type, TokenManager.midCache)
 
     val canManageFavoriteResources: Boolean
-        get() = id > 0L && canManageSpaceFavoriteResources(type, mid, TokenManager.midCache)
+        get() = id > 0L && canManageSpaceFavoriteResources(type, favoriteFolderOwnerMid, TokenManager.midCache)
 
     private val _favoriteFolderInfo = MutableStateFlow<FavoriteInfo?>(null)
     val favoriteFolderInfo = _favoriteFolderInfo.asStateFlow()
@@ -50,6 +50,9 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
     private var favoriteFolderOwnerMid = 0L
     val canEditFavoriteFolder: Boolean
         get() = canManageSpaceFavoriteResources(type, favoriteFolderOwnerMid, TokenManager.midCache)
+    val canShareFavoriteFolder: Boolean
+        get() = type == "favorite" && id > 0L && (TokenManager.midCache ?: 0L) > 0L &&
+            _favoriteFolderInfo.value?.let { (it.attr and 1) == 0 } == true
 
     private var refreshJob: Job? = null
     private var pagingJob: Job? = null
@@ -244,6 +247,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
     }
 
     private fun updateFavoriteResourceInfo(info: FavoriteInfo) {
+        _favoriteFolderInfo.value = info
         favoriteFolderOwnerMid = info.upper?.mid?.takeIf { it > 0L } ?: info.mid
         mid = favoriteFolderOwnerMid.takeIf { it > 0L } ?: mid
         if (info.title.isNotBlank()) pageTitle = info.title
@@ -253,10 +257,6 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         )
     }
 
-    private fun updateFavoriteInfo(info: FavoriteInfo) {
-        _favoriteFolderInfo.value = info
-        updateFavoriteResourceInfo(info)
-    }
 
     private suspend fun fetchFavoriteResources(
         page: Int = 1,
@@ -374,6 +374,34 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         loadMore()
     }
 
+    internal fun shareFavoriteFolderToDynamic() {
+        if (!canShareFavoriteFolder || _isManagingState.value ||
+            _uiState.value.isLoading || isLoadingMore) return
+        val mediaId = id
+        val generation = requestGeneration
+        _isManagingState.value = true
+        accountRequests.launch {
+            try {
+                val info = FavoriteRepository.getFolderInfo(mediaId).getOrThrow()
+                currentCoroutineContext().ensureActive()
+                if (generation != requestGeneration || id != mediaId) return@launch
+                updateFavoriteResourceInfo(info)
+                check(canShareFavoriteFolder) { "私密收藏夹不能分享至动态" }
+                FavoriteRepository.shareFolderToDynamic(
+                    mediaId = mediaId,
+                    content = "分享收藏夹：${info.title}",
+                ).getOrThrow()
+                Toast.makeText(getApplication(), "已分享至动态", Toast.LENGTH_SHORT).show()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(getApplication(), e.message ?: "分享失败，请稍后重试", Toast.LENGTH_SHORT).show()
+            } finally {
+                _isManagingState.value = false
+            }
+        }
+    }
+
     internal fun loadFavoriteFolderForEditing(onSuccess: () -> Unit) {
         if (!canEditFavoriteFolder || _isManagingState.value || _uiState.value.isLoading) return
         val mediaId = id
@@ -387,7 +415,6 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                 if (generation != requestGeneration || id != mediaId) return@launch
                 updateFavoriteResourceInfo(info)
                 check(canEditFavoriteFolder) { "无法编辑此收藏夹" }
-                updateFavoriteInfo(info)
                 onSuccess()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -442,7 +469,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                     cover = cover,
                     attr = if (isPrivate) original.attr or 1 else original.attr and 1.inv(),
                 )
-                updateFavoriteInfo(updated)
+                updateFavoriteResourceInfo(updated)
                 try {
                     FavoriteFolderCoverCache.store(
                         app,

@@ -455,32 +455,6 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
-    fun fullscreenLockButton_hidesAfterLockAndCanBeRevealedAgain() {
-        val sectionSource = loadVideoPlayerSectionSource()
-        val overlaySource = loadVideoPlayerOverlaySource()
-        val lockButtonBlock = overlaySource
-            .substringAfter("// --- 3.5")
-            .substringBefore("if (isFullscreen && showFullscreenScreenshotButton)")
-
-        assertTrue(sectionSource.contains("LaunchedEffect(isScreenLocked, showControls)"))
-        assertTrue(sectionSource.contains("delay(2_000L)"))
-        assertTrue(lockButtonBlock.contains("visible = isVisible"))
-        assertFalse(lockButtonBlock.contains("visible = isVisible || isScreenLocked"))
-    }
-
-    @Test
-    fun fullscreenLock_freezesAndRestoresActivityOrientation() {
-        val sectionSource = loadVideoPlayerSectionSource()
-        val lockEffect = sectionSource
-            .substringAfter("DisposableEffect(isFullscreen, isScreenLocked)")
-            .substringBefore("// 「播放页沉浸状态栏」")
-
-        assertTrue(lockEffect.contains("ActivityInfo.SCREEN_ORIENTATION_LOCKED"))
-        assertTrue(lockEffect.contains("previousRequestedOrientation"))
-        assertTrue(lockEffect.contains("applyPlayerRequestedOrientation(previousRequestedOrientation)"))
-    }
-
-    @Test
     fun playbackDebugRows_includeAllReadableStatsAndSkipEmptyValues() {
         val rows = resolvePlaybackDebugRows(
             PlaybackDebugInfo(

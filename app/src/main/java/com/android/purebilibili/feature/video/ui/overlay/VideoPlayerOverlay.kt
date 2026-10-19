@@ -70,7 +70,7 @@ import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDi
 import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuPlacement
 import com.android.purebilibili.feature.video.ui.components.PlayerListPopupPlacement
 import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
-import com.android.purebilibili.feature.video.ui.components.LandscapeDanmakuComposerForPlayer
+import com.android.purebilibili.feature.video.ui.components.LandscapeDanmakuComposer
 import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
 import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
@@ -407,6 +407,55 @@ internal fun resolveFullscreenLockButtonVisualState(
     }
 }
 
+/** Media contrast belongs to this control, not the surrounding page's accent palette. */
+@Composable
+internal fun FullscreenLockButton(
+    visualState: FullscreenLockButtonVisualState,
+    onClick: () -> Unit,
+    cornerRadiusDp: Int,
+    iconSizeDp: Int,
+    modifier: Modifier = Modifier,
+) {
+    val glass = LocalPlayerControlGlassEnabled.current
+    val foreground = if (glass || !visualState.highlighted) Color.White else Color.Black
+    val background = when {
+        glass -> Color.Transparent
+        visualState.highlighted -> Color.White
+        else -> Color.Black.copy(alpha = 0.6f)
+    }
+    PlayerControlGlassDock(
+        enabled = true,
+        shape = CircleShape,
+        minimumReadabilityScrimAlpha = 0.6f,
+    ) {
+        // Glass owns the translucent backing; native mode retains its state inversion.
+        // Both glass states use media white, with the glyph and label conveying lock state.
+        CompositionLocalProvider(
+            com.android.purebilibili.core.ui.LocalAppButtonSlotColorCorrectionEnabled provides false,
+        ) {
+            AppSurface(
+                onClick = onClick,
+                color = background,
+                contentColor = foreground,
+                shape = RoundedCornerShape(cornerRadiusDp.dp),
+                modifier = modifier.size(PlayerChromeLayout.CircularButtonSizeDp.dp),
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    AppIcon(
+                        imageVector = when (visualState.icon) {
+                            FullscreenLockButtonIcon.LOCKED -> Icons.Outlined.Lock
+                            FullscreenLockButtonIcon.UNLOCKED -> Icons.Outlined.LockOpen
+                        },
+                        contentDescription = visualState.contentDescription,
+                        tint = foreground,
+                        modifier = Modifier.size(iconSizeDp.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
 internal fun resolvePageSelectorSheetOuterBottomPaddingDp(
     isFullscreen: Boolean
 ): Int {
@@ -561,7 +610,6 @@ private fun VideoPlayerOverlayContent(
     val onSponsorContributionMarkBoundary = actions.onSponsorContributionMarkBoundary
     val onSponsorContributionMarkWholeVideo = actions.onSponsorContributionMarkWholeVideo
     val onSponsorContributionCancel = actions.onSponsorContributionCancel
-    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     val danmakuEnabled = state.danmakuEnabled
     val onDanmakuToggle = actions.onDanmakuToggle
     val onDanmakuInputClick = actions.onDanmakuInputClick
@@ -1467,9 +1515,6 @@ private fun VideoPlayerOverlayContent(
                         },
                         onCommentClick = onLandscapeCommentClick,
                         isLoggedIn = isLoggedIn,
-                        onDanmakuSettingsClick = if (liquidGlassEnabled) {
-                            { showDanmakuSettings = true }
-                        } else null,
                         onCastClick = onCastClickAction,
                         showCastButton = playerControlVisibility.showCastButton,
                         onMoreClick = {
@@ -1514,7 +1559,6 @@ private fun VideoPlayerOverlayContent(
                     isPlaying = effectiveIsPlaying,
                     progressProvider = progressProvider,
                     isFullscreen = isFullscreen,
-                    fullscreenDanmakuActionsInDedicatedDocks = isFullscreen,
                     compactPlayerChrome = playerControlVisibility.compactPlayerChrome,
                     currentSpeed = currentSpeed,
                     currentRatio = currentAspectRatio,
@@ -1615,7 +1659,7 @@ private fun VideoPlayerOverlayContent(
         }
 
         if (isFullscreen && danmakuComposerVisible) {
-            LandscapeDanmakuComposerForPlayer(
+            LandscapeDanmakuComposer(
                 visible = true,
                 onDismiss = onDismissDanmakuComposer,
                 onSend = onSendDanmakuComposer,
@@ -1630,18 +1674,6 @@ private fun VideoPlayerOverlayContent(
             )
         }
 
-        CenterPlaybackControl(
-            visible = (!isFullscreen || liquidGlassEnabled) && isVisible &&
-                (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED) &&
-                centerLoadingUiState == null &&
-                !isScreenLocked && !isSeekScrubbing && !danmakuComposerVisible &&
-                !endDrawerVisible && !landscapeCommentPanelVisible && !showInsightDetails,
-            isPlaying = effectiveIsPlaying,
-            onPlayPause = { togglePlayPause() },
-            diameter = if (isFullscreen) 72.dp else 56.dp,
-            modifier = Modifier.align(Alignment.Center),
-        )
-
         // --- 3.5 🔒 [新增] 屏幕锁定按钮 (仅全屏模式) ---
         if (isFullscreen && showFullscreenLockButton) {
             AnimatedVisibility(
@@ -1652,30 +1684,12 @@ private fun VideoPlayerOverlayContent(
                     .align(Alignment.CenterEnd)
                     .padding(end = overlayVisualPolicy.lockButtonEndPaddingDp.dp)
             ) {
-                PlayerControlGlassDock(enabled = true, shape = androidx.compose.foundation.shape.CircleShape) {
-                    AppSurface(
-                        onClick = onLockToggle,
-                        color = Color.Transparent,
-                        shape = RoundedCornerShape(overlayVisualPolicy.lockButtonCornerRadiusDp.dp),
-                        modifier = Modifier.size(PlayerChromeLayout.CircularButtonSizeDp.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            AppIcon(
-                                when (fullscreenLockButtonState.icon) {
-                                    FullscreenLockButtonIcon.LOCKED -> Icons.Outlined.Lock
-                                    FullscreenLockButtonIcon.UNLOCKED -> Icons.Outlined.LockOpen
-                                },
-                                contentDescription = fullscreenLockButtonState.contentDescription,
-                                tint = if (fullscreenLockButtonState.highlighted) {
-                                    AppContentColors.accent()
-                                } else {
-                                    Color.White
-                                },
-                                modifier = Modifier.size(overlayVisualPolicy.lockIconSizeDp.dp)
-                            )
-                        }
-                    }
-                }
+                FullscreenLockButton(
+                    visualState = fullscreenLockButtonState,
+                    onClick = onLockToggle,
+                    cornerRadiusDp = overlayVisualPolicy.lockButtonCornerRadiusDp,
+                    iconSizeDp = overlayVisualPolicy.lockIconSizeDp,
+                )
             }
         }
 
