@@ -29,7 +29,7 @@ class PortraitVideoEngagementSessionTest {
         val account = ActionRepository.interactionSession()
         val store = PortraitVideoEngagementStore(backgroundScope, { _, _ -> },
             { root.recordExternalVideoEngagement(it, account) },
-            PortraitEngagementLoader { _, _, _ -> pending.await() }, { model(backend) })
+            PortraitEngagementLoader { _, _, _, _ -> pending.await() }, { model(backend) })
         try {
             val target = subject("FOREIGN", 20).copy(isRepost = true)
             val session = store.session(target, info(target), VideoEngagementSeed(isLoggedIn = true, isRepost = true, likeCount = 8))
@@ -63,7 +63,7 @@ class PortraitVideoEngagementSessionTest {
         val backend = Backend()
         var reads = 0
         val store = PortraitVideoEngagementStore(backgroundScope, { _, _ -> }, {},
-            PortraitEngagementLoader { _, _, _ -> reads++; error("known state must not be fetched") }, { model(backend) })
+            PortraitEngagementLoader { _, _, _, _ -> reads++; error("known state must not be fetched") }, { model(backend) })
         try {
             val target = subject("PARTS", 30)
             val first = store.session(target, info(target), readySeed().copy(isFavorited = true, coinCount = 1, likeCount = 12))
@@ -89,7 +89,7 @@ class PortraitVideoEngagementSessionTest {
         var failRead = true
         val target = subject("NETWORK", 40)
         val store = PortraitVideoEngagementStore(backgroundScope, { _, event -> events += event }, {},
-            PortraitEngagementLoader { _, _, _ ->
+            PortraitEngagementLoader { _, _, _, _ ->
                 if (failRead) Result.failure(IllegalStateException("relationship unavailable"))
                 else Result.success(PortraitEngagementSnapshot(target, readySeed().copy(coinCount = 2, isLiked = true), info(target)))
             }, { model(backend) })

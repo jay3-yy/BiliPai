@@ -177,8 +177,8 @@ class CdnPlaybackDataSourceTest {
         private var callback: Callback? = null
         @Volatile private var canceled = false
         private val computedTags = ConcurrentHashMap<Class<*>, Any>()
-        private val eventListeners = java.util.concurrent.CopyOnWriteArrayList<okhttp3.EventListener>()
-        override fun addEventListener(eventListener: okhttp3.EventListener) {
+        private val eventListeners = java.util.concurrent.CopyOnWriteArrayList<EventListener>()
+        override fun addEventListener(eventListener: EventListener) {
             eventListeners.add(eventListener)
         }
         override fun request(): Request = request
@@ -200,7 +200,6 @@ class CdnPlaybackDataSourceTest {
         }
         override fun isExecuted(): Boolean = callback != null
         override fun isCanceled(): Boolean = canceled
-        override fun addEventListener(eventListener: EventListener) = Unit
         override fun timeout(): Timeout = Timeout()
         override fun <T : Any> tag(type: KClass<T>): T? = tag(type.java)
         override fun <T> tag(type: Class<out T>): T? {

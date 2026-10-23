@@ -505,7 +505,6 @@
     <string name="settings_search_history_clear_all">Clear all</string>
     <string name="settings_search_history_empty">No search history yet. Search for a setting to see it here.</string>
     <string name="settings_search_history_delete">Delete search history: %1$s</string>
-    <string name="settings_search_load_more">Load more</string>
     <string name="settings_search_legacy_001_title">Interface and theme</string>
     <string name="settings_search_legacy_001_summary">Interface style, colors, fonts, and launch screen</string>
     <string name="settings_search_legacy_002_title">Home and recommendations</string>

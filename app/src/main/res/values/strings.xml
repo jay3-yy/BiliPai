@@ -506,7 +506,6 @@
     <string name="settings_search_history_clear_all">清空全部</string>
     <string name="settings_search_history_empty">暂无搜索历史，搜索设置功能后会显示在这里</string>
     <string name="settings_search_history_delete">删除搜索历史：%1$s</string>
-    <string name="settings_search_load_more">加载更多</string>
     <string name="settings_search_legacy_001_title">界面与主题</string>
     <string name="settings_search_legacy_001_summary">界面风格、颜色、字体和启动画面</string>
     <string name="settings_search_legacy_002_title">首页与推荐</string>
