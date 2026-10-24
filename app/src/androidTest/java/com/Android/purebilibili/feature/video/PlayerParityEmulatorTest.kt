@@ -176,11 +176,11 @@ class PlayerParityEmulatorTest {
                 val preset = if (fullscreen) Anime4KPreset.QUALITY else Anime4KPreset.FAST
                 scenario.onActivity {
                     it.enhancement.setPreset(preset)
-                    it.enhancement.setAlgorithm(VideoEnhancementAlgorithm.FSR)
+                    it.enhancement.setAlgorithm(VideoEnhancementAlgorithm.FSR_1_0)
                     it.enhancement.setRememberAcrossVideos(true, currentVideoEnabled = true)
                 }
                 awaitPlayer {
-                    it.enhancement.configState.value.algorithm == VideoEnhancementAlgorithm.FSR &&
+                    it.enhancement.configState.value.algorithm == VideoEnhancementAlgorithm.FSR_1_0 &&
                         it.enhancement.configState.value.preset == preset &&
                         it.enhancement.configState.value.rememberedEnabled
                 }

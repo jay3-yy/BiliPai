@@ -67,7 +67,7 @@ class VideoDetailWholeCardReturnUiRegressionTest {
         try {
             rule.runOnIdle {
                 CardPositionManager.clear()
-                CardPositionManager.lastClickedVideoSourceKey = "home:BVquick"
+                CardPositionManager.restoreVideoSourceKey("home:BVquick")
             }
             rule.setContent {
                 val context = LocalContext.current
