@@ -142,7 +142,6 @@ class AppNavigationSettingsMappingPolicyTest {
     @Test
     fun populatedPreferences_mapToNavigationSettingsCorrectly() {
         val prefs = mutablePreferencesOf(
-            intPreferencesKey("bottom_bar_visibility_mode") to SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE.value,
             stringPreferencesKey("bottom_bar_order") to "PROFILE,HOME,DYNAMIC,HISTORY",
             stringPreferencesKey("bottom_bar_visible_tabs") to "HOME,PROFILE,HISTORY",
             stringPreferencesKey("bottom_bar_item_colors") to "HOME:2,PROFILE:4,INVALID:x,NO_COLON",
@@ -157,7 +156,6 @@ class AppNavigationSettingsMappingPolicyTest {
 
         val result = mapAppNavigationSettingsFromPreferences(prefs)
 
-        assertEquals(SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE, result.bottomBarVisibilityMode)
         assertEquals(listOf("PROFILE", "HOME", "HISTORY"), result.orderedVisibleTabIds)
         assertEquals(mapOf("HOME" to 2, "PROFILE" to 4, "INVALID" to 0), result.bottomBarItemColors)
         assertEquals(mapOf("HOME" to "首页,新", "PROFILE" to "账号"), result.bottomBarItemLabels)

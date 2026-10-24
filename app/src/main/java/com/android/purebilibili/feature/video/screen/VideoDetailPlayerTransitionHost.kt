@@ -79,20 +79,13 @@ internal data class ContinuousPlayerFullscreenExtras(
 )
 
 /**
- * Reads the frame-rate progress only during measurement, keeping the player composition stable
- * while the inline viewport grows into the landscape viewport.
- */
-/**
  * @param preferLayoutWidthInline 普通视频竖屏详情播放器：展开态按**实际布局宽度**算高度，
  * 避免 `configuration.screenWidthDp` 与真机可用宽度不一致时出现左右黑边（vivo 等窄机更常见）。
  * 折叠/半折叠时必须仍尊重 [inlineHeight]（评论上滑缩小播放器），不能盖成固定展开比例。
  * @param inlineTopInset 沉浸状态栏额外高度；只加在 inline 高度上，不参与媒体比例本体。
  */
-internal fun Modifier.continuousPlayerViewportHeight(
-    progressProvider: () -> Float,
+internal fun Modifier.inlinePlayerViewportHeight(
     inlineHeight: Dp,
-    fullscreenHeight: Dp,
-    enabled: Boolean,
     preferLayoutWidthInline: Boolean = false,
     inlineTopInset: Dp = 0.dp,
     removedInlineTopInsetProvider: () -> Dp = { 0.dp },
@@ -102,19 +95,13 @@ internal fun Modifier.continuousPlayerViewportHeight(
         val removedInset = removedInlineTopInsetProvider()
         val insetPx = (inlineTopInset - removedInset).roundToPx().coerceAtLeast(0)
         val callerInlinePx = (inlineHeight - removedInset).roundToPx().coerceAtLeast(0)
-        val inlinePx = resolveContinuousPlayerInlineHeightPx(
+        val inlinePx = resolveInlinePlayerViewportHeightPx(
             layoutWidthPx = layoutWidth,
             preferLayoutWidthInline = preferLayoutWidthInline,
             callerInlineHeightPx = callerInlinePx,
             inlineTopInsetPx = insetPx,
         )
-        val fraction = progressProvider().coerceIn(0f, 1f)
-        val fullscreenPx = fullscreenHeight.toPx()
-        val height = if (!enabled) {
-            inlinePx
-        } else {
-            (inlinePx + (fullscreenPx - inlinePx) * fraction).roundToInt()
-        }.coerceIn(
+        val height = inlinePx.coerceIn(
             minimumValue = constraints.minHeight,
             maximumValue = if (constraints.maxHeight == Constraints.Infinity) {
                 Int.MAX_VALUE
@@ -137,13 +124,13 @@ internal fun Modifier.continuousPlayerViewportHeight(
 }
 
 /**
- * 解析 continuous player 的 inline 高度。
+ * Resolves inline player height without reusing fullscreen window geometry.
  *
  * - 默认：直接使用调用方传入的 [callerInlineHeightPx]（已含评论上滑折叠进度）。
  * - [preferLayoutWidthInline]：展开时用真实布局宽计算加载封面与播放画面的统一 16:9 高度，消除 screenWidthDp 黑边；
  *   折叠时取与调用方高度的较小值，避免盖掉「上滑缩小播放器」。
  */
-internal fun resolveContinuousPlayerInlineHeightPx(
+internal fun resolveInlinePlayerViewportHeightPx(
     layoutWidthPx: Int,
     preferLayoutWidthInline: Boolean,
     callerInlineHeightPx: Int,

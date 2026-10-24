@@ -58,7 +58,7 @@ class ContinuousPlayerTransitionPolicyTest {
     }
 
     @Test
-    fun exitingFullscreenWaitsForPortraitBeforeCollapsing() {
+    fun exitingKeepsLandscapeHostUntilFirstPortraitLayoutThenReturnsInline() {
         val awaitingPortrait = reduceContinuousPlayerTransition(
             phase = ContinuousPlayerTransitionPhase.Fullscreen,
             event = ContinuousPlayerTransitionEvent.Toggle,
@@ -71,12 +71,28 @@ class ContinuousPlayerTransitionPolicyTest {
             ContinuousPlayerOrientationRequest.Portrait,
             awaitingPortrait.orientationRequest,
         )
+        assertTrue(
+            resolveContinuousPlayerFullscreenPresentation(
+                orientationFullscreen = false,
+                phase = awaitingPortrait.phase,
+                isLandscape = true,
+            )
+        )
+        // Configuration can update before the reducer effect. Do not render a portrait
+        // fullscreen shell for even that first frame.
+        assertFalse(
+            resolveContinuousPlayerFullscreenPresentation(
+                orientationFullscreen = false,
+                phase = awaitingPortrait.phase,
+                isLandscape = false,
+            )
+        )
 
-        val collapsing = reduceContinuousPlayerTransition(
+        val inline = reduceContinuousPlayerTransition(
             phase = awaitingPortrait.phase,
             event = ContinuousPlayerTransitionEvent.OrientationChanged(isLandscape = false),
         )
-        assertEquals(ContinuousPlayerTransitionPhase.Collapsing, collapsing.phase)
+        assertEquals(ContinuousPlayerTransitionPhase.Inline, inline.phase)
     }
 
     @Test
@@ -106,16 +122,16 @@ class ContinuousPlayerTransitionPolicyTest {
     }
 
     @Test
-    fun systemPortraitFromFullscreenOrStuckPhasesStartsCollapse() {
+    fun systemPortraitFromFullscreenOrStuckPhasesReturnsInline() {
         assertEquals(
-            ContinuousPlayerTransitionPhase.Collapsing,
+            ContinuousPlayerTransitionPhase.Inline,
             reduceContinuousPlayerTransition(
                 phase = ContinuousPlayerTransitionPhase.Fullscreen,
                 event = ContinuousPlayerTransitionEvent.OrientationChanged(isLandscape = false),
             ).phase,
         )
         assertEquals(
-            ContinuousPlayerTransitionPhase.Collapsing,
+            ContinuousPlayerTransitionPhase.Inline,
             reduceContinuousPlayerTransition(
                 phase = ContinuousPlayerTransitionPhase.AwaitingLandscape,
                 event = ContinuousPlayerTransitionEvent.OrientationChanged(isLandscape = false),
@@ -123,20 +139,4 @@ class ContinuousPlayerTransitionPolicyTest {
         )
     }
 
-    @Test
-    fun reenteringDuringCollapseRequestsLandscapeWithoutWaitingForAnimation() {
-        val result = reduceContinuousPlayerTransition(
-            phase = ContinuousPlayerTransitionPhase.Collapsing,
-            event = ContinuousPlayerTransitionEvent.Toggle,
-        )
-        assertEquals(ContinuousPlayerTransitionPhase.AwaitingLandscape, result.phase)
-        assertEquals(ContinuousPlayerOrientationRequest.Landscape, result.orientationRequest)
-
-        val lateCollapse = reduceContinuousPlayerTransition(
-            phase = result.phase,
-            event = ContinuousPlayerTransitionEvent.CollapseFinished,
-        )
-        assertEquals(ContinuousPlayerTransitionPhase.AwaitingLandscape, lateCollapse.phase)
-        assertEquals(ContinuousPlayerOrientationRequest.None, lateCollapse.orientationRequest)
-    }
 }

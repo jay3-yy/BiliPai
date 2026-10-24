@@ -97,14 +97,14 @@ internal fun PiliPlayerBar(
 internal fun PlayerPlayPauseButton(
     isPlaying: Boolean,
     onClick: () -> Unit,
-    sizeDp: Int = 42,
+    width: Dp,
     iconSizeDp: Int = 20,
     height: Dp = PILI_PLAYER_BOTTOM_ROW_HEIGHT_DP.dp,
 ) {
     PlayerControlIconAction(
         icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
         description = if (isPlaying) "暂停" else "播放",
-        width = sizeDp.dp,
+        width = width,
         height = height,
         iconSize = iconSizeDp.dp,
         modifier = Modifier.testTag("player_play_pause"),
@@ -125,9 +125,7 @@ internal fun PlayerControlIconAction(
     iconSize: Dp = 22.dp,
     onLongClick: (() -> Unit)? = null,
 ) {
-    // Glass decorates this existing button only; it never changes its measured or touch bounds.
-    PlayerControlGlassDock(
-        enabled = true,
+    PlayerControlSurface(
         modifier = modifier.width(width).height(height),
         shape = RoundedCornerShape(8.dp),
     ) {
@@ -160,7 +158,7 @@ internal fun PlayerControlTextAction(
     fontSp: Int = 13,
     height: Dp = 30.dp,
 ) {
-    PlayerControlGlassDock(enabled = true, modifier = modifier, shape = RoundedCornerShape(8.dp)) {
+    PlayerControlSurface(modifier = modifier, shape = RoundedCornerShape(8.dp)) {
         AppExactTouchTargets {
             Box(
                 modifier = Modifier.height(height).semantics {

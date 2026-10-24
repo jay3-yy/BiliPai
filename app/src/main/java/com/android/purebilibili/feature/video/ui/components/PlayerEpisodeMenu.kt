@@ -164,7 +164,7 @@ internal fun PanelAction(icon: ImageVector, label: String, onClick: () -> Unit) 
 @Composable
 internal fun PlayerDetailPanel(title: String, isFullscreen: Boolean, playerBounds: IntRect?,
     onDismiss: () -> Unit, modifier: Modifier = Modifier,
-    compactHeight: Boolean = false, useGlassSurface: Boolean = false,
+    compactHeight: Boolean = false,
     draggable: Boolean = false,
     content: @Composable ColumnScope.(requestDismiss: () -> Unit) -> Unit) {
     val density = LocalDensity.current
@@ -204,21 +204,11 @@ internal fun PlayerDetailPanel(title: String, isFullscreen: Boolean, playerBound
                 content = { content(requestDismiss) },
             )
         }
-        // 仅玻璃入口显式选择弹窗材质，原生面板保留原有 Surface 与默认参数。
-        if (useGlassSurface && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
-            com.android.purebilibili.core.ui.AppPopupSurface(
-                type = com.android.purebilibili.core.ui.AppPopupSurfaceType.SHEET,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                content = panelContent,
-            )
-        } else {
-            androidx.compose.material3.Surface(
-                color = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-                content = panelContent,
-            )
-        }
+        androidx.compose.material3.Surface(
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            content = panelContent,
+        )
     }
     Popup(
         popupPositionProvider = provider,

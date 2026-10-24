@@ -132,7 +132,8 @@ internal fun LargeScreenVideoLayout(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
-            .background(pageColor),
+            .background(pageColor)
+            .statusBarsPadding(),
     ) {
         val windowWidthDp = maxWidth.value
         val windowHeightDp = maxHeight.value
@@ -144,8 +145,6 @@ internal fun LargeScreenVideoLayout(
                 enableVerticalExpand = true,
             )
         }
-        val applySideStatusBarPadding =
-            metrics.mode != LargeScreenVideoLayoutMode.AlmostSquare
         val showRelatedInIntro = resolveShowRelatedInIntro(metrics.mode)
         val relatedTabFirst = resolveRelatedTabFirstInSecondary(
             mode = metrics.mode,
@@ -255,7 +254,7 @@ internal fun LargeScreenVideoLayout(
                         } else {
                             null
                         },
-                        applyStatusBarPadding = applySideStatusBarPadding,
+                        applyStatusBarPadding = false,
                         includeRelatedTab = includeRelatedTab,
                         includeOwnerUploadsTab = true,
                         relatedTabFirst = relatedTabFirst,
@@ -276,7 +275,6 @@ internal fun LargeScreenVideoLayout(
                         modifier = Modifier
                             .width(metrics.sidePaneWidthDp.dp)
                             .fillMaxHeight()
-                            .statusBarsPadding(),
                     ) {
                         intro(Modifier.fillMaxSize())
                     }

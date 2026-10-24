@@ -156,7 +156,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.IntOffset
@@ -628,16 +627,9 @@ private fun BoxScope.VideoSubtitleOverlayHost(
                         subtitleBottomOffsetPx
                 )
             }
-            .then(
-                if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) Modifier
-                    .fillMaxWidth(0.9f)
-                    .padding(horizontal = 10.dp)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                else Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = appearance.horizontalPadding.dp)
-                    .padding(bottom = appearance.bottomPadding.dp)
-            )
+            .fillMaxWidth()
+            .padding(horizontal = appearance.horizontalPadding.dp)
+            .padding(bottom = appearance.bottomPadding.dp)
             .then(
                 if (positionLocked) {
                     Modifier
@@ -674,53 +666,22 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
-            val subtitleShadow = Shadow(
-                color = Color.Black.copy(alpha = 0.85f),
-                offset = Offset(0f, 1.5f),
-                blurRadius = 6f
-            )
-            val showPrimaryLine = !subtitlePrimaryText.isNullOrBlank()
-            val showSecondaryLine = !subtitleSecondaryText.isNullOrBlank()
-            val secondaryAsPrimaryLine = showSecondaryLine && !showPrimaryLine
-            AppText(
-                text = subtitleSecondaryText.orEmpty(),
-                color = Color.White.copy(alpha = if (showSecondaryLine) 0.88f else 0f),
-                fontSize = if (secondaryAsPrimaryLine) primaryTextSizeSp.sp else secondaryTextSizeSp.sp,
-                fontWeight = if (secondaryAsPrimaryLine) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 2,
-                textAlign = TextAlign.Center,
-                style = LocalTextStyle.current.copy(shadow = subtitleShadow),
-                modifier = Modifier.then(if (showSecondaryLine) Modifier else Modifier.height(0.dp))
-            )
-            AppText(
-                text = subtitlePrimaryText.orEmpty(),
-                color = Color.White.copy(alpha = if (showPrimaryLine) 1f else 0f),
-                fontSize = primaryTextSizeSp.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                textAlign = TextAlign.Center,
-                style = LocalTextStyle.current.copy(shadow = subtitleShadow),
-                modifier = Modifier.then(if (showPrimaryLine) Modifier else Modifier.height(0.dp))
-            )
-        } else {
-            val showPrimaryLine = !subtitlePrimaryText.isNullOrBlank()
-            val showSecondaryLine = !subtitleSecondaryText.isNullOrBlank()
-            val secondaryAsPrimaryLine = showSecondaryLine && !showPrimaryLine
-            if (showSecondaryLine) com.android.purebilibili.feature.video.subtitle.PiliStyledSubtitleText(
-                text = subtitleSecondaryText.orEmpty(),
-                baseFontSizeSp = if (secondaryAsPrimaryLine) primaryTextSizeSp else secondaryTextSizeSp,
-                appearance = appearance,
-                isFullscreen = isFullscreen,
-                color = Color.White.copy(alpha = 0.88f),
-            )
-            if (showPrimaryLine) com.android.purebilibili.feature.video.subtitle.PiliStyledSubtitleText(
-                text = subtitlePrimaryText.orEmpty(),
-                baseFontSizeSp = primaryTextSizeSp,
-                appearance = appearance,
-                isFullscreen = isFullscreen,
-            )
-        }
+        val showPrimaryLine = !subtitlePrimaryText.isNullOrBlank()
+        val showSecondaryLine = !subtitleSecondaryText.isNullOrBlank()
+        val secondaryAsPrimaryLine = showSecondaryLine && !showPrimaryLine
+        if (showSecondaryLine) com.android.purebilibili.feature.video.subtitle.PiliStyledSubtitleText(
+            text = subtitleSecondaryText.orEmpty(),
+            baseFontSizeSp = if (secondaryAsPrimaryLine) primaryTextSizeSp else secondaryTextSizeSp,
+            appearance = appearance,
+            isFullscreen = isFullscreen,
+            color = Color.White.copy(alpha = 0.88f),
+        )
+        if (showPrimaryLine) com.android.purebilibili.feature.video.subtitle.PiliStyledSubtitleText(
+            text = subtitlePrimaryText.orEmpty(),
+            baseFontSizeSp = primaryTextSizeSp,
+            appearance = appearance,
+            isFullscreen = isFullscreen,
+        )
     }
 }
 
@@ -960,16 +921,8 @@ private fun VideoPlayerSectionContent(
             widthDp = uiLayoutWidthDp
         )
     }
-    val liquidGlassLayoutEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-    // 玻璃控制栏使用原有尺寸预留，原生控制栏保留统一布局的尺寸策略。
-    val bottomGestureExclusionHeightDp = if (liquidGlassLayoutEnabled) {
-        val controls = com.android.purebilibili.feature.video.ui.overlay.glass.resolveBottomControlBarLayoutPolicy(uiLayoutWidthDp)
-        val progress = com.android.purebilibili.feature.video.ui.overlay.resolveVideoProgressBarLayoutPolicy(uiLayoutWidthDp)
-        controls.bottomPaddingDp + controls.progressSpacingDp + progress.baseHeightWithChapterDp +
-            controls.playButtonSizeDp + 12
-    } else {
+    val bottomGestureExclusionHeightDp =
         com.android.purebilibili.feature.video.ui.overlay.piliPlayerBottomControlsHeightDp(viewPoints.isNotEmpty())
-    }
     val gestureSeekFallbackDurationMs = remember(uiState) {
         (uiState as? VideoPlaybackUiState.Success)?.videoDurationMs ?: 0L
     }
@@ -1782,7 +1735,7 @@ private fun VideoPlayerSectionContent(
         isFullscreen = isFullscreen,
         screenWidthDp = configuration.screenWidthDp
     )
-    val panelViewport = remember(currentPlaybackIdentity, isFullscreen, liquidGlassLayoutEnabled) {
+    val panelViewport = remember(currentPlaybackIdentity, isFullscreen) {
         PlayerPanelViewportState()
     }
     var playerRightInWindow by remember { mutableIntStateOf(0) }
@@ -2168,39 +2121,6 @@ private fun VideoPlayerSectionContent(
         currentQualityId = (uiState as? VideoPlaybackUiState.Success)?.currentQuality ?: 0,
         colorTransfer = videoInputFormat?.colorInfo?.colorTransfer ?: 0
     )
-    val playerPageBackdrop = rememberPlayerPageBackdrop()
-    val pageGlassSupported = supportsPlayerPageGlass(
-        liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-        fullscreen = isFullscreen,
-        portraitFullscreen = isPortraitFullscreen,
-        hdr = navigationHdrSurfaceRequired,
-        anime4k = shouldUseAnime4kPipeline,
-        audioOnly = isAudioOnly,
-        pip = isInPipMode,
-        detailInline = !isFullscreen && !isPortraitFullscreen,
-    )
-    // Keep TextureView after leaving fullscreen to avoid a second surface recreation.
-    // HDR always overrides this retained SDR choice.
-    var hasUsedPageGlassTexture by remember(bvid) { mutableStateOf(false) }
-    LaunchedEffect(pageGlassSupported) {
-        if (pageGlassSupported) hasUsedPageGlassTexture = true
-    }
-    // Keep page recording through chrome/paused-center exits without a polling job.
-    val pageGlassRequested = showControls || !observedIsPlaying ||
-        (isGestureVisible && (gestureMode == VideoGestureMode.Brightness || gestureMode == VideoGestureMode.Volume))
-    val pageGlassVisibility = animateFloatAsState(
-        targetValue = if (pageGlassRequested) 1f else 0f,
-        animationSpec = tween<Float>(
-            com.android.purebilibili.feature.video.ui.overlay.PLAYER_GLASS_VISIBILITY_DURATION_MS,
-            easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.Continuity,
-        ),
-        label = "playerPageCaptureVisibility",
-    )
-    val pageGlassCaptureVisible by remember(pageGlassVisibility) {
-        derivedStateOf { pageGlassVisibility.value > 0f }
-    }
-    val capturePlayerPage = pageGlassSupported && (pageGlassRequested || pageGlassCaptureVisible) && hostLifecycleStarted &&
-        !MiniPlayerManager.getInstance(context).isMiniMode
     // 应用共享元素
     val livePlayerSharedElementEnabled = shouldEnableLivePlayerSharedElement(
             transitionEnabled = transitionEnabled,
@@ -3875,36 +3795,27 @@ private fun VideoPlayerSectionContent(
             statusBar = shouldCaptureStatusBarAmbientFrame,
             diagnosticLogging = playerDiagnosticLoggingEnabled,
         )
-        val useTextureSurface = shouldUsePlayerPageTexture(
-            glassSupported = pageGlassSupported,
-            retainedGlassTexture = hasUsedPageGlassTexture,
-            hdr = requiresHdrSurface,
-            existingTextureRequest = shouldUseTextureSurfaceForFlip(
-                isFlippedHorizontal = isFlippedHorizontal,
-                isFlippedVertical = isFlippedVertical,
-                liveBackPreview = liveBackPreview || hasUsedLiveBackPreviewTexture,
-                navigationTransformEnabled = useTextureSurfaceForNavigation,
-                requiresHdrSurfaceOutput = requiresHdrSurface,
-            ),
+        val useTextureSurface = shouldUseTextureSurfaceForFlip(
+            isFlippedHorizontal = isFlippedHorizontal,
+            isFlippedVertical = isFlippedVertical,
+            liveBackPreview = liveBackPreview || hasUsedLiveBackPreviewTexture,
+            navigationTransformEnabled = useTextureSurfaceForNavigation,
+            requiresHdrSurfaceOutput = requiresHdrSurface,
         )
         // 输出面能力仅控制封面退场方式：SurfaceView/HDR 硬切，TextureView 保留淡出。
-        // 玻璃与原生路径都在揭开落定后移除封面，不改变各自的布局和尺寸。
         val surfaceCanCrossfade = canSurfaceParticipateInAlphaCrossfade(
             usesTextureSurface = useTextureSurface,
         )
-        // isPortraitFullscreen 不作为 key：退出竖屏全屏保留 PlayerView 实例，由上方
-        // LaunchedEffect 在退出瞬间直接重绑 surface（rebindPlayerSurfaceIfNeeded）恢复画面。
+        // 同一宿主内的方向切换不改变 PlayerView 身份；输出恢复由 surface rebind 处理。
         // HDR/色彩元数据与纹理翻转维度仍触发重建。
         key(isFlippedHorizontal, isFlippedVertical, useTextureSurface) {
-            val viewportAspectRatio = if (liquidGlassLayoutEnabled && !isFullscreen) VideoAspectRatio.FIT else currentAspectRatio
+            val viewportAspectRatio = currentAspectRatio
             val playerVideoSize = playerState.player.videoSize
             BoxWithConstraints(
                 modifier = playerContentModifier
                     .clipToBounds()
-                    .then(if (capturePlayerPage) playerPageBackdrop.video.modifier else Modifier)
                     // Fade the entire video plane, including its black backing. Fading only
                     // PlayerView leaves this backing opaque over the source-cover underlay.
-                    // Shared by glass, MD3 and Miuix; their viewport geometry stays unchanged.
                     .graphicsLayer {
                         alpha = if (isPlayerSurfaceReady) playerSurfaceAlpha.value else 0f
                     }
@@ -4530,8 +4441,7 @@ private fun VideoPlayerSectionContent(
         }
 
         Box(
-            modifier = playerContentModifier
-                .then(if (capturePlayerPage) playerPageBackdrop.cover.modifier else Modifier),
+            modifier = playerContentModifier,
         ) {
             val coverContainerModifier = if (fillPlayerViewportForManualStartCover ||
                 (!isVerticalVideo && !isFullscreen && !forceCoverDuringReturnAnimation)
@@ -4698,10 +4608,9 @@ private fun VideoPlayerSectionContent(
 
             //  [修复] 移除 key(isFullscreen)，避免横竖屏切换时重建 DanmakuView 导致弹幕消失
             // 使用 remember 保存 DanmakuView 引用，在 update 回调中处理尺寸变化
-            val viewportAspectRatio = if (liquidGlassLayoutEnabled && !isFullscreen) VideoAspectRatio.FIT else currentAspectRatio
+            val viewportAspectRatio = currentAspectRatio
             BoxWithConstraints(
                 modifier = playerContentModifier
-                    .then(if (capturePlayerPage) playerPageBackdrop.danmaku.modifier else Modifier)
                     .graphicsLayer { alpha = if (shouldShowDanmakuLayer) 1f else 0f }
                     .then(
                         if (topOffset > 0) {
@@ -4806,43 +4715,8 @@ private fun VideoPlayerSectionContent(
                     renderingPaused = suppressTransientOverlaysForTransition,
                     modifier = Modifier.fillMaxSize()
                 )
-                // Each material reserves its own control geometry before the first measurement.
-                val commandControlsReservePx = if (liquidGlassLayoutEnabled) {
-                    val commandControlsLayout = remember(uiLayoutWidthDp) {
-                        com.android.purebilibili.feature.video.ui.overlay.glass.resolveBottomControlBarLayoutPolicy(uiLayoutWidthDp)
-                    }
-                    val commandProgressLayout = remember(uiLayoutWidthDp) {
-                        com.android.purebilibili.feature.video.ui.overlay.resolveVideoProgressBarLayoutPolicy(uiLayoutWidthDp)
-                    }
-                    val requestedCommandProgressPlacement by remember(context) {
-                        com.android.purebilibili.core.store.SettingsManager.getPlayerProgressPlacement(context)
-                    }.collectAsStateWithLifecycle(
-                        initialValue = com.android.purebilibili.core.store.PlayerProgressPlacement.ABOVE_CONTROLS
-                    )
-                    val commandProgressPlacement = com.android.purebilibili.feature.video.ui.overlay.glass.resolveVideoDetailProgressPlacement(
-                        requestedPlacement = requestedCommandProgressPlacement,
-                        isFullscreen = isFullscreen,
-                    )
-                    val commandControlsBottomPaddingDp = com.android.purebilibili.feature.video.ui.overlay.glass.resolveBottomControlBarBottomPaddingDp(
-                        defaultBottomPaddingDp = commandControlsLayout.bottomPaddingDp,
-                        progressPlacement = commandProgressPlacement,
-                    )
-                    with(density) {
-                        (maxOf(
-                            commandControlsLayout.playButtonSizeDp,
-                            commandControlsLayout.danmakuInputHeightDp,
-                            com.android.purebilibili.feature.video.ui.overlay.glass.resolveFullscreenToggleTouchTargetDp(
-                                commandControlsLayout.fullscreenIconSizeDp
-                            ),
-                        ) +
-                            commandProgressLayout.touchContainerHeightDp +
-                            commandControlsLayout.progressSpacingDp +
-                            commandControlsBottomPaddingDp).dp.roundToPx()
-                    } + if (isFullscreen) WindowInsets.navigationBarsIgnoringVisibility.getBottom(density) else 0
-                } else {
-                    measuredBottomControlsHeightPx.takeIf { it > 0 }
-                        ?: with(density) { bottomGestureExclusionHeightDp.dp.roundToPx() }
-                }
+                val commandControlsReservePx = measuredBottomControlsHeightPx.takeIf { it > 0 }
+                    ?: with(density) { bottomGestureExclusionHeightDp.dp.roundToPx() }
                 com.android.purebilibili.feature.video.ui.overlay.CommandDanmakuOverlay(
                     viewport = viewport,
                     bottomInsetPx = com.android.purebilibili.feature.video.ui.overlay.resolveCommandDanmakuBottomInsetPx(
@@ -5212,9 +5086,7 @@ private fun VideoPlayerSectionContent(
         }
 
         Box(
-            modifier = Modifier
-                .matchParentSize()
-                .then(if (capturePlayerPage) playerPageBackdrop.subtitles.modifier else Modifier),
+            modifier = Modifier.matchParentSize(),
         ) {
             VideoSubtitleOverlayHost(
                 player = playerState.player,
@@ -5310,9 +5182,6 @@ private fun VideoPlayerSectionContent(
             compact = !isFullscreen,
             mode = gestureMode,
             percent = gesturePercent,
-            glassBackdrop = playerPageBackdrop.backdrop.takeIf {
-                capturePlayerPage && playerPageBackdrop.video.isReady
-            },
         )
 
         // 上滑/下滑进入全屏的拖动跟随反馈；手势结束(mode 复位)即隐藏。
@@ -6364,11 +6233,6 @@ private fun VideoPlayerSectionContent(
                 CompositionLocalProvider(
                     LocalPlayerPanelViewport provides panelViewport.takeIf { panelAvoidanceEnabled },
                     com.android.purebilibili.feature.video.ui.overlay.LocalPlayerLevelGestureActive provides shouldShowLevelIndicator,
-                    com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop provides
-                        playerPageBackdrop.backdrop.takeIf {
-                            capturePlayerPage && playerPageBackdrop.video.isReady &&
-                                playerViewRef?.videoSurfaceView is TextureView
-                        },
                 ) {
                     renderVideoPlayerOverlay()
                 }

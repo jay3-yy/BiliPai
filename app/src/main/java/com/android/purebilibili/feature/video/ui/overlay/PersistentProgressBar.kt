@@ -27,9 +27,7 @@ internal fun PersistentBottomProgressBar(
     duration: Long,
     modifier: Modifier = Modifier
 ) {
-    val activeColor = AppContentColors.selectionAccent(
-        com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-    )
+    val activeColor = AppContentColors.selectionAccent(false)
     val progress = resolvePersistentProgressFraction(current = current, duration = duration)
     if (duration <= 0L) return
 

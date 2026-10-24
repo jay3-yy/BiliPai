@@ -29,14 +29,13 @@ fun ChapterListPanel(
     anchorBounds: IntRect? = null,
     isFullscreen: Boolean = false, playerBounds: IntRect? = null,
     showViewPoints: Boolean = true, onShowViewPointsChange: ((Boolean) -> Unit)? = null,
-    useGlassSurface: Boolean = false,
 ) {
     val selectionHaptic = rememberHapticFeedback()
     val currentIndex = viewPoints.indexOfLast { currentPositionMs >= it.fromMs && currentPositionMs < it.to.toLong() * 1000L }
     val state = rememberLazyListState(initialFirstVisibleItemIndex = currentIndex.coerceAtLeast(0))
     PlayerDetailPanel(
         "分段信息", isFullscreen, playerBounds, onDismiss,
-        draggable = true, useGlassSurface = useGlassSurface,
+        draggable = true,
     ) { requestDismiss ->
         Row(modifier.fillMaxWidth().height(45.dp).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("分段信息", fontSize = 16.sp, modifier = Modifier.weight(1f))

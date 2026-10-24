@@ -152,10 +152,14 @@ internal fun resolveVideoDetailSystemBarsApplySpec(
     } else {
         VideoDetailHiddenSystemBars.NONE
     }
+    // Inline playback owns persistent system bars, never fullscreen's transient swipe mode.
+    val systemBarsBehavior = if (hiddenBars == VideoDetailHiddenSystemBars.NONE) {
+        WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+    } else transientBarsBehavior
     return if (useTabletLayout) {
         VideoDetailSystemBarsApplySpec(
             hiddenBars = hiddenBars,
-            systemBarsBehavior = transientBarsBehavior,
+            systemBarsBehavior = systemBarsBehavior,
             statusBarColor = backgroundColor,
             navigationBarColor = backgroundColor,
             lightStatusBars = isLightBackground,
@@ -164,7 +168,7 @@ internal fun resolveVideoDetailSystemBarsApplySpec(
     } else {
         VideoDetailSystemBarsApplySpec(
             hiddenBars = hiddenBars,
-            systemBarsBehavior = transientBarsBehavior,
+            systemBarsBehavior = systemBarsBehavior,
             statusBarColor = transparentColor,
             navigationBarColor = transparentColor,
             lightStatusBars = useCollapsedPlayerChromeAppearance && isLightBackground,

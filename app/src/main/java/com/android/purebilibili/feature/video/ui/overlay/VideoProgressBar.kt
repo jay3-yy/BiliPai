@@ -35,7 +35,6 @@ import com.android.purebilibili.core.plugin.skin.UiSkinSurface
 import com.android.purebilibili.core.plugin.skin.assetPath
 import com.android.purebilibili.core.plugin.skin.parseUiSkinColor
 import com.android.purebilibili.core.ui.AppContentColors
-import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.drawMediaProgressTrack
@@ -95,8 +94,7 @@ fun VideoProgressBar(
     val progressColors = progressSkin?.manifest?.colors
     val primaryColor = parseUiSkinColor(
         progressColors?.playerProgressActiveTint,
-        // 与详情页选中态共用颜色入口，保留皮肤显式覆盖及原生主色。
-        AppContentColors.selectionAccent(LocalAppThemeConfig.current.liquidGlassEnabled),
+        AppContentColors.selectionAccent(false),
     )
     val bufferedTrackColor = parseUiSkinColor(
         progressColors?.playerProgressBufferedTint,
@@ -398,13 +396,6 @@ fun VideoProgressBar(
                                     .align(Alignment.CenterStart)
                                     .offset { IntOffset(thumbOffsetProvider(), 0) },
                                 contentDescription = null,
-                            )
-                        } else if (LocalPlayerControlGlassEnabled.current) {
-                            PlayerControlGlassThumb(
-                                size = thumbSizeDp,
-                                dragging = isSeekScrubbing,
-                                modifier = Modifier.align(Alignment.CenterStart)
-                                    .offset { IntOffset(thumbOffsetProvider(), 0) },
                             )
                         } else {
                             Box(

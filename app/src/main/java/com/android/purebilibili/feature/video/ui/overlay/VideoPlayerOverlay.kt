@@ -387,7 +387,7 @@ internal fun resolveFullscreenLockButtonVisualState(
     }
 }
 
-/** 非玻璃播放器的侧边锁定入口；玻璃布局使用自己的独立实现。 */
+/** Shared native fullscreen lock control. */
 @Composable
 internal fun FullscreenLockButton(
     visualState: FullscreenLockButtonVisualState,
@@ -474,7 +474,7 @@ private const val SEEK_RESUME_TRANSITION_GRACE_MS = 350L
 
 // 播放器 overlay 色层动效 token：遮罩/控制栏/锁屏按钮/加载指示共用同一节奏与曲线。
 // 曲线取全局 alpha 主曲线 Continuity（AppMotionTokens 体系），时长保持既有节奏。
-private const val OVERLAY_CHROME_FADE_DURATION_MILLIS = PLAYER_GLASS_VISIBILITY_DURATION_MS
+private const val OVERLAY_CHROME_FADE_DURATION_MILLIS = 300
 private const val OVERLAY_CONTROL_FADE_DURATION_MILLIS = 200
 private val OverlayChromeFadeSpec =
     tween<Float>(OVERLAY_CHROME_FADE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
@@ -488,16 +488,9 @@ fun VideoPlayerOverlay(
     state: VideoPlayerOverlayState,
     actions: VideoPlayerOverlayActions,
 ) {
-    // 液态玻璃保留独立控制栏与布局；关闭后沿用统一的原生控制栏及默认参数。
-    if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
-        com.android.purebilibili.feature.video.ui.overlay.glass.VideoPlayerOverlay(state, actions)
-        return
-    }
-    // Keep the non-inline backdrop slot small. Capturing this screen's locals
-    // here exceeds DEX's 255 argument-register limit in synthetic constructors.
-    PlayerControlsBackdropHost(
-        enabled = true,
-        modifier = Modifier.fillMaxSize(),
+    val themeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    CompositionLocalProvider(
+        com.android.purebilibili.core.ui.LocalAppThemeConfig provides themeConfig.copy(liquidGlassEnabled = false),
     ) {
         VideoPlayerOverlayContent(state, actions)
     }
@@ -1437,6 +1430,11 @@ private fun VideoPlayerOverlayContent(
         }
     }
 
+    val horizontalControlInsets = playerControlHorizontalInsets(
+        isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE,
+        isFullscreen = isFullscreen,
+    )
+
     Box(modifier = Modifier.fillMaxSize().playerActionBounds { playerBoundsInWindow = it }) {
         val subtitleChromeHeightSeed = with(androidx.compose.ui.platform.LocalDensity.current) {
             piliPlayerBottomControlsHeightDp(showViewPointMarkers && viewPoints.isNotEmpty()).dp.roundToPx()
@@ -1547,7 +1545,7 @@ private fun VideoPlayerOverlayContent(
             )
         }
 
-        // 两条材质路径共用显示策略；仅显式选择常驻时在控制栏收起后保留章节。
+        // 仅显式选择常驻时在控制栏收起后保留章节。
         val chapterViewportIsLandscape = playerBoundsInWindow?.let { it.width > it.height }
             ?: (configuration.screenWidthDp > configuration.screenHeightDp)
         if (chapterDisplayMode == ChapterDisplayMode.PERSISTENT &&
@@ -1567,7 +1565,7 @@ private fun VideoPlayerOverlayContent(
                     .align(Alignment.BottomCenter)
                     .landscapeEndDrawerPadding(endDrawerReservedWidthProvider)
                     // 常驻条贴住播放器底边，仅保留左右安全区，不添加底部间距。
-                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+                    .windowInsetsPadding(horizontalControlInsets)
                     .padding(horizontal = 20.dp),
             )
         }
@@ -1736,7 +1734,7 @@ private fun VideoPlayerOverlayContent(
                 exit = fadeOut(OverlayControlFadeSpec),
                 modifier = Modifier
                     .align(Alignment.CenterStart)
-                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Start))
+                    .windowInsetsPadding(horizontalControlInsets.only(WindowInsetsSides.Start))
                     .padding(start = 4.dp)
             ) {
                 FullscreenLockButton(
@@ -1755,7 +1753,7 @@ private fun VideoPlayerOverlayContent(
                 exit = fadeOut(OverlayControlFadeSpec),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.End))
+                    .windowInsetsPadding(horizontalControlInsets.only(WindowInsetsSides.End))
                     .padding(end = 4.dp)
             ) {
                 NativePlayerSideButton(
@@ -2884,8 +2882,6 @@ fun LandscapeEndDrawer(
 
                     if (hasSeason) {
                         AppThemeAdaptiveTabRow(
-                            // Glass indicator fills the measured slot; native geometry keeps its defaults.
-                            liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                             role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
                             options = listOf(
                                 AppSegmentOption(0, "推荐视频"),

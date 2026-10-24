@@ -10,8 +10,8 @@ import kotlin.test.assertTrue
  * 双主题原生组件迁移的存量棘轮。
  *
  * 这些上限冻结 2026-08-24 的生产源码现状。每完成一个迁移批次，都应同步调低对应上限；
- * 不允许为了让测试通过而提高上限。液态玻璃与共享 Miuix navigation 子系统不属于本轮组件迁移，
- * 因此使用精确文件集合而不是数量上限，防止例外继续扩散。
+ * 不允许为了让测试通过而提高上限。共享 Miuix navigation 子系统不属于本轮组件迁移，
+ * 因此使用精确文件集合而不是数量上限，防止导航例外继续扩散。
  */
 class NativeThemeMigrationBoundaryTest {
 
@@ -281,17 +281,6 @@ class NativeThemeMigrationBoundaryTest {
         )
     }
 
-    @Test
-    fun liquidGlassExceptionSetCannotExpandOrChangeIdentity() {
-        val featureFiles = kotlinFiles("app/src/main/java/com/android/purebilibili/feature")
-        val exceptionPaths = featureFiles
-            .filter { file -> file.hasAnyImportPrefix(MIUIX_VISUAL_EFFECT_IMPORTS) }
-            .map(::repoRelativePath)
-            .toSet()
-
-        assertEquals(LIQUID_GLASS_EXCEPTION_FILE_COUNT, exceptionPaths.size)
-        assertEquals(LIQUID_GLASS_EXCEPTION_PATHS_SHA256, sha256(exceptionPaths))
-    }
 
     @Test
     fun sharedMiuixNavigationExceptionSetCannotExpandOrChangeIdentity() {
@@ -413,11 +402,6 @@ class NativeThemeMigrationBoundaryTest {
             "import top.yukonga.miuix.kmp.preference.",
             "import top.yukonga.miuix.kmp.overlay.",
         )
-        val MIUIX_VISUAL_EFFECT_IMPORTS = listOf(
-            "import top.yukonga.miuix.kmp.blur.",
-            "import top.yukonga.miuix.kmp.shader.",
-            "import top.yukonga.miuix.kmp.squircle.",
-        )
         val APP_UI_STYLE_BRANCH = Regex("\\bAppUiStyle\\.")
         val MATERIAL_SLIDER_DEFAULTS_CALL = Regex("(?<![A-Za-z0-9_])SliderDefaults\\.colors\\(")
         val DIRECT_NATIVE_SLIDER_CALL = Regex("(?<![A-Za-z0-9_])Slider\\(")
@@ -462,9 +446,6 @@ class NativeThemeMigrationBoundaryTest {
         const val MAX_FEATURE_DIRECT_PROGRESS_CALLS = 0
         const val MAX_PRIMITIVE_FACADE_MATERIAL3_IMPORTS = 47
 
-        const val LIQUID_GLASS_EXCEPTION_FILE_COUNT = 45
-        const val LIQUID_GLASS_EXCEPTION_PATHS_SHA256 =
-            "56e0a85c43e39a0ed4292c37e4bcaf79957bb9015a60d26e2c34bf62cb32a8f6"
         const val MIUIX_NAVIGATION_EXCEPTION_FILE_COUNT = 12
         const val MIUIX_NAVIGATION_EXCEPTION_PATHS_SHA256 =
             "44a6cdfe8e3e7963aa014c981ca69c4af61f536a51ecf860532872d762d1e088"

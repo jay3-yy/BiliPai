@@ -271,30 +271,10 @@ fun BangumiPlayerView(
         currentQualityId = currentQuality, colorTransfer = videoInputFormat?.colorInfo?.colorTransfer ?: 0,
     )
     val shouldUseAnime4kPipeline = anime4kOutputDecision.shouldUsePipeline
-    val playerPageBackdrop = com.android.purebilibili.feature.video.ui.section.rememberPlayerPageBackdrop()
-    val pageGlassSupported = com.android.purebilibili.feature.video.ui.section.supportsPlayerPageGlass(
-        liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-        fullscreen = isFullscreen,
-        portraitFullscreen = false,
-        detailInline = !isFullscreen,
-        hdr = requiresHdrSurface,
-        anime4k = shouldUseAnime4kPipeline,
-        audioOnly = features.isAudioOnly,
-        pip = features.isInPipMode,
-    )
-    var hasUsedPageGlassTexture by remember(exoPlayer) { mutableStateOf(false) }
-    LaunchedEffect(pageGlassSupported) {
-        if (pageGlassSupported) hasUsedPageGlassTexture = true
-    }
-    val useTextureSurface = com.android.purebilibili.feature.video.ui.section.shouldUsePlayerPageTexture(
-        glassSupported = pageGlassSupported,
-        retainedGlassTexture = hasUsedPageGlassTexture,
-        hdr = requiresHdrSurface,
-        existingTextureRequest = com.android.purebilibili.feature.video.ui.section.shouldUseTextureSurfaceForFlip(
-            isFlippedHorizontal = features.isFlippedHorizontal,
-            isFlippedVertical = features.isFlippedVertical,
-            requiresHdrSurfaceOutput = requiresHdrSurface,
-        ),
+    val useTextureSurface = com.android.purebilibili.feature.video.ui.section.shouldUseTextureSurfaceForFlip(
+        isFlippedHorizontal = features.isFlippedHorizontal,
+        isFlippedVertical = features.isFlippedVertical,
+        requiresHdrSurfaceOutput = requiresHdrSurface,
     )
     val shouldRenderAnime4kPipeline = shouldUseAnime4kPipeline &&
         videoSizeState.first > 0 &&
@@ -421,18 +401,6 @@ fun BangumiPlayerView(
         }
     }
 
-    val glassCaptureVisibility = androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (showControls || !isPlaying || gestureMode != BangumiGestureMode.None) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(
-            com.android.purebilibili.feature.video.ui.overlay.PLAYER_GLASS_VISIBILITY_DURATION_MS,
-            easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.Continuity,
-        ),
-        label = "bangumiPageGlassCapture",
-    )
-    val glassCaptureVisible by remember(glassCaptureVisibility) {
-        derivedStateOf { glassCaptureVisibility.value > 0f }
-    }
-    val capturePlayerPage = pageGlassSupported && glassCaptureVisible
 
     Box(
         modifier = modifier
@@ -609,7 +577,6 @@ fun BangumiPlayerView(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (capturePlayerPage) playerPageBackdrop.video.modifier else Modifier)
                 .clipToBounds(),
             contentAlignment = Alignment.Center
         ) {
@@ -760,7 +727,6 @@ fun BangumiPlayerView(
                     onRelease = { view -> danmakuManager.detachView(view) },
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (capturePlayerPage) playerPageBackdrop.danmaku.modifier else Modifier)
                         .padding(top = danmakuTopInset)
                         .clipToBounds()
                 )
@@ -775,10 +741,6 @@ fun BangumiPlayerView(
             mode = if (gestureMode == BangumiGestureMode.Brightness) VideoGestureMode.Brightness else VideoGestureMode.Volume,
             percent = if (gestureMode == BangumiGestureMode.Brightness) currentBrightness else gestureValue,
             compact = !isFullscreen,
-            glassBackdrop = playerPageBackdrop.backdrop.takeIf {
-                capturePlayerPage && playerPageBackdrop.video.isReady &&
-                    playerViewRef?.videoSurfaceView is android.view.TextureView
-            },
         )
         if (showGestureIndicator && gestureMode == BangumiGestureMode.Seek) {
             // 与普通视频一致：预览气泡展示目标时间与相对起点的时间增量；
@@ -829,20 +791,13 @@ fun BangumiPlayerView(
         )
 
         if (!features.isInPipMode && !features.isAudioOnly) {
-            Box(Modifier.fillMaxSize().then(
-                if (capturePlayerPage) playerPageBackdrop.subtitles.modifier else Modifier,
-            )) {
+            Box(Modifier.fillMaxSize()) {
                 BangumiSubtitleOverlay(exoPlayer, features.subtitle, showControls, isFullscreen, playerViewRef?.height ?: 0)
             }
         }
         CompositionLocalProvider(
             com.android.purebilibili.feature.video.ui.overlay.LocalPlayerLevelGestureActive provides
                 (gestureMode == BangumiGestureMode.Brightness || gestureMode == BangumiGestureMode.Volume),
-            com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop provides
-                playerPageBackdrop.backdrop.takeIf {
-                    capturePlayerPage && playerPageBackdrop.video.isReady &&
-                        playerViewRef?.videoSurfaceView is android.view.TextureView
-                },
         ) {
         BangumiPlayerOverlayHost(
             player = exoPlayer,

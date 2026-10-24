@@ -13,11 +13,136 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.android.purebilibili.core.ui.findHostActivity
 
 @RunWith(AndroidJUnit4::class)
 class ThemeColorTransitionTest {
     @get:Rule
     val rule = createComposeRule()
+
+    @Test
+    fun themeDefaultDoesNotOverwritePlayerSystemIconsAfterThemeRemount() {
+        val generation = mutableIntStateOf(0)
+        val style = mutableStateOf(AppUiStyle.MATERIAL3)
+        val fullscreen = mutableStateOf(false)
+        lateinit var controller: androidx.core.view.WindowInsetsControllerCompat
+        rule.setContent {
+            // A fresh theme models the default effect restarting with a recreated host view.
+            androidx.compose.runtime.key(generation.intValue) {
+                PureBiliBiliTheme(
+                    uiStyle = style.value,
+                    darkTheme = false,
+                    liquidGlassEnabled = false,
+                    themeTransitionEnabled = false,
+                ) {
+                    val view = androidx.compose.ui.platform.LocalView.current
+                    val window = checkNotNull(view.context.findHostActivity()).window
+                    val spec = com.android.purebilibili.feature.video.screen.resolveVideoDetailSystemBarsApplySpec(
+                        visibilityPolicy = com.android.purebilibili.feature.video.screen.resolveVideoDetailSystemBarsVisibilityPolicy(
+                            isFullscreenMode = fullscreen.value,
+                            hideVideoPageStatusBar = false,
+                            isInPipMode = false,
+                            isScreenActive = true,
+                        ),
+                        useTabletLayout = false,
+                        isLightBackground = true,
+                        backgroundColor = android.graphics.Color.WHITE,
+                        transparentColor = android.graphics.Color.TRANSPARENT,
+                        blackColor = android.graphics.Color.BLACK,
+                        transientBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
+                    )
+                    controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                    com.android.purebilibili.feature.video.screen.VideoDetailSystemBarsEffect(
+                        view = view,
+                        window = window,
+                        insetsController = controller,
+                        isScreenActive = true,
+                        spec = spec,
+                    )
+                }
+            }
+        }
+        rule.runOnIdle {
+            org.junit.Assert.assertFalse(controller.isAppearanceLightStatusBars)
+        }
+        for (nativeStyle in AppUiStyle.entries) {
+            for (isFullscreen in listOf(true, false)) {
+                rule.runOnIdle {
+                    style.value = nativeStyle
+                    fullscreen.value = isFullscreen
+                    generation.intValue++
+                }
+                rule.waitForIdle()
+                rule.runOnIdle {
+                    org.junit.Assert.assertFalse(
+                        "Player must retain light system icons after $nativeStyle fullscreen=$isFullscreen",
+                        controller.isAppearanceLightStatusBars,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun playerReassertsIconsAfterConfigurationRelayoutButReleasesInactiveWindow() {
+        val orientation = mutableIntStateOf(android.content.res.Configuration.ORIENTATION_PORTRAIT)
+        val active = mutableStateOf(true)
+        val windowResetRevision = mutableIntStateOf(0)
+        val spec = com.android.purebilibili.feature.video.screen.VideoDetailSystemBarsApplySpec(
+            hiddenBars = com.android.purebilibili.feature.video.screen.VideoDetailHiddenSystemBars.NONE,
+            systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_DEFAULT,
+            statusBarColor = android.graphics.Color.TRANSPARENT,
+            navigationBarColor = android.graphics.Color.TRANSPARENT,
+            lightStatusBars = false,
+            lightNavigationBars = false,
+        )
+        lateinit var controller: androidx.core.view.WindowInsetsControllerCompat
+        rule.setContent {
+            val hostConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+            val configuration = androidx.compose.runtime.remember(orientation.intValue) {
+                android.content.res.Configuration(hostConfiguration).apply {
+                    this.orientation = orientation.intValue
+                }
+            }
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalConfiguration provides configuration,
+            ) {
+                val view = androidx.compose.ui.platform.LocalView.current
+                val window = checkNotNull(view.context.findHostActivity()).window
+                controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                com.android.purebilibili.feature.video.screen.VideoDetailSystemBarsEffect(
+                    view = view,
+                    window = window,
+                    insetsController = controller,
+                    isScreenActive = active.value,
+                    spec = spec,
+                )
+                if (windowResetRevision.intValue > 0) {
+                    // Model decor restoring its light theme after the page's Compose commit.
+                    SideEffect { controller.isAppearanceLightStatusBars = true }
+                }
+            }
+        }
+        rule.runOnIdle { org.junit.Assert.assertFalse(controller.isAppearanceLightStatusBars) }
+        for (nextOrientation in listOf(
+            android.content.res.Configuration.ORIENTATION_LANDSCAPE,
+            android.content.res.Configuration.ORIENTATION_PORTRAIT,
+        )) {
+            rule.runOnIdle {
+                orientation.intValue = nextOrientation
+                windowResetRevision.intValue++
+            }
+            rule.waitForIdle()
+            rule.runOnIdle { org.junit.Assert.assertFalse(controller.isAppearanceLightStatusBars) }
+        }
+        rule.runOnIdle {
+            active.value = false
+            orientation.intValue = android.content.res.Configuration.ORIENTATION_LANDSCAPE
+            windowResetRevision.intValue++
+        }
+        rule.waitForIdle()
+        rule.runOnIdle { org.junit.Assert.assertTrue(controller.isAppearanceLightStatusBars) }
+    }
 
     private fun palette(dark: Boolean): AppThemePalette {
         val material = if (dark) darkColorScheme() else lightColorScheme()

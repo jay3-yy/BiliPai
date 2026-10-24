@@ -249,7 +249,7 @@ fun BottomControlBar(
         Column(
             modifier = modifier.fillMaxWidth()
                 .semantics { testTagsAsResourceId = true }
-                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+                .windowInsetsPadding(playerControlHorizontalInsets(viewportIsLandscape, isFullscreen))
                 .padding(vertical = PILI_PLAYER_BOTTOM_VERTICAL_PADDING_DP.dp),
         ) {
             val seekInsets = WindowInsets.systemGestures.only(WindowInsetsSides.Horizontal).union(
@@ -290,7 +290,7 @@ fun BottomControlBar(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(PILI_PLAYER_BOTTOM_ROW_HEIGHT_DP.dp)
                     .testTag("player_control_row"),
                 left = {
-                    PlayerPlayPauseButton(isPlaying, onPlayPauseClick)
+                    PlayerPlayPauseButton(isPlaying, onPlayPauseClick, width = slotWidth)
                     ProgressTimeText(
                         positionProvider = displayPosition,
                         durationProvider = { progressProvider().duration },

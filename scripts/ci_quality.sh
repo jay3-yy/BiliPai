@@ -33,6 +33,7 @@ case "$MODE" in
         --tests 'com.android.purebilibili.core.store.SerializedSettingsCacheWriterTest'
         --tests 'com.android.purebilibili.core.store.AppNavigationSettingsMappingPolicyTest.gestureRotationAndTranslationPreferencesAreIndependent'
         --tests 'com.android.purebilibili.core.store.AppNavigationSettingsMappingPolicyTest.populatedPreferences_mapToNavigationSettingsCorrectly'
+        --tests 'com.android.purebilibili.core.store.AppNavigationSettingsMappingPolicyTest.explicitVisibilityModeWinsForEveryDockCompactAndFloatingCombination'
         --tests 'com.android.purebilibili.core.store.ThemeSelectionMigrationPolicyTest'
     )
     ;;

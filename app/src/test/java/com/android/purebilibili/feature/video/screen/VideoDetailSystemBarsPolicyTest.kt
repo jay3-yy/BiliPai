@@ -201,6 +201,29 @@ class VideoDetailSystemBarsPolicyTest {
     }
 
     @Test
+    fun inlinePlaybackRestoresPersistentBarsAfterFullscreenForBothLayouts() {
+        for (tablet in listOf(false, true)) {
+            val policy = resolveVideoDetailSystemBarsVisibilityPolicy(
+                isFullscreenMode = false,
+                hideVideoPageStatusBar = true,
+                isInPipMode = false,
+                isScreenActive = true,
+            )
+            val spec = resolveVideoDetailSystemBarsApplySpec(
+                visibilityPolicy = policy,
+                useTabletLayout = tablet,
+                isLightBackground = false,
+                backgroundColor = 0,
+                transparentColor = 0,
+                blackColor = 0xFF000000.toInt(),
+                transientBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE,
+            )
+            assertEquals(VideoDetailHiddenSystemBars.NONE, spec.hiddenBars)
+            assertEquals(androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_DEFAULT, spec.systemBarsBehavior)
+        }
+    }
+
+    @Test
     fun applySpec_sameInputsProduceEqualStableSpec() {
         val first = resolveVideoDetailSystemBarsApplySpec(
             visibilityPolicy = VideoDetailSystemBarsVisibilityPolicy(

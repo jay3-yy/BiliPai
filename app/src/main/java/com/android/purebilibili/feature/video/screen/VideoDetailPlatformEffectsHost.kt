@@ -18,6 +18,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.core.view.OneShotPreDrawListener
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.Player
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
@@ -164,8 +166,24 @@ internal fun VideoDetailSystemBarsEffect(
     // The generation re-commits the same policy after a cancelled return or a retained route
     // becomes topmost again.
     val effectiveSpec = remember(spec, reapplyGeneration) { spec }
+    val configuration = LocalConfiguration.current
+    val latestSpec by rememberUpdatedState(effectiveSpec)
+    val latestScreenActive by rememberUpdatedState(isScreenActive)
     SideEffect {
         if (view.isInEditMode || !isScreenActive || window == null || insetsController == null) return@SideEffect
         applyVideoDetailSystemBarsSpec(window, insetsController, effectiveSpec)
+    }
+    // Rotation can reapply the window theme after Compose has committed the inline policy.
+    // Reassert the current owner once, after relayout and before its first frame is drawn.
+    DisposableEffect(view, window, insetsController, isScreenActive, configuration, reapplyGeneration) {
+        if (view.isInEditMode || !isScreenActive || window == null || insetsController == null) {
+            return@DisposableEffect onDispose {}
+        }
+        val reapply = OneShotPreDrawListener.add(view) {
+            if (latestScreenActive) {
+                applyVideoDetailSystemBarsSpec(window, insetsController, latestSpec)
+            }
+        }
+        onDispose { reapply.removeListener() }
     }
 }

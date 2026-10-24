@@ -1,27 +1,13 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-import com.android.purebilibili.core.ui.AppContentColors
-import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.components.AppSwitch
-import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -42,23 +28,16 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleTrackOption
 import com.android.purebilibili.feature.video.subtitle.buildSubtitleTrackOptions
@@ -350,7 +329,6 @@ fun PortraitSubtitleHost(
         onControlsChange(controlState, controlCallbacks)
     }
 
-    val glassLayout = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     Box(modifier = modifier.fillMaxSize()) {
         if (keepMounted && subtitleSession.selectedTrackKey == null) {
             Column(
@@ -366,17 +344,9 @@ fun PortraitSubtitleHost(
                             }
                         )
                     }
-                    .then(
-                        if (glassLayout) Modifier
-                            .fillMaxWidth(0.92f)
-                            .padding(horizontal = 12.dp)
-                            .padding(bottom = bottomPaddingDp.dp)
-                            .padding(vertical = 6.dp)
-                        else Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = subtitleAppearance.horizontalPadding.dp)
-                            .padding(bottom = (bottomPaddingDp + subtitleAppearance.bottomPadding).dp)
-                    )
+                    .fillMaxWidth()
+                    .padding(horizontal = subtitleAppearance.horizontalPadding.dp)
+                    .padding(bottom = (bottomPaddingDp + subtitleAppearance.bottomPadding).dp)
                     .then(
                         if (subtitlePositionLocked) {
                             Modifier
@@ -411,61 +381,22 @@ fun PortraitSubtitleHost(
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (glassLayout) {
-                    val shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.85f),
-                        offset = Offset(0f, 1.5f),
-                        blurRadius = 6f
-                    )
-                    val showPrimary = !primaryText.isNullOrBlank()
-                    val showSecondary = !secondaryText.isNullOrBlank()
-                    val secondaryAsPrimary = showSecondary && !showPrimary
-                    AppText(
-                        text = secondaryText.orEmpty(),
-                        color = Color.White.copy(alpha = if (showSecondary) 0.88f else 0f),
-                        fontSize = if (secondaryAsPrimary) {
-                            textSizeSpec.primarySp.sp
-                        } else {
-                            textSizeSpec.secondarySp.sp
-                        },
-                        fontWeight = if (secondaryAsPrimary) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center,
-                        style = androidx.compose.ui.text.TextStyle(shadow = shadow),
-                        modifier = Modifier.then(
-                            if (showSecondary) Modifier else Modifier.height(0.dp)
-                        )
-                    )
-                    AppText(
-                        text = primaryText.orEmpty(),
-                        color = Color.White.copy(alpha = if (showPrimary) 1f else 0f),
-                        fontSize = textSizeSpec.primarySp.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center,
-                        style = androidx.compose.ui.text.TextStyle(shadow = shadow),
-                        modifier = Modifier.then(
-                            if (showPrimary) Modifier else Modifier.height(0.dp)
-                        )
-                    )
-                } else {
-                    val showPrimary = !primaryText.isNullOrBlank()
-                    val showSecondary = !secondaryText.isNullOrBlank()
-                    val secondaryAsPrimary = showSecondary && !showPrimary
-                    if (showSecondary) PiliStyledSubtitleText(
-                        text = secondaryText.orEmpty(),
-                        baseFontSizeSp = if (secondaryAsPrimary) textSizeSpec.primarySp else textSizeSpec.secondarySp,
-                        appearance = subtitleAppearance,
-                        isFullscreen = false,
-                        color = Color.White.copy(alpha = 0.88f),
-                    )
-                    if (showPrimary) PiliStyledSubtitleText(
-                        text = primaryText.orEmpty(),
-                        baseFontSizeSp = textSizeSpec.primarySp,
-                        appearance = subtitleAppearance,
-                        isFullscreen = false,
-                    )
-                }
+                val showPrimary = !primaryText.isNullOrBlank()
+                val showSecondary = !secondaryText.isNullOrBlank()
+                val secondaryAsPrimary = showSecondary && !showPrimary
+                if (showSecondary) PiliStyledSubtitleText(
+                    text = secondaryText.orEmpty(),
+                    baseFontSizeSp = if (secondaryAsPrimary) textSizeSpec.primarySp else textSizeSpec.secondarySp,
+                    appearance = subtitleAppearance,
+                    isFullscreen = false,
+                    color = Color.White.copy(alpha = 0.88f),
+                )
+                if (showPrimary) PiliStyledSubtitleText(
+                    text = primaryText.orEmpty(),
+                    baseFontSizeSp = textSizeSpec.primarySp,
+                    appearance = subtitleAppearance,
+                    isFullscreen = false,
+                )
             }
         }
 

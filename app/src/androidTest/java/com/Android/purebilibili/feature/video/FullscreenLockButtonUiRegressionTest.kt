@@ -30,16 +30,12 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppThemeConfig
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.feature.video.ui.overlay.FullscreenLockButton
-import com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop
-import com.android.purebilibili.feature.video.ui.overlay.PlayerControlsBackdropHost
 import com.android.purebilibili.feature.video.ui.overlay.resolveFullscreenLockButtonVisualState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
@@ -55,8 +51,7 @@ class FullscreenLockButtonUiRegressionTest {
         val style: AppUiStyle = AppUiStyle.MATERIAL3,
         val dark: Boolean = false,
         val video: Color = Color.Black,
-        // Native, glass without capture, and glass with a real captured sibling layer.
-        val material: Int = 0,
+        val glass: Boolean = false,
     )
 
     @Test
@@ -77,29 +72,22 @@ class FullscreenLockButtonUiRegressionTest {
             }
             CompositionLocalProvider(
                 LocalAppUiStyle provides current.style,
-                LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = current.material != 0),
+                LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = current.glass),
             ) {
                 MaterialTheme(colorScheme = if (current.dark) darkColorScheme() else lightColorScheme()) {
                     MiuixTheme(controller = controller) {
-                        val backdrop = rememberLayerBackdrop()
                         Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {
-                            Box(Modifier.fillMaxSize().layerBackdrop(backdrop).background(current.video))
-                            CompositionLocalProvider(
-                                LocalPlayerPageBackdrop provides backdrop.takeIf { current.material == 2 },
-                            ) {
-                                PlayerControlsBackdropHost(enabled = true) {
-                                    FullscreenLockButton(
-                                        visualState = resolveFullscreenLockButtonVisualState(locked.value),
-                                        onClick = {
-                                            clicks++
-                                            locked.value = !locked.value
-                                        },
-                                        cornerRadiusDp = 24,
-                                        iconSizeDp = 24,
-                                        modifier = Modifier.testTag("lock_surface"),
-                                    )
-                                }
-                            }
+                            Box(Modifier.fillMaxSize().background(current.video))
+                            FullscreenLockButton(
+                                visualState = resolveFullscreenLockButtonVisualState(locked.value),
+                                onClick = {
+                                    clicks++
+                                    locked.value = !locked.value
+                                },
+                                cornerRadiusDp = 24,
+                                iconSizeDp = 24,
+                                modifier = Modifier.testTag("lock_surface"),
+                            )
                         }
                     }
                 }
@@ -108,64 +96,42 @@ class FullscreenLockButtonUiRegressionTest {
 
         for (style in AppUiStyle.entries) {
             for (dark in listOf(false, true)) {
-                for (material in 0..2) {
-                    val mediaBackings = listOf(Color.Black, Color.White).map { video ->
-                        val current = Scenario(style, dark, video, material)
+                for (glass in listOf(false, true)) {
+                    for (video in listOf(Color.Black, Color.White)) {
+                        val current = Scenario(style, dark, video, glass)
                         rule.runOnIdle {
                             scenario.value = current
                             locked.value = false
                         }
-                        val unlockedBacking = assertRenderedContrast(locked = false, scenario = current)
+                        assertRenderedContrast(locked = false, scenario = current)
                         rule.onNodeWithContentDescription("未锁定")
                             .assertIsDisplayed().assertHasClickAction().performClick()
-                        val lockedBacking = assertRenderedContrast(locked = true, scenario = current)
+                        assertRenderedContrast(locked = true, scenario = current)
                         rule.onNodeWithContentDescription("已锁定")
                             .assertIsDisplayed().assertHasClickAction().performClick()
                         rule.runOnIdle { assertTrue(!locked.value) }
-                        listOf(unlockedBacking, lockedBacking)
-                    }
-                    if (material != 0) {
-                        for (state in 0..1) {
-                            val blackBacking = mediaBackings[0][state]
-                            val whiteBacking = mediaBackings[1][state]
-                            // Both fallback and captured glass must transmit the video.
-                            // An opaque dark/light plate could pass contrast but not this.
-                            assertTrue(
-                                "$style dark=$dark material=$material locked=${state == 1} " +
-                                    "must transmit video: black=$blackBacking white=$whiteBacking",
-                                whiteBacking - blackBacking > 0.02f,
-                            )
-                        }
                     }
                 }
             }
         }
-        rule.runOnIdle { assertEquals(AppUiStyle.entries.size * 2 * 2 * 3 * 2, clicks) }
+        rule.runOnIdle { assertEquals(AppUiStyle.entries.size * 2 * 2 * 2 * 2, clicks) }
     }
 
-    private fun assertRenderedContrast(locked: Boolean, scenario: Scenario): Float {
+    private fun assertRenderedContrast(locked: Boolean, scenario: Scenario) {
         val pixels = rule.onNodeWithTag("lock_surface").captureToImage().toPixelMap()
         // Sample inside the backing but outside the centered 24dp glyph, not the video.
         val backing = pixels[pixels.width / 8, pixels.height / 2].luminance()
-        val darkGlyph = locked && scenario.material == 0
-        var glyph = if (darkGlyph) 1f else 0f
+        var lightestGlyph = 0f
+        var darkestGlyph = 1f
         for (y in pixels.height / 3 until pixels.height * 2 / 3) {
             for (x in pixels.width / 3 until pixels.width * 2 / 3) {
                 val luminance = pixels[x, y].luminance()
-                glyph = if (darkGlyph) minOf(glyph, luminance) else maxOf(glyph, luminance)
+                lightestGlyph = maxOf(lightestGlyph, luminance)
+                darkestGlyph = minOf(darkestGlyph, luminance)
             }
         }
-        val contrast = (maxOf(glyph, backing) + 0.05f) / (minOf(glyph, backing) + 0.05f)
+        fun contrast(glyph: Float) = (maxOf(glyph, backing) + 0.05f) / (minOf(glyph, backing) + 0.05f)
+        val contrast = maxOf(contrast(lightestGlyph), contrast(darkestGlyph))
         assertTrue("$scenario locked=$locked glyph contrast=$contrast", contrast >= 4.5f)
-        assertTrue(
-            "$scenario locked=$locked glyph=$glyph",
-            if (darkGlyph) glyph <= 0.1f else glyph >= 0.9f,
-        )
-        // Only native locked mode inverts to a light plate; glass stays dark and translucent.
-        assertTrue(
-            "$scenario locked=$locked backing=$backing",
-            if (darkGlyph) backing >= 0.9f else backing <= 0.14f,
-        )
-        return backing
     }
 }

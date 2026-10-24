@@ -410,35 +410,6 @@ class PortraitVideoPagerPolicyTest {
     }
 
 
-    @Test
-    fun landscapeContainer_doesNotLiftVideoViewport() {
-        assertEquals(
-            0,
-            resolvePortraitVideoViewportVerticalOffsetDp(
-                currentVideoAspect = 16f / 9f,
-                fillContainer = false,
-                isLandscape = true
-            )
-        )
-    }
-
-    @Test
-    fun portraitOrFillViewport_keepsCenteredVerticalOffset() {
-        assertEquals(
-            0,
-            resolvePortraitVideoViewportVerticalOffsetDp(
-                currentVideoAspect = 9f / 16f,
-                fillContainer = false
-            )
-        )
-        assertEquals(
-            0,
-            resolvePortraitVideoViewportVerticalOffsetDp(
-                currentVideoAspect = 16f / 9f,
-                fillContainer = true
-            )
-        )
-    }
 
     @Test
     fun sharedPlayerEntry_reusesExistingFrameWhenSharedPlayerAlreadyHasVideoSize() {

@@ -11,6 +11,77 @@ import kotlin.test.assertTrue
 class VideoDetailFullscreenOrientationPolicyTest {
 
     @Test
+    fun `vertical fullscreen setting exits horizontal video directly to portrait inline`() {
+        val fullscreenAfterExit = resolveVideoDetailFullscreenMode(
+            isOrientationDrivenFullscreen = false,
+            isLandscape = true,
+            userRequestedFullscreen = false,
+            isInMultiWindowMode = false,
+        )
+        assertFalse(fullscreenAfterExit)
+        for (autoRotate in listOf(false, true)) {
+            assertEquals(
+                ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                resolvePhoneVideoRequestedOrientation(
+                    autoRotateEnabled = autoRotate,
+                    fullscreenMode = FullscreenMode.VERTICAL,
+                    isCompactDevice = true,
+                    isOrientationDrivenFullscreen = false,
+                    isFullscreenMode = fullscreenAfterExit,
+                    manualFullscreenRequested = false,
+                    isVerticalVideo = false,
+                    isCurrentlyLandscape = true,
+                    currentRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                )
+            )
+        }
+    }
+
+    @Test
+    fun `portrait fullscreen exit remains inline while landscape configuration catches up`() {
+        for (autoRotate in listOf(false, true)) {
+            for (mode in listOf(FullscreenMode.AUTO, FullscreenMode.HORIZONTAL)) {
+                assertNull(resolvePhoneVideoRequestedOrientation(
+                    autoRotateEnabled = autoRotate,
+                    fullscreenMode = mode,
+                    isCompactDevice = true,
+                    isOrientationDrivenFullscreen = true,
+                    isFullscreenMode = false,
+                    isVerticalVideo = true,
+                    isPortraitFullscreen = true,
+                ))
+
+                // Portrait exit clears the fullscreen intent and installs a portrait hold
+                // together, before the platform has delivered the portrait configuration.
+                val fullscreenAfterExit = resolveVideoDetailFullscreenMode(
+                    isOrientationDrivenFullscreen = true,
+                    isLandscape = true,
+                    userRequestedFullscreen = false,
+                    isInMultiWindowMode = false,
+                    manualPortraitHoldActive = true,
+                )
+                assertFalse(fullscreenAfterExit)
+                assertEquals(
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                    resolvePhoneVideoRequestedOrientation(
+                        autoRotateEnabled = autoRotate,
+                        fullscreenMode = mode,
+                        isCompactDevice = true,
+                        isOrientationDrivenFullscreen = true,
+                        isFullscreenMode = fullscreenAfterExit,
+                        manualFullscreenRequested = false,
+                        manualPortraitHoldActive = true,
+                        isVerticalVideo = true,
+                        isPortraitFullscreen = false,
+                        currentRequestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                        isCurrentlyLandscape = true,
+                    )
+                )
+            }
+        }
+    }
+
+    @Test
     fun `phone small window detail entry stays portrait despite stale landscape bounds`() {
         for (autoRotate in listOf(false, true)) {
             for (mode in listOf(FullscreenMode.AUTO, FullscreenMode.HORIZONTAL)) {

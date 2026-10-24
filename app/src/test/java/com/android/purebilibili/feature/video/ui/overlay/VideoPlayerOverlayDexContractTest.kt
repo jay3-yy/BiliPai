@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -10,26 +9,6 @@ class VideoPlayerOverlayDexContractTest {
         if (it == java.lang.Long.TYPE || it == java.lang.Double.TYPE) 2 else 1
     }
 
-    @Test
-    fun backdropSlot_capturesOnlyStateAndActions() {
-        val projectRoot = listOf(File("."), File(".."))
-            .first { File(it, "app/src/main").exists() }
-        val source = File(
-            projectRoot,
-            "app/src/main/java/com/android/purebilibili/feature/video/ui/overlay/VideoPlayerOverlay.kt",
-        ).readText()
-        val entry = source.substringAfter("fun VideoPlayerOverlay(")
-            .substringBefore("private fun VideoPlayerOverlayContent(")
-        assertTrue(entry.contains("enabled = true,"))
-        val slot = entry.substringAfter("modifier = Modifier.fillMaxSize(),")
-            .substringBefore("@Composable")
-        assertEquals("{\n        VideoPlayerOverlayContent(state, actions)\n    }\n}", slot.trim().removePrefix(") "))
-        val content = source.substringAfter("private fun VideoPlayerOverlayContent(")
-        assertTrue(
-            !content.contains("PlayerControlsBackdropHost("),
-            "The backdrop must wrap the small entry point, not capture the screen's locals",
-        )
-    }
 
     @Test
     fun compiledOverlayEntryPoint_fitsDexInvokeRange() {

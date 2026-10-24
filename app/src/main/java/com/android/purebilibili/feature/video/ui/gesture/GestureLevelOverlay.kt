@@ -49,8 +49,6 @@ import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
@@ -95,9 +93,6 @@ import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Slider
 import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.blur.Backdrop
-import com.android.purebilibili.feature.video.ui.overlay.playerControlGlassSurface
-import com.android.purebilibili.feature.home.components.resolveBottomBarDarkTheme
 
 /**
  * Theme-native volume / brightness feedback:
@@ -111,19 +106,14 @@ fun BoxScope.GestureLevelOverlayHost(
     mode: VideoGestureMode,
     percent: Float,
     modifier: Modifier = Modifier,
-    glassBackdrop: Backdrop? = null,
     compact: Boolean = false,
 ) {
     val kind = resolveGestureLevelKind(mode) ?: return
-    val glass = glassBackdrop != null && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     val playerChromeProfile = rememberAppPlayerChromeProfile()
     val style = rememberGestureLevelOverlayStyle(playerChromeProfile.tabPresentation)
     val motionSpec = remember { resolveVideoGestureMotionSpec() }
-    val reduceMotion = rememberSystemReduceMotion()
     val brightnessColor = colorResource(R.color.player_brightness_accent)
     val colorScheme = MaterialTheme.colorScheme
-    val glassDarkTheme = resolveBottomBarDarkTheme(colorScheme.background)
-    val glassContentColor = colorScheme.onSurface
     val miuixColorScheme = MiuixTheme.colorScheme
     val spec = remember(style, kind, percent, colorScheme, miuixColorScheme, brightnessColor) {
         resolveGestureLevelOverlaySpec(
@@ -153,12 +143,9 @@ fun BoxScope.GestureLevelOverlayHost(
     AnimatedVisibility(
         visible = visible,
         modifier = modifier
-            .align(if (glass) Alignment.TopCenter else spec.alignment)
+            .align(spec.alignment)
             .then(
-                if (glass) Modifier
-                    .windowInsetsPadding(WindowInsets.statusBars.union(WindowInsets.displayCutout).only(WindowInsetsSides.Top))
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-                else when (style) {
+                when (style) {
                     GestureLevelOverlayStyle.Md3 -> Modifier.fillMaxSize()
                     GestureLevelOverlayStyle.Miuix -> Modifier
                     GestureLevelOverlayStyle.Ios -> Modifier.padding(horizontal = 22.dp)
@@ -176,16 +163,7 @@ fun BoxScope.GestureLevelOverlayHost(
                 initialOffsetY = { if (style == GestureLevelOverlayStyle.Ios) it / 8 else 0 },
                 animationSpec = tween(motionSpec.levelOverlayEnterTransformDurationMillis)
             ),
-        exit = if (glass) {
-            if (reduceMotion) {
-                fadeOut(animationSpec = tween(motionSpec.levelOverlayExitDurationMillis))
-            } else {
-                slideOutVertically(
-                    targetOffsetY = { -it },
-                    animationSpec = tween(motionSpec.levelOverlayExitDurationMillis)
-                ) + fadeOut(animationSpec = tween(motionSpec.levelOverlayExitDurationMillis))
-            }
-        } else if (style == GestureLevelOverlayStyle.Md3) {
+        exit = if (style == GestureLevelOverlayStyle.Md3) {
             fadeOut(animationSpec = tween(motionSpec.levelOverlayExitDurationMillis))
         } else fadeOut(animationSpec = tween(motionSpec.levelOverlayExitDurationMillis)) +
             scaleOut(
@@ -197,49 +175,7 @@ fun BoxScope.GestureLevelOverlayHost(
                 animationSpec = tween(motionSpec.levelOverlayExitDurationMillis)
             )
     ) {
-        if (glass) {
-            Row(
-                modifier = Modifier
-                    .width(if (compact) 240.dp else 360.dp)
-                    .heightIn(min = 44.dp)
-                    .playerControlGlassSurface(
-                        glassBackdrop,
-                        darkTheme = glassDarkTheme,
-                    )
-                    // Feedback taps must not toggle the player controls underneath.
-                    .pointerInput(Unit) { detectTapGestures(onTap = {}) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
-                    .semantics(mergeDescendants = true) {
-                        contentDescription = resolveGestureLevelLabel(kind)
-                        stateDescription = "$percentInt%"
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                AppIcon(imageVector = icon, contentDescription = null, tint = glassContentColor, modifier = Modifier.size(20.dp))
-                GlassGestureLevelRail(
-                    fillColor = spec.fillColor,
-                    contentColor = glassContentColor,
-                    progress = { percent.coerceIn(0f, 1f) },
-                    compact = compact,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(if (compact) 16.dp else 24.dp)
-                        .semantics {
-                            contentDescription = resolveGestureLevelLabel(kind)
-                            stateDescription = "$percentInt%"
-                        },
-                )
-                AppText(
-                    text = "$percentInt",
-                    color = glassContentColor,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    modifier = Modifier.width(28.dp),
-                )
-            }
-        } else when (style) {
+        when (style) {
             GestureLevelOverlayStyle.Md3 -> Md3GestureLevelIndicator(
                 spec = spec,
                 icon = icon,
@@ -268,36 +204,6 @@ fun BoxScope.GestureLevelOverlayHost(
     }
 }
 
-/** Read-only feedback keeps full contrast, without disabled slider colors or value tweening. */
-@Composable
-private fun GlassGestureLevelRail(
-    fillColor: Color,
-    contentColor: Color,
-    progress: () -> Float,
-    compact: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Canvas(modifier = modifier) {
-        val scale = if (compact) 2f / 3f else 1f
-        // Keep rounded ends inside the rail even at 0/100%, with room for glass optics.
-        val edgeInset = (3.dp * scale).toPx().coerceAtMost(minOf(size.width, size.height) / 2f)
-        val thumbWidth = (36.dp * scale).toPx().coerceAtMost((size.width - edgeInset * 2f).coerceAtLeast(0f))
-        val thumbHeight = (24.dp * scale).toPx().coerceAtMost((size.height - edgeInset * 2f).coerceAtLeast(0f))
-        val centerY = size.height / 2f
-        val start = Offset(edgeInset + thumbWidth / 2f, centerY)
-        val end = Offset(size.width - edgeInset - thumbWidth / 2f, centerY)
-        val thumbCenter = start + (end - start) * progress().coerceIn(0f, 1f)
-        val trackHeight = (4.dp * scale).toPx()
-        drawLine(contentColor.copy(alpha = 0.28f), start, end, trackHeight, StrokeCap.Round)
-        drawLine(fillColor, start, thumbCenter, trackHeight, StrokeCap.Round)
-        drawRoundRect(
-            color = Color.White.copy(alpha = 0.92f),
-            topLeft = Offset(thumbCenter.x - thumbWidth / 2f, centerY - thumbHeight / 2f),
-            size = Size(thumbWidth, thumbHeight),
-            cornerRadius = CornerRadius(thumbHeight / 2f),
-        )
-    }
-}
 
 @Composable
 private fun Md3GestureLevelIndicator(

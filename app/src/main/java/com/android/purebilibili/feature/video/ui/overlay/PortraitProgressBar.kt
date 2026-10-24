@@ -293,11 +293,7 @@ fun ThinWigglyProgressBar(
                 val thumbModifier = Modifier
                     .offset { IntOffset(thumbOffsetX.roundToInt(), 0) }
                     .align(Alignment.CenterStart)
-                if (LocalPlayerControlGlassEnabled.current) {
-                    PlayerControlGlassThumb(size = thumbSize, dragging = true, modifier = thumbModifier)
-                } else {
-                    Box(thumbModifier.size(thumbSize).background(Color.White, CircleShape))
-                }
+                Box(thumbModifier.size(thumbSize).background(Color.White, CircleShape))
             }
 
             if (videoshotData != null && videoshotData.isValid) {

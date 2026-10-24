@@ -58,7 +58,7 @@ import java.util.Locale
 
 /**
  * Shared Android PiliPlus HeaderControl for inline/fullscreen and portrait/landscape.
- * Each button owns its material; title, status and action rows never become glass capsules.
+ * Each button owns its material; title, status and action rows remain uncontained.
  * Nullable actions permit isolated previews. Production callers supply every applicable handler.
  */
 @OptIn(ExperimentalFoundationApi::class)
@@ -109,6 +109,9 @@ fun TopControlBar(
     onRelatedVideosClick: (() -> Unit)? = null,
     commentsVisible: Boolean = false,
     relatedVideosVisible: Boolean = false,
+    displayCutoutInsets: WindowInsets = WindowInsets.displayCutout,
+    statusBarInsets: WindowInsets = WindowInsets.statusBars,
+    systemGestureInsets: WindowInsets = WindowInsets.systemGestures,
 ) {
     val policy = resolveTopControlBarLayoutPolicy(
         isPortrait = isPortrait,
@@ -148,13 +151,26 @@ fun TopControlBar(
         piliHeaderLikeGesture(triplePress, isLiked && isCoined && isFavorited, onLikeClick, onLikeLongClick)
     } else null
 
+    // Media and chrome can be siblings: consume remaining status-bar space here in every mode.
+    val horizontalInsets = playerControlHorizontalInsets(
+        isLandscape = !isPortrait,
+        isFullscreen = isFullscreen,
+        displayCutoutInsets = displayCutoutInsets,
+        systemGestureInsets = systemGestureInsets,
+    )
+    val safeInsets = horizontalInsets.let { horizontal ->
+        val cutout = if (isFullscreen) {
+            horizontal.union(displayCutoutInsets.only(WindowInsetsSides.Top))
+        } else horizontal
+        if (statusBarVisible) {
+            cutout.union(statusBarInsets.only(WindowInsetsSides.Top))
+        } else cutout
+    }
+
     PlayerControlTouchBounds(height = policy.buttonHeightDp.dp) {
         Column(
             modifier = modifier.fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
-                .then(if (shouldApplyStatusBarPaddingToTopControlBar(isFullscreen, statusBarVisible)) {
-                    Modifier.statusBarsPadding()
-                } else Modifier)
+                .windowInsetsPadding(safeInsets)
                 .padding(vertical = policy.verticalPaddingDp.dp),
         ) {
             PiliHeaderSlots(
@@ -401,7 +417,7 @@ private fun HeaderButton(
     gestureModifier: Modifier? = null,
     content: @Composable () -> Unit,
 ) {
-    PlayerControlGlassDock(enabled = true, shape = CircleShape) {
+    PlayerControlSurface(shape = CircleShape) {
         Box(
             modifier = Modifier.size(width = 42.dp, height = 34.dp)
                 .semantics(mergeDescendants = true) {

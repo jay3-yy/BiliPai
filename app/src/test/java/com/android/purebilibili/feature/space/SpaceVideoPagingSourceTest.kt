@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.space
 
 import androidx.paging.PagingSource
 import com.android.purebilibili.data.model.response.SpaceVideoItem
+import com.android.purebilibili.data.model.response.VideoSortOrder
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*

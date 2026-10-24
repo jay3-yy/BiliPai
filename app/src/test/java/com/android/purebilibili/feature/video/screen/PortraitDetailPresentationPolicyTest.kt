@@ -668,14 +668,14 @@ class PortraitDetailPresentationPolicyTest {
     }
 
     @Test
-    fun continuousPlayerInlineHeight_prefersLayoutWidthWhenExpandedButHonorsCollapse() {
+    fun inlinePlayerHeight_prefersLayoutWidthWhenExpandedButHonorsCollapse() {
         val layoutWidth = 1080
         val layoutExpanded =
             resolvePhoneDetailPlayerContentHeightPx(layoutWidthPx = layoutWidth) + 80
         // screenWidthDp 估高：caller 展开高度大于真布局宽 → 取 layout 消黑边
         assertEquals(
             layoutExpanded,
-            resolveContinuousPlayerInlineHeightPx(
+            resolveInlinePlayerViewportHeightPx(
                 layoutWidthPx = layoutWidth,
                 preferLayoutWidthInline = true,
                 callerInlineHeightPx = layoutExpanded + 40,
@@ -685,7 +685,7 @@ class PortraitDetailPresentationPolicyTest {
         // 评论上滑折叠：caller 更小 → 必须跟着缩小，不能卡死在展开高度
         assertEquals(
             120,
-            resolveContinuousPlayerInlineHeightPx(
+            resolveInlinePlayerViewportHeightPx(
                 layoutWidthPx = layoutWidth,
                 preferLayoutWidthInline = true,
                 callerInlineHeightPx = 120,
@@ -695,7 +695,7 @@ class PortraitDetailPresentationPolicyTest {
         // 未启用 layout-width 时原样使用 caller
         assertEquals(
             200,
-            resolveContinuousPlayerInlineHeightPx(
+            resolveInlinePlayerViewportHeightPx(
                 layoutWidthPx = layoutWidth,
                 preferLayoutWidthInline = false,
                 callerInlineHeightPx = 200,

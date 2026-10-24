@@ -37,12 +37,6 @@ internal fun resolveTopControlBarLayoutPolicy(
     showDislike = isUgc,
 )
 
-internal fun shouldApplyStatusBarPaddingToTopControlBar(
-    isFullscreen: Boolean = false,
-    statusBarVisible: Boolean = isFullscreen,
-): Boolean = com.android.purebilibili.feature.video.screen
-    .shouldApplyStatusBarPaddingToVideoPlayerChrome(statusBarVisible = statusBarVisible)
-
 internal fun shouldPollTopControlBarClock(
     showCurrentTime: Boolean,
     hostLifecycleStarted: Boolean,
