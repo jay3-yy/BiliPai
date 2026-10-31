@@ -569,6 +569,9 @@ fun FloatingBottomBar(
     // Do not use the system night flag here: BiliPai supports an app-only dark theme.
     val isInDark = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val isLiquidGlassMode = mode == FloatingBottomBarMode.LiquidGlass
+    val gravityGate = if (isLiquidGlassMode) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    } else null
     val parentGlass = com.android.purebilibili.core.ui.blur.LocalAppGlassContainer.current
         .takeIf { isLiquidGlassMode && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled }
     val materialBackdrop = if (parentGlass != null) parentGlass.backdrop else backdrop
@@ -1322,13 +1325,22 @@ fun FloatingBottomBar(
     }
     SideEffect { onDockTranslationProviderChanged?.invoke(dockDragTranslationY) }
 
-    val baseHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(extraDegrees = -45f) else null
+    val indicatorHighlightVisible = if (isLiquidGlassMode) {
+        remember(dampedDragAnimation) {
+            derivedStateOf { dampedDragAnimation.pressProgress > 0.001f }
+        }.value
+    } else false
+    val baseHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(
+        extraDegrees = -45f,
+        active = enabled && drawShell && parentGlass == null && materialBackdrop != null && gravityGate?.active == true,
+    ) else null
     val pillHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(
         extraDegrees = 90f,
         width = resolveDockPillHighlightWidthDp(
             indicatorWidthDp = fittedIndicatorWidth.value,
             indicatorHeightDp = fittedIndicatorHeight.value,
         ).dp,
+        active = enabled && materialBackdrop != null && indicatorHighlightVisible && gravityGate?.active == true,
     ) else null
 
     val combinedBackdrop = if (materialBackdrop != null && tabsBackdrop != null) {
@@ -1339,6 +1351,7 @@ fun FloatingBottomBar(
 
     Box(
         modifier = modifier
+            .then(gravityGate?.modifier ?: Modifier)
             .trackLiquidGlassAdaptiveReadability(
                 state = adaptiveReadabilityState,
                 enabled = adaptiveReadabilityEnabled,
@@ -1578,6 +1591,12 @@ fun FloatingBottomBar(
                                 effects = {
                                     // 捕获层与可见子外壳使用相同材质，不能在隐藏捕获中再做一次折射。
                                     if (parentGlass == null) {
+                                        // 先声明折射所需边距，避免模糊构建后再扩边导致整条效果重新求值。
+                                        if (top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() &&
+                                            shellRefractionHeightPx > 0f && shellRefractionAmountPx > 0f
+                                        ) {
+                                            padding = maxOf(padding, shellRefractionAmountPx)
+                                        }
                                         vibrancy(liquidGlassTuning.saturation)
                                         blur(
                                             liquidGlassTuning.backdropBlurRadius.dp.toPx(),

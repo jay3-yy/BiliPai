@@ -611,6 +611,19 @@ object CommentRepository {
         mode: Int = 3,
         continuation: CommentMainListContinuation? = null,
         fallbackOnMissingLocation: Boolean = false,
+        expectedCount: Int = 0,
+    ): Result<ReplyData> = recoverEmptyCommentFirstPage(page, expectedCount) {
+        readMobileCommentsForSubject(oid, type, page, ps, mode, continuation, fallbackOnMissingLocation)
+    }.map { filterGoodsRepliesIfEnabled(it) }
+
+    private suspend fun readMobileCommentsForSubject(
+        oid: Long,
+        type: Int,
+        page: Int,
+        ps: Int,
+        mode: Int,
+        continuation: CommentMainListContinuation?,
+        fallbackOnMissingLocation: Boolean,
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
             require(page <= 1 || continuation != null) { "评论缺少分页游标，请刷新后重试" }
@@ -656,7 +669,7 @@ object CommentRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }.map { filterGoodsRepliesIfEnabled(it) }
+    }
 
     private suspend fun fetchMobileRestCommentPage(
         oid: Long, type: Int, page: Int, ps: Int, mode: Int,

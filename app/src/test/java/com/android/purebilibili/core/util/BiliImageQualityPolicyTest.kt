@@ -48,4 +48,26 @@ class BiliImageQualityPolicyTest {
             assertEquals(url, BiliImageQualityPolicy.resolveUrl(url, true))
         }
     }
+    @Test
+    fun `custom quality replaces existing quality without stacking transforms`() {
+        val balanced = BiliImageQualityPolicy.resolveUrl("$image@960w_600h_1c_100q.webp", 70)
+        assertEquals("$image@960w_600h_1c_70q.webp", balanced)
+        assertEquals(balanced, BiliImageQualityPolicy.resolveUrl(balanced, 70))
+        assertEquals("$image@960w_600h_1c_40q.webp", BiliImageQualityPolicy.resolveUrl(balanced, 40))
+        assertEquals(image + "@1q.webp", BiliImageQualityPolicy.resolveUrl(image, -1))
+        assertEquals(image + "@100q.webp", BiliImageQualityPolicy.resolveUrl(image, 500))
+    }
+
+    @Test
+    fun `custom preview quality preserves signed foreign and animated resources`() {
+        listOf("$image?sign=x", "https://example.com/photo.jpg", "https://i0.hdslb.com/bfs/face/a.gif").forEach {
+            assertEquals(it, BiliImageQualityPolicy.resolveUrl(it, 40))
+        }
+    }
+    @Test
+    fun `view original overrides preview compression and default keeps source URL`() {
+        assertEquals(image, BiliImageQualityPolicy.resolvePreviewUrl(image, 0, false))
+        assertEquals(image, BiliImageQualityPolicy.resolvePreviewUrl(image, 40, true))
+        assertEquals("$image@40q.webp", BiliImageQualityPolicy.resolvePreviewUrl(image, 40, false))
+    }
 }

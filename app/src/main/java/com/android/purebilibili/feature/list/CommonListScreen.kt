@@ -378,6 +378,10 @@ fun CommonListScreen(
     var showFavoriteDetailEditor by rememberSaveable(
         seasonSeriesDetailViewModel, accountIdentity.mid, accountIdentity.generation
     ) { mutableStateOf(false) }
+    var showFavoriteResourceOrder by rememberSaveable(
+        seasonSeriesDetailViewModel, seasonSeriesDetailViewModel?.favoriteOrderFolderId,
+        accountIdentity.mid, accountIdentity.generation
+    ) { mutableStateOf(false) }
     val likedVideosHasMore by likedVideosViewModel?.hasMoreState?.collectAsStateWithLifecycle()
         ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     val likedVideosIsLoadingMore by likedVideosViewModel?.isLoadingMoreState?.collectAsStateWithLifecycle()
@@ -874,6 +878,7 @@ fun CommonListScreen(
         selectedFavoriteDetailTransferFolderId = null
         pendingFavoriteDetailRemoveKeys = null
         showFavoriteDetailEditor = false
+        showFavoriteResourceOrder = false
         primaryGridState.scrollToItem(0)
         subscribedFolderListState.scrollToItem(0)
         favoriteFolderListState.scrollToItem(0)
@@ -2004,7 +2009,7 @@ fun CommonListScreen(
                                             ))
                                             add(listOf(
                                                 AppWindowAction(
-                                                    label = "收藏时间：${favoriteDetailSortOrder.label}",
+                                                    label = "排序方式：${favoriteDetailSortOrder.label}",
                                                     enabled = !isFavoriteDetailBusy,
                                                     children = FavoriteDetailSortOrder.entries.map { order ->
                                                         AppWindowAction(
@@ -2024,6 +2029,13 @@ fun CommonListScreen(
                                                     },
                                                 ),
                                             ))
+                                            if (canManageFavoriteDetailResources) {
+                                                add(listOf(AppWindowAction(
+                                                    label = "拖动排序",
+                                                    enabled = !isFavoriteDetailBusy && state.items.isNotEmpty(),
+                                                    onClick = { showFavoriteResourceOrder = true },
+                                                )))
+                                            }
                                             if (canEditFavoriteDetail) {
                                                 add(listOf(
                                                     AppWindowAction(
@@ -2581,6 +2593,20 @@ fun CommonListScreen(
             dismissButton = {
                 AppTextButton(onClick = { showCreateFavoriteFolder = false }) {
                     AppText("取消")
+                }
+            },
+        )
+    }
+
+    if (showFavoriteResourceOrder && canManageFavoriteDetailResources && seasonSeriesDetailViewModel != null) {
+        com.android.purebilibili.feature.space.FavoriteResourceOrderDialog(
+            folderId = seasonSeriesDetailViewModel.favoriteOrderFolderId,
+            ownerMid = seasonSeriesDetailViewModel.favoriteOrderOwnerMid,
+            onDismiss = { showFavoriteResourceOrder = false },
+            onSaved = { savedIdentity ->
+                if (savedIdentity == com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
+                    seasonSeriesDetailViewModel.onFavoriteResourceOrderSaved()
+                    coroutineScope.launch { primaryGridState.scrollToItem(0) }
                 }
             },
         )

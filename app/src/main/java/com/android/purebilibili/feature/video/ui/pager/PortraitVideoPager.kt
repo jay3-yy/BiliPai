@@ -2918,11 +2918,13 @@ private fun VideoPageItem(
     }
     // User activity and blocking overlays restart the countdown; playback-position
     // polling does not. Hidden controls stay hidden until the existing tap gesture.
-    LaunchedEffect(bvid, autoHidePortraitControls, controlsInteractionGeneration) {
+    val autoHide = com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(PORTRAIT_CONTROLS_AUTO_HIDE_DELAY_MS)
+    LaunchedEffect(bvid, autoHidePortraitControls, controlsInteractionGeneration, autoHide.timeoutMillis) {
+        val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
         if (!autoHidePortraitControls) return@LaunchedEffect
-        delay(PORTRAIT_CONTROLS_AUTO_HIDE_DELAY_MS)
+        delay(timeout)
         // A down event can arrive before recomposition cancels this effect.
-        if (!controlsPointerPressed && !isLongPressing && !seekSession.isSliderMoving) {
+        if (autoHide.canHide() && !controlsPointerPressed && !isLongPressing && !seekSession.isSliderMoving) {
             latestOnPortraitOverlayVisibleChange(false)
         }
     }
@@ -2990,6 +2992,7 @@ private fun VideoPageItem(
     val danmakuTapCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
     Box(
         modifier = Modifier
+            .then(autoHide.focusModifier)
             .fillMaxSize()
             .background(Color.Black)
             .onGloballyPositioned { danmakuTapCoordinates.value = it }

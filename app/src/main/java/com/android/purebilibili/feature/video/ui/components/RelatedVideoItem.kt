@@ -8,6 +8,8 @@ import android.widget.Toast
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,13 +19,24 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.WatchLater
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
+import com.android.purebilibili.core.ui.components.AppDropdownMenu
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
+import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
+import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
@@ -57,9 +70,6 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.android.purebilibili.core.store.HomeFeedCardStyle
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.store.TodayWatchDislikedVideoSnapshot
-import com.android.purebilibili.core.store.TodayWatchFeedbackStore
-import com.android.purebilibili.core.store.withDislikedVideoFeedback
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.AppSpacingTokens
@@ -85,11 +95,8 @@ import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
-import com.android.purebilibili.data.model.response.RecommendationFeedbackLocalAction
-import com.android.purebilibili.data.model.response.RecommendationFeedbackReason
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.repository.ActionRepository
-import com.android.purebilibili.data.repository.BlockedUpRepository
 import com.android.purebilibili.feature.home.HomeFeedCardLayout
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
@@ -206,6 +213,7 @@ fun RelatedVideoItem(
     onClick: () -> Unit,
     onMoreClick: (() -> Unit)? = null,
     moreMenuSource: AppGlassMenuSource? = null,
+    moreMenu: @Composable () -> Unit = {},
 ) {
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -492,11 +500,12 @@ fun RelatedVideoItem(
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(
-                            imageVector = Icons.Filled.MoreVert,
+                            imageVector = Icons.Outlined.MoreVert,
                             contentDescription = "更多操作",
                             tint = AppContentColors.secondaryText(),
                             modifier = Modifier.size(18.dp),
                         )
+                        moreMenu()
                     }
                 }
             },
@@ -512,17 +521,17 @@ internal fun RelatedVideoGridRow(
     followingMids: Set<Long> = emptySet(),
     showUpBadge: Boolean = true,
     onVideoClick: (RelatedVideo) -> Unit,
-    onVideoHidden: ((RelatedVideo) -> Unit)? = null,
+    onUpClick: ((Long) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var actionVideo by remember { mutableStateOf<RelatedVideo?>(null) }
+    var menuVideo by remember { mutableStateOf<RelatedVideo?>(null) }
+    var summaryVideo by remember { mutableStateOf<RelatedVideo?>(null) }
+    var summaryLoading by remember { mutableStateOf(false) }
+    var summaryText by remember { mutableStateOf("") }
+    val privacyEnabled by remember { SettingsManager.getPrivacyModeEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
     val actionMenuSource = rememberAppGlassMenuSource()
-    var blockCreatorRequest by remember {
-        mutableStateOf<RelatedVideoBlockRequest?>(null)
-    }
-    var isBlockingCreator by remember { mutableStateOf(false) }
-    val blockedUpRepository = remember { BlockedUpRepository.getInstance(context) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -540,159 +549,69 @@ internal fun RelatedVideoGridRow(
                 stacked = cardPresentation == RelatedVideoCardLayout.STACKED,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { onVideoClick(video) },
-                onMoreClick = { actionVideo = video },
+                onMoreClick = { menuVideo = video },
                 moreMenuSource = actionMenuSource,
+                moreMenu = {
+                    AppDropdownMenu(
+                        expanded = menuVideo == video,
+                        onDismissRequest = { menuVideo = null },
+                        glassSource = actionMenuSource,
+                    ) {
+                        if (video.bvid.isNotBlank()) {
+                            AppDropdownMenuItem(text = { AppText(video.bvid) }, leadingIcon = { AppIcon(Icons.Outlined.ContentCopy, null) }, onClick = {
+                                menuVideo = null
+                                copyPlainTextToClipboard(context, video.bvid, "BV号")
+                                Toast.makeText(context, "已复制 ${video.bvid}", Toast.LENGTH_SHORT).show()
+                            })
+                        }
+                        AppDropdownMenuItem(text = { AppText("稍后再看") }, leadingIcon = { AppIcon(Icons.Outlined.WatchLater, null) }, onClick = {
+                            menuVideo = null
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { ActionRepository.toggleWatchLater(video.aid, true) }
+                                Toast.makeText(context, result.fold({ "已添加到稍后再看" }, { it.message ?: "添加失败" }), Toast.LENGTH_SHORT).show()
+                            }
+                        })
+                        if (video.cid > 0L && video.bvid.isNotBlank()) {
+                            AppDropdownMenuItem(text = { AppText("AI总结") }, leadingIcon = { AppIcon(Icons.Outlined.AutoAwesome, null) }, onClick = {
+                                menuVideo = null
+                                summaryVideo = video
+                                summaryLoading = true
+                                summaryText = ""
+                                scope.launch {
+                                    VideoRepository.getAiSummary(video.bvid, video.cid, video.owner.mid).fold(
+                                        { summaryText = it.data?.modelResult?.summary?.takeIf(String::isNotBlank) ?: "该视频暂无 AI 总结" },
+                                        { summaryText = it.message ?: "获取 AI 总结失败" },
+                                    )
+                                    summaryLoading = false
+                                }
+                            })
+                        }
+                        if (video.owner.mid > 0L && onUpClick != null) {
+                            AppDropdownMenuItem(text = { AppText("访问：${video.owner.name}") }, leadingIcon = { AppIcon(Icons.Outlined.Person, null) }, onClick = {
+                                menuVideo = null
+                                onUpClick(video.owner.mid)
+                            })
+                        }
+                        AppDropdownMenuItem(text = { AppText(if (privacyEnabled) "退出无痕模式" else "进入无痕模式") }, leadingIcon = { AppIcon(if (privacyEnabled) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, null) }, onClick = {
+                            menuVideo = null
+                            scope.launch {
+                                SettingsManager.setPrivacyModeEnabled(context, !privacyEnabled)
+                                Toast.makeText(context, if (privacyEnabled) "已退出无痕模式" else "已进入无痕模式", Toast.LENGTH_SHORT).show()
+                            }
+                        })
+                    }
+                },
             )
         }
     }
 
-    val pendingVideo = actionVideo
-    if (pendingVideo != null) {
-        RelatedVideoActionSheet(
-            video = pendingVideo,
-            source = actionMenuSource,
-            onWatchLater = {
-                scope.launch {
-                    val result = withContext(Dispatchers.IO) {
-                        ActionRepository.toggleWatchLater(pendingVideo.aid, true)
-                    }
-                    val message = result.fold(
-                        onSuccess = { "已添加到稍后再看" },
-                        onFailure = { error -> error.message ?: "添加失败" }
-                    )
-                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                }
-            },
-            onReasonSelected = { reason ->
-                if (reason.localAction == RecommendationFeedbackLocalAction.CREATOR &&
-                    pendingVideo.owner.mid > 0L
-                ) {
-                    blockCreatorRequest = RelatedVideoBlockRequest(pendingVideo, reason)
-                } else {
-                    scope.launch {
-                        recordRelatedVideoFeedback(
-                            context = context,
-                            video = pendingVideo,
-                            reason = reason
-                        )
-                        if (shouldRemoveRelatedVideoAfterFeedback(reason)) {
-                            onVideoHidden?.invoke(pendingVideo)
-                        }
-                        Toast.makeText(
-                            context,
-                            resolveRelatedFeedbackToast(reason),
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                }
-            },
-            onDismissRequest = { actionVideo = null }
-        )
-    }
-
-    val blockRequest = blockCreatorRequest
-    if (blockRequest != null) {
+    if (summaryVideo != null) {
         AppAlertDialog(
-            onDismissRequest = {
-                if (!isBlockingCreator) {
-                    blockCreatorRequest = null
-                }
-            },
-            title = { AppText("屏蔽 UP 主") },
-            text = {
-                AppText(
-                    "确定要屏蔽 ${blockRequest.video.owner.name.ifBlank { "该 UP 主" }} 吗？\n" +
-                        "屏蔽后将不再推荐该 UP 主的视频。"
-                )
-            },
-            confirmButton = {
-                AppDialogAction(
-                    onClick = {
-                        if (!isBlockingCreator) {
-                            isBlockingCreator = true
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) {
-                                    blockedUpRepository.blockUpWithBilibiliSync(
-                                        mid = blockRequest.video.owner.mid,
-                                        name = blockRequest.video.owner.name,
-                                        face = blockRequest.video.owner.face
-                                    )
-                                }
-                                recordRelatedVideoFeedback(
-                                    context = context,
-                                    video = blockRequest.video,
-                                    reason = blockRequest.reason
-                                )
-                                onVideoHidden?.invoke(blockRequest.video)
-                                Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
-                                isBlockingCreator = false
-                                blockCreatorRequest = null
-                            }
-                        }
-                    }
-                ) {
-                    AppText("屏蔽", color = AppContentColors.error())
-                }
-            },
-            dismissButton = {
-                AppDialogAction(
-                    onClick = {
-                        if (!isBlockingCreator) {
-                            blockCreatorRequest?.let { request ->
-                                blockCreatorRequest = null
-                                scope.launch {
-                                    recordRelatedVideoFeedback(
-                                        context = context,
-                                        video = request.video,
-                                        reason = request.reason
-                                    )
-                                    onVideoHidden?.invoke(request.video)
-                                    Toast.makeText(
-                                        context,
-                                        resolveRelatedFeedbackToast(request.reason),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        }
-                    }
-                ) {
-                    AppText("暂不屏蔽")
-                }
-            }
+            onDismissRequest = { summaryVideo = null },
+            title = { AppText("AI 总结") },
+            text = { Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) { AppText(if (summaryLoading) "正在获取 AI 总结…" else summaryText) } },
+            confirmButton = { AppDialogAction(onClick = { summaryVideo = null }) { AppText("关闭") } },
         )
     }
-}
 
-private data class RelatedVideoBlockRequest(
-    val video: RelatedVideo,
-    val reason: RecommendationFeedbackReason,
-)
-
-private suspend fun recordRelatedVideoFeedback(
-    context: android.content.Context,
-    video: RelatedVideo,
-    reason: RecommendationFeedbackReason
-) {
-    withContext(Dispatchers.IO) {
-        val includeCreator = reason.localAction == RecommendationFeedbackLocalAction.CREATOR &&
-            video.owner.mid > 0L
-        val keywords = when (reason.localAction) {
-            RecommendationFeedbackLocalAction.SIMILAR_CONTENT ->
-                extractRelatedFeedbackKeywords(video.title)
-            else -> emptySet()
-        }
-        val snapshot = TodayWatchFeedbackStore.getSnapshot(context).withDislikedVideoFeedback(
-            video = TodayWatchDislikedVideoSnapshot(
-                bvid = video.bvid,
-                title = video.title,
-                creatorName = video.owner.name,
-                creatorMid = video.owner.mid,
-                dislikedAtMillis = System.currentTimeMillis()
-            ),
-            keywords = keywords,
-            includeCreatorSignal = includeCreator
-        )
-        TodayWatchFeedbackStore.saveSnapshot(context, snapshot)
-    }
 }

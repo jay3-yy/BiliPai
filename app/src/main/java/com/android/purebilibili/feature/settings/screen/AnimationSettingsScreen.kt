@@ -351,6 +351,8 @@ fun AnimationSettingsContent(
             item(key = "animation_page") {
                 Box(modifier = Modifier.entrance()) {
                     AppPreferenceGroup {
+                        com.android.purebilibili.feature.settings.ScrollFeedbackPreference()
+                        AppPreferenceDivider()
                         SettingsItemAnchor("animation.ui_entrance_animation_enabled") {
                             AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.UI_ENTRANCE_ANIMATION),

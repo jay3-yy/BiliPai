@@ -279,9 +279,8 @@ private fun LiveRoomScreen(
     var liveVideoSize by remember(roomId, siteId) { mutableStateOf(androidx.media3.common.VideoSize.UNKNOWN) }
     var videoScale by rememberSaveable(roomId, siteId) { mutableFloatStateOf(1f) }
     var videoAspectRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
-    var backgroundPlaybackEnabled by remember {
-        mutableStateOf(SettingsManager.getBackgroundPlaybackEnabledSync(context))
-    }
+    val savedBackgroundPlaybackEnabled by remember(context) { SettingsManager.getBackgroundPlaybackEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.getBackgroundPlaybackEnabledSync(context))
     val autoEnterFullscreenEnabled by remember(context) {
         SettingsManager.getAutoEnterFullscreen(context)
     }.collectAsStateWithLifecycle(initialValue = false)
@@ -493,18 +492,6 @@ private fun LiveRoomScreen(
         showShareMessageSheet = true
     }
 
-    fun toggleBackgroundPlayback() {
-        val newValue = !backgroundPlaybackEnabled
-        backgroundPlaybackEnabled = newValue
-        coroutineScope.launch {
-            SettingsManager.setBackgroundPlaybackEnabled(context, newValue)
-        }
-        Toast.makeText(
-            context,
-            if (newValue) "已开启后台播放" else "已关闭后台播放",
-            Toast.LENGTH_SHORT
-        ).show()
-    }
 
     fun addLiveBlockKeyword(keyword: String) {
         val trimmed = keyword.trim()
@@ -617,6 +604,15 @@ private fun LiveRoomScreen(
             )
             .setHandleAudioBecomingNoisy(true)
             .build().withAppVideoDecoderDiagnostics(context).apply { playWhenReady = true }
+    }
+    val backgroundSession = com.android.purebilibili.feature.video.player.rememberPlayerBackgroundPlaybackSession(exoPlayer, "live:$bilibiliRoomId")
+    val backgroundOverride by backgroundSession.selection.collectAsStateWithLifecycle()
+    val backgroundPlaybackEnabled = backgroundOverride ?: savedBackgroundPlaybackEnabled
+    fun toggleBackgroundPlayback() {
+        val newValue = !backgroundPlaybackEnabled
+        backgroundSession.select(newValue)
+        coroutineScope.launch { backgroundSession.saveIfRemembered(context, newValue) }
+        Toast.makeText(context, if (newValue) "已开启后台播放" else "已关闭后台播放", Toast.LENGTH_SHORT).show()
     }
     com.android.purebilibili.feature.video.screen.VideoDetailKeepScreenOnEffect(
         window = activity?.window,

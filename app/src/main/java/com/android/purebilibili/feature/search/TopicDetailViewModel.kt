@@ -33,6 +33,13 @@ class TopicDetailViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(TopicDetailUiState())
     val uiState = _uiState.asStateFlow()
 
+    private val publishingRequests = com.android.purebilibili.core.coroutines.AccountScopedRequests(viewModelScope)
+    init {
+        publishingRequests.observe {
+            _uiState.update { it.copy(isPublishing = false, publishError = null) }
+        }
+    }
+
     private var loadedTopicId: Long = 0L
 
     fun load(topicId: Long) {
@@ -170,14 +177,23 @@ class TopicDetailViewModel : ViewModel() {
     ) {
         if (_uiState.value.isPublishing) return
         _uiState.update { it.copy(isPublishing = true, publishError = null) }
-        viewModelScope.launch {
+        val identity = publishingRequests.identity
+        publishingRequests.launch {
             DynamicCreateRepository.publish(context, draft)
-                .onSuccess {
+                .onSuccess { createdId ->
+                    if (!publishingRequests.isCurrent(identity)) return@onSuccess
                     _uiState.update { it.copy(isPublishing = false, publishError = null) }
                     onResult(true, if (draft.publishAtSeconds != null) "定时发布已创建" else "发布成功")
                     if (draft.publishAtSeconds == null) refreshSelectedFeed()
+                    com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.afterPublication(
+                        context.applicationContext, createdId, identity,
+                        privatePublication = draft.private,
+                        scheduledPublication = draft.publishAtSeconds != null,
+                    )
                 }
                 .onFailure { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    if (!publishingRequests.isCurrent(identity)) return@onFailure
                     val message = error.message ?: "发布失败"
                     _uiState.update { it.copy(isPublishing = false, publishError = message) }
                     onResult(false, message)

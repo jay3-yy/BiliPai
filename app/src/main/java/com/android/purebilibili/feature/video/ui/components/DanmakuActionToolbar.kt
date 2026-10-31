@@ -72,6 +72,7 @@ internal fun DanmakuActionToolbar(
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    if (!rememberPlayerPopupHostActive(onDismiss)) return
     val density = LocalDensity.current
     val gap = with(density) { 6.dp.roundToPx() }
     val maxWidth = with(density) { (anchor.viewportRight - anchor.viewportLeft).toDp() - 12.dp }.coerceAtLeast(40.dp)

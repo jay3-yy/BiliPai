@@ -417,6 +417,7 @@ internal fun StoryVideoCard(
             // 封面比例由首页卡片样式统一配置。
             PageAwareAsyncImage(
                 model = coverImageRequest,
+                dimInDarkTheme = true,
                 loadingAllowed = LocalHomeCardCoverLoadingAllowed.current
                     ?: LocalPageImageLoadingAllowed.current,
                 contentDescription = null,

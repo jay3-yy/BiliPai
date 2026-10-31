@@ -14,6 +14,10 @@ dependencies {
 
 gradlePlugin {
     plugins {
+        create("composePopupWindowGuard") {
+            id = "com.android.bilipai.compose-popup-window-guard"
+            implementationClass = "com.android.purebilibili.build.ComposePopupWindowGuardPlugin"
+        }
         create("navigationEventDisposalGuard") {
             id = "com.android.bilipai.navigationevent-disposal-guard"
             implementationClass = "com.android.purebilibili.build.NavigationEventDisposalGuardPlugin"

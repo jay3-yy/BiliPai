@@ -10,6 +10,7 @@ import com.android.purebilibili.core.ui.components.AppSearchEntry
 
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppTopChromePolicy
+import com.android.purebilibili.core.ui.resolveAppSearchGlyphOpticalScale
 import com.android.purebilibili.core.ui.blur.TopSolidProgressiveFadeOverlay
 import com.android.purebilibili.core.ui.AppTopTabPresentation
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -1551,6 +1552,7 @@ fun HomeHeader(
     }
     val edgeButtonShape = resolveHomeTopEdgeButtonShape(topChromePolicy)
     val topActionIcons = resolveHomeTopActionIcons(semanticVisualPolicy.effectiveIconFamily)
+    val searchIconOpticalScale = resolveAppSearchGlyphOpticalScale(semanticVisualPolicy.effectiveIconFamily)
     val topRightAction = homeSettings?.homeTopRightAction ?: HomeTopRightAction.SETTINGS
     val topRightActionIcon = if (topRightAction == HomeTopRightAction.INBOX) {
         topActionIcons.inbox
@@ -2847,6 +2849,7 @@ fun HomeHeader(
                                                 iconTextGap = resolveHomeTopSearchIconTextGap(topChromePolicy),
                                                 modifier = Modifier.fillMaxWidth(),
                                                 pressed = searchPillPressed,
+                                                searchIconOpticalScale = searchIconOpticalScale,
                                             )
                                         }
                                     } else {

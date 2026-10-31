@@ -43,10 +43,32 @@ fun BackdropEffectScope.lens(
         padding = refractionAmount
     }
 
-    val radii = if (outlineBounds != null && outlineRadius != null) {
-        val radius = outlineRadius.coerceIn(0f, outlineBounds.minDimension / 2f)
-        FloatArray(4) { radius }
-    } else roundedRectCornerRadii() ?: return
+    // 圆角直接以四个标量传入 shader，避免每次效果求值分配原始与缩放数组。
+    val explicitRadius = if (outlineBounds != null && outlineRadius != null) {
+        outlineRadius.coerceIn(0f, outlineBounds.minDimension / 2f)
+    } else null
+    val topLeft: Float
+    val topRight: Float
+    val bottomRight: Float
+    val bottomLeft: Float
+    if (explicitRadius != null) {
+        topLeft = explicitRadius
+        topRight = explicitRadius
+        bottomRight = explicitRadius
+        bottomLeft = explicitRadius
+    } else {
+        val cornerShape = shape as? CornerBasedShape ?: return
+        val maxRadius = size.minDimension / 2f
+        val isLtr = layoutDirection == LayoutDirection.Ltr
+        topLeft = (if (isLtr) cornerShape.topStart else cornerShape.topEnd)
+            .toPx(size, this).fastCoerceAtMost(maxRadius)
+        topRight = (if (isLtr) cornerShape.topEnd else cornerShape.topStart)
+            .toPx(size, this).fastCoerceAtMost(maxRadius)
+        bottomRight = (if (isLtr) cornerShape.bottomEnd else cornerShape.bottomStart)
+            .toPx(size, this).fastCoerceAtMost(maxRadius)
+        bottomLeft = (if (isLtr) cornerShape.bottomStart else cornerShape.bottomEnd)
+            .toPx(size, this).fastCoerceAtMost(maxRadius)
+    }
 
     // A moving overflow band can cross zero on every spring/velocity reversal.
     // Keep the same shader and let its mask reach zero continuously instead of
@@ -73,43 +95,61 @@ fun BackdropEffectScope.lens(
     val scaledPadding = padding / sf
     val scaledRefractionHeight = refractionHeight / sf
     val scaledRefractionAmount = refractionAmount / sf
-    val scaledRadii = FloatArray(radii.size) { radii[it] / sf }
+    val offsetX = -scaledPadding - (outlineBounds?.left ?: 0f) / sf
+    val offsetY = -scaledPadding - (outlineBounds?.top ?: 0f) / sf
+    val scaledTopLeft = topLeft / sf
+    val scaledTopRight = topRight / sf
+    val scaledBottomRight = bottomRight / sf
+    val scaledBottomLeft = bottomLeft / sf
+    val depth = if (depthEffect) 1f else 0f
+    val horizontalBand = if (chromaticBandHorizontal) 1f else 0f
+    val edgeBand = chromaticEdgeBand?.coerceAtLeast(0f)?.div(sf) ?: -1f
 
-    runtimeShaderEffect(
-        key = key,
-        shaderString = shaderString,
-        uniformShaderName = "content",
-    ) {
-        setFloatUniform("size", scaledSizeW, scaledSizeH)
-        setFloatUniform("offset", -scaledPadding - (outlineBounds?.left ?: 0f) / sf,
-            -scaledPadding - (outlineBounds?.top ?: 0f) / sf)
-        setFloatUniform("cornerRadii", scaledRadii)
-        setFloatUniform("refractionHeight", scaledRefractionHeight)
-        setFloatUniform("refractionAmount", -scaledRefractionAmount)
-        setFloatUniform("depthEffect", if (depthEffect) 1f else 0f)
-        if (dispersionEnabled) {
-            setFloatUniform("chromaticBandHorizontal", if (chromaticBandHorizontal) 1f else 0f)
-            setFloatUniform("chromaticAberration", chromaticAberration)
-            setFloatUniform("chromaticEdgeBand", chromaticEdgeBand?.coerceAtLeast(0f)?.div(sf) ?: -1f)
+    // 完整记录 shader 类型及 uniform；背景移动不改变局部光学参数时直接复用效果。
+    val cache = liquidLensEffectCache()
+    cache[0] = scaledSizeW
+    cache[1] = scaledSizeH
+    cache[2] = offsetX
+    cache[3] = offsetY
+    cache[4] = scaledTopLeft
+    cache[5] = scaledTopRight
+    cache[6] = scaledBottomRight
+    cache[7] = scaledBottomLeft
+    cache[8] = scaledRefractionHeight
+    cache[9] = scaledRefractionAmount
+    cache[10] = depth
+    cache[11] = horizontalBand
+    cache[12] = chromaticAberration
+    cache[13] = edgeBand
+    cache[14] = if (dispersionEnabled) 1f else 0f
+    if (cache.needsUpdate) {
+        val input = renderEffect
+        try {
+            // 缓存独立镜片，不把上游模糊、调色或背景输入固化在镜片中。
+            renderEffect = null
+            runtimeShaderEffect(
+                key = key,
+                shaderString = shaderString,
+                uniformShaderName = "content",
+            ) {
+                setFloatUniform("size", scaledSizeW, scaledSizeH)
+                setFloatUniform("offset", offsetX, offsetY)
+                setFloatUniform("cornerRadii", scaledTopLeft, scaledTopRight, scaledBottomRight, scaledBottomLeft)
+                setFloatUniform("refractionHeight", scaledRefractionHeight)
+                setFloatUniform("refractionAmount", -scaledRefractionAmount)
+                setFloatUniform("depthEffect", depth)
+                if (dispersionEnabled) {
+                    setFloatUniform("chromaticBandHorizontal", horizontalBand)
+                    setFloatUniform("chromaticAberration", chromaticAberration)
+                    setFloatUniform("chromaticEdgeBand", edgeBand)
+                }
+            }
+            cache.store(renderEffect)
+        } finally {
+            renderEffect = input
         }
     }
-}
-
-private fun BackdropEffectScope.roundedRectCornerRadii(): FloatArray? {
-    val cornerShape = shape as? CornerBasedShape ?: return null
-    val sizePx = size
-    val maxRadius = sizePx.minDimension / 2f
-    val isLtr = layoutDirection == LayoutDirection.Ltr
-    val topLeft = if (isLtr) cornerShape.topStart.toPx(sizePx, this) else cornerShape.topEnd.toPx(sizePx, this)
-    val topRight = if (isLtr) cornerShape.topEnd.toPx(sizePx, this) else cornerShape.topStart.toPx(sizePx, this)
-    val bottomRight = if (isLtr) cornerShape.bottomEnd.toPx(sizePx, this) else cornerShape.bottomStart.toPx(sizePx, this)
-    val bottomLeft = if (isLtr) cornerShape.bottomStart.toPx(sizePx, this) else cornerShape.bottomEnd.toPx(sizePx, this)
-    return floatArrayOf(
-        topLeft.fastCoerceAtMost(maxRadius),
-        topRight.fastCoerceAtMost(maxRadius),
-        bottomRight.fastCoerceAtMost(maxRadius),
-        bottomLeft.fastCoerceAtMost(maxRadius),
-    )
+    cache.applyTo(this)
 }
 
 private const val ROUNDED_RECT_SDF = """

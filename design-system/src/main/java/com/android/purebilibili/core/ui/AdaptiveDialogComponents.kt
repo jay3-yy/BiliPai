@@ -256,6 +256,9 @@ internal fun AdaptiveAlertDialog(
                     dismissButton = dismissButton,
                     confirmContentColor = confirmContentColor,
                     dismissContentColor = dismissContentColor,
+                    // 与玻璃/铰链路径一致：容器有高度上限时，text 槽用 weight 收缩，
+                    // 保证操作行始终在容器内可见。
+                    constrainText = true,
                 )
             }
             WindowDialog(
@@ -269,16 +272,19 @@ internal fun AdaptiveAlertDialog(
                 cornerRadius = 0.dp,
             ) {
                 com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
-                AppPopupSurface(
-                    type = AppPopupSurfaceType.DIALOG,
-                    modifier = modifier
-                        .fillMaxWidth()
-                        .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp),
-                    shape = dialogShape,
-                    containerColor = dialogColor,
-                    tonalElevation = tonalElevation ?: 0.dp,
-                ) {
-                    dialogBody()
+                BoxWithConstraints {
+                    AppPopupSurface(
+                        type = AppPopupSurfaceType.DIALOG,
+                        modifier = modifier
+                            .fillMaxWidth()
+                            .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp)
+                            .heightIn(max = maxHeight),
+                        shape = dialogShape,
+                        containerColor = dialogColor,
+                        tonalElevation = tonalElevation ?: 0.dp,
+                    ) {
+                        dialogBody()
+                    }
                 }
             }
             return

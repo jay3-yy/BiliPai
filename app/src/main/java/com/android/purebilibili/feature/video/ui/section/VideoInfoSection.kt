@@ -828,10 +828,13 @@ fun VideoTitleWithDesc(
                 }
                 if (showDeclarationRows) {
                     if (argueMsg.isNotBlank()) {
-                        VideoArgueMsgRow(argueMsg = argueMsg)
+                        VideoArgueMsgRow(argueMsg = argueMsg, modifier = Modifier.align(Alignment.CenterVertically))
                     }
                     if (noReprint) {
-                        VideoArgueMsgRow(argueMsg = "未经作者授权，请勿转载")
+                        VideoArgueMsgRow(
+                            argueMsg = "未经作者授权，请勿转载",
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                        )
                     }
                 }
             }
@@ -994,12 +997,13 @@ private fun VideoDetailBadgeChip(
 }
 
 /**
- * UP 主视频声明行(PiliPlus argue_msg 样式):
+ * UP 主视频声明行：
  * error_outline 小图标 + 12sp 次要色文本,如"虚构演绎,请勿过度解读"。
  */
 @Composable
-private fun VideoArgueMsgRow(argueMsg: String) {
+private fun VideoArgueMsgRow(argueMsg: String, modifier: Modifier = Modifier) {
     Row(
+        modifier = modifier,
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
     ) {

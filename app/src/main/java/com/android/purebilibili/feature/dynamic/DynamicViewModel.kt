@@ -77,6 +77,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -2629,20 +2630,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             onResult(false, "无法识别该动态")
             return
         }
+        val identity = activeAccountIdentity
         launchAccount {
-            try {
-                // Deliberately query as a guest. An authenticated detail request can still see an
-                // author's self-only dynamic and therefore cannot detect publication visibility.
-                val response = NetworkModule.guestDynamicApi.getDynamicDetail(id = dynamicId)
-                if (response.code == 0 && response.data?.item != null) {
-                    onResult(true, "匿名状态下可见，动态正常")
-                } else {
-                    onResult(false, "匿名状态下不可见，动态可能仅自己可见或尚未通过审核")
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                onResult(false, error.message ?: "检查失败")
+            val status = com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.check(dynamicId)
+            if (identity == TokenManager.accountIdentity.value) {
+                onResult(status == com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityStatus.VISIBLE, status.message)
             }
         }
     }
@@ -2707,6 +2699,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         topic: com.android.purebilibili.data.model.response.DynamicCreateTopic? = null,
         onResult: (Boolean, String) -> Unit,
     ) {
+        val identity = activeAccountIdentity
         launchAccount {
             try {
                 if (dynamicId.isBlank()) {
@@ -2728,6 +2721,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                             topic = topic,
                         )
                     )
+                currentCoroutineContext().ensureActive()
+                if (identity != TokenManager.accountIdentity.value) return@launchAccount
                 if (response.code == 0) {
                     val currentState = mapDynamicTimelineItems(_uiState.value) { items ->
                         applyDynamicForwardCountIncrement(items, dynamicId)
@@ -2743,7 +2738,13 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         val commentOk = postSourceDynamicComment(dynamicId, content)
                         message = if (commentOk) "转发成功，已同步评论" else "转发成功，评论同步失败"
                     }
+                    if (identity != TokenManager.accountIdentity.value) return@launchAccount
                     onResult(true, message)
+                    com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.afterPublication(
+                        appContext,
+                        com.android.purebilibili.data.model.response.resolveCreatedDynamicId(response.data),
+                        identity,
+                    )
                 } else {
                     onResult(false, response.message.ifBlank { "转发失败" })
                 }
@@ -2805,6 +2806,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             onResult(false, "内容不能为空")
             return
         }
+        val identity = activeAccountIdentity
         launchAccount {
             try {
                 val csrf = TokenManager.csrfCache
@@ -2814,6 +2816,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 }
                 val createdId = if (context != null) {
                     DynamicCreateRepository.publish(context, draft).getOrElse {
+                        if (it is CancellationException) throw it
+                        if (identity != TokenManager.accountIdentity.value) return@launchAccount
                         onResult(false, it.message ?: "发布失败")
                         return@launchAccount
                     }
@@ -2828,21 +2832,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     }
                     response.data?.dynamic_id_str.orEmpty()
                 }
+                currentCoroutineContext().ensureActive()
+                if (identity != TokenManager.accountIdentity.value) return@launchAccount
                 onResult(true, if (draft.publishAtSeconds != null) "定时发布已创建" else "发布成功")
                 if (draft.publishAtSeconds == null) refresh(selectedTab = _selectedTab.value)
-                if (createdId.isBlank() || draft.private || draft.publishAtSeconds != null) return@launchAccount
-                try {
-                    delay(DYNAMIC_CREATE_ANTIFRAUD_DELAY_MS)
-                    val verify = NetworkModule.dynamicApi.getDynamicDetail(id = createdId)
-                    if (verify.code != 0 || verify.data?.item == null) {
-                        context?.let {
-                            android.widget.Toast.makeText(it, "动态可能暂未生效（可在网页端确认）", android.widget.Toast.LENGTH_LONG).show()
-                        }
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                }
+                com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.afterPublication(
+                    appContext, createdId, identity,
+                    privatePublication = draft.private,
+                    scheduledPublication = draft.publishAtSeconds != null,
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -3180,7 +3178,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         private const val PREFS_DYNAMIC_CACHE = "dynamic_cache"
         private const val PREFS_DYNAMIC_USERS = "dynamic_user_prefs"
         //  发布动态后延迟校验时间（对齐 BiliPai checkCreatedDyn 的 5 秒）
-        private const val DYNAMIC_CREATE_ANTIFRAUD_DELAY_MS = 5_000L
         private const val KEY_DYNAMIC_CACHE = "dynamic_items_cache"
         private const val KEY_DYNAMIC_CACHE_TIME = "dynamic_cache_time"
         private const val KEY_NOT_INTERESTED_DYNAMIC_IDS = "not_interested_dynamic_ids_v1"

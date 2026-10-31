@@ -20,6 +20,7 @@ internal fun ImageRequest.Builder.originalBiliImage() = apply {
 /** 显示、预加载、取色共用同一质量及缓存身份；重复应用不会重复追加。 */
 internal fun ImageRequest.withBiliImageQuality(
     dataSaver: Boolean = SettingsManager.isDataSaverActive(context),
+    listQuality: Int = com.android.purebilibili.core.store.ContentDisplayPreferences.imageSnapshot.listQuality,
 ): ImageRequest {
     if (extras[OriginalBiliImage] == true) return this
     val url = when (val value = data) {
@@ -27,9 +28,12 @@ internal fun ImageRequest.withBiliImageQuality(
         is android.net.Uri -> value.toString()
         else -> return this
     }
-    val resolved = BiliImageQualityPolicy.resolveUrl(url, dataSaver)
+    val normalizedQuality = com.android.purebilibili.core.store.ContentDisplayPreferences.normalizeQuality(listQuality)
+    val selectedQuality = if (dataSaver) BiliImageQualityPolicy.DATA_SAVER_QUALITY
+        else normalizedQuality.takeIf { it > 0 } ?: BiliImageQualityPolicy.HIGH_QUALITY
+    val resolved = BiliImageQualityPolicy.resolveUrl(url, selectedQuality)
     if (resolved == url && QUALITY_CACHE_EXTRA !in memoryCacheKeyExtras) return this
-    val quality = if (dataSaver) "10" else "100"
+    val quality = selectedQuality.toString()
     if (resolved == url && memoryCacheKeyExtras[QUALITY_CACHE_EXTRA] == quality) return this
     return newBuilder()
         .data(resolved)

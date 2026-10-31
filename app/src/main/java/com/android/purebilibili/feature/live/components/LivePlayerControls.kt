@@ -260,11 +260,13 @@ fun LivePlayerControls(
     val palette = rememberLiveChromePalette()
     val controlVisualSpec = remember { resolveLivePlayerControlVisualSpec() }
 
+    val autoHide = com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(3_000L)
     // 自动隐藏控制器（锁定时保持隐藏）
-    LaunchedEffect(isControlsVisible, isPlaying, isLocked, menuExpanded, danmakuSettingsVisible) {
+    LaunchedEffect(isControlsVisible, isPlaying, isLocked, menuExpanded, danmakuSettingsVisible, autoHide.timeoutMillis) {
+        val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
         if (isControlsVisible && !isLocked && isPlaying && !menuExpanded && !danmakuSettingsVisible) {
-            kotlinx.coroutines.delay(3000)
-            isControlsVisible = false
+            kotlinx.coroutines.delay(timeout)
+            if (autoHide.canHide()) isControlsVisible = false
         }
     }
 
@@ -309,6 +311,7 @@ fun LivePlayerControls(
     PlayerControlsBackdropHost(
         enabled = glass,
         modifier = modifier
+            .then(autoHide.focusModifier)
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .onGloballyPositioned { controlsWindowOffset = it.positionInWindow() }

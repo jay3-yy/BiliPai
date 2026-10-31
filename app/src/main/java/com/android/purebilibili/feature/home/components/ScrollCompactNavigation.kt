@@ -23,8 +23,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.motion.scrollCompactExpansionSpring
-import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import dev.chrisbanes.haze.HazeState
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -60,8 +58,11 @@ internal fun ScrollCompactNavigation(
         !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
     val progress = animateFloatAsState(
         targetValue = if (compact) 1f else 0f,
-        animationSpec = if (reduceMotion) snap() else if (compact) interactiveSnapSpring()
-        else scrollCompactExpansionSpring(),
+        animationSpec = if (reduceMotion) snap() else com.android.purebilibili.core.ui.components.scrollFeedbackSpring(
+            com.android.purebilibili.core.ui.components.LocalScrollFeedbackPreset.current,
+            damping = if (compact) 0.78f else 0.74f,
+            stiffness = 420f,
+        ),
         label = "scrollCompactNavigation",
     )
     val accent = com.android.purebilibili.core.ui.AppInteractionColors.nativeNavigation(

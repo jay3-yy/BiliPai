@@ -10,6 +10,8 @@ import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.core.ui.resolveMatchedLiquidIndicatorHeightDp
 import com.android.purebilibili.core.ui.AppIconStyle
+import com.android.purebilibili.core.ui.AppSemanticIconFamily
+import com.android.purebilibili.core.ui.resolveAppSearchGlyphOpticalScale
 import com.android.purebilibili.core.ui.rememberResolvedAppIconStyle
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppBottomNavigationHost
@@ -1072,12 +1074,19 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
         pressProgress = materialPressProgress,
         liquidGlassTuning = liquidGlassTuning
     )
+    val gravityGate = if (renderGlassEffects) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    } else null
+    val effectiveShellLensIntensity = if (inheritShellOptics) 0f else shellLensIntensity.coerceIn(0f, 1f)
     val baseHighlight = if (renderGlassEffects) {
-        rememberBiliPaiGravityHighlight(iosIndicatorSpecular, extraDegrees = -45f)
+        rememberBiliPaiGravityHighlight(
+            iosIndicatorSpecular,
+            extraDegrees = -45f,
+            active = samplingBackdrop != null && effectiveShellLensIntensity > 0f && gravityGate?.active == true,
+        )
     } else {
         null
     }
-    val effectiveShellLensIntensity = if (inheritShellOptics) 0f else shellLensIntensity.coerceIn(0f, 1f)
     val hasBackdrop = samplingBackdrop != null && (renderGlassEffects || blurEnabled)
     val hasHazeBlur = !hasBackdrop && useHazeBlur && hazeState != null
 
@@ -1191,6 +1200,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     }
 
     this
+        .then(gravityGate?.modifier ?: Modifier)
         .then(
             if (hasHazeBlur) {
                 Modifier.unifiedBlur(
@@ -4673,6 +4683,16 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
             ),
         ) else opticalProgress
     }
+    val indicatorBackdrop = if (!glassEnabled) {
+        null
+    } else if (shouldUseBottomBarCombinedIndicatorBackdrop(liquidGlassPreset)) {
+        contentBackdrop
+    } else {
+        backdrop
+    }
+    val gravityGate = if (glassEnabled) {
+        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    } else null
     val pillHighlight = if (glassEnabled) {
         rememberBiliPaiGravityHighlight(
             iosIndicatorSpecular,
@@ -4681,16 +4701,11 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
                 indicatorWidthDp = if (swapMotionAxes) indicatorHeight.value else indicatorWidth.value,
                 indicatorHeightDp = if (swapMotionAxes) indicatorWidth.value else indicatorHeight.value,
             ).dp,
+            active = indicatorBackdrop != null && dockContentAlpha > 0f &&
+                effectivePressProgress > 0.001f && gravityGate?.active == true,
         )
     } else {
         null
-    }
-    val indicatorBackdrop = if (!glassEnabled) {
-        null
-    } else if (shouldUseBottomBarCombinedIndicatorBackdrop(liquidGlassPreset)) {
-        contentBackdrop
-    } else {
-        backdrop
     }
     Box(
         modifier = Modifier
@@ -4715,6 +4730,7 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
             .height(indicatorHeight)
             .align(indicatorAlignment)
             .zIndex(2f)
+            .then(gravityGate?.modifier ?: Modifier)
             .then(interactionModifier)
             .run {
                 if (indicatorBackdrop != null) {
@@ -5014,7 +5030,15 @@ internal fun BiliPaiBottomBarSearchVisualContent(
                 modifier = Modifier
                     .size(AppSpacingTokens.ExtraLarge)
                     .graphicsLayer {
-                        val scale = iconScale()
+                        // Miuix 的 Search 字形占满视口，与 Material 字形同框偏大，统一光学补偿。
+                        val glyphScale = resolveAppSearchGlyphOpticalScale(
+                            if (iconStyle == SharedFloatingBottomBarIconStyle.MIUIX) {
+                                AppSemanticIconFamily.MIUIX
+                            } else {
+                                AppSemanticIconFamily.MATERIAL
+                            }
+                        )
+                        val scale = iconScale() * glyphScale
                         scaleX = scale
                         scaleY = scale
                     }

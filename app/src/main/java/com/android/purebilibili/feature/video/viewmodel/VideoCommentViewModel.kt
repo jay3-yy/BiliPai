@@ -508,7 +508,8 @@ class VideoCommentViewModel : ViewModel() {
                 CommentRepository.getMobileCommentsForSubject(
                     oid = requestSubject.oid, type = requestSubject.type, page = request.page,
                     ps = VIDEO_COMMENT_PAGE_SIZE, mode = currentState.sortMode.apiMode,
-                    continuation = request.continuation, fallbackOnMissingLocation = requestSubject.type == 1
+                    continuation = request.continuation, fallbackOnMissingLocation = requestSubject.type == 1,
+                    expectedCount = currentState.replyCount.takeIf { currentState.replyCountSubject == requestSubject } ?: 0,
                 ).getOrThrow()
             },
             onPage = success@ { request, data ->

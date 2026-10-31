@@ -412,8 +412,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var hasMoreLiveData = true  //  是否还有更多直播数据
     private var incrementalTimelineRefreshEnabled = false
 
-    // 「上次刷新提示」开启时推荐流刷新也保留旧内容（独立于增量时间线开关）。
-    private var homeRefreshTipVisible = true
+    // 推荐保留与位置提示独立；动态流仍使用自己的增量刷新配置。
+    private var keepRecommendOldContent = true
     
     //  [新增] 刷新撤销快照
     private var _undoSnapshot: HomeRefreshUndoSnapshot? = null
@@ -493,8 +493,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         viewModelScope.launch {
-            SettingsManager.getHomeRefreshTipVisible(getApplication()).collect { visible ->
-                homeRefreshTipVisible = visible
+            com.android.purebilibili.core.store.ContentDisplayPreferences.keepRecommend(getApplication()).collect { keep ->
+                keepRecommendOldContent = keep
             }
         }
         // Monitor blocked list
@@ -1684,7 +1684,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             
             val useIncrementalRecommendRefresh = !isLoadMore &&
                 currentCategory == HomeCategory.RECOMMEND &&
-                (incrementalTimelineRefreshEnabled || homeRefreshTipVisible)
+                keepRecommendOldContent
 
             // The list may change while CPU work is suspended (dismiss/feedback/account).
             // Rebase on the latest immutable list before committing; never restore a removed card.

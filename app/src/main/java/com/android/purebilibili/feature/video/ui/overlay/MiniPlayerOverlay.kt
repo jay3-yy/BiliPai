@@ -96,7 +96,6 @@ import com.android.purebilibili.core.ui.motion.iosMorphTween
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 
 private const val TAG = "MiniPlayerOverlay"
-private const val AUTO_HIDE_DELAY_MS = 3000L
 private const val MINI_PLAYER_VISIBILITY_DURATION_MILLIS = 280
 
 /**
@@ -481,11 +480,13 @@ private fun MiniPlayerSessionOverlay(
     }
 
     // Any gesture/menu change cancels the old timer. Restart only after interaction ends.
+    val autoHide = rememberPlayerControlsAutoHide(3_000L)
     val interactionBusy = isDraggingPosition || isDraggingProgress || isResizing || moreExpanded
-    LaunchedEffect(showControls, lastInteractionTime, interactionBusy, isStashed, hostLifecycleStarted) {
+    LaunchedEffect(showControls, lastInteractionTime, interactionBusy, isStashed, hostLifecycleStarted, autoHide.timeoutMillis) {
+        val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
         if (showControls && !interactionBusy && !isStashed && hostLifecycleStarted) {
-            delay(AUTO_HIDE_DELAY_MS)
-            showControls = false
+            delay(timeout)
+            if (autoHide.canHide()) showControls = false
         }
     }
 
@@ -794,6 +795,7 @@ private fun MiniPlayerSessionOverlay(
             val miniPlayerShape = RoundedCornerShape(miniPlayerCornerRadius)
             AppCard(
                 modifier = Modifier
+                    .then(autoHide.focusModifier)
                     .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                     .width(miniPlayerWidth)
                     .height(miniPlayerHeight)

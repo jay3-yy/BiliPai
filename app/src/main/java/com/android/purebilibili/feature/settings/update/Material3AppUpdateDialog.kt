@@ -141,6 +141,8 @@ private fun Material3UpdateContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // 容器高度受限时让出空间给下载渠道按钮，日志自身滚动。
+                .weight(1f, fill = false)
                 .heightIn(max = contentMaxHeightDp.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),

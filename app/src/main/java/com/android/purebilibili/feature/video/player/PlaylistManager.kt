@@ -6,6 +6,8 @@ import com.android.purebilibili.core.util.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
@@ -291,6 +293,9 @@ object PlaylistManager {
     var userEdited: Boolean = false
         private set
 
+    private val transportPreferences = PlaylistTransportPreferences()
+    private val _savedTransport = MutableStateFlow(transportPreferences.saved)
+    internal val savedTransport = _savedTransport.asStateFlow()
     private var activePlaylistSession = PlaylistSession(0L)
 
     private val transportState = combine(playMode, shuffleEnabled) { playMode, shuffleEnabled ->
@@ -355,6 +360,7 @@ object PlaylistManager {
      * 注意：此方法会重置外部播放列表标志
      */
     fun setPlaylist(items: List<PlaylistItem>, startIndex: Int = 0) {
+        resetTemporaryTransport()
         beginPlaylistSession()
         nextOverrideIndex = null
         userEdited = false
@@ -386,6 +392,7 @@ object PlaylistManager {
         startIndex: Int = 0,
         source: ExternalPlaylistSource = ExternalPlaylistSource.UNKNOWN
     ): PlaylistSession {
+        resetTemporaryTransport()
         val session = beginPlaylistSession()
         nextOverrideIndex = null
         userEdited = false
@@ -523,6 +530,7 @@ object PlaylistManager {
      * 清空播放列表
      */
     fun clearPlaylist() {
+        resetTemporaryTransport()
         beginPlaylistSession()
         nextOverrideIndex = null
         userEdited = false
@@ -547,7 +555,7 @@ object PlaylistManager {
         }
         _playMode.value = mode
         Logger.d(TAG, " 播放模式: $mode")
-        persistState()
+        recordTransportSelection()
     }
 
     fun setShuffleEnabled(enabled: Boolean) {
@@ -560,7 +568,7 @@ object PlaylistManager {
             _playMode.value = PlayMode.REPEAT_ALL
         }
         Logger.d(TAG, " 随机播放: $enabled")
-        persistState()
+        recordTransportSelection()
     }
     
     /**
@@ -578,7 +586,7 @@ object PlaylistManager {
             resetShuffleHistoryForCurrentIndex()
         }
         Logger.d(TAG, " 切换播放模式: $newMode")
-        persistState()
+        recordTransportSelection()
         return newMode
     }
     
@@ -867,15 +875,53 @@ object PlaylistManager {
         applyShuffleProgress(nextProgress)
     }
 
+    internal fun endPlaybackPreferenceSession() {
+        resetTemporaryTransport()
+        resetShuffleHistoryForCurrentIndex()
+        persistState()
+    }
+
+    private fun resetTemporaryTransport() {
+        _playMode.value = transportPreferences.saved.playMode
+        _shuffleEnabled.value = transportPreferences.saved.shuffleEnabled
+    }
+
+    private fun recordTransportSelection() {
+        val request = transportPreferences.request(RestoredPlayTransport(_playMode.value, _shuffleEnabled.value))
+        val context = appContext
+        val remember = com.android.purebilibili.core.store.ContentDisplayPreferences.rememberAdjustmentsSnapshot
+        if (remember != null || context == null) {
+            if (transportPreferences.commit(request, remember ?: true)) _savedTransport.value = transportPreferences.saved
+        } else {
+            // 冷启动偏好尚未读取时异步确认；未确认前仅按临时选择生效。
+            persistenceScope.launch {
+                try {
+                    val shouldRemember = com.android.purebilibili.core.store.ContentDisplayPreferences.rememberPlayerAdjustments(context).first()
+                    withContext(Dispatchers.Main.immediate) {
+                        if (transportPreferences.commit(request, shouldRemember)) {
+                            _savedTransport.value = transportPreferences.saved
+                            persistState()
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Logger.e(TAG, "Failed to resolve playback preference; selection remains temporary", error)
+                }
+            }
+        }
+        persistState()
+    }
+
     private fun persistState() {
         if (appContext == null) return
         persistenceRequests.trySend(PlaylistSnapshot(
             playlist = _playlist.value,
             currentIndex = _currentIndex.value,
-            playMode = _playMode.value,
+            playMode = transportPreferences.saved.playMode,
             isExternalPlaylist = _isExternalPlaylist.value,
             externalPlaylistSource = _externalPlaylistSource.value,
-            shuffleEnabled = _shuffleEnabled.value,
+            shuffleEnabled = transportPreferences.saved.shuffleEnabled,
             nextOverrideIndex = nextOverrideIndex,
             userEdited = userEdited,
         ))
@@ -896,6 +942,8 @@ object PlaylistManager {
                 storedPlayMode = snapshot.playMode,
                 storedShuffleEnabled = snapshot.shuffleEnabled
             )
+            transportPreferences.restore(transport)
+            _savedTransport.value = transportPreferences.saved
             _playlist.value = snapshot.playlist
             _playMode.value = transport.playMode
             _shuffleEnabled.value = transport.shuffleEnabled

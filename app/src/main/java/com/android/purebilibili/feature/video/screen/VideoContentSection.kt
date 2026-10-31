@@ -98,7 +98,6 @@ import com.android.purebilibili.feature.video.ui.section.shouldAnimateVideoDetai
 import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
 import com.android.purebilibili.feature.video.ui.components.RelatedVideoGridRow
 import com.android.purebilibili.feature.video.ui.components.chunkRelatedVideosForHomeStyleGrid
-import com.android.purebilibili.feature.video.ui.components.filterRelatedVideosByHiddenBvids
 import com.android.purebilibili.feature.video.ui.components.rememberRelatedVideoCardLayout
 import com.android.purebilibili.feature.video.ui.components.CollectionRow
 import com.android.purebilibili.feature.video.ui.components.CollectionSheet
@@ -1478,10 +1477,7 @@ private fun VideoIntroTab(
     showInteractionActions: Boolean = true,
     animateVideoDetailLayout: Boolean = true,
 ) {
-    var hiddenRelatedBvids by remember(info.bvid) { mutableStateOf(emptySet<String>()) }
-    val visibleRelatedVideos = remember(relatedVideos, hiddenRelatedBvids) {
-        filterRelatedVideosByHiddenBvids(relatedVideos, hiddenRelatedBvids)
-    }
+    val visibleRelatedVideos = relatedVideos
     val relatedRows = remember(visibleRelatedVideos) {
         chunkRelatedVideosForHomeStyleGrid(visibleRelatedVideos)
     }
@@ -1609,9 +1605,7 @@ private fun VideoIntroTab(
                         )
                         onRelatedVideoClick(video.bvid, navOptions)
                     },
-                    onVideoHidden = { video ->
-                        hiddenRelatedBvids = hiddenRelatedBvids + video.bvid
-                    }
+                    onUpClick = onUpClick,
                 )
             }
         }
@@ -1779,16 +1773,20 @@ internal fun VideoCommentTab(
                 )
             } else if (replies.isEmpty() && voteCard == null && repliesError == null) {
                 item(key = "video_comment_empty", contentType = "video_comment_empty") {
-                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                        // replyCount 来自详情/游标 all_count：>0 却列表空 = 最热链路空成功，勿误报「暂无」
-                        AppText(
-                            text = pageControl?.emptyMessage()?.takeIf { it.isNotBlank() } ?: if (replyCount > 0) {
-                                "评论暂时无法加载，可切换「最新」或稍后重试"
-                            } else {
-                                "暂无评论"
-                            },
-                            color = commentAppearance.secondaryTextColor
+                    val emptyMessage = pageControl?.emptyMessage()?.takeIf { it.isNotBlank() }
+                    if (replyCount > 0 && emptyMessage == null) {
+                        com.android.purebilibili.feature.video.ui.components.VideoCommentLoadError(
+                            message = "评论暂时无法加载，请重试或切换「最新」",
+                            onRetry = onRefreshReplies,
+                            modifier = Modifier.fillMaxWidth().fillParentMaxHeight(0.7f),
                         )
+                    } else {
+                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                            AppText(
+                                text = emptyMessage ?: "暂无评论",
+                                color = commentAppearance.secondaryTextColor
+                            )
+                        }
                     }
                 }
             } else {

@@ -58,7 +58,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlurEffect
+import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.Outline
@@ -1043,6 +1043,9 @@ private fun AppGlassChoicePopupCard(
     val cornerRadiusPx = with(density) { PopupCornerRadius.toPx() }
     val densityScale = density.density
     val outlineCache = remember { PopupSurfaceOutlineCache() }
+    // 源控件与正文独立缓存；半径变化仍逐帧更新，不量化动画或更改采样边界。
+    val sourceBlurCache = remember(request) { BlurRenderEffectCache() }
+    val contentBlurCache = remember(request) { BlurRenderEffectCache() }
     val ownScrollState = remember(request) { androidx.compose.foundation.ScrollState(0) }
     val scrollState = request.menu?.scrollState ?: ownScrollState
     val wholeItemViewport = remember(request) { WholeMenuItemViewport() }
@@ -1111,6 +1114,13 @@ private fun AppGlassChoicePopupCard(
         shouldDrawLens, isDark, interactivePanel, themeFrosted, morph, cornerRadiusPx, densityScale) {
         val block: BackdropEffectScope.() -> Unit = {
             val frame = morph.frame(cornerRadiusPx, densityScale)
+            val lensAmount = refractionAmountPx * (0.25f + 0.75f * frame.materialProgress)
+            // 联合轮廓的折射边距先于模糊确定，复用原先二次求值后的最终采样范围。
+            if (shouldDrawLens && !morph.card.isEmpty && !frame.rect.isEmpty &&
+                refractionHeightPx > 0f && lensAmount > 0f
+            ) {
+                padding = maxOf(padding, lensAmount)
+            }
             val frost = blurRadiusPx * (0.21f + 0.79f * frame.materialProgress)
             blur(frost, frost)
             colorControls(brightness = 0f,
@@ -1119,7 +1129,7 @@ private fun AppGlassChoicePopupCard(
                 frame = frame,
                 origin = glassPopupSurfaceBounds(morph.card, morph.anchor, densityScale).topLeft,
                 height = refractionHeightPx,
-                amount = refractionAmountPx * (0.25f + 0.75f * frame.materialProgress),
+                amount = lensAmount,
             )
         }
         block
@@ -1345,7 +1355,7 @@ private fun AppGlassChoicePopupCard(
                         translationX = target.left - morph.card.left
                         translationY = target.top - morph.card.top
                         alpha = frame.sourceAlpha
-                        renderEffect = if (!lowBlurBudget && frame.sourceBlur > 0.1f) BlurEffect(frame.sourceBlur, frame.sourceBlur) else null
+                        renderEffect = if (!lowBlurBudget && frame.sourceBlur > 0.1f) sourceBlurCache.resolve(frame.sourceBlur) else null
                     }
                 },
             ) { drawLayer(sourceLayer) }
@@ -1359,7 +1369,7 @@ private fun AppGlassChoicePopupCard(
                     val frame = morph.frame(cornerRadiusPx, densityScale)
                     shape = PopupFrameShape(frame, morph.card, true)
                     renderEffect = if (!lowBlurBudget && frame.contentBlur > 0.1f) {
-                        BlurEffect(frame.contentBlur, frame.contentBlur)
+                        contentBlurCache.resolve(frame.contentBlur)
                     } else null
                 },
         ) {

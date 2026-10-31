@@ -312,7 +312,7 @@ fun AppearanceSettingsContent(
     val windowSizeClass = LocalWindowSizeClass.current
     val isTablet = windowSizeClass.isTablet
     val sectionKeys = when (contentMode) {
-        AppearanceSettingsContentMode.APPEARANCE -> listOf("appearance_display_mode", "appearance_theme_color", "appearance_text_size", "appearance_splash_icon", "appearance_language")
+        AppearanceSettingsContentMode.APPEARANCE -> listOf("appearance_display_mode", "appearance_theme_color", "appearance_text_size", "appearance_splash_icon", "content_image_display", "appearance_language")
         AppearanceSettingsContentMode.HOME -> listOf("home_list", "home_wallpaper", "home_recommendation", "home_browsing")
     }.flatMap { listOf(it + "_title", it) }
     SettingsSectionFocusEffect(
@@ -1704,6 +1704,12 @@ fun AppearanceSettingsContent(
             }
         }
 
+        item(key = "content_image_display_title") {
+            AppPreferenceSectionTitle("图片显示")
+        }
+        item(key = "content_image_display") {
+            com.android.purebilibili.feature.settings.ContentImagePreferences()
+        }
         //  语言
         item(key = "appearance_language_title") {
             Box(modifier = Modifier.entrance()) {
@@ -2000,6 +2006,8 @@ fun AppearanceSettingsContent(
                             )
                         }
 
+                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                        com.android.purebilibili.feature.settings.RecommendRetentionPreference()
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_refresh_tip_visible") {
                             AppSwitchPreference(

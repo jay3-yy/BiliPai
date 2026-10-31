@@ -1545,6 +1545,7 @@ fun DynamicCardV2(
                             if (expandOpusDetailImages) {
                                 val expandedImageSourceRect = rememberImagePreviewSourceRect()
                                 PageAwareAsyncImage(
+                                    dimInDarkTheme = true,
                                     model = imageRequest,
                                     contentDescription = opus.title.orEmpty(),
                                     modifier = Modifier
@@ -1663,6 +1664,7 @@ fun DynamicCardV2(
                                 .build()
                         }
                         PageAwareAsyncImage(
+                            dimInDarkTheme = true,
                             model = imageRequest,
                             contentDescription = opus.title.orEmpty(),
                             modifier = Modifier
@@ -2248,6 +2250,7 @@ internal fun DynamicNativeLinkCard(
             leadingContent = if (cover.isNotBlank()) {
                 {
                     PageAwareAsyncImage(
+                        dimInDarkTheme = true,
                         model = cover,
                         contentDescription = null,
                         modifier = Modifier
@@ -2843,6 +2846,7 @@ fun DynamicCardCompact(
         content?.major?.archive?.let { archive ->
             Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
             PageAwareAsyncImage(
+                dimInDarkTheme = true,
                 model = coil3.request.ImageRequest.Builder(LocalContext.current)
                     .data(archive.cover.let { if (it.startsWith("http://")) it.replace("http://", "https://") else it })
                     .crossfade(true)

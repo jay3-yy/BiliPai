@@ -1178,11 +1178,16 @@ private fun ImagePreviewOverlayContent(
                                 }
                             )
                         }
-                        val previewRequest = remember(context, imageUrl, decodeSize, placeholderCacheKey, requestToken, publicContent) {
+                        val previewQuality = com.android.purebilibili.core.ui.components.LocalContentImageSettings.current.previewQuality
+                        val showOriginal = page in originalQualityPages
+                        val displayedImageUrl = remember(imageUrl, previewQuality, showOriginal) {
+                            com.android.purebilibili.core.util.BiliImageQualityPolicy.resolvePreviewUrl(imageUrl, previewQuality, showOriginal)
+                        }
+                        val previewRequest = remember(context, displayedImageUrl, decodeSize, placeholderCacheKey, requestToken, publicContent) {
                             ImageRequest.Builder(context)
-                                .data(imageUrl)
+                                .data(displayedImageUrl)
                                 .originalBiliImage()
-                                .diskCacheKey(imageUrl)
+                                .diskCacheKey(displayedImageUrl)
                                 // 预览必须采样解码，避免超大原图超过 Canvas 单位图绘制上限。
                                 .size(decodeSize.widthPx, decodeSize.heightPx)
                                 .placeholderMemoryCacheKey(placeholderCacheKey)

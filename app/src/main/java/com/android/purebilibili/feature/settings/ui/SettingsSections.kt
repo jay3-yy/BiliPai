@@ -1119,7 +1119,7 @@ fun FeedApiSection(
             SettingSwitchItem(
                 icon = refreshIcon,
                 title = settingItemTitle("home.incremental_timeline_refresh_enabled"),
-                subtitle = "下拉刷新只把新动态加到顶部，不重新排列已看到的内容",
+                subtitle = "动态流下拉刷新只把新动态加到顶部，不重新排列已看到的内容",
                 checked = incrementalTimelineRefreshEnabled,
                 onCheckedChange = onIncrementalTimelineRefreshChange,
                 iconTint = siblingTints[1]
@@ -1136,6 +1136,8 @@ fun FeedApiSection(
                 iconTint = siblingTints[9]
             )
         }
+        SettingsAdaptiveDivider()
+        com.android.purebilibili.feature.settings.DynamicVisibilityCheckPreference()
         SettingsAdaptiveDivider()
         SettingsItemAnchor("home.dynamic_image_preview_text_visible") {
             SettingSwitchItem(

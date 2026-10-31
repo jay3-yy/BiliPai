@@ -31,10 +31,22 @@ internal data class BackgroundAudioSnapshot(
     val audioLanguage: String? = null,
     val volume: Float = 1f,
     val handleAudioFocus: Boolean = true,
-    val reportHistory: Boolean = false
+    val reportHistory: Boolean = false,
+    val savedPlayMode: PlayMode? = null,
+    val savedShuffle: Boolean? = null,
+    val backgroundPlaybackOverride: Boolean? = null,
+    val backgroundOverrideBvid: String? = null,
 ) {
     val current: PlaylistItem? get() = queue.getOrNull(index)
 }
+
+/** 恢复记录使用已保存的顺序，临时后台播放只随正在运行的接力传递。 */
+internal fun BackgroundAudioSnapshot.forPersistence(): BackgroundAudioSnapshot = copy(
+    playMode = savedPlayMode ?: playMode,
+    shuffle = savedShuffle ?: shuffle,
+    backgroundPlaybackOverride = null,
+    backgroundOverrideBvid = null,
+)
 
 internal fun BackgroundAudioSnapshot.toAudioBundle(): Bundle = Bundle().apply {
     val json = backgroundAudioJson.encodeToString(BackgroundAudioSnapshot.serializer(), this@toAudioBundle)

@@ -351,6 +351,31 @@ object FavoriteRepository {
         }
     }
 
+    suspend fun sortResources(
+        mediaId: Long,
+        ownerMid: Long,
+        sort: String,
+        identity: com.android.purebilibili.core.store.AccountSessionIdentity,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            require(mediaId > 0L && ownerMid > 0L && identity.mid == ownerMid) { "只能排序自己的收藏夹" }
+            check(TokenManager.accountIdentity.value == identity) { "账号已切换，请重新打开排序" }
+            val session = com.android.purebilibili.core.network.AccountCookieSession.main()
+            check(TokenManager.accountIdentity.value == identity && session.seed["DedeUserID"] == ownerMid.toString()) { "账号已切换，请重新打开排序" }
+            val csrf = session.seed["bili_jct"].orEmpty()
+            check(csrf.isNotBlank()) { "请先登录" }
+            require(sort.isNotBlank() && sort.length <= 60000) { "排序操作过多，请分批保存" }
+            val response = api.sortFavResources(mediaId, sort, csrf, session)
+            check(TokenManager.accountIdentity.value == identity) { "账号已切换，排序结果未应用到当前页面" }
+            if (response.code == 0) Result.success(Unit)
+            else Result.failure(favoriteApiFailure("保存收藏顺序失败", response.code, response.message))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun removeResources(mediaId: Long, resourceIds: Set<Long>): Result<Unit> =
         withContext(Dispatchers.IO) {
             if (resourceIds.isEmpty()) return@withContext Result.success(Unit)

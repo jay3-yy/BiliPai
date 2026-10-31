@@ -164,7 +164,6 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.adaptive.resolveDeviceUiProfile
 import com.android.purebilibili.core.ui.adaptive.resolveEffectiveMotionTier
-import com.android.purebilibili.core.ui.motion.pullRefreshReleaseSpring
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.TrackJankStateFlag
@@ -1279,14 +1278,14 @@ fun HomeScreen(
         chromeContentReady && it.isReady
     }?.backdrop
 
-    // [性能优化] 避免双重捕获：当 MiuixBackdrop 已经激活且处于 Miuix 视觉体系时，顶栏与底栏均走
-    // MiuixBackdrop 渲染，此时 Feed 容器无需重复挂载 HazeSource 离屏录制。仅在 MD3 工具栏或 Backdrop 缺失时保留 Haze。
+    // 已有页面背景源时，只为仍消费 Haze 的原生顶栏保留额外采样。
+    // 渐进模糊独立开启时顶栏不消费 Haze；抽屉的顶部模糊需求仍按原开关保留。
     val appUiStyle = com.android.purebilibili.core.theme.LocalAppUiStyle.current
     val shouldCaptureHomeHaze = if (homeMiuixBackdropSource != null) {
         com.android.purebilibili.feature.home.components.shouldUseOfficialMd3HomeTopToolbar(
             uiStyle = appUiStyle,
             liquidGlassEnabled = isLiquidGlassEnabled,
-        )
+        ) && (!appThemeConfig.progressiveTopBlurEnabled || isHeaderBlurEnabled)
     } else {
         isLiquidGlassEnabled || isHeaderBlurEnabled || isBottomBarBlurEnabled
     }
@@ -2095,6 +2094,8 @@ fun HomeScreen(
         // Composite header and feed before applying depth; separate blur layers form a seam.
         Box(modifier = Modifier.fillMaxSize().then(homeFeedSnapshotModifier)) {
         AppScaffold(
+                // 顶部渐进模糊和玻璃控件沿用 feed 背景；避免 scaffold 再录制相同内容。
+                topBarIconBackdropSource = homeMiuixBackdropSource,
                 modifier = Modifier
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection),
@@ -2315,6 +2316,7 @@ fun HomeScreen(
                         val animatedDragOffsetFraction = androidx.compose.animation.core.animateFloatAsState(
                             targetValue = resolvedStablePullOffsetFraction,
                             animationSpec = if (
+                                systemReduceMotion || !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled ||
                                 shouldSnapPullOffsetToFinger(
                                     distanceFraction = pullDistanceFraction,
                                     isRefreshing = isPageRefreshing,
@@ -2324,7 +2326,11 @@ fun HomeScreen(
                             ) {
                                 androidx.compose.animation.core.snap()
                             } else {
-                                pullRefreshReleaseSpring()
+                                com.android.purebilibili.core.ui.components.scrollFeedbackSpring(
+                                    com.android.purebilibili.core.ui.components.LocalScrollFeedbackPreset.current,
+                                    damping = 0.96f,
+                                    stiffness = 520f,
+                                )
                             },
                             label = "pull_bounce"
                         )

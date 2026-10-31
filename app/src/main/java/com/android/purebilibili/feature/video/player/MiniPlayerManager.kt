@@ -814,6 +814,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
     private var remoteTransferJob: Job? = null
     private var playbackStopGeneration = 0L
     private var remotePreferencesJob: Job? = null
+    private var remoteBackgroundOverride: Pair<String, Boolean>? = null
+    private var pendingBackgroundOverride: Pair<String, Boolean>? = null
     private val remoteReclaimMutex = kotlinx.coroutines.sync.Mutex()
 
     /** Only detached listen-video sessions enter this path; mounted video/PiP keeps its player. */
@@ -834,7 +836,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
             quality = state.currentQuality, audioQuality = state.selectedAudioQuality,
             audioUrl = state.audioUrl.orEmpty(), audioLanguage = state.currentAudioLang,
             volume = local.volume, handleAudioFocus = SettingsManager.getAudioFocusEnabledSync(context),
-            reportHistory = !SettingsManager.isPrivacyModeEnabledSync(context)
+            reportHistory = !SettingsManager.isPrivacyModeEnabledSync(context),
+            savedPlayMode = PlaylistManager.savedTransport.value.playMode,
+            savedShuffle = PlaylistManager.savedTransport.value.shuffleEnabled,
+            backgroundPlaybackOverride = PlayerBackgroundPlaybackSessions.selection(local, "video:$currentBvid"),
+            backgroundOverrideBvid = currentBvid,
         )
         if (!com.android.purebilibili.feature.audio.player.canTransferBackgroundAudio(
                 listening = AudioNowPlayingSession.active.value,
@@ -863,6 +869,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     }
                 }
                 if (transferred) {
+                    remoteBackgroundOverride = request.backgroundPlaybackOverride?.let { value ->
+                        request.backgroundOverrideBvid?.let { it to value }
+                    }
                     clearPlaybackNotificationArtifacts(stopServiceDirectly = true)
                     cachedUiState = null
                     if (player === local && !pageOwnership.isRetained(local)) {
@@ -910,6 +919,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 remoteAudio.close()
                 return@withLock null
             }
+            pendingBackgroundOverride = state.backgroundPlaybackOverride?.let { value ->
+                state.backgroundOverrideBvid?.takeIf { it == state.current?.bvid }?.let { it to value }
+            }
+            remoteBackgroundOverride = null
             state.current?.let { item ->
                 com.android.purebilibili.core.player.PlaybackProgressManager.getInstance(context).apply {
                     // A return near the beginning must replace an older (>5s) cached position too.
@@ -964,9 +977,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
         remotePreferencesJob?.cancel()
         remotePreferencesJob = scope.launch {
             combine(PlaylistManager.playMode, PlaylistManager.shuffleEnabled,
-                SettingsManager.getPrivacyModeEnabled(context), PlaylistManager.playlist) { mode, shuffle, privacy, queue ->
-                Triple(mode, shuffle, privacy) to queue
-            }.collect { (preferences, queue) ->
+                SettingsManager.getPrivacyModeEnabled(context), PlaylistManager.playlist,
+                PlaylistManager.savedTransport) { mode, shuffle, privacy, queue, saved ->
+                (Triple(mode, shuffle, privacy) to queue) to saved
+            }.collect { (runtime, saved) ->
+                val (preferences, queue) = runtime
                 val (mode, shuffle, privacy) = preferences
                 if (!remoteAudio.active) return@collect
                 remoteAudio.controller?.sendCustomCommand(
@@ -974,6 +989,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
                         com.android.purebilibili.feature.audio.player.AUDIO_TRANSPORT, android.os.Bundle.EMPTY
                     ), android.os.Bundle().apply {
                         putString("mode", mode.name); putBoolean("shuffle", shuffle)
+                        putString("saved_mode", saved.playMode.name)
+                        putBoolean("saved_shuffle", saved.shuffleEnabled)
                         putBoolean("report_history", !privacy)
                         if (queue.size in 1..128 && queue.none { it.isBangumi }) {
                             val json = com.android.purebilibili.feature.audio.player.backgroundAudioJson.encodeToString(
@@ -1904,7 +1921,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
      */
     fun shouldContinueBackgroundAudio(): Boolean {
         val mode = getCurrentMode()
-        val backgroundPlaybackEnabled = SettingsManager.getBackgroundPlaybackEnabledSync(context)
+        val backgroundKey = if (isLiveMode) "live:$currentRoomId" else currentBvid?.takeIf { it.isNotBlank() }?.let { "video:$it" }
+        val backgroundPlaybackEnabled = remoteBackgroundOverride?.takeIf {
+            remoteAudio.active && it.first == currentBvid
+        }?.second ?: PlayerBackgroundPlaybackSessions.effective(
+            player, backgroundKey, SettingsManager.getBackgroundPlaybackEnabledSync(context),
+        )
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
         return shouldContinueBackgroundAudioByPolicy(
             backgroundPlaybackEnabled = backgroundPlaybackEnabled,
@@ -2451,6 +2473,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     fun endBangumiPlayback(expectedPlayer: ExoPlayer) {
         if (clearExternalPlayerIfMatches(expectedPlayer)) {
+            PlayerBackgroundPlaybackSessions.clear(expectedPlayer)
+            PlaylistManager.endPlaybackPreferenceSession()
             isPlaying = false
             releaseMediaSession()
             clearPlaybackNotificationArtifacts()
@@ -2471,6 +2495,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
     }
 
     private fun dismiss(taskRemoved: Boolean) {
+        PlayerBackgroundPlaybackSessions.clear(_externalPlayer)
+        PlayerBackgroundPlaybackSessions.clear(_player)
+        remoteBackgroundOverride = null
+        pendingBackgroundOverride = null
+        PlaylistManager.endPlaybackPreferenceSession()
         playbackStopGeneration++
         remoteTransferJob?.cancel()
         remotePreferencesJob?.cancel()
@@ -2601,6 +2630,10 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isLiveMode = false  // 📺 视频模式
         
         replaceExternalPlayer(externalPlayer)
+        pendingBackgroundOverride?.takeIf { it.first == bvid }?.let { (_, value) ->
+            PlayerBackgroundPlaybackSessions.forContent(externalPlayer, "video:$bvid").select(value)
+        }
+        pendingBackgroundOverride = null
         isActive = true
         isMiniMode = false
         // A visible detail reclaim ends the previous navigation handoff.

@@ -183,6 +183,7 @@ import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.toLegacyRoute
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -1415,6 +1416,20 @@ class MainActivity : AppCompatActivity() {
             // val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
             // var showWelcome by remember { mutableStateOf(!prefs.getBoolean(KEY_FIRST_LAUNCH, false)) }
 
+            // 同步队列操作在后台也会读取保存范围，订阅跟随应用外壳的组合生命周期。
+            LaunchedEffect(context) {
+                com.android.purebilibili.core.store.ContentDisplayPreferences.rememberPlayerAdjustments(context).collect { }
+            }
+            val playerControlsTimeout by remember(context) {
+                com.android.purebilibili.core.store.ContentDisplayPreferences.playerControlsTimeout(context)
+            }.collectAsStateWithLifecycle(initialValue = 0)
+            val contentImages by remember(context) {
+                com.android.purebilibili.core.store.ContentDisplayPreferences.images(context)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.ContentDisplayPreferences.imageSnapshot)
+            val scrollFeedbackPreset by remember(context) {
+                com.android.purebilibili.core.store.ContentDisplayPreferences.spring(context)
+            }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.ScrollFeedbackPreset.STANDARD)
+            SideEffect { com.android.purebilibili.core.store.ContentDisplayPreferences.publishImageSnapshot(contentImages) }
             val appThemeSettings by remember(context) { SettingsManager.getAppThemeSettings(context) }
                 .collectAsStateWithLifecycle(
                     initialValue = SettingsManager.getInitialAppThemeSettings(context)
@@ -1648,6 +1663,10 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides appThemeSettings,
                         com.android.purebilibili.core.ui.LocalAdaptiveScaffoldHazeFactory provides
                             { userEnabled -> com.android.purebilibili.core.ui.blur.rememberAppScaffoldHazeHandle(userEnabled) },
+                        com.android.purebilibili.feature.video.ui.overlay.LocalPlayerControlsTimeoutSeconds provides playerControlsTimeout,
+                        com.android.purebilibili.core.ui.components.LocalContentImageDarkTheme provides useDarkTheme,
+                        com.android.purebilibili.core.ui.components.LocalContentImageSettings provides contentImages,
+                        com.android.purebilibili.core.ui.components.LocalScrollFeedbackPreset provides scrollFeedbackPreset,
                         LocalDensity provides effectiveDensity,
                         LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
                         com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
@@ -1661,6 +1680,7 @@ class MainActivity : AppCompatActivity() {
                         LocalAppSingleChoicePresentation provides
                             appThemeSettings.singleChoicePresentation,
                     ) {
+                    com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityNoticeHost()
                     MaidLottieAnimationSettingsHost {
                     val isPipRenderingActive =
                         isInPipMode || miniPlayerManager.shouldKeepPlaybackForPipTransition()

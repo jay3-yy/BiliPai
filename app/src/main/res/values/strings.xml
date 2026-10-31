@@ -832,8 +832,8 @@
     <string name="appearance_home_avatars_off">隐藏头像，为 UP 主名称留出更多空间</string>
     <string name="appearance_home_badges_on">首页和相关推荐显示 UP 标识</string>
     <string name="appearance_home_badges_off">首页和相关推荐隐藏 UP 标识</string>
-    <string name="appearance_home_refresh_tip_on">推荐流刷新后保留旧内容，并在刷新位置显示提示</string>
-    <string name="appearance_home_refresh_tip_off">关闭后刷新直接替换推荐内容，不显示刷新位置提示</string>
+    <string name="appearance_home_refresh_tip_on">保留旧推荐时显示上次刷新位置，内容是否保留由单独开关控制</string>
+    <string name="appearance_home_refresh_tip_off">隐藏刷新位置提示，不改变推荐内容的保留方式</string>
     <string name="appearance_home_refresh_undo">刷新推荐流后显示撤销按钮，可恢复刷新前的内容</string>
     <string name="appearance_home_online_on">在视频卡片显示“xx 人正在看”，不影响视频页</string>
     <string name="appearance_home_online_off">关闭后隐藏卡片观看人数，不影响视频页</string>

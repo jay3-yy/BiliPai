@@ -73,6 +73,7 @@ fun PlayerSelectionPopup(
     content: @Composable () -> Unit,
 ) {
     val glassSource = source
+    if (!rememberPlayerPopupHostActive(onDismissRequest)) return
     val anchorToGlassSource = glassSource?.isAvailable == true &&
         com.android.purebilibili.core.ui.components.appGlassMenuAvailable()
     if (placement == PlayerListPopupPlacement.ANCHOR_END && anchorBounds == null && !anchorToGlassSource) return

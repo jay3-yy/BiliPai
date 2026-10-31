@@ -140,7 +140,6 @@ import androidx.navigationevent.NavigationEventTransitionState
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 
-private const val AUTO_HIDE_DELAY = 4000L
 private const val VISIBLE_TOP_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 96
 private const val VISIBLE_BOTTOM_CONTROLS_GESTURE_EXCLUSION_HEIGHT_DP = 90
 
@@ -226,6 +225,7 @@ fun FullscreenPlayerOverlay(
     onDismiss: () -> Unit,
     onNavigateToDetail: () -> Unit
 ) {
+    val autoHide = rememberPlayerControlsAutoHide(4_000L)
     val context = LocalContext.current
     val density = LocalDensity.current
     val player = miniPlayerManager.player
@@ -247,16 +247,18 @@ fun FullscreenPlayerOverlay(
     var showSpeedMenu by remember { mutableStateOf(false) }
 
     //  视频比例状态
+    val aspectRatioSession = com.android.purebilibili.feature.video.ui.components.rememberPlayerAspectRatioSession(player, miniPlayerManager.currentBvid.orEmpty())
+    val sessionAspectRatio by aspectRatioSession.selection.collectAsStateWithLifecycle()
     val fixedFullscreenAspectRatio by SettingsManager
         .getFullscreenAspectRatio(context)
         .collectAsStateWithLifecycle(initialValue = FullscreenAspectRatio.FIT
         )
     var playerVideoSize by remember(player) { mutableStateOf(player?.videoSize ?: androidx.media3.common.VideoSize.UNKNOWN) }
     val isVerticalContent = playerVideoSize.width > 0 && playerVideoSize.height > playerVideoSize.width
-    var aspectRatio by remember {
+    var aspectRatio by remember(aspectRatioSession) {
         mutableStateOf(
             resolveSafeVideoAspectRatio(
-                preferred = fixedFullscreenAspectRatio.toVideoAspectRatio(),
+                preferred = sessionAspectRatio ?: fixedFullscreenAspectRatio.toVideoAspectRatio(),
                 isVerticalVideo = isVerticalContent
             )
         )
@@ -428,9 +430,9 @@ fun FullscreenPlayerOverlay(
         }
     }
 
-    LaunchedEffect(fixedFullscreenAspectRatio, isVerticalContent) {
+    LaunchedEffect(fixedFullscreenAspectRatio, isVerticalContent, sessionAspectRatio, aspectRatioSession) {
         aspectRatio = resolveSafeVideoAspectRatio(
-            preferred = fixedFullscreenAspectRatio.toVideoAspectRatio(),
+            preferred = sessionAspectRatio ?: fixedFullscreenAspectRatio.toVideoAspectRatio(),
             isVerticalVideo = isVerticalContent
         )
     }
@@ -544,7 +546,8 @@ fun FullscreenPlayerOverlay(
     }
 
     // 自动隐藏控制按钮
-    LaunchedEffect(showControls, lastInteractionTime, gestureMode, isPlaying) {
+    LaunchedEffect(showControls, lastInteractionTime, gestureMode, isPlaying, autoHide.timeoutMillis) {
+        val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
         if (
             shouldAutoHideFullscreenControls(
                 showControls = showControls,
@@ -552,8 +555,8 @@ fun FullscreenPlayerOverlay(
                 isPlaying = isPlaying
             )
         ) {
-            delay(AUTO_HIDE_DELAY)
-            if (System.currentTimeMillis() - lastInteractionTime >= AUTO_HIDE_DELAY) {
+            delay(timeout)
+            if (autoHide.canHide() && System.currentTimeMillis() - lastInteractionTime >= timeout) {
                 showControls = false
             }
         }
@@ -624,6 +627,7 @@ fun FullscreenPlayerOverlay(
 
     Box(
         modifier = Modifier
+            .then(autoHide.focusModifier)
             .fillMaxSize()
             .graphicsLayer {
                 val progress = backProgress.coerceIn(0f, 1f)
@@ -1646,12 +1650,8 @@ fun FullscreenPlayerOverlay(
                             isVerticalVideo = isVerticalContent
                         )
                         aspectRatio = safeRatio
-                        scope.launch {
-                            SettingsManager.setFullscreenAspectRatio(
-                                context,
-                                safeRatio.toFullscreenAspectRatio()
-                            )
-                        }
+                        aspectRatioSession.select(safeRatio)
+                        scope.launch { aspectRatioSession.saveIfRemembered(context, safeRatio) }
                         showRatioMenu = false
                         lastInteractionTime = System.currentTimeMillis()
                     },

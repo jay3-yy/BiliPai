@@ -3318,6 +3318,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         PlayerSettingsStore.getLastPlaybackSpeed(context)
 
     suspend fun setLastPlaybackSpeed(context: Context, speed: Float) {
+        if (!ContentDisplayPreferences.rememberPlayerAdjustments(context).first()) return
         PlayerSettingsStore.setLastPlaybackSpeed(context, speed)
     }
 
@@ -8304,6 +8305,12 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             )
         }
 
+    suspend fun savePlayerFullscreenAspectRatio(context: Context, ratio: FullscreenAspectRatio): Boolean {
+        if (!ContentDisplayPreferences.rememberPlayerAdjustments(context).first()) return false
+        setFullscreenAspectRatio(context, ratio)
+        return true
+    }
+
     suspend fun setFullscreenAspectRatio(context: Context, ratio: FullscreenAspectRatio) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_FULLSCREEN_ASPECT_RATIO] = ratio.value
@@ -8863,6 +8870,15 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             IntShareablePreferenceDefinition(KEY_HOME_WALLPAPER_EFFECT_MODE, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_HOME_WALLPAPER_EFFECT_SCOPE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_UP_BADGES_VISIBLE, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(ContentDisplayPreferences.rememberPlayerAdjustmentsKey, SettingsShareSection.PLAYBACK),
+            IntShareablePreferenceDefinition(ContentDisplayPreferences.rotationSensitivityKey, SettingsShareSection.PLAYBACK),
+            IntShareablePreferenceDefinition(ContentDisplayPreferences.playerControlsTimeoutKey, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(ContentDisplayPreferences.dynamicVisibilityCheckKey, SettingsShareSection.NAVIGATION),
+            IntShareablePreferenceDefinition(ContentDisplayPreferences.listQualityKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(ContentDisplayPreferences.previewQualityKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(ContentDisplayPreferences.darkDimKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(ContentDisplayPreferences.springKey, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(ContentDisplayPreferences.keepRecommendKey, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_HOME_REFRESH_TIP_VISIBLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_REFRESH_UNDO_VISIBLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_UP_AVATARS_VISIBLE, SettingsShareSection.APPEARANCE),
@@ -9228,6 +9244,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 PlayerSettingsStore.reconcilePlaybackSpeedSelections(preferences)
             }
         }
+        ContentDisplayPreferences.syncRememberPlayerAdjustments(updated)
         if (playbackSpeedChanged) {
             PlayerSettingsStore.syncPlaybackSpeedCache(context, updated)
         }

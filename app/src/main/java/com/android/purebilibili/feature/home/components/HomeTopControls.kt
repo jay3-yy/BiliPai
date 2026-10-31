@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -93,6 +94,7 @@ internal fun HomeTopSearchPillContent(
     iconTextGap: Dp,
     modifier: Modifier = Modifier,
     pressed: Boolean = false,
+    searchIconOpticalScale: Float = 1f,
 ) {
     AppPressShiftContent(
         pressed = pressed,
@@ -107,7 +109,12 @@ internal fun HomeTopSearchPillContent(
                 imageVector = searchIcon,
                 contentDescription = "搜索",
                 tint = contentColor,
-                modifier = Modifier.size(AppSpacingTokens.Large + AppSpacingTokens.Micro)
+                modifier = Modifier
+                    .size(AppSpacingTokens.Large + AppSpacingTokens.Micro)
+                    .graphicsLayer {
+                        scaleX = searchIconOpticalScale
+                        scaleY = searchIconOpticalScale
+                    }
             )
             Spacer(modifier = Modifier.width(iconTextGap))
             AppText(

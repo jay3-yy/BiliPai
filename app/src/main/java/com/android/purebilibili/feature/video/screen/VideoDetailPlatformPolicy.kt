@@ -780,15 +780,15 @@ internal fun resolvePhoneAutoRotateRequestedOrientation(
         orientationDegrees = normalized,
         minLeftSideTopDegrees = landscapeEnterMinDegrees,
         maxLeftSideTopDegrees = landscapeEnterMaxDegrees,
-        minRightSideTopDegrees = 240,
-        maxRightSideTopDegrees = 300
+        minRightSideTopDegrees = landscapeEnterMinDegrees + 180,
+        maxRightSideTopDegrees = landscapeEnterMaxDegrees + 180
     )
     val exactLandscapeKeep = resolveExactLandscapeOrientation(
         orientationDegrees = normalized,
         minLeftSideTopDegrees = landscapeKeepMinDegrees,
         maxLeftSideTopDegrees = landscapeKeepMaxDegrees,
-        minRightSideTopDegrees = 220,
-        maxRightSideTopDegrees = 320
+        minRightSideTopDegrees = landscapeKeepMinDegrees + 180,
+        maxRightSideTopDegrees = landscapeKeepMaxDegrees + 180
     )
 
     return when {

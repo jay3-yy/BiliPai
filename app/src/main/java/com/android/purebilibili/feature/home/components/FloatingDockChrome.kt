@@ -55,7 +55,6 @@ import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
 import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.highlight.LightPosition
 import top.yukonga.miuix.kmp.blur.highlight.LightSource
-import top.yukonga.miuix.kmp.blur.sensor.rememberDeviceTilt
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
@@ -108,8 +107,9 @@ internal fun rememberBiliPaiGravityHighlight(
     base: Highlight = iosIndicatorSpecular,
     extraDegrees: Float = 0f,
     width: Dp = base.width,
+    active: Boolean,
 ): State<Highlight> {
-    val tiltState = rememberDeviceTilt()
+    val tiltState = rememberSharedGlassGravity(active)
     val quantizedDirection = remember(tiltState) {
         derivedStateOf {
             quantizeGravityHighlightDirection(
@@ -193,7 +193,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
         )
 
     if (enabled && samplingBackdrop != null) {
-        val baseHighlight = rememberBiliPaiGravityHighlight(extraDegrees = -45f)
+        val gravityGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
         val surfaceColor = containerColor.copy(alpha = liquidGlassTuning.surfaceAlpha)
         val readabilityScrimColor = if (readabilitySurfaceColor != Color.Unspecified) {
             readabilitySurfaceColor
@@ -201,6 +201,10 @@ internal fun Modifier.biliPaiFloatingDockShell(
         val resolvedLensIntensity = lensIntensity.coerceIn(0f, 1f) *
             liquidGlassTuning.contentDistortionScale.coerceIn(0f, 1.8f)
         val shouldDrawLens = parentGlass == null && drawLens && resolvedLensIntensity > 0.001f
+        val baseHighlight = rememberBiliPaiGravityHighlight(
+            extraDegrees = -45f,
+            active = shouldDrawLens && gravityGate.active,
+        )
         val refractionHeightDp = liquidGlassTuning.refractionHeight * resolvedLensIntensity
         val refractionAmountDp = liquidGlassTuning.refractionAmount * resolvedLensIntensity
         val effectPaddingDp = resolveFloatingDockEffectPaddingDp(
@@ -259,6 +263,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
             block
         }
         return baseModifier
+            .then(gravityGate.modifier)
             .drawBackdrop(
                 backdrop = samplingBackdrop,
                 shape = shapeBlock,
@@ -385,6 +390,12 @@ private fun rememberFloatingDockBackdropEffects(
     {
         if (effectPaddingPx > 0f) {
             padding = maxOf(padding, effectPaddingPx)
+        }
+        // 折射可能扩大采样范围；在模糊之前确定最终边距，避免效果链二次求值。
+        if (shouldDrawLens && top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() &&
+            refractionHeightPx > 0f && refractionAmountPx > 0f
+        ) {
+            padding = maxOf(padding, refractionAmountPx)
         }
         vibrancy(saturation)
         blur(blurRadiusPx, blurRadiusPx)
@@ -537,7 +548,11 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
         )
     }
     val recoilDirection = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 1f else -1f
-    val pillHighlight = rememberBiliPaiGravityHighlight(extraDegrees = 90f)
+    val gravityGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val pillHighlight = rememberBiliPaiGravityHighlight(
+        extraDegrees = 90f,
+        active = highlightEnabled && combinedBackdrop != null && pressProgress > 0.001f && gravityGate.active,
+    )
     Box(
         modifier = Modifier
             .align(alignment)
@@ -551,6 +566,7 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
             .width(width)
             .height(height)
             .zIndex(2f)
+            .then(gravityGate.modifier)
             .then(
                 if (combinedBackdrop != null) {
                     Modifier

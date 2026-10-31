@@ -1420,12 +1420,7 @@ internal fun TabletSecondaryContent(
                 }
 
                 TabletSecondaryTab.RELATED -> {
-                    var hiddenRelatedBvids by remember(success.info.bvid) {
-                        mutableStateOf(emptySet<String>())
-                    }
-                    val visibleRelatedVideos = remember(success.related, hiddenRelatedBvids) {
-                        filterRelatedVideosByHiddenBvids(success.related, hiddenRelatedBvids)
-                    }
+                    val visibleRelatedVideos = success.related
                     val relatedVideoCardLayout = rememberRelatedVideoCardLayout()
                     val relatedListState = rememberLazyListState()
                     RelatedVideoList(
@@ -1487,9 +1482,7 @@ internal fun TabletSecondaryContent(
                                             ) ?: android.os.Bundle.EMPTY
                                             onRelatedVideoClick(video.bvid, navOptions)
                                         },
-                                        onVideoHidden = { video ->
-                                            hiddenRelatedBvids = hiddenRelatedBvids + video.bvid
-                                        }
+                                        onUpClick = onUpClick,
                                     )
                                 }
                             }

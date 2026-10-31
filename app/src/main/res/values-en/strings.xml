@@ -830,8 +830,8 @@
     <string name="appearance_home_avatars_off">Hide avatars to make more room for uploader names</string>
     <string name="appearance_home_badges_on">Show uploader badges on Home and related videos</string>
     <string name="appearance_home_badges_off">Hide uploader badges on Home and related videos</string>
-    <string name="appearance_home_refresh_tip_on">Keep existing recommendations after refresh and show a notice at the refresh point</string>
-    <string name="appearance_home_refresh_tip_off">When off, refresh replaces recommendations without a notice</string>
+    <string name="appearance_home_refresh_tip_on">Show the previous refresh position when older recommendations are kept</string>
+    <string name="appearance_home_refresh_tip_off">Hide the position notice without changing whether older recommendations are kept</string>
     <string name="appearance_home_refresh_undo">Show an undo button after refreshing recommendations to restore previous content</string>
     <string name="appearance_home_online_on">Show “xx watching” on video cards; video pages are controlled separately</string>
     <string name="appearance_home_online_off">Hide viewer counts on cards; video pages are controlled separately</string>

@@ -239,7 +239,12 @@ class BackgroundAudioService : MediaSessionService() {
                             }?.takeIf { entries -> entries.size in 1..128 && entries.none { it.isBangumi || it.bvid.isBlank() } &&
                                 entries.distinctBy { it.bvid }.size == entries.size }
                             val newIndex = queue?.indexOfFirst { it.bvid == current.current?.bvid }
+                            val savedMode = args.getString("saved_mode")?.let { value ->
+                                com.android.purebilibili.feature.video.player.PlayMode.entries.firstOrNull { it.name == value }
+                            } ?: current.savedPlayMode
                             val next = current.copy(playMode = mode, shuffle = args.getBoolean("shuffle"),
+                                savedPlayMode = savedMode,
+                                savedShuffle = if (args.containsKey("saved_shuffle")) args.getBoolean("saved_shuffle") else current.savedShuffle,
                                 reportHistory = args.getBoolean("report_history", current.reportHistory),
                                 queue = queue?.takeIf { newIndex != null && newIndex >= 0 } ?: current.queue,
                                 index = newIndex?.takeIf { it >= 0 } ?: current.index)
@@ -519,7 +524,7 @@ class BackgroundAudioService : MediaSessionService() {
                 )
             }
         }
-        stateStore.edit { it[snapshotKey] = backgroundAudioJson.encodeToString(BackgroundAudioSnapshot.serializer(), state) }
+        stateStore.edit { it[snapshotKey] = backgroundAudioJson.encodeToString(BackgroundAudioSnapshot.serializer(), state.forPersistence()) }
         Unit
     }
 

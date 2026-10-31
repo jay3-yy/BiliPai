@@ -1525,6 +1525,7 @@ internal fun ElegantVideoCard(
             }
             PageAwareAsyncImage(
                 model = coverImageRequest,
+                dimInDarkTheme = true,
                 loadingAllowed = LocalHomeCardCoverLoadingAllowed.current
                     ?: LocalPageImageLoadingAllowed.current,
                 contentDescription = null,

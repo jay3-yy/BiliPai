@@ -47,20 +47,26 @@ internal fun PageAwareAsyncImage(
     contentScale: ContentScale = ContentScale.Fit,
     alignment: Alignment = Alignment.Center,
     loadingAllowed: Boolean = LocalPageImageLoadingAllowed.current,
+    dimInDarkTheme: Boolean = false,
     onError: ((AsyncImagePainter.State.Error) -> Unit)? = null,
     onSuccess: ((AsyncImagePainter.State.Success) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val resolvedImageLoader = imageLoader ?: context.imageLoader
+    val imageSettings = LocalContentImageSettings.current
+    val darkTheme = LocalContentImageDarkTheme.current
+    val imageFilter = remember(dimInDarkTheme, darkTheme, imageSettings.darkDimPercent) {
+        contentImageDimFilter(dimInDarkTheme && darkTheme, imageSettings.darkDimPercent)
+    }
     // 请求和暂停时的缓存回放使用同一质量身份，避免返回列表时丢失封面占位。
     val dataSaver by remember(context) { DataSaverState.get(context).active }
     // 首页封面、头像直接显示。只按是否属于首页选择策略，不把滚动/加载许可作为请求 key，
     // 避免滚动启停重建请求；其他列表继续使用各自的淡入配置。
     val homeFeedImage = LocalHomeCardCoverLoadingAllowed.current != null
-    val request = remember(model, dataSaver, homeFeedImage, context) {
+    val request = remember(model, dataSaver, imageSettings.listQuality, homeFeedImage, context) {
         val source = model as? ImageRequest
-            ?: if (homeFeedImage && model != null) ImageRequest.Builder(context).data(model).build() else null
-        source?.withBiliImageQuality(dataSaver)?.let {
+            ?: if (model != null) ImageRequest.Builder(context).data(model).build() else null
+        source?.withBiliImageQuality(dataSaver, imageSettings.listQuality)?.let {
             if (homeFeedImage) it.newBuilder().crossfade(false).build() else it
         }
     }
@@ -97,6 +103,7 @@ internal fun PageAwareAsyncImage(
             modifier = modifier,
             placeholder = retainedPainter,
             contentScale = contentScale,
+            colorFilter = imageFilter,
             alignment = alignment,
             onSuccess = {
                 retainedImage = it.result.image
@@ -119,6 +126,7 @@ internal fun PageAwareAsyncImage(
                 contentDescription = contentDescription,
                 modifier = modifier,
                 contentScale = contentScale,
+                colorFilter = imageFilter,
                 alignment = alignment,
             )
         } else {

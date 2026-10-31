@@ -1598,11 +1598,13 @@ private fun VideoPlayerSectionContent(
         stateValue = gestureMode.takeUnless { it == VideoGestureMode.None }?.name
     )
 
+    val aspectRatioSession = com.android.purebilibili.feature.video.ui.components.rememberPlayerAspectRatioSession(playerState.player, bvid)
+    val sessionAspectRatio by aspectRatioSession.selection.collectAsStateWithLifecycle()
     //  视频比例状态
-    var currentAspectRatio by remember {
+    var currentAspectRatio by remember(aspectRatioSession) {
         mutableStateOf(
             resolveSafeVideoAspectRatio(
-                preferred = fixedFullscreenAspectRatio.toVideoAspectRatio(),
+                preferred = sessionAspectRatio ?: fixedFullscreenAspectRatio.toVideoAspectRatio(),
                 isVerticalVideo = isVerticalVideo
             )
         )
@@ -1720,9 +1722,9 @@ private fun VideoPlayerSectionContent(
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
 
-    LaunchedEffect(fixedFullscreenAspectRatio, isVerticalVideo) {
+    LaunchedEffect(fixedFullscreenAspectRatio, isVerticalVideo, sessionAspectRatio, aspectRatioSession) {
         currentAspectRatio = resolveSafeVideoAspectRatio(
-            preferred = fixedFullscreenAspectRatio.toVideoAspectRatio(),
+            preferred = sessionAspectRatio ?: fixedFullscreenAspectRatio.toVideoAspectRatio(),
             isVerticalVideo = isVerticalVideo
         )
     }
@@ -5704,10 +5706,8 @@ private fun VideoPlayerSectionContent(
                             isVerticalVideo = isVerticalVideo
                         )
                         currentAspectRatio = safeRatio
-                        scope.launch {
-                            com.android.purebilibili.core.store.SettingsManager
-                                .setFullscreenAspectRatio(context, safeRatio.toFullscreenAspectRatio())
-                        }
+                        aspectRatioSession.select(safeRatio)
+                        scope.launch { aspectRatioSession.saveIfRemembered(context, safeRatio) }
                     },
                     //  [新增] 视频设置面板回调
                     onReloadVideo = onReloadVideo,

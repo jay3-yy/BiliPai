@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.space
 
-internal enum class FavoriteDetailSortOrder(val label: String) {
-    NEWEST_FIRST("倒序（最新在前）"),
-    OLDEST_FIRST("正序（最早在前）"),
+internal enum class FavoriteDetailSortOrder(val label: String, val serverOrder: String = "mtime") {
+    NEWEST_FIRST("最近收藏"),
+    OLDEST_FIRST("最早收藏"),
+    MOST_PLAYED("最多播放", "view"),
+    LATEST_PUBLISHED("最近投稿", "pubtime"),
 }
 
 internal fun favoriteLastServerPage(resourceCount: Int): Int =

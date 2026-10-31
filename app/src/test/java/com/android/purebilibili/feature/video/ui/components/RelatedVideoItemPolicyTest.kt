@@ -167,11 +167,11 @@ class RelatedVideoItemPolicyTest {
     }
 
     @Test
-    fun `related cards expose official style more menu entry`() {
+    fun `related cards expose more menu entry`() {
         val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt")
             .readText()
         assertTrue(source.contains("onMoreClick: (() -> Unit)? = null"))
-        assertTrue(source.contains("RelatedVideoActionSheet("))
-        assertTrue(source.contains("onVideoHidden"))
+        assertTrue(source.contains("AppDropdownMenu("))
+        assertFalse(source.contains("RelatedVideoActionSheet("))
     }
 }

@@ -2635,6 +2635,12 @@ SettingsItemAnchor("playback.fullscreen_swipe_seek_seconds") {
             )
         }
         AppPreferenceDivider()
+        com.android.purebilibili.feature.settings.PlayerAdjustmentPersistencePreference()
+        AppPreferenceDivider()
+        com.android.purebilibili.feature.settings.PlayerRotationSensitivityPreference()
+        AppPreferenceDivider()
+        com.android.purebilibili.feature.settings.PlayerControlsTimeoutPreference()
+        AppPreferenceDivider()
         SettingsItemAnchor("playback.player_control_visibility.show_follow_button") {
             AppSwitchPreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.FOLLOW_BUTTON),

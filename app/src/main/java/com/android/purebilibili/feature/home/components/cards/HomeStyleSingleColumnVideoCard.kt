@@ -291,7 +291,10 @@ internal fun HomeStyleSingleColumnVideoCard(
         },
         coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier,
         coverContent = {
-            AsyncImage(
+            com.android.purebilibili.core.ui.components.PageAwareAsyncImage(
+                dimInDarkTheme = true,
+                loadingAllowed = com.android.purebilibili.feature.home.LocalHomeCardCoverLoadingAllowed.current
+                    ?: com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed.current,
                 model = coverRequest,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,

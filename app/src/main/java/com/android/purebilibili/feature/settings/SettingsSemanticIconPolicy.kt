@@ -32,6 +32,15 @@ internal enum class SettingsIconRole {
     WEBDAV_BACKUP,
     DOWNLOAD_PATH,
     IMAGE_SAVE_PATH,
+    LIST_IMAGE_QUALITY,
+    PREVIEW_IMAGE_QUALITY,
+    DARK_IMAGE_DIM,
+    SCROLL_FEEDBACK,
+    PLAYER_CONTROLS_TIMEOUT,
+    PLAYER_ADJUSTMENT_PERSISTENCE,
+    PLAYER_ROTATION_SENSITIVITY,
+    DYNAMIC_VISIBILITY_CHECK,
+    RECOMMEND_RETENTION,
     CLEAR_CACHE,
     AUTO_CLEAR_CACHE,
     CACHE_CAPACITY_LIMIT,
@@ -278,6 +287,15 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.SETTINGS_SHARE -> R.drawable.ms_share_24
     SettingsIconRole.WEBDAV_BACKUP -> R.drawable.ms_cloud_upload_24
     SettingsIconRole.DOWNLOAD_PATH -> R.drawable.ms_folder_24
+    SettingsIconRole.LIST_IMAGE_QUALITY -> R.drawable.ic_settings_list_image_quality_24
+    SettingsIconRole.PREVIEW_IMAGE_QUALITY -> R.drawable.ic_settings_preview_image_quality_24
+    SettingsIconRole.DARK_IMAGE_DIM -> R.drawable.ic_settings_dark_image_dim_24
+    SettingsIconRole.PLAYER_ADJUSTMENT_PERSISTENCE -> R.drawable.ic_settings_player_adjustments_24
+    SettingsIconRole.PLAYER_ROTATION_SENSITIVITY -> R.drawable.ic_settings_rotation_sensitivity_24
+    SettingsIconRole.PLAYER_CONTROLS_TIMEOUT -> R.drawable.ic_settings_player_controls_timeout_24
+    SettingsIconRole.DYNAMIC_VISIBILITY_CHECK -> R.drawable.ic_settings_dynamic_visibility_check_24
+    SettingsIconRole.SCROLL_FEEDBACK -> R.drawable.ic_settings_scroll_feedback_24
+    SettingsIconRole.RECOMMEND_RETENTION -> R.drawable.ic_settings_recommend_retention_24
     SettingsIconRole.IMAGE_SAVE_PATH -> R.drawable.ms_photo_24
     SettingsIconRole.CLEAR_CACHE -> R.drawable.ms_delete_outline_24
     SettingsIconRole.AUTO_CLEAR_CACHE -> R.drawable.ms_auto_delete_24

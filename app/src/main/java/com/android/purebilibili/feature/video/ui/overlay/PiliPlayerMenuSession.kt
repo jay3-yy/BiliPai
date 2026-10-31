@@ -128,8 +128,15 @@ fun rememberPiliPlayerMenuSession(
     val scope = rememberCoroutineScope()
     val amplification by remember(context) { PiliPlayerMenuStore.amplification(context) }
         .collectAsStateWithLifecycle(initialValue = 1f)
-    val backgroundEnabled by remember(context) { SettingsManager.getBackgroundPlaybackEnabled(context) }
+    val savedBackgroundEnabled by remember(context) { SettingsManager.getBackgroundPlaybackEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = SettingsManager.getBackgroundPlaybackEnabledSync(context))
+    val backgroundManager = remember(context) { com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstance(context) }
+    val backgroundKey = if (player != null && backgroundManager.isPlayerManaged(player) && backgroundManager.isLiveMode) {
+        "live:${backgroundManager.currentRoomId}"
+    } else "video:$bvid"
+    val backgroundSession = com.android.purebilibili.feature.video.player.rememberPlayerBackgroundPlaybackSession(player, backgroundKey)
+    val backgroundOverride by backgroundSession.selection.collectAsStateWithLifecycle()
+    val backgroundEnabled = backgroundOverride ?: savedBackgroundEnabled
     val waitForEnd by remember(context) { PiliPlayerMenuStore.sleepWaitForEnd(context) }
         .collectAsStateWithLifecycle<Boolean?>(initialValue = null)
     val exitApp by remember(context) { PiliPlayerMenuStore.sleepExitApp(context) }
@@ -297,7 +304,10 @@ fun rememberPiliPlayerMenuSession(
         }) else null,
         playerVolumeUnavailableReason = volumeFailure,
         isBackgroundPlaybackEnabled = backgroundEnabled,
-        onBackgroundPlaybackChange = { value -> scope.launch { SettingsManager.setBackgroundPlaybackEnabled(context, value) } },
+        onBackgroundPlaybackChange = { value ->
+            backgroundSession.select(value)
+            scope.launch { backgroundSession.saveIfRemembered(context, value) }
+        },
         onWatchLater = actions.onWatchLater,
         onShowNotes = actions.onShowNotes,
         onDownloadVideo = actions.onDownloadVideo,

@@ -45,6 +45,15 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
     val canManageFavoriteResources: Boolean
         get() = id > 0L && canManageSpaceFavoriteResources(type, favoriteFolderOwnerMid, TokenManager.midCache)
 
+    internal val favoriteOrderFolderId: Long get() = id
+    internal val favoriteOrderOwnerMid: Long get() = favoriteFolderOwnerMid
+
+    internal fun onFavoriteResourceOrderSaved() {
+        if (!canManageFavoriteResources) return
+        _favoriteDetailSortOrder.value = FavoriteDetailSortOrder.NEWEST_FIRST
+        loadData()
+    }
+
     private val _favoriteFolderInfo = MutableStateFlow<FavoriteInfo?>(null)
     val favoriteFolderInfo = _favoriteFolderInfo.asStateFlow()
     private val _favoriteDetailSortOrder = MutableStateFlow(FavoriteDetailSortOrder.NEWEST_FIRST)
@@ -78,7 +87,8 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
         val requestOwner = ownerName
         val ordinaryFavorite = requestType == SpaceCollectionDetailType.FAVORITE.raw
         val favoriteDetail = isFavoriteDetail
-        val oldestFirst = ordinaryFavorite && _favoriteDetailSortOrder.value == FavoriteDetailSortOrder.OLDEST_FIRST
+        val favoriteSort = _favoriteDetailSortOrder.value
+        val oldestFirst = ordinaryFavorite && favoriteSort == FavoriteDetailSortOrder.OLDEST_FIRST
         _uiState.update { it.copy(isLoading = showLoading || it.items.isEmpty(), error = null, loadMoreError = null) }
         var appliedPages = 0
         lateinit var session: ForwardPagingSession<CollectionDetailPageKey, CollectionDetailPageChunk>
@@ -108,7 +118,7 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
                         }
                         else -> {
                             val response = if (ordinaryFavorite) {
-                                FavoriteRepository.getFavoriteList(mediaId = requestId, pn = number)
+                                FavoriteRepository.getFavoriteList(mediaId = requestId, pn = number, order = favoriteSort.serverOrder)
                             } else FavoriteRepository.getFavoriteSeasonList(seasonId = requestId, pn = number)
                             val data = response.getOrThrow()
                             currentCoroutineContext().ensureActive()
@@ -216,6 +226,9 @@ class SeasonSeriesDetailViewModel(application: Application) : BaseListViewModel(
     val favoriteDetailProgressState = _favoriteDetailProgressState.asStateFlow()
 
     fun init(type: String, id: Long, mid: Long, title: String, ownerName: String = "") {
+        if (this.type != type || this.id != id || this.mid != mid) {
+            _favoriteDetailSortOrder.value = FavoriteDetailSortOrder.NEWEST_FIRST
+        }
         ++requestGeneration
         pagingJob?.cancel()
         _favoriteFolderInfo.value = null

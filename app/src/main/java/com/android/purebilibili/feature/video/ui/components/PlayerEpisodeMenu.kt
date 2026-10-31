@@ -282,6 +282,7 @@ internal fun PlayerDetailPanel(title: String, isFullscreen: Boolean, playerBound
     compactHeight: Boolean = false, useGlassSurface: Boolean = false,
     draggable: Boolean = false,
     content: @Composable ColumnScope.(requestDismiss: () -> Unit) -> Unit) {
+    if (!rememberPlayerPopupHostActive(onDismiss)) return
     val density = LocalDensity.current
     val size = LocalWindowInfo.current.containerSize
     val safe = playerPanelSafeWindowBounds()

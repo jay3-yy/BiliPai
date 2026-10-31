@@ -218,6 +218,9 @@ fun BangumiPlayerView(
     var currentAspectRatio by remember { mutableStateOf(VideoAspectRatio.FIT) }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
     val scope = rememberCoroutineScope()
+    com.android.purebilibili.feature.video.player.PlayerBackgroundPlaybackLifecycleEffect(
+        player = exoPlayer, key = "video:$bvid", isInPipMode = features.isInPipMode,
+    )
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val hostLifecycleStarted = lifecycleState.isAtLeast(Lifecycle.State.STARTED)

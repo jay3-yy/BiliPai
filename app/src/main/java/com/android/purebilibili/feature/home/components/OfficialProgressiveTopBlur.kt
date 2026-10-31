@@ -110,6 +110,14 @@ private fun rememberSupportedOfficialProgressiveTopBlur(
 @RequiresApi(33)
 private class OfficialProgressiveBackdropRenderer {
     private val node = RenderNode("ProgressiveTopBackdrop")
+    // 四个档位各持有独立 shader；尺寸和渐变变化只更新 uniform 与效果快照。
+    private val bandShaders = Array(4) { RuntimeShader(PROGRESSIVE_BAND_SHADER) }
+    private val blurEffects = arrayOfNulls<RenderEffect>(4)
+    private var blurRadius = Float.NaN
+    private var configuredWidth = 0
+    private var configuredHeight = 0
+    private var configuredRadius = Float.NaN
+    private var configuredGradient: ProgressiveBlur? = null
     private var failureReported = false
 
     fun failOnce(): Boolean {
@@ -118,24 +126,43 @@ private class OfficialProgressiveBackdropRenderer {
         return true
     }
 
-    fun configure(width: Int, height: Int, radius: Float, gradient: ProgressiveBlur): Boolean = try {
-        node.setPosition(0, 0, width, height)
-        node.setClipToBounds(true)
-        val effect = createProgressiveBackdropEffect(width.toFloat(), height.toFloat(), radius, gradient)
-        if (OfficialBackdropApi.setEffect(node, effect)) {
-            // 透明 SrcOver 保留背景效果；CLEAR 会使背景效果不参与合成。
-            val canvas = node.beginRecording(width, height)
-            try {
-                canvas.drawColor(android.graphics.Color.TRANSPARENT)
-            } finally {
-                node.endRecording()
+    fun configure(width: Int, height: Int, radius: Float, gradient: ProgressiveBlur): Boolean {
+        if (configuredWidth == width && configuredHeight == height &&
+            configuredRadius == radius && configuredGradient == gradient
+        ) return true
+        return try {
+            if (blurRadius != radius) {
+                // 模糊半径与窗口尺寸无关；收起顶栏或调整窗口时复用三个模糊档位。
+                for (level in 1..3) {
+                    val levelRadius = radius * level / 3f
+                    blurEffects[level] = RenderEffect.createBlurEffect(levelRadius, levelRadius, Shader.TileMode.CLAMP)
+                }
+                blurRadius = radius
             }
-            true
-        } else false
-    } catch (_: RuntimeException) {
-        false
-    } catch (_: LinkageError) {
-        false
+            node.setPosition(0, 0, width, height)
+            node.setClipToBounds(true)
+            val effect = createProgressiveBackdropEffect(
+                width.toFloat(), height.toFloat(), gradient, bandShaders, blurEffects,
+            )
+            if (OfficialBackdropApi.setEffect(node, effect)) {
+                // 透明 SrcOver 保留背景效果；CLEAR 会使背景效果不参与合成。
+                val canvas = node.beginRecording(width, height)
+                try {
+                    canvas.drawColor(android.graphics.Color.TRANSPARENT)
+                } finally {
+                    node.endRecording()
+                }
+                configuredWidth = width
+                configuredHeight = height
+                configuredRadius = radius
+                configuredGradient = gradient
+                true
+            } else false
+        } catch (_: RuntimeException) {
+            false
+        } catch (_: LinkageError) {
+            false
+        }
     }
 
     fun draw(canvas: android.graphics.Canvas): Boolean {
@@ -153,6 +180,9 @@ private class OfficialProgressiveBackdropRenderer {
     fun release() {
         OfficialBackdropApi.setEffect(node, null)
         node.discardDisplayList()
+        blurEffects.fill(null)
+        blurRadius = Float.NaN
+        configuredGradient = null
     }
 }
 
@@ -164,8 +194,9 @@ private class OfficialProgressiveBackdropRenderer {
 private fun createProgressiveBackdropEffect(
     width: Float,
     height: Float,
-    radius: Float,
     gradient: ProgressiveBlur,
+    bandShaders: Array<RuntimeShader>,
+    blurEffects: Array<RenderEffect?>,
 ): RenderEffect {
     val angle = Math.toRadians(gradient.angle.toDouble())
     val dx = cos(angle).toFloat()
@@ -174,7 +205,7 @@ private fun createProgressiveBackdropEffect(
     val extent = (kotlin.math.abs(width * dx) + kotlin.math.abs(height * dy)).coerceAtLeast(1f)
     var result: RenderEffect? = null
     for (level in 0..3) {
-        val shader = RuntimeShader(PROGRESSIVE_BAND_SHADER).apply {
+        val shader = bandShaders[level].apply {
             setFloatUniform("direction", dx, dy)
             setFloatUniform("projection", minProjection, extent)
             setFloatUniform("ramp", gradient.startFraction, gradient.endFraction, gradient.curve)
@@ -183,7 +214,7 @@ private fun createProgressiveBackdropEffect(
         val band = RenderEffect.createRuntimeShaderEffect(shader, "content")
         val layer = if (level == 0) band else RenderEffect.createChainEffect(
             band,
-            RenderEffect.createBlurEffect(radius * level / 3f, radius * level / 3f, Shader.TileMode.CLAMP),
+            requireNotNull(blurEffects[level]),
         )
         result = result?.let { RenderEffect.createBlendModeEffect(it, layer, BlendMode.PLUS) } ?: layer
     }

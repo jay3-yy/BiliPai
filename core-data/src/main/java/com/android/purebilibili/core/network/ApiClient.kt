@@ -439,6 +439,15 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 20
     ): FavoriteResourceResponse
 
+    @retrofit2.http.FormUrlEncoded
+    @retrofit2.http.POST("x/v3/fav/resource/sort")
+    suspend fun sortFavResources(
+        @retrofit2.http.Field("media_id") mediaId: Long,
+        @retrofit2.http.Field("sort") sort: String,
+        @retrofit2.http.Field("csrf") csrf: String,
+        @retrofit2.http.Tag accountSession: AccountCookieSession,
+    ): SimpleApiResponse
+
     // [新增] 批量删除收藏资源 (取消收藏)
     @retrofit2.http.FormUrlEncoded
     @retrofit2.http.POST("x/v3/fav/resource/batch-del")
@@ -2010,7 +2019,7 @@ interface DynamicApi {
         @Query("x-bili-device-req-json") deviceRequestJson: String = "{\"platform\":\"web\",\"device\":\"pc\"}",
         @Query("x-bili-web-req-json") webRequestJson: String = "{\"spm_id\":\"333.1330\"}",
         @retrofit2.http.Body body: DynamicRepostRequest
-    ): SimpleApiResponse
+    ): DynamicCreateFeedResponse
 
     @retrofit2.http.POST("x/dynamic/feed/create/dyn")
     suspend fun createFeedDynamic(
