@@ -5869,8 +5869,12 @@ internal fun VideoDetailScreenStateHolder(
             threadListModifier = commentThreadPlayerScrollConnection?.let {
                 Modifier.nestedScroll(it)
             } ?: Modifier,
+            // 横屏全屏时楼中楼宿主整个退出，只保留 ViewModel 里的 subReplyState，
+            // 转回竖屏后自动恢复成原来的楼中楼。
+            // 之前只在横屏评论面板已打开时才隐藏，面板没打开时楼中楼会按 60% 屏高
+            // 从底部展开，正好压住横屏视频的下半部分。
             visible = shouldShowDetachedVideoCommentThreadHost(useTabletLayout = useTabletLayout) &&
-                !(canShowLandscapeComments && landscapeCommentPanelVisible),
+                !canShowLandscapeComments,
             successState = successState,
             commentState = commentState,
             commentViewModel = commentViewModel,
