@@ -1661,8 +1661,10 @@ fun SearchScreen(
                                 .fillMaxSize()
                                 .then(searchChromeSource?.modifier ?: Modifier)
                         .globalWallpaperAwareBackground(),
-                            beyondViewportPageCount = 1
+                            beyondViewportPageCount = 1,
+                            key = { page -> resolveSearchTypeForPagerPage(page, searchTabs) },
                         ) { page ->
+                        SearchResultPageHost(modifier = Modifier.fillMaxSize()) {
                         val targetSearchType = resolveSearchTypeForPagerPage(page, searchTabs)
                         val pageResultState = resolveSearchResultPageState(
                             state = state,
@@ -2724,6 +2726,7 @@ fun SearchScreen(
                         }
                         }
                         }
+                }
                 }
             } else {
                 val useSplitLayout = shouldUseSearchSplitLayout(
