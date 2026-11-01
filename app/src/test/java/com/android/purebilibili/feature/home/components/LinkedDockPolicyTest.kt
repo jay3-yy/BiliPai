@@ -396,4 +396,44 @@ class LinkedDockPolicyTest {
 
     private fun geometry(merge: Float, search: Float) =
         resolveLinkedDockGeometry(336, 56, 64, 8, true, true, merge, search)
+
+    @Test
+    fun searchScrollMergeWorksWithoutPlaybackAndRespectsTheSwitch() {
+        assertEquals(LinkedDockPhase.Compact, resolveLinkedDockScrollPhase(24f, 24f,
+            hasAudio = false, searchEnabled = true, mergeOnScrollDownEnabled = true))
+        assertEquals(LinkedDockPhase.Playback, resolveLinkedDockScrollPhase(24f, 24f,
+            hasAudio = true, searchEnabled = true, mergeOnScrollDownEnabled = true))
+        assertEquals(null, resolveLinkedDockScrollPhase(24f, 24f,
+            hasAudio = false, searchEnabled = true, mergeOnScrollDownEnabled = false))
+        assertEquals(null, resolveLinkedDockScrollPhase(24f, 24f,
+            hasAudio = false, searchEnabled = false, mergeOnScrollDownEnabled = true))
+        assertEquals(null, resolveLinkedDockScrollPhase(23f, 24f,
+            hasAudio = false, searchEnabled = true, mergeOnScrollDownEnabled = true))
+        assertEquals(LinkedDockPhase.Expanded, resolveLinkedDockScrollPhase(-24f, 24f,
+            hasAudio = false, searchEnabled = true, mergeOnScrollDownEnabled = false))
+    }
+
+    @Test
+    fun searchMergeTakesPrecedenceOverStandaloneNavigationCompacting() {
+        assertFalse(shouldUseScrollCompactNavigation(enabled = true, hasAudio = false,
+            retainingAudio = false, searchMergeEnabled = true))
+        assertTrue(shouldUseScrollCompactNavigation(enabled = true, hasAudio = false,
+            retainingAudio = false, searchMergeEnabled = false))
+    }
+
+    @Test
+    fun mergedSearchSurvivesReconciliationRemountAndInputDismissal() {
+        assertEquals(LinkedDockPhase.Compact, resolveLinkedDockPhaseOnAudioChange(
+            LinkedDockPhase.Compact, hasAudio = false, searchMergeEnabled = true))
+        assertEquals(LinkedDockPhase.Compact, resolveLinkedDockInitialPhase(
+            BottomNavItem.HOME, collapseRequested = false, hasAudio = false,
+            savedPhase = LinkedDockPhase.Compact, searchMergeEnabled = true))
+        assertEquals(LinkedDockPhase.Compact, resolveLinkedDockPhaseOnSearchDismiss(
+            hasAudio = false, previousPhase = LinkedDockPhase.Compact, searchMergeEnabled = true))
+        assertEquals(LinkedDockPhase.Expanded, resolveLinkedDockPhaseOnAudioChange(
+            LinkedDockPhase.Compact, hasAudio = false, searchMergeEnabled = false))
+        assertEquals(LinkedDockPhase.Search, resolveLinkedDockPhaseOnAudioChange(
+            LinkedDockPhase.Search, hasAudio = false, searchMergeEnabled = false))
+    }
+
 }

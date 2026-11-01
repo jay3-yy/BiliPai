@@ -381,18 +381,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun getPopularCategoryState(subCategory: PopularSubCategory): StateFlow<CategoryContent> =
         popularCategoryStateFlows.getValue(subCategory)
 
-    fun getPreloadVideosSnapshot(
-        category: HomeCategory,
-        popularSubCategory: PopularSubCategory
-    ): List<VideoItem> {
-        val state = _uiState.value
-        return if (category == HomeCategory.POPULAR) {
-            state.popularCategoryStates[popularSubCategory]?.videos ?: state.videos
-        } else {
-            state.categoryStates[category]?.videos ?: state.videos
-        }
-    }
-
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing = _isRefreshing.asStateFlow()
 
@@ -1649,8 +1637,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (shouldRefreshHomeUserInfoAfterFeedLoad(isLoadMore)) {
             refreshUserInfoInBackground()
         }
-
-        if (isLoadMore) delay(100)
 
         // Feed filtering and de-duplication are CPU-only work. Keep it off the UI dispatcher so
         // the list can continue drawing while plugin and feedback rules process the response.

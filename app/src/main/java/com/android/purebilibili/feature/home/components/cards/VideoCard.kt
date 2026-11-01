@@ -126,21 +126,15 @@ import top.yukonga.miuix.kmp.blur.drawBackdrop
 import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick as semanticClick
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.LocalMiuixVideoCardTransitionState
-import com.android.purebilibili.core.ui.transition.LocalVideoCardTransitionBackgroundState
-import com.android.purebilibili.core.ui.transition.captureNativeCoverOverlayLayer
-import com.android.purebilibili.core.ui.transition.captureNativeVideoCardImage
-import com.android.purebilibili.core.ui.transition.captureWholeCardReturnBitmap
-import com.android.purebilibili.core.ui.transition.captureVideoCardPixelsAfterEntry
-import com.android.purebilibili.core.ui.transition.rememberVideoCardPixelCaptureAllowed
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
-import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardLayer
 import com.android.purebilibili.core.ui.transition.LocalClickToPlayEnabled
 import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
 import com.android.purebilibili.core.ui.transition.VideoSharedTransitionMotionSpec
@@ -398,11 +392,23 @@ internal fun VideoCardDurationPublishRow(
     emphasizePublishTime: Boolean,
     publishTimeColor: Color,
     topSpacing: Dp,
+    singleLine: Boolean = false,
 ) {
     if (durationText.isBlank() && publishTimeText.isBlank()) return
     val contentTypography = feedContentTypography()
 
     Spacer(modifier = Modifier.height(topSpacing))
+    if (singleLine) {
+        AppText(
+            text = listOf(publishTimeText, durationText).filter { it.isNotBlank() }.joinToString(" · "),
+            style = contentTypography.statistic,
+            color = publishTimeColor,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
     FlowRow(
         modifier = Modifier.fillMaxWidth(),
         itemVerticalAlignment = Alignment.CenterVertically,
@@ -555,6 +561,8 @@ internal fun ElegantVideoCard(
     compactMetadata: Boolean = true,
     titleMinLines: Int = 2,
     titleMaxLines: Int = 2,
+    // Home's regular grid bounds metadata to rows; other lists retain wrapping metadata.
+    regularGridMetadata: Boolean = false,
     highlightedTitle: AnnotatedString? = null,
     showOnlineCount: Boolean = false,
     upFollowerCount: Int? = null,
@@ -1053,12 +1061,30 @@ internal fun ElegantVideoCard(
     var menuGlassAnchorBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     val hasOverflowMenu = onDismiss != null || onWatchLater != null
     val hasTrailingCardAction = onUnfavorite != null || hasOverflowMenu
-    val nativeCardLayer = rememberNativeVideoCardLayer()
-    val wholeCardCaptureScope = rememberCoroutineScope()
-    val wholeCardCaptureAllowed = rememberVideoCardPixelCaptureAllowed()
-    val videoCardTransitionBackgroundState = LocalVideoCardTransitionBackgroundState.current
-    val nativeCoverOverlayLayer = rememberNativeVideoCardLayer()
-    val freezeNativeCardLayer = remember(video.bvid) { mutableStateOf(false) }
+    // Home sources mount only for an input gesture or their active navigation identity.
+    // Other lists keep their existing eager preparation policy.
+    val sourceEnabled = transitionEnabled && LocalSharedTransitionEnabled.current
+    val onDemandSource = homeScrollTickProvider != null && sourceEnabled
+    val sourceInteraction = remember(video.bvid, video.cid, effectiveSharedElementSourceRoute) {
+        VideoCardSourceInteraction()
+    }
+    val sourceInteractionAllowed by rememberUpdatedState(
+        onDemandSource && LocalPageImageLoadingAllowed.current && cardVisibleInWindow &&
+            com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
+            LocalHomeCardScrolling.current?.value != true
+    )
+    val prepareCardTransition = sourceEnabled && (
+        !onDemandSource || (sourceInteractionAllowed && sourceInteraction.preparing) ||
+            isVideoCardSharedReturnTarget(
+                bvid = video.bvid,
+                sourceRoute = effectiveSharedElementSourceRoute,
+                lastClickedVideoSourceKey = CardPositionManager.lastClickedVideoSourceKey,
+            ) && isVideoCardSharedSourceInstanceOwner(
+                sharedSourceInstanceId, CardPositionManager.lastClickedVideoSourceInstanceId,
+            )
+    )
+    val captureState = if (prepareCardTransition) rememberVideoCardCaptureState(video.bvid) else null
+    val wholeCardCaptureScope = if (prepareCardTransition) rememberCoroutineScope() else null
 
     // 玻璃底色显式选择材质分支，原生卡片不借用玻璃透明度或布局参数。
     val infoBaseContainerColor = AppSurfaceTokens.videoCardContainer(glassEnabled = useCardEffectSurface)
@@ -1158,9 +1184,13 @@ internal fun ElegantVideoCard(
                             publishTimeText = publishTimeRowText,
                             showStatsInInfo = scrollLitePolicy.showSecondaryStatsRow,
                             ownerBeforeStats = true,
-                            showDurationInInfo = showDurationOutside,
+                            showDurationInInfo = showDurationOutside && !scrollLitePolicy.showCompactStatsOnCover,
                             useTintedInfoSurface = useCardEffectSurface,
                             showOverflowMenu = hasOverflowMenu,
+                            singleLineMetadata = regularGridMetadata,
+                            onlineCountText = if (scrollLitePolicy.showSecondaryStatsRow &&
+                                (onlineCount.isNotEmpty() || (regularGridMetadata && showOnlineCount))
+                            ) onlineCount.ifEmpty { "—" } else "",
                         ),
                     coverPresentation = VideoCardSourceCoverPresentation(
                         showGradientMask = scrollLitePolicy.showCoverGradientMask,
@@ -1191,37 +1221,34 @@ internal fun ElegantVideoCard(
                     ?.takeIf { it.isAttached }
                     ?.videoCardSourceBoundsInRoot(),
             )
-            // The mounted draw modifier reads this latch directly, so the layer freezes
-            // before OPENING can hide the stationary title and statistics.
-            // 过渡关闭时 draw modifier 未挂载，冻结/捕获纯属空转（层从未 record）。
-            if (transitionEnabled) {
-                freezeNativeCardLayer.value = true
-                captureNativeVideoCardImage(nativeCardLayer)
-                captureNativeCoverOverlayLayer(nativeCoverOverlayLayer)
-                val owner = CardPositionManager.videoCardPixelOwnerFor(CardPositionManager.lastClickedVideoSourceKey)
+            // Freeze synchronously before navigation; deferred readback stays in the mounted
+            // source scope and is cancelled if the source leaves composition.
+            if (captureState != null && wholeCardCaptureScope != null) {
+                val owner = captureState.freezeOnClick()
                 if (owner != null) {
-                    wholeCardCaptureScope.launch {
-                        captureVideoCardPixelsAfterEntry(
-                            phaseProvider = videoCardTransitionBackgroundState.phaseProvider,
-                            isReturnGestureInProgress = {
-                                videoCardTransitionBackgroundState.isReturnGestureInProgressProvider() ||
-                                    videoCardTransitionBackgroundState.isGestureRestoreInProgressProvider()
-                            },
-                            ownsCapture = {
-                                !nativeCardLayer.isReleased &&
-                                    CardPositionManager.isActiveVideoCardPixelOwner(owner) &&
-                                    CardPositionManager.isNativeVideoCardLayerCurrentOwner(nativeCardLayer)
-                            },
-                            captureAllowed = { wholeCardCaptureAllowed.value },
-                            entryWorkReleased = { owner.entryWorkReleased },
-                            capture = { captureWholeCardReturnBitmap(nativeCardLayer, owner) },
-                        )
-                    }
+                    wholeCardCaptureScope.launch { captureState.captureAfterEntry(owner) }
                 }
             }
         }
         onClick(video.bvid, video.cid)
     })
+    val requestCardClick by rememberUpdatedState {
+        if (onDemandSource) {
+            if (sourceInteractionAllowed && !CardPositionManager.isVideoNavigationDebounceActive()) {
+                sourceInteraction.requestClick()
+            }
+        } else {
+            triggerCardClick()
+        }
+    }
+    if (sourceInteraction.preparing) {
+        VideoCardPreparedClickEffect(
+            interaction = sourceInteraction,
+            capture = captureState,
+            allowed = onDemandSource && sourceInteractionAllowed,
+            onClick = { triggerCardClick() },
+        )
+    }
     val homeCardScrolling = LocalHomeCardScrolling.current
     val homeCardTransitionAtMount = LocalHomeCardTransitionRunning.current
     val enterAnimationEnabledAtMount = remember(video.bvid) {
@@ -1266,7 +1293,7 @@ internal fun ElegantVideoCard(
         val sharedTransitionSpeedSettings = LocalVideoSharedTransitionSpeedSettings.current
         val transitionAdaptiveInfo = com.android.purebilibili.core.ui.transition
             .LocalVideoTransitionAdaptiveInfo.current
-        val effectiveTransitionEnabled = transitionEnabled
+        val effectiveTransitionEnabled = prepareCardTransition
         val coverSharedEnabled = shouldEnableVideoCoverSharedTransition(
             transitionEnabled = effectiveTransitionEnabled && LocalSharedTransitionEnabled.current,
             hasSharedTransitionScope = sharedTransitionScope != null,
@@ -1320,7 +1347,7 @@ internal fun ElegantVideoCard(
                 lastClickedVideoSourceKey = CardPositionManager.lastClickedVideoSourceKey,
             )
         }
-        val sharedSourceOwnershipAllowed = isVideoCardSharedSourceInstanceOwner(
+        val sharedSourceOwnershipAllowed = (onDemandSource && sourceInteraction.preparing) || isVideoCardSharedSourceInstanceOwner(
             sourceInstanceId = sharedSourceInstanceId,
             lastClickedSourceInstanceId = CardPositionManager.lastClickedVideoSourceInstanceId,
         )
@@ -1355,15 +1382,15 @@ internal fun ElegantVideoCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .recordNativeVideoCardLayer(
-                    layer = nativeCardLayer,
+                    layer = captureState?.cardLayer,
                     freezeProvider = {
-                        freezeNativeCardLayer.value &&
-                            CardPositionManager.isNativeVideoCardLayerCurrentOwner(nativeCardLayer)
+                        captureState?.freezeCard() == true
                     },
                     bvid = video.bvid,
                     sourceRoute = effectiveSharedElementSourceRoute,
                     enabled = effectiveTransitionEnabled,
                     landingFeedbackEnabled = true,
+                    onRecorded = captureState?.let { { it.onCardRecorded() } },
                 ),
         ) {
             val cardShellBaseColor = if (useCardEffectSurface) {
@@ -1443,6 +1470,7 @@ internal fun ElegantVideoCard(
                     isReturningFromDetail = isReturningFromVideoDetail,
                 )
                 .testTag("home_video_cover")
+                .semantics { semanticClick(label = "播放视频") { requestCardClick(); true } }
                 .aspectRatio(coverAspectRatio)
                 .clip(coverShape)
                 .onPlaced { coordinates -> coverCoordsRef.value = coordinates }
@@ -1457,10 +1485,18 @@ internal fun ElegantVideoCard(
                 )
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 //  [交互优化] 封面区域：点击跳转
-                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite) {
+                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, onDemandSource, sourceInteraction) {
                     val hasPreviewAction = isLongPressEnabled && onLongClick != null
                     val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
                     detectTapGestures(
+                        onPress = {
+                            if (onDemandSource && sourceInteractionAllowed) sourceInteraction.press()
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                sourceInteraction.release()
+                            }
+                        },
                         onLongPress = if (isLongPressEnabled && (hasPreviewAction || hasLongPressMenu)) {
                             { pressOffset ->
                                 if (hasPreviewAction) {
@@ -1478,7 +1514,7 @@ internal fun ElegantVideoCard(
                             }
                         } else null,
                         onTap = {
-                            triggerCardClick()
+                            requestCardClick()
                         }
                     )
                 }
@@ -1543,16 +1579,14 @@ internal fun ElegantVideoCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .recordNativeVideoCardLayer(
-                        layer = nativeCoverOverlayLayer,
+                        layer = captureState?.coverOverlayLayer,
                         freezeProvider = {
-                            freezeNativeCardLayer.value &&
-                                CardPositionManager.isNativeCoverOverlayLayerCurrentOwner(
-                                    nativeCoverOverlayLayer
-                                )
+                            captureState?.freezeCover() == true
                         },
                         bvid = video.bvid,
                         sourceRoute = effectiveSharedElementSourceRoute,
                         enabled = effectiveTransitionEnabled,
+                        onRecorded = captureState?.let { { it.onCoverRecorded() } },
                     ),
             ) {
             VideoStatusBadges(
@@ -2011,15 +2045,26 @@ internal fun ElegantVideoCard(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics { contentDescription = "视频标题: ${video.title}" }
+                .semantics {
+                    contentDescription = "视频标题: ${video.title}"
+                    semanticClick(label = "播放视频") { requestCardClick(); true }
+                }
                 .onPlaced { coordinates ->
                     titleCoordsRef.value = coordinates
                 }
                 //  [交互优化] 标题区域：长按弹出菜单，点击跳转
-                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite) {
+                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, onDemandSource, sourceInteraction) {
                     val hasPreviewAction = isLongPressEnabled && onLongClick != null
                     val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
                     detectTapGestures(
+                        onPress = {
+                            if (onDemandSource && sourceInteractionAllowed) sourceInteraction.press()
+                            try {
+                                tryAwaitRelease()
+                            } finally {
+                                sourceInteraction.release()
+                            }
+                        },
                         onLongPress = if (isLongPressEnabled && (hasPreviewAction || hasLongPressMenu)) {
                             { pressOffset ->
                                 if (hasPreviewAction) {
@@ -2037,7 +2082,7 @@ internal fun ElegantVideoCard(
                             }
                         } else null,
                         onTap = {
-                            triggerCardClick()
+                            requestCardClick()
                         }
                     )
                 }
@@ -2080,9 +2125,10 @@ internal fun ElegantVideoCard(
                     playText = primaryStatText,
                     danmakuText = secondaryStatText.orEmpty(),
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = regularGridMetadata,
                 )
 
-                if (onlineCount.isNotEmpty()) {
+                if (onlineCount.isNotEmpty() || (regularGridMetadata && showOnlineCount)) {
                     HomeVideoBadgePill(
                         style = badgeStylePolicy.infoStyle,
                         useRealtimeHaze = badgeEffectVisual.useRealtimeHaze,
@@ -2097,7 +2143,7 @@ internal fun ElegantVideoCard(
                             tint = adaptiveContentColors.subtitleColor
                         )
                         AppText(
-                            text = onlineCount,
+                            text = onlineCount.ifEmpty { "—" },
                             color = adaptiveContentColors.subtitleColor,
                             style = contentTypography.statistic.copy(fontWeight = FontWeight.Medium),
                             maxLines = 1,
@@ -2122,6 +2168,7 @@ internal fun ElegantVideoCard(
             } else {
                 AppSpacingTokens.Small - AppSpacingTokens.Micro
             },
+            singleLine = regularGridMetadata,
         )
 
         }

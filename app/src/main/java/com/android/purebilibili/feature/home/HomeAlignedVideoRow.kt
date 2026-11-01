@@ -1,20 +1,19 @@
 package com.android.purebilibili.feature.home
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 
 /**
  * Keep the natural tallest-card height for every material. Slot modifiers go on the real
  * card root, avoiding an extra Box (and its intrinsic traversal) around every card.
- * Do not cache the maximum height: title, width and font changes must allow rows to shrink.
+ *
+ * 按列宽查询自然高度后，每张卡只实际测量一次；普通 Layout 不允许同一遍测量中
+ * 用不同约束重复测量同一个子项。保留最长内容决定行高的语义，不固定文字区高度，
+ * 标题、宽度或字号变化后行高可以缩回。玻璃、MD3 与 Miuix 共用这条测量路径。
  */
 @Composable
 internal fun HomeAlignedVideoRow(
@@ -25,18 +24,35 @@ internal fun HomeAlignedVideoRow(
     modifier: Modifier = Modifier,
     content: @Composable (Int, Modifier) -> Unit,
 ) {
-    Row(
-        modifier = modifier.height(IntrinsicSize.Min),
-        horizontalArrangement = horizontalArrangement,
-        verticalAlignment = Alignment.Top,
-    ) {
-        indices.forEach { index ->
-            key(itemKeys[index]) {
-                content(index, Modifier.weight(1f).fillMaxHeight())
+    Layout(
+        content = {
+            indices.forEach { index ->
+                key(itemKeys[index]) {
+                    content(index, Modifier)
+                }
             }
+        },
+        modifier = modifier,
+    ) { measurables, constraints ->
+        val slotCount = columns.coerceAtLeast(measurables.size)
+        val gapPx = horizontalArrangement.spacing.roundToPx()
+        val gapTotal = gapPx * (slotCount - 1).coerceAtLeast(0)
+        val availableWidth = (constraints.maxWidth - gapTotal).coerceAtLeast(0)
+        val columnWidth = availableWidth / slotCount
+        val remainder = availableWidth % slotCount
+        // Distribute rounding pixels instead of rounding every column up past the row bounds.
+        val slotWidths = IntArray(measurables.size) { columnWidth + if (it < remainder) 1 else 0 }
+        val naturalMax = measurables.indices.maxOf { measurables[it].minIntrinsicHeight(slotWidths[it]) }
+        val rowHeight = naturalMax.coerceIn(constraints.minHeight, constraints.maxHeight)
+        val placeables = measurables.mapIndexed { index, measurable ->
+            measurable.measure(Constraints.fixed(slotWidths[index], rowHeight))
         }
-        repeat((columns - indices.count()).coerceAtLeast(0)) {
-            Spacer(modifier = Modifier.weight(1f))
+        layout(constraints.maxWidth, rowHeight) {
+            var x = 0
+            placeables.forEach { placeable ->
+                placeable.placeRelative(x, 0)
+                x += placeable.width + gapPx
+            }
         }
     }
 }

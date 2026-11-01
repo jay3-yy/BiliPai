@@ -135,6 +135,14 @@ class HomePerformancePolicyTest {
     }
 
     @Test
+    fun coverPreloadRange_doesNotRestartFromTheBeginningWithoutAVisibleVideo() {
+        assertNull(resolveHomeCoverPreloadRange(false, false, -1, 20, 2))
+        assertNull(resolveHomeCoverPreloadRange(false, false, 20, 20, 2))
+        assertNull(resolveHomeCoverPreloadRange(false, false, 0, 0, 2))
+        assertNull(resolveHomeCoverPreloadRange(false, false, 19, 20, 2))
+    }
+
+    @Test
     fun md3Preset_requiresAndroidNativeGlobalOptInForSharedLiquidGlass() {
         val config = resolveHomePerformanceConfig(
             supportsIndependentLiquidGlass = false,

@@ -132,6 +132,7 @@ class HomeScrollLayoutUiRegressionTest {
         rule.setContent {
             val pager = rememberPagerState(pageCount = { 1 })
             val grid = rememberLazyStaggeredGridState()
+            val feedGrid = rememberHomeFeedGridState(regularLayout = true)
             connection = rememberHomeHeaderScrollConnection(
                 configuration = HomeHeaderScrollConfiguration(
                     collapseEnabled = true,
@@ -144,7 +145,7 @@ class HomeScrollLayoutUiRegressionTest {
                 ),
                 pagerState = pager,
                 topTabEntries = listOf(HomeTopTabEntry.Category(HomeCategory.RECOMMEND)),
-                activeGridStateProvider = { grid },
+                activeGridStateProvider = { feedGrid },
                 subscriptionListState = grid,
                 revealLocked = revealLocked.value,
                 headerOffsetProvider = { headerOffset.floatValue },
@@ -201,6 +202,7 @@ class HomeScrollLayoutUiRegressionTest {
             pager = rememberPagerState(pageCount = { 2 })
             scope = rememberCoroutineScope()
             val grid = rememberLazyStaggeredGridState()
+            val feedGrid = rememberHomeFeedGridState(regularLayout = true)
             connection = rememberHomeHeaderScrollConnection(
                 configuration = HomeHeaderScrollConfiguration(
                     collapseEnabled = true,
@@ -216,7 +218,7 @@ class HomeScrollLayoutUiRegressionTest {
                     HomeTopTabEntry.Category(HomeCategory.RECOMMEND),
                     HomeTopTabEntry.Category(HomeCategory.POPULAR),
                 ),
-                activeGridStateProvider = { grid },
+                activeGridStateProvider = { feedGrid },
                 subscriptionListState = grid,
                 revealLocked = false,
                 refreshInteractionActiveProvider = { refreshByPage[pager.currentPage].value },

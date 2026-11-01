@@ -11,6 +11,25 @@ import kotlin.test.assertTrue
 class HomeFeedScrollRestorePolicyTest {
 
     @Test
+    fun changingLayoutKeepsItsOwnViewportInsteadOfApplyingTheOtherLayoutsIndex() {
+        val anchor = captureHomeFeedScrollAnchor(
+            HomeCategory.RECOMMEND, PopularSubCategory.COMPREHENSIVE,
+            firstVisibleItemIndex = 30,
+            firstVisibleItemScrollOffset = 20,
+            headerOffsetPx = -28f,
+            regularGrid = false,
+        )
+        assertEquals(
+            HomeFeedScrollRestorePlan(restoreGrid = false, restoreHeader = true),
+            resolveHomeFeedScrollRestorePlan(4, 12, 0f, anchor, currentRegularGrid = true),
+        )
+        assertEquals(
+            HomeFeedScrollRestorePlan(restoreGrid = true, restoreHeader = true),
+            resolveHomeFeedScrollRestorePlan(4, 12, 0f, anchor, currentRegularGrid = false),
+        )
+    }
+
+    @Test
     fun capture_normalizesNegativeScrollValues() {
         val anchor = captureHomeFeedScrollAnchor(
             category = HomeCategory.RECOMMEND,

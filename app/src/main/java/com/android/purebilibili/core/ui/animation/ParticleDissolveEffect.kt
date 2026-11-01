@@ -350,6 +350,7 @@ fun MaybeDissolvableVideoCard(
     reflowDuringFinalTail: Boolean = false,
     onReflowStarted: () -> Unit = {},
     preserveContentLayerWhenIdle: Boolean = false,
+    propagateMinConstraints: Boolean = false,
     content: @Composable () -> Unit
 ) {
     if (shouldWrapWithDissolveAnimation(isDissolving)) {
@@ -367,12 +368,12 @@ fun MaybeDissolvableVideoCard(
             content = content
         )
     } else {
-        Box(modifier = modifier) {
+        Box(modifier = modifier, propagateMinConstraints = propagateMinConstraints) {
             if (preserveContentLayerWhenIdle) {
                 // SharedBounds records its source relative to the card's existing graphics layer.
                 // Keep the same idle hierarchy as DissolvableVideoCard for transition-enabled
                 // cards, without restoring its per-frame size/window coordinate tracking.
-                Box(modifier = Modifier.alpha(1f)) {
+                Box(modifier = Modifier.alpha(1f), propagateMinConstraints = propagateMinConstraints) {
                     content()
                 }
             } else {

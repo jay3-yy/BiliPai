@@ -30,6 +30,8 @@ import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardLayer
 import com.android.purebilibili.core.ui.transition.rememberVideoCardTransitionSnapshotHandle
 import com.android.purebilibili.core.ui.transition.videoCardTransitionBackgroundEffect
 import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.feature.home.components.cards.VideoCardCaptureState
+import com.android.purebilibili.feature.home.components.cards.rememberVideoCardCaptureState
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -39,6 +41,74 @@ import org.junit.Test
 
 class HomeCardTransitionDrawCacheUiTest {
     @get:Rule val rule = createComposeRule()
+
+    @Test
+    fun clickCaptureFreezesPixelsUntilAnotherSourceTakesOwnership() {
+        val color = mutableStateOf(Color.Blue)
+        lateinit var source: VideoCardCaptureState
+        lateinit var other: GraphicsLayer
+        rule.setContent {
+            source = rememberVideoCardCaptureState("BVcapture")
+            other = rememberNativeVideoCardLayer()
+            Row {
+                Box(Modifier.size(80.dp).testTag("captured_card")
+                    .recordNativeVideoCardLayer(source.cardLayer, { source.freezeCard() }, sourceRoute = null)
+                    .background(color.value))
+                Box(Modifier.size(80.dp)
+                    .recordNativeVideoCardLayer(other, { false }, sourceRoute = null)
+                    .background(Color.Red))
+            }
+        }
+        fun pixel() = rule.onNodeWithTag("captured_card").captureToImage().toPixelMap()[5, 5]
+        assertTrue(pixel().blue > 0.9f)
+        rule.runOnIdle {
+            CardPositionManager.recordVideoCardPosition(
+                bvid = "BVcapture",
+                sourceRoute = "home:recommend",
+                bounds = Rect(0f, 0f, 80f, 80f),
+                screenWidth = 360f,
+                screenHeight = 640f,
+            )
+            source.freezeOnClick()
+            color.value = Color.Green
+        }
+        assertTrue("Click must preserve the source pixels before navigation", pixel().blue > 0.9f)
+        rule.runOnIdle { captureNativeVideoCardImage(other) }
+        assertTrue("A previous source must resume after losing pixel ownership", pixel().green > 0.9f)
+        rule.runOnIdle { CardPositionManager.clear() }
+    }
+
+    @Test
+    fun attachingAndReleasingTransitionLayersKeepsTheCurrentCardPixels() {
+        val prepared = mutableStateOf(false)
+        val color = mutableStateOf(Color.Blue)
+        rule.setContent {
+            val layer = if (prepared.value) rememberNativeVideoCardLayer() else null
+            Box(
+                Modifier.size(80.dp).testTag("preparation_card")
+                    .recordNativeVideoCardLayer(
+                        layer = layer,
+                        freezeProvider = { false },
+                        bvid = "BVpreparation",
+                        sourceRoute = "home:recommend",
+                        enabled = prepared.value,
+                    )
+                    .background(color.value),
+            )
+        }
+        fun pixel() = rule.onNodeWithTag("preparation_card").captureToImage().toPixelMap()[5, 5]
+        assertTrue(pixel().blue > 0.9f)
+        rule.runOnIdle {
+            prepared.value = true
+            color.value = Color.Green
+        }
+        assertTrue(pixel().green > 0.9f)
+        rule.runOnIdle {
+            prepared.value = false
+            color.value = Color.Red
+        }
+        assertTrue(pixel().red > 0.9f)
+    }
 
     @Test
     fun refreshingSnapshotMidReturnDrawsSourceOnceAndKeepsLiveHandoffReversible() {

@@ -75,4 +75,26 @@ class HomeAlignedVideoRowTest {
         val second = rule.onNodeWithTag("card_1").getUnclippedBoundsInRoot()
         assertEquals(12.dp, first.left - second.right)
     }
+
+    @Test
+    fun sevenColumnsDistributeRoundingPixelsWithinTheAvailableWidth() {
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                HomeAlignedVideoRow(
+                    indices = 0..6,
+                    itemKeys = List(7) { "card_$it" },
+                    columns = 7,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.width(300.dp).testTag("row"),
+                ) { index, slotModifier ->
+                    Box(slotModifier.heightIn(min = 40.dp).testTag("card_$index"))
+                }
+            }
+        }
+        val row = rule.onNodeWithTag("row").getUnclippedBoundsInRoot()
+        val cards = (0..6).map { rule.onNodeWithTag("card_$it").getUnclippedBoundsInRoot() }
+        assertEquals(row.left, cards.first().left)
+        assertEquals(row.right, cards.last().right)
+        cards.zipWithNext().forEach { (left, right) -> assertEquals(12.dp, right.left - left.right) }
+    }
 }

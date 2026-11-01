@@ -37,14 +37,13 @@ internal fun resolveHomeCoverRequestSpec(
         return HomeCoverRequestSpec(widthPx = 240, heightPx = 150)
     }
 
-    val sampledWidthPx = ceil(cardWidthDp.coerceAtLeast(0f) * density.coerceAtLeast(0f) * 1.25f)
+    // List covers target device pixels; detail/transition imagery has its own capture path.
+    val sampledWidthPx = ceil(cardWidthDp.coerceAtLeast(0f) * density.coerceAtLeast(0f))
         .toInt()
-    val widthPx = HOME_COVER_WIDTH_TIERS.firstOrNull { it >= sampledWidthPx }
-        ?: HOME_COVER_WIDTH_TIERS.last()
+    // Small buckets keep resize-cache reuse without lifting a narrow column to a large tier.
+    val widthPx = (((sampledWidthPx + 31) / 32) * 32).coerceIn(64, 1280)
     return HomeCoverRequestSpec(
         widthPx = widthPx,
         heightPx = widthPx * 10 / 16,
     )
 }
-
-private val HOME_COVER_WIDTH_TIERS = intArrayOf(480, 640, 960, 1280)

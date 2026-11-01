@@ -162,14 +162,15 @@ internal fun shouldRecordNativeVideoCardLayer(
  */
 @Composable
 internal fun Modifier.recordNativeVideoCardLayer(
-    layer: GraphicsLayer,
+    layer: GraphicsLayer?,
     freezeProvider: () -> Boolean,
     bvid: String = "",
     sourceRoute: String?,
     enabled: Boolean = true,
     landingFeedbackEnabled: Boolean = false,
+    onRecorded: (() -> Unit)? = null,
 ): Modifier {
-    if (!enabled) return this
+    if (!enabled || layer == null) return this
     val bgState = LocalVideoCardTransitionBackgroundState.current
     val coverLatch = remember(layer, bvid, sourceRoute) { NativeVideoCardCoverLatch() }
     val sourceExposure = remember(bgState) {
@@ -207,6 +208,7 @@ internal fun Modifier.recordNativeVideoCardLayer(
             layer.record {
                 this@drawWithContent.drawContent()
             }
+            onRecorded?.invoke()
         }
         val hide = shouldHideStationarySourceCard(
             isSharedMorphSourceCard = isSharedMorphSourceCard,

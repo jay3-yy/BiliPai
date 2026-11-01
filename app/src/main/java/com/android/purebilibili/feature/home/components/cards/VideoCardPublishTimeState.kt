@@ -27,20 +27,26 @@ internal fun rememberVideoCardPublishTimeText(
     enabled: Boolean,
     isVisibleInWindow: Boolean,
 ): String {
+    if (!enabled) return ""
+    if (video.pubdate > 0L) return resolveCompactPublishTimeRowText(video.pubdate)
+    return rememberMissingVideoCardPublishTimeText(video, isVisibleInWindow)
+}
+
+@Composable
+private fun rememberMissingVideoCardPublishTimeText(
+    video: VideoItem,
+    isVisibleInWindow: Boolean,
+): String {
     val accountIdentity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     var fetchedPubdate by remember(video.bvid, video.aid, accountIdentity) { mutableLongStateOf(0L) }
     var attempted by remember(video.bvid, video.aid, accountIdentity) { mutableStateOf(false) }
-    val cachedPubdate = if (enabled && video.pubdate <= 0L) {
-        SharedContentRepository.cachedDetailInfo(video.bvid, video.aid)?.pubdate ?: 0L
-    } else 0L
-    val pubdate = video.pubdate.takeIf { it > 0L }
-        ?: cachedPubdate.takeIf { it > 0L }
-        ?: fetchedPubdate
+    val cachedPubdate = SharedContentRepository.cachedDetailInfo(video.bvid, video.aid)?.pubdate ?: 0L
+    val pubdate = cachedPubdate.takeIf { it > 0L } ?: fetchedPubdate
     val isVideo = video.contentType.isBlank() || video.contentType == "av"
     val pageAllowsWork = LocalPageImageLoadingAllowed.current
     val visualWorkActive = rememberVisualWorkActive()
-    val workAllowed = enabled && isVideo && isVisibleInWindow &&
-        pageAllowsWork && visualWorkActive
+    val workAllowed = isVideo && isVisibleInWindow &&
+        pageAllowsWork && visualWorkActive && LocalHomeCardAuxiliaryWorkAllowed.current
 
     LaunchedEffect(video.bvid, video.aid, accountIdentity, pubdate, workAllowed) {
         if (!workAllowed || pubdate > 0L || attempted) return@LaunchedEffect
@@ -52,6 +58,5 @@ internal fun rememberVideoCardPublishTimeText(
         fetchedPubdate = result.getOrNull()?.pubdate?.takeIf { it > 0L } ?: 0L
         attempted = true
     }
-    if (!enabled) return ""
     return resolveCompactPublishTimeRowText(pubdate).ifBlank { "发布时间未知" }
 }

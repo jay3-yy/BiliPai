@@ -2,7 +2,9 @@ package com.android.purebilibili.feature.home.policy
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class HomeBottomBarScrollPolicyTest {
 
@@ -109,6 +111,57 @@ class HomeBottomBarScrollPolicyTest {
         assertEquals(
             1000f,
             resolveBottomBarChromeScrollOffset(firstVisibleItem = 1, scrollOffset = 0)
+        )
+    }
+
+    @Test
+    fun scrollSample_suppressesSubStepDriftWithinOneItem() {
+        val emitted = HomeBottomBarScrollState(firstVisibleItem = 2, scrollOffset = 300)
+        assertFalse(
+            shouldEmitBottomBarScrollSample(
+                previousEmittedItem = emitted.firstVisibleItem,
+                previousEmittedOffset = emitted.scrollOffset,
+                firstVisibleItem = emitted.firstVisibleItem,
+                scrollOffset = emitted.scrollOffset + 39
+            )
+        )
+        assertTrue(
+            shouldEmitBottomBarScrollSample(
+                previousEmittedItem = emitted.firstVisibleItem,
+                previousEmittedOffset = emitted.scrollOffset,
+                firstVisibleItem = emitted.firstVisibleItem,
+                scrollOffset = emitted.scrollOffset + 40
+            )
+        )
+    }
+
+    @Test
+    fun scrollSample_emitsOnItemChangeAndAbsoluteTopRegion() {
+        assertTrue(
+            shouldEmitBottomBarScrollSample(
+                previousEmittedItem = 2,
+                previousEmittedOffset = 0,
+                firstVisibleItem = 3,
+                scrollOffset = 0
+            )
+        )
+        // 回到顶部显隐区是绝对判定，即使位移未跨过步长也要逐帧上报，
+        // 否则停在阈值下方时 SHOW 永远不会结算。
+        assertTrue(
+            shouldEmitBottomBarScrollSample(
+                previousEmittedItem = 0,
+                previousEmittedOffset = 99,
+                firstVisibleItem = 0,
+                scrollOffset = 90
+            )
+        )
+        assertFalse(
+            shouldEmitBottomBarScrollSample(
+                previousEmittedItem = 0,
+                previousEmittedOffset = 99,
+                firstVisibleItem = 0,
+                scrollOffset = 120
+            )
         )
     }
 }

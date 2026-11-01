@@ -8,35 +8,6 @@ import kotlin.test.assertTrue
 class HomeFeedScrollStatePersistenceStructureTest {
 
     @Test
-    fun `home category masonry states are saveable per category`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-
-        assertTrue(source.contains("rememberSaveable("))
-        assertTrue(source.contains("category.name"))
-        assertTrue(source.contains("saver = LazyStaggeredGridState.Saver"))
-        assertTrue(source.contains("LazyStaggeredGridState()"))
-        assertFalse(source.contains("gridStates[category] = rememberLazyStaggeredGridState()"))
-    }
-
-    @Test
-    fun `home feed uses staggered lanes with full width chrome items`() {
-        val pageSource = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt"
-        )
-        val screenSource = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"
-        )
-
-        assertTrue(pageSource.contains("FeedVerticalStaggeredGrid("))
-        assertTrue(pageSource.contains("StaggeredGridCells.Fixed(gridColumns)"))
-        assertTrue(pageSource.contains("StaggeredGridItemSpan.FullLine"))
-        assertTrue(pageSource.contains("verticalItemSpacing = cardLayout.verticalItemSpacingDp.dp"))
-        assertTrue(pageSource.contains("visibleItemsInfo.maxOfOrNull { it.index }"))
-        assertTrue(screenSource.contains("LazyVerticalStaggeredGrid("))
-        assertFalse(pageSource.contains("LazyVerticalGrid("))
-    }
-
-    @Test
     fun `bottom bar reselect scrolls the latest visible home category`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
         val scrollCollectorSource = source

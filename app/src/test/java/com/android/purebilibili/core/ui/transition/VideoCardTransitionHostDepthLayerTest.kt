@@ -245,23 +245,6 @@ class VideoCardTransitionHostDepthLayerTest {
     }
 
     @Test
-    fun sourceNeverYieldsEmptyDrawToHost() {
-        // This legacy helper alone cannot decide whether a safe Host snapshot exists.
-        assertFalse(
-            shouldSourceYieldDepthLayerToHost(
-                isHostOwnedSnapshot = true,
-                exposure = VideoCardTransitionExposure.SettledHidden,
-            ),
-        )
-        assertFalse(
-            shouldSourceYieldDepthLayerToHost(
-                isHostOwnedSnapshot = true,
-                exposure = VideoCardTransitionExposure.BackPreview,
-            ),
-        )
-    }
-
-    @Test
     fun hostOwnedDisposeDoesNotMarkStaleSoHeldBlurSurvives() {
         assertFalse(shouldMarkDisplayListStaleOnHostOwnedSourceDispose())
     }

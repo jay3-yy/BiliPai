@@ -1,11 +1,16 @@
 package com.android.purebilibili.feature.home
 
-import java.io.File
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HomeFeedAlignedRowsPolicyTest {
+
+    @Test
+    fun homeOldContentLocatorCountsVideoItemsAndEveryFullWidthHeader() {
+        assertEquals(13, resolveHomeOldContentGridItemIndex(8, 30, dividerIndex = 8, headerItemCount = 4))
+        assertEquals(7, resolveHomeOldContentGridItemIndex(3, 30, dividerIndex = 8, headerItemCount = 4))
+        assertEquals(12, resolveHomeOldContentGridItemIndex(8, 30, dividerIndex = null, headerItemCount = 4))
+    }
 
     @Test
     fun truncatedCards_advanceInCompleteRows() {
@@ -29,31 +34,5 @@ class HomeFeedAlignedRowsPolicyTest {
             emptyList<IntRange>(),
             resolveHomeFeedAlignedRows(itemCount = 0, columns = 4),
         )
-    }
-
-    @Test
-    fun fullCardSetting_exclusivelyOwnsTheWaterfallBranch() {
-        val pageSource = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt"
-        )
-        val screenSource = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"
-        )
-
-        assertTrue(pageSource.contains("if (showFullVideoCardContent)"))
-        assertTrue(pageSource.contains("resolveHomeFeedAlignedRows("))
-        assertTrue(pageSource.contains("contentType = \"home_video_row\""))
-        assertTrue(
-            screenSource.contains(
-                "showFullVideoCardContent = homeSettings.showFullVideoCardContent"
-            )
-        )
-    }
-
-    private fun loadSource(path: String): String {
-        val normalizedPath = path.removePrefix("app/")
-        val sourceFile = listOf(File(path), File(normalizedPath)).firstOrNull { it.exists() }
-        require(sourceFile != null) { "Cannot locate $path from ${File(".").absolutePath}" }
-        return sourceFile.readText()
     }
 }

@@ -33,16 +33,23 @@ class HomeCoverRequestPolicyTest {
     }
 
     @Test
-    fun `normal cover keeps sampling margin and selects nearest sufficient tier`() {
+    fun `normal cover selects a tier sufficient for displayed device pixels`() {
         val spec = resolveHomeCoverRequestSpec(
             cardWidthDp = 180f,
             density = 3f,
             useLowQualityCover = false,
         )
 
-        assertEquals(960, spec.widthPx)
-        assertEquals(600, spec.heightPx)
-        assertEquals("960x600", spec.cacheKeySuffix)
+        assertEquals(544, spec.widthPx)
+        assertEquals(340, spec.heightPx)
+        assertEquals("544x340", spec.cacheKeySuffix)
+    }
+
+    @Test
+    fun `narrow columns avoid oversized covers and small resizes share a bucket`() {
+        assertEquals(HomeCoverRequestSpec(192, 120), resolveHomeCoverRequestSpec(64f, 3f, false))
+        assertEquals(resolveHomeCoverRequestSpec(179f, 3f, false), resolveHomeCoverRequestSpec(180f, 3f, false))
+        assertTrue(resolveHomeCoverRequestSpec(182f, 3f, false).widthPx >= 546)
     }
 
     @Test

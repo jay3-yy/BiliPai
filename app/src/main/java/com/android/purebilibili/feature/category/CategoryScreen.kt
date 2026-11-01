@@ -336,7 +336,6 @@ fun CategoryScreen(
                                         cardHorizontalPadding = cardLayout.storyCardHorizontalPaddingDp.dp,
                                         compactMetadata = cardLayout.compactMetadata,
                                         homeDurationStyle = homeSettings.homeDurationStyle,
-                                        showOnlineCount = showOnlineCount,
                                         isReturningFromVideoDetail = isReturningFromVideoDetail,
                                         isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                                         onClick = { bvid, _ ->

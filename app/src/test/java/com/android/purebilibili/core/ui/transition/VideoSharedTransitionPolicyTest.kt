@@ -649,7 +649,6 @@ class VideoSharedTransitionPolicyTest {
             "src/main/java/com/android/purebilibili/feature/personal/PersonalCardVideoTransition.kt",
             "src/main/java/com/android/purebilibili/feature/watchlater/WatchLaterScreen.kt",
             "src/main/java/com/android/purebilibili/feature/dynamic/components/VideoCards.kt",
-            "src/main/java/com/android/purebilibili/feature/home/components/cards/StoryVideoCard.kt",
         )
         cardSources.forEach { path ->
             val source = File(path).readText()

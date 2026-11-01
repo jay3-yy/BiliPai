@@ -3,6 +3,8 @@
 package com.android.purebilibili.feature.home.components
 
 import coil3.request.crossfade
+import coil3.compose.asPainter
+import coil3.Image
 
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
@@ -45,22 +47,29 @@ import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -71,6 +80,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,17 +100,22 @@ import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSo
 import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
 import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
-import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
+import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.util.HomeCoverReturnPrefetchEntry
 import com.android.purebilibili.core.util.HomeCoverReturnPrefetchRegistry
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.feature.home.components.cards.isVideoCardSharedSourceInstanceOwner
+import com.android.purebilibili.feature.home.components.cards.isVideoCardSharedReturnTarget
+import com.android.purebilibili.feature.home.components.cards.LocalHomeCardScrolling
+import com.android.purebilibili.feature.home.components.cards.VideoCardSourceInteraction
+import com.android.purebilibili.feature.home.components.cards.VideoCardPreparedClickEffect
+import com.android.purebilibili.feature.home.components.cards.rememberVideoCardCaptureState
+import kotlinx.coroutines.launch
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.VideoItem
-import com.android.purebilibili.feature.home.HomeHeroCarouselCardTransform
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.feature.home.resolveHomeHeroCarouselCardTransform
 import com.android.purebilibili.feature.home.resolveHomeHeroCarouselItemKey
@@ -185,16 +200,20 @@ internal fun HomeHeroCarousel(
         ) { page ->
             val video = resolveHomeHeroCarouselItemOrNull(videos, page)
                 ?: return@HorizontalPager
-            // transform 同时用于层级、图层变换与渐变，当前仍在组合期统一计算。
-            @Suppress("FrequentlyChangingValue")
-            val pageOffset = (
-                (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                ).coerceIn(-1f, 1f)
-            val transform = resolveHomeHeroCarouselCardTransform(pageOffset)
-            val activeForPlayback = autoplayEnabled &&
-                pagerState.currentPage == page &&
-                pageOffset.absoluteValue < 0.12f
+            // 连续值（currentPageOffsetFraction）只允许在图层/绘制阶段读取；
+            // 组合期只读离散的 currentPage，滑动全程不再逐帧重组页面。
+            val currentPage = pagerState.currentPage
+            val pageOffsetProvider = {
+                ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                    .coerceIn(-1f, 1f)
+            }
+            val settledNearCenter by remember {
+                derivedStateOf { pagerState.currentPageOffsetFraction.absoluteValue < 0.12f }
+            }
+            val activeForPlayback = autoplayEnabled && currentPage == page && settledNearCenter
             val isDissolving = video.bvid in dissolvingVideos
+            // 正图解码完成后由卡片回传，倒影直接复用同一 Image，不再二次解码。
+            var reflectionCoverImage by remember(video.bvid) { mutableStateOf<coil3.Image?>(null) }
             // 新横幅淡入：被消散移除后，下一条在原位轻柔浮现，避免硬切跳变。
             val entranceAlpha = remember(video.bvid) { androidx.compose.animation.core.Animatable(0f) }
             LaunchedEffect(video.bvid) {
@@ -203,19 +222,27 @@ internal fun HomeHeroCarousel(
             Column(modifier = Modifier.graphicsLayer { alpha = entranceAlpha.value }) {
                 HomeHeroCarouselCard(
                     video = video,
-                    transform = transform,
+                    pageOffsetProvider = pageOffsetProvider,
+                    isCenterPage = currentPage == page,
                     activeForPlayback = activeForPlayback,
                     aspectRatio = aspectRatio,
                     isDissolving = isDissolving,
                     onVideoClick = { onVideoClick(video) },
                     onDissolveComplete = { onDissolveComplete(video.bvid) },
                     onLongPress = onLongPress,
-                    onGetPreviewUrl = onGetPreviewUrl
+                    onGetPreviewUrl = onGetPreviewUrl,
+                    onCoverImageDecoded = { reflectionCoverImage = it },
                 )
-                // 地面镜面倒影：镜像封面，向下渐隐（视频预览不参与，保持轻量）。
-                val normalizedReflectionUrl = remember(video.pic) { FormatUtils.fixImageUrl(video.pic) }
-                val reflectionAlpha by animateFloatAsState(
-                    targetValue = if (isDissolving) 0f else (1f - pageOffset.absoluteValue * 0.5f).coerceIn(0f, 1f) * 0.9f,
+                // 地面镜面倒影：镜像正图已解码的封面（同一 coil3.Image 复用，不发起第二个
+                // 图片请求/解码），向下渐隐（视频预览不参与，保持轻量）。
+                // 滑动渐隐在图层阶段直接读偏移（fraction 本身连续，无需再叠弹簧）；
+                // 弹簧只承担消散离场的离散淡出。
+                val reflectionContext = LocalContext.current
+                val reflectionPainter = remember(reflectionCoverImage, reflectionContext) {
+                    reflectionCoverImage?.asPainter(reflectionContext, FilterQuality.Low)
+                }
+                val dissolveFadeAlpha by animateFloatAsState(
+                    targetValue = if (isDissolving) 0f else 1f,
                     animationSpec = spring(
                         dampingRatio = Spring.DampingRatioNoBouncy,
                         stiffness = Spring.StiffnessMedium,
@@ -228,11 +255,33 @@ internal fun HomeHeroCarousel(
                         .height(reflectionHeight)
                         .graphicsLayer {
                             scaleY = -1f
-                            alpha = reflectionAlpha
+                            val offset = pageOffsetProvider()
+                            val swipeAlpha =
+                                (1f - offset.absoluteValue * 0.5f).coerceIn(0f, 1f) * 0.9f
+                            alpha = swipeAlpha * dissolveFadeAlpha
                             compositingStrategy = CompositingStrategy.Offscreen
                         }
                         .drawWithContent {
-                            drawContent()
+                            val painter = reflectionPainter
+                            if (painter != null && painter.intrinsicSize.width >= 1f &&
+                                painter.intrinsicSize.height >= 1f
+                            ) {
+                                val srcWidth = painter.intrinsicSize.width
+                                val srcHeight = painter.intrinsicSize.height
+                                val cropScale = maxOf(size.width / srcWidth, size.height / srcHeight)
+                                val dstWidth = srcWidth * cropScale
+                                val dstHeight = srcHeight * cropScale
+                                clipRect {
+                                    translate(
+                                        (size.width - dstWidth) / 2f,
+                                        (size.height - dstHeight) / 2f,
+                                    ) {
+                                        with(painter) {
+                                            draw(Size(dstWidth, dstHeight), alpha = 0.30f)
+                                        }
+                                    }
+                                }
+                            }
                             drawRect(
                                 brush = Brush.verticalGradient(
                                     0f to Color.White.copy(alpha = 0.9f),
@@ -242,17 +291,7 @@ internal fun HomeHeroCarousel(
                                 blendMode = BlendMode.DstIn,
                             )
                         }
-                ) {
-                    PageAwareAsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(normalizedReflectionUrl)
-                            .crossfade(false)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxWidth().graphicsLayer { alpha = 0.30f },
-                    )
-                }
+                )
             }
         }
 
@@ -305,14 +344,16 @@ internal fun HomeHeroCarousel(
 @Composable
 private fun HomeHeroCarouselCard(
     video: VideoItem,
-    transform: HomeHeroCarouselCardTransform,
+    pageOffsetProvider: () -> Float,
+    isCenterPage: Boolean,
     activeForPlayback: Boolean,
     aspectRatio: Float,
     isDissolving: Boolean,
     onVideoClick: () -> Unit,
     onDissolveComplete: () -> Unit,
     onLongPress: ((VideoItem) -> Unit)?,
-    onGetPreviewUrl: suspend (String, Long) -> String?
+    onGetPreviewUrl: suspend (String, Long) -> String?,
+    onCoverImageDecoded: (coil3.Image?) -> Unit = {},
 ) {
     val context = LocalContext.current
     var previewUrl by remember(video.bvid, video.cid) { mutableStateOf<String?>(null) }
@@ -332,12 +373,28 @@ private fun HomeHeroCarouselCard(
     val sharedSourceInstanceId = rememberSaveable(video.bvid) {
         CardPositionManager.newVideoCardSourceInstanceId()
     }
+    val sourceEnabled = LocalSharedTransitionEnabled.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val sourceInteraction = remember(video.bvid, video.cid, sourceRoute) {
+        VideoCardSourceInteraction()
+    }
+    val sourceInteractionAllowed = LocalPageImageLoadingAllowed.current &&
+        com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
+        LocalHomeCardScrolling.current?.value != true && !isDissolving
     val ownsSharedTransitionSource = isVideoCardSharedSourceInstanceOwner(
         sourceInstanceId = sharedSourceInstanceId,
         lastClickedSourceInstanceId = CardPositionManager.lastClickedVideoSourceInstanceId,
     )
-    val useCardShellSharedBounds = ownsSharedTransitionSource &&
-        LocalSharedTransitionEnabled.current &&
+    val isSharedReturnTarget = ownsSharedTransitionSource && isVideoCardSharedReturnTarget(
+        video.bvid, sourceRoute, CardPositionManager.lastClickedVideoSourceKey,
+    )
+    val preparingInput = sourceInteractionAllowed && (isPressed || sourceInteraction.preparing)
+    val prepareCardTransition = sourceEnabled && (preparingInput || isSharedReturnTarget)
+    val captureState = if (prepareCardTransition) rememberVideoCardCaptureState(video.bvid) else null
+    val captureScope = if (prepareCardTransition) rememberCoroutineScope() else null
+    val useCardShellSharedBounds = prepareCardTransition &&
+        (preparingInput || ownsSharedTransitionSource) &&
         sharedTransitionScope != null &&
         animatedVisibilityScope != null &&
         video.bvid.isNotBlank() &&
@@ -381,7 +438,6 @@ private fun HomeHeroCarouselCard(
 
     val cardShape = AppShapes.container(ContainerLevel.Card)
     val cardCornerDp = AppShapes.containerCornerDp(ContainerLevel.Card)
-    val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(video.bvid)
     val normalizedCoverUrl = remember(video.pic) { FormatUtils.fixImageUrl(video.pic) }
     var measuredCoverSize by remember(normalizedCoverUrl) {
         mutableStateOf(androidx.compose.ui.unit.IntSize.Zero)
@@ -449,13 +505,26 @@ private fun HomeHeroCarouselCard(
                 ),
                 sourceInstanceId = sharedSourceInstanceId,
             )
-            nativeCardSnapshot.capture()
+            if (captureState != null && captureScope != null) {
+                val owner = captureState.freezeOnClick()
+                if (owner != null) captureScope.launch { captureState.captureAfterEntry(owner) }
+            }
         }
         onVideoClick()
     }
 
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val requestCardClick: () -> Unit = {
+        if (!sourceEnabled) {
+            clickAction()
+        } else if (sourceInteractionAllowed && !CardPositionManager.isVideoNavigationDebounceActive()) {
+            sourceInteraction.requestClick()
+        }
+    }
+    if (sourceInteraction.preparing) {
+        VideoCardPreparedClickEffect(
+            sourceInteraction, captureState, sourceEnabled && sourceInteractionAllowed, clickAction,
+        )
+    }
     val pressProgress by animateFloatAsState(
         targetValue = if (isPressed) 1f else 0f,
         animationSpec = spring(
@@ -492,6 +561,7 @@ private fun HomeHeroCarouselCard(
         tonalElevation = AppSpacingTokens.None,
         shadowElevation = AppSpacingTokens.None,
         modifier = Modifier
+            .testTag("home_hero_video_card")
             .adaptiveCardHoverEffect(shape = cardShape, hoverShadowElevation = AppSpacingTokens.None)
             .videoCardShellSharedBoundsOrEmpty(
                 enabled = useCardShellSharedBounds,
@@ -502,9 +572,19 @@ private fun HomeHeroCarouselCard(
                 motionSpec = cardShellMotionSpec,
                 clipShape = cardShape
             )
-            .zIndex(transform.zIndex)
-            .then(nativeCardSnapshot.modifier)
+            // 折角覆盖层差只有 0.01，层级按离散的当前页固定即可；
+            // 连续 z 会导致滑动全程逐帧重建 zIndex 修饰符。
+            .zIndex(if (isCenterPage) 1f else 0.99f)
+            .recordNativeVideoCardLayer(
+                layer = captureState?.cardLayer,
+                freezeProvider = { captureState?.freezeCard() == true },
+                bvid = video.bvid,
+                sourceRoute = sourceRoute,
+                landingFeedbackEnabled = true,
+                onRecorded = captureState?.let { { it.onCardRecorded() } },
+            )
             .graphicsLayer {
+                val transform = resolveHomeHeroCarouselCardTransform(pageOffsetProvider())
                 transformOrigin = TransformOrigin(transform.pivotFractionX, 0.5f)
                 cameraDistance = transform.cameraDistanceMultiplier * density.density
                 translationX = transform.translationXFraction * size.width
@@ -522,7 +602,7 @@ private fun HomeHeroCarouselCard(
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
-                onClick = clickAction,
+                onClick = requestCardClick,
                 onLongClick = longPressAction,
             )
     ) {
@@ -531,6 +611,7 @@ private fun HomeHeroCarouselCard(
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
+                        val transform = resolveHomeHeroCarouselCardTransform(pageOffsetProvider())
                         translationX = transform.contentParallaxFraction * size.width
                         scaleX = transform.contentScale
                         scaleY = transform.contentScale
@@ -540,167 +621,183 @@ private fun HomeHeroCarouselCard(
                     model = stationaryCoverRequest,
                     contentDescription = video.title,
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    onSuccess = { onCoverImageDecoded(it.result.image) },
                 )
                 if (activeForPlayback && previewUrl != null) {
                     MutedHeroVideoPlayer(url = previewUrl.orEmpty())
                 }
             }
-            if (transform.edgeShadeAlpha > 0.001f) {
+            // 覆盖层与整卡分别录制；闲置卡片不创建来源图层，原生与玻璃布局保持共用。
+            Box(
+                Modifier.matchParentSize().recordNativeVideoCardLayer(
+                    layer = captureState?.coverOverlayLayer,
+                    freezeProvider = { captureState?.freezeCover() == true },
+                    bvid = video.bvid,
+                    sourceRoute = sourceRoute,
+                    onRecorded = captureState?.let { { it.onCoverRecorded() } },
+                )
+            ) {
+                // 侧卡边缘遮罩：随偏移在绘制阶段建立/消退，中心卡为空绘制，不再逐帧重建渐变。
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .drawBehind {
+                            val transform = resolveHomeHeroCarouselCardTransform(pageOffsetProvider())
+                            if (transform.edgeShadeAlpha > 0.001f) {
+                                drawRect(
+                                    if (transform.edgeShadeStartFromLeft) {
+                                        Brush.horizontalGradient(
+                                            0f to MediaContrastPalette.Scrim.copy(alpha = transform.edgeShadeAlpha),
+                                            0.48f to Color.Transparent,
+                                            1f to Color.Transparent
+                                        )
+                                    } else {
+                                        Brush.horizontalGradient(
+                                            0f to Color.Transparent,
+                                            0.52f to Color.Transparent,
+                                            1f to MediaContrastPalette.Scrim.copy(alpha = transform.edgeShadeAlpha)
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                )
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            if (transform.edgeShadeStartFromLeft) {
-                                Brush.horizontalGradient(
-                                    0f to MediaContrastPalette.Scrim.copy(alpha = transform.edgeShadeAlpha),
-                                    0.48f to Color.Transparent,
-                                    1f to Color.Transparent
-                                )
-                            } else {
-                                Brush.horizontalGradient(
-                                    0f to Color.Transparent,
-                                    0.52f to Color.Transparent,
-                                    1f to MediaContrastPalette.Scrim.copy(alpha = transform.edgeShadeAlpha)
-                                )
-                            }
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.54f to Color.Transparent,
+                                1f to MediaContrastPalette.Scrim.copy(alpha = 0.76f)
+                            )
                         )
                 )
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.54f to Color.Transparent,
-                            1f to MediaContrastPalette.Scrim.copy(alpha = 0.76f)
+                // 底部标题与统计（时长 · 播放 · 弹幕）
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(
+                            start = AppSpacingTokens.Large,
+                            end = AppSpacingTokens.Large,
+                            bottom = AppSpacingTokens.ExtraLarge,
                         )
-                    )
-            )
-            // 底部标题与统计（时长 · 播放 · 弹幕）
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(
-                        start = AppSpacingTokens.Large,
-                        end = AppSpacingTokens.Large,
-                        bottom = AppSpacingTokens.ExtraLarge,
-                    )
-                    .videoCardShellReturnChromeAlpha(
-                        enabled = useCardShellSharedBounds,
-                        bvid = video.bvid,
-                        sourceRoute = sourceRoute,
-                    )
-            ) {
-                // 标题行（预览播放中显示播放图标）
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                        .videoCardShellReturnChromeAlpha(
+                            enabled = useCardShellSharedBounds,
+                            bvid = video.bvid,
+                            sourceRoute = sourceRoute,
+                        )
                 ) {
-                    if (activeForPlayback) {
-                        AppIcon(
-                            imageVector = Icons.Rounded.PlayArrow,
-                            contentDescription = null,
-                            tint = MediaContrastPalette.Foreground.copy(alpha = 0.9f),
-                            modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
-                        )
-                        Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
-                    }
-                    AppText(
-                        text = video.title,
-                        color = MediaContrastPalette.Foreground,
-                        // 背景图亮暗变化较大，给标题加柔和阴影保持可读性。
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.72f),
-                                offset = androidx.compose.ui.geometry.Offset(0f, 2f),
-                                blurRadius = 5f,
-                            )
-                        ),
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (video.owner.name.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-                    AppText(
-                        text = video.owner.name,
-                        color = MediaContrastPalette.Foreground.copy(alpha = 0.78f),
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            shadow = Shadow(
-                                color = Color.Black.copy(alpha = 0.62f),
-                                offset = androidx.compose.ui.geometry.Offset(0f, 1.5f),
-                                blurRadius = 4f,
-                            )
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                // 统计信息：时长 · 播放量 · 弹幕
-                if (video.duration > 0 || video.stat.view > 0 || video.stat.danmaku > 0) {
-                    Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                    // 标题行（预览播放中显示播放图标）
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Start
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                    var separatorNeeded = false
-                    // 时长
-                    if (video.duration > 0) {
+                        if (activeForPlayback) {
+                            AppIcon(
+                                imageVector = Icons.Rounded.PlayArrow,
+                                contentDescription = null,
+                                tint = MediaContrastPalette.Foreground.copy(alpha = 0.9f),
+                                modifier = Modifier.size(AppSpacingTokens.ExtraLarge - AppSpacingTokens.Micro)
+                            )
+                            Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
+                        }
                         AppText(
-                            text = FormatUtils.formatDuration(video.duration),
-                            color = MediaContrastPalette.Foreground.copy(alpha = 0.65f),
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                shadow = Shadow(Color.Black.copy(alpha = 0.58f), blurRadius = 3f)
+                            text = video.title,
+                            color = MediaContrastPalette.Foreground,
+                            // 背景图亮暗变化较大，给标题加柔和阴影保持可读性。
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.72f),
+                                    offset = androidx.compose.ui.geometry.Offset(0f, 2f),
+                                    blurRadius = 5f,
+                                )
                             ),
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            modifier = Modifier.wrapContentSize()
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        separatorNeeded = true
                     }
-                    // 播放量
-                    if (video.stat.view > 0) {
-                        if (separatorNeeded) AppText(
-                            " · ",
-                            color = MediaContrastPalette.Foreground.copy(alpha = 0.5f),
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize
-                        )
+                    if (video.owner.name.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
                         AppText(
-                            text = FormatUtils.formatStat(video.stat.view.toLong()) + "播放",
-                            color = MediaContrastPalette.Foreground.copy(alpha = 0.65f),
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            fontWeight = FontWeight.Normal,
+                            text = video.owner.name,
+                            color = MediaContrastPalette.Foreground.copy(alpha = 0.78f),
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.62f),
+                                    offset = androidx.compose.ui.geometry.Offset(0f, 1.5f),
+                                    blurRadius = 4f,
+                                )
+                            ),
                             maxLines = 1,
-                            modifier = Modifier.wrapContentSize()
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        separatorNeeded = true
                     }
-                    // 弹幕
-                    if (video.stat.danmaku > 0) {
-                        if (separatorNeeded) AppText(
-                            " · ",
-                            color = MediaContrastPalette.Foreground.copy(alpha = 0.5f),
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize
-                        )
-                        AppText(
-                            text = FormatUtils.formatStat(video.stat.danmaku.toLong()) + "弹幕",
-                            color = MediaContrastPalette.Foreground.copy(alpha = 0.65f),
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            fontWeight = FontWeight.Normal,
-                            maxLines = 1,
-                            modifier = Modifier.wrapContentSize()
-                        )
+                    // 统计信息：时长 · 播放量 · 弹幕
+                    if (video.duration > 0 || video.stat.view > 0 || video.stat.danmaku > 0) {
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Start
+                        ) {
+                        var separatorNeeded = false
+                        // 时长
+                        if (video.duration > 0) {
+                            AppText(
+                                text = FormatUtils.formatDuration(video.duration),
+                                color = MediaContrastPalette.Foreground.copy(alpha = 0.65f),
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    shadow = Shadow(Color.Black.copy(alpha = 0.58f), blurRadius = 3f)
+                                ),
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                modifier = Modifier.wrapContentSize()
+                            )
+                            separatorNeeded = true
+                        }
+                        // 播放量
+                        if (video.stat.view > 0) {
+                            if (separatorNeeded) AppText(
+                                " · ",
+                                color = MediaContrastPalette.Foreground.copy(alpha = 0.5f),
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize
+                            )
+                            AppText(
+                                text = FormatUtils.formatStat(video.stat.view.toLong()) + "播放",
+                                color = MediaContrastPalette.Foreground.copy(alpha = 0.65f),
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                modifier = Modifier.wrapContentSize()
+                            )
+                            separatorNeeded = true
+                        }
+                        // 弹幕
+                        if (video.stat.danmaku > 0) {
+                            if (separatorNeeded) AppText(
+                                " · ",
+                                color = MediaContrastPalette.Foreground.copy(alpha = 0.5f),
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize
+                            )
+                            AppText(
+                                text = FormatUtils.formatStat(video.stat.danmaku.toLong()) + "弹幕",
+                                color = MediaContrastPalette.Foreground.copy(alpha = 0.65f),
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                fontWeight = FontWeight.Normal,
+                                maxLines = 1,
+                                modifier = Modifier.wrapContentSize()
+                            )
+                        }
                     }
                 }
             }
+            }
         }
-    }
     }
     }
 }

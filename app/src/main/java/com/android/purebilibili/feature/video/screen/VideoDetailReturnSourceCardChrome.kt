@@ -992,13 +992,13 @@ private fun LandingInfoTexts(
         style = contentTypography.title,
         color = AppContentColors.primaryText(),
         fontWeight = FontWeight.Medium,
-        maxLines = if (sourceLayout == VideoCardSourceLayout.SIDE_BY_SIDE) {
+        maxLines = if (model.infoPresentation.singleLineMetadata || sourceLayout == VideoCardSourceLayout.SIDE_BY_SIDE) {
             2
         } else {
             videoCardTitleMaxLines()
         },
-        minLines = 1,
-        overflow = if (sourceLayout == VideoCardSourceLayout.SIDE_BY_SIDE) {
+        minLines = if (model.infoPresentation.singleLineMetadata) 2 else 1,
+        overflow = if (model.infoPresentation.singleLineMetadata || sourceLayout == VideoCardSourceLayout.SIDE_BY_SIDE) {
             TextOverflow.Ellipsis
         } else {
             videoCardTitleOverflow()
@@ -1023,23 +1023,52 @@ private fun LandingInfoTexts(
         LandingOwnerMetadata(model, Modifier.fillMaxWidth())
     }
     if (model.infoPresentation.showStatsInInfo) {
-        VideoStatRow(
-            playText = model.viewText,
-            danmakuText = model.danmakuText,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        if (model.infoPresentation.singleLineMetadata) {
+            HorizontalVideoStatRow(
+                playText = model.viewText,
+                danmakuText = model.danmakuText,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+        } else {
+            VideoStatRow(
+                playText = model.viewText,
+                danmakuText = model.danmakuText,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
     if (!model.infoPresentation.ownerBeforeStats) {
         LandingOwnerMetadata(model, Modifier.fillMaxWidth())
     }
+    if (model.infoPresentation.onlineCountText.isNotBlank()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AppIcon(
+                imageVector = Icons.Outlined.Visibility,
+                contentDescription = null,
+                modifier = Modifier.size(AppSpacingTokens.Medium),
+                tint = AppContentColors.secondaryText(),
+            )
+            AppText(
+                text = model.infoPresentation.onlineCountText,
+                style = contentTypography.statistic.copy(fontWeight = FontWeight.Medium),
+                color = AppContentColors.secondaryText(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
     val footer = buildList {
+        if (model.infoPresentation.singleLineMetadata && model.infoPresentation.publishTimeText.isNotBlank()) {
+            add(model.infoPresentation.publishTimeText)
+        }
         if (model.infoPresentation.showDurationInInfo && model.durationText.isNotBlank()) {
             add(model.durationText)
         }
-        if (model.infoPresentation.publishTimeText.isNotBlank()) {
+        if (!model.infoPresentation.singleLineMetadata && model.infoPresentation.publishTimeText.isNotBlank()) {
             add(model.infoPresentation.publishTimeText)
         }
-    }.joinToString("  ·  ")
+    }.joinToString(if (model.infoPresentation.singleLineMetadata) " · " else "  ·  ")
     if (footer.isNotBlank()) {
         LandingPublishMetadata(footer, Modifier.fillMaxWidth())
     }

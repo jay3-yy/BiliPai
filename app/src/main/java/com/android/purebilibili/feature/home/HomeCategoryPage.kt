@@ -8,8 +8,6 @@ import com.android.purebilibili.core.ui.components.AppButton
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import com.android.purebilibili.core.ui.components.videoListItemModifier
-import com.android.purebilibili.core.ui.components.FeedVerticalStaggeredGrid
 
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -116,8 +114,8 @@ internal fun resolveHomeCategoryVideoGridKeys(videos: List<VideoItem>): List<Str
 }
 
 /**
- * Rows used by the truncated-card feed. A divider starts a fresh row so content below it
- * remains aligned; full-card mode bypasses this grouping and keeps the waterfall layout.
+ * Rows for list screens that explicitly align card shells. The home grid uses per-video
+ * items; callers of this helper can still start a fresh row after a full-width divider.
  */
 internal fun resolveHomeFeedAlignedRows(
     itemCount: Int,
@@ -140,29 +138,18 @@ internal fun resolveHomeFeedAlignedRows(
     }
 }
 
-private fun resolveHomeFeedRowKey(row: IntRange, videoGridKeys: List<String>): String =
-    row.joinToString(prefix = "home_video_row_", separator = "_") { videoGridKeys[it] }
+internal fun resolveHomeFeedVideoRangesByLazyKey(videoGridKeys: List<String>): Map<String, IntRange> =
+    videoGridKeys.mapIndexed { index, key -> key to (index..index) }.toMap()
 
 internal fun resolveHomeOldContentGridItemIndex(
     anchorVideoIndex: Int,
     itemCount: Int,
-    columns: Int,
-    showFullVideoCardContent: Boolean,
     dividerIndex: Int?,
     headerItemCount: Int,
 ): Int? {
     if (anchorVideoIndex !in 0 until itemCount) return null
-    val safeDividerIndex = dividerIndex?.takeIf { it in 1 until itemCount }
-    val contentItemIndex = if (showFullVideoCardContent) {
-        anchorVideoIndex
-    } else {
-        resolveHomeFeedAlignedRows(itemCount, columns, safeDividerIndex)
-            .indexOfFirst { anchorVideoIndex in it }
-            .takeIf { it >= 0 }
-            ?: return null
-    }
-    val dividerItemBeforeAnchor = safeDividerIndex != null && anchorVideoIndex >= safeDividerIndex
-    return headerItemCount + contentItemIndex + if (dividerItemBeforeAnchor) 1 else 0
+    val dividerItemBeforeAnchor = dividerIndex != null && anchorVideoIndex >= dividerIndex
+    return headerItemCount + anchorVideoIndex + if (dividerItemBeforeAnchor) 1 else 0
 }
 
 internal fun resolveHomeHeroCarouselDedupKey(video: VideoItem): String {
@@ -180,11 +167,12 @@ internal fun shouldRequestHomeCategoryLoadMore(
     lastVisibleItemIndex: Int,
     isLoading: Boolean,
     hasMore: Boolean,
-    hasVisibleContent: Boolean
+    hasVisibleContent: Boolean,
+    preloadItemCount: Int = 4,
 ): Boolean {
     return hasVisibleContent &&
         totalItems > 0 &&
-        lastVisibleItemIndex >= totalItems - 4 &&
+        lastVisibleItemIndex >= totalItems - preloadItemCount &&
         !isLoading &&
         hasMore
 }
@@ -198,13 +186,15 @@ internal fun HomeCategoryPageContent(
     /** 页面是否在屏幕上。图片加载只看这个，不看数据同步是否就绪。 */
     pageOnScreen: Boolean = isActive,
     visibleDuringNavigation: Boolean = false,
-    gridState: LazyStaggeredGridState,
+    gridState: HomeFeedGridState,
     gridColumns: Int,
     contentPadding: PaddingValues,
     dissolvingVideos: ImmutableSet<String>,
     followingMids: ImmutableSet<Long>,
     showOnlineCount: Boolean,
     coverRequestSpec: HomeCoverRequestSpec,
+    coverPreloadAllowed: Boolean = false,
+    coverPreloadAheadCount: Int = 0,
     onVideoClick: (HomeVideoClickRequest) -> Unit,
     onUpClick: (Long) -> Unit = {},
     onLiveClick: (Long, String, String) -> Unit,
@@ -285,13 +275,10 @@ internal fun HomeCategoryPageContent(
      * 首屏骨架 item 提供者。非空时网格只铺骨架，与真实卡片共用同一个 LazyLayout 与同一个
      * gridState；数据到达后由真实卡片原地替换，不会整屏重建、也不丢滚动锚点。
      */
-    initialSkeletonContent: (LazyStaggeredGridScope.() -> Unit)? = null,
+    initialSkeletonContent: (HomeFeedGridScope.() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val cardReflowState = remember(category) { HomeCardReflowState() }
-    val cardReflowScope = rememberCoroutineScope()
     var cardReflowActive by remember(category) { mutableStateOf(false) }
-    val latestReflowEnabled by rememberUpdatedState(dissolveReflowEnabled)
     LaunchedEffect(dissolvingVideos, dissolveReflowEnabled) {
         if (!dissolveReflowEnabled) {
             cardReflowActive = false
@@ -338,13 +325,12 @@ internal fun HomeCategoryPageContent(
     val latestCategoryState by rememberUpdatedState(categoryState)
     val latestIsActive by rememberUpdatedState(isActive)
     val latestOnLoadMore by rememberUpdatedState(onLoadMore)
-    val shouldLoadMore by remember(gridState) {
+    val shouldLoadMore by remember(gridState, gridColumns) {
         derivedStateOf {
-            val layoutInfo = gridState.layoutInfo
-            val totalItems = layoutInfo.totalItemsCount
+            val totalItems = gridState.totalItemsCount
             // Staggered lanes do not guarantee that the last visible entry has the greatest
             // adapter index. Use the maximum across lanes so pagination cannot stall.
-            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: 0
+            val lastVisibleItemIndex = gridState.lastVisibleItemIndex
             val current = latestCategoryState
             latestIsActive && current.loadMoreError == null && shouldRequestHomeCategoryLoadMore(
                 totalItems = totalItems,
@@ -353,7 +339,8 @@ internal fun HomeCategoryPageContent(
                 hasMore = current.hasMore,
                 hasVisibleContent = current.videos.isNotEmpty() ||
                     current.liveRooms.isNotEmpty() ||
-                    current.followedLiveRooms.isNotEmpty()
+                    current.followedLiveRooms.isNotEmpty(),
+                preloadItemCount = gridColumns * 2,
             )
         }
     }
@@ -361,9 +348,12 @@ internal fun HomeCategoryPageContent(
         if (shouldLoadMore) latestOnLoadMore()
     }
 
-    val carouselVideos = remember(category, categoryState.videos) {
-        if (category == HomeCategory.RECOMMEND) {
-            selectHomeHeroCarouselItems(categoryState.videos.filter { it.contentType !in setOf("bangumi", "picture") })
+    val carouselVideos = remember(category, categoryState.videos, homeHeroCarouselEnabled) {
+        if (category == HomeCategory.RECOMMEND && homeHeroCarouselEnabled) {
+            // Stop scanning once the banner is full; disabled banners do no selection work.
+            selectHomeHeroCarouselItems(categoryState.videos) {
+                it.contentType != "bangumi" && it.contentType != "picture"
+            }
         } else {
             emptyList()
         }
@@ -387,7 +377,6 @@ internal fun HomeCategoryPageContent(
     val videoGridKeys = remember(visibleGridVideos) {
         resolveHomeCategoryVideoGridKeys(visibleGridVideos)
     }
-    SideEffect { cardReflowState.retainKeys(videoGridKeys) }
     // 旧内容定位与分界共用一次查找，滚动启停等无关重组不再遍历全部视频。
     val oldContentAnchorIndex = remember(visibleGridVideos, oldContentAnchorBvid) {
         oldContentAnchorBvid?.let { anchor ->
@@ -406,6 +395,9 @@ internal fun HomeCategoryPageContent(
         oldContentDividerIndex,
         showHeroCarousel,
         todayWatchEnabled,
+        categoryState.refreshError,
+        contentPadding,
+        cardLayout.verticalItemSpacingDp,
     ) {
         if (category != HomeCategory.RECOMMEND) {
             null
@@ -414,11 +406,11 @@ internal fun HomeCategoryPageContent(
                 resolveHomeOldContentGridItemIndex(
                     anchorVideoIndex = videoIndex,
                     itemCount = visibleGridVideos.size,
-                    columns = gridColumns,
-                    showFullVideoCardContent = showFullVideoCardContent,
                     dividerIndex = oldContentDividerIndex,
                     headerItemCount = (if (showHeroCarousel) 1 else 0) +
-                        (if (todayWatchEnabled) 1 else 0),
+                        (if (todayWatchEnabled) 1 else 0) +
+                        (if (categoryState.refreshError != null) 1 else 0) +
+                        (if (contentPadding.calculateTopPadding() > cardLayout.verticalItemSpacingDp.dp) 1 else 0),
                 )
             }
         }
@@ -434,7 +426,7 @@ internal fun HomeCategoryPageContent(
 
     // Share key extraction, but read each card's Boolean in its own restart scope.
     val visibleLazyItemKeys = remember(gridState) {
-        derivedStateOf { gridState.layoutInfo.visibleItemsInfo.mapTo(HashSet()) { it.key } }
+        derivedStateOf { gridState.visibleItemKeys() }
     }
     val alignedDividerIndex = remember(
         category, visibleGridVideos, oldContentAnchorBvid, oldContentStartIndex, oldContentAnchorIndex,
@@ -444,35 +436,21 @@ internal fun HomeCategoryPageContent(
             oldContentAnchorIndex?.takeIf { it > 0 }
         } else oldContentStartIndex?.takeIf { it > 0 && it < visibleGridVideos.size }
     }
-    val alignedRows = remember(visibleGridVideos.size, gridColumns, alignedDividerIndex, showFullVideoCardContent) {
-        if (showFullVideoCardContent) emptyList()
-        else resolveHomeFeedAlignedRows(visibleGridVideos.size, gridColumns, alignedDividerIndex)
+    // Both layouts use one lazy item per video; headers never enter this mapping.
+    val videoRangesByLazyKey = remember(videoGridKeys) {
+        resolveHomeFeedVideoRangesByLazyKey(videoGridKeys)
     }
-    // Keys include full-width rows, dividers and headers. Map only video keys; never infer
-    // a video index from a lazy index, which would preload unrelated cards after a header.
-    val videoRangesByLazyKey = remember(videoGridKeys, alignedRows, showFullVideoCardContent) {
-        if (showFullVideoCardContent) {
-            videoGridKeys.mapIndexed { index, key -> key to (index..index) }.toMap()
-        } else {
-            alignedRows.associateBy(
-                keySelector = { row -> resolveHomeFeedRowKey(row, videoGridKeys) },
-                valueTransform = { it },
-            )
-        }
+    val visibleVideoRange = remember(visibleLazyItemKeys, videoRangesByLazyKey) {
+        derivedStateOf { resolveHomeVisibleVideoRange(visibleLazyItemKeys.value, videoRangesByLazyKey) }
     }
     val coverLoadRange = remember(
-        visibleLazyItemKeys, videoRangesByLazyKey, visibleGridVideos.size, gridColumns, isDataSaverActive,
+        visibleVideoRange, visibleGridVideos.size, gridColumns, isDataSaverActive,
     ) {
         derivedStateOf {
-            var first: Int? = null
-            var last: Int? = null
-            visibleLazyItemKeys.value.forEach { key ->
-                (key as? String)?.let { videoRangesByLazyKey[it] }?.let { range ->
-                    first = minOf(first ?: range.first, range.first)
-                    last = maxOf(last ?: range.last, range.last)
-                }
-            }
-            resolveHomeCoverLoadRange(first, last, videoGridKeys.size, gridColumns, isDataSaverActive)
+            val visible = visibleVideoRange.value
+            resolveHomeCoverLoadRange(
+                visible?.first, visible?.last, visibleGridVideos.size, gridColumns, isDataSaverActive,
+            )
         }
     }
     val coverLoadingActive = pageOnScreen || visibleDuringNavigation
@@ -543,15 +521,8 @@ internal fun HomeCategoryPageContent(
                 onDissolveReflowStarted(video.bvid)
             },
             preserveContentLayerWhenIdle = cardTransitionEnabled,
+            propagateMinConstraints = gridState.regularLayout,
             modifier = itemModifier
-                .then(homeCardReflowModifier(
-                    key = videoGridKeys[index],
-                    state = cardReflowState,
-                    scope = cardReflowScope,
-                    enabledProvider = {
-                        latestReflowEnabled && cardReflowActive && !gridState.isScrollInProgress
-                    },
-                ))
                 .graphicsLayer {
                     scaleX = cardSquishScaleX.value
                     scaleY = cardSquishScaleY.value
@@ -566,7 +537,7 @@ internal fun HomeCategoryPageContent(
                 when (displayMode) {
                     1 -> StoryVideoCard(
                         video = video,
-                        modifier = if (showFullVideoCardContent) Modifier else Modifier.fillMaxHeight(),
+                        modifier = Modifier,
                         index = index,
                         animationEnabled = cardAnimationEnabled,
                         motionTier = cardMotionTier,
@@ -587,9 +558,8 @@ internal fun HomeCategoryPageContent(
                         coverAspectRatio = cardLayout.coverAspectRatio,
                         cardHorizontalPadding = cardLayout.storyCardHorizontalPaddingDp.dp,
                         compactMetadata = cardLayout.compactMetadata,
-                        titleMinLines = cardLayout.titleMinLines,
+                        titleMinLines = if (gridState.regularLayout) cardLayout.titleMaxLines else cardLayout.titleMinLines,
                         titleMaxLines = cardLayout.titleMaxLines,
-                        showOnlineCount = showOnlineCount,
                         onUpClick = onUpClick,
                         showPublishTime = showPublishTime,
                         onDismiss = { onDismissVideo(video) },
@@ -612,7 +582,8 @@ internal fun HomeCategoryPageContent(
 
                     else -> ElegantVideoCard(
                         video = video,
-                        modifier = if (showFullVideoCardContent) Modifier else Modifier.fillMaxHeight(),
+                        regularGridMetadata = gridState.regularLayout,
+                        modifier = Modifier,
                         index = index,
                         isFollowing = video.owner.mid in followingMids && category != HomeCategory.FOLLOW,
                         animationEnabled = cardAnimationEnabled,
@@ -640,7 +611,7 @@ internal fun HomeCategoryPageContent(
                         } else homeDurationStyle,
                         coverAspectRatio = cardLayout.coverAspectRatio,
                         compactMetadata = cardLayout.compactMetadata,
-                        titleMinLines = cardLayout.titleMinLines,
+                        titleMinLines = if (gridState.regularLayout) cardLayout.titleMaxLines else cardLayout.titleMinLines,
                         titleMaxLines = cardLayout.titleMaxLines,
                         showOnlineCount = showOnlineCount,
                         onUpClick = onUpClick,
@@ -675,6 +646,14 @@ internal fun HomeCategoryPageContent(
     val cardScrolling = remember(gridState, pageScrollInProgress) {
         derivedStateOf { gridState.isScrollInProgress || pageScrollInProgress?.value == true }
     }
+    HomeFeedCoverPreload(
+        videos = visibleGridVideos,
+        visibleVideoRange = visibleVideoRange,
+        isScrolling = cardScrolling,
+        requestSpec = coverRequestSpec,
+        allowed = coverPreloadAllowed && pageImageWorkAllowed && visualWorkActive && !isDataSaverActive,
+        aheadCount = coverPreloadAheadCount,
+    )
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val visibilityScope = LocalAnimatedVisibilityScope.current
     val cardTransitionRunning = remember(sharedTransitionScope, visibilityScope) {
@@ -692,9 +671,9 @@ internal fun HomeCategoryPageContent(
             LocalHomeCardScrolling provides cardScrolling,
             LocalHomeCardTransitionRunning provides cardTransitionRunning
         ) {
-            FeedVerticalStaggeredGrid(
+            HomeFeedGrid(
                 state = gridState,
-                columns = StaggeredGridCells.Fixed(gridColumns),
+                columns = gridColumns,
                 contentPadding = contentPadding,
                 horizontalArrangement = horizontalArrangement,
                 verticalItemSpacing = cardLayout.verticalItemSpacingDp.dp,
@@ -704,10 +683,10 @@ internal fun HomeCategoryPageContent(
                 // 骨架 → 卡片是一次 item 原地替换，而不是整棵网格重建。
                 if (initialSkeletonContent != null) {
                     initialSkeletonContent()
-                    return@FeedVerticalStaggeredGrid
+                    return@HomeFeedGrid
                 }
         categoryState.refreshError?.let { message ->
-            item(key = "refresh_error", span = StaggeredGridItemSpan.FullLine) {
+            item(key = "refresh_error", fullLine = true) {
                 ListLoadError(
                     message = "刷新失败，已保留现有内容：$message",
                     onRetry = onRetryRefresh,
@@ -717,7 +696,7 @@ internal fun HomeCategoryPageContent(
         }
         if (category == HomeCategory.LIVE) {
             // 顶栏/侧滑偶发进入内嵌直播页时，引导到与底栏一致的 LiveList 首页。
-            item(span = StaggeredGridItemSpan.FullLine) {
+            item(fullLine = true) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -747,7 +726,7 @@ internal fun HomeCategoryPageContent(
                     item(
                         key = "home_hero_carousel",
                         contentType = "home_hero_carousel",
-                        span = StaggeredGridItemSpan.FullLine
+                        fullLine = true
                     ) {
                         val heroVisible = "home_hero_carousel" in visibleLazyItemKeys.value
                         val heroWorkAllowed = pageImageWorkAllowed && heroVisible && visualWorkActive
@@ -806,7 +785,7 @@ internal fun HomeCategoryPageContent(
                     }
                 }
                 if (todayWatchEnabled) {
-                    item(key = "home_today_watch", span = StaggeredGridItemSpan.FullLine) {
+                    item(key = "home_today_watch", fullLine = true) {
                         val imageWorkAllowed = pageImageWorkAllowed && visualWorkActive &&
                             "home_today_watch" in visibleLazyItemKeys.value
                         CompositionLocalProvider(LocalPageImageLoadingAllowed provides imageWorkAllowed) {
@@ -830,7 +809,7 @@ internal fun HomeCategoryPageContent(
                 }
             }
             if (category == HomeCategory.POPULAR) {
-                item(span = StaggeredGridItemSpan.FullLine) {
+                item(fullLine = true) {
                     PopularSubCategorySegmentedControl(
                         selectedSubCategory = popularSubCategory,
                         onSubCategoryChange = onPopularSubCategoryChange,
@@ -842,7 +821,7 @@ internal fun HomeCategoryPageContent(
             }
 
             if (category == HomeCategory.POPULAR && popularSubCategory == PopularSubCategory.WEEKLY) {
-                item(span = StaggeredGridItemSpan.FullLine) {
+                item(fullLine = true) {
                     com.android.purebilibili.core.ui.components.AppTextButton(
                         onClick = onWeeklySeriesClick,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
@@ -855,63 +834,36 @@ internal fun HomeCategoryPageContent(
             if (visibleGridVideos.isNotEmpty()) {
                 val dividerIndex = alignedDividerIndex
 
-                if (showFullVideoCardContent) {
-                    // Complete titles intentionally retain the independent-lane waterfall.
-                    visibleGridVideos.forEachIndexed { index, video ->
-                        if (index == dividerIndex) {
-                            item(
-                                key = "old_content_divider_$index",
-                                contentType = "home_old_content_divider",
-                                span = StaggeredGridItemSpan.FullLine
-                            ) {
-                                OldContentDivider(onClick = onOldContentDividerClick)
-                            }
-                        }
-                        item(key = videoGridKeys[index], contentType = "home_video_card") {
-                            renderVideoCard(
-                                index,
-                                video,
-                                videoListItemModifier(enabled = cardAnimationEnabled && !cardReflowActive),
-                                videoGridKeys[index],
-                            )
-                        }
+                fun addCards(startIndex: Int, endExclusive: Int) {
+                    items(
+                        count = endExclusive - startIndex,
+                        key = { videoGridKeys[startIndex + it] },
+                        contentType = { "home_video_card" },
+                    ) { offset ->
+                        val index = startIndex + offset
+                        renderVideoCard(
+                            index,
+                            visibleGridVideos[index],
+                            videoListItemModifier(
+                                enabled = cardAnimationEnabled,
+                                dissolveReflowEnabled = dissolveReflowEnabled && isActive &&
+                                    visualWorkActive && componentMotionEnabled && !reduceMotion,
+                                dissolveReflowActive = cardReflowActive,
+                            ),
+                            videoGridKeys[index],
+                        )
                     }
-                } else {
-                    // Keep both the card shells and subsequent rows aligned while retaining
-                    // unabridged metadata. The tallest card determines each row's height.
-                    alignedRows.forEach { rowIndices ->
-                        if (rowIndices.first == dividerIndex) {
-                            item(
-                                key = "old_content_divider_${rowIndices.first}",
-                                contentType = "home_old_content_divider",
-                                span = StaggeredGridItemSpan.FullLine
-                            ) {
-                                OldContentDivider(onClick = onOldContentDividerClick)
-                            }
-                        }
-                        val rowKey = resolveHomeFeedRowKey(rowIndices, videoGridKeys)
-                        item(
-                            key = rowKey,
-                            contentType = "home_video_row",
-                            span = StaggeredGridItemSpan.FullLine,
-                        ) {
-                            HomeAlignedVideoRow(
-                                indices = rowIndices,
-                                itemKeys = videoGridKeys,
-                                columns = gridColumns,
-                                horizontalArrangement = horizontalArrangement,
-                                modifier = videoListItemModifier(enabled = cardAnimationEnabled && !cardReflowActive)
-                                    .fillMaxWidth(),
-                            ) { index, cardModifier ->
-                                renderVideoCard(
-                                    index,
-                                    visibleGridVideos[index],
-                                    cardModifier,
-                                    rowKey,
-                                )
-                            }
-                        }
+                }
+                addCards(0, dividerIndex ?: visibleGridVideos.size)
+                if (dividerIndex != null) {
+                    item(
+                        key = "old_content_divider_$dividerIndex",
+                        contentType = "home_old_content_divider",
+                        fullLine = true,
+                    ) {
+                        OldContentDivider(onClick = onOldContentDividerClick)
                     }
+                    addCards(dividerIndex, visibleGridVideos.size)
                 }
             }
         }
@@ -919,7 +871,7 @@ internal fun HomeCategoryPageContent(
         // Loading Indicator at bottom
         val loadMoreError = categoryState.loadMoreError
         if (loadMoreError != null) {
-            item(key = "load_more_error", span = StaggeredGridItemSpan.FullLine) {
+            item(key = "load_more_error", fullLine = true) {
                 ListLoadError(
                     message = "加载更多失败：$loadMoreError",
                     onRetry = onRetryLoadMore,
@@ -927,7 +879,7 @@ internal fun HomeCategoryPageContent(
                 )
             }
         } else if (categoryState.isLoading || categoryState.hasMore) {
-             item(key = "load_more_status", span = StaggeredGridItemSpan.FullLine) {
+             item(key = "load_more_status", fullLine = true) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -945,7 +897,7 @@ internal fun HomeCategoryPageContent(
         }
 
         // Spacer
-        item(span = StaggeredGridItemSpan.FullLine) {
+        item(fullLine = true) {
             Box(modifier = Modifier.fillMaxWidth().height(AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall))
         }
         }

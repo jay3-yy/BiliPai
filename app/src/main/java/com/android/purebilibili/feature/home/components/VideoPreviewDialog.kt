@@ -124,10 +124,11 @@ fun VideoPreviewDialog(
     var videoUrl by remember(video.bvid, video.cid) { androidx.compose.runtime.mutableStateOf<String?>(null) }
     var isLoading by remember(video.bvid, video.cid) { androidx.compose.runtime.mutableStateOf(false) }
     val currentGetPreviewUrl by androidx.compose.runtime.rememberUpdatedState(onGetPreviewUrl)
+    val previewWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
 
     // Fetch URL when isPlaying becomes true
-    androidx.compose.runtime.LaunchedEffect(video.bvid, video.cid, isPlaying) {
-        if (!isPlaying) {
+    androidx.compose.runtime.LaunchedEffect(video.bvid, video.cid, isPlaying, previewWorkActive) {
+        if (!isPlaying || !previewWorkActive) {
             isLoading = false
         } else if (videoUrl == null) {
             isLoading = true
@@ -374,11 +375,11 @@ fun DisposableVideoPlayer(
     onFirstFrame: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val visualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val currentOnLoadingChanged by androidx.compose.runtime.rememberUpdatedState(onLoadingChanged)
     val currentOnPlaybackError by androidx.compose.runtime.rememberUpdatedState(onPlaybackError)
     val currentOnFirstFrame by androidx.compose.runtime.rememberUpdatedState(onFirstFrame)
-    val player = remember(context, url, lifecycleOwner) {
+    val player = remember(context, url) {
         val upstream = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
             com.android.purebilibili.core.network.NetworkModule.playbackOkHttpClient
         ).setDefaultRequestProperties(
@@ -395,7 +396,7 @@ fun DisposableVideoPlayer(
             }
     }
 
-    androidx.compose.runtime.DisposableEffect(player, lifecycleOwner) {
+    androidx.compose.runtime.DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 currentOnLoadingChanged(playbackState == Player.STATE_BUFFERING)
@@ -410,14 +411,8 @@ fun DisposableVideoPlayer(
                 currentOnPlaybackError()
             }
         }
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
-            player.playWhenReady = lifecycleOwner.lifecycle.currentState
-                .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
-        }
         player.addListener(listener)
-        lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
             player.removeListener(listener)
             player.release()
         }
@@ -425,9 +420,10 @@ fun DisposableVideoPlayer(
     androidx.compose.runtime.LaunchedEffect(player, url) {
         currentOnLoadingChanged(true)
         player.setMediaItem(MediaItem.fromUri(url))
-        player.playWhenReady = lifecycleOwner.lifecycle.currentState
-            .isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
         player.prepare()
+    }
+    androidx.compose.runtime.LaunchedEffect(player, visualWorkActive) {
+        player.playWhenReady = visualWorkActive
     }
     AndroidView(
         factory = { ctx ->

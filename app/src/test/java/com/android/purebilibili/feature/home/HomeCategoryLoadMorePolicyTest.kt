@@ -7,6 +7,13 @@ import kotlin.test.assertTrue
 class HomeCategoryLoadMorePolicyTest {
 
     @Test
+    fun largeGridStartsLoadingTwoRowsBeforeTheEnd() {
+        assertFalse(shouldRequestHomeCategoryLoadMore(100, 85, false, true, true, preloadItemCount = 14))
+        assertTrue(shouldRequestHomeCategoryLoadMore(100, 86, false, true, true, preloadItemCount = 14))
+        assertFalse(shouldRequestHomeCategoryLoadMore(100, 86, true, true, true, preloadItemCount = 14))
+    }
+
+    @Test
     fun emptyPlaceholderOnlyPageDoesNotRequestLoadMore() {
         assertFalse(
             shouldRequestHomeCategoryLoadMore(

@@ -96,6 +96,21 @@ class HomeHeroCarouselPolicyTest {
     }
 
     @Test
+    fun `carousel fills available slots with eligible items in feed order`() {
+        assertEquals(
+            listOf("video-a", "video-b"),
+            selectHomeHeroCarouselItems(
+                listOf("picture", "video-a", "bangumi", "video-b", "video-c"),
+                maxItems = 2,
+            ) { it.startsWith("video-") }
+        )
+        assertEquals(
+            emptyList(),
+            selectHomeHeroCarouselItems(listOf("picture", "bangumi")) { it.startsWith("video-") }
+        )
+    }
+
+    @Test
     fun `carousel feed removes visible hero items from regular grid`() {
         val items = listOf("a", "b", "c", "d")
         val carouselItems = listOf("a", "b")

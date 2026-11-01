@@ -848,7 +848,6 @@ class VideoCardTransitionBackgroundPolicyTest {
                     progress = 1f,
                     phase = phase,
                     motionTier = MotionTier.Normal,
-                    isGestureRestoreInProgress = false,
                 ),
                 0.0001f,
             )
@@ -929,19 +928,16 @@ class VideoCardTransitionBackgroundPolicyTest {
         assertEquals(0f, partitionReduction, 0.0001f)
         assertTrue(
             shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                source = VideoCardTransitionBackgroundSource.RelatedVideo,
                 realtimeBlurEnabled = true,
             )
         )
         assertFalse(
             shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                source = VideoCardTransitionBackgroundSource.RelatedVideo,
                 realtimeBlurEnabled = false,
             )
         )
         assertTrue(
             shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                source = VideoCardTransitionBackgroundSource.Home,
                 realtimeBlurEnabled = true,
             )
         )
@@ -951,7 +947,6 @@ class VideoCardTransitionBackgroundPolicyTest {
                 progress = 1f,
                 phase = VideoCardTransitionBackgroundPhase.OPENING,
                 motionTier = MotionTier.Normal,
-                isGestureRestoreInProgress = false,
                 scaleReduction = relatedReduction,
             ),
             0.0001f,
@@ -962,7 +957,6 @@ class VideoCardTransitionBackgroundPolicyTest {
                 progress = 1f,
                 phase = VideoCardTransitionBackgroundPhase.OPENING,
                 motionTier = MotionTier.Normal,
-                isGestureRestoreInProgress = false,
                 scaleReduction = partitionReduction,
             ),
             0.0001f,
@@ -1087,8 +1081,6 @@ class VideoCardTransitionBackgroundPolicyTest {
             ),
             0.0001f,
         )
-        // 遗留 soft-clear 曲线仍可算，但主路径不再使用。
-        assertEquals(0.5647f, softClearVideoCardTransitionDepth(0.5f), 0.01f)
     }
 
     @Test
@@ -1207,13 +1199,11 @@ class VideoCardTransitionBackgroundPolicyTest {
             progress = 1f,
             phase = VideoCardTransitionBackgroundPhase.OPENING,
             motionTier = MotionTier.Normal,
-            isGestureRestoreInProgress = false,
         )
         val restoreScale = resolveVideoCardTransitionContentScale(
             progress = 0.5f,
             phase = VideoCardTransitionBackgroundPhase.HELD,
             motionTier = MotionTier.Normal,
-            isGestureRestoreInProgress = true,
         )
 
         assertEquals(1f, openingScale, 0.0001f)
@@ -1503,48 +1493,6 @@ class VideoCardTransitionBackgroundPolicyTest {
         )
         assertFalse(
             shouldInterruptVideoCardOpeningOnReturn(VideoCardTransitionBackgroundPhase.RETURNING)
-        )
-    }
-
-    @Test
-    fun quickReturnSnapsDepthBlurClearToAvoidCoverBlurFlash() {
-        // 打断 OPENING：无论是否已 mark quick，都必须立刻清模糊。
-        assertTrue(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = false,
-                phase = VideoCardTransitionBackgroundPhase.OPENING,
-            )
-        )
-        assertTrue(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = true,
-                phase = VideoCardTransitionBackgroundPhase.OPENING,
-            )
-        )
-        // HELD / RETURNING（含快速返回）必须走连续消糊，禁止 snap 瞬间清晰。
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = true,
-                phase = VideoCardTransitionBackgroundPhase.HELD,
-            )
-        )
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = true,
-                phase = VideoCardTransitionBackgroundPhase.RETURNING,
-            )
-        )
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = false,
-                phase = VideoCardTransitionBackgroundPhase.HELD,
-            )
-        )
-        assertFalse(
-            shouldSnapClearVideoCardDepthBlurOnQuickReturn(
-                isQuickReturnFromDetail = false,
-                phase = VideoCardTransitionBackgroundPhase.IDLE,
-            )
         )
     }
 

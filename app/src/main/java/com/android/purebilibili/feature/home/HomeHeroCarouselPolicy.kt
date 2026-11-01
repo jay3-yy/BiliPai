@@ -54,10 +54,11 @@ internal fun <T> resolveHomeHeroCarouselItemKey(
 
 internal fun <T> selectHomeHeroCarouselItems(
     items: List<T>,
-    maxItems: Int = HOME_HERO_CAROUSEL_MAX_ITEMS
+    maxItems: Int = HOME_HERO_CAROUSEL_MAX_ITEMS,
+    eligible: (T) -> Boolean = { true },
 ): List<T> {
     if (maxItems <= 0) return emptyList()
-    return items.take(maxItems)
+    return items.asSequence().filter(eligible).take(maxItems).toList()
 }
 
 internal fun <T, K> excludeHomeHeroCarouselItems(

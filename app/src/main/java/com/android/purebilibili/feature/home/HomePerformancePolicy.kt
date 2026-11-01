@@ -33,7 +33,7 @@ internal fun resolveHomeCoverPreloadRange(
     totalItemCount: Int,
     preloadAheadCount: Int
 ): IntRange? {
-    if (isDataSaverActive || isScrollInProgress || totalItemCount <= 0) return null
+    if (isDataSaverActive || isScrollInProgress || lastVisibleIndex !in 0 until totalItemCount) return null
     val effectiveAheadCount = resolveHomePreloadAheadCount(
         isDataSaverActive = false,
         normalPreloadAheadCount = preloadAheadCount

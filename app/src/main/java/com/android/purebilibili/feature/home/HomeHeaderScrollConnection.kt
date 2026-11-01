@@ -39,7 +39,7 @@ internal fun rememberHomeHeaderScrollConnection(
     configuration: HomeHeaderScrollConfiguration,
     pagerState: PagerState,
     topTabEntries: List<HomeTopTabEntry>,
-    activeGridStateProvider: () -> LazyStaggeredGridState?,
+    activeGridStateProvider: () -> HomeFeedGridState?,
     subscriptionListState: LazyStaggeredGridState,
     partitionListState: LazyListState = rememberLazyListState(),
     revealLocked: Boolean,
@@ -89,13 +89,16 @@ internal fun rememberHomeHeaderScrollConnection(
                     categoryFirstVisibleIndex = activeGridState?.firstVisibleItemIndex ?: 0,
                     subscriptionFirstVisibleIndex = subscriptionListState.firstVisibleItemIndex,
                 )
-                val activeList = if (onSubscriptionTab) subscriptionListState else activeGridState
                 // 仅回顶模式依据当前列表位置决定是否恢复；反向恢复模式允许浏览中展开。
                 val canRevealHeader = if (onPartitionTab) partitionListState.firstVisibleItemIndex == 0 else canRevealHomeHeaderForList(
                     firstVisibleItemIndex = headerListIndex,
                     listMissing = !onSubscriptionTab && activeGridState == null,
                 )
-                val listAtTop = if (onPartitionTab) !partitionListState.canScrollBackward else activeList?.let { !it.canScrollBackward } == true
+                val listAtTop = when {
+                    onPartitionTab -> !partitionListState.canScrollBackward
+                    onSubscriptionTab -> !subscriptionListState.canScrollBackward
+                    else -> activeGridState?.canScrollBackward == false
+                }
                 // 刷新保护只在当前列表顶部生效，避免请求中或切页残留状态强制展开。
                 if (currentRefreshInteractionActive.value() && listAtTop) {
                     currentOnHeaderOffsetChanged.value(0f, false)

@@ -44,6 +44,10 @@ internal data class VideoCardSourceInfoPresentation(
     val useTintedInfoSurface: Boolean = false,
     /** Whether the stationary card exposes the bottom-right overflow affordance. */
     val showOverflowMenu: Boolean = false,
+    /** Regular home cards keep two title lines and single-line metadata at every width. */
+    val singleLineMetadata: Boolean = false,
+    /** Empty means no info-region online row; an unknown visible count is recorded as “—”. */
+    val onlineCountText: String = "",
 )
 
 /**
@@ -134,6 +138,8 @@ internal fun resolveVideoCardSourceInfoPresentation(
     useTintedInfoSurface: Boolean = false,
     showOverflowMenu: Boolean = false,
     ownerBeforeStats: Boolean = false,
+    singleLineMetadata: Boolean = false,
+    onlineCountText: String = "",
 ): VideoCardSourceInfoPresentation = VideoCardSourceInfoPresentation(
     publishTimeText = publishTimeText.trim(),
     showStatsInInfo = showStatsInInfo,
@@ -142,6 +148,8 @@ internal fun resolveVideoCardSourceInfoPresentation(
     ownerBeforePublish = ownerBeforePublish,
     useTintedInfoSurface = useTintedInfoSurface,
     showOverflowMenu = showOverflowMenu,
+    singleLineMetadata = singleLineMetadata,
+    onlineCountText = onlineCountText,
 )
 
 internal fun resolveVideoCardSourceLayout(

@@ -15,7 +15,8 @@ internal data class HomeFeedScrollAnchor(
     val popularSubCategory: PopularSubCategory,
     val firstVisibleItemIndex: Int,
     val firstVisibleItemScrollOffset: Int,
-    val headerOffsetPx: Float
+    val headerOffsetPx: Float,
+    val regularGrid: Boolean = true,
 )
 
 internal val HomeFeedScrollAnchorSaver: Saver<HomeFeedScrollAnchor?, Any> = listSaver(
@@ -29,7 +30,8 @@ internal val HomeFeedScrollAnchorSaver: Saver<HomeFeedScrollAnchor?, Any> = list
                 anchor.popularSubCategory.name,
                 anchor.firstVisibleItemIndex,
                 anchor.firstVisibleItemScrollOffset,
-                anchor.headerOffsetPx
+                anchor.headerOffsetPx,
+                anchor.regularGrid,
             )
         }
     },
@@ -42,7 +44,9 @@ internal val HomeFeedScrollAnchorSaver: Saver<HomeFeedScrollAnchor?, Any> = list
                 popularSubCategory = enumValueOf(values[2] as String),
                 firstVisibleItemIndex = values[3] as Int,
                 firstVisibleItemScrollOffset = values[4] as Int,
-                headerOffsetPx = (values[5] as Number).toFloat()
+                headerOffsetPx = (values[5] as Number).toFloat(),
+                // Saved anchors from the row-based feed belong to its former index space.
+                regularGrid = values.getOrNull(6) as? Boolean ?: false,
             )
         }
     }
@@ -53,14 +57,16 @@ internal fun captureHomeFeedScrollAnchor(
     popularSubCategory: PopularSubCategory,
     firstVisibleItemIndex: Int,
     firstVisibleItemScrollOffset: Int,
-    headerOffsetPx: Float
+    headerOffsetPx: Float,
+    regularGrid: Boolean = true,
 ): HomeFeedScrollAnchor {
     return HomeFeedScrollAnchor(
         category = category,
         popularSubCategory = popularSubCategory,
         firstVisibleItemIndex = firstVisibleItemIndex.coerceAtLeast(0),
         firstVisibleItemScrollOffset = firstVisibleItemScrollOffset.coerceAtLeast(0),
-        headerOffsetPx = headerOffsetPx
+        headerOffsetPx = headerOffsetPx,
+        regularGrid = regularGrid,
     )
 }
 
@@ -84,11 +90,14 @@ internal fun resolveHomeFeedScrollRestorePlan(
     currentHeaderOffsetPx: Float,
     anchor: HomeFeedScrollAnchor,
     offsetTolerancePx: Int = 1,
-    headerTolerancePx: Float = 0.5f
+    headerTolerancePx: Float = 0.5f,
+    currentRegularGrid: Boolean = true,
 ): HomeFeedScrollRestorePlan {
     return HomeFeedScrollRestorePlan(
-        restoreGrid = currentIndex != anchor.firstVisibleItemIndex ||
-            kotlin.math.abs(currentOffset - anchor.firstVisibleItemScrollOffset) > offsetTolerancePx,
+        restoreGrid = currentRegularGrid == anchor.regularGrid && (
+            currentIndex != anchor.firstVisibleItemIndex ||
+                kotlin.math.abs(currentOffset - anchor.firstVisibleItemScrollOffset) > offsetTolerancePx
+            ),
         restoreHeader = kotlin.math.abs(currentHeaderOffsetPx - anchor.headerOffsetPx) > headerTolerancePx,
     )
 }

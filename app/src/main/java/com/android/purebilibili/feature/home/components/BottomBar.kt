@@ -4053,6 +4053,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                 hasUiSkinDecoration = uiSkinDecoration != null,
                 fillAllocatedDockWidth = embeddedDock,
                 nativeMiuixNavigation = useNativeMiuixNavigation,
+                glassMotionEnabled = effectiveGlassEnabled,
             )
             val compactSearchLayout =
                 bottomBarSearchLayoutMode == BottomBarSearchLayoutMode.HOME_AND_SEARCH
