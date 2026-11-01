@@ -909,10 +909,20 @@ object VideoRepository {
         epid: Long = 0L,
         sid: Long = 0L,
         videoType: Int = 3,
-        subType: Int? = null
+        subType: Int? = null,
+        videoDurationSec: Long = 0L,
+        lastProgressSec: Long = 0L,
+        maxProgressSec: Long = 0L,
+        session: String = "",
     ): Boolean {
-        val success = HistoryRepository.reportPlayback(bvid, cid, playedTime, realPlayedTime,
-            startTsSec, aid, epid, sid, videoType, subType).isSuccess
+        val success = HistoryRepository.reportPlayback(
+            bvid, cid, playedTime, realPlayedTime,
+            startTsSec, aid, epid, sid, videoType, subType,
+            videoDurationSec = videoDurationSec,
+            lastProgressSec = lastProgressSec,
+            maxProgressSec = maxProgressSec,
+            session = session,
+        ).isSuccess
         if (success) com.android.purebilibili.core.refresh.HistoryRefreshBus.notifyChanged()
         return success
     }

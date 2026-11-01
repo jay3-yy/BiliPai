@@ -163,6 +163,11 @@ private const val PLAYBACK_CDN_FIRST_FRAME_FALLBACK_TIMEOUT_MS = 2_500L
 private const val PLAYBACK_STALL_RECOVERY_TIMEOUT_MS = 10_000L
 private const val PLAYBACK_STARTUP_RECOVERY_TIMEOUT_MS = 5_000L
 
+/** 官方客户端把「剩最后 5 秒」也算看完（TfCode.MOBILE_TF_RULES_NO_MATCH_VALUE）。 */
+private const val HISTORY_FINISH_THRESHOLD_MS = 5_000L
+/** 已经上报过「看完」的哨兵值，避免重复请求。 */
+private const val HISTORY_PROGRESS_FINISHED = -2L
+
 internal data class PlaybackStallRecoveryDecision(
     val nextCdnIndex: Int? = null
 ) {
@@ -1863,6 +1868,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val playbackAnalyticsTracker = com.android.purebilibili.core.util.PlaybackAnalyticsTracker()
     private var heartbeatJob: Job? = null
     private var heartbeatSessionStartTsSec: Long = 0L
+    /** 最近一次成功上报的观看进度；-2 表示已经报过「看完」。 */
+    private var lastReportedHistoryProgressMs: Long = -1L
+    /** 本次播放会话内达到过的最大进度，官方心跳的 max_play_progress_time。 */
+    private var heartbeatMaxProgressMs: Long = 0L
     private var heartbeatAccumulatedPlayMs: Long = 0L
     private var heartbeatActivePlayStartElapsedMs: Long? = null
     private var lastReportedHeartbeatSnapshot: PlaybackHeartbeatSnapshot? = null
@@ -9372,6 +9381,48 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         if (currentBvid.isBlank() || currentCid <= 0L) return
         viewModelScope.launch {
             reportPlaybackHeartbeatSnapshot(forceFlush = true, reason = reason)
+            // 推荐系统判断「已看过」靠 history/report，跟心跳是两条独立的链路：
+            // 官方客户端在 onPause、播放器可用性变化、离开页面、切后台都会报，
+            // 没有最小时长门槛。这里跟着同一个 flush 时机走。
+            reportVideoWatchProgress(scene = if (reason == "background") "background" else "front")
+        }
+    }
+
+    /** 上报观看进度，用于推荐系统过滤已看内容。进度变化 ≤1 秒时跳过，避免重复请求。 */
+    private suspend fun reportVideoWatchProgress(scene: String) {
+        val info = (_uiState.value as? VideoPlaybackUiState.Success)?.info ?: return
+        val aid = info.aid
+        val cid = currentCid
+        if (aid <= 0L || cid <= 0L) return
+        val player = exoPlayer ?: return
+        // 用播放器报告的时长；还没准备好（C.TIME_UNSET）时这次不报，等下次事件。
+        val durationMs = player.duration
+        if (durationMs == androidx.media3.common.C.TIME_UNSET || durationMs <= 0L) return
+        val positionMs = if (player.playbackState == androidx.media3.common.Player.STATE_ENDED) {
+            durationMs
+        } else {
+            player.currentPosition.coerceAtLeast(0L)
+        }
+        val previous = lastReportedHistoryProgressMs
+        // 看完之后不再重复上报；进度几乎没动也不报。
+        if (previous == HISTORY_PROGRESS_FINISHED) return
+        val finished = positionMs + HISTORY_FINISH_THRESHOLD_MS >= durationMs
+        if (!finished && previous >= 0L && kotlin.math.abs(positionMs - previous) <= 1000L) return
+        val result = com.android.purebilibili.data.repository.HistoryRepository.reportVideoProgress(
+            aid = aid,
+            cid = cid,
+            progressMs = positionMs,
+            durationMs = durationMs,
+            startTsSec = heartbeatSessionStartTsSec,
+            scene = scene,
+        )
+        if (result.isSuccess) {
+            lastReportedHistoryProgressMs = if (finished) HISTORY_PROGRESS_FINISHED else positionMs
+        } else {
+            Logger.d(
+                "HistoryReport",
+                "failed aid=$aid error=${result.exceptionOrNull()?.message}",
+            )
         }
     }
 
@@ -9383,6 +9434,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         heartbeatAccumulatedPlayMs = 0L
         heartbeatActivePlayStartElapsedMs = null
         lastReportedHeartbeatSnapshot = null
+        // 换视频/换分P 后重新开始记录观看进度上报。
+        lastReportedHistoryProgressMs = -1L
+        heartbeatMaxProgressMs = 0L
     }
 
     private fun clearHeartbeatSession() {
@@ -9454,13 +9508,32 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         if (!shouldSend) return false
 
         try {
+            // 补上官方心跳里的进度/时长字段，缺了服务端只能算 VV。
+            val heartbeatPlayer = exoPlayer
+            val heartbeatDurationMs = heartbeatPlayer?.duration
+                ?.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0L } ?: 0L
+            val heartbeatPositionMs = heartbeatPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
+            if (heartbeatPositionMs > heartbeatMaxProgressMs) heartbeatMaxProgressMs = heartbeatPositionMs
+            Logger.d(
+                "Heartbeat",
+                "request bvid=$currentBvid cid=$currentCid " +
+                    "played=${snapshot.playedTimeSec}s real=${snapshot.realPlayedTimeSec}s " +
+                    "duration=${heartbeatDurationMs / 1000}s " +
+                    "last=${heartbeatPositionMs / 1000}s " +
+                    "max=${heartbeatMaxProgressMs / 1000}s " +
+                    "session=$heartbeatSessionStartTsSec reason=$reason",
+            )
             val reported = VideoRepository.reportPlayHeartbeat(
                 bvid = currentBvid,
                 cid = currentCid,
                 aid = (_uiState.value as? VideoPlaybackUiState.Success)?.info?.aid ?: 0L,
                 playedTime = snapshot.playedTimeSec,
                 realPlayedTime = snapshot.realPlayedTimeSec,
-                startTsSec = heartbeatSessionStartTsSec
+                startTsSec = heartbeatSessionStartTsSec,
+                videoDurationSec = heartbeatDurationMs / 1000L,
+                lastProgressSec = heartbeatPositionMs / 1000L,
+                maxProgressSec = heartbeatMaxProgressMs / 1000L,
+                session = heartbeatSessionStartTsSec.toString(),
             )
             if (reported) {
                 lastReportedHeartbeatSnapshot = snapshot

@@ -176,13 +176,49 @@ object HistoryRepository {
         bvid: String, cid: Long, playedTime: Long = 0, realPlayedTime: Long = playedTime,
         startTsSec: Long = System.currentTimeMillis() / 1000L, aid: Long = 0,
         epid: Long = 0, sid: Long = 0, videoType: Int = 3, subType: Int? = null,
+        videoDurationSec: Long = 0L, lastProgressSec: Long = 0L,
+        maxProgressSec: Long = 0L, session: String = "",
     ): Result<Unit> = dataRequest {
         val context = com.android.purebilibili.core.network.NetworkModule.appContext
         if (context != null && com.android.purebilibili.core.network.CoreNetworkRuntime.config.isPrivacyModeEnabled(context)) return@dataRequest
         val fields = buildPlaybackHeartbeatFields(bvid, aid, cid, epid, sid,
             com.android.purebilibili.core.store.TokenManager.midCache, playedTime, realPlayedTime, startTsSec,
-            com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty(), videoType, subType)
+            com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty(), videoType, subType,
+            videoDurationSec = videoDurationSec, lastProgressSec = lastProgressSec,
+            maxProgressSec = maxProgressSec, session = session)
         val response = api.reportHeartbeat(fields)
+        if (response.code != 0) throw ContentRequestException(response.code, response.message)
+    }
+
+    /**
+     * 上报视频观看进度。推荐系统判断「已看过」靠的是这个接口，
+     * 而不是 click-interface 那套心跳（官方客户端已不再请求它）。
+     */
+    suspend fun reportVideoProgress(
+        aid: Long,
+        cid: Long,
+        progressMs: Long,
+        durationMs: Long,
+        startTsSec: Long,
+        scene: String = "front",
+    ): Result<Unit> = dataRequest {
+        val context = com.android.purebilibili.core.network.NetworkModule.appContext
+        if (context != null && com.android.purebilibili.core.network.CoreNetworkRuntime.config.isPrivacyModeEnabled(context)) return@dataRequest
+        val fields = buildVideoHistoryReportFields(
+            aid = aid,
+            cid = cid,
+            progressMs = progressMs,
+            durationMs = durationMs,
+            startTsSec = startTsSec,
+            deviceTsSec = System.currentTimeMillis() / 1000L,
+            csrf = com.android.purebilibili.core.store.TokenManager.csrfCache.orEmpty(),
+            scene = scene,
+        )
+        if (fields == null) return@dataRequest
+        val response = api.reportHistory(fields)
+        com.android.purebilibili.core.util.CoreLogger.d("HistoryReport",
+            "response code=${response.code} msg=${response.message} aid=$aid cid=$cid",
+        )
         if (response.code != 0) throw ContentRequestException(response.code, response.message)
     }
 
