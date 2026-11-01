@@ -218,6 +218,10 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     @OptIn(ExperimentalFoundationApi::class, dev.chrisbanes.haze.ExperimentalHazeApi::class)
     override fun onCreate() {
         instance = this
+        // 让 core-data 等下层模块的日志也进同一份日志文件（它们不能反向依赖 Logger）。
+        com.android.purebilibili.core.util.CoreLogger.sink = { tag, message ->
+            com.android.purebilibili.core.util.Logger.d(tag, message)
+        }
         if (com.android.purebilibili.feature.message.notification.isLightweightServiceProcess(this)) {
             super.onCreate()
             com.android.purebilibili.feature.message.notification.initializeMessageNotificationProcess(this)
