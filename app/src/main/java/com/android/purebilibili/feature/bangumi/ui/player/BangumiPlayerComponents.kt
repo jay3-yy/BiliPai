@@ -440,7 +440,7 @@ fun BangumiPlayerView(
     }
     val capturePlayerPage = pageGlassSupported && glassCaptureVisible
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .background(Color.Black)
             .pointerInput(isScreenLocked, longPressSpeed, requestedAudioQuality, exoPlayer) {
@@ -853,6 +853,7 @@ fun BangumiPlayerView(
         ) {
         val captureAndShareScreenshot = com.android.purebilibili.feature.video.ui.components.rememberVideoScreenshotAction()
         BangumiPlayerOverlayHost(
+            viewportWidthDp = maxWidth.value.toInt(),
             player = exoPlayer,
             danmakuManager = danmakuManager,
             features = features.copy(

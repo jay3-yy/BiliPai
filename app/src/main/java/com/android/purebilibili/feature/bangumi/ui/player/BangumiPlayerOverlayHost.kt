@@ -50,6 +50,7 @@ import com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction
 
 @Composable
 internal fun BangumiPlayerOverlayHost(
+    viewportWidthDp: Int,
     player: ExoPlayer,
     danmakuManager: DanmakuManager,
     features: BangumiPlayerFeatures,
@@ -161,6 +162,7 @@ internal fun BangumiPlayerOverlayHost(
 
     VideoPlayerOverlay(
         state = VideoPlayerOverlayState(
+            viewportWidthDpOverride = viewportWidthDp,
             player = player,
             title = title,
             isVisible = isVisible,
