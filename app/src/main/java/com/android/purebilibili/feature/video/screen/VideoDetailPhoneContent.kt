@@ -296,8 +296,6 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                         emoteMap = success.emoteMap,
                                         followingMids = engagementState.followingMids,
                                         videoTags = success.videoTags,
-                                        bgmInfo = success.bgmInfo,
-                                        bgmInfoList = success.bgmInfoList,
                                     ),
                                     engagementState = VideoContentEngagementState(
                                         isLoggedIn = success.isLoggedIn,

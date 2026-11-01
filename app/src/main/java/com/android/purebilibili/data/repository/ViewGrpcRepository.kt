@@ -3,7 +3,6 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.BgmDetailData
-import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.response.BgmRecommendVideo
 import kotlinx.coroutines.CancellationException
 import com.android.purebilibili.core.network.WbiKeyManager
@@ -13,26 +12,6 @@ import kotlinx.coroutines.withContext
 
 internal object ViewGrpcRepository {
     private const val TAG = "BgmList"
-
-    suspend fun getBgmList(aid: Long, bvid: String, cid: Long): Result<List<BgmInfo>> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                val response = NetworkModule.api.getBgmMultipleMusic(aid = aid, cid = cid)
-                val list = response.data?.list.orEmpty().map { bgm ->
-                    if (bgm.jumpUrl.isBlank() && bgm.musicId.isNotBlank()) {
-                        bgm.copy(
-                            jumpUrl = "https://music.bilibili.com/h5/music-detail" +
-                                "?music_id=${bgm.musicId}&cid=$cid&aid=$aid&na_close_hide=1&isMulti=1"
-                        )
-                    } else bgm
-                }
-                Logger.w(TAG, "BGM list API returned ${list.size} entries for aid=$aid")
-                list
-            }.onFailure { e ->
-                if (e is CancellationException) throw e
-                Logger.w(TAG, "BGM list API failed: ${e.message}")
-            }
-        }
 
     suspend fun getBgmDetail(musicId: String, aid: Long = 0, cid: Long = 0): Result<BgmDetailData?> =
         withContext(Dispatchers.IO) {

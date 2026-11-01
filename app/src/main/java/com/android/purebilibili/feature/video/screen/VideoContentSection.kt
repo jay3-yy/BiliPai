@@ -92,7 +92,6 @@ import com.android.purebilibili.feature.common.resolveIndexedVideoLazyKey
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
-import com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList
 import com.android.purebilibili.feature.video.ui.section.resolveVideoDetailMotionBudget
 import com.android.purebilibili.feature.video.ui.section.shouldAnimateVideoDetailLayout
 import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
@@ -444,8 +443,6 @@ internal class VideoContentData(
     val emoteMap: Map<String, String>,
     val followingMids: Set<Long>,
     val videoTags: List<VideoTag>,
-    val bgmInfo: BgmInfo?,
-    val bgmInfoList: List<BgmInfo>,
     val relatedLoadState: VideoPlaybackUiState.RelatedLoadState = VideoPlaybackUiState.RelatedLoadState.READY,
 )
 
@@ -591,8 +588,6 @@ internal fun VideoContentSection(
     val emoteMap = data.emoteMap
     val followingMids = data.followingMids
     val videoTags = data.videoTags
-    val bgmInfo = data.bgmInfo
-    val bgmInfoList = data.bgmInfoList
     val isLoggedIn = engagementState.isLoggedIn
     val isFollowing = engagementState.isFollowing
     val followStatusKnown = engagementState.followStatusKnown
@@ -1050,8 +1045,6 @@ internal fun VideoContentSection(
                         aiSummaryPrompt = aiSummaryPrompt,
                         onShowAiSummarySheet = { showAiSummarySheet = true },
                         onShowNoteListSheet = { showNoteListSheet = true },
-                        bgmInfo = bgmInfo,
-                        bgmInfoList = bgmInfoList,
                         onlineCount = onlineCount,
                         showOnlineCount = showOnlineCount,
                         onTimestampClick = onTimestampClick,
@@ -1467,8 +1460,6 @@ private fun VideoIntroTab(
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
     onShowAiSummarySheet: () -> Unit = {},
     onShowNoteListSheet: () -> Unit = {},
-    bgmInfo: BgmInfo? = null,
-    bgmInfoList: List<BgmInfo> = emptyList(),
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
     sponsorVideoLabel: String = "",
@@ -1532,8 +1523,6 @@ private fun VideoIntroTab(
                 aiSummaryPrompt = aiSummaryPrompt,
                 onShowAiSummarySheet = onShowAiSummarySheet,
                 onShowNoteListSheet = onShowNoteListSheet,
-                bgmInfo = bgmInfo,
-                bgmInfoList = bgmInfoList,
                 relatedVideos = relatedVideos,
                 onlineCount = onlineCount,
                 showOnlineCount = showOnlineCount,
@@ -2134,8 +2123,6 @@ private fun VideoHeaderContent(
     aiSummaryPrompt: com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState? = null,
     onShowAiSummarySheet: () -> Unit = {},
     onShowNoteListSheet: () -> Unit = {},
-    bgmInfo: BgmInfo? = null,
-    bgmInfoList: List<BgmInfo> = emptyList(),
     relatedVideos: List<RelatedVideo> = emptyList(),
     onTimestampClick: ((Long) -> Unit)? = null,
     onBgmClick: (BgmInfo) -> Unit = {},
@@ -2200,15 +2187,10 @@ private fun VideoHeaderContent(
                     onNoteClick = onShowNoteListSheet,
                 )
             },
-            bgmList = resolveDisplayBgmList(
-                bgmInfo = bgmInfo,
-                bgmInfoList = bgmInfoList
-            ),
             onlineCount = onlineCount,
             showOnlineCount = showOnlineCount,
             onBgmClick = onBgmClick,
             onDescriptionUrlClick = onDescriptionUrlClick,
-            onRelatedVideoClick = onRelatedVideoClick,
             animateLayout = animateVideoDetailLayout,
             onTagClick = onSearchKeywordClick
         )

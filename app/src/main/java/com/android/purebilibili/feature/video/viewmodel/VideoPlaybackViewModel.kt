@@ -674,8 +674,6 @@ sealed class VideoPlaybackUiState {
         val aiSummary: AiSummaryData? = null,
         val aiSummaryPrompt: AiSummaryPromptState? = null,
         val videoNoteState: VideoNoteUiState = VideoNoteUiState(),
-        val bgmInfo: BgmInfo? = null,
-        val bgmInfoList: List<BgmInfo> = emptyList(),
         // [New] AI Audio Translation
         val aiAudio: AiAudioInfo? = null,
         val currentAudioLang: String? = null,
@@ -6432,34 +6430,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             )
                         } else {
                             Logger.d("PlayerVM", "📈 Failed to load PBP progress: ${e.message}")
-                        }
-                    }
-
-                    // 2. 处理 BGM 信息
-                    if (data.bgmInfo != null) {
-                        val checkedDataBgmInfo = requireNotNull(data.bgmInfo)
-                        _uiState.update { current ->
-                            if (current is VideoPlaybackUiState.Success) {
-                                current.copy(bgmInfo = checkedDataBgmInfo)
-                            } else current
-                        }
-                        Logger.d("PlayerVM", "🎵 Loaded BGM: ${checkedDataBgmInfo.musicTitle}")
-                    }
-
-                    // 2b. gRPC BGM list (multi-song support)
-                    val grpcAid = currentState.info.aid
-                    if (grpcAid > 0) {
-                        ViewGrpcRepository.getBgmList(grpcAid, bvid, cid).onSuccess { bgmList ->
-                            Logger.w("PlayerVM", "gRPC BGM result: ${bgmList.size} entries for aid=$grpcAid")
-                            if (bgmList.isNotEmpty()) {
-                                _uiState.update { current ->
-                                    if (current is VideoPlaybackUiState.Success) {
-                                        current.copy(bgmInfoList = bgmList)
-                                    } else current
-                                }
-                            }
-                        }.onFailure { e ->
-                            Logger.w("PlayerVM", "gRPC BGM fetch failed: ${e.message}")
                         }
                     }
 

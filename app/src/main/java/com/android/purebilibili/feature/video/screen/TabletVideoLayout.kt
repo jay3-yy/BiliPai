@@ -83,7 +83,6 @@ import com.android.purebilibili.feature.video.ui.section.VideoNoteListSheet
 import com.android.purebilibili.feature.video.ui.section.VideoSupplementStatsActions
 import com.android.purebilibili.feature.video.ui.section.VideoNoteDeleteConfirmDialog
 import com.android.purebilibili.feature.video.ui.section.VideoNoteEditorSheet
-import com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActions
@@ -763,8 +762,6 @@ internal fun TabletVideoInfoPane(
         videoTags = success.videoTags,
         ownerFollowerCount = success.ownerFollowerCount,
         ownerVideoCount = success.ownerVideoCount,
-        bgmInfo = success.bgmInfo,
-        bgmInfoList = success.bgmInfoList,
         onBgmClick = onBgmClick,
         relatedVideos = if (showRelatedVideos) success.related else emptyList(),
         relatedLoadState = success.relatedLoadState,
@@ -1628,8 +1625,6 @@ private fun ScrollableVideoInfoSection(
     videoTags: List<com.android.purebilibili.data.model.response.VideoTag>,
     ownerFollowerCount: Int?,
     ownerVideoCount: Int?,
-    bgmInfo: BgmInfo? = null,
-    bgmInfoList: List<BgmInfo> = emptyList(),
     onBgmClick: (BgmInfo) -> Unit = {},
     onFollowClick: () -> Unit,
     onFavoriteClick: () -> Unit,
@@ -1727,12 +1722,7 @@ private fun ScrollableVideoInfoSection(
                             onNoteClick = { showNoteListSheet = true },
                         )
                     },
-                    bgmList = resolveDisplayBgmList(
-                        bgmInfo = bgmInfo,
-                        bgmInfoList = bgmInfoList
-                    ),
                     onBgmClick = onBgmClick,
-                    onRelatedVideoClick = onRelatedVideoClick,
                     onDescriptionUrlClick = onOpenBilibiliLink,
                     onTagClick = onSearchKeywordClick
                 )

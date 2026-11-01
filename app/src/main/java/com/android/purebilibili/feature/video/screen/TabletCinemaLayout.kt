@@ -142,7 +142,6 @@ import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAc
 import com.android.purebilibili.feature.video.ui.components.videoCommentItemModifier
 import com.android.purebilibili.feature.video.ui.components.videoCommentSkeletonItems
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
-import com.android.purebilibili.feature.video.ui.section.resolveDisplayBgmList
 import com.android.purebilibili.feature.video.ui.section.UpInfoSection
 import com.android.purebilibili.feature.video.ui.section.VideoTitleWithDesc
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
@@ -1073,12 +1072,7 @@ private fun CinemaVideoIntroSection(
                     )
                 },
                 onDescriptionUrlClick = onOpenBilibiliLink,
-                bgmList = resolveDisplayBgmList(
-                    bgmInfo = success.bgmInfo,
-                    bgmInfoList = success.bgmInfoList
-                ),
                 onBgmClick = onBgmClick,
-                onRelatedVideoClick = onRelatedVideoClick,
                 onTagClick = onSearchKeywordClick
             )
         }
