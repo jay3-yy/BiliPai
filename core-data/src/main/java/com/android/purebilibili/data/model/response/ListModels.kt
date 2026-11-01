@@ -192,6 +192,7 @@ data class VideoItem(
     val id: Long = 0,
     val bvid: String = "",
     val dynamicId: String = "", // Home Follow 动态卡片跳转详情用
+    val trackId: String = "", // 推荐流卡片追踪 ID（负反馈上报用）
     val aid: Long = 0,   // [修复] 新增 aid 字段，移动端推荐流可能只返回 aid
     val cid: Long = 0,   //  明确的 CID 字段，用于播放
     val title: String = "",
@@ -265,7 +266,13 @@ data class RecommendationFeedbackMetadata(
     val goto: String = "",
     val param: String = "",
     val reasons: List<RecommendationFeedbackReason> = emptyList(),
-    val supportsServerSync: Boolean = false
+    val supportsServerSync: Boolean = false,
+    /** 推荐流卡片追踪 ID，服务端靠它把负反馈关联到具体那条推荐。 */
+    val trackId: String = "",
+    /** 来源页面标识，首页推荐固定 tm.recommend.0.0。 */
+    val spmid: String = "tm.recommend.0.0",
+    /** UP 主 mid，负反馈里作为 mid 字段上报。 */
+    val creatorMid: Long = 0L,
 )
 
 @Serializable
@@ -740,6 +747,8 @@ data class MobileFeedItem(
     @Serializable(with = RecommendationReasonSerializer::class)
     val recommendationReason: String = "",
     @SerialName("card_goto") val cardGoto: String = "",
+    // 推荐卡片的追踪 ID，负反馈要靠它关联到具体那条推荐。
+    @SerialName("track_id") val trackId: String = "",
     @SerialName("ad_info") val adInfo: kotlinx.serialization.json.JsonElement? = null,
     @SerialName("desc_button") val descButton: MobileFeedDescButton? = null,
     @SerialName("is_steins")
@@ -796,6 +805,7 @@ data class MobileFeedItem(
             navigationUrl = uri,
             episodeId = episode,
             dynamicId = dynamic,
+            trackId = trackId,
             aid = if (type == "av") extractedAid else 0L,  // [修复] 填充 aid，用于 bvid 为空时的回退
             cid = if (type == "av") playerArgs?.cid ?: 0L else 0L,
             title = title,
@@ -832,6 +842,8 @@ data class MobileFeedItem(
             recommendationFeedback = RecommendationFeedbackMetadata(
                 goto = type,
                 param = param,
+                trackId = trackId,
+                creatorMid = args?.upId ?: 0L,
                 reasons = threePointV2.flatMap { group ->
                     val type = when (group.type) {
                         "feedback" -> RecommendationFeedbackType.FEEDBACK
