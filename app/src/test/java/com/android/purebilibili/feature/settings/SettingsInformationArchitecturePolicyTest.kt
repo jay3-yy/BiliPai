@@ -19,7 +19,7 @@ class SettingsInformationArchitecturePolicyTest {
         assertTrue(appearance.contains("contentMode == AppearanceSettingsContentMode.HOME"))
         assertFalse(appearance.contains("onNavigateToAnimationSettings"))
         assertFalse(appearance.contains("setBottomBarSearchLayoutMode"))
-        assertTrue(animation.contains("title = \"触感反馈\""))
+        assertTrue(animation.contains("R.string.animation_title_haptic"))
         assertFalse(animation.contains("setBottomBarFloating"))
         assertTrue(navigation.contains("setBottomBarFloating"))
         assertTrue(navigation.contains("title = \"底栏搜索按钮\""))

@@ -398,17 +398,18 @@ class SettingsRootCategoryContentStructureTest {
         assertTrue(settingsSections.contains("SettingsDetailGroup(title = \"显示与交互\")"))
         assertTrue(settingsSections.contains("SettingsDetailGroup(title = \"画质与播放\")"))
         assertTrue(settingsSections.contains("SettingsDetailGroup(title = \"隐私与安全\")"))
-        assertTrue(appearance.contains("AppPreferenceSectionTitle(\"显示模式\")"))
-        assertTrue(appearance.contains("AppPreferenceSectionTitle(\"文字与大小\")"))
-        assertTrue(appearance.contains("AppPreferenceSectionTitle(\"开屏与图标\")"))
+        // 外观与动画页的分组标题已走字符串资源,断言标题资源接线而非字面量
+        assertTrue(appearance.contains("R.string.appearance_section_interface_effects"))
+        assertTrue(appearance.contains("R.string.appearance_section_text_size"))
+        assertTrue(appearance.contains("R.string.appearance_section_splash_icon"))
         assertTrue(playback.contains("AppPreferenceSectionTitle(\"小窗与后台\")"))
         assertTrue(playback.contains("AppPreferenceSectionTitle(\"诊断\")"))
         assertTrue(
             playback.indexOf("AppPreferenceSectionTitle(\"网络与画质\")") <
                 playback.indexOf("AppPreferenceSectionTitle(\"互动与评论\")")
         )
-        assertTrue(animation.contains("AppPreferenceSectionTitle(\"液态玻璃与磨砂\")"))
-        assertTrue(animation.contains("title = \"触感反馈\""))
+        assertTrue(animation.contains("R.string.animation_glass_section_title"))
+        assertTrue(animation.contains("R.string.animation_title_haptic"))
         assertFalse(animation.contains("AppPreferenceSectionTitle(\"底栏入口\")"))
     }
 

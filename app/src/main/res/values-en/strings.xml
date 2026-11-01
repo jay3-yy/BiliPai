@@ -499,14 +499,14 @@
     <string name="settings_search_history_clear_all">Clear all</string>
     <string name="settings_search_history_empty">No search history yet. Search for a setting to see it here.</string>
     <string name="settings_search_history_delete">Delete search history: %1$s</string>
-    <string name="settings_search_legacy_001_title">Interface and theme</string>
-    <string name="settings_search_legacy_001_summary">Interface style, colors, fonts, and launch screen</string>
+    <string name="settings_search_legacy_001_title">Appearance and animation</string>
+    <string name="settings_search_legacy_001_summary">Theme, text size, icons, animation, and vibration</string>
     <string name="settings_search_legacy_002_title">Home and recommendations</string>
     <string name="settings_search_legacy_002_summary">Home cards, recommendations, dynamic posts, and release schedules</string>
-    <string name="settings_search_legacy_003_title">Navigation and tabs</string>
-    <string name="settings_search_legacy_003_summary">Adjust the bottom bar, category tabs, and sidebar</string>
-    <string name="settings_search_legacy_004_title">Playback and quality</string>
-    <string name="settings_search_legacy_004_summary">Video quality, playback speed, subtitles, and continuous playback</string>
+    <string name="settings_search_legacy_003_title">Navigation layout</string>
+    <string name="settings_search_legacy_003_summary">Bottom bar, home tabs, search categories, and tablet sidebar</string>
+    <string name="settings_search_legacy_004_title">Playback</string>
+    <string name="settings_search_legacy_004_summary">Quality, speed, subtitles, autoplay, mini-window, and background play</string>
     <string name="settings_search_legacy_005_title">Full screen and gestures</string>
     <string name="settings_search_legacy_005_summary">Screen orientation, screenshots, lock button, brightness, volume, and seek gestures</string>
     <string name="settings_search_legacy_006_title">Interactions and comments</string>
@@ -515,14 +515,14 @@
     <string name="settings_search_legacy_007_summary">Shown automatically when data is available. It cannot be forced when Bilibili does not provide it.</string>
     <string name="settings_search_legacy_008_title">Full comment timestamps</string>
     <string name="settings_search_legacy_008_summary">Show the full date and time instead of a relative time such as “2 hours ago”</string>
-    <string name="settings_search_legacy_009_title">Storage and backup</string>
-    <string name="settings_search_legacy_009_summary">Save locations, cache, settings sharing, and cloud backup</string>
+    <string name="settings_search_legacy_009_title">Downloads and backup</string>
+    <string name="settings_search_legacy_009_summary">Save locations, cache, settings sharing, and WebDAV backup</string>
     <string name="settings_search_legacy_010_title">Privacy and permissions</string>
     <string name="settings_search_legacy_010_summary">History, system permissions, and blocked users</string>
-    <string name="settings_search_legacy_011_title">Troubleshooting</string>
+    <string name="settings_search_legacy_011_title">Diagnostics and logs</string>
     <string name="settings_search_legacy_011_summary">Record and export information to help diagnose issues</string>
-    <string name="settings_search_legacy_012_title">About and support</string>
-    <string name="settings_search_legacy_012_summary">Updates, help, and official channels</string>
+    <string name="settings_search_legacy_012_title">Help and about</string>
+    <string name="settings_search_legacy_012_summary">Help, troubleshooting, updates, and app info</string>
 
     <!-- Search filters -->
     <string name="search_filter">Filter</string>
@@ -624,7 +624,7 @@
     <string name="notify_live">Notify me when a followed streamer goes live.</string>
     <string name="notify_section_resident">Background activity</string>
     <string name="notify_resident_enabled_desc">Keep the app running in the background for faster notifications. This uses more battery, and the system may still stop it.</string>
-    <string name="notify_resident_requires_desc">Turn on Background notifications and grant notification permission first. This uses more battery, and the system may still stop it.</string>
+    <string name="notify_resident_requires_desc">Turn on Background notifications and grant notification permission first.</string>
     <string name="notify_resident_first_status">Turn on Background notifications before enabling persistent background activity.</string>
     <string name="notify_permission_setup_status">Enable notification permission and make sure system notification channels are not turned off.</string>
     <string name="notify_section_send">Post notifications</string>
@@ -825,7 +825,7 @@
     <string name="appearance_home_compact_stats_off">Shown below the uploader</string>
     <string name="appearance_home_duration_subtitle">Choose how video duration is displayed</string>
     <string name="appearance_home_publish_on">Show publish time on home video cards</string>
-    <string name="appearance_home_publish_off">Hide publish time on home video cards</string>
+    <string name="appearance_home_publish_off">Hides the publish time for a more compact card</string>
     <string name="appearance_home_avatars_on">Show uploader avatars on home video cards</string>
     <string name="appearance_home_avatars_off">Hide avatars to make more room for uploader names</string>
     <string name="appearance_home_badges_on">Show uploader badges on Home and related videos</string>

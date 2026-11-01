@@ -6,11 +6,9 @@ internal fun settingItemPath(item: PlaybackSettingItem): String {
         SettingsRootCategory.COMMENTS_CONTENT,
         SettingsRootCategory.FULLSCREEN_GESTURE -> SettingsRootCategory.PLAYBACK_QUALITY.title
         SettingsRootCategory.PLAYER_DIAGNOSTICS -> SettingsRootCategory.SYSTEM_ABOUT.title
-        SettingsRootCategory.GLASS_ADVANCED -> SettingsRootCategory.APPEARANCE_THEME.title
         else -> item.page.title
     }
     val page = when {
-        item.page == SettingsRootCategory.GLASS_ADVANCED -> "玻璃高级调节"
         item.page == SettingsRootCategory.PLAYER_DIAGNOSTICS -> "问题排查"
         item.target == SettingsSearchTarget.ANIMATION -> "动画与触感"
         item.target == SettingsSearchTarget.PLAYBACK -> "播放设置"
@@ -38,7 +36,7 @@ internal fun settingItemPath(item: PlaybackSettingItem): String {
         "home_options" -> "推荐与动态"
         "animation_page" -> "动画与振动"
         "animation_card" -> "卡片动画"
-        "animation_glass" -> if (item.page == SettingsRootCategory.GLASS_ADVANCED) null else "液态玻璃与磨砂"
+        "animation_glass" -> "液态玻璃与磨砂"
         "navigation_behavior" -> "导航行为"
         "navigation_top_tabs" -> "顶部标签"
         "navigation_tablet" -> "平板导航"

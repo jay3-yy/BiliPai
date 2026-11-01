@@ -904,9 +904,9 @@ SettingsItemAnchor("playback.music_lyrics_ui_style") {
                                     icon = rememberSettingsSemanticIcon(SettingsIconRole.PIP_DANMAKU),
                                 title = playbackSettingTitle("playback.pip_no_danmaku_enabled"),
                                 subtitle = if (!backgroundPlaybackEnabled) {
-                                    "开启后台播放后，小窗和画中画相关设置才会生效"
+                                    "需先开启后台播放"
                                 } else if (miniPlayerMode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF) {
-                                    if (pipNoDanmakuEnabled) "小窗和画中画中不显示弹幕" else "小窗和画中画中也显示弹幕"
+                                    if (pipNoDanmakuEnabled) "小窗和画中画中不显示弹幕" else "小窗和画中画中显示弹幕"
                                 } else {
                                     "选择小窗或画中画模式后生效"
                                 },
@@ -1597,7 +1597,7 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
                 subtitle = if (hideInteractiveCommandDanmaku) {
                     "隐藏画面内的关注、三连、UP 提示和投票"
                 } else {
-                    "显示画面内的关注、三连、UP 提示和投票"
+                    "互动提示照常显示在画面中"
                 },
                 checked = hideInteractiveCommandDanmaku,
                 onCheckedChange = {
@@ -1654,7 +1654,7 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
                 subtitle = if (videoArgueMsgShown) {
                     "显示视频警告、争议信息及禁止转载声明"
                 } else {
-                    "关闭后隐藏视频警告、争议信息及禁止转载声明"
+                    "视频页不显示警告与争议提示"
                 },
                 checked = videoArgueMsgShown,
                 onCheckedChange = {

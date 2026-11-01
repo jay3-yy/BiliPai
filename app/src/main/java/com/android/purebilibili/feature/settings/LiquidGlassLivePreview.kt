@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.rememberCoroutineScope
 import com.android.purebilibili.core.store.home.GlassPopupPalette
+import com.android.purebilibili.core.store.home.GlassMotionStyle
 import com.android.purebilibili.core.store.home.LiquidGlassSettingsStore
 import com.android.purebilibili.core.ui.components.AppSingleChoicePreference
 import com.android.purebilibili.core.ui.components.AppChoiceOption
@@ -115,6 +116,10 @@ internal fun LiquidGlassAdjustmentPanel(
     val context = LocalContext.current
     val paletteFlow = remember(context) { LiquidGlassSettingsStore.observePopupPalette(context) }
     val popupPalette by paletteFlow.collectAsStateWithLifecycle(initialValue = GlassPopupPalette.DOCK)
+    val motionStyleFlow = remember(context) { LiquidGlassSettingsStore.observePopupMotionStyle(context) }
+    val popupMotionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
+    val dockMotionFlow = remember(context) { LiquidGlassSettingsStore.observeDockMotionStyle(context) }
+    val dockMotionStyle by dockMotionFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
     val paletteScope = rememberCoroutineScope()
     val previewImagePicker = rememberLauncherForActivityResult(
         contract = PickGalleryVisualMedia(),
@@ -229,6 +234,30 @@ internal fun LiquidGlassAdjustmentPanel(
             style = MaterialTheme.typography.bodySmall,
             color = AppContentColors.secondaryText(),
         )
+
+        SettingsItemAnchor("glass.dock_motion_style") {
+            AppSingleChoicePreference(
+                title = settingItemTitle("glass.dock_motion_style"),
+                subtitle = "控制底栏合体、解体与搜索框伸缩；标准保留当前节奏，弹性让展开与收回分别回弹",
+                selectedValue = dockMotionStyle,
+                options = remember { GlassMotionStyle.entries.map { AppChoiceOption(it, it.label) } },
+                onValueChange = { style ->
+                    paletteScope.launch { LiquidGlassSettingsStore.setDockMotionStyle(context, style) }
+                },
+            )
+        }
+
+        SettingsItemAnchor("glass.popup_motion_style") {
+            AppSingleChoicePreference(
+                title = settingItemTitle("glass.popup_motion_style"),
+                subtitle = "标准保留当前动画；弹性让展开与收回更柔和、回弹更明显。下次打开菜单时生效",
+                selectedValue = popupMotionStyle,
+                options = remember { GlassMotionStyle.entries.map { AppChoiceOption(it, it.label) } },
+                onValueChange = { style ->
+                    paletteScope.launch { LiquidGlassSettingsStore.setPopupMotionStyle(context, style) }
+                },
+            )
+        }
 
         SettingsItemAnchor("glass.popup_palette") {
             AppSingleChoicePreference(

@@ -27,7 +27,8 @@ class AnimationSettingsScreenStructureTest {
     fun animationSettingsScreen_exposesRealtimeTransitionBlurToggle() {
         val source = animationSettingsSource()
 
-        assertTrue(source.contains("title = \"转场时模糊背景\""))
+        // 标题经 localizedAnimationSettingTitle 映射到字符串资源
+        assertTrue(source.contains("localizedAnimationSettingTitle(\"animation.video_transition_realtime_blur_enabled\")"))
         assertTrue(source.contains("checked = videoTransitionRealtimeBlurEnabled"))
         assertTrue(source.contains("toggleVideoTransitionRealtimeBlur"))
     }
@@ -36,7 +37,7 @@ class AnimationSettingsScreenStructureTest {
     fun animationSettingsScreen_exposesLiveSurfaceCardTransitionToggle() {
         val source = animationSettingsSource()
 
-        assertTrue(source.contains("title = \"用当前画面过渡\""))
+        assertTrue(source.contains("localizedAnimationSettingTitle(\"animation.live_surface_card_transition_enabled\")"))
         assertTrue(source.contains("checked = liveSurfaceCardTransitionEnabled"))
         assertTrue(source.contains("toggleLiveSurfaceCardTransition"))
         assertTrue(source.contains("enabled = state.cardTransitionEnabled"))

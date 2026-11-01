@@ -54,7 +54,8 @@ class SettingsRootCategoryPolicyTest {
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.INTERACTION_COMMENT),
         )
         assertEquals(
-            SettingsRootCategory.NAVIGATION_INTERACTION,
+            // 动画与触感页的导航父级是外观设置,搜索归属保持一致
+            SettingsRootCategory.APPEARANCE_THEME,
             resolveSettingsRootCategoryForSearchTarget(SettingsSearchTarget.ANIMATION),
         )
         assertEquals(

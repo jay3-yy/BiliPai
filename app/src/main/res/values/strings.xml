@@ -501,14 +501,14 @@
     <string name="settings_search_history_clear_all">清空全部</string>
     <string name="settings_search_history_empty">暂无搜索历史，搜索设置功能后会显示在这里</string>
     <string name="settings_search_history_delete">删除搜索历史：%1$s</string>
-    <string name="settings_search_legacy_001_title">界面与主题</string>
-    <string name="settings_search_legacy_001_summary">界面风格、颜色、字体和启动画面</string>
+    <string name="settings_search_legacy_001_title">外观与动画</string>
+    <string name="settings_search_legacy_001_summary">主题、文字大小、图标、动画与振动</string>
     <string name="settings_search_legacy_002_title">首页与推荐</string>
     <string name="settings_search_legacy_002_summary">首页卡片、推荐内容、动态和更新时间表</string>
-    <string name="settings_search_legacy_003_title">导航与标签</string>
-    <string name="settings_search_legacy_003_summary">调整底栏、分类标签和侧边栏</string>
-    <string name="settings_search_legacy_004_title">播放与画质</string>
-    <string name="settings_search_legacy_004_summary">画质、倍速、字幕和连续播放</string>
+    <string name="settings_search_legacy_003_title">导航布局</string>
+    <string name="settings_search_legacy_003_summary">底栏、首页分类栏、搜索分类和平板侧边栏</string>
+    <string name="settings_search_legacy_004_title">播放设置</string>
+    <string name="settings_search_legacy_004_summary">画质、倍速、字幕、连播、小窗和后台播放</string>
     <string name="settings_search_legacy_005_title">全屏与手势</string>
     <string name="settings_search_legacy_005_summary">全屏方向、截图、锁定按钮、亮度、音量与进度手势</string>
     <string name="settings_search_legacy_006_title">互动与评论</string>
@@ -517,14 +517,14 @@
     <string name="settings_search_legacy_007_summary">有数据时自动显示，无需开启；B站未返回时无法强制显示</string>
     <string name="settings_search_legacy_008_title">完整评论时间</string>
     <string name="settings_search_legacy_008_summary">显示年月日和时分秒；关闭后显示“多久前”</string>
-    <string name="settings_search_legacy_009_title">存储与备份</string>
-    <string name="settings_search_legacy_009_summary">保存位置、缓存、设置分享和云备份</string>
+    <string name="settings_search_legacy_009_title">下载与备份</string>
+    <string name="settings_search_legacy_009_summary">保存位置、缓存、设置分享和 WebDAV 备份</string>
     <string name="settings_search_legacy_010_title">隐私与权限</string>
     <string name="settings_search_legacy_010_summary">历史记录、系统权限和屏蔽名单</string>
-    <string name="settings_search_legacy_011_title">问题排查</string>
+    <string name="settings_search_legacy_011_title">诊断与日志</string>
     <string name="settings_search_legacy_011_summary">记录和导出信息，帮助排查问题</string>
-    <string name="settings_search_legacy_012_title">关于与支持</string>
-    <string name="settings_search_legacy_012_summary">版本更新、使用帮助和官方渠道</string>
+    <string name="settings_search_legacy_012_title">帮助与关于</string>
+    <string name="settings_search_legacy_012_summary">使用帮助、问题排查、更新和应用信息</string>
 
     <!-- Search filters -->
     <string name="search_filter">筛选</string>
@@ -626,7 +626,7 @@
     <string name="notify_live">关注的主播开播时通知</string>
     <string name="notify_section_resident">后台运行</string>
     <string name="notify_resident_enabled_desc">保持应用后台运行以更及时地收到通知；会增加耗电，系统仍可能终止</string>
-    <string name="notify_resident_requires_desc">需要先开启后台消息通知和可用的通知权限；会增加耗电，系统仍可能终止</string>
+    <string name="notify_resident_requires_desc">需要先开启后台消息通知和可用的通知权限</string>
     <string name="notify_resident_first_status">请先开启后台消息通知，再启用常驻后台</string>
     <string name="notify_permission_setup_status">请先在通知权限中开启通知，并确保通知渠道未被系统关闭</string>
     <string name="notify_section_send">发送通知</string>
@@ -827,7 +827,7 @@
     <string name="appearance_home_compact_stats_off">显示在 UP 主下方</string>
     <string name="appearance_home_duration_subtitle">选择视频时长的显示方式</string>
     <string name="appearance_home_publish_on">首页视频卡片显示发布时间</string>
-    <string name="appearance_home_publish_off">首页视频卡片不显示发布时间</string>
+    <string name="appearance_home_publish_off">隐藏发布时间，卡片信息更紧凑</string>
     <string name="appearance_home_avatars_on">首页视频卡片显示 UP 主头像</string>
     <string name="appearance_home_avatars_off">隐藏头像，为 UP 主名称留出更多空间</string>
     <string name="appearance_home_badges_on">首页和相关推荐显示 UP 标识</string>

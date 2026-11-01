@@ -28,10 +28,6 @@ class SettingsSemanticIconPolicyTest {
 
     @Test
     fun batteryStatus_usesBatteryResourceInsteadOfPhoneGlyph() {
-        val source = File(
-            "app/src/main/java/com/android/purebilibili/feature/settings/SettingsSemanticIconPolicy.kt"
-        ).readText()
-
         assertEquals(
             R.drawable.ms_battery_full_24,
             resolveSettingsMaterialSymbolResource(SettingsIconRole.BATTERY_STATUS),

@@ -225,8 +225,11 @@ class SettingsNavHierarchyPolicyTest {
 
     @Test
     fun multiEntryOrInlineCategories_keepCategoryScreen() {
-        // 首页/隐私等分类含内联设置或多个入口,保留中间层
-        assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.HOME_RECOMMENDATION))
+        // 首页分类已直跳「首页与推荐」页;隐私等分类含内联设置或多个入口,保留中间层
+        assertEquals(
+            BiliPaiNavKey.HomeSettings,
+            resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.HOME_RECOMMENDATION),
+        )
         assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.NAVIGATION_INTERACTION))
         assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.PRIVACY_PERMISSION))
         assertNull(resolveSettingsCategoryDirectTargetKey(SettingsRootCategory.STORAGE_BACKUP))

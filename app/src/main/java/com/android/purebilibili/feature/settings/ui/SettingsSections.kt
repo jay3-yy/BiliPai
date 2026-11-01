@@ -511,6 +511,8 @@ internal fun SettingsRootCategoryContent(
                 }
             }
             SettingsRootCategory.HOME_RECOMMENDATION -> {
+                // 推荐流与动态条目统一在「首页与推荐」页的「推荐与动态」分组渲染,
+                // 分类页不再内联第二份 FeedApiSection;分类直跳首页设置页。
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = "首页展示") {
                         SettingsDetailEntrySection(
@@ -526,33 +528,6 @@ internal fun SettingsRootCategoryContent(
                                     onClick = actions.onHomeClick,
                                 ),
                             ),
-                        )
-                    }
-                }
-                SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "推荐流与动态") {
-                        FeedApiSection(
-                            feedApiType = state.feedApiType,
-                            onFeedApiTypeChange = actions.onFeedApiTypeChange,
-                            incrementalTimelineRefreshEnabled = state.incrementalTimelineRefreshEnabled,
-                            onIncrementalTimelineRefreshChange = actions.onIncrementalTimelineRefreshChange,
-                            dynamicImagePreviewTextVisible = state.dynamicImagePreviewTextVisible,
-                            onDynamicImagePreviewTextVisibleChange = actions.onDynamicImagePreviewTextVisibleChange,
-                            dynamicCommentPreviewVisible = state.dynamicCommentPreviewVisible,
-                            onDynamicCommentPreviewVisibleChange = actions.onDynamicCommentPreviewVisibleChange,
-                            dynamicDetailImageLayout = state.dynamicDetailImageLayout,
-                            onDynamicDetailImageLayoutChange = actions.onDynamicDetailImageLayoutChange,
-                            dynamicTopBarCollapseOnScroll = state.dynamicTopBarCollapseOnScroll,
-                            onDynamicTopBarCollapseOnScrollChange =
-                                actions.onDynamicTopBarCollapseOnScrollChange,
-                            dynamicFeedLayoutMode = state.dynamicFeedLayoutMode,
-                            onDynamicFeedLayoutModeChange = actions.onDynamicFeedLayoutModeChange,
-                            dynamicVisibleTabIds = state.dynamicVisibleTabIds,
-                            onDynamicTabVisibilityChange = actions.onDynamicTabVisibilityChange,
-                            dynamicTabOrder = state.dynamicTabOrder,
-                            onDynamicTabOrderChange = actions.onDynamicTabOrderChange,
-                            homeRefreshCount = state.homeRefreshCount,
-                            onHomeRefreshCountChange = actions.onHomeRefreshCountChange,
                         )
                     }
                 }
@@ -597,7 +572,8 @@ internal fun SettingsRootCategoryContent(
             }
             SettingsRootCategory.PRIVACY_PERMISSION -> {
                 SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "隐私与权限") {
+                    // 分组名描述内容范围,不复读分类名,避免"隐私与权限里还有隐私与权限"。
+                    SettingsDetailGroup(title = "历史记录与权限") {
                         PrivacySection(
                             privacyModeEnabled = state.privacyModeEnabled,
                             searchSuggestionsEnabled = state.searchSuggestionsEnabled,
@@ -617,7 +593,7 @@ internal fun SettingsRootCategoryContent(
             }
             SettingsRootCategory.STORAGE_BACKUP -> {
                 SettingsRootCategoryEntranceSection {
-                    SettingsDetailGroup(title = "存储与备份") {
+                    SettingsDetailGroup(title = "备份与缓存") {
                         DataStorageSection(
                             customDownloadPath = state.customDownloadPath,
                             customImageSavePath = state.customImageSavePath,
@@ -1403,7 +1379,11 @@ fun PrivacySection(
                 SettingSwitchItem(
                     icon = rememberSettingsSemanticIcon(iconRole),
                     title = settingItemTitle(id),
-                    subtitle = if (index == 1) "关闭后隐藏搜索历史，记录设置和已有历史不变" else "关闭后隐藏搜索页对应分区",
+                    subtitle = when (index) {
+                        0 -> "关闭后隐藏搜索页的「大家都在搜」分区"
+                        1 -> "关闭后隐藏搜索历史，记录设置和已有历史不变"
+                        else -> "关闭后隐藏搜索页的「搜索发现」分区"
+                    },
                     checked = visible,
                     onCheckedChange = { enabled ->
                         scope.launch { SettingsManager.setSearchLandingSectionVisible(context, index, enabled) }

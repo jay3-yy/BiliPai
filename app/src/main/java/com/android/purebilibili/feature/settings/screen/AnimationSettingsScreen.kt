@@ -232,6 +232,12 @@ fun AnimationSettingsContent(
     val maidLottieAnimationEnabled by remember(context) { SettingsManager.getMaidLottieAnimationEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     val skeletonBreathingEnabled = com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()
+    val liquidControlsUseThemeColor by remember(context) { SettingsManager.getLiquidControlsUseThemeColor(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
+    val switchThumbMode by remember(context) { SettingsManager.getLiquidSwitchThumbMode(context) }
+        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
+    val homeCardFrostedGlassEnabled by remember(context) { SettingsManager.getHomeCardFrostedGlassEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
     val globalTextTapCopyEnabled by remember(context) { SettingsManager.getGlobalTextTapCopyEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = themeConfiguration.globalTextTapCopyEnabled)
     val appNavigationSettings = rememberSettingsNavigationConfiguration()
@@ -410,6 +416,23 @@ fun AnimationSettingsContent(
                                 iconTint = AppContentColors.secondaryText(),
                             )
                         }
+                        // 加载占位动画不是玻璃/模糊效果,归入页面动效分组。
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("animation.skeleton_breathing_enabled") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SKELETON_BREATHING),
+                                title = localizedAnimationSettingTitle("animation.skeleton_breathing_enabled"),
+                                subtitle = stringResource(R.string.animation_skeleton_summary),
+                                checked = skeletonBreathingEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.SkeletonSettingsStore
+                                            .setBreathingEnabled(context, enabled)
+                                    }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
+                            )
+                        }
                         if (entranceDowngradedBySystem) {
                             AppPreferenceDivider()
                             Column(
@@ -569,17 +592,6 @@ fun AnimationSettingsContent(
                                 },
                                 enabled = state.cardTransitionEnabled,
                                 iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("animation.video_transition_realtime_blur_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WALLPAPER_EFFECT),
-                                title = localizedAnimationSettingTitle("animation.video_transition_realtime_blur_enabled"),
-                                subtitle = stringResource(R.string.animation_transition_blur_summary),
-                                checked = videoTransitionRealtimeBlurEnabled,
-                                onCheckedChange = { viewModel.toggleVideoTransitionRealtimeBlur(it) },
-                                iconTint = AppContentColors.secondaryText()
                             )
                         }
                         AppPreferenceDivider()
@@ -788,9 +800,54 @@ fun AnimationSettingsContent(
             item(key = "animation_glass") {
                 Box(modifier = Modifier.entrance()) {
                     AppPreferenceGroup {
-                        if (!isLiquidGlassAvailable || !state.androidNativeLiquidGlassEnabled) {
+                        // 玻璃家族总开关与材质条目统一收口在本分组;设备不支持时以提示替代开关。
+                        SettingsItemAnchor("appearance.effective_liquid_glass_enabled") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANDROID_LIQUID_GLASS),
+                                title = settingItemTitle("appearance.effective_liquid_glass_enabled"),
+                                subtitle = if (isLiquidGlassAvailable) {
+                                    context.getString(R.string.appearance_liquid_glass_summary)
+                                } else {
+                                    context.getString(R.string.appearance_liquid_glass_unsupported)
+                                },
+                                checked = state.androidNativeLiquidGlassEnabled,
+                                onCheckedChange = { viewModel.toggleAndroidNativeLiquidGlass(it) },
+                                enabled = isLiquidGlassAvailable,
+                                iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("appearance.liquid_controls_use_theme_color") {
+                            AppSwitchPreference(
+                                title = context.getString(R.string.appearance_liquid_controls_theme_title),
+                                subtitle = context.getString(R.string.appearance_liquid_controls_theme_summary),
+                                checked = liquidControlsUseThemeColor,
+                                enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
+                                onCheckedChange = { enabled ->
+                                    scope.launch { SettingsManager.setLiquidControlsUseThemeColor(context, enabled) }
+                                },
+                            )
+                        }
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("appearance.switch_thumb_mode") {
+                            SettingsSingleChoicePreference(
+                                title = settingItemTitle("appearance.switch_thumb_mode"),
+                                subtitle = "选择开关滑块的颜色",
+                                options = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.entries.map {
+                                    AppSegmentOption(it, it.label)
+                                },
+                                selectedValue = switchThumbMode,
+                                // 拇指强制色只作用于液态玻璃开启后的开关；关闭玻璃时不可选。
+                                enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
+                                onSelectionChange = { mode ->
+                                    scope.launch { SettingsManager.setLiquidSwitchThumbMode(context, mode) }
+                                },
+                            )
+                        }
+                        if (!isLiquidGlassAvailable) {
+                            AppPreferenceDivider()
                             AppText(
-                                text = if (!isLiquidGlassAvailable) stringResource(R.string.animation_glass_unavailable) else stringResource(R.string.animation_glass_disabled),
+                                text = stringResource(R.string.animation_glass_unavailable),
                                 modifier = Modifier.padding(16.dp),
                                 color = AppContentColors.secondaryText(),
                             )
@@ -880,22 +937,6 @@ fun AnimationSettingsContent(
                             )
                         AppPreferenceDivider()
                         if (!advancedOnly) {
-                        SettingsItemAnchor("animation.skeleton_breathing_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SKELETON_BREATHING),
-                                title = localizedAnimationSettingTitle("animation.skeleton_breathing_enabled"),
-                                subtitle = stringResource(R.string.animation_skeleton_summary),
-                                checked = skeletonBreathingEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SkeletonSettingsStore
-                                            .setBreathingEnabled(context, enabled)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
                         // 磨砂效果 (始终显示)
                         SettingsItemAnchor("animation.header_blur_enabled") {
                             AppSwitchPreference(
@@ -972,6 +1013,37 @@ fun AnimationSettingsContent(
                                 subtitle = stringResource(R.string.animation_bottom_blur_summary),
                                 checked = state.bottomBarBlurEnabled,
                                 onCheckedChange = { viewModel.toggleBottomBarBlur(it) },
+                                iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        // 模糊家族条目统一收口在本分组:卡片背景模糊原属首页壁纸,转场模糊原属卡片动画。
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("appearance.home_card_frosted_glass_enabled") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_INFO_GLASS),
+                                title = settingItemTitle("appearance.home_card_frosted_glass_enabled"),
+                                subtitle = if (homeCardFrostedGlassEnabled) {
+                                    context.getString(R.string.appearance_wallpaper_card_blur_on)
+                                } else {
+                                    context.getString(R.string.appearance_wallpaper_card_blur_off)
+                                },
+                                checked = homeCardFrostedGlassEnabled,
+                                onCheckedChange = {
+                                    scope.launch {
+                                        SettingsManager.setHomeCardFrostedGlassEnabled(context, it)
+                                    }
+                                },
+                                iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("animation.video_transition_realtime_blur_enabled") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WALLPAPER_EFFECT),
+                                title = localizedAnimationSettingTitle("animation.video_transition_realtime_blur_enabled"),
+                                subtitle = stringResource(R.string.animation_transition_blur_summary),
+                                checked = videoTransitionRealtimeBlurEnabled,
+                                onCheckedChange = { viewModel.toggleVideoTransitionRealtimeBlur(it) },
                                 iconTint = AppContentColors.secondaryText()
                             )
                         }

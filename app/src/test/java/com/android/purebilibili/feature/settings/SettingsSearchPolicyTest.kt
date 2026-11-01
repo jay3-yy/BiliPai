@@ -163,11 +163,11 @@ class SettingsSearchPolicyTest {
     }
 
     @Test
-    fun queryByAndroidNativeLiquidGlass_focusesAppearanceThemeSection() {
+    fun queryByAndroidNativeLiquidGlass_focusesAnimationGlassSection() {
         val result = resolveSettingsSearchResults("安卓原生液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test
@@ -195,24 +195,24 @@ class SettingsSearchPolicyTest {
     fun queryByBottomBarLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("底栏液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test
     fun queryByTopDockLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("顶部dock栏液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test
     fun queryByHomeSearchLiquidGlass_focusesGlobalAppearanceEntry() {
         val result = resolveSettingsSearchResults("首页搜索框液态玻璃").firstOrNull()
 
-        assertEquals(SettingsSearchTarget.APPEARANCE, result?.target)
-        assertEquals(SettingsSearchFocusIds.APPEARANCE_THEME, result?.focusId)
+        assertEquals(SettingsSearchTarget.ANIMATION, result?.target)
+        assertEquals("animation_glass", result?.focusId)
     }
 
     @Test

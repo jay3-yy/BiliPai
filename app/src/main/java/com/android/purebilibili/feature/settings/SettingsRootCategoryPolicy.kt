@@ -88,7 +88,7 @@ internal fun canonicalSettingsRootCategory(category: SettingsRootCategory): Sett
         SettingsRootCategory.VIDEO_DECODER -> SettingsRootCategory.PLAYBACK_QUALITY
         SettingsRootCategory.MESSAGE_NOTIFICATION -> SettingsRootCategory.PRIVACY_PERMISSION
         SettingsRootCategory.PLAYER_DIAGNOSTICS -> SettingsRootCategory.SYSTEM_ABOUT
-        SettingsRootCategory.GLASS_ADVANCED -> SettingsRootCategory.NAVIGATION_INTERACTION
+        SettingsRootCategory.GLASS_ADVANCED -> SettingsRootCategory.APPEARANCE_THEME
         else -> category
     }
 
@@ -129,7 +129,8 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
     SettingsSearchTarget.BLOCKED_LIST,
     SettingsSearchTarget.MESSAGE_NOTIFICATION -> SettingsRootCategory.PRIVACY_PERMISSION
 
-    SettingsSearchTarget.ANIMATION -> SettingsRootCategory.NAVIGATION_INTERACTION
+    // 动画与触感页的导航父级是外观设置,搜索归属保持一致
+    SettingsSearchTarget.ANIMATION -> SettingsRootCategory.APPEARANCE_THEME
 
     SettingsSearchTarget.DATA_BACKUP,
     SettingsSearchTarget.SETTINGS_SHARE,
