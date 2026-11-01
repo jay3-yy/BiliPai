@@ -31,7 +31,17 @@ internal data class AppGlassPopupFrame(
     val materialProgress: Float = 1f,
     val contentStretchX: Float = 1f,
     val contentStretchY: Float = 1f,
+    /** 弹性通道显式控制透镜脉冲；标准保留原有材质进度映射。 */
+    val lensProgress: Float? = null,
 )
+
+/** 源快照接回底色与阴影时，联合外壳退让；无有效源的菜单保持自身材质。 */
+internal fun popupMaterialOwnership(frame: AppGlassPopupFrame, sourceAvailable: Boolean): Float {
+    if (!sourceAvailable || frame.sourceRect == null) return 1f
+    val sourceCoverage = frame.sourceAlpha.coerceIn(0f, 1f) *
+        (1f - frame.materialProgress.coerceIn(0f, 1f))
+    return 1f - sourceCoverage
+}
 
 /** 曲率按当前短边归一化，供普通转场及中途反向使用。 */
 internal fun popupCornerRoundness(frame: AppGlassPopupFrame): Float =
@@ -55,8 +65,12 @@ internal object AppGlassPopupMotion {
 
     private fun cornerBlend(time: Float, start: Float, end: Float): Float {
         val t = ((time - start) / (end - start)).coerceIn(0f, 1f)
-        return t * t * t * (t * (t * 6f - 15f) + 10f)
+        return (t * t * t * (t * (t * 6f - 15f) + 10f)).coerceIn(0f, 1f)
     }
+
+    /** 连接颈受两端实际尺寸约束；小控件不会被固定融合半径撑成一团。 */
+    private fun blendBand(main: Rect, source: Rect, density: Float): Float =
+        min(28f * density, min(main.minDimension, source.minDimension).coerceAtLeast(0f) * 0.65f)
 
     private fun pulse(time: Float, peak: Float, sharpness: Float): Float {
         if (time <= 0f) return 0f
@@ -102,15 +116,21 @@ internal object AppGlassPopupMotion {
             sunk.x.coerceIn(inner.left, inner.right), sunk.y.coerceIn(inner.top, inner.bottom),
         )
         val sourceScale = 1f - 0.75f * progress
-        val under = min(1f, reveal / 0.25f)
+        // 外壳先展开，正文随后清晰；源控件、材质与连接颈分别交接，不随几何过冲闪回。
+        val under = if (sourceControl) cornerBlend(t, 0f, 0.09f) else min(1f, reveal / 0.25f)
+        val body = rect(center, card.width * scale, max(0f, height * scale))
+        val source = if (sourceControl) rect(anchor.center + (target - anchor.center) * progress,
+            anchor.width * sourceScale, anchor.height * sourceScale) else null
+        val neck = cornerBlend(t, 0f, 0.055f) * (1f - cornerBlend(t, 0.18f, 0.34f))
         return AppGlassPopupFrame(
-            rect(center, card.width * scale, max(0f, height * scale)),
-            corners.coerceIn(0f, halfMinDimension), scale, reveal, blur,
-            sourceRect = if (sourceControl) rect(anchor.center + (target - anchor.center) * progress,
-                anchor.width * sourceScale, anchor.height * sourceScale) else null,
+            body,
+            corners.coerceIn(0f, halfMinDimension), scale,
+            if (sourceControl) cornerBlend(t, 0.025f, 0.2f) else reveal, blur,
+            sourceRect = source,
             sourceAlpha = if (sourceControl) 1f - under else 0f,
             sourceBlur = 4f * density * under,
-            surfaceBlend = if (sourceControl) 28f * density else 0f,
+            surfaceBlend = if (source != null) blendBand(body, source, density) * neck else 0f,
+            materialProgress = if (sourceControl) cornerBlend(t, 0f, 0.18f) else 1f,
         )
     }
 
@@ -219,7 +239,10 @@ internal object AppGlassPopupMotion {
                 initial + (1f - initial) * glyphIn.transform((t / 0.47f).coerceIn(0f, 1f))
             } else 0f,
             sourceBlur = start.sourceBlur * (1f - (t / 0.1f).coerceIn(0f, 1f)),
-            surfaceBlend = if (sourceControl) (start.surfaceBlend + (28f * density - start.surfaceBlend) * (t / 0.05f).coerceIn(0f, 1f)) * (1f - absorbed) else 0f,
+            surfaceBlend = if (sourceControl) {
+                val band = blendBand(result, glyphRect, density)
+                (start.surfaceBlend + (band - start.surfaceBlend) * cornerBlend(t, 0f, 0.07f)) * (1f - absorbed)
+            } else 0f,
             materialProgress = start.materialProgress * (1f - absorbed),
             contentStretchX = start.contentStretchX + (1f - start.contentStretchX) * progress.coerceIn(0f, 1f),
             contentStretchY = start.contentStretchY + (1f - start.contentStretchY) * progress.coerceIn(0f, 1f),

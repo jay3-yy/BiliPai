@@ -1770,8 +1770,12 @@ fun AppNavigation(
         val audioNowPlayingItem = audioPlaylist.getOrNull(audioPlaylistIndex)
         var linkedDockPhase by rememberSaveable { mutableStateOf(LinkedDockPhase.Expanded) }
         val hasActiveAudioPlayback = audioNowPlayingActive && audioNowPlayingItem != null && audioNowPlayingBarEnabled
-        LaunchedEffect(hasActiveAudioPlayback) {
-            val reconciled = resolveLinkedDockPhaseOnAudioChange(linkedDockPhase, hasActiveAudioPlayback)
+        val linkedSearchMergeEnabled = bottomBarHomeSettings.isBottomBarSearchEnabled &&
+            bottomBarHomeSettings.linkedDockMergeOnScrollEnabled
+        LaunchedEffect(hasActiveAudioPlayback, linkedSearchMergeEnabled) {
+            val reconciled = resolveLinkedDockPhaseOnAudioChange(
+                linkedDockPhase, hasActiveAudioPlayback, linkedSearchMergeEnabled,
+            )
             if (reconciled != linkedDockPhase) {
                 linkedDockPhase = reconciled
             }
@@ -2600,7 +2604,6 @@ fun AppNavigation(
                                                 isLightBackgroundProvider = backgroundState.isLightBackgroundProvider,
                                                 realtimeBlurEnabledProvider = {
                                                     shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                                                        source = backgroundSource,
                                                         realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                                                     )
                                                 },
@@ -2620,7 +2623,6 @@ fun AppNavigation(
                                                 isLightBackgroundProvider = backgroundState.isLightBackgroundProvider,
                                                 realtimeBlurEnabledProvider = {
                                                     shouldUseRealtimeVideoCardTransitionBackgroundBlur(
-                                                        source = backgroundSource,
                                                         realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                                                     )
                                                 },

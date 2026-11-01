@@ -78,31 +78,42 @@ class AppElasticPressState internal constructor(
         }
     }
 
+    private fun transformFor(size: Size): AppElasticTransform {
+        val width = visibleSizePx ?: gestureSize.width.takeIf { it > 0f } ?: size.width
+        val height = visibleSizePx ?: gestureSize.height.takeIf { it > 0f } ?: size.height
+        val expansion = if (sizeScaledExpansion) {
+            appPopupElasticExpansionPx(minOf(width, height), expansionPx)
+        } else expansionPx
+        return resolveAppElasticTransform(
+            Size(width, height), press.value, position.value - startPosition, expansion, feedbackStrength,
+            normalizeToShortSide = sizeScaledExpansion,
+            dragReferencePx = if (sizeScaledExpansion && feedbackStrength > 0f) {
+                expansionPx / feedbackStrength / 4f * APP_POPUP_ELASTIC_DRAG_REFERENCE_DP
+            } else null,
+        )
+    }
+
+    /** 供相邻玻璃的联合轮廓使用，与当前控件实际绘制的缩放和位移同源。 */
+    fun transformedBounds(bounds: androidx.compose.ui.geometry.Rect): androidx.compose.ui.geometry.Rect {
+        if (!motionEnabled) return bounds
+        val transform = transformFor(bounds.size)
+        val center = bounds.center + transform.translation
+        val halfWidth = bounds.width * transform.scaleX / 2f
+        val halfHeight = bounds.height * transform.scaleY / 2f
+        return androidx.compose.ui.geometry.Rect(center.x - halfWidth, center.y - halfHeight,
+            center.x + halfWidth, center.y + halfHeight)
+    }
+
     val layerBlock: GraphicsLayerScope.() -> Unit = {
         if (motionEnabled) {
-            // A shared state may drive sibling surface/content layers. Geometry belongs
-            // to the observed control, never to an icon or text layer's smaller bounds.
-            val width = visibleSizePx ?: gestureSize.width.takeIf { it > 0f } ?: size.width
-            val height = visibleSizePx ?: gestureSize.height.takeIf { it > 0f } ?: size.height
-            if (width > 0f && height > 0f) {
-                // 大面积弹窗把扩展随短边放大，保持与小型控件一致的可感知形变。
-                val expansion = if (sizeScaledExpansion) {
-                    appPopupElasticExpansionPx(minOf(width, height), expansionPx)
-                } else expansionPx
-                val transform = resolveAppElasticTransform(
-                    Size(width, height), press.value, position.value - startPosition, expansion, feedbackStrength,
-                    normalizeToShortSide = sizeScaledExpansion,
-                    dragReferencePx = if (sizeScaledExpansion && feedbackStrength > 0f) {
-                        expansionPx / feedbackStrength / 4f * APP_POPUP_ELASTIC_DRAG_REFERENCE_DP
-                    } else null,
-                )
-                translationX = transform.translation.x
-                translationY = transform.translation.y
-                scaleX = transform.scaleX
-                scaleY = transform.scaleY
-            }
+            val transform = transformFor(size)
+            translationX = transform.translation.x
+            translationY = transform.translation.y
+            scaleX = transform.scaleX
+            scaleY = transform.scaleY
         }
     }
+
 }
 
 @Composable

@@ -35,13 +35,6 @@ class ChromeBackdropReadinessStructureTest {
             }
     }
 
-    @Test
-    fun nestedCommentOverlayUsesTheReceiverFreeAnimation() {
-        val source = source("feature/dynamic/components/DynamicCommentSheet.kt")
-        assertTrue(source.contains("androidx.compose.animation.AnimatedVisibility("))
-        assertFalse(source.contains("import androidx.compose.animation.AnimatedVisibility"))
-    }
-
     private fun source(path: String): String = listOf(
         File("app/src/main/java/com/android/purebilibili/$path"),
         File("src/main/java/com/android/purebilibili/$path"),

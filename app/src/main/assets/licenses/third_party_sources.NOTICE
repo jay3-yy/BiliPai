@@ -234,3 +234,19 @@ Reviewed lib/pages/video/controller.dart (setSubtitle) and
 lib/utils/subtitle_utils.dart for player-clock subtitle timing and track caching.
 BiliPai retains its Android text renderers and implements event-driven position
 updates and cue-boundary scheduling with Media3 Player events and Kotlin coroutines.
+
+Glass menu spring parameter and phase reference:
+Glasmio, Copyright 2026 NEORUAA, Apache-2.0.
+https://github.com/NEORUAA/Glasmio
+https://github.com/NEORUAA/Glasmio/blob/main/glasmio-glass/src/main/java/io/github/neoruaa/glasmio/glass/LiquidMenuMorphMotion.kt
+Referenced damping/response pairs and staged release timings; the local finite
+menu renderer, frame adapter and presentation lifecycle are implemented for BiliPai.
+No Glasmio runtime dependency or bundled Apple assets are included.
+Apache-2.0 license text: design-system/src/main/assets/licenses/AndroidLiquidGlass.LICENSE.
+
+Adjacent navigation/search glass contact reference:
+Glasmio, Copyright 2026 NEORUAA, Apache-2.0.
+https://github.com/NEORUAA/Glasmio/blob/main/glasmio-glass/src/main/java/io/github/neoruaa/glasmio/glass/NavigationNativeUnion.kt
+Angle-weighted smooth union of capsule fields, adapted to local press geometry,
+shared material rendering and the existing Miuix backdrop infrastructure.
+Apache-2.0 license text: design-system/src/main/assets/licenses/AndroidLiquidGlass.LICENSE.

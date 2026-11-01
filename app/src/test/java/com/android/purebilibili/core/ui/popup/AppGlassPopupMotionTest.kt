@@ -338,4 +338,74 @@ class AppGlassPopupMotionTest {
         }
     }
 
+    @Test
+    fun sourceMorphRevealsItsShellBeforeTextAndTransfersMaterialContinuously() {
+        val start = AppGlassPopupMotion.opening(0f, card, anchor, 24f, true)
+        val emerging = AppGlassPopupMotion.opening(0.02f, card, anchor, 24f, true)
+        val settled = AppGlassPopupMotion.opening(0.45f, card, anchor, 24f, true)
+        assertEquals(0f, start.materialProgress)
+        assertEquals(0f, start.surfaceBlend)
+        assertEquals(0f, emerging.contentAlpha)
+        assertTrue(emerging.rect.width > start.rect.width)
+        assertTrue(emerging.materialProgress > 0f)
+        assertEquals(1f, settled.materialProgress)
+        assertEquals(1f, settled.contentAlpha)
+        assertEquals(null, settled.sourceRect)
+        var previousMaterial = 0f
+        for (step in 0..90) {
+            val frame = AppGlassPopupMotion.opening(step * 0.005f, card, anchor, 24f, true)
+            assertTrue(frame.materialProgress >= previousMaterial)
+            previousMaterial = frame.materialProgress
+            frame.sourceRect?.let { source ->
+                assertTrue(frame.surfaceBlend <= minOf(frame.rect.minDimension, source.minDimension) * 0.65f + 0.001f)
+            }
+        }
+    }
+
+    @Test
+    fun earlyCloseAndReopenPreserveMaterialAndNeckAtTheTurn() {
+        val before = AppGlassPopupMotion.opening(0.065f, card, anchor, 24f, true)
+        val start = AppGlassPopupMotion.opening(0.07f, card, anchor, 24f, true)
+        val close = AppGlassPopupMotion.closing(0f, 0.07f, card, anchor, 24f, true, startFrame = start)
+        assertEquals(start.materialProgress, close.materialProgress)
+        assertEquals(start.surfaceBlend, close.surfaceBlend)
+        assertEquals(start.contentAlpha, close.contentAlpha)
+        val target = AppGlassPopupFrame(card, 24f, 1f, 1f, 0f)
+        assertEquals(start, AppGlassPopupMotion.retarget(0f, 0.25f, start, before, 0.005f, target))
+        assertEquals(target, AppGlassPopupMotion.retarget(0.25f, 0.25f, start, before, 0.005f, target))
+    }
+
+    @Test
+    fun sourceOwnsItsBackingAtBothEndsAndMenuOwnsItWhenExpanded() {
+        val start = AppGlassPopupMotion.opening(0f, card, anchor, 24f, true)
+        val expanded = AppGlassPopupMotion.opening(0.45f, card, anchor, 24f, true)
+        val returned = AppGlassPopupMotion.closing(0.5f, 0.45f, card, anchor, 24f, true)
+        assertEquals(0f, popupMaterialOwnership(start, sourceAvailable = true))
+        assertEquals(1f, popupMaterialOwnership(expanded, sourceAvailable = true))
+        assertEquals(0f, popupMaterialOwnership(returned, sourceAvailable = true))
+        assertEquals(1f, popupMaterialOwnership(start, sourceAvailable = false))
+        assertEquals(1f, popupMaterialOwnership(returned, sourceAvailable = false))
+        assertEquals(1f, popupMaterialOwnership(expanded.copy(sourceAlpha = 1f,
+            materialProgress = 0f), sourceAvailable = true))
+    }
+
+    @Test
+    fun materialHandoffStaysBoundedAndContinuousWhenAnEarlyCloseReverses() {
+        val before = AppGlassPopupMotion.opening(0.055f, card, anchor, 24f, true)
+        val start = AppGlassPopupMotion.opening(0.06f, card, anchor, 24f, true)
+        val turned = AppGlassPopupMotion.closing(0f, 0.06f, card, anchor, 24f, true, startFrame = start)
+        assertEquals(popupMaterialOwnership(start, true), popupMaterialOwnership(turned, true))
+        val target = AppGlassPopupFrame(card, 24f, 1f, 1f, 0f)
+        var previous = popupMaterialOwnership(start, true)
+        for (step in 0..100) {
+            val frame = AppGlassPopupMotion.retarget(step * 0.0025f, 0.25f,
+                start, before, 0.005f, target)
+            val ownership = popupMaterialOwnership(frame, sourceAvailable = true)
+            assertTrue(ownership in 0f..1f)
+            assertTrue(kotlin.math.abs(ownership - previous) < 0.04f)
+            previous = ownership
+        }
+        assertEquals(1f, previous)
+    }
+
 }
