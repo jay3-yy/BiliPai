@@ -1452,6 +1452,10 @@ fun HomeScreen(
     var isPinchPillVisible by remember { mutableStateOf(false) }
     var pinchPillDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     val effectiveGridColumns = gridColumnPreference.columns
+    // 请求条数按列数换算（官方客户端由服务端按屏幕形态决定下发量，web 接口只能自己算）。
+    LaunchedEffect(effectiveGridColumns) {
+        viewModel.updateFeedGridColumns(effectiveGridColumns)
+    }
     val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT)
 
 
