@@ -10,6 +10,7 @@ import com.android.purebilibili.core.ui.MediaContrastPalette
 import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.feature.video.ui.overlay.NextWatchOverlay
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
@@ -469,7 +470,7 @@ fun BangumiPlayerView(
                     },
                     onDoubleTap = {
                         if (isScreenLocked) return@detectTapGestures
-                        if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
+                        togglePlayerPlaybackFromUserAction(exoPlayer)
                     }
                 )
             }

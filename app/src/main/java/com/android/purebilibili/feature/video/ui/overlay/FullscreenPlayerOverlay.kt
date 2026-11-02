@@ -363,7 +363,11 @@ fun FullscreenPlayerOverlay(
     }
 
     // 播放器状态 — 用当前 player 位置 seed，避免全屏重建时先显示 00:00
-    var isPlaying by remember { mutableStateOf(player?.isPlaying ?: false) }
+    var isPlaying by remember(player) {
+        mutableStateOf(player?.let {
+            resolveOverlayPlaybackButtonPlayingState(it.isPlaying, it.playWhenReady, it.playbackState)
+        } == true)
+    }
     var currentProgress by remember {
         mutableFloatStateOf(
             run {
@@ -522,7 +526,7 @@ fun FullscreenPlayerOverlay(
         }
         while (isActive) {
             player?.let {
-                isPlaying = it.isPlaying
+                isPlaying = resolveOverlayPlaybackButtonPlayingState(it.isPlaying, it.playWhenReady, it.playbackState)
                 duration = resolveSeekableDurationMs(
                     playbackDurationMs = it.duration,
                     fallbackDurationMs = miniPlayerManager.duration

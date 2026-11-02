@@ -1027,7 +1027,8 @@ fun PortraitVideoPager(
                 ) return
                 val snapshot = requestedPlaybackSnapshot ?: return
                 if (snapshot.bvid != currentPlayingBvid) return
-                requestedPlaybackSnapshot = requestedPlaybackSnapshot?.copy(playWhenReady = playWhenReady)
+                requestedPlaybackSnapshot = snapshot.copy(playWhenReady = playWhenReady)
+                if (!playWhenReady) pendingAutoPlayGeneration = -1
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -1047,6 +1048,8 @@ fun PortraitVideoPager(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY &&
                     pendingAutoPlayGeneration == activeLoadGeneration &&
+                    listenerGeneration == activeLoadGeneration &&
+                    requestedPlaybackSnapshot?.playWhenReady == true &&
                     isPortraitPlaybackAllowed &&
                     !exoPlayer.isPlaying
                 ) {
@@ -1317,7 +1320,8 @@ fun PortraitVideoPager(
             if (!shouldApplyLoadResult(requestGeneration, activeLoadGeneration, bvid, currentPlayingBvid)) return
             playbackFailure = PortraitPlaybackFailure(
                 requestGeneration,
-                PortraitPlaybackRecoverySnapshot(bvid, requestedCid, plannedPositionMs, resumePlayback),
+                requestedPlaybackSnapshot
+                    ?: PortraitPlaybackRecoverySnapshot(bvid, requestedCid, plannedPositionMs, resumePlayback),
                 message
             )
             pendingAutoPlayGeneration = -1
@@ -1503,7 +1507,10 @@ fun PortraitVideoPager(
                         lastLoadedCollectionInfoBvid = info.bvid
                         lastLoadedCollectionInfo = info
 
-                        exoPlayer.playWhenReady = latestPortraitPlaybackAllowed && resumePlayback
+                        // A pause while the address request was in flight supersedes its original autoplay.
+                        val shouldPlay = latestPortraitPlaybackAllowed &&
+                            (requestedPlaybackSnapshot?.playWhenReady ?: resumePlayback)
+                        exoPlayer.playWhenReady = shouldPlay
                         val reusedPreparedMedia = preparedPlayback?.let {
                             wifiPreloadQueue.playClaimed(it, plannedPositionMs)
                         } == true
@@ -1522,7 +1529,7 @@ fun PortraitVideoPager(
                             }
                         }
 
-                        if (latestPortraitPlaybackAllowed && resumePlayback) {
+                        if (shouldPlay) {
                             exoPlayer.play()
                         }
                     },
@@ -3456,7 +3463,7 @@ private fun VideoPageItem(
                     )
                 }
 
-                if (isLoading && isCurrentPage) {
+                if (isLoading && isCurrentPage && !portraitOverlayVisible) {
                     com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(
                         modifier = Modifier.align(Alignment.Center),
                         tint = AppContentColors.accent(),
@@ -3950,7 +3957,7 @@ private fun VideoPageItem(
                 } else progressState.current,
                 highFrequencyProgressActive = isCurrentPage,
                 hasPendingSeekResume = portraitPlaybackRecovering,
-                // This route owns its cover/loading and gesture feedback below the chrome.
+                // This route owns the cover/gestures; shared chrome owns playback and recovery feedback.
                 isBuffering = false,
                 hasRenderedFirstFrame = hasRenderedFirstFrame,
                 suppressTransientOverlaysForTransition = true,
@@ -4375,27 +4382,6 @@ private fun VideoPageItem(
             state = portraitOverlayState,
             actions = portraitOverlayActions,
         )
-        AnimatedVisibility(
-            visible = portraitPlaybackRecovering && portraitOverlayVisible &&
-                commentSheetVisibilityProgress <= 0.001f,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.align(Alignment.Center),
-        ) {
-            Box {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(
-                        tint = AppContentColors.accent(),
-                        size = 32.dp,
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    AppText(text = "正在恢复播放...", color = Color.White)
-                }
-            }
-        }
     }
 
     }

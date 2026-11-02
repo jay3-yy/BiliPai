@@ -45,6 +45,7 @@ import com.android.purebilibili.core.store.PlayLastSession
 import com.android.purebilibili.feature.video.player.PlaylistItem
 import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.subtitle.buildSubtitleTrackOptions
+import com.android.purebilibili.feature.video.usecase.playPlayerFromUserAction
 import com.android.purebilibili.feature.video.playback.audio.resolveAudioQualityControlPresentation
 import com.android.purebilibili.feature.video.share.VideoShareSheet
 import com.android.purebilibili.feature.video.share.buildVideoSharePayload
@@ -488,7 +489,10 @@ internal fun AudioModeMusicPlayer(
             if (playlist.isNotEmpty()) {
                 PlaylistManager.playAt(index)?.let { item ->
                     if (item.bvid == info.bvid && (item.cid == 0L || item.cid == info.cid)) {
-                        if (player != null && !player.isPlaying) player.handleAudioModePlayPause()
+                        if (player != null && !player.isPlaying) {
+                            if (player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
+                            playPlayerFromUserAction(player)
+                        }
                     } else {
                         viewModel.loadVideo(
                             bvid = item.bvid,

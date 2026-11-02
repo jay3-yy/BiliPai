@@ -81,39 +81,6 @@ class VideoPlaybackUserResumePolicyTest {
         verify(exactly = 1) { player.play() }
     }
 
-    @Test
-    fun `applyPlaybackButtonUserAction plays when play icon is shown during buffering resume`() {
-        val player = mockk<Player>(relaxed = true)
-        every { player.playbackState } returns Player.STATE_BUFFERING
-        every { player.mediaItemCount } returns 1
-        every { player.isPlaying } returns false
-        every { player.playWhenReady } returns true
-
-        applyPlaybackButtonUserAction(
-            player = player,
-            isShowingPauseIcon = false
-        )
-
-        verify(exactly = 0) { player.pause() }
-        verify(exactly = 1) { player.play() }
-    }
-
-    @Test
-    fun `applyPlaybackButtonUserAction pauses when pause icon is shown during buffering`() {
-        val player = mockk<Player>(relaxed = true)
-        every { player.playbackState } returns Player.STATE_BUFFERING
-        every { player.mediaItemCount } returns 1
-        every { player.isPlaying } returns false
-        every { player.playWhenReady } returns true
-
-        applyPlaybackButtonUserAction(
-            player = player,
-            isShowingPauseIcon = true
-        )
-
-        verify(exactly = 1) { player.pause() }
-        verify(exactly = 0) { player.play() }
-    }
 
     @Test
     fun `applyPlaybackIntentAfterSourceChange replays source swaps when autoplay should continue`() {

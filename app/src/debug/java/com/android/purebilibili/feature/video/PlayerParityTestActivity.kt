@@ -51,6 +51,7 @@ class PlayerParityTestActivity : ComponentActivity() {
         private set
     val renderedFrames = AtomicLong()
     var fullscreen by mutableStateOf(false)
+    private var isBuffering by mutableStateOf(false)
     var glass by mutableStateOf(false)
     var uiStyle by mutableStateOf(AppUiStyle.MATERIAL3)
     var richCapabilities by mutableStateOf(true)
@@ -81,6 +82,9 @@ class PlayerParityTestActivity : ComponentActivity() {
             repeatMode = Player.REPEAT_MODE_ONE
             setVideoFrameMetadataListener { _, _, _, _ -> renderedFrames.incrementAndGet() }
             addListener(object : Player.Listener {
+                override fun onEvents(player: Player, events: Player.Events) {
+                    isBuffering = player.playbackState == Player.STATE_BUFFERING
+                }
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     val identity = mediaItem?.mediaId.orEmpty().split(':')
                     selectedPage = identity.firstOrNull()?.toIntOrNull() ?: 0
@@ -121,6 +125,7 @@ class PlayerParityTestActivity : ComponentActivity() {
                                 state = VideoPlayerOverlayState(
                                     player = player, title = "Local player parity", isVisible = true,
                                     isFullscreen = fullscreen,
+                                    isBuffering = isBuffering,
                                     currentQualityLabel = "Local MP4", qualityLabels = listOf("Local MP4"),
                                     qualityIds = listOf(16), switchableQualityIds = listOf(16),
                                     currentQuality = 16, bvid = "local-fixture", cid = selectedPage + 1L,

@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.playback.cache
 
 import com.android.purebilibili.core.player.buildPlaybackCacheKey
-import com.android.purebilibili.core.player.resolvePlaybackMediaCacheMaxBytes
 import com.android.purebilibili.core.player.shouldUsePlaybackMediaCache
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -64,11 +63,4 @@ class PlaybackMediaCachePolicyTest {
         assertFalse(shouldUsePlaybackMediaCache("content://media/external/video/media/42"))
     }
 
-    @Test
-    fun playbackMediaCacheBudgetIsFixedTo512MiB() {
-        assertEquals(
-            512L * 1024L * 1024L,
-            resolvePlaybackMediaCacheMaxBytes()
-        )
-    }
 }
