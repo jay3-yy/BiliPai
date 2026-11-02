@@ -13,6 +13,7 @@ import com.android.purebilibili.core.network.getSpaceAggregate
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.data.repository.BangumiRepository
 import com.android.purebilibili.data.repository.ActionRepository
+import com.android.purebilibili.data.repository.DynamicCommentPreviewRepository
 import com.android.purebilibili.data.repository.FavoriteRepository
 import com.android.purebilibili.data.repository.HistoryRepository
 import com.android.purebilibili.data.repository.shouldContinueDynamicFetchAfterFilter
@@ -224,6 +225,7 @@ class SpaceViewModel(
     private var articlePagingReportsErrors = false
     private var contributionAccount = TokenManager.accountIdentity.value
     private var activeSpaceCheeseJob: Job? = null
+    private var activeSpaceDynamicJob: Job? = null
     private var activeSpaceSearchJob: Job? = null
     private var activeVideoListJob: Job? = null
     private var videoPagingJob: Job? = null
@@ -309,6 +311,7 @@ class SpaceViewModel(
         articlePagingSession = null
         audioPagingSession = null
         activeSpaceCheeseJob?.cancel()
+        activeSpaceDynamicJob?.cancel()
         activeSpaceWatchHistoryJob?.cancel()
 
         activeSpaceLoadJob = viewModelScope.launch {
@@ -1484,30 +1487,36 @@ class SpaceViewModel(
     // ==========  动态 Tab 数据加载 ==========
     
     /**
-     *  加载用户动态
+     * 加载 Web 动态并补齐官方评论摘要；分页游标、正文和展示顺序仍以 Web 为准。
      */
     fun loadSpaceDynamic(refresh: Boolean = false) {
         val current = _uiState.value as? SpaceUiState.Success ?: return
         if (current.isLoadingDynamics) return
         if (!refresh && !current.hasMoreDynamics) return
-        
-        viewModelScope.launch {
-            var currentState = current.markTabLoading(SpaceMainTab.DYNAMIC).copy(
+        val requestMid = currentMid
+        val generation = activeSpaceLoadGeneration
+        val identity = TokenManager.accountIdentity.value
+        if (current.userInfo.mid != requestMid) return
+
+        activeSpaceDynamicJob = viewModelScope.launch {
+            val loadingState = current.markTabLoading(SpaceMainTab.DYNAMIC).copy(
                 isLoadingDynamics = true,
                 lastDynamicLoadFailed = false
             )
-            _uiState.value = currentState
+            _uiState.value = loadingState
             
             try {
-                currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 var offset = if (refresh) "" else current.dynamicOffset
-                val accumulated = if (refresh) mutableListOf() else currentState.dynamics.toMutableList()
+                val accumulated = mutableListOf<SpaceDynamicItem>()
                 var hasMore = true
                 var pagesFetched = 0
                 var failed = false
 
                 while (true) {
-                    val response = spaceApi.getSpaceDynamic(currentMid, offset)
+                    val response = spaceApi.getSpaceDynamic(requestMid, offset)
+                    if (identity != TokenManager.accountIdentity.value ||
+                        !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+                    ) return@launch
                     val responseData = response.data
                     if (response.code != 0 || responseData == null) {
                         android.util.Log.e("SpaceVM", " loadSpaceDynamic failed: code=${response.code}, msg=${response.message}")
@@ -1521,14 +1530,8 @@ class SpaceViewModel(
                     val previousOffset = offset
                     offset = responseData.offset
                     hasMore = responseData.has_more
-                    val newlyAccumulatedVisibleCount = if (refresh) {
-                        accumulated.size
-                    } else {
-                        (accumulated.size - currentState.dynamics.size).coerceAtLeast(0)
-                    }
-
                     if (!shouldContinueDynamicFetchAfterFilter(
-                            accumulatedVisibleCount = newlyAccumulatedVisibleCount,
+                            accumulatedVisibleCount = accumulated.size,
                             hasMore = hasMore,
                             previousOffset = previousOffset,
                             nextOffset = offset,
@@ -1539,8 +1542,15 @@ class SpaceViewModel(
                     }
                 }
 
+                val enriched = DynamicCommentPreviewRepository.enrichSpace(accumulated, requestMid)
+                if (identity != TokenManager.accountIdentity.value ||
+                    !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+                ) return@launch
+                val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
+                val dynamics = if (refresh) enriched else currentState.dynamics + enriched
+
                 val fallbackLocation = if (currentState.headerState.userInfo?.ipLocation.isNullOrBlank()) {
-                    accumulated.firstNotNullOfOrNull { item ->
+                    dynamics.firstNotNullOfOrNull { item ->
                         item.modules.module_author?.pub_location_text?.takeIf { it.isNotBlank() }
                     }
                 } else {
@@ -1566,7 +1576,7 @@ class SpaceViewModel(
                 _uiState.value = currentState.copy(
                     userInfo = nextUserInfo,
                     headerState = nextHeaderState,
-                    dynamics = accumulated,
+                    dynamics = dynamics,
                     dynamicOffset = offset,
                     hasMoreDynamics = hasMore,
                     isLoadingDynamics = false,
@@ -1578,9 +1588,20 @@ class SpaceViewModel(
                 )
                 android.util.Log.d(
                     "SpaceVM",
-                    " loadSpaceDynamic: total=${accumulated.size}, hasMore=$hasMore, pagesFetched=$pagesFetched, failed=$failed"
+                    " loadSpaceDynamic: total=${dynamics.size}, hasMore=$hasMore, pagesFetched=$pagesFetched, failed=$failed"
                 )
+            } catch (e: CancellationException) {
+                if (identity == TokenManager.accountIdentity.value &&
+                    shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+                ) {
+                    val latest = _uiState.value as? SpaceUiState.Success
+                    if (latest != null) _uiState.value = latest.copy(isLoadingDynamics = false)
+                }
+                throw e
             } catch (e: Exception) {
+                if (identity != TokenManager.accountIdentity.value ||
+                    !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+                ) return@launch
                 android.util.Log.e("SpaceVM", "loadSpaceDynamic error: ${e.message}", e)
                 val currentState = _uiState.value as? SpaceUiState.Success ?: return@launch
                 _uiState.value = currentState.copy(
@@ -2192,9 +2213,15 @@ class SpaceViewModel(
     private suspend fun prefetchSpaceDynamicsForSearch(query: String) {
         val normalizedQuery = query.trim()
         if (normalizedQuery.isEmpty()) return
+        val requestMid = currentMid
+        val generation = activeSpaceLoadGeneration
+        val identity = TokenManager.accountIdentity.value
 
         var pagesFetchedForSearch = 0
         while (true) {
+            if (identity != TokenManager.accountIdentity.value ||
+                !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+            ) return
             val state = _uiState.value as? SpaceUiState.Success ?: return
             if (state.searchQuery.trim() != normalizedQuery) return
             if (state.tabShellState.selectedTab != SpaceMainTab.DYNAMIC) return
@@ -2229,6 +2256,10 @@ class SpaceViewModel(
     private suspend fun fetchNextSpaceDynamicPage(): Boolean {
         val current = _uiState.value as? SpaceUiState.Success ?: return false
         if (current.isLoadingDynamics || !current.hasMoreDynamics) return false
+        val requestMid = currentMid
+        val generation = activeSpaceLoadGeneration
+        val identity = TokenManager.accountIdentity.value
+        if (current.userInfo.mid != requestMid) return false
 
         _uiState.value = current.markTabLoading(SpaceMainTab.DYNAMIC).copy(
             isLoadingDynamics = true,
@@ -2237,7 +2268,10 @@ class SpaceViewModel(
 
         return try {
             val stateBefore = _uiState.value as? SpaceUiState.Success ?: return false
-            val response = spaceApi.getSpaceDynamic(currentMid, stateBefore.dynamicOffset)
+            val response = spaceApi.getSpaceDynamic(requestMid, stateBefore.dynamicOffset)
+            if (identity != TokenManager.accountIdentity.value ||
+                !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+            ) return false
             val responseData = response.data
             if (response.code != 0 || responseData == null) {
                 val failed = _uiState.value as? SpaceUiState.Success ?: return false
@@ -2248,8 +2282,16 @@ class SpaceViewModel(
                 return false
             }
 
+            val incoming = DynamicCommentPreviewRepository.enrichSpace(
+                com.android.purebilibili.data.repository.filterGoodsSpaceDynamics(responseData.items),
+                requestMid
+            )
+            if (identity != TokenManager.accountIdentity.value ||
+                !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+            ) return false
+
             val latest = _uiState.value as? SpaceUiState.Success ?: return false
-            val merged = mergeSpaceDynamicPages(existing = latest.dynamics, incoming = com.android.purebilibili.data.repository.filterGoodsSpaceDynamics(responseData.items))
+            val merged = mergeSpaceDynamicPages(existing = latest.dynamics, incoming = incoming)
             _uiState.value = latest.copy(
                 dynamics = merged,
                 dynamicOffset = responseData.offset,
@@ -2261,11 +2303,16 @@ class SpaceViewModel(
             true
         } catch (e: CancellationException) {
             val cancelled = _uiState.value as? SpaceUiState.Success
-            if (cancelled != null) {
+            if (cancelled != null && identity == TokenManager.accountIdentity.value &&
+                shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+            ) {
                 _uiState.value = cancelled.copy(isLoadingDynamics = false)
             }
             throw e
         } catch (e: Exception) {
+            if (identity != TokenManager.accountIdentity.value ||
+                !shouldApplySpaceLoadResult(requestMid, currentMid, generation, activeSpaceLoadGeneration)
+            ) return false
             android.util.Log.e("SpaceVM", "fetchNextSpaceDynamicPage error: ${e.message}", e)
             val failed = _uiState.value as? SpaceUiState.Success ?: return false
             _uiState.value = failed.copy(
@@ -2283,12 +2330,14 @@ class SpaceViewModel(
         activeSpaceAudioJob?.cancel()
         activeSpaceArticleJob?.cancel()
         activeSpaceOpusJob?.cancel()
+        activeSpaceDynamicJob?.cancel()
         audioPagingSession = null
         articlePagingSession = null
         videoPagingJob?.cancel()
         videoPagingSession = null
         _uiState.update { state ->
             (state as? SpaceUiState.Success)?.copy(isLoadingAudios = false, isLoadingArticles = false, isLoadingMore = false,
+                isLoadingDynamics = false,
                 opusItems = emptyList(), opusCollections = emptyList(), opusOffset = "", opusFilter = "all", hasLoadedOpus = false, hasMoreOpus = true, isLoadingOpus = false,
                 comics = emptyList(), hasLoadedComics = false, isLoadingComics = false, comicError = null,
                 showFollowedUsers = false, followedUsers = emptyList(), followedUsersPage = 1, hasMoreFollowedUsers = true,

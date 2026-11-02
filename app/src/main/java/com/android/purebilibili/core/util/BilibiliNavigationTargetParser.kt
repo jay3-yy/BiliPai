@@ -322,18 +322,24 @@ object BilibiliNavigationTargetParser {
         segments: List<String>,
         query: Map<String, String>,
     ): BilibiliNavigationTarget? {
-        val native = scheme in listOf("bilibili", "bili") && host == "comment" &&
-            segments.firstOrNull() in listOf("detail", "msg_fold")
+        val nativeMain = scheme in listOf("bilibili", "bili") && host == "comment3" &&
+            segments.firstOrNull() == "main"
+        val native = nativeMain || (scheme in listOf("bilibili", "bili") && host == "comment" &&
+            segments.firstOrNull() in listOf("detail", "msg_fold"))
         val web = scheme in listOf("http", "https") && isBilibiliHost(host) &&
             (segments.take(2) == listOf("h5", "comment") || segments.take(2) == listOf("comment", "sub"))
         if (!native && !web) return null
-        val oid = (if (native) segments.getOrNull(2) else query["oid"])
+        val oid = (if (nativeMain) segments.getOrNull(1) else if (native) segments.getOrNull(2) else query["oid"])
             ?.toLongOrNull()?.takeIf { it > 0L } ?: return null
-        val rawBusiness = if (native) segments.getOrNull(1) else query["pageType"] ?: query["type"] ?: "1"
+        val rawBusiness = when {
+            nativeMain -> segments.getOrNull(2)
+            native -> segments.getOrNull(1)
+            else -> query["pageType"] ?: query["type"] ?: "1"
+        }
         val business = rawBusiness?.toIntOrNull()?.takeIf { it > 0 } ?: return null
         val type = if (business == 1 && oid >= 100_000_000_000_000_000L) 17 else business
-        val pathRoot = if (native) segments.getOrNull(3)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L else 0L
-        val pathTarget = if (native) segments.getOrNull(4)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L else 0L
+        val pathRoot = if (native && !nativeMain) segments.getOrNull(3)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L else 0L
+        val pathTarget = if (native && !nativeMain) segments.getOrNull(4)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L else 0L
         val location = resolveCommentLocation(uri, query, pathRoot, pathTarget) ?: return null
         // A reply ID alone is not a root ID. Only subject pages can carry an unresolved target.
         if (type == 12) return BilibiliNavigationTarget.Article(oid, location.root, location.target)
@@ -365,8 +371,8 @@ object BilibiliNavigationTargetParser {
             query[it]?.toLongOrNull()?.takeIf { value -> value > 0L }
         } ?: 0L
         val root = pathRoot.takeIf { it > 0L }
-            ?: positive("comment_root_id", "root_reply_id", "root_id", "root")
-        val target = positive("comment_secondary_id", "comment_id", "reply_id", "rpid", "target_id", "anchor", "source_id")
+            ?: positive("comment_root_id", "root_reply_id", "root_id", "root", "rp_id")
+        val target = positive("comment_secondary_id", "sub_rp_id", "comment_id", "reply_id", "rpid", "target_id", "anchor", "source_id")
             .takeIf { it > 0L } ?: pathTarget.takeIf { it > 0L }
             ?: replyFragmentPattern.matchEntire(uri.fragment.orEmpty())?.groupValues?.get(1)
                 ?.toLongOrNull()?.takeIf { it > 0L } ?: 0L

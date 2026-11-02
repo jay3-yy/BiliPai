@@ -3,10 +3,6 @@ package com.Android.purebilibili.feature.dynamic
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
@@ -14,8 +10,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
@@ -102,7 +96,7 @@ class DynamicHotCommentPreviewUiRegressionTest {
                 "modules":{
                     "module_author":{"mid":123,"name":"动态作者"},
                     "module_dynamic":{"major":{"archive":{"bvid":"$VIDEO_ID","title":"$VIDEO_TITLE"}}},
-                    "module_interaction":{"items":[{"type":1,"desc":{"rich_text_nodes":[
+                    "module_interaction":{"items":[{"type":1,"extend_click_param":{"comment_root_id":"701"},"desc":{"rich_text_nodes":[
                         {"type":"RICH_TEXT_NODE_TYPE_AT","text":"@评论作者","rid":"$USER_ID"},
                         {"type":"RICH_TEXT_NODE_TYPE_TEXT","text":"：个人空间接口热评"}
                     ]}}]}
@@ -112,72 +106,19 @@ class DynamicHotCommentPreviewUiRegressionTest {
         val body = "@评论作者：个人空间接口热评"
         showCard(
             DynamicDesc(),
-            isDetail = true,
             itemOverride = resolveSpaceDynamicCardItem(spaceItem),
         )
 
         tapCharacter(body, "评论作者")
-        assertDestinations("user:$USER_ID")
+        assertDestinations("link:$COMMENTS_URL")
         tapCharacter(body, "接口热评")
-        assertDestinations("user:$USER_ID", "link:$COMMENTS_URL")
+        assertDestinations("link:$COMMENTS_URL", "link:$COMMENTS_URL")
         tapRowBlank(body)
-        assertDestinations("user:$USER_ID", "link:$COMMENTS_URL", "link:$COMMENTS_URL")
+        assertDestinations("link:$COMMENTS_URL", "link:$COMMENTS_URL", "link:$COMMENTS_URL")
     }
 
     @Test
-    fun inlineCommentHostScrollsInPlaceRegardlessOfCardExpansionMode() {
-        val body = "本页已有评论区"
-        compose.setContent {
-            val context = LocalContext.current
-            val loader = remember(context) { ImageLoader.Builder(context).build() }
-            val listState = rememberLazyListState()
-            val scope = rememberCoroutineScope()
-            CompositionLocalProvider(LocalDynamicCommentPreviewVisible provides true) {
-                MaterialTheme {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize().testTag(HOST_TAG),
-                    ) {
-                        item {
-                            DynamicCardV2(
-                                item = DynamicItem(
-                                    id_str = DYNAMIC_ID,
-                                    modules = DynamicModules(
-                                        module_interaction = DynamicInteractionModule(items = listOf(
-                                            DynamicInteractionItem(type = 1, desc = DynamicDesc(text = body)),
-                                        )),
-                                    ),
-                                ),
-                                gifImageLoader = loader,
-                                actions = DynamicCardActions(
-                                    navigation = DynamicCardNavigationActions(
-                                        onVideoClick = { destinations += "video:$it" },
-                                        onUserClick = { destinations += "user:$it" },
-                                        onOpenLink = { destinations += "link:$it" },
-                                    ),
-                                    interaction = DynamicCardInteractionActions(
-                                        onShowCommentsInPlace = { scope.launch { listState.scrollToItem(21) } },
-                                    ),
-                                ),
-                            )
-                        }
-                        items(20) { index ->
-                            Text("正文段落 $index", Modifier.height(56.dp))
-                        }
-                        item { Text("当前页评论区", Modifier.height(400.dp)) }
-                    }
-                }
-            }
-        }
-
-        compose.onNodeWithText("当前页评论区").assertDoesNotExist()
-        tapCharacter(body, "已有评论区")
-        compose.onNodeWithText("当前页评论区").assertIsDisplayed()
-        compose.runOnIdle { assertTrue("Inline comments must not push a new destination", destinations.isEmpty()) }
-    }
-
-    @Test
-    fun nativeAtAuthorTapOpensOnlyUserAndCommentBodyStillOpensComments() {
+    fun nativeAtAuthorAndCommentBodyBothOpenCurrentDynamicComments() {
         val author = "@评论作者"
         val body = "$author：热门正文"
         showCard(DynamicDesc(
@@ -190,17 +131,17 @@ class DynamicHotCommentPreviewUiRegressionTest {
 
         // A character-bound tap exercises BasicText's native LinkAnnotation child.
         tapCharacter(body, "评论作者")
-        assertDestinations("user:$USER_ID")
+        assertDestinations("link:$COMMENTS_URL")
 
         tapCharacter(body, "热门正文")
-        assertDestinations("user:$USER_ID", "link:$COMMENTS_URL")
+        assertDestinations("link:$COMMENTS_URL", "link:$COMMENTS_URL")
     }
 
     @Test
-    fun explicitCommentLinkKeepsItsRootAndTargetWithoutAlsoOpeningDefaultComments() {
+    fun sameDynamicBodyLinkDoesNotInventTheSummaryLocation() {
         val linkedText = "查看原评论"
         val body = "$linkedText 普通正文"
-        val explicitUrl = "bilibili://following/detail/998877665544?root_reply_id=701&target_id=702"
+        val explicitUrl = "bilibili://following/detail/$DYNAMIC_ID?root_reply_id=701&target_id=702"
         showCard(DynamicDesc(
             text = body,
             rich_text_nodes = listOf(
@@ -210,11 +151,79 @@ class DynamicHotCommentPreviewUiRegressionTest {
         ))
 
         tapCharacter(body, linkedText)
-        assertDestinations("link:$explicitUrl")
+        assertDestinations("link:$COMMENTS_URL")
 
-        // Merely containing a comment link must not change the whole-row destination.
         tapRowBlank(body)
-        assertDestinations("link:$explicitUrl", "link:$COMMENTS_URL")
+        assertDestinations("link:$COMMENTS_URL", "link:$COMMENTS_URL")
+    }
+
+    @Test
+    fun summaryUriAndOverrideParamsLocateTheImageComment() {
+        val body = "@评论作者：摘要携带楼层"
+        val spaceItem = Json { ignoreUnknownKeys = true }.decodeFromString<SpaceDynamicItem>(
+            """{
+                "id_str":"$DYNAMIC_ID","type":"DYNAMIC_TYPE_DRAW",
+                "basic":{"comment_id_str":"413967238","comment_type":11},
+                "modules":{"module_interaction":{"items":[{
+                    "type":1,
+                    "uri":"bilibili://comment3/main/413967238/11?rp_id=10&sub_rp_id=20",
+                    "extend_click_param":{"rp_id":"322575690544","sub_rp_id":"318863949761"},
+                    "desc":{"text":"$body","rich_text_nodes":[
+                        {"type":"AT","text":"@评论作者","rid":"$USER_ID"},
+                        {"type":"TEXT","text":"：摘要携带楼层"}
+                    ]}
+                }]}}
+            }""",
+        )
+        showCard(
+            DynamicDesc(),
+            itemOverride = resolveSpaceDynamicCardItem(spaceItem),
+        )
+        val locatedUrl = "$BASE_COMMENTS_URL&root_reply_id=322575690544&target_id=318863949761"
+
+        tapCharacter(body, "评论作者")
+        tapCharacter(body, "携带楼层")
+        tapRowBlank(body)
+        assertDestinations("link:$locatedUrl", "link:$locatedUrl", "link:$locatedUrl")
+    }
+
+    @Test
+    fun unrelatedDynamicAndUserLinksCannotNavigateAwayFromHotCommentPreview() {
+        val body = "其他动态 用户主页 无ID提及"
+        showCard(DynamicDesc(
+            text = body,
+            rich_text_nodes = listOf(
+                RichTextNode(type = "WEB", text = "其他动态 ", jump_url = "bilibili://following/detail/999?root=701&comment_id=702"),
+                RichTextNode(type = "WEB", text = "用户主页 ", jump_url = "https://space.bilibili.com/$USER_ID"),
+                RichTextNode(type = "AT", text = "无ID提及"),
+            ),
+        ))
+
+        tapCharacter(body, "其他动态")
+        tapCharacter(body, "用户主页")
+        tapCharacter(body, "无ID提及")
+        assertDestinations("link:$COMMENTS_URL", "link:$COMMENTS_URL", "link:$COMMENTS_URL")
+    }
+
+    @Test
+    fun hotPreviewOverrideDoesNotChangeBodyMentionsOrVideoClicks() {
+        val preview = "热评里的@用户"
+        val body = "正文里的@用户"
+        showCard(
+            desc = DynamicDesc(text = preview, rich_text_nodes = listOf(
+                RichTextNode(type = "TEXT", text = "热评里的"),
+                RichTextNode(type = "AT", text = "@用户", rid = USER_ID.toString()),
+            )),
+            bodyDesc = DynamicDesc(text = body, rich_text_nodes = listOf(
+                RichTextNode(type = "TEXT", text = "正文里的"),
+                RichTextNode(type = "AT", text = "@用户", rid = USER_ID.toString()),
+            )),
+        )
+
+        tapCharacter(preview, "@用户")
+        tapCharacter(body, "@用户")
+        tapCharacter(VIDEO_TITLE, "视频")
+        assertDestinations("link:$COMMENTS_URL", "user:$USER_ID", "video:$VIDEO_ID")
     }
 
     @Test
@@ -269,6 +278,25 @@ class DynamicHotCommentPreviewUiRegressionTest {
         assertDestinations("video:$VIDEO_ID")
     }
 
+    @Test
+    fun detailDoesNotRepeatTheHotPreviewButKeepsOtherCardContent() {
+        val body = "详情页不重复显示的热门评论"
+        showCard(DynamicDesc(text = body), includeLikeHint = true, isDetail = true)
+
+        previewText(body).assertDoesNotExist()
+        previewText(LIKE_HINT).assertIsDisplayed()
+        previewText(VIDEO_TITLE).assertIsDisplayed()
+    }
+
+    @Test
+    fun cachedUnlocatedPreviewIsHiddenButTheVideoRemainsActionable() {
+        val body = "没有楼层的旧摘要"
+        showCard(DynamicDesc(text = body), rootId = 0L)
+        previewText(body).assertDoesNotExist()
+        tapCharacter(VIDEO_TITLE, "视频")
+        assertDestinations("video:$VIDEO_ID")
+    }
+
     private fun showCard(
         desc: DynamicDesc,
         interactionType: Int = 1,
@@ -276,9 +304,15 @@ class DynamicHotCommentPreviewUiRegressionTest {
         includeLikeHint: Boolean = false,
         isDetail: Boolean = false,
         itemOverride: DynamicItem? = null,
+        bodyDesc: DynamicDesc? = null,
+        rootId: Long = 701L,
     ) {
         val interactions = buildList {
-            add(DynamicInteractionItem(type = interactionType, desc = desc))
+            add(DynamicInteractionItem(
+                type = interactionType,
+                desc = desc,
+                extend_click_param = if (rootId > 0L) mapOf("comment_root_id" to rootId.toString()) else emptyMap(),
+            ))
             if (includeLikeHint) add(DynamicInteractionItem(type = 0, desc = DynamicDesc(text = LIKE_HINT)))
         }
         val item = itemOverride ?: DynamicItem(
@@ -287,6 +321,7 @@ class DynamicHotCommentPreviewUiRegressionTest {
             modules = DynamicModules(
                 module_author = DynamicAuthorModule(mid = 123L, name = "动态作者"),
                 module_dynamic = DynamicContentModule(
+                    desc = bodyDesc,
                     major = DynamicMajor(archive = ArchiveMajor(bvid = VIDEO_ID, title = VIDEO_TITLE)),
                 ),
                 module_interaction = DynamicInteractionModule(items = interactions),
@@ -372,7 +407,8 @@ class DynamicHotCommentPreviewUiRegressionTest {
         const val HOST_TAG = "hot-comment-card-host"
         const val DESTINATION_TAG = "hot-comment-destination"
         const val DYNAMIC_ID = "112233445566778899"
-        const val COMMENTS_URL = "bilibili://following/detail/$DYNAMIC_ID?tab=comment"
+        const val BASE_COMMENTS_URL = "bilibili://following/detail/$DYNAMIC_ID?tab=comment"
+        const val COMMENTS_URL = "$BASE_COMMENTS_URL&root_reply_id=701"
         const val VIDEO_ID = "BV1xx411c7mD"
         const val VIDEO_TITLE = "主卡片视频"
         const val USER_ID = 4422L

@@ -143,8 +143,6 @@ data class DynamicCardNavigationActions(
 @Immutable
 data class DynamicCardInteractionActions(
     val onCommentClick: (dynamicId: String) -> Unit = {},
-    /** 仅由已展示本条动态评论区的宿主提供；与卡片展开样式无关。 */
-    val onShowCommentsInPlace: (() -> Unit)? = null,
     val onRepostClick: (dynamicId: String) -> Unit = {},
     val onLikeClick: (dynamicId: String) -> Unit = {},
     val onLikeClickWithState: ((dynamicId: String, isLiked: Boolean) -> Unit)? = null,
@@ -204,7 +202,6 @@ fun DynamicCardV2(
     val onUnfoldRelatedClick = actions.navigation.onUnfoldRelatedClick
     val onPrimaryClickOverride = actions.navigation.onPrimaryClickOverride
     val onCommentClick = actions.interaction.onCommentClick
-    val onShowCommentsInPlace = actions.interaction.onShowCommentsInPlace
     val onRepostClick = actions.interaction.onRepostClick
     val onLikeClick = actions.interaction.onLikeClick
     val onLikeClickWithState = actions.interaction.onLikeClickWithState
@@ -1098,10 +1095,10 @@ fun DynamicCardV2(
         }
 
         //  互动条：UP 主觉得很赞 / 相关评论提示
-        val interactionItems = resolveVisibleDynamicInteractionItems(
-            items = item.modules.module_interaction?.items.orEmpty(),
-            commentPreviewVisible = LocalDynamicCommentPreviewVisible.current,
-        )
+        val commentPreviewVisible = !isDetail && LocalDynamicCommentPreviewVisible.current
+        val interactionItems = remember(item, commentPreviewVisible) {
+            resolveVisibleDynamicInteractionItems(item, commentPreviewVisible)
+        }
         if (interactionItems.isNotEmpty()) {
             val interactionBarColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
             Column(
@@ -1120,30 +1117,35 @@ fun DynamicCardV2(
                     .padding(start = AppSpacingTokens.Small),
                 verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro)
             ) {
-                interactionItems.forEach { interactionItem ->
+                interactionItems.forEach { preview ->
+                    val interactionItem = preview.item
                     val desc = interactionItem.desc ?: return@forEach
+                    val previewTarget = preview.commentTarget
                     val onPreviewClick: (() -> Unit)? =
-                        if (interactionItem.type == 1 && item.id_str.isNotBlank()) {
+                        if (previewTarget != null) {
                             {
                                 DynamicRepository.rememberDynamicDetailSeed(item)
-                                if (onShowCommentsInPlace != null) {
-                                    onShowCommentsInPlace()
+                                val url = buildString {
+                                    append("bilibili://following/detail/${previewTarget.dynamicId}?tab=comment")
+                                    if (previewTarget.commentRootRpid > 0L) {
+                                        append("&root_reply_id=${previewTarget.commentRootRpid}")
+                                    }
+                                    if (previewTarget.commentTargetRpid > 0L) {
+                                        append("&target_id=${previewTarget.commentTargetRpid}")
+                                    }
+                                }
+                                if (onOpenLink != null) {
+                                    onOpenLink(url)
                                 } else {
-                                    // 热评载荷通常没有 rpid；AT 节点的 rid 是用户 ID，不能拿来猜楼层。
-                                    val url = "bilibili://following/detail/${item.id_str}?tab=comment"
-                                    if (onOpenLink != null) {
-                                        onOpenLink(url)
-                                    } else {
-                                        val intent = android.content.Intent(
-                                            android.content.Intent.ACTION_VIEW,
-                                            android.net.Uri.parse(url),
-                                        ).setPackage(context.packageName)
-                                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        if (runCatching { context.startActivity(intent) }.isFailure) {
-                                            android.widget.Toast.makeText(
-                                                context, "无法打开评论区", android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
+                                    val intent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse(url),
+                                    ).setPackage(context.packageName)
+                                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    if (runCatching { context.startActivity(intent) }.isFailure) {
+                                        android.widget.Toast.makeText(
+                                            context, "无法打开评论区", android.widget.Toast.LENGTH_SHORT,
+                                        ).show()
                                     }
                                 }
                             }
@@ -1176,7 +1178,7 @@ fun DynamicCardV2(
                             desc = desc,
                             collapseWebLinks = isDetail,
                             onUserClick = onUserClick,
-                            onBlankTap = onPreviewClick,
+                            onTextTap = onPreviewClick,
                             fontSize = MaterialTheme.typography.bodySmall.fontSize,
                             lineHeight = MaterialTheme.typography.bodySmall.lineHeight,
                             extraEmoteUrlMap = dynamicCardEmoteMap,
@@ -2353,6 +2355,7 @@ private fun openDynamicUrl(
  *  若节点仅为纯文本短码，则用表情面板缓存补全图片。
  *
  *  @param onBlankTap 点击非 @/链接区域时回调（转发原文点击跳原动态）
+ *  @param onTextTap 整段预览点击，覆盖原生 @/链接与普通文字；不影响长按选择。
  */
 @Composable
 fun RichTextContent(
@@ -2377,6 +2380,7 @@ fun RichTextContent(
     overflow: TextOverflow = TextOverflow.Clip,
     extraEmoteUrlMap: Map<String, String> = emptyMap(),
     collapseWebLinks: Boolean = false,
+    onTextTap: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -2420,7 +2424,8 @@ fun RichTextContent(
                 putAll(extraEmoteUrlMap)
             },
             linkListener = LinkInteractionListener { link ->
-                dispatchDynamicLink((link as LinkAnnotation.Clickable).tag)
+                if (onTextTap != null) onTextTap()
+                else dispatchDynamicLink((link as LinkAnnotation.Clickable).tag)
             },
             collapseWebLinks = collapseWebLinks,
         )
@@ -2456,9 +2461,10 @@ fun RichTextContent(
     val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.LONG_PRESS)
 
     // 保留 BasicText 原生链接点击；长按打开全文选择面板，轻触空白才走转发回调。
-    val blankTapWithFeedback = appActionWithFeedback { onBlankTap?.invoke() }
+    val textTap = onTextTap ?: onBlankTap
+    val blankTapWithFeedback = appActionWithFeedback { textTap?.invoke() }
     val latestBlankTapWithFeedback by rememberUpdatedState(blankTapWithFeedback)
-    val textGestureModifier = Modifier.pointerInput(annotatedText, onBlankTap, copyText) {
+    val textGestureModifier = Modifier.pointerInput(annotatedText, textTap, copyText) {
         detectTapWithSelectionFriendly(
             onLongPress = {
                 if (copyText.isNotBlank()) {
@@ -2466,7 +2472,7 @@ fun RichTextContent(
                     showTextSelectionSheet = true
                 }
             },
-            onTap = onBlankTap?.let { { _: Offset -> latestBlankTapWithFeedback() } },
+            onTap = textTap?.let { { _: Offset -> latestBlankTapWithFeedback() } },
         )
     }
     AppText(

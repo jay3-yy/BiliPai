@@ -75,6 +75,7 @@ import coil3.transform.Transformation
 import coil3.imageLoader
 //  已改用 AppContentColors.accent()
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled
 import com.android.purebilibili.core.theme.calculateContrastRatio
 import com.android.purebilibili.core.util.FormatUtils
@@ -567,6 +568,10 @@ internal fun resolveReplyMemberMid(item: ReplyItem): Long {
     return item.member.mid.toLongOrNull()?.takeIf { it > 0L }
         ?: item.mid.takeIf { it > 0L }
         ?: 0L
+}
+
+internal fun shouldShowReplyBlockUserAction(authorMid: Long, currentMid: Long?): Boolean {
+    return authorMid > 0L && authorMid != currentMid
 }
 
 internal fun shouldSupportReplyShare(item: ReplyItem): Boolean {
@@ -1545,6 +1550,7 @@ fun ReplyItemView(
     var confirmBlockUser by remember(item.rpid) { mutableStateOf(false) }
 
     if (showActionSheet) {
+        val accountIdentity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
         ReplyActionSheet(
             source = actionSource,
             carriedPress = actionCarriedPress,
@@ -1555,7 +1561,7 @@ fun ReplyItemView(
             canToggleReplyPreview = true,
             canReport = onReportClick != null,
             canShare = shouldSupportReplyShare(item),
-            canBlockUser = replyMemberMid > 0L,
+            canBlockUser = shouldShowReplyBlockUserAction(replyMemberMid, accountIdentity.mid),
             canCopyUsername = item.member.uname.isNotBlank(),
             topActionLabel = if (canToggleTop) resolveReplyTopActionLabel(showTopBadge) else null,
             onDismiss = { showActionSheet = false },
@@ -2128,18 +2134,21 @@ fun ReplyItemView(
                                             }
                                         }
                                     }
+                                    // Native text links consume their own tap; previews route them
+                                    // to this reply's floor instead of navigating out of the thread.
+                                    val openPreviewReply = {
+                                        onSubClick(
+                                            previewRoot,
+                                            resolveSubReplyOpenTargetId(item.rpid, subReply.rpid)
+                                        )
+                                    }
 
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .testTag("$COMMENT_SUB_REPLY_PREVIEW_TAG_PREFIX${subReply.rpid}")
                                             .combinedClickable(
-                                                onClick = appActionWithFeedback {
-                                                    onSubClick(
-                                                        previewRoot,
-                                                        resolveSubReplyOpenTargetId(item.rpid, subReply.rpid)
-                                                    )
-                                                },
+                                                onClick = appActionWithFeedback(openPreviewReply),
                                                 onLongClick = {
                                                     copyToClipboard(
                                                         subReply.content.message,
@@ -2157,20 +2166,15 @@ fun ReplyItemView(
                                             emoteMap = subEmoteMap,
                                             content = subReply.content,
                                             maxLines = 2,
-                                            onTimestampClick = onTimestampClick,
+                                            onTimestampClick = { openPreviewReply() },
                                             maxTimestampMs = maxTimestampMs,
-                                            onUrlClick = onUrlClick,
-                                            onUserClick = { mid -> onAvatarClick(mid.toString()) },
-                                            onTopicClick = { topic -> onUrlClick?.invoke(resolveReplyTopicNavigationUrl(topic)) },
-                                            onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
+                                            onUrlClick = { openPreviewReply() },
+                                            onUserClick = { openPreviewReply() },
+                                            onTopicClick = { openPreviewReply() },
+                                            onVoteClick = { openPreviewReply() },
                                             noteCvidStr = subReply.noteCvidStr,
                                             prefix = prefix,
-                                            onPlainTextClick = {
-                                                onSubClick(
-                                                    previewRoot,
-                                                    resolveSubReplyOpenTargetId(item.rpid, subReply.rpid)
-                                                )
-                                            }
+                                            onPlainTextClick = openPreviewReply
                                         )
                                     }
                                 }

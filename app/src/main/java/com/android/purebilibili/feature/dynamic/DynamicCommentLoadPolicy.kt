@@ -165,7 +165,24 @@ internal data class DynamicCommentUiState(
     val dynamicId: String? = null,
     val hasMore: Boolean = false,
     val nextPage: Int = 1,
+    val pinnedRootReplyId: Long = 0L,
+    val pinnedTargetReplyId: Long = 0L,
+    val pinnedReply: ReplyItem? = null,
+    val pinnedReplyError: String? = null,
 )
+
+/** Route-local placement does not change the server order or the cached first page. */
+internal fun resolveDynamicDetailDisplayComments(state: DynamicCommentUiState): List<ReplyItem> {
+    val pinned = state.pinnedReply?.takeIf {
+        it.rpid > 0L && it.rpid == state.pinnedRootReplyId
+    } ?: return state.comments
+    if (state.comments.firstOrNull() === pinned) return state.comments
+    val existingIndex = state.comments.indexOfFirst { it.rpid == pinned.rpid }
+    return buildList(state.comments.size + if (existingIndex < 0) 1 else 0) {
+        add(pinned)
+        state.comments.forEach { if (it.rpid != pinned.rpid) add(it) }
+    }
+}
 
 /**
  * 评论骨架槽位估算。

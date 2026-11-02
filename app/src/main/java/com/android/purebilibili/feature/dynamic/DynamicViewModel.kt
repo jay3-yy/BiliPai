@@ -38,6 +38,7 @@ import com.android.purebilibili.data.repository.BlockedUpRepository
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.DynamicCreateRepository
 import com.android.purebilibili.data.repository.DynamicRepository
+import com.android.purebilibili.data.repository.retainLocatedDynamicCommentPreviews
 import com.android.purebilibili.data.repository.LiveRepository
 import com.android.purebilibili.data.repository.SessionRepository
 import com.android.purebilibili.feature.dynamic.components.DynamicManageAction
@@ -466,7 +467,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         } ?: return
         val items = withContext(Dispatchers.Default) {
             try {
-                json.decodeFromString<List<DynamicItem>>(cachedJson)
+                retainLocatedDynamicCommentPreviews(json.decodeFromString<List<DynamicItem>>(cachedJson))
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {
@@ -1242,7 +1243,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var remoteMainReplies: List<ReplyItem> = emptyList()
 
     private fun selectCommentSubject(dynamicId: String, target: DynamicCommentTarget? = null) {
-        if (sentCommentDynamicId != dynamicId ||
+        val changedDynamic = sentCommentDynamicId != dynamicId
+        if (changedDynamic ||
             (target != null && sentCommentTarget != null && sentCommentTarget != target)
         ) {
             if (sentCommentDynamicId == dynamicId) commentCache.clear()
@@ -1250,6 +1252,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             removedCommentIds.clear()
             remoteSubReplies = emptyList()
             remoteMainReplies = emptyList()
+            val state = _commentUiState.value
+            resetPinnedCommentRoute(
+                if (changedDynamic) 0L else state.pinnedRootReplyId,
+                if (changedDynamic) 0L else state.pinnedTargetReplyId,
+            )
             sentCommentTarget = null
             commentSubjectSession++
             subReplyLoadRequestId++
@@ -1270,12 +1277,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             sentCommentReplies.isRootRemoved(reply.root)
         ) return
         val comments = _commentUiState.value.comments
-        val activeRoot = _subReplyState.value.rootReply?.takeIf { root ->
-            root.rpid == reply.root && comments.none { it.rpid == root.rpid }
-        }
+        val activeRoot = (_subReplyState.value.rootReply?.takeIf { it.rpid == reply.root }
+            ?: _commentUiState.value.pinnedReply?.takeIf { it.rpid == reply.root })
+            ?.takeIf { root -> comments.none { it.rpid == root.rpid } }
         val isNew = sentCommentReplies.record(reply, if (activeRoot == null) comments else comments + activeRoot)
         updateCommentUiState { it.copy(
             comments = sentCommentReplies.merge(it.comments),
+            pinnedReply = it.pinnedReply?.let { root ->
+                sentCommentReplies.merge(listOf(root)).firstOrNull { merged -> merged.rpid == root.rpid }
+            },
             totalCount = it.totalCount + if (isNew) 1 else 0,
         ) }
         if (isNew) {
@@ -1328,14 +1338,43 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var commentGrpcNextOffset: String? = null
     private var commentContinuation: CommentMainListContinuation? = null
     private var commentLoadJob: Job? = null
+    private var pinnedReplyLoadJob: Job? = null
     private var mainCommentPagingJob: Job? = null
     private var mainCommentPagingSession: CommentPagingSession? = null
     private var commentLoadRequestId = 0L
 
+    private fun resetPinnedCommentRoute(rootReplyId: Long, targetReplyId: Long) {
+        pinnedReplyLoadJob?.cancel()
+        pinnedReplyLoadJob = null
+        val root = rootReplyId.coerceAtLeast(0L)
+        updateCommentUiState {
+            it.copy(
+                pinnedRootReplyId = root,
+                pinnedTargetReplyId = targetReplyId.takeIf { id -> root > 0L && id > 0L && id != root } ?: 0L,
+                pinnedReply = null,
+                pinnedReplyError = null,
+            )
+        }
+    }
+
     private fun updateCommentUiState(
         transform: (DynamicCommentUiState) -> DynamicCommentUiState
     ) {
-        _commentUiState.update(transform)
+        _commentUiState.update { previous ->
+            val next = transform(previous)
+            val rootId = next.pinnedRootReplyId
+            when {
+                rootId > 0L && (rootId in removedCommentIds || sentCommentReplies.isRootRemoved(rootId)) ->
+                    next.copy(pinnedRootReplyId = 0L, pinnedTargetReplyId = 0L, pinnedReply = null, pinnedReplyError = null)
+                rootId > 0L && (previous.comments !== next.comments || next.pinnedReply == null) -> {
+                    val root = next.comments.firstOrNull { it.rpid == rootId }
+                    if (root != null && (root !== next.pinnedReply || next.pinnedReplyError != null)) {
+                        next.copy(pinnedReply = root, pinnedReplyError = null)
+                    } else next
+                }
+                else -> next
+            }
+        }
     }
 
     /**
@@ -1373,7 +1412,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         var updated: List<ReplyItem> = emptyList()
         updateCommentUiState { state ->
             updated = transform(state.comments)
-            state.copy(comments = updated)
+            state.copy(
+                comments = updated,
+                pinnedReply = state.pinnedReply?.let { root ->
+                    transform(listOf(root)).firstOrNull { it.rpid == root.rpid }
+                },
+            )
         }
         cacheCurrentComments(updated)
     }
@@ -1405,6 +1449,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
      */
     fun openCommentSheet(dynamicId: String) {
         selectCommentSubject(dynamicId)
+        resetPinnedCommentRoute(0L, 0L)
         commentSubjectSession++
         resetCommentComposerState()
         val item = findDynamicById(dynamicId)
@@ -1417,9 +1462,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     fun openCommentSheet(
         item: DynamicItem,
         rootReplyId: Long = 0L,
-        targetReplyId: Long = 0L
+        targetReplyId: Long = 0L,
+        pinRootReply: Boolean = false,
     ) {
         selectCommentSubject(item.id_str)
+        resetPinnedCommentRoute(
+            if (pinRootReply) rootReplyId else 0L,
+            if (pinRootReply) targetReplyId else 0L,
+        )
         commentSubjectSession++
         resetCommentComposerState()
         _selectedDynamic.value = item
@@ -1452,6 +1502,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         mainCommentPagingJob?.cancel()
         commentLoadJob?.cancel()
         commentLoadJob = null
+        pinnedReplyLoadJob?.cancel()
+        pinnedReplyLoadJob = null
         _selectedDynamic.value = null
         _selectedCommentTarget.value = null
         subReplyLoadRequestId++
@@ -1498,6 +1550,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         mainCommentPagingSession = null
         mainCommentPagingJob?.cancel()
         commentLoadJob?.cancel()
+        pinnedReplyLoadJob?.cancel()
+        pinnedReplyLoadJob = null
         commentLoadJob = launchAccount {
             val routeIntentActive = routeIntentSession == subReplyLoadRequestId
             val sortMode = _dynamicCommentSortMode.value
@@ -1578,18 +1632,23 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     return@launchAccount
                 }
 
-                // A thread read depends on the resolved subject, not on the main list succeeding.
-                // Keep this routed read and its main list on the same subject; probing another
-                // candidate must not replace the thread's identity after it has already opened.
+                // Both routed presentations stay bound to one oid/type, even if the main list fails.
+                val pinState = _commentUiState.value
+                val pinRequested = pinState.pinnedRootReplyId > 0L
                 val routedTarget = targets.firstOrNull()?.takeIf {
-                    routedRootReplyId > 0L && routeIntentActive && resolvedRouteSession == subReplyLoadRequestId &&
+                    (pinRequested || (routedRootReplyId > 0L && routeIntentActive &&
+                        resolvedRouteSession == subReplyLoadRequestId)) &&
                         requestId == commentLoadRequestId && _selectedDynamic.value?.id_str == dynamicId &&
                         activeAccountIdentity == TokenManager.accountIdentity.value
                 }
                 if (routedTarget != null) {
                     selectCommentSubject(dynamicId, routedTarget)
                     _selectedCommentTarget.value = routedTarget
-                    openSubReplyFromRoute(routedRootReplyId, routedTargetReplyId)
+                    if (pinRequested) {
+                        loadPinnedCommentRoot(routedTarget, requestId, force = isRefresh)
+                    } else {
+                        openSubReplyFromRoute(routedRootReplyId, routedTargetReplyId)
+                    }
                 }
 
                 val candidateResults = loadDynamicCommentCandidates(
@@ -1647,6 +1706,55 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             } finally {
                 if (requestId == commentLoadRequestId) {
                     updateCommentUiState { it.copy(isLoading = false, isRefreshing = false) }
+                }
+            }
+        }
+    }
+
+    private fun loadPinnedCommentRoot(
+        target: DynamicCommentTarget,
+        requestId: Long,
+        force: Boolean,
+    ) {
+        val state = _commentUiState.value
+        val rootId = state.pinnedRootReplyId.takeIf { it > 0L } ?: return
+        val loadedRoot = state.comments.firstOrNull { it.rpid == rootId }
+        if (loadedRoot != null || (!force && state.pinnedReply?.rpid == rootId)) return
+        if (sentCommentReplies.isRootRemoved(rootId)) return
+        val dynamicId = _selectedDynamic.value?.id_str ?: return
+        val subjectSession = commentSubjectSession
+        val account = activeAccountIdentity
+        fun isCurrent(): Boolean =
+            requestId == commentLoadRequestId && subjectSession == commentSubjectSession &&
+                _selectedDynamic.value?.id_str == dynamicId && _selectedCommentTarget.value == target &&
+                _commentUiState.value.pinnedRootReplyId == rootId &&
+                account == activeAccountIdentity && account == TokenManager.accountIdentity.value &&
+                rootId !in removedCommentIds && !sentCommentReplies.isRootRemoved(rootId)
+
+        updateCommentUiState { it.copy(pinnedReplyError = null) }
+        pinnedReplyLoadJob = launchAccount {
+            try {
+                val data = CommentRepository.getMobileSortedSubCommentsForSubject(
+                    oid = target.oid,
+                    type = target.type,
+                    rootId = rootId,
+                    mode = SubReplySortMode.TIME.apiMode,
+                    supplementLocations = false,
+                ).getOrThrow()
+                if (!isCurrent()) return@launchAccount
+                check(data.root?.let { it.rpid == rootId } != false) { "回复楼层不匹配，请重试" }
+                val root = resolveRoutedCommentRootReply(emptyList(), data, rootId)
+                    ?: error("评论可能已被删除或不可见")
+                val merged = sentCommentReplies.merge(listOf(root)).firstOrNull { it.rpid == rootId }
+                    ?: return@launchAccount
+                updateCommentUiState { it.copy(pinnedReply = merged, pinnedReplyError = null) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (isCurrent() && _commentUiState.value.comments.none { it.rpid == rootId }) {
+                    updateCommentUiState {
+                        it.copy(pinnedReplyError = "定位评论加载失败：${error.message ?: "请稍后重试"}")
+                    }
                 }
             }
         }
@@ -2324,7 +2432,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
 
     fun likeComment(rpid: Long, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
         if (rpid <= 0L) return
-        val current = _commentUiState.value.comments.firstOrNull { it.rpid == rpid }
+        val current = _commentUiState.value.pinnedReply?.let { findDynamicComment(it, rpid) }
+            ?: _commentUiState.value.comments.firstOrNull { it.rpid == rpid }
             ?: _commentUiState.value.comments.firstNotNullOfOrNull { parent ->
                 parent.replies.orEmpty().firstOrNull { it.rpid == rpid }
             }
@@ -2369,9 +2478,10 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
 
     fun hateComment(rpid: Long, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
         if (rpid <= 0L) return
-        val current = _commentUiState.value.comments.firstNotNullOfOrNull { reply ->
-            findDynamicComment(reply, rpid)
-        } ?: _subReplyState.value.items.firstOrNull { it.rpid == rpid }
+        val current = _commentUiState.value.pinnedReply?.let { findDynamicComment(it, rpid) }
+            ?: _commentUiState.value.comments.firstNotNullOfOrNull { reply ->
+                findDynamicComment(reply, rpid)
+            } ?: _subReplyState.value.items.firstOrNull { it.rpid == rpid }
             ?: _subReplyState.value.rootReply?.takeIf { it.rpid == rpid }
             ?: return
         val target = _selectedCommentTarget.value
@@ -2425,6 +2535,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         val accountIdentity = activeAccountIdentity
         val deletedReply = _subReplyState.value.items.find { it.rpid == rpid }
             ?: _commentUiState.value.comments.firstNotNullOfOrNull { findDynamicComment(it, rpid) }
+            ?: _commentUiState.value.pinnedReply?.let { findDynamicComment(it, rpid) }
         val rootId = deletedReply?.root?.takeIf { it > 0L }
             ?: _subReplyState.value.rootReply?.rpid?.takeIf { root ->
                 _subReplyState.value.baseItems.any { it.rpid == rpid } && root != rpid
