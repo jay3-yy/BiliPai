@@ -411,8 +411,7 @@ object VideoRepository {
         accessTokenPlatform = TokenManager.accessTokenPlatformCache,
         feedApiType = NetworkModule.appContext?.let { SettingsManager.getFeedApiTypeSync(it) }
             ?: SettingsManager.FeedApiType.WEB,
-        refreshCount = NetworkModule.appContext?.let { SettingsManager.getHomeRefreshCountSync(it) }
-            ?: com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT,
+        refreshCount = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT,
         anonymousWeb = com.android.purebilibili.core.network.policy.HomeFeedAnonymizerRuntime.enabled,
     )
 
@@ -439,7 +438,10 @@ object VideoRepository {
                             "🚀 Skip buvid warmup for WEB home preload"
                         )
                     }
-                    getHomeVideosInternal(idx = 0).also { result ->
+                    getHomeVideosInternal(
+                        idx = 0,
+                        refreshCount = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT,
+                    ).also { result ->
                         com.android.purebilibili.core.util.Logger.d(
                             "VideoRepo",
                             "🚀 Home data preload finished. Success=${result.isSuccess}"
@@ -639,7 +641,10 @@ object VideoRepository {
             page.videos
         }
 
-    internal suspend fun getHomeFeed(idx: Int = 0): Result<HomeFeedPage> = withContext(Dispatchers.IO) {
+    internal suspend fun getHomeFeed(
+        idx: Int = 0,
+        refreshCount: Int = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT,
+    ): Result<HomeFeedPage> = withContext(Dispatchers.IO) {
         TokenManager.awaitRestore()
         val session = homePreloadState.captureSession()
         if (idx == 0) {
@@ -650,14 +655,14 @@ object VideoRepository {
                 return@withContext preloaded
             }
         }
-        getHomeVideosInternal(idx).also {
+        getHomeVideosInternal(idx, refreshCount).also {
             currentCoroutineContext().ensureActive()
             homePreloadState.ensureCurrent(session)
         }
     }
 
     // [重构] 内部加载逻辑
-    private suspend fun getHomeVideosInternal(idx: Int): Result<HomeFeedPage> {
+    private suspend fun getHomeVideosInternal(idx: Int, refreshCount: Int): Result<HomeFeedPage> {
         try {
             //  读取推荐流类型设置
             val context = com.android.purebilibili.core.network.NetworkModule.appContext
@@ -666,11 +671,7 @@ object VideoRepository {
             } else {
                 com.android.purebilibili.core.store.SettingsManager.FeedApiType.WEB
             }
-            val refreshCount = if (context != null) {
-                SettingsManager.getHomeRefreshCountSync(context)
-            } else {
-                com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT
-            }
+            // 条数由调用方按网格列数决定（见 HomeViewModel.resolveHomeFeedPageSize）。
             
             com.android.purebilibili.core.util.Logger.d(
                 "VideoRepo",
@@ -731,7 +732,25 @@ object VideoRepository {
                     " 视频[$index]: ${item.title?.take(15)}... dimension=${item.dimension} isVertical=${item.dimension?.isVertical}")
             }
             
-            val list = feedResp.data?.item?.filter { it.adInfo == null }?.map { it.toVideoItem() }?.filter { it.bvid.isNotEmpty() } ?: emptyList()
+            val rawItems = feedResp.data?.item.orEmpty()
+            if (rawItems.isNotEmpty()) {
+                val dropped = rawItems.filter { !it.isSupportedRecommendation }
+                com.android.purebilibili.core.util.Logger.d(
+                    "HomeFeed",
+                    "web 原始=${rawItems.size} 丢弃=${dropped.size} " +
+                        "原因=" + dropped.groupingBy { item ->
+                            when {
+                                item.adInfo != null -> "ad_info"
+                                item.businessInfo != null -> "business_info"
+                                item.cardType == "cm" -> "card_type=cm"
+                                else -> "goto=${item.goto ?: "null"}"
+                            }
+                        }.eachCount(),
+                )
+            }
+            val list = rawItems.filter { it.isSupportedRecommendation }
+                .map { it.toVideoItem() }
+                .filter { it.bvid.isNotEmpty() }
             
             //  [调试] 检查转换后的 VideoItem
             val verticalCount = list.count { it.isVertical }
@@ -793,7 +812,25 @@ object VideoRepository {
                 throw ContentRequestException(feedResp.code, feedResp.message)
             }
 
-            val list = feedResp.data?.item?.filter { it.adInfo == null }?.map { it.toVideoItem() }?.filter { it.bvid.isNotEmpty() } ?: emptyList()
+            val rawItems = feedResp.data?.item.orEmpty()
+            if (rawItems.isNotEmpty()) {
+                val dropped = rawItems.filter { !it.isSupportedRecommendation }
+                com.android.purebilibili.core.util.Logger.d(
+                    "HomeFeed",
+                    "mobile 原始=${rawItems.size} 丢弃=${dropped.size} " +
+                        "原因=" + dropped.groupingBy { item ->
+                            when {
+                                item.adInfo != null -> "ad_info"
+                                item.businessInfo != null -> "business_info"
+                                item.cardType == "cm" -> "card_type=cm"
+                                else -> "goto=${item.goto ?: "null"}"
+                            }
+                        }.eachCount(),
+                )
+            }
+            val list = rawItems.filter { it.isSupportedRecommendation }
+                .map { it.toVideoItem() }
+                .filter { it.bvid.isNotEmpty() }
 
             com.android.purebilibili.core.util.Logger.d("VideoRepo", " Merged Web推荐: total=${list.size}")
 

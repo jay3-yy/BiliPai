@@ -393,6 +393,10 @@ data class RecommendItem(
     val recommendationReason: String = "",
     val param: String = "",
     @SerialName("ad_info") val adInfo: kotlinx.serialization.json.JsonElement? = null,
+    /** 广告卡标记，官方 App 用 "cm" 表示商业推广。 */
+    @SerialName("card_type") val cardType: String = "",
+    /** 商业化信息，非空通常代表广告或推广内容。 */
+    @SerialName("business_info") val businessInfo: kotlinx.serialization.json.JsonElement? = null,
     @SerialName("is_steins")
     @Serializable(with = FlexibleBooleanSerializer::class)
     val isSteins: Boolean = false,
@@ -409,6 +413,13 @@ data class RecommendItem(
     @Serializable(with = FlexibleBooleanSerializer::class)
     val cooperation: Boolean = false
 ) {
+    /** 与 [MobileFeedItem.isSupportedRecommendation] 同口径：广告与非常规卡片一律丢弃。 */
+    val isSupportedRecommendation: Boolean
+        get() = adInfo == null &&
+            businessInfo == null &&
+            cardType != "cm" &&
+            goto.orEmpty().ifBlank { "av" } in setOf("av", "bangumi", "picture")
+
     fun toVideoItem(): VideoItem {
         val type = goto.orEmpty().ifBlank { "av" }
         val episode = if (type == "bangumi") recommendationEpisodeId(param, uri.orEmpty()) else 0L
@@ -750,6 +761,10 @@ data class MobileFeedItem(
     // 推荐卡片的追踪 ID，负反馈要靠它关联到具体那条推荐。
     @SerialName("track_id") val trackId: String = "",
     @SerialName("ad_info") val adInfo: kotlinx.serialization.json.JsonElement? = null,
+    /** 广告卡标记，官方 App 用 "cm" 表示商业推广。 */
+    @SerialName("card_type") val cardType: String = "",
+    /** 商业化信息，非空通常代表广告或推广内容。 */
+    @SerialName("business_info") val businessInfo: kotlinx.serialization.json.JsonElement? = null,
     @SerialName("desc_button") val descButton: MobileFeedDescButton? = null,
     @SerialName("is_steins")
     @Serializable(with = FlexibleBooleanSerializer::class)
@@ -769,7 +784,10 @@ data class MobileFeedItem(
 ) {
     val recommendationType: String get() = cardGoto.ifBlank { goto }.ifBlank { "av" }
     val isSupportedRecommendation: Boolean
-        get() = adInfo == null && recommendationType in setOf("av", "bangumi", "picture")
+        get() = adInfo == null &&
+            businessInfo == null &&
+            cardType != "cm" &&
+            recommendationType in setOf("av", "bangumi", "picture")
 
     fun toVideoItem(): VideoItem {
         val type = recommendationType

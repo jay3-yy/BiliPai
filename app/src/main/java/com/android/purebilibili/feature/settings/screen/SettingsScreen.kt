@@ -147,8 +147,6 @@ fun SettingsScreen(
         .collectAsStateWithLifecycle(initialValue = SettingsManager.AppUpdateChannel.STABLE)
     val incrementalTimelineRefreshEnabled by remember(context) { SettingsManager.getIncrementalTimelineRefresh(context) }
         .collectAsStateWithLifecycle(initialValue = false)
-    val homeRefreshCount by remember(context) { SettingsManager.getHomeRefreshCount(context) }
-        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT)
     val dynamicVisibleTabIds by remember(context) { SettingsManager.getDynamicTabVisibleTabs(context) }
         .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
     val dynamicTabOrder by remember(context) { SettingsManager.getDynamicTabOrder(context) }
@@ -943,12 +941,6 @@ fun SettingsScreen(
                             SettingsManager.setDynamicTabOrder(context, order)
                         }
                     },
-                    homeRefreshCount = homeRefreshCount,
-                    onHomeRefreshCountChange = { count ->
-                        scope.launch {
-                            SettingsManager.setHomeRefreshCount(context, count)
-                        }
-                    },
                 )
             }
         }
@@ -1093,8 +1085,6 @@ private fun MobileSettingsNavLayout(
     onDynamicTabVisibilityChange: (String) -> Unit,
     dynamicTabOrder: List<String>,
     onDynamicTabOrderChange: (List<String>) -> Unit,
-    homeRefreshCount: Int,
-    onHomeRefreshCountChange: (Int) -> Unit,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
     val sectionOrder = remember { resolveSettingsRootCategoryOrder() }
@@ -1163,7 +1153,6 @@ private fun MobileSettingsNavLayout(
         onDynamicFeedLayoutModeChange = onDynamicFeedLayoutModeChange,
         onDynamicTabVisibilityChange = onDynamicTabVisibilityChange,
         onDynamicTabOrderChange = onDynamicTabOrderChange,
-        onHomeRefreshCountChange = onHomeRefreshCountChange,
     )
     val rootCategoryState = SettingsRootCategoryState(
         privacyModeEnabled = privacyModeEnabled,
@@ -1203,7 +1192,6 @@ private fun MobileSettingsNavLayout(
         dynamicFeedLayoutMode = dynamicFeedLayoutMode,
         dynamicVisibleTabIds = dynamicVisibleTabIds,
         dynamicTabOrder = dynamicTabOrder,
-        homeRefreshCount = homeRefreshCount,
     )
 
     @Composable
