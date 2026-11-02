@@ -191,7 +191,6 @@ import com.android.purebilibili.feature.video.playback.session.updatePlaybackSee
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
 import com.android.purebilibili.feature.video.playback.audio.collectAudioStreamCandidates
 import com.android.purebilibili.feature.video.playback.audio.resolveRequestedAudioQuality
-import com.android.purebilibili.feature.video.playback.policy.shouldRefreshPremiumAudioForPlaybackSpeedChange
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
 import com.android.purebilibili.feature.video.ui.components.UpPreviewSheet
 import com.android.purebilibili.feature.video.ui.components.UP_PREVIEW_SHEET_HEIGHT_FRACTION
@@ -1192,10 +1191,7 @@ fun PortraitVideoPager(
         }
     }
 
-    fun switchPortraitAudioQuality(
-        audioQuality: Int,
-        persistManualSelection: Boolean
-    ): Boolean {
+    fun switchPortraitAudioQuality(audioQuality: Int): Boolean {
         val dash = portraitCachedDash ?: return false
         val videoUrl = portraitCurrentVideoUrl.takeIf { it.isNotBlank() } ?: return false
         val activeBvid = currentPlayingBvid?.takeIf { it.isNotBlank() } ?: return false
@@ -1218,11 +1214,9 @@ fun PortraitVideoPager(
         portraitRequestedAudioQuality = audioQuality
         portraitSelectedAudioQuality = result.selection.selectedPreferenceId
         portraitAvailableAudioQualities = result.selection.availableOptions
-        if (persistManualSelection) {
-            portraitRememberedAudioQuality = audioQuality
-            scope.launch {
-                SettingsManager.setAudioQuality(context, audioQuality)
-            }
+        portraitRememberedAudioQuality = audioQuality
+        scope.launch {
+            SettingsManager.setAudioQuality(context, audioQuality)
         }
         return true
     }
@@ -2041,29 +2035,11 @@ fun PortraitVideoPager(
                     )
                 },
                 onAudioQualitySelected = { audioQuality ->
-                    switchPortraitAudioQuality(
-                        audioQuality = audioQuality,
-                        persistManualSelection = true
-                    )
+                    switchPortraitAudioQuality(audioQuality)
                 },
                 onPlaybackSpeedSelected = { speed ->
-                    val previousSpeed = exoPlayer.playbackParameters.speed
                     val normalizedSpeed = speed.coerceAtLeast(0.1f)
                     exoPlayer.playbackParameters = PlaybackParameters(normalizedSpeed, 1.0f)
-                    val requestedKind = portraitAvailableAudioQualities
-                        .firstOrNull { it.preferenceId == portraitRequestedAudioQuality }?.kind
-                    if (shouldRefreshPremiumAudioForPlaybackSpeedChange(
-                            requestedAudioQuality = portraitRequestedAudioQuality,
-                            previousPlaybackSpeed = previousSpeed,
-                            nextPlaybackSpeed = normalizedSpeed,
-                            requestedAudioKind = requestedKind
-                        )
-                    ) {
-                        switchPortraitAudioQuality(
-                            audioQuality = portraitRequestedAudioQuality,
-                            persistManualSelection = false
-                        )
-                    }
                 },
                 onAspectRatioChange = { ratio ->
                     // Runtime safety is applied per-page from actual video aspect.
@@ -2863,7 +2839,7 @@ private fun VideoPageItem(
     }
 
     fun applyPortraitTemporaryPlaybackParameters(parameters: PlaybackParameters) {
-        // 竖屏长按只是临时倍速，不走详情页 ViewModel，避免用入口视频状态触发音频流重建。
+        // 临时倍速作用于当前竖屏页面的播放器，松手时还原原始参数。
         exoPlayer.playbackParameters = parameters
     }
 
