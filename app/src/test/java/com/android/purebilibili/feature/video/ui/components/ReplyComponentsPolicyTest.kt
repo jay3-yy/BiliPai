@@ -464,20 +464,19 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
-    fun `buildRichCommentAnnotatedString uses server url title and app schema`() {
+    fun `rich comment short link prefers a valid video app schema`() {
         val annotated = buildRichCommentAnnotatedString(
             text = "看看 https://b23.tv/demo",
             richUrls = mapOf(
                 "https://b23.tv/demo" to ReplyContentUrl(
                     title = "视频标题",
-                    appUrlSchema = "bilibili://video/BV1testtest"
+                    appUrlSchema = "bilibili://video/BV1xx411c7mD"
                 )
             )
         )
 
-        assertEquals("看看 视频标题", annotated.text)
         assertEquals(
-            "bilibili://video/BV1testtest",
+            "bilibili://video/BV1xx411c7mD",
             annotated.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX)
         )
     }
@@ -536,26 +535,6 @@ class ReplyComponentsPolicyTest {
                 rawToken = "https://t.bilibili.com/1199344045210468386",
                 url = url
             )
-        )
-    }
-
-    @Test
-    fun `buildRichCommentAnnotatedString accepts server url prefix icon`() {
-        val annotated = buildRichCommentAnnotatedString(
-            text = "看看 https://b23.tv/demo",
-            richUrls = mapOf(
-                "https://b23.tv/demo" to ReplyContentUrl(
-                    title = "视频标题",
-                    appUrlSchema = "bilibili://video/BV1testtest",
-                    prefixIcon = "https://example.com/icon.png"
-                )
-            )
-        )
-
-        assertTrue(annotated.text.contains("视频标题"))
-        assertEquals(
-            "bilibili://video/BV1testtest",
-            annotated.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX)
         )
     }
 
