@@ -1109,6 +1109,12 @@ internal fun TabletSecondaryContent(
                 TabletSecondaryTab.COMMENTS -> {
                     val listState = rememberLazyListState()
                     val repliesError = commentState.repliesError
+                    // 列表空、无错误、还没建立分页状态（pageControl == null）：
+                    // 说明评论请求压根还没跑起来。快速切到评论区时会出现这一帧，
+                    // 此时 replyCount 也还是 0（视频详情未返回），不能拿它当判据。
+                    val pendingFirstLoad = commentState.replies.isEmpty() &&
+                        repliesError == null &&
+                        (commentState.pageControl == null || commentState.replyCount > 0)
                     val shouldLoadMore by remember(
                         listState,
                         commentState.isRepliesLoading,
@@ -1290,9 +1296,9 @@ internal fun TabletSecondaryContent(
                                     )
                                 }
                             }
+                            // 有评论数但列表空、无错误：加载中或请求还没发起，都显示骨架。
                             if (
-                                commentState.isRepliesLoading &&
-                                !commentState.isRepliesRefreshing &&
+                                (commentState.isRepliesLoading || pendingFirstLoad) &&
                                 commentState.replies.isEmpty()
                             ) {
                                 // 骨架拆成多个独立 lazy item（而不是 1 个 item 里塞 5 行）：
@@ -1301,10 +1307,7 @@ internal fun TabletSecondaryContent(
                                     slotCount = commentSkeletonSlotCount,
                                     keyPrefix = "tablet_comment_skeleton_",
                                 )
-                            } else if (
-                                commentState.isRepliesLoading &&
-                                !commentState.isRepliesRefreshing
-                            ) {
+                            } else if (commentState.isRepliesLoading) {
                                 item {
                                     Box(
                                         modifier = Modifier
@@ -1323,6 +1326,7 @@ internal fun TabletSecondaryContent(
                             commentState.replies.isEmpty() &&
                             !commentState.isRepliesLoading &&
                             !commentState.isRepliesRefreshing &&
+                            !pendingFirstLoad &&
                             repliesError == null
                         ) {
                             Column(

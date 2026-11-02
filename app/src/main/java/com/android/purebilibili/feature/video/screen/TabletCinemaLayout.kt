@@ -1539,9 +1539,13 @@ private fun CinemaCommentsPane(
                     }
                 )
             }
+            // 有评论数但列表空、无错误：加载中或请求还没发起（快速切到评论区时
+            // loadComments 尚未调用），两种都显示骨架，不能落到下面的空态分支。
+            val pendingFirstLoad = commentState.replies.isEmpty() &&
+                commentState.repliesError == null &&
+                (commentState.pageControl == null || commentState.replyCount > 0)
             if (
-                commentState.isRepliesLoading &&
-                !commentState.isRepliesRefreshing &&
+                (commentState.isRepliesLoading || pendingFirstLoad) &&
                 commentState.replies.isEmpty()
             ) {
                 // 骨架拆成多个独立 lazy item（而不是 1 个 item 里塞 5 行）：数据到达时是
@@ -1550,7 +1554,7 @@ private fun CinemaCommentsPane(
                     slotCount = commentSkeletonSlotCount,
                     keyPrefix = "cinema_comment_skeleton_",
                 )
-            } else if (commentState.isRepliesLoading && !commentState.isRepliesRefreshing) {
+            } else if (commentState.isRepliesLoading) {
                 item {
                     Box(
                         modifier = Modifier
@@ -1566,6 +1570,7 @@ private fun CinemaCommentsPane(
                 commentState.replies.isEmpty() &&
                 !commentState.isRepliesLoading &&
                 !commentState.isRepliesRefreshing &&
+                !pendingFirstLoad &&
                 commentState.repliesError == null
             ) {
                 item {
