@@ -183,4 +183,16 @@ class PlaybackAncillaryTaskPolicyTest {
             )
         )
     }
+
+    @Test
+    fun `backward seek including restart is flushed without extra watch time`() {
+        val previous = PlaybackHeartbeatSnapshot(playedTimeSec = 120L, realPlayedTimeSec = 30L)
+        listOf(60L, 0L).forEach { position ->
+            assertTrue(shouldFlushPlaybackHeartbeatSnapshot(
+                currentBvid = "BV1test", currentCid = 456L,
+                snapshot = PlaybackHeartbeatSnapshot(position, 30L),
+                lastReportedSnapshot = previous,
+            ))
+        }
+    }
 }

@@ -81,11 +81,12 @@ internal fun shouldFlushPlaybackHeartbeatSnapshot(
     snapshot: PlaybackHeartbeatSnapshot,
     lastReportedSnapshot: PlaybackHeartbeatSnapshot?
 ): Boolean {
-    if (currentBvid.isBlank() || currentCid <= 0L || snapshot.playedTimeSec <= 0L) {
+    if (currentBvid.isBlank() || currentCid <= 0L ||
+        (snapshot.playedTimeSec <= 0L && lastReportedSnapshot == null)) {
         return false
     }
 
     return lastReportedSnapshot == null ||
-        snapshot.playedTimeSec > lastReportedSnapshot.playedTimeSec ||
+        snapshot.playedTimeSec != lastReportedSnapshot.playedTimeSec ||
         snapshot.realPlayedTimeSec > lastReportedSnapshot.realPlayedTimeSec
 }

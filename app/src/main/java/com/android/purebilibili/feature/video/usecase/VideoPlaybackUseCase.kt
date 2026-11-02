@@ -88,8 +88,10 @@ sealed class VideoLoadResult {
         val aiAudio: AiAudioInfo? = null,
         val curAudioLang: String? = null,
         val adaptiveDashSource: AdaptiveDashPlaybackSource? = null,
-        // 播放地址接口返回的上次播放分P cid：多 P 视频用于「上次看到第 N P」提示。
-        val lastPlayCid: Long = 0
+        // 上次播放分 P：多 P 视频用于「上次看到第 N P」提示。
+        val lastPlayCid: Long = 0,
+        // null 表示服务端未提供当前分 P 的进度；0 是有效的从头播放记录。
+        val serverPositionMs: Long? = null,
     ) : VideoLoadResult()
     
     data class Error(
@@ -561,6 +563,10 @@ class VideoPlaybackUseCase(
             
             return detailResult.fold(
                 onSuccess = { (info, playData) ->
+                    val history = com.android.purebilibili.data.repository.HistoryRepository
+                        .getPlaybackHistory(info.bvid, info.cid)
+                        .onFailure { Logger.w("VideoPlaybackUseCase", "播放历史读取失败", it) }
+                        .getOrNull()
                     val isLogin = com.android.purebilibili.data.repository.VideoRepository.isPlaybackLoggedIn()
                     var isVip = com.android.purebilibili.data.repository.VideoRepository.isPlaybackVip()
                     if (isLogin && !isVip && com.android.purebilibili.data.repository.shouldRefreshVipStatusOnVideoLoad()) {
@@ -716,7 +722,8 @@ class VideoPlaybackUseCase(
                         aiAudio = playData.aiAudio,
                         curAudioLang = playData.curLanguage,
                         adaptiveDashSource = selection.adaptiveDashSource,
-                        lastPlayCid = playData.lastPlayCid ?: 0L
+                        lastPlayCid = history?.lastPlayCid ?: playData.lastPlayCid ?: 0L,
+                        serverPositionMs = history?.resumePositionMs(info.cid)
                     )
                 },
                 onFailure = { e ->

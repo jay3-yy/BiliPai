@@ -29,7 +29,7 @@ internal sealed interface PlaybackLoadResult {
             return when (result) {
                 is VideoLoadResult.Success -> Success(
                     request = request,
-                    cachedPositionMs = cachedPositionMs,
+                    cachedPositionMs = if (request.ignoreSavedProgress) 0L else result.serverPositionMs?.coerceAtLeast(0L) ?: cachedPositionMs,
                     payload = result
                 )
                 is VideoLoadResult.Error -> Error(

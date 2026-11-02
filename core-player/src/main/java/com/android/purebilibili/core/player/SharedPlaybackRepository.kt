@@ -27,7 +27,7 @@ data class SharedPlaybackRequest(
 
 class PlaybackLoadException(val info: ViewInfo, cause: Throwable) : Exception(cause.message, cause)
 
-data class LoadedPlayback(val info: ViewInfo, val streams: PlayUrlData)
+data class LoadedPlayback(val info: ViewInfo, val streams: PlayUrlData, val serverPositionMs: Long? = null)
 
 object SharedPlaybackRepository {
     suspend fun load(
@@ -44,7 +44,12 @@ object SharedPlaybackRepository {
             } catch (error: Exception) {
                 throw PlaybackLoadException(info, error)
             }
-            Result.success(LoadedPlayback(info, streams))
+            val history = com.android.purebilibili.data.repository.HistoryRepository
+                .getPlaybackHistory(info.bvid, info.cid)
+                .onFailure { com.android.purebilibili.core.network.CoreDataLog.w("SharedPlayback", "播放历史读取失败: ${it.message}") }
+                .getOrNull()
+            Result.success(LoadedPlayback(info, streams,
+                history?.resumePositionMs(info.cid)))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {

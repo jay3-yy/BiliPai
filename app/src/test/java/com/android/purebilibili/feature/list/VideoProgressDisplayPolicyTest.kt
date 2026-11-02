@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 class VideoProgressDisplayPolicyTest {
 
     @Test
-    fun `resolveVideoDisplayProgressState prefers furthest valid progress`() {
+    fun `resolveVideoDisplayProgressState prefers cloud history over stale local progress`() {
         val state = resolveVideoDisplayProgressState(
             serverProgressSec = 120,
             durationSec = 600,
@@ -16,13 +16,13 @@ class VideoProgressDisplayPolicyTest {
             viewAt = 1L
         )
 
-        assertEquals(180, state.progressSec)
-        assertEquals(0.3f, state.progressFraction, 0.0001f)
+        assertEquals(120, state.progressSec)
+        assertEquals(0.2f, state.progressFraction, 0.0001f)
         assertTrue(state.showProgressBar)
     }
 
     @Test
-    fun `resolveVideoDisplayProgressState treats near end local progress as completed`() {
+    fun `resolveVideoDisplayProgressState keeps cloud zero over completed local progress`() {
         val state = resolveVideoDisplayProgressState(
             serverProgressSec = 0,
             durationSec = 1000,
@@ -30,9 +30,9 @@ class VideoProgressDisplayPolicyTest {
             viewAt = 1L
         )
 
-        assertEquals(-1, state.progressSec)
-        assertEquals(1f, state.progressFraction, 0.0001f)
-        assertTrue(state.showProgressBar)
+        assertEquals(0, state.progressSec)
+        assertEquals(0f, state.progressFraction, 0.0001f)
+        assertFalse(state.showProgressBar)
     }
 
     @Test

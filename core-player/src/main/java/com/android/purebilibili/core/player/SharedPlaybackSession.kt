@@ -170,7 +170,7 @@ class SharedPlaybackSession(context: Context) : AutoCloseable {
             val start = resolvePlaybackResumePosition(
                 explicitMs = request.startPositionMs,
                 localMs = recent.items(accountMid).firstOrNull { it.bvid == info.bvid && it.cid == info.cid }?.progress?.times(1000L) ?: 0,
-                serverMs = streams.lastPlayTime?.toLong()?.takeIf { streams.lastPlayCid == info.cid } ?: 0,
+                serverMs = loaded.serverPositionMs,
                 durationMs = streams.timelength,
             )
             mutableState.update { SharedPlaybackState(

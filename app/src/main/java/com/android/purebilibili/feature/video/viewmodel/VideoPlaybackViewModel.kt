@@ -3704,7 +3704,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 }
 
                 val loadResult = if (initialLoadResult is PlaybackLoadResult.Success &&
-                    _isInAudioMode.value && fallbackResumePositionMs <= 0L && !playbackRequest.ignoreSavedProgress
+                    _isInAudioMode.value && fallbackResumePositionMs <= 0L && !playbackRequest.ignoreSavedProgress &&
+                    initialLoadResult.payload.serverPositionMs == null
                 ) {
                     val info = initialLoadResult.payload.info
                     val checkpoint = appContext?.let { context ->
@@ -3749,10 +3750,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         // 🛠️ [修复] 检查是否已播放结束 (余量 < 5秒)
                         // 若上次已看完，则从头开始播放，避免立即触发 STATE_ENDED 导致循环跳转
                         val videoDuration = result.duration
-                        var startPos = resolveRequestedStartPositionMs(
-                            cachedPositionMs = loadResult.cachedPositionMs,
-                            fallbackResumePositionMs = fallbackResumePositionMs
-                        )
+                        var startPos = when {
+                            playbackRequest.ignoreSavedProgress -> 0L
+                            fallbackResumePositionMs > 0L -> fallbackResumePositionMs
+                            else -> loadResult.cachedPositionMs
+                        }
                         if (videoDuration > 0 && startPos >= videoDuration - 5000) {
                              Logger.d("PlayerVM", "🛡️ Previous position at end ($startPos / $videoDuration), restarting from 0")
                              startPos = 0
@@ -8230,7 +8232,14 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         isHevcSupported = isHevcSupported,
                         isAv1Supported = isAv1Supported
                     )
-                    val sharedAudioPosition = if (_isInAudioMode.value && !ignoreSavedProgress) {
+                    val serverHistory = if (!ignoreSavedProgress) {
+                        com.android.purebilibili.data.repository.HistoryRepository
+                            .getPlaybackHistory(targetBvid, page.cid)
+                            .onFailure { Logger.w("PlayerVM", "分 P 播放历史读取失败", it) }
+                            .getOrNull()
+                    } else null
+                    val serverPosition = serverHistory?.resumePositionMs(page.cid)
+                    val sharedAudioPosition = if (_isInAudioMode.value && !ignoreSavedProgress && serverPosition == null) {
                         appContext?.let { context ->
                             try {
                                 com.android.purebilibili.core.store.AudioPlaybackProgressStore.read(
@@ -8246,7 +8255,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         }
                     } else null
                     val restoredPosition = resolvePageSwitchStartPositionMs(
-                        cachedPositionMs = sharedAudioPosition ?: playbackUseCase.getCachedPosition(targetBvid, page.cid),
+                        cachedPositionMs = serverPosition ?: sharedAudioPosition ?: playbackUseCase.getCachedPosition(targetBvid, page.cid),
                         pageDurationSeconds = page.duration,
                         ignoreSavedProgress = ignoreSavedProgress
                     )

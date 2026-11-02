@@ -27,6 +27,8 @@ fun resolveVideoDisplayProgressState(
     )
 
     val resolvedProgress = when {
+        // 已有云端历史时，较小进度和 0 同样有效，不能被旧本地进度覆盖。
+        viewAt > 0L -> normalizedServer
         normalizedServer == -1 || normalizedLocal == -1 -> -1
         else -> maxOf(
             normalizedServer.coerceAtLeast(0),

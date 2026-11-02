@@ -17,7 +17,7 @@ class RecentPlaybackStore(context: Context) {
     @Synchronized fun save(mid: Long?, info: ViewInfo, positionMs: Long, durationMs: Long) {
         if (info.bvid.isBlank() || info.cid <= 0 || positionMs < 5_000) return
         val previous = items(mid).filterNot { it.bvid == info.bvid }
-        val resume = resolvePlaybackResumePosition(null, positionMs, 0, durationMs)
+        val resume = resolvePlaybackResumePosition(null, positionMs, null, durationMs)
         val next = if (resume > 0) listOf(VideoItem(aid = info.aid, bvid = info.bvid, cid = info.cid,
             title = info.title, pic = info.pic, owner = info.owner, progress = (positionMs / 1000).toInt(),
             duration = (durationMs / 1000).toInt(), view_at = System.currentTimeMillis() / 1000)) + previous else previous
@@ -28,7 +28,7 @@ class RecentPlaybackStore(context: Context) {
         val local = items(mid)
         val completed = history.filter { it.cid > 0 && (it.progress == -1 || it.duration > 0 && it.progress > it.duration * .95) }
         val candidates = (local + history.filter { it.cid > 0 && resolvePlaybackResumePosition(null,
-            it.progress * 1000L, 0, it.duration * 1000L) > 0 })
+            it.progress * 1000L, null, it.duration * 1000L) > 0 })
             .filterNot { item -> completed.any { it.bvid == item.bvid && it.cid == item.cid && it.view_at >= item.view_at } }
             .sortedByDescending { it.view_at }.distinctBy { it.bvid }
         write(mid, candidates)

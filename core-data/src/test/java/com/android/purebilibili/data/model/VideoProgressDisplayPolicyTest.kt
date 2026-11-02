@@ -46,11 +46,13 @@ class VideoProgressDisplayPolicyTest {
     }
 
     @Test
-    fun `history combines local position with server completion without changing its rule`() {
+    fun `cloud history retains backward seeks zero and completion over stale local progress`() {
         val local = resolveVideoDisplayProgressState(20, 100, localPositionMs = 30_000, viewAt = 1)
-        assertEquals(30, local.progressSec)
-        assertEquals(0.3f, local.progressFraction)
+        assertEquals(20, local.progressSec)
+        assertEquals(0.2f, local.progressFraction)
         assertEquals(-1, resolveVideoDisplayProgressState(-1, 100, localPositionMs = 30_000, viewAt = 1).progressSec)
-        assertEquals(-1, resolveVideoDisplayProgressState(20, 100, localPositionMs = 95_000, viewAt = 1).progressSec)
+        assertEquals(20, resolveVideoDisplayProgressState(20, 100, localPositionMs = 95_000, viewAt = 1).progressSec)
+        assertEquals(0, resolveVideoDisplayProgressState(0, 100, localPositionMs = 95_000, viewAt = 1).progressSec)
+        assertEquals(30, resolveVideoDisplayProgressState(-1, 100, localPositionMs = 30_000, viewAt = 0).progressSec)
     }
 }

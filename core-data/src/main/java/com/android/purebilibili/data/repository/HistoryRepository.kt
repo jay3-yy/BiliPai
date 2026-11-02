@@ -44,6 +44,20 @@ fun resolveHistoryCursorQuery(
 object HistoryRepository {
     private val api = NetworkModule.api
 
+    /** 进度使用观看记录账号实时读取，不复用取流账号或播放地址缓存。 */
+    suspend fun getPlaybackHistory(bvid: String, cid: Long): Result<com.android.purebilibili.data.model.response.PlayerInfoData> = dataRequest {
+        val account = com.android.purebilibili.core.network.purposeAccount(com.android.purebilibili.core.store.AccountPurpose.WATCH_HISTORY)
+        val session = account?.let(com.android.purebilibili.core.network.AccountCookieSession::from)
+            ?: com.android.purebilibili.core.network.AccountCookieSession.main()
+        val keys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrThrow()
+        val params = com.android.purebilibili.core.network.WbiUtils.sign(
+            mapOf("bvid" to bvid, "cid" to cid.toString()), keys.first, keys.second,
+        )
+        val response = api.getPlaybackHistory(params, session)
+        if (response.code != 0) throw ContentRequestException(response.code, response.message)
+        response.data ?: error("播放历史信息为空")
+    }
+
     /**
      * 获取历史记录列表（支持游标分页）
      * @param ps 每页数量

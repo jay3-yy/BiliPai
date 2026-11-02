@@ -1004,6 +1004,13 @@ interface BilibiliApi {
         @QueryMap params: Map<String, String>
     ): PlayerInfoResponse
 
+    @retrofit2.http.Headers("Cache-Control: no-cache")
+    @GET("x/player/wbi/v2")
+    suspend fun getPlaybackHistory(
+        @QueryMap params: Map<String, String>,
+        @retrofit2.http.Tag session: AccountCookieSession,
+    ): PlayerInfoResponse
+
     //  [新增] 获取视频的完整 BGM 列表
     @GET("x/copyright-music-publicity/bgm/multiple/music")
     suspend fun getBgmMultipleMusic(

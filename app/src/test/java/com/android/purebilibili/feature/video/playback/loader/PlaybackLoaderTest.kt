@@ -67,6 +67,19 @@ class PlaybackLoaderTest {
         assertEquals(12_345L, success.cachedPositionMs)
         assertSame(request, success.request)
         assertSame(payload, success.payload)
+
+        // 设备 B 的新云端记录可以比设备 A 的旧缓存更前、更后或恰好为 0。
+        listOf(60_000L, 5_000L, 0L, -1L).forEach { cloudMs ->
+            val cloudPayload = payload.copy(serverPositionMs = cloudMs)
+            val synced = assertIs<PlaybackLoadResult.Success>(PlaybackLoadResult.from(
+                request, cachedPositionMs = 12_345L, result = cloudPayload,
+            ))
+            assertEquals(cloudMs.coerceAtLeast(0L), synced.cachedPositionMs)
+            val replay = assertIs<PlaybackLoadResult.Success>(PlaybackLoadResult.from(
+                request.copy(ignoreSavedProgress = true), 12_345L, cloudPayload,
+            ))
+            assertEquals(0L, replay.cachedPositionMs)
+        }
     }
 
     @Test

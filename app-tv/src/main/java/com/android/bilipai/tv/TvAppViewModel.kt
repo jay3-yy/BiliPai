@@ -647,7 +647,7 @@ class TvAppViewModel(application: Application, private val savedState: SavedStat
         resolvePlaybackResumePosition(
             explicitMs = null,
             localMs = recent.items(TokenManager.midCache).firstOrNull { it.bvid == info.bvid && it.cid == info.cid }?.progress?.times(1000L) ?: 0,
-            serverMs = 0,
+            serverMs = null,
             durationMs = (info.pages.firstOrNull { it.cid == info.cid }?.duration ?: 0) * 1_000L,
         )
     }
