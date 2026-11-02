@@ -273,6 +273,26 @@ class DynamicCommentLoadPolicyTest {
         assertEquals(emptyList(), store.repliesFor(10L))
     }
 
+    @Test
+    fun `route pin is displayed first once without mutating the server order or top flag`() {
+        val first = ReplyItem(rpid = 10L)
+        val selected = ReplyItem(rpid = 20L)
+        val last = ReplyItem(rpid = 30L)
+        val remote = listOf(first, selected, last)
+        val state = DynamicCommentUiState(
+            comments = remote,
+            pinnedRootReplyId = selected.rpid,
+            pinnedReply = selected,
+        )
+
+        val displayed = resolveDynamicDetailDisplayComments(state)
+
+        assertEquals(listOf(20L, 10L, 30L), displayed.map { it.rpid })
+        assertEquals(listOf(10L, 20L, 30L), remote.map { it.rpid })
+        assertEquals(selected.replyControl, displayed.first().replyControl)
+        assertEquals(remote, resolveDynamicDetailDisplayComments(state.copy(pinnedRootReplyId = 0L)))
+    }
+
     private fun commentSnapshot(rpid: Long, oid: Long = 1L) = DynamicCommentCacheSnapshot(
         replies = listOf(ReplyItem(rpid = rpid)),
         totalCount = 1,

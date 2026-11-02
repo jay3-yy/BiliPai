@@ -4,6 +4,7 @@ import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.TopicTopDetails
 import com.android.purebilibili.data.model.response.TopicSortOption
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -84,13 +85,15 @@ object TopicRepository {
             }
             Result.success(
                 TopicFeedPage(
-                    items = visibleItems,
+                    items = DynamicCommentPreviewRepository.enrich(visibleItems),
                     offset = page.offset,
                     hasMore = page.hasMore,
                     sortOptions = sortConfig?.allSortBy.orEmpty(),
                     selectedSortBy = sortConfig?.showSortBy ?: sortBy,
                 )
             )
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             e.printStackTrace()
             Result.failure(e)

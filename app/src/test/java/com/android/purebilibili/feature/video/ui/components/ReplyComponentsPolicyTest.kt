@@ -61,6 +61,28 @@ class ReplyComponentsPolicyTest {
     }
 
     @Test
+    fun `block user action excludes current account and invalid authors`() {
+        assertFalse(shouldShowReplyBlockUserAction(authorMid = 42L, currentMid = 42L))
+        assertTrue(shouldShowReplyBlockUserAction(authorMid = 43L, currentMid = 42L))
+        assertTrue(shouldShowReplyBlockUserAction(authorMid = 42L, currentMid = null))
+        assertFalse(shouldShowReplyBlockUserAction(authorMid = 0L, currentMid = 42L))
+        assertFalse(shouldShowReplyBlockUserAction(authorMid = -1L, currentMid = null))
+    }
+
+    @Test
+    fun `block user policy uses member identity before item fallback`() {
+        val fallback = ReplyItem(mid = 42L, member = ReplyMember(mid = ""))
+        assertEquals(42L, resolveReplyMemberMid(fallback))
+        assertFalse(shouldShowReplyBlockUserAction(resolveReplyMemberMid(fallback), currentMid = 42L))
+        val memberIdentity = fallback.copy(member = ReplyMember(mid = "43"))
+        assertEquals(43L, resolveReplyMemberMid(memberIdentity))
+        assertTrue(shouldShowReplyBlockUserAction(resolveReplyMemberMid(memberIdentity), currentMid = 42L))
+        assertEquals(42L, resolveReplyMemberMid(fallback.copy(member = ReplyMember(mid = "invalid"))))
+        assertEquals(42L, resolveReplyMemberMid(fallback.copy(member = ReplyMember(mid = "0"))))
+        assertEquals(0L, resolveReplyMemberMid(ReplyItem(mid = -1L, member = ReplyMember(mid = "invalid"))))
+    }
+
+    @Test
     fun `resolveReplyLevelBadgeAsset keeps pili plus mapping for normal levels`() {
         assertEquals(
             ReplyLevelBadgeAsset.LEVEL_4,

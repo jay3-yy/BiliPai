@@ -17,6 +17,7 @@ import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.feature.comment.SentCommentReplyStores
+import com.android.purebilibili.feature.video.viewmodel.CommentSortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import io.mockk.Runs
 import io.mockk.coEvery
@@ -603,6 +604,208 @@ class DynamicCommentSendViewModelTest {
             }
         } finally {
             unmockkObject(DynamicRepository)
+        }
+    }
+
+    @Test
+    fun `detail route pins an off page root while the main list is pending or fails without opening a thread`() = runTest(dispatcher) {
+        val main = CompletableDeferred<Result<ReplyData>>()
+        coEvery {
+            CommentRepository.getMobileCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { main.await() }
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(root = ReplyItem(rpid = 90L)))
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 90L, targetReplyId = 91L, pinRootReply = true)
+            runCurrent()
+            assertTrue(owner.commentUiState.value.isLoading)
+            assertEquals(91L, owner.commentUiState.value.pinnedTargetReplyId)
+            assertEquals(listOf(90L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertFalse(owner.subReplyState.value.visible)
+
+            main.complete(Result.failure(IllegalStateException("main offline")))
+            runCurrent()
+            assertEquals("main offline", owner.commentUiState.value.refreshError)
+            assertEquals(90L, owner.commentUiState.value.pinnedReply?.rpid)
+            assertFalse(owner.subReplyState.value.visible)
+        }
+    }
+
+    @Test
+    fun `detail pin moves a cached main root first without duplicating it or changing the normal cache order`() = runTest(dispatcher) {
+        val selected = ReplyItem(rpid = 90L)
+        coEvery {
+            CommentRepository.getMobileCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(replies = listOf(root, selected), cursor = ReplyCursor(isEnd = true)))
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.openCommentSheet(subject, rootReplyId = 90L, pinRootReply = true)
+            runCurrent()
+            assertEquals(listOf(90L, 10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertEquals(listOf(10L, 90L), owner.commentUiState.value.comments.map { it.rpid })
+            assertFalse(owner.subReplyState.value.visible)
+
+            owner.closeCommentSheet()
+            owner.openCommentSheet(subject)
+            runCurrent()
+            assertEquals(listOf(10L, 90L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertNull(owner.commentUiState.value.pinnedReply)
+        }
+    }
+
+    @Test
+    fun `off page detail pin is not injected into an ordinary reopening and root targeted routes normalize child selection`() = runTest(dispatcher) {
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(root = ReplyItem(rpid = 90L)))
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 90L, targetReplyId = 90L, pinRootReply = true)
+            runCurrent()
+            assertEquals(0L, owner.commentUiState.value.pinnedTargetReplyId)
+            assertEquals(listOf(90L, 10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertEquals(3, owner.commentUiState.value.totalCount)
+
+            owner.closeCommentSheet()
+            owner.openCommentSheet(subject)
+            runCurrent()
+            assertEquals(listOf(10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertEquals(0L, owner.commentUiState.value.pinnedRootReplyId)
+            assertNull(owner.commentUiState.value.pinnedReply)
+        }
+    }
+
+    @Test
+    fun `detail pin survives main paging refresh and sort changes without changing the server total`() = runTest(dispatcher) {
+        var rootLikes = 4
+        coEvery { CommentRepository.getCommentCountForSubject(any(), any()) } returns Result.success(13)
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { Result.success(ReplyData(root = ReplyItem(rpid = 90L, like = rootLikes))) }
+        coEvery {
+            CommentRepository.getMobileCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            val newest = arg<Int>(4) == CommentSortMode.NEWEST.apiMode
+            val nextPage = arg<Int>(2) > 1
+            Result.success(ReplyData(
+                replies = listOf(if (newest) ReplyItem(rpid = 50L) else if (nextPage) ReplyItem(rpid = 30L) else root),
+                cursor = ReplyCursor(allCount = 13, isEnd = newest || nextPage),
+                grpcNextOffset = if (newest || nextPage) "" else "next",
+            ))
+        }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 90L, pinRootReply = true)
+            runCurrent()
+            owner.loadMoreComments()
+            runCurrent()
+            assertEquals(listOf(90L, 10L, 30L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+
+            rootLikes = 9
+            owner.refreshComments()
+            runCurrent()
+            assertEquals(9, owner.commentUiState.value.pinnedReply?.like)
+            assertEquals(listOf(90L, 10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+
+            owner.setDynamicCommentSortMode(CommentSortMode.NEWEST)
+            runCurrent()
+            assertEquals(listOf(90L, 50L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertEquals(13, owner.commentUiState.value.totalCount)
+            assertFalse(owner.subReplyState.value.visible)
+        }
+    }
+
+    @Test
+    fun `late cancellation resistant pin data cannot enter another dynamic or a closed comment page`() = runTest(dispatcher) {
+        val response = CompletableDeferred<Result<ReplyData>>()
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { withContext(NonCancellable) { response.await() } }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 90L, pinRootReply = true)
+            runCurrent()
+            owner.openCommentSheet(otherSubject)
+            runCurrent()
+            response.complete(Result.success(ReplyData(root = ReplyItem(rpid = 90L))))
+            runCurrent()
+            assertEquals(listOf(110L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertNull(owner.commentUiState.value.pinnedReply)
+            assertNull(owner.commentUiState.value.pinnedReplyError)
+
+            owner.closeCommentSheet()
+            assertEquals(emptyList(), resolveDynamicDetailDisplayComments(owner.commentUiState.value))
+        }
+    }
+
+    @Test
+    fun `account changes discard an unresolved detail pin rather than carrying it into the next login`() = runTest(dispatcher) {
+        val response = CompletableDeferred<Result<ReplyData>>()
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { withContext(NonCancellable) { response.await() } }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 90L, pinRootReply = true)
+            runCurrent()
+            identities.value = AccountSessionIdentity(202L, 2L)
+            runCurrent()
+            response.complete(Result.success(ReplyData(root = ReplyItem(rpid = 90L))))
+            runCurrent()
+            assertNull(owner.commentUiState.value.pinnedReply)
+            assertEquals(0L, owner.commentUiState.value.pinnedRootReplyId)
+            owner.openCommentSheet(subject)
+            runCurrent()
+            assertEquals(listOf(10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+        }
+    }
+
+    @Test
+    fun `wrong point lookup root is never pinned and a normal comment refresh can resolve the intended root`() = runTest(dispatcher) {
+        var correct = false
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers { Result.success(ReplyData(root = ReplyItem(rpid = if (correct) 90L else 99L))) }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 90L, pinRootReply = true)
+            runCurrent()
+            assertNull(owner.commentUiState.value.pinnedReply)
+            assertTrue(owner.commentUiState.value.pinnedReplyError.orEmpty().contains("楼层不匹配"))
+            assertEquals(listOf(10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertFalse(owner.subReplyState.value.visible)
+
+            correct = true
+            owner.refreshComments()
+            runCurrent()
+            assertEquals(listOf(90L, 10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertNull(owner.commentUiState.value.pinnedReplyError)
+        }
+    }
+
+    @Test
+    fun `off page pinned roots support optimistic actions rollback and deletion without changing the main list`() = runTest(dispatcher) {
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(root = ReplyItem(rpid = 90L, like = 4)))
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } returns Result.failure(IllegalStateException("offline"))
+        coEvery { CommentRepository.hateCommentForSubject(any(), any(), any(), any()) } returns Result.failure(IllegalStateException("offline"))
+        coEvery { CommentRepository.deleteCommentForSubject(any(), any(), any()) } returns Result.success(Unit)
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 90L, pinRootReply = true)
+            runCurrent()
+            owner.likeComment(90L)
+            assertEquals(5, owner.commentUiState.value.pinnedReply?.like)
+            runCurrent()
+            assertEquals(4, owner.commentUiState.value.pinnedReply?.like)
+            owner.hateComment(90L)
+            assertTrue(owner.commentUiState.value.pinnedReply?.let(::isDynamicCommentHated) == true)
+            runCurrent()
+            assertFalse(owner.commentUiState.value.pinnedReply?.let(::isDynamicCommentHated) == true)
+
+            owner.deleteDynamicComment(90L) { _, _ -> }
+            runCurrent()
+            assertNull(owner.commentUiState.value.pinnedReply)
+            assertEquals(0L, owner.commentUiState.value.pinnedRootReplyId)
+            assertEquals(listOf(10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertEquals(2, owner.commentUiState.value.totalCount)
         }
     }
 

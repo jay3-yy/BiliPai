@@ -81,6 +81,47 @@ class BilibiliNavigationTargetParserTest {
     }
 
     @Test
+    fun officialComment3RoutesKeepBusinessRootAndSecondaryReply() {
+        listOf(
+            "bilibili://comment3/main/123/1?rp_id=456&sub_rp_id=789" to
+                BilibiliNavigationTarget.CommentDetail(123L, 456L, 789L, 1, "bilibili://video/123"),
+            "bili://comment3/main/888/11?rp_id=456&sub_rp_id=789" to
+                BilibiliNavigationTarget.CommentDetail(888L, 456L, 789L, 11),
+            "bilibili://comment3/main/123/17?rp_id=456&sub_rp_id=789" to
+                BilibiliNavigationTarget.CommentDetail(123L, 456L, 789L, 17, "bilibili://following/detail/123"),
+        ).forEach { (link, expected) ->
+            assertEquals(expected, BilibiliNavigationTargetParser.parse(link), link)
+        }
+    }
+
+    @Test
+    fun officialReplyAliasesAlsoWorkOnContentLinksWithoutInventingARoot() {
+        assertEquals(
+            BilibiliNavigationTarget.Dynamic("123", 456L, 789L),
+            BilibiliNavigationTargetParser.parse("bilibili://following/detail/123?rp_id=456&sub_rp_id=789"),
+        )
+        assertEquals(
+            BilibiliNavigationTarget.Video("av123", 0L, 789L),
+            BilibiliNavigationTargetParser.parse("bilibili://comment3/main/123/1?rp_id=0&sub_rp_id=789"),
+        )
+        assertEquals(
+            BilibiliNavigationTarget.CommentDetail(123L, 456L, 0L, 17, "bilibili://following/detail/123"),
+            BilibiliNavigationTargetParser.parse("bilibili://comment3/main/123/17?rp_id=456&sub_rp_id=456"),
+        )
+    }
+
+    @Test
+    fun officialComment3RejectsInvalidSubjectsAndMissingRealLocation() {
+        listOf(
+            "bilibili://comment3/main/0/17?rp_id=456",
+            "bilibili://comment3/main/123/0?rp_id=456",
+            "bilibili://comment3/main/123/11?rp_id=-1&sub_rp_id=0",
+            "bilibili://comment3/main/123/11?rp_id=9223372036854775808",
+            "bilibili://comment3/main/123/11?sub_rp_id=789",
+        ).forEach { assertNull(BilibiliNavigationTargetParser.parse(it), it) }
+    }
+
+    @Test
     fun nativePathRootWinsWhileQueryTargetOverridesPathAndFragment() {
         assertEquals(
             BilibiliNavigationTarget.CommentDetail(123L, 456L, 789L, 1, "bilibili://video/123"),

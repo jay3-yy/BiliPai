@@ -894,7 +894,9 @@ data class DynamicInteractionModule(
 data class DynamicInteractionItem(
     /** 1 = 相关评论（评论图标），其他值 = UP主点赞等（点赞图标）。 */
     val type: Int = 0,
-    val desc: DynamicDesc? = null
+    val desc: DynamicDesc? = null,
+    val uri: String = "",
+    val extend_click_param: Map<String, String> = emptyMap(),
 )
 
 @Serializable

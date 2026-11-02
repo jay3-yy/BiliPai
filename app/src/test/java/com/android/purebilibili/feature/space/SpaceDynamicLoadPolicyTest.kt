@@ -13,6 +13,9 @@ import com.android.purebilibili.data.model.response.SpaceDynamicOpus
 import com.android.purebilibili.data.model.response.SpaceDynamicOpusSummary
 import com.android.purebilibili.data.model.response.DynamicMajorBadge
 import com.android.purebilibili.data.model.response.DynamicBasic
+import com.android.purebilibili.data.model.response.DynamicDesc
+import com.android.purebilibili.data.model.response.DynamicInteractionItem
+import com.android.purebilibili.data.model.response.DynamicInteractionModule
 import com.android.purebilibili.data.model.response.DynamicOfficialVerify
 import com.android.purebilibili.data.model.response.DynamicVipInfo
 import com.android.purebilibili.data.model.response.DynamicMoreModule
@@ -29,8 +32,74 @@ import com.android.purebilibili.feature.dynamic.components.resolveDynamicCardMed
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertSame
 
 class SpaceDynamicLoadPolicyTest {
+
+    @Test
+    fun resolveSpaceDynamicCardItem_preservesOfficialPreviewMetadataAndWebContentForReposts() {
+        val interaction = DynamicInteractionModule(
+            items = listOf(
+                DynamicInteractionItem(
+                    type = 1,
+                    desc = DynamicDesc(text = "官方摘要"),
+                    uri = "bilibili://comment/detail/100",
+                    extend_click_param = mapOf("comment_root_id" to "100")
+                ),
+                DynamicInteractionItem(
+                    type = 0,
+                    desc = DynamicDesc(text = "UP主点赞")
+                )
+            )
+        )
+        val originalInteraction = interaction.copy(
+            items = listOf(
+                interaction.items.first().copy(
+                    uri = "bilibili://comment/detail/200",
+                    extend_click_param = mapOf("comment_root_id" to "200")
+                )
+            )
+        )
+        val original = SpaceDynamicItem(
+            id_str = "original",
+            modules = SpaceDynamicModules(
+                module_interaction = originalInteraction,
+                module_dynamic = SpaceDynamicContent(
+                    desc = SpaceDynamicDesc(text = "原动态正文"),
+                    major = SpaceDynamicMajor(
+                        draw = SpaceDynamicDraw(
+                            items = listOf(SpaceDynamicDrawItem(src = "https://example.com/original.jpg"))
+                        )
+                    )
+                )
+            )
+        )
+        val item = SpaceDynamicItem(
+            id_str = "forward",
+            orig = original,
+            modules = SpaceDynamicModules(
+                module_interaction = interaction,
+                module_dynamic = SpaceDynamicContent(desc = SpaceDynamicDesc(text = "转发正文"))
+            )
+        )
+
+        val card = resolveSpaceDynamicCardItem(item)
+
+        assertEquals("forward", card.id_str)
+        assertEquals("转发正文", card.modules.module_dynamic?.desc?.text)
+        assertSame(interaction, card.modules.module_interaction)
+        assertEquals("original", card.orig?.id_str)
+        assertEquals("原动态正文", card.orig?.modules?.module_dynamic?.desc?.text)
+        assertEquals(
+            "https://example.com/original.jpg",
+            card.orig?.modules?.module_dynamic?.major?.draw?.items?.single()?.src
+        )
+        assertSame(originalInteraction, card.orig?.modules?.module_interaction)
+        assertEquals(
+            mapOf("comment_root_id" to "200"),
+            card.orig?.modules?.module_interaction?.items?.single()?.extend_click_param
+        )
+    }
 
     @Test
     fun resolveSpaceDynamicCardItem_preservesAuthorAvatarMarks() {

@@ -238,8 +238,10 @@ object DynamicRepository {
                 }
                 if (!fetchNext) break
             }
+            val enriched = DynamicCommentPreviewRepository.enrich(items)
+            ensureCurrentAccount(identity)
             Result.success(DynamicFeedFetchResult(
-                items = items,
+                items = enriched,
                 updateNum = updateNum,
                 usedUpdateBaseline = useBaseline,
                 nextOffset = requestOffset,
@@ -319,13 +321,12 @@ object DynamicRepository {
                         )
                     }
                 }
-                ensureCurrentAccount(account.identity)
-                return@withContext Result.success(
-                    mergeDynamicDetailInteractionMetadata(
-                        detailItem = merged,
-                        seedItem = seed
-                    )
+                val withMetadata = restoreLocatedDynamicCommentPreviewMetadata(
+                    mergeDynamicDetailInteractionMetadata(detailItem = merged, seedItem = seed),
+                    seed,
                 )
+                ensureCurrentAccount(account.identity)
+                return@withContext Result.success(withMetadata)
             }
 
             Result.failure(Exception("动态详情为空"))
