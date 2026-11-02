@@ -33,8 +33,6 @@ private val settingsDynamicDescriptionIndex = mapOf(
     "appearance.back_to_top_button_enabled" to "已保存按钮位置，长按可拖动；在长页面显示回顶按钮",
     "appearance.home_publish_time_visible" to "发布时间显示在首页视频卡片上；隐藏发布时间，卡片信息更紧凑",
     "notification.resident_enabled" to "保持应用后台运行以更及时地收到通知；会增加耗电，系统仍可能终止；需要先开启后台消息通知和可用的通知权限",
-    "playback.inline_swipe_seek_seconds" to "非全屏播放页左右拖动调进度的单次秒数上限；选择「不限制」时按拖动距离调整进度",
-    "playback.fullscreen_swipe_seek_seconds" to "横屏全屏左右拖动调进度的单次秒数上限，数值越小越精确；选择「不限制」时按拖动距离调整进度",
 )
 
 internal fun settingSearchDescription(settingId: String): String = listOfNotNull(
