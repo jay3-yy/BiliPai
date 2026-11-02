@@ -1232,7 +1232,10 @@ internal fun shouldFinishVideoPlayerSurfaceReveal(
     hasStartedSmoothReveal: Boolean,
     isPlayerSurfaceReady: Boolean,
     surfaceAlpha: Float,
-): Boolean = hasStartedSmoothReveal && isPlayerSurfaceReady && surfaceAlpha == 1f
+): Boolean = hasStartedSmoothReveal && isPlayerSurfaceReady &&
+    // animateFloatAsState 的终点通常是 0.9999999x 这种值，用 == 1f 判定永远不成立，
+    // 结果 hasSurfaceRevealSettled 一直是 false，入口封面永远不揭开。
+    surfaceAlpha >= 0.995f
 
 /** 揭开叠化起点（progress=0）封面的降饱和程度；1.0 为完全不动。 */
 private const val VIDEO_PLAYER_COVER_REVEAL_MIN_SATURATION = 0.90f
