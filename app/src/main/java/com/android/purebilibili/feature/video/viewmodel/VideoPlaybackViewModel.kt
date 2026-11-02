@@ -74,7 +74,6 @@ import com.android.purebilibili.feature.video.note.resolveVideoNoteConflictMessa
 import com.android.purebilibili.feature.video.note.resolveVideoNoteEditableDocument
 import com.android.purebilibili.feature.video.note.resolveVideoNoteSaveFeedback
 import com.android.purebilibili.feature.video.note.shouldLoadVideoNote
-import com.android.purebilibili.feature.video.playback.policy.shouldRefreshPremiumAudioForPlaybackSpeedChange
 import com.android.purebilibili.feature.video.usecase.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -1564,38 +1563,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     fun applyPlaybackSpeedFromUi(speed: Float): Boolean {
         val player = exoPlayer ?: return false
-        val previousSpeed = player.playbackParameters.speed
         val normalizedSpeed = speed.coerceAtLeast(0.1f)
         player.playbackParameters = PlaybackParameters(normalizedSpeed, 1.0f)
 
-        val current = _uiState.value as? VideoPlaybackUiState.Success ?: return true
-        if (current.isQualitySwitching) return true
-
-        val audioPreference = current.requestedAudioQuality
-        val requestedKind = current.availableAudioQualities
-            .firstOrNull { it.preferenceId == audioPreference }?.kind
-        if (!shouldRefreshPremiumAudioForPlaybackSpeedChange(
-                requestedAudioQuality = audioPreference,
-                previousPlaybackSpeed = previousSpeed,
-                nextPlaybackSpeed = normalizedSpeed,
-                requestedAudioKind = requestedKind
-            )
-        ) {
-            return true
-        }
-
-        viewModelScope.launch {
-            refreshPlaybackAudioForSpeedCompatibility(
-                current = current,
-                audioPreference = audioPreference,
-                currentPos = player.currentPosition.coerceAtLeast(0L),
-                playWhenReady = player.playWhenReady
-            )
-        }
+        // 倍速只更新渲染参数；重建音视频源会清掉缓冲和首帧，使封面重新盖住视频。
+        // 音质兼容选择留在加载/显式切换音质时，实际解码失败仍走已有音频回退。
         return true
     }
 
-    private suspend fun refreshPlaybackAudioForSpeedCompatibility(
+    private suspend fun refreshPlaybackAudio(
         current: VideoPlaybackUiState.Success,
         audioPreference: Int,
         currentPos: Long,
@@ -5730,7 +5706,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 return@launch
             }
 
-            val switched = refreshPlaybackAudioForSpeedCompatibility(
+            val switched = refreshPlaybackAudio(
                 current = current,
                 audioPreference = audioQuality,
                 currentPos = player.currentPosition.coerceAtLeast(0L),
@@ -5798,7 +5774,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
         viewModelScope.launch {
             try {
-                val switched = refreshPlaybackAudioForSpeedCompatibility(
+                val switched = refreshPlaybackAudio(
                     current = current,
                     audioPreference = AUDIO_QUALITY_AUTO,
                     currentPos = currentPos,

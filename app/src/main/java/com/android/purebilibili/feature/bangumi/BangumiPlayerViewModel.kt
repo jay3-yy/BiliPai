@@ -26,7 +26,6 @@ import com.android.purebilibili.feature.video.playback.audio.AudioFallbackReason
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
 import com.android.purebilibili.feature.video.playback.audio.resolveAudioStreamSelection
 import com.android.purebilibili.feature.video.playback.audio.resolveRequestedAudioQuality
-import com.android.purebilibili.feature.video.playback.policy.shouldRefreshPremiumAudioForPlaybackSpeedChange
 import com.android.purebilibili.feature.video.usecase.VideoInteractionUseCase
 import com.android.purebilibili.feature.video.policy.resolveFavoriteFolderMediaId
 import com.android.purebilibili.feature.video.viewmodel.resolveFavoriteFolderMutation
@@ -1151,29 +1150,12 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     }
 
     /**
-     * 处理 Hi-Res/杜比在高倍速下的临时回退，并在回到兼容倍速时恢复用户选择。
+     * 仅更新倍速，保留当前音轨、视频缓冲和播放状态。
      */
     fun applyPlaybackSpeedFromUi(speed: Float) {
         val player = exoPlayer ?: return
-        val previousSpeed = player.playbackParameters.speed
         val normalizedSpeed = speed.coerceAtLeast(0.1f)
         player.setPlaybackSpeed(normalizedSpeed)
-
-        val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
-        if (!shouldRefreshPremiumAudioForPlaybackSpeedChange(
-                requestedAudioQuality = currentState.requestedAudioQuality,
-                requestedAudioKind = currentState.availableAudioQualities
-                    .firstOrNull { it.preferenceId == currentState.requestedAudioQuality }?.kind,
-                previousPlaybackSpeed = previousSpeed,
-                nextPlaybackSpeed = normalizedSpeed
-            )
-        ) {
-            return
-        }
-
-        viewModelScope.launch {
-            switchAudioQuality(currentState.requestedAudioQuality)
-        }
     }
 
     private fun switchAudioQuality(audioQuality: Int): Boolean {

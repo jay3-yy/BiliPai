@@ -43,26 +43,6 @@ fun resolveSpeedCompatibleAudioQualityPreference(
     }
 }
 
-fun shouldRefreshPremiumAudioForPlaybackSpeedChange(
-    requestedAudioQuality: Int,
-    previousPlaybackSpeed: Float,
-    nextPlaybackSpeed: Float,
-    speedThreshold: Float = PREMIUM_AUDIO_SPEED_COMPATIBILITY_THRESHOLD,
-    requestedAudioKind: AudioStreamKind? = null
-): Boolean {
-    return resolveSpeedCompatibleAudioQualityPreference(
-        requestedAudioQuality = requestedAudioQuality,
-        playbackSpeed = previousPlaybackSpeed,
-        speedThreshold = speedThreshold,
-        requestedAudioKind = requestedAudioKind
-    ) != resolveSpeedCompatibleAudioQualityPreference(
-        requestedAudioQuality = requestedAudioQuality,
-        playbackSpeed = nextPlaybackSpeed,
-        speedThreshold = speedThreshold,
-        requestedAudioKind = requestedAudioKind
-    )
-}
-
 fun buildAdaptiveDashTrackSet(
     dash: Dash,
     mode: PlaybackQualityMode,

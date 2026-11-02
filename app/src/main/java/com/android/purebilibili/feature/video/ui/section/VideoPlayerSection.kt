@@ -1844,7 +1844,7 @@ private fun VideoPlayerSectionContent(
     }
 
     fun applyLongPressPlaybackParameters(parameters: PlaybackParameters) {
-        // 长按倍速是临时手势；不要走手动改倍速的音轨兼容刷新通路，避免按下/松开时重建播放源。
+        // 长按只临时更新播放参数；保留当前播放源，松手时还原原始参数。
         playerState.player.playbackParameters = parameters
     }
 
