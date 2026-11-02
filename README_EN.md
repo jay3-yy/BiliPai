@@ -73,6 +73,8 @@ Review the source and declared permissions before importing third-party plugins.
 
 ## Recent updates
 
+- Speed changes retain the playback source and first frame; reply previews and dynamic comment summaries open the correct thread.
+- Recommendation feeds reduce duplicate requests and align batch sizes; improved seek gestures and tablet comment loading.
 - Spaces add comics, article collections, reservations, medal walls and more account tools. Web uploads support native lists, filters, sorting and page navigation.
 - Cross-device resume uses the latest cloud progress, with fixes for multi-part videos, seeking backward and history display.
 - Fixed false loading errors when opening comments quickly, video-link taps and long-press menus in comments.

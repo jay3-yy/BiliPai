@@ -22,15 +22,28 @@ internal data class HomeFeedPage(
         }
 }
 
+/** 请求时统一声明的列数，用于让服务端按较大版面下发卡量。 */
+internal const val HOME_FEED_REQUEST_COLUMN = 7
+
+/** 首次进入 / 冷启动。 */
+internal const val HOME_FEED_FLUSH_DEFAULT = 5
+/** 下拉刷新。 */
+internal const val HOME_FEED_FLUSH_PULL_DOWN = 6
+/** 上滑加载更多。 */
+internal const val HOME_FEED_FLUSH_PULL_UP = 8
+
 internal fun homeMobileFeedSource(platform: String): HomeFeedSource =
     if (platform == TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID_HD) HomeFeedSource.HD else HomeFeedSource.MOBILE
 
 /** 手机端请求保留独立参数；签名必须使用颁发当前凭证的密钥。 */
 internal fun buildSignedHomePhoneFeedParams(
     idx: Int,
-    refreshCount: Int,
     accessToken: String,
     platform: String,
+    /** 当前网格列数，服务端据此决定按几列排版和下发多少卡。 */
+    columns: Int = 4,
+    /** 请求场景：5=首次进入，6=下拉刷新，8=上滑加载更多。 */
+    flush: Int = HOME_FEED_FLUSH_DEFAULT,
     timestampSec: Long = AppSignUtils.getTimestamp(),
 ): Map<String, String> {
     require(accessToken.isNotBlank()) { "缺少移动端登录凭证" }
@@ -40,10 +53,12 @@ internal fun buildSignedHomePhoneFeedParams(
     val params = mapOf(
         "idx" to idx.toString(),
         "pull" to if (idx == 0) "1" else "0",
-        "column" to "4",
-        "flush" to "5",
+        // 固定 7：服务端按这个值决定下发量，实测给 4 时只返回 8~10 条，
+        // 填不满手机一屏之外还要等下一页。统一按 7 列要，回来多出来的卡
+        // 由本地列表照常排布（网格列数仍按用户实际设置渲染）。
+        "column" to HOME_FEED_REQUEST_COLUMN.toString(),
+        "flush" to flush.toString(),
         "autoplay_card" to "11",
-        "ps" to refreshCount.toString(),
         "access_key" to accessToken,
         "appkey" to if (android) AppSignUtils.ANDROID_APP_KEY else AppSignUtils.TV_APP_KEY,
         "ts" to timestampSec.toString(),

@@ -1033,10 +1033,6 @@ private fun VideoPlayerSectionContent(
     val pipNoDanmakuEnabled = playerInteractionSettings.pipNoDanmakuEnabled
     val seekForwardSeconds = playerInteractionSettings.seekForwardSeconds
     val seekBackwardSeconds = playerInteractionSettings.seekBackwardSeconds
-    val inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds
-    val fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds
-    val swipeSeekUseRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration
-    val swipeSeekRelativePercent = playerInteractionSettings.swipeSeekRelativePercent
     val fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled
     val fullscreenGestureReverse = playerInteractionSettings.fullscreenGestureReverse
     val autoEnterFullscreenEnabled = playerInteractionSettings.autoEnterFullscreenEnabled
@@ -2436,10 +2432,6 @@ private fun VideoPlayerSectionContent(
                 slideVolumeBrightnessEnabled,
                 fullscreenSwipeSeekEnabled,
                 gestureSensitivity,
-                inlineSwipeSeekSeconds,
-                fullscreenSwipeSeekSeconds,
-                swipeSeekUseRelativeDuration,
-                swipeSeekRelativePercent,
                 fullscreenGestureReverse,
                 bottomGestureExclusionHeightDp,
                 gestureSeekFallbackDurationMs,
@@ -2834,16 +2826,10 @@ private fun VideoPlayerSectionContent(
                                         fallbackDurationMs = gestureSeekFallbackDurationMs
                                     )
                                     val seekDelta = resolveHorizontalSeekDeltaMs(
-                                        isFullscreen = isFullscreen,
-                                        fullscreenSwipeSeekEnabled = fullscreenSwipeSeekEnabled,
                                         totalDragDistanceX = totalDragDistanceX,
                                         containerWidthPx = size.width.toFloat(),
-                                        fullscreenSwipeSeekSeconds = fullscreenSwipeSeekSeconds,
-                                        inlineSwipeSeekSeconds = inlineSwipeSeekSeconds,
                                         gestureSensitivity = gestureSensitivity,
                                         durationMs = duration,
-                                        useRelativeDuration = swipeSeekUseRelativeDuration,
-                                        relativeSeekPercent = swipeSeekRelativePercent
                                     )
                                     if (seekDelta != null) {
                                         seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)

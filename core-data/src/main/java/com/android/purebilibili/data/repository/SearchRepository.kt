@@ -2,6 +2,7 @@ package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.network.NetworkModule
+import com.android.purebilibili.core.network.WbiKeyManager
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.HotItem
@@ -757,31 +758,19 @@ object SearchRepository {
     }
 
     private suspend fun signWithWbi(params: Map<String, String>): Map<String, String> {
-        return try {
-            val navResp = navApi.getNavInfo()
-            val wbiImg = navResp.data?.wbi_img
-            val imgKey = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
-            val subKey = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
-            if (imgKey.isNotEmpty() && subKey.isNotEmpty()) {
-                WbiUtils.sign(params, imgKey, subKey)
-            } else {
-                com.android.purebilibili.core.network.CoreDataLog.w(
-                    "SearchRepo",
-                    "signWithWbi: missing img/sub key, use unsigned params"
-                )
-                params
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+        // 走 WbiKeyManager 的缓存（内存 + SP 持久化，24 小时有效），
+        // 之前这里每次都重新请求 /x/web-interface/nav，冷启动时网络未就绪会失败，
+        // 失败后又静默降级成无签名参数，服务端拒绝签名的 wbi 接口，表现为「搜索失败」。
+        val keys = WbiKeyManager.getWbiKeys().getOrNull()
+            ?: WbiKeyManager.refreshKeys().getOrNull()
+        if (keys == null) {
             com.android.purebilibili.core.network.CoreDataLog.e(
                 "SearchRepo",
-                "signWithWbi: failed to load nav/wbi keys, use unsigned params",
-                e
+                "signWithWbi: WBI keys unavailable after retry, use unsigned params",
             )
-            params
+            return params
         }
+        return WbiUtils.sign(params, keys.first, keys.second)
     }
 
     private fun createSearchError(code: Int, message: String): Exception {

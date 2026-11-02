@@ -14,9 +14,9 @@ import kotlin.test.assertTrue
 
 class HomeFeedRequestPolicyTest {
     @Test
-    fun legacyLoginRetainsPhoneRequestAndPageSize() {
-        val initial = buildSignedHomePhoneFeedParams(0, 20, "test-token", TokenManager.ACCESS_TOKEN_PLATFORM_TV, 123L)
-        val next = buildSignedHomePhoneFeedParams(3, 35, "test-token", TokenManager.ACCESS_TOKEN_PLATFORM_TV, 124L)
+    fun legacyLoginRetainsPhoneIdentityAndRequestsFixedCardVolume() {
+        val initial = buildSignedHomePhoneFeedParams(idx = 0, accessToken = "test-token", platform = TokenManager.ACCESS_TOKEN_PLATFORM_TV, columns = 2, timestampSec = 123L)
+        val next = buildSignedHomePhoneFeedParams(idx = 3, accessToken = "test-token", platform = TokenManager.ACCESS_TOKEN_PLATFORM_TV, columns = 4, flush = HOME_FEED_FLUSH_PULL_UP, timestampSec = 124L)
         assertEquals(AppSignUtils.TV_APP_KEY, initial["appkey"])
         assertEquals("android", initial["mobi_app"])
         assertEquals("android", initial["device"])
@@ -25,14 +25,19 @@ class HomeFeedRequestPolicyTest {
         assertEquals("1", initial["pull"])
         assertEquals("0", next["pull"])
         assertEquals("3", next["idx"])
-        assertEquals("35", next["ps"])
+        assertNull(initial["ps"])
+        assertNull(next["ps"])
+        assertEquals("7", initial["column"])
+        assertEquals(initial["column"], next["column"])
+        assertEquals("5", initial["flush"])
+        assertEquals("8", next["flush"])
         assertEquals("124", next["ts"])
     }
 
     @Test
     fun androidCredentialUsesItsOwnAppKeyAndSignature() {
-        val android = buildSignedHomePhoneFeedParams(0, 20, "test-token", TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID, 123L)
-        val tv = buildSignedHomePhoneFeedParams(0, 20, "test-token", TokenManager.ACCESS_TOKEN_PLATFORM_TV, 123L)
+        val android = buildSignedHomePhoneFeedParams(idx = 0, accessToken = "test-token", platform = TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID, timestampSec = 123L)
+        val tv = buildSignedHomePhoneFeedParams(idx = 0, accessToken = "test-token", platform = TokenManager.ACCESS_TOKEN_PLATFORM_TV, columns = 2, timestampSec = 123L)
         assertEquals(AppSignUtils.ANDROID_APP_KEY, android["appkey"])
         assertNotEquals(tv["sign"], android["sign"])
         assertEquals(AppSignUtils.signForAndroidApi(android - "sign")["sign"], android["sign"])
@@ -41,11 +46,11 @@ class HomeFeedRequestPolicyTest {
     @Test
     fun blankUnknownAndHdCredentialsCannotUsePhoneSigning() {
         assertFailsWith<IllegalArgumentException> {
-            buildSignedHomePhoneFeedParams(0, 20, " ", TokenManager.ACCESS_TOKEN_PLATFORM_TV)
+            buildSignedHomePhoneFeedParams(0, " ", TokenManager.ACCESS_TOKEN_PLATFORM_TV)
         }
         for (platform in listOf(TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID_HD, "unknown")) {
             assertFailsWith<IllegalArgumentException> {
-                buildSignedHomePhoneFeedParams(0, 20, "test-token", platform)
+                buildSignedHomePhoneFeedParams(0, "test-token", platform)
             }
         }
         assertEquals(HomeFeedSource.HD, homeMobileFeedSource(TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID_HD))

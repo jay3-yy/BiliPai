@@ -994,6 +994,8 @@ internal fun ExternalPlaylistQueueSheetContent(
 @Composable
 internal fun DetachedVideoCommentThreadHost(
     visible: Boolean,
+    /** 横屏期间被隐藏过：恢复时跳过进场动画，直接显示原样。 */
+    instantRestore: Boolean = false,
     successState: VideoPlaybackUiState.Success?,
     commentState: CommentUiState,
     commentViewModel: VideoCommentViewModel,
@@ -1015,6 +1017,7 @@ internal fun DetachedVideoCommentThreadHost(
     val subReplyState by commentViewModel.subReplyState.collectAsStateWithLifecycle()
 
     VideoCommentSheetHost(
+        instantRestore = instantRestore,
         threadListModifier = threadListModifier,
         mainSheetVisible = resolveVideoDetailCommentThreadHostMainSheetVisible(
             useEmbeddedPresentation = com.android.purebilibili.feature.video.ui.pager

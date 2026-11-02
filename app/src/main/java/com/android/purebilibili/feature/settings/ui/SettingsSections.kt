@@ -65,8 +65,6 @@ import com.android.purebilibili.core.ui.components.rememberAdaptiveListVisualCap
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.components.AppTextField
-import com.android.purebilibili.core.store.MAX_HOME_REFRESH_COUNT
-import com.android.purebilibili.core.store.MIN_HOME_REFRESH_COUNT
 import com.android.purebilibili.core.store.NetworkProxyStore
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.network.policy.AppHttpProxySettings
@@ -188,7 +186,6 @@ internal data class SettingsRootCategoryActions(
     val onDynamicFeedLayoutModeChange: (com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode) -> Unit,
     val onDynamicTabVisibilityChange: (String) -> Unit,
     val onDynamicTabOrderChange: (List<String>) -> Unit,
-    val onHomeRefreshCountChange: (Int) -> Unit
 )
 
 internal data class SettingsRootCategoryState(
@@ -229,7 +226,6 @@ internal data class SettingsRootCategoryState(
     val dynamicFeedLayoutMode: com.android.purebilibili.core.store.SettingsManager.DynamicFeedLayoutMode,
     val dynamicVisibleTabIds: Set<String>,
     val dynamicTabOrder: List<String>,
-    val homeRefreshCount: Int
 )
 
 @Composable
@@ -736,8 +732,6 @@ internal fun SettingsRootCategoryContent(
                             onDynamicTabVisibilityChange = actions.onDynamicTabVisibilityChange,
                             dynamicTabOrder = state.dynamicTabOrder,
                             onDynamicTabOrderChange = actions.onDynamicTabOrderChange,
-                            homeRefreshCount = state.homeRefreshCount,
-                            onHomeRefreshCountChange = actions.onHomeRefreshCountChange
                         )
                     }
                 }
@@ -1068,8 +1062,6 @@ fun FeedApiSection(
     onDynamicTabVisibilityChange: (String) -> Unit,
     dynamicTabOrder: List<String>,
     onDynamicTabOrderChange: (List<String>) -> Unit,
-    homeRefreshCount: Int,
-    onHomeRefreshCountChange: (Int) -> Unit
 ) {
     ContentDisplayPreferences()
     val siblingTints = rememberSettingsSiblingIconTints(10, paletteOffset = 1)
@@ -1178,18 +1170,6 @@ fun FeedApiSection(
             tabOrder = dynamicTabOrder,
             onTabOrderChange = onDynamicTabOrderChange,
             iconTint = siblingTints[7]
-        )
-        SettingsAdaptiveDivider()
-        SettingSliderItem(
-            icon = refreshIcon,
-            title = "首页刷新数量",
-            subtitle = resolveHomeRefreshCountSummary(homeRefreshCount),
-            value = homeRefreshCount.toFloat(),
-            onValueChange = { value -> onHomeRefreshCountChange(value.roundToInt()) },
-            valueRange = resolveHomeRefreshSliderRange(),
-            steps = resolveHomeRefreshSliderSteps(),
-            valueFormatter = { value -> value.roundToInt().toString() },
-            iconTint = siblingTints[8]
         )
     }
 }
@@ -1316,17 +1296,8 @@ private fun FeedDynamicTabVisibilityItem(
     }
 }
 
-internal fun resolveHomeRefreshCountSummary(count: Int): String {
-    return "单次最多请求 $count 条推荐内容，实际显示可能更少"
-}
 
-internal fun resolveHomeRefreshSliderRange(): ClosedFloatingPointRange<Float> {
-    return MIN_HOME_REFRESH_COUNT.toFloat()..MAX_HOME_REFRESH_COUNT.toFloat()
-}
 
-internal fun resolveHomeRefreshSliderSteps(): Int {
-    return (MAX_HOME_REFRESH_COUNT - MIN_HOME_REFRESH_COUNT - 1).coerceAtLeast(0)
-}
 
 @Composable
 fun PrivacySection(

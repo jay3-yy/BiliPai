@@ -515,15 +515,6 @@ class HomeSettingsMappingPolicyTest {
     }
 
     @Test
-    fun normalizeHomeRefreshCount_clampsToSupportedRange() {
-        assertEquals(10, normalizeHomeRefreshCount(1))
-        assertEquals(30, normalizeHomeRefreshCount(30))
-        assertEquals(20, DEFAULT_HOME_REFRESH_COUNT)
-        assertEquals(30, MAX_HOME_REFRESH_COUNT)
-        assertEquals(30, normalizeHomeRefreshCount(999))
-    }
-
-    @Test
     fun populatedPreferences_mapHideTopTabs() {
         val prefsTrue = mutablePreferencesOf(
             booleanPreferencesKey("hide_top_tabs") to true

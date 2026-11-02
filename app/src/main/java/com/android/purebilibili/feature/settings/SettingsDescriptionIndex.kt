@@ -155,8 +155,6 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "playback.resume_playback_prompt_enabled" to "检测到历史进度时仅提醒一次；关闭后不再弹出“继续播放”提示",
     "playback.seek_backward_seconds" to "调整左侧双击后退幅度",
     "playback.seek_forward_seconds" to "调整右侧双击快进幅度",
-    "playback.swipe_seek_use_relative_duration" to "关闭时使用固定秒数，不受视频长短影响，需要精确调整时建议保持关闭；开启时按视频总时长比例快进快退，视频越长跳转越大",
-    "playback.swipe_seek_relative_percent" to "灵敏度为 1 时，横向拖过整个播放器宽度可调整视频总时长的所选比例：25%、50%、90%、100%；各播放场景共用，忽略固定秒数及横屏精细调节开关",
     "playback.set_system_brightness_enabled" to "依赖“滑动调亮度和音量”开关；亮度手势会同时修改当前画面和设备系统亮度；关闭时只临时调整当前播放画面；开启需要系统授权",
     "playback.fullscreen_action_counts" to "横屏与竖屏全屏播放时，点赞、评论、收藏按钮右上角显示主题色数量，支持分别关闭；与播放器内设置同步",
     "playback.show_fullscreen_action_items" to "横屏顶部显示点赞/投币/分享等快捷操作；关闭后隐藏横屏顶部互动按钮，保留返回与更多入口",

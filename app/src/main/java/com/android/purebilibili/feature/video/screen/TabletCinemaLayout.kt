@@ -1539,9 +1539,12 @@ private fun CinemaCommentsPane(
                     }
                 )
             }
+            // 首包尚未完成或正在刷新时保留骨架；完成后正常显示真实空态。
+            val pendingFirstLoad = commentState.replies.isEmpty() &&
+                commentState.repliesError == null &&
+                (commentState.isRepliesRefreshing || (commentState.nextPage <= 1 && !commentState.isRepliesEnd))
             if (
-                commentState.isRepliesLoading &&
-                !commentState.isRepliesRefreshing &&
+                (commentState.isRepliesLoading || pendingFirstLoad) &&
                 commentState.replies.isEmpty()
             ) {
                 // 骨架拆成多个独立 lazy item（而不是 1 个 item 里塞 5 行）：数据到达时是
@@ -1550,7 +1553,7 @@ private fun CinemaCommentsPane(
                     slotCount = commentSkeletonSlotCount,
                     keyPrefix = "cinema_comment_skeleton_",
                 )
-            } else if (commentState.isRepliesLoading && !commentState.isRepliesRefreshing) {
+            } else if (commentState.isRepliesLoading) {
                 item {
                     Box(
                         modifier = Modifier
@@ -1566,6 +1569,7 @@ private fun CinemaCommentsPane(
                 commentState.replies.isEmpty() &&
                 !commentState.isRepliesLoading &&
                 !commentState.isRepliesRefreshing &&
+                !pendingFirstLoad &&
                 commentState.repliesError == null
             ) {
                 item {
