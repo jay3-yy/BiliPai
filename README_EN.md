@@ -129,6 +129,6 @@ This is an unofficial client and is not affiliated with BiliBili. Content belong
 
 <div align="center">
 
-<sub>Source version 0.7.5 (544) · Updated 2026-11-02 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>Source version 0.7.5 (545) · Updated 2026-11-02 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>
