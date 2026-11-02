@@ -4,6 +4,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.SpaceArticleItem
 
 internal fun buildSpaceArticleStatsText(article: SpaceArticleItem): String {
+    article.displayStats?.let { return if (it.isEmpty()) "图文" else it.joinToString(" · ") }
     return buildList {
         add(article.category?.name?.takeIf { it.isNotBlank() } ?: "图文")
         val viewCount = article.stats?.view ?: 0

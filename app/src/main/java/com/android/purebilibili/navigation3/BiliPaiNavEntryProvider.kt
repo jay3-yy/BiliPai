@@ -62,6 +62,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     settingsEntry<BiliPaiNavKey.TipsSettings>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Login>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Profile>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.ProfileAccountEdit>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.AccountLedger>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.AicuQuery>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.History>(swipeDismiss = swipeBackDirection, content = content)
@@ -142,6 +143,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     entry<BiliPaiNavKey.ArticleDetail>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.DynamicDetail>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.CommentDetail>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.SpaceWebVideos>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.Space>(
         transition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.Space }?.let(liveContainerTransitions::get) ?: pageTransition,
         swipeDismiss = swipeBackDirection, content = content,

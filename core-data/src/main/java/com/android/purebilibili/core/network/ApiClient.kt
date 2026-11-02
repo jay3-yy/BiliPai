@@ -1374,6 +1374,35 @@ interface BilibiliApi {
         @Query("fid") fid: Long  // UP 主 mid
     ): RelationResponse
 
+    @GET("x/relation/followings/followed_upper")
+    suspend fun getSpaceFollowedUsers(
+        @Query("vmid") mid: Long, @Query("pn") page: Int,
+        @Query("csrf") csrf: String, @Query("web_location") location: String = "333.789",
+        @Query("x-bili-device-req-json") device: String = "{\"platform\":\"web\",\"device\":\"pc\",\"spmid\":\"333.789\"}",
+    ): FollowingsResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @POST("x/space/reserve")
+    suspend fun reserveSpace(@retrofit2.http.Field("sid") sid: Long, @retrofit2.http.Field("csrf") csrf: String): SimpleApiResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @POST("x/space/reserve/cancel")
+    suspend fun cancelSpaceReserve(@retrofit2.http.Field("sid") sid: Long, @retrofit2.http.Field("csrf") csrf: String): SimpleApiResponse
+
+    @POST("x/vip/experience/add")
+    suspend fun claimVipExperience(@Query("mid") mid: Long, @Query("csrf") csrf: String): SimpleApiResponse
+
+    @GET("https://api.live.bilibili.com/xlive/web-ucenter/user/MedalWall")
+    suspend fun getSpaceMedalWall(@Query("target_id") mid: Long): SpaceMedalWallResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @POST("x/relation/tag/special/add")
+    suspend fun addSpaceSpecialFollow(@retrofit2.http.Field("fid") mid: Long, @retrofit2.http.Field("csrf") csrf: String): SimpleApiResponse
+
+    @retrofit2.http.FormUrlEncoded
+    @POST("x/relation/tag/special/del")
+    suspend fun removeSpaceSpecialFollow(@retrofit2.http.Field("fid") mid: Long, @retrofit2.http.Field("csrf") csrf: String): SimpleApiResponse
+
     @GET("x/relation/tags")
     suspend fun getRelationTags(): RelationTagsResponse
 
@@ -2206,6 +2235,10 @@ interface SpaceApi {
         @QueryMap params: Map<String, String>
     ): com.android.purebilibili.data.model.response.SpaceAggregateResponse
 
+    @retrofit2.http.Headers("User-Agent: Mozilla/5.0 BiliDroid/8.43.0 mobi_app/android build/8430300", "bili-http-engine: cronet")
+    @GET("https://app.bilibili.com/x/v2/space/comic")
+    suspend fun getSpaceComics(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SpaceArchiveSectionResponse
+
     @retrofit2.http.Headers(
         "User-Agent: Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/master innerVer/8430300 osVer/15 network/2",
         "bili-http-engine: cronet",
@@ -2253,6 +2286,13 @@ interface SpaceApi {
     @GET("x/space/wbi/arc/search")
     suspend fun getSpaceVideos(@QueryMap params: Map<String, String>): com.android.purebilibili.data.model.response.SpaceVideoResponse
     
+    @Headers("User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36", "Origin: https://space.bilibili.com")
+    @GET("x/space/wbi/arc/search")
+    suspend fun getSpaceWebVideos(
+        @QueryMap params: Map<String, String>,
+        @Header("Referer") referer: String,
+    ): com.android.purebilibili.data.model.response.SpaceVideoResponse
+
     // 获取关注/粉丝数
     @GET("x/relation/stat")
     suspend fun getRelationStat(@Query("vmid") mid: Long): com.android.purebilibili.data.model.response.RelationStatResponse
@@ -2276,7 +2316,10 @@ interface SpaceApi {
         @Query("season_id") seasonId: Long,
         @Query("page_num") pageNum: Int = 1,
         @Query("page_size") pageSize: Int = 30,
-        @Query("sort_reverse") sortReverse: Boolean = false
+        @Query("sort_reverse") sortReverse: Boolean = false,
+        @Query("web_location") webLocation: String? = null,
+        @Header("Referer") referer: String? = null,
+        @Header("Origin") origin: String? = null,
     ): com.android.purebilibili.data.model.response.SeasonArchivesResponse
     
     //  获取系列内的视频列表
@@ -2286,7 +2329,10 @@ interface SpaceApi {
         @Query("series_id") seriesId: Long,
         @Query("pn") pn: Int = 1,
         @Query("ps") ps: Int = 30,
-        @Query("sort") sort: String = "desc"
+        @Query("sort") sort: String = "desc",
+        @Query("web_location") webLocation: String? = null,
+        @Header("Referer") referer: String? = null,
+        @Header("Origin") origin: String? = null,
     ): com.android.purebilibili.data.model.response.SeriesArchivesResponse
     
     //  置顶视频

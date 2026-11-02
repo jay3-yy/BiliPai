@@ -8,6 +8,19 @@ import com.android.purebilibili.feature.home.gridColumnPinchEnabled
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.compose.material.icons.outlined.PersonRemove
+import androidx.compose.material.icons.outlined.NotificationsNone
+import androidx.compose.material.icons.outlined.WorkspacePremium
+import androidx.compose.material.icons.outlined.Stars
+import androidx.compose.material.icons.outlined.StarBorder
+import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.Toll
+import androidx.compose.material.icons.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.ManageAccounts
+import androidx.compose.material.icons.outlined.OpenInBrowser
+import androidx.compose.material.icons.outlined.AddToHomeScreen
+import androidx.compose.material.icons.outlined.ReportProblem
 import com.android.purebilibili.feature.following.FanManagementState
 import com.android.purebilibili.feature.following.FanManagementViewModel
 import com.android.purebilibili.feature.following.RemoveFanConfirmDialog
@@ -311,12 +324,14 @@ fun SpaceScreen(
     onBangumiClick: (Long) -> Unit = {},
     onCheeseClick: (Long) -> Unit = onBangumiClick,
     onWebClick: (String, String) -> Unit = { _, _ -> },
+    onWebVideosClick: (String, String, Long) -> Unit = { _, _, _ -> },
     onLiveClick: (Long, String, String) -> Unit = { _, _, _ -> },
     onUserClick: (Long) -> Unit = {},
     onTopicClick: (Long) -> Unit = {},
     onTopicKeywordClick: ((String) -> Unit)? = null,
     onDynamicDetailClick: (String) -> Unit = {},
     onArticleClick: (Long, String) -> Unit = { _, _ -> },
+    onArticleCollectionClick: (Long, String) -> Unit = { _, _ -> },
     onMatchClick: ((Long) -> Unit)? = null,
     onViewAllClick: (String, Long, Long, String, String) -> Unit = { _, _, _, _, _ -> },
     onLikedVideosClick: ((Long, String) -> Unit)? = null,
@@ -325,6 +340,7 @@ fun SpaceScreen(
     onFansClick: (Long) -> Unit = {},
     onUpowerRankClick: ((Long, String, Long) -> Unit)? = null,
     onMemberGuardClick: ((Long, String, Long) -> Unit)? = null,
+    onAccountPageClick: (SpaceAccountPage) -> Unit = {},
     viewModel: SpaceViewModel = viewModel(),
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null,
@@ -339,6 +355,14 @@ fun SpaceScreen(
     val rawFanState by fanModel.state.collectAsStateWithLifecycle()
     val fanState = rawFanState.takeIf { it.identity == fanIdentity } ?: FanManagementState(identity = fanIdentity)
     var showRemoveFanConfirm by remember(mid, fanIdentity) { mutableStateOf(false) }
+    var showReservations by remember(mid, fanIdentity) { mutableStateOf(false) }
+    var refreshProfileOnResume by rememberSaveable(mid, fanIdentity) { mutableStateOf(false) }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+        if (refreshProfileOnResume) {
+            refreshProfileOnResume = false
+            viewModel.refreshProfileHeader()
+        }
+    }
     LaunchedEffect(fanModel) { fanModel.load() }
     LaunchedEffect(fanState.message) {
         fanState.message?.let { message ->
@@ -373,7 +397,7 @@ fun SpaceScreen(
     val isFollowGroupsLoading by viewModel.isFollowGroupsLoading.collectAsStateWithLifecycle()
     val isSavingFollowGroups by viewModel.isSavingFollowGroups.collectAsStateWithLifecycle()
     val blockedUpRepository = remember { com.android.purebilibili.data.repository.BlockedUpRepository(context) }
-    val isBlocked by blockedUpRepository.isBlocked(mid).collectAsStateWithLifecycle(initialValue = false)
+    val isLocallyBlocked by blockedUpRepository.isBlocked(mid).collectAsStateWithLifecycle(initialValue = false)
     val coroutineScope = rememberCoroutineScope()
 
     var showBlockConfirmDialog by remember { mutableStateOf(false) }
@@ -444,11 +468,12 @@ fun SpaceScreen(
         }
     }
 
-    LaunchedEffect(mid) {
+    LaunchedEffect(mid, fanIdentity) {
         viewModel.loadSpaceInfo(mid)
     }
 
     val currentSuccessState = uiState as? SpaceUiState.Success
+    val isBlocked = isLocallyBlocked || currentSuccessState?.userInfo?.relationStatus == 128
     var contributionVideoLayoutMode by rememberSaveable(mid) {
         mutableStateOf(defaultSpaceContributionVideoLayoutMode())
     }
@@ -660,6 +685,68 @@ fun SpaceScreen(
                                                 )
                                             )
                                         }
+                                        val profile = currentSuccessState
+                                        if (!profile?.reservations.isNullOrEmpty()) {
+                                            add(listOf(AppWindowAction(
+                                                label = "预约 (${profile?.reservations?.size})", icon = Icons.Outlined.NotificationsNone,
+                                                onClick = { showReservations = true },
+                                            )))
+                                        }
+                                        if (profile?.hasMedalWall == true) {
+                                            add(listOf(AppWindowAction(
+                                                label = "粉丝勋章墙", icon = Icons.Outlined.WorkspacePremium,
+                                                enabled = !profile.isProfileActionRunning, onClick = viewModel::loadMedalWall,
+                                            )))
+                                        }
+                                        if (profile?.userInfo?.isFollowed == true && mid != fanIdentity.mid && fanIdentity.mid != null) {
+                                            add(listOf(
+                                                AppWindowAction(label = if (profile.userInfo.relationStatus == -10) "移除特别关注" else "加入特别关注",
+                                                    icon = Icons.Outlined.StarBorder, enabled = !profile.isProfileActionRunning, onClick = viewModel::toggleSpecialFollow),
+                                                AppWindowAction(label = "设置关注分组", icon = Icons.Outlined.FolderOpen,
+                                                    onClick = { viewModel.showFollowGroupDialogForUser(mid) }),
+                                                AppWindowAction(
+                                                label = "关注时间", icon = Icons.Outlined.History,
+                                                enabled = !profile.isProfileActionRunning, onClick = viewModel::showFollowTime,
+                                            )))
+                                        }
+                                        add(listOf(
+                                            AppWindowAction(label = "网页投稿", icon = Icons.Outlined.OpenInBrowser,
+                                                enabled = profile != null,
+                                                onClick = {
+                                                    val selected = profile?.let {
+                                                        resolveSelectedContributionTab(it.contributionTabs, it.selectedContributionTabId, it.selectedSubTab)
+                                                    }
+                                                    val (type, id) = when {
+                                                        selected == null -> "" to 0L
+                                                        selected.seasonId > 0L -> "season" to selected.seasonId
+                                                        selected.seriesId > 0L -> "series" to selected.seriesId
+                                                        else -> "" to 0L
+                                                    }
+                                                    onWebVideosClick(profile?.userInfo?.name.orEmpty(), type, id)
+                                                }),
+                                            AppWindowAction(label = "添加至桌面", icon = Icons.Outlined.AddToHomeScreen,
+                                                enabled = context.getSystemService(android.content.pm.ShortcutManager::class.java).isRequestPinShortcutSupported,
+                                                onClick = {
+                                                    if (!pinSpaceShortcut(context, mid, profile?.userInfo?.name?.ifBlank { "UID $mid" } ?: "UID $mid")) {
+                                                        android.widget.Toast.makeText(context, "未能添加桌面快捷方式", android.widget.Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }),
+                                        ))
+                                        if (fanIdentity.mid != null && mid == fanIdentity.mid) {
+                                            add(buildList {
+                                                if ((profile?.userInfo?.vip?.status ?: 0) > 0) add(AppWindowAction(
+                                                    label = "领取大会员经验", icon = Icons.Outlined.Stars,
+                                                    enabled = profile?.isProfileActionRunning != true, onClick = viewModel::claimVipExperience))
+                                                add(AppWindowAction(label = "登录设备与记录", icon = Icons.Outlined.Devices,
+                                                    onClick = { onAccountPageClick(SpaceAccountPage.LOGIN_ACTIVITY) }))
+                                                add(AppWindowAction(label = "硬币记录", icon = Icons.Outlined.Toll,
+                                                    onClick = { onAccountPageClick(SpaceAccountPage.COINS) }))
+                                                add(AppWindowAction(label = "经验记录", icon = Icons.Outlined.TrendingUp,
+                                                    onClick = { onAccountPageClick(SpaceAccountPage.EXPERIENCE) }))
+                                                add(AppWindowAction(label = "空间设置", icon = Icons.Outlined.ManageAccounts,
+                                                    onClick = { onAccountPageClick(SpaceAccountPage.PRIVACY) }))
+                                            })
+                                        }
                                         if (queryAicu != null && mid > 0) {
                                             add(listOf(AppWindowAction(
                                                 label = "评论与弹幕查询",
@@ -705,11 +792,11 @@ fun SpaceScreen(
                                                 onClick = { showRemoveFanConfirm = true },
                                             )))
                                         }
-                                        add(
+                                        if (mid != fanIdentity.mid) add(
                                             listOf(
                                                 AppWindowAction(
                                                     label = "举报",
-                                                    icon = Icons.Outlined.VisibilityOff,
+                                                    icon = Icons.Outlined.ReportProblem,
                                                     iconTint = AppContentColors.error(),
                                                     onClick = {
                                                         onWebClick(
@@ -841,6 +928,7 @@ fun SpaceScreen(
                             onTopicKeywordClick = onTopicKeywordClick,
                             onDynamicDetailClick = onDynamicDetailClick,
                             onArticleClick = onArticleClick,
+                            onArticleCollectionClick = onArticleCollectionClick,
                             onMatchClick = onMatchClick,
                             onViewAllClick = onViewAllClick,
                             onLikedVideosClick = onLikedVideosClick,
@@ -861,18 +949,31 @@ fun SpaceScreen(
                             onLoadMoreArticles = { viewModel.loadSpaceArticles(refresh = false) },
                             onLoadCheese = { viewModel.loadSpaceCheese(refresh = true) },
                             onLoadMoreCheese = { viewModel.loadSpaceCheese(refresh = false) },
+                            onLoadComics = viewModel::loadSpaceComics,
+                            onLoadMoreOpus = { viewModel.loadSpaceOpus() },
+                            onSelectOpusFilter = viewModel::selectOpusFilter,
                             onSearchQueryChange = viewModel::updateSearchQuery,
                             onSearchEntryClick = { viewModel.setSearchMode(true) },
                             onLocateTargetConsumed = viewModel::consumePendingLocateBvid,
                             onLocateTargetMissing = viewModel::reportPendingLocateBvidMissing,
                             onLocateTargetLoadFailed = viewModel::reportPendingLocateBvidLoadFailed,
-                            onFollowClick = viewModel::toggleFollow,
+                            onFollowClick = {
+                                when {
+                                    mid == fanIdentity.mid -> {
+                                        refreshProfileOnResume = true
+                                        onAccountPageClick(SpaceAccountPage.EDIT_PROFILE)
+                                    }
+                                    state.userInfo.relationStatus == 128 -> showBlockConfirmDialog = true
+                                    else -> viewModel.toggleFollow()
+                                }
+                            },
                             onMessageClick = {
                                 val user = state.userInfo
                                 onMessageClick(user.mid, user.name, user.face)
                             },
                             onFollowingClick = { onFollowingClick(state.userInfo.mid) },
                             onFansClick = { onFansClick(state.userInfo.mid) },
+                            onFollowedUsersClick = viewModel::openFollowedUsers,
                             onUpowerRankClick = onUpowerRankClick
                                 ?: { m, _, _ -> onWebClick("https://space.bilibili.com/$m/upower/rank", "充电排行") },
                             onMemberGuardClick = onMemberGuardClick
@@ -1051,6 +1152,16 @@ fun SpaceScreen(
         )
     }
 
+    currentSuccessState?.let { state ->
+        SpaceProfileDialogs(
+            state = state, showReservations = showReservations,
+            onDismissReservations = { showReservations = false }, onToggleReservation = viewModel::toggleReservation,
+            onDismissNotice = viewModel::dismissProfileNotice, onDismissMedals = viewModel::dismissMedalWall,
+            onDismissFollowedUsers = viewModel::dismissFollowedUsers, onLoadMoreFollowedUsers = viewModel::loadMoreFollowedUsers,
+            onDynamicClick = onDynamicDetailClick, onUserClick = onUserClick, onLiveClick = onLiveClick, onWebClick = onWebClick,
+        )
+    }
+
     if (showBlockConfirmDialog) {
         val userName = currentSuccessState?.userInfo?.name ?: "该用户"
         val userFace = currentSuccessState?.userInfo?.face.orEmpty()
@@ -1085,6 +1196,7 @@ fun SpaceScreen(
                                     android.widget.Toast.LENGTH_SHORT
                                 ).show()
                             }
+                            viewModel.refreshRelation()
                             showBlockConfirmDialog = false
                         }
                     }
@@ -1264,6 +1376,7 @@ private fun SpaceContent(
     onTopicKeywordClick: ((String) -> Unit)? = null,
     onDynamicDetailClick: (String) -> Unit,
     onArticleClick: (Long, String) -> Unit,
+    onArticleCollectionClick: (Long, String) -> Unit,
     onMatchClick: ((Long) -> Unit)? = null,
     onViewAllClick: (String, Long, Long, String, String) -> Unit,
     onLikedVideosClick: ((Long, String) -> Unit)? = null,
@@ -1284,6 +1397,9 @@ private fun SpaceContent(
     onLoadMoreArticles: () -> Unit,
     onLoadCheese: () -> Unit = {},
     onLoadMoreCheese: () -> Unit = {},
+    onLoadComics: () -> Unit = {},
+    onLoadMoreOpus: () -> Unit = {},
+    onSelectOpusFilter: (String) -> Unit = {},
     onSearchQueryChange: (String) -> Unit,
     onSearchEntryClick: () -> Unit,
     onLocateTargetConsumed: (String) -> Unit,
@@ -1293,6 +1409,7 @@ private fun SpaceContent(
     onMessageClick: () -> Unit,
     onFollowingClick: () -> Unit,
     onFansClick: () -> Unit,
+    onFollowedUsersClick: () -> Unit,
     onUpowerRankClick: (Long, String, Long) -> Unit = { _, _, _ -> },
     onMemberGuardClick: (Long, String, Long) -> Unit = { _, _, _ -> },
     onTopPhotoClick: (Rect?, String?) -> Unit,
@@ -1544,9 +1661,6 @@ private fun SpaceContent(
         // 玻璃主栏位于列表外，回弹必须作用于二者的共同父层，避免列表拉伸而 dock 原地漂浮。
         // 原生 MD3/Miuix 仍由各页网格绘制回弹；标签吸顶模式继续禁用回弹。
         val sharedSpaceOverscrollEffect = rememberOverscrollEffect()
-        val sharedGridOverscrollEffect = remember(sharedSpaceOverscrollEffect) {
-            sharedSpaceOverscrollEffect?.withoutVisualEffect()
-        }
         val pagerDragSource = remember(pagerState) {
             androidx.compose.foundation.interaction.MutableInteractionSource()
         }
@@ -1643,6 +1757,11 @@ private fun SpaceContent(
         )
         val selectedMainTab = pageTab
         val gridState = pageGridStates.getValue(primaryTab)
+        // 外层回弹可共享，事件包装仍包含可挂载的节点，必须由各个 Pager 页分别持有。
+        // 否则保留页与当前页会重复挂载、卸载同一节点，退出页面时可能崩溃。
+        val sharedGridOverscrollEffect = remember(sharedSpaceOverscrollEffect) {
+            sharedSpaceOverscrollEffect?.withoutVisualEffect()
+        }
         val lazyGridSharedTransitionScope = lazyGridSharedTransitionScope.takeIf { isPageActive }
         val lazyGridAnimatedVisibilityScope = lazyGridAnimatedVisibilityScope.takeIf { isPageActive }
         val density = LocalDensity.current
@@ -1931,6 +2050,7 @@ private fun SpaceContent(
                     onMessageClick = onMessageClick,
                     onFollowingClick = onFollowingClick,
                     onFansClick = onFansClick,
+                    onFollowedUsersClick = onFollowedUsersClick,
                     onTopPhotoClick = onTopPhotoClick,
                     onAvatarClick = onAvatarClick,
                     onLiveClick = { roomId, title, uname -> onLiveClick(roomId, title, uname) },
@@ -2016,11 +2136,11 @@ private fun SpaceContent(
                     }
                 }
 
-                if (state.videos.isNotEmpty() || state.totalVideos > 0) {
+                if (state.homeVideos.isNotEmpty() || state.homeVideoCount > 0) {
                     item(span = StaggeredGridItemSpan.FullLine) {
                         SpaceSectionHeader(
                             title = "视频",
-                            count = state.totalVideos.takeIf { it > 0 } ?: state.videos.size,
+                            count = state.homeVideoCount.takeIf { it > 0 } ?: state.homeVideos.size,
                             onActionClick = {
                                 onMainTabSelected(SpaceMainTab.CONTRIBUTION)
                                 state.contributionTabs.firstOrNull { it.subTab == SpaceSubTab.VIDEO }?.let {
@@ -2029,7 +2149,7 @@ private fun SpaceContent(
                             }
                         )
                     }
-                    val homeVideos = state.videos.take(4)
+                    val homeVideos = state.homeVideos.take(4)
                     val homeVideoKeys = homeVideos.map { "home_video_${it.bvid}" }
                     val alignHomeVideos = gridColumns > 1 && !homeSettings.showFullVideoCardContent
                     val renderHomeVideo: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
@@ -2315,7 +2435,10 @@ private fun SpaceContent(
                         SpaceSectionHeader(
                             title = "漫画",
                             count = state.homeComicCount.takeIf { it > 0 } ?: state.homeComicItems.size,
-                            actionLabel = null
+                            onActionClick = {
+                                onMainTabSelected(SpaceMainTab.CONTRIBUTION)
+                                state.contributionTabs.firstOrNull { it.subTab == SpaceSubTab.COMIC }?.let { onContributionTabSelected(it.id) }
+                            }
                         )
                     }
                     items(
@@ -2341,7 +2464,7 @@ private fun SpaceContent(
                 }
 
                 if (
-                    state.videos.isEmpty() &&
+                    state.homeVideos.isEmpty() &&
                     state.homeFavoriteFolders.isEmpty() &&
                     state.homeCoinVideos.isEmpty() &&
                     state.homeLikeVideos.isEmpty() &&
@@ -2355,6 +2478,15 @@ private fun SpaceContent(
                             title = "主页空空的",
                             subtitle = "暂时没有可展示的主页内容"
                         )
+                    }
+                }
+                val offlineRoom = state.userInfo.liveRoom
+                if (offlineRoom != null && offlineRoom.roomStatus == 1 && offlineRoom.liveStatus != 1 && offlineRoom.roomId > 0L) {
+                    item(span = StaggeredGridItemSpan.FullLine) {
+                        AppTextButton(onClick = { onLiveClick(offlineRoom.roomId, offlineRoom.title, state.userInfo.name) },
+                            modifier = Modifier.fillMaxWidth()) {
+                            AppText("TA 现在没有直播，去 TA 的直播间")
+                        }
                     }
                 }
             }
@@ -2613,7 +2745,36 @@ private fun SpaceContent(
                     }
 
                     SpaceSubTab.ARTICLE, SpaceSubTab.OPUS -> {
-                        if (state.articles.isEmpty() && !state.isLoadingArticles) {
+                        val isOpus = selectedContributionTab.subTab == SpaceSubTab.OPUS
+                        val articles = if (isOpus) state.opusItems else state.articles
+                        val loading = if (isOpus) state.isLoadingOpus else state.isLoadingArticles
+                        val hasMore = if (isOpus) state.hasMoreOpus else state.hasMoreArticles
+                        val loadMore = if (isOpus) onLoadMoreOpus else onLoadMoreArticles
+                        if (isOpus && selectedContributionTab.filters.isNotEmpty()) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                AppWindowActionMenu(groups = listOf(selectedContributionTab.filters.map { filter ->
+                                    AppWindowAction(label = filter.text, selected = filter.meta == state.opusFilter,
+                                        onClick = { onSelectOpusFilter(filter.meta) })
+                                })) {
+                                    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        AppText(selectedContributionTab.filters.firstOrNull { it.meta == state.opusFilter }?.text ?: "全部图文")
+                                        AppIcon(Icons.Outlined.MoreVert, contentDescription = "图文筛选")
+                                    }
+                                }
+                            }
+                        }
+                        if (isOpus) {
+                            items(state.opusCollections, key = { "opus_collection_${it.id}" }, span = { StaggeredGridItemSpan.FullLine }) { collection ->
+                                SpaceCollectionSummaryCard(title = collection.title, subtitle = collection.subtitle,
+                                    cover = collection.cover, total = null,
+                                    onClick = { onArticleCollectionClick(collection.id, collection.title) })
+                            }
+                        }
+                        val opusError = state.opusError.takeIf { isOpus }
+                        if (opusError != null) {
+                            item(span = StaggeredGridItemSpan.FullLine) { SpaceErrorSection(opusError, onRetry = loadMore) }
+                        }
+                        if (articles.isEmpty() && !loading && opusError == null) {
                             item(span = StaggeredGridItemSpan.FullLine) {
                                 SpaceSectionEmptyState(
                                     title = "暂无图文",
@@ -2623,7 +2784,7 @@ private fun SpaceContent(
                         }
 
                         items(
-                            items = state.articles,
+                            items = articles,
                             key = { "space_article_${it.id}" },
                             span = { StaggeredGridItemSpan.FullLine }
                         ) { article ->
@@ -2640,13 +2801,13 @@ private fun SpaceContent(
                             )
                         }
 
-                        if (state.isLoadingArticles) {
+                        if (loading) {
                             item(span = StaggeredGridItemSpan.FullLine) {
                                 SpaceLoadingFooter()
                             }
-                        } else if (state.hasMoreArticles && state.articles.isNotEmpty()) {
+                        } else if (hasMore && articles.isNotEmpty() && opusError == null) {
                             item(span = StaggeredGridItemSpan.FullLine) {
-                                LaunchedEffect(state.articles.size, isPageActive) { if (isPageActive) onLoadMoreArticles() }
+                                LaunchedEffect(articles.size, isPageActive) { if (isPageActive) loadMore() }
                                 Spacer(modifier = Modifier.height(1.dp))
                             }
                         }
@@ -2790,12 +2951,33 @@ private fun SpaceContent(
                         }
                     }
 
-                    SpaceSubTab.UGC_SEASON, SpaceSubTab.COMIC -> {
-                        item(span = StaggeredGridItemSpan.FullLine) {
-                            SpaceSectionEmptyState(
-                                title = "该分类暂未开放",
-                                subtitle = "当前仓库还没有为这个投稿分类补齐独立列表视图"
-                            )
+                    SpaceSubTab.UGC_SEASON -> {
+                        if (state.seasons.isEmpty() && state.series.isEmpty()) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                SpaceSectionEmptyState("暂无合集或系列", "这个 UP 主还没有公开的合集或系列")
+                            }
+                        }
+                        items(state.seasons, key = { "contribution_season_${it.meta.season_id}" }, span = { StaggeredGridItemSpan.FullLine }) { season ->
+                            SpaceCollectionSummaryCard(season.meta.name, season.meta.description, season.meta.cover, season.meta.total,
+                                onClick = { onViewAllClick("season", season.meta.season_id, state.userInfo.mid, season.meta.name, state.userInfo.name) })
+                        }
+                        items(state.series, key = { "contribution_series_${it.meta.series_id}" }, span = { StaggeredGridItemSpan.FullLine }) { series ->
+                            SpaceCollectionSummaryCard(series.meta.name, series.meta.description, series.meta.cover, series.meta.total,
+                                onClick = { onViewAllClick("series", series.meta.series_id, state.userInfo.mid, series.meta.name, state.userInfo.name) })
+                        }
+                    }
+                    SpaceSubTab.COMIC -> {
+                        if (state.isLoadingComics) {
+                            item(span = StaggeredGridItemSpan.FullLine) { SpaceLoadingFooter() }
+                        } else if (state.comicError != null) {
+                            item(span = StaggeredGridItemSpan.FullLine) {
+                                SpaceErrorSection(message = state.comicError, onRetry = onLoadComics)
+                            }
+                        } else if (state.comics.isEmpty()) {
+                            item(span = StaggeredGridItemSpan.FullLine) { SpaceSectionEmptyState("暂无漫画", "这个 UP 主还没有公开的漫画") }
+                        }
+                        items(state.comics, key = { "comic_${it.param}" }) { comic ->
+                            SpaceAggregatePosterCard(comic, onClick = { onWebClick("https://manga.bilibili.com/detail/mc${comic.param}", comic.title) })
                         }
                     }
                 }
@@ -3216,6 +3398,7 @@ private fun SpaceHeader(
     onMessageClick: () -> Unit,
     onFollowingClick: () -> Unit,
     onFansClick: () -> Unit,
+    onFollowedUsersClick: () -> Unit,
     onUpowerRankClick: (Long, String, Long) -> Unit = { _, _, _ -> },
     onMemberGuardClick: (Long, String, Long) -> Unit = { _, _, _ -> },
     onTopPhotoClick: (Rect?, String?) -> Unit,
@@ -3542,6 +3725,7 @@ private fun SpaceHeader(
                     SpaceHeaderIdentityInfo(
                         userInfo = userInfo,
                         officialBadge = officialBadge,
+                        onFollowedUsersClick = onFollowedUsersClick,
                         modifier = Modifier
                             .weight(1f)
                             .graphicsLayer { alpha = 1f - collapseFractionProvider() }
@@ -3589,15 +3773,7 @@ private fun SpaceHeader(
                             userName = userInfo.name,
                             isFollowing = userInfo.isFollowed && !isOwner,
                             onFollowClick = {
-                                if (isOwner) {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "可在「我的」页面编辑个人资料",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    onFollowClick()
-                                }
+                                onFollowClick()
                             },
                         ),
                         modifier = Modifier.fillMaxWidth(),
@@ -3611,6 +3787,7 @@ private fun SpaceHeader(
             SpaceHeaderIdentityInfo(
                 userInfo = userInfo,
                 officialBadge = officialBadge,
+                onFollowedUsersClick = onFollowedUsersClick,
                 modifier = Modifier
                     .fillMaxWidth()
                     .graphicsLayer { alpha = 1f - collapseFractionProvider() }
@@ -3641,6 +3818,7 @@ private fun SpaceHeader(
 private fun SpaceHeaderIdentityInfo(
     userInfo: SpaceUserInfo,
     officialBadge: OfficialVerifyBadgeSpec?,
+    onFollowedUsersClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // 信息区：名字 + 等级 + VIP 标识。
@@ -3743,7 +3921,7 @@ private fun SpaceHeaderIdentityInfo(
             userInfo.followingsFollowed?.let { followedUp ->
                 if (followedUp.items.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    SpaceFollowedUpSection(followedUp = followedUp)
+                    SpaceFollowedUpSection(followedUp = followedUp, onClick = onFollowedUsersClick)
                 }
             }
 
@@ -5159,7 +5337,7 @@ private fun SpaceArticleListItem(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        val imageUrls = article.displayImageUrls()
+        val imageUrls = article.displayImageUrls(com.android.purebilibili.core.ui.isAppInDarkTheme())
         if (imageUrls.isNotEmpty()) {
             Spacer(modifier = Modifier.height(10.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -5451,7 +5629,7 @@ private fun SpaceCollectionSummaryCard(
     title: String,
     subtitle: String,
     cover: String,
-    total: Int,
+    total: Int?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -5494,11 +5672,9 @@ private fun SpaceCollectionSummaryCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(6.dp))
-                AppText(
-                    text = "$total 个内容",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppContentColors.accent()
-                )
+                if (total != null) {
+                    AppText(text = "$total 个内容", style = MaterialTheme.typography.bodySmall, color = AppContentColors.accent())
+                }
                 if (subtitle.isNotBlank()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     AppText(
@@ -6064,6 +6240,7 @@ private fun SpaceHeaderTitleBadge(
 @Composable
 private fun SpaceFollowedUpSection(
     followedUp: com.android.purebilibili.data.model.response.SpaceFollowingsFollowedUpper,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val items = followedUp.items
@@ -6074,7 +6251,7 @@ private fun SpaceFollowedUpSection(
     val suffixText = if (items.size > 3) "等${moreCount}人也关注了TA" else "也关注了TA"
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().appActionClickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
@@ -6259,6 +6436,7 @@ private fun handleAggregateArchiveClick(
 ) {
     val videoId = resolveSpaceAggregateVideoId(item)
     when {
+        item.goto.equals("comic", ignoreCase = true) -> onWebClick("https://manga.bilibili.com/detail/mc${item.param}", item.title)
         videoId != null -> onVideoClick(videoId)
         item.goto.contains("bangumi", ignoreCase = true) ||
             item.isPgc ||

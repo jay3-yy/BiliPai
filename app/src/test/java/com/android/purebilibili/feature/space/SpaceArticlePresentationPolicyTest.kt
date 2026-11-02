@@ -6,6 +6,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SpaceArticlePresentationPolicyTest {
+    @Test
+    fun `opus preserves formatted counts and does not fabricate missing counts`() {
+        assertEquals("2.3万点赞", buildSpaceArticleStatsText(SpaceArticleItem(displayStats = listOf("2.3万点赞"))))
+        assertEquals("图文", buildSpaceArticleStatsText(SpaceArticleItem(displayStats = emptyList())))
+    }
+
 
     @Test
     fun `empty remote view renders an unavailable reading count instead of fake zero`() {

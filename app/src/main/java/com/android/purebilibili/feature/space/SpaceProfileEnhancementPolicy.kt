@@ -24,7 +24,8 @@ data class SpaceContributionTab(
     val subTab: SpaceSubTab,
     val param: String,
     val seasonId: Long = 0,
-    val seriesId: Long = 0
+    val seriesId: Long = 0,
+    val filters: List<SpaceOpusFilter> = emptyList(),
 )
 
 data class SpaceTabContentState(
@@ -215,6 +216,7 @@ fun tabIndexToMainTab(index: Int): SpaceMainTab {
         4 -> SpaceMainTab.BANGUMI
         5 -> SpaceMainTab.COLLECTIONS
         6 -> SpaceMainTab.CHEESE
+        7 -> SpaceMainTab.SHOP
         else -> SpaceMainTab.HOME
     }
 }
@@ -302,7 +304,8 @@ internal fun resolveSpaceContributionTabs(tab2: List<SpaceAggregateTab>): List<S
                     subTab = it,
                     param = item.param,
                     seasonId = item.seasonId,
-                    seriesId = item.seriesId
+                    seriesId = item.seriesId,
+                    filters = item.filter,
                 )
             }
         }
@@ -336,7 +339,7 @@ internal fun mergeSpaceContributionTabsWithCollections(
     }
 
     baseTabs.firstOrNull { it.subTab == SpaceSubTab.VIDEO }?.let(::add)
-    baseTabs.firstOrNull { it.subTab == SpaceSubTab.ARTICLE || it.subTab == SpaceSubTab.OPUS }?.let(::add)
+    baseTabs.filter { it.subTab == SpaceSubTab.ARTICLE || it.subTab == SpaceSubTab.OPUS }.forEach(::add)
 
     seasons.forEach { season ->
         val seasonId = season.meta.season_id

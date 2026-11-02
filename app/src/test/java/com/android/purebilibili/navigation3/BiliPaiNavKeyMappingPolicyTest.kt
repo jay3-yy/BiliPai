@@ -8,6 +8,25 @@ import kotlin.test.assertNotEquals
 
 class BiliPaiNavKeyMappingPolicyTest {
     @Test
+    fun webUploadsRestoreOwnerAndCurrentCollectionWithoutBecomingAWebPage() {
+        listOf(
+            BiliPaiNavKey.SpaceWebVideos(42L, "UP + 空间 & 100%"),
+            BiliPaiNavKey.SpaceWebVideos(42L, "UP", "season", 123L),
+            BiliPaiNavKey.SpaceWebVideos(42L, "UP", "series", 456L),
+        ).forEach { key ->
+            assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+            assertEquals(BiliPaiNavEntryContentRole.SPACE_WEB_VIDEOS, resolveBiliPaiNavEntryContentRole(key))
+        }
+    }
+
+    @Test
+    fun profileAccountEditorHasItsOwnRestorableDestination() {
+        assertEquals(BiliPaiNavKey.ProfileAccountEdit, legacyRouteToBiliPaiNavKey(BiliPaiNavKey.ProfileAccountEdit.toLegacyRoute()))
+        assertNotEquals(BiliPaiNavKey.Profile.toLegacyRoute(), BiliPaiNavKey.ProfileAccountEdit.toLegacyRoute())
+        assertEquals(BiliPaiNavEntryContentRole.PROFILE, resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.ProfileAccountEdit))
+    }
+
+    @Test
     fun dynamicCommentEntryAndReplyLocationSurviveRouteRestoration() {
         listOf(
             BiliPaiNavKey.DynamicDetail("123"),

@@ -29,6 +29,28 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SpaceAggregatedModelMappingTest {
+    @Test
+    fun `charging selection keeps ordinary home previews and reservation metadata separate`() {
+        val preview = SpaceAggregateArchiveItem(aid = 123L, bvid = "BV1preview", title = "普通视频", goto = "av")
+        val reservation = com.android.purebilibili.data.model.response.SpaceReservationItem(sid = 7L, name = "预约")
+        val seed = assertNotNull(resolveSpaceInitialSeedFromAggregate(SpaceAggregateData(
+            defaultTab = "charging_video", card = SpaceAggregateCard(mid = "42", name = "UP"),
+            archive = SpaceAggregateArchive(count = 100, item = listOf(preview)), reservations = listOf(reservation), medal = 1,
+            tab2 = listOf(SpaceAggregateTab(param = "contribute", items = listOf(
+                SpaceAggregateTabItem(param = "video", title = "视频"),
+                SpaceAggregateTabItem(param = "charging_video", title = "充电专属"),
+            ))),
+        ), "", ""))
+        val state = buildInitialSpaceSuccessState(seed, SpaceMainTab.CONTRIBUTION)
+        assertEquals(SpaceSubTab.CHARGING_VIDEO, state.selectedSubTab)
+        assertEquals(0, state.totalVideos)
+        assertTrue(state.videos.isEmpty())
+        assertEquals("BV1preview", state.homeVideos.single().bvid)
+        assertEquals(100, state.homeVideoCount)
+        assertEquals(listOf(reservation), state.reservations)
+        assertTrue(state.hasMedalWall)
+    }
+
 
     @Test
     fun `resolveSpaceInitialSeedFromAggregate maps core header and seeded content`() {
@@ -208,7 +230,7 @@ class SpaceAggregatedModelMappingTest {
         assertEquals("BVlike1", seed.homeLikeVideos.single().bvid)
         assertEquals("5566", seed.homeBangumiItems.single().param)
         assertEquals("7788", seed.homeComicItems.single().param)
-        assertEquals(SpaceMainTab.HOME, seed.defaultMainTab)
+        assertEquals(SpaceMainTab.CONTRIBUTION, seed.defaultMainTab)
         assertEquals(SpaceSubTab.VIDEO, seed.defaultSubTab)
         assertEquals(listOf("主页", "动态", "投稿", "收藏", "追番"), seed.mainTabs.map { it.title })
         assertEquals(listOf("视频", "图文", "赛季合集"), seed.contributionTabs.map { it.title })

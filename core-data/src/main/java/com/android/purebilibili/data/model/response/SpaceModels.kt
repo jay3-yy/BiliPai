@@ -102,6 +102,9 @@ data class SpaceAggregateResponse(
 
 @Serializable
 data class SpaceAggregateData(
+    @SerialName("reservation_card_list")
+    val reservations: List<SpaceReservationItem> = emptyList(),
+    val medal: Int = 0,
     @SerialName("default_tab")
     val defaultTab: String = "",
     val relation: Int? = null,
@@ -267,6 +270,13 @@ data class SpaceAggregateArchive(
 )
 
 @Serializable
+data class SpaceArchiveSectionResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: SpaceAggregateArchive? = null,
+)
+
+@Serializable
 data class SpaceAggregateEpisodicButton(
     val text: String = "",
     val uri: String = ""
@@ -369,6 +379,7 @@ data class SpaceAggregateTab(
 
 @Serializable
 data class SpaceAggregateTabItem(
+    val filter: List<SpaceOpusFilter> = emptyList(),
     val title: String = "",
     val param: String = "",
     @SerialName("season_id")
@@ -376,6 +387,9 @@ data class SpaceAggregateTabItem(
     @SerialName("series_id")
     val seriesId: Long = 0
 )
+
+@Serializable
+data class SpaceOpusFilter(val text: String = "", val meta: String = "all", @SerialName("tab_name") val tabName: String = "")
 
 // /x/space/wbi/arc/search UP主投稿视频列表
 @Serializable
@@ -393,7 +407,16 @@ data class SpaceVideoData(
 
 @Serializable
 data class SpaceVideoList(
-    val vlist: List<SpaceVideoItem> = emptyList()
+    val vlist: List<SpaceVideoItem> = emptyList(),
+    val tags: List<SpaceVideoTag> = emptyList()
+)
+
+@Serializable
+data class SpaceVideoTag(
+    val tid: Int = 0,
+    val name: String = "",
+    val count: Int? = null,
+    @SerialName("special_type") val specialType: String? = null,
 )
 
 @Serializable
@@ -957,10 +980,13 @@ data class SpaceArticleItem(
     val ctime: Long = 0,
     val mtime: Long = 0,
     val is_like: Boolean = false,
-    val image_urls: List<String> = emptyList()
+    val image_urls: List<String> = emptyList(),
+    val darkCover: SpaceArticleCover? = null,
+    val displayStats: List<String>? = null,
 )
 
-fun SpaceArticleItem.displayImageUrls(): List<String> {
+fun SpaceArticleItem.displayImageUrls(darkTheme: Boolean = false): List<String> {
+    if (darkTheme && darkCover != null) return listOf(darkCover.url)
     return image_urls.ifEmpty {
         listOfNotNull(
             banner_url.takeIf { it.isNotBlank() },

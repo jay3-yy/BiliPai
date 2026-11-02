@@ -30,6 +30,11 @@ internal fun resolveWebViewNavigationAction(
         return WebViewNavigationAction.AllowWebLoad
     }
 
+    // 空间子页包含网页投稿、充电等独立内容，不能丢掉路径后拦回 UP 主首页。
+    if (isOfficialSpaceSubpageUrl(trimmedUrl)) {
+        return WebViewNavigationAction.AllowWebLoad
+    }
+
     if (isCustomScheme) {
         if (!hasUserGesture) {
             return WebViewNavigationAction.Block
@@ -67,6 +72,13 @@ internal fun shouldOpenWebUrlExternally(urlString: String): Boolean {
     ) return false
     val host = uri.host?.lowercase() ?: return false
     return !com.android.purebilibili.core.util.isBilibiliWebHost(host)
+}
+
+internal fun isOfficialSpaceSubpageUrl(urlString: String): Boolean {
+    val uri = runCatching { java.net.URI(urlString.trim()) }.getOrNull() ?: return false
+    val segments = uri.path.orEmpty().split('/').filter { it.isNotBlank() }
+    return uri.host.equals("space.bilibili.com", ignoreCase = true) && segments.size > 1 &&
+        segments.first().toLongOrNull()?.let { it > 0L } == true
 }
 
 internal fun isOfficialMusicDetailUrl(urlString: String): Boolean {

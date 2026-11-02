@@ -10,6 +10,26 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SpaceProfileEnhancementPolicyTest {
+    @Test
+    fun `shop selection survives the saved main tab index`() {
+        assertEquals(SpaceMainTab.SHOP, tabIndexToMainTab(mainTabToTabIndex(SpaceMainTab.SHOP)))
+    }
+
+    @Test
+    fun `article opus and opus filters survive collection tab enrichment`() {
+        val tabs = resolveSpaceContributionTabs(listOf(SpaceAggregateTab(param = "contribute", items = listOf(
+            SpaceAggregateTabItem(param = "video", title = "视频"),
+            SpaceAggregateTabItem(param = "article", title = "专栏"),
+            SpaceAggregateTabItem(param = "opus", title = "图文", filter = listOf(
+                com.android.purebilibili.data.model.response.SpaceOpusFilter(text = "全部图文", meta = "all"),
+                com.android.purebilibili.data.model.response.SpaceOpusFilter(text = "专栏", meta = "article"),
+            )),
+        ))))
+        val merged = mergeSpaceContributionTabsWithCollections(tabs, emptyList(), emptyList())
+        assertEquals(listOf(SpaceSubTab.VIDEO, SpaceSubTab.ARTICLE, SpaceSubTab.OPUS), merged.map { it.subTab })
+        assertEquals(listOf("all", "article"), merged.last().filters.map { it.meta })
+    }
+
 
     @Test
     fun `discovered opus content adds the missing article contribution tab`() {
@@ -124,7 +144,7 @@ class SpaceProfileEnhancementPolicyTest {
         val shell = buildInitialTabShellState(selectedTab = SpaceMainTab.DYNAMIC)
 
         assertEquals(SpaceMainTab.DYNAMIC, shell.selectedTab)
-        assertEquals(7, shell.tabStates.size)
+        assertFalse(shell.tabStates[SpaceMainTab.SHOP]?.hasLoaded ?: true)
         assertFalse(shell.tabStates[SpaceMainTab.HOME]?.hasLoaded ?: true)
         assertFalse(shell.tabStates[SpaceMainTab.CHEESE]?.hasLoaded ?: true)
     }

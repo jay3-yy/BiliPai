@@ -343,6 +343,7 @@ fun ProfileScreen(
     viewModel: ProfileViewModel = viewModel(),
     isCurrentPage: Boolean = true,
     accountSessionRefreshGeneration: Int = 0,
+    initialEditAccount: Boolean = false,
     onBack: () -> Unit,
     onGoToLogin: () -> Unit,
     onLogoutSuccess: () -> Unit,
@@ -390,6 +391,7 @@ fun ProfileScreen(
             viewModel = viewModel,
             isCurrentPage = isCurrentPage,
             accountSessionRefreshGeneration = accountSessionRefreshGeneration,
+            initialEditAccount = initialEditAccount,
             onBack = onBack,
             onGoToLogin = onGoToLogin,
             onLogoutSuccess = onLogoutSuccess,
@@ -425,6 +427,7 @@ private fun ProfileScreenContent(
     viewModel: ProfileViewModel = viewModel(),
     isCurrentPage: Boolean = true,
     accountSessionRefreshGeneration: Int = 0,
+    initialEditAccount: Boolean = false,
     onBack: () -> Unit,
     onGoToLogin: () -> Unit,
     onLogoutSuccess: () -> Unit,
@@ -682,7 +685,7 @@ private fun ProfileScreenContent(
                             deferImmersiveRenderBudget = deferImmersiveRenderBudget,
                             skinVideoBackgroundPath = skinVideoBackgroundPath,
                             skinVideoPlayMode = skinVideoPlayMode,
-                            playSkinVideo = isCurrentPage,
+                            playSkinVideo = isCurrentPage && !initialEditAccount,
                         )
                     },
                     progressiveTopChrome = profileProgressiveChrome,
@@ -907,12 +910,13 @@ private fun ProfileScreenContent(
                             deferImmersiveRenderBudget = deferImmersiveRenderBudget,
                             skinVideoBackgroundPath = skinVideoBackgroundPath,
                             skinVideoPlayMode = skinVideoPlayMode,
-                            playSkinVideo = isCurrentPage,
+                            playSkinVideo = isCurrentPage && !initialEditAccount,
                         )
                     }
 
                     ProfileSpaceContent(
                         viewModel = viewModel,
+                        initialEditAccount = initialEditAccount,
                         user = decoratedUser,
                         accountFace = currentUiState.user.face,
                         space = currentUiState.space,
@@ -964,7 +968,7 @@ private fun ProfileScreenContent(
                                     deferImmersiveRenderBudget = deferImmersiveRenderBudget,
                                     skinVideoBackgroundPath = skinVideoBackgroundPath,
                                     skinVideoPlayMode = skinVideoPlayMode,
-                                    playSkinVideo = isCurrentPage,
+                                    playSkinVideo = isCurrentPage && !initialEditAccount,
                                 )
                             }
                         },
@@ -1173,6 +1177,7 @@ private fun ProfileSkinVideoBackground(
 @Composable
 private fun ProfileSpaceContent(
     viewModel: ProfileViewModel,
+    initialEditAccount: Boolean = false,
     user: UserState,
     accountFace: String,
     space: ProfileSpaceUiState,
@@ -1211,7 +1216,7 @@ private fun ProfileSpaceContent(
     progressiveTopChrome: ProfileProgressiveTopChrome = ProfileProgressiveTopChrome(null, false),
     captureBackground: @Composable BoxScope.() -> Unit = {},
 ) {
-    var showEditDialog by remember { mutableStateOf(false) }
+    var showEditDialog by rememberSaveable(user.mid) { mutableStateOf(initialEditAccount) }
     var avatarPreview by remember(user.mid) { mutableStateOf<String?>(null) }
     val avatarSourceRect = rememberImagePreviewSourceRect()
     val openAvatarPreview: () -> Unit = {
@@ -1262,7 +1267,7 @@ private fun ProfileSpaceContent(
             mid = user.mid,
             accountFace = accountFace,
             isSaving = space.isSavingSign,
-            onDismiss = { showEditDialog = false },
+            onDismiss = { showEditDialog = false; if (initialEditAccount) onBack() },
             onEditSign = { showEditDialog = false; showAccountSignDialog = true },
             // 子编辑流程（昵称/生日、性别、头像）叠加在编辑资料之上，返回时回到编辑资料。
             onEditField = { field -> editingAccountField = field },
@@ -1292,8 +1297,12 @@ private fun ProfileSpaceContent(
     if (showAccountSignDialog) {
         ProfileAccountSignDialog(
             initialValue = editableAccount.sign,
-            onDismiss = { showAccountSignDialog = false },
-            onSave = { sign -> showAccountSignDialog = false; onSignSave(sign) },
+            onDismiss = { showAccountSignDialog = false; if (initialEditAccount) showEditDialog = true },
+            onSave = { sign ->
+                showAccountSignDialog = false
+                if (initialEditAccount) showEditDialog = true
+                onSignSave(sign)
+            },
         )
     }
     editingAccountField?.let { field ->

@@ -489,7 +489,9 @@ internal data class SpaceInitialSeed(
     val defaultMainTab: SpaceMainTab,
     val defaultSubTab: SpaceSubTab,
     val defaultContributionTabId: String,
-    val hasCheeseTab: Boolean = false
+    val hasCheeseTab: Boolean = false,
+    val reservations: List<com.android.purebilibili.data.model.response.SpaceReservationItem> = emptyList(),
+    val hasMedalWall: Boolean = false,
 )
 
 internal fun resolveSpaceAggregateTopPhoto(
@@ -661,7 +663,9 @@ internal fun resolveSpaceInitialSeedFromAggregate(
         defaultMainTab = defaultSelection.first,
         defaultSubTab = defaultSelection.second,
         defaultContributionTabId = defaultSelection.third,
-        hasCheeseTab = data.tab2.any { it.param.equals("cheese", ignoreCase = true) }
+        hasCheeseTab = data.tab2.any { it.param.equals("cheese", ignoreCase = true) },
+        reservations = data.reservations,
+        hasMedalWall = data.medal == 1,
     )
 }
 
@@ -690,8 +694,10 @@ internal fun buildInitialSpaceSuccessState(
         userInfo = seed.userInfo,
         relationStat = seed.relationStat,
         upStat = seed.upStat,
-        videos = seed.videos,
-        totalVideos = seed.totalVideos,
+        videos = if (selectedSubTab == SpaceSubTab.CHARGING_VIDEO) emptyList() else seed.videos,
+        totalVideos = if (selectedSubTab == SpaceSubTab.CHARGING_VIDEO) 0 else seed.totalVideos,
+        homeVideos = seed.videos,
+        homeVideoCount = seed.totalVideos,
         categories = categories,
         selectedSubTab = selectedSubTab,
         selectedContributionTabId = seed.defaultContributionTabId,
@@ -710,7 +716,7 @@ internal fun buildInitialSpaceSuccessState(
         homeBangumiCount = seed.homeBangumiCount,
         homeComicItems = seed.homeComicItems,
         homeComicCount = seed.homeComicCount,
-        isLoadingMore = shouldShowInitialVideoLoading,
+        isLoadingMore = selectedSubTab != SpaceSubTab.CHARGING_VIDEO && shouldShowInitialVideoLoading,
         hasMoreVideos = seed.totalVideos > seed.videos.size,
         hasMoreAudios = seed.totalAudios > seed.audios.size,
         hasMoreArticles = seed.totalArticles > seed.articles.size,
@@ -725,7 +731,9 @@ internal fun buildInitialSpaceSuccessState(
         ),
         tabShellState = tabShellState,
         mainTabs = seed.mainTabs,
-        hasCheeseTab = seed.hasCheeseTab
+        hasCheeseTab = seed.hasCheeseTab,
+        reservations = seed.reservations,
+        hasMedalWall = seed.hasMedalWall,
     )
 }
 
@@ -734,8 +742,11 @@ internal fun resolveSpaceAggregateDefaultSelection(
     contributionTabs: List<SpaceContributionTab>
 ): Triple<SpaceMainTab, SpaceSubTab, String> {
     val contributionTab = when (defaultTab.lowercase()) {
-        "article" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.ARTICLE || it.subTab == SpaceSubTab.OPUS }
-        "opus" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.OPUS || it.subTab == SpaceSubTab.ARTICLE }
+        "article" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.ARTICLE }
+            ?: contributionTabs.firstOrNull { it.subTab == SpaceSubTab.OPUS }
+        "opus" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.OPUS }
+            ?: contributionTabs.firstOrNull { it.subTab == SpaceSubTab.ARTICLE }
+        "charging_video" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.CHARGING_VIDEO }
         "audio" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.AUDIO }
         "season_video" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.SEASON_VIDEO }
         "series" -> contributionTabs.firstOrNull { it.subTab == SpaceSubTab.SERIES }
@@ -749,6 +760,10 @@ internal fun resolveSpaceAggregateDefaultSelection(
         "home" -> Triple(SpaceMainTab.HOME, contributionTab.subTab, contributionTab.id)
         "favorite" -> Triple(SpaceMainTab.FAVORITE, contributionTab.subTab, contributionTab.id)
         "bangumi" -> Triple(SpaceMainTab.BANGUMI, contributionTab.subTab, contributionTab.id)
+        "cheese" -> Triple(SpaceMainTab.CHEESE, contributionTab.subTab, contributionTab.id)
+        "shop" -> Triple(SpaceMainTab.SHOP, contributionTab.subTab, contributionTab.id)
+        "video", "contribute", "article", "opus", "audio", "charging_video", "season_video", "series", "ugcseason", "comic" ->
+            Triple(SpaceMainTab.CONTRIBUTION, contributionTab.subTab, contributionTab.id)
         else -> Triple(SpaceMainTab.HOME, contributionTab.subTab, contributionTab.id)
     }
 }

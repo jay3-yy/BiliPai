@@ -171,6 +171,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object ProfileAccountEdit : BiliPaiNavKey {
+        override val routeBase: String = "profile_account_edit"
+    }
+
+    @Serializable
     data class AccountLedger(val kind: com.android.purebilibili.data.model.AccountLedgerKind) : BiliPaiNavKey {
         override val routeBase: String = "account_ledger"
     }
@@ -516,6 +521,16 @@ internal sealed interface BiliPaiNavKey : NavKey {
         val targetBvid: String = "",
     ) : BiliPaiNavKey {
         override val routeBase: String = "space"
+    }
+
+    @Serializable
+    data class SpaceWebVideos(
+        val mid: Long,
+        val ownerName: String,
+        val collectionType: String = "",
+        val collectionId: Long = 0L,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "space_web_videos"
     }
 
     @Serializable

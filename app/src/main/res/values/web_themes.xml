@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BiliPai.Web.Light" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:isLightTheme">true</item>
+    </style>
+    <style name="Theme.BiliPai.Web.Dark" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:isLightTheme">false</item>
+    </style>
+</resources>

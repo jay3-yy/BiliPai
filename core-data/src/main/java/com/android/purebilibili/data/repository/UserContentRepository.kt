@@ -36,18 +36,48 @@ object UserContentRepository {
         response.data ?: error("UP 主资料为空")
     }
 
+    suspend fun webVideos(mid: Long, page: Int, order: String, tag: SpaceVideoTag): Result<SpaceVideoData> = dataRequest {
+        val keys = WbiKeyManager.getWbiKeys().getOrThrow()
+        val params = buildSpaceVideoQueryParams(mid, page, 30, order, tag.tid, "", tag.specialType) + mapOf(
+            "platform" to "web", "web_location" to "333.1387", "order_avoided" to "true", "tid" to tag.tid.toString(),
+            "dm_img_list" to "[]", "dm_img_str" to spaceWebImageToken(16, 64),
+            "dm_cover_img_str" to spaceWebImageToken(32, 128),
+            "dm_img_inter" to "{\"ds\":[],\"wh\":[0,0,0],\"of\":[0,0,0]}",
+        )
+        val response = NetworkModule.spaceApi.getSpaceWebVideos(
+            WbiUtils.sign(params, keys.first, keys.second), "https://space.bilibili.com/$mid",
+        )
+        if (response.code != 0) throw ContentRequestException(response.code, response.message)
+        response.data ?: error("网页投稿数据为空")
+    }
+
     suspend fun videos(mid: Long, page: Int, pageSize: Int = 30, order: String = "pubdate", tid: Int = 0,
-        keyword: String = "", imgKey: String? = null, subKey: String? = null): Result<SpaceVideoData> = dataRequest {
+        keyword: String = "", imgKey: String? = null, subKey: String? = null,
+        specialType: String? = null): Result<SpaceVideoData> = dataRequest {
         val keys = if (imgKey != null && subKey != null) imgKey to subKey else WbiKeyManager.getWbiKeys().getOrThrow()
-        val params = buildMap {
-            put("mid", mid.toString()); put("pn", page.toString()); put("ps", pageSize.toString()); put("order", order)
-            if (tid > 0) put("tid", tid.toString())
-            if (keyword.isNotBlank()) put("keyword", keyword)
-        }
+        val params = buildSpaceVideoQueryParams(mid, page, pageSize, order, tid, keyword, specialType)
         val response = NetworkModule.spaceApi.getSpaceVideos(WbiUtils.sign(params, keys.first, keys.second))
         if (response.code != 0) throw ContentRequestException(response.code, response.message)
         response.data ?: error("UP 主投稿数据为空")
     }
+}
+
+private fun spaceWebImageToken(minLength: Int, maxLength: Int): String {
+    val bytes = ByteArray(kotlin.random.Random.nextInt(minLength, maxLength + 1)) {
+        kotlin.random.Random.nextInt(0x26, 0x7f).toByte()
+    }
+    return java.util.Base64.getEncoder().encodeToString(bytes).dropLast(2)
+}
+
+internal fun buildSpaceVideoQueryParams(mid: Long, page: Int, pageSize: Int, order: String,
+    tid: Int, keyword: String, specialType: String?): Map<String, String> = buildMap {
+    put("mid", mid.toString())
+    put("pn", page.toString())
+    put("ps", pageSize.toString())
+    put("order", order)
+    if (tid > 0) put("tid", tid.toString())
+    if (keyword.isNotBlank()) put("keyword", keyword)
+    if (specialType != null) put("special_type", specialType)
 }
 
 fun durationSeconds(text: String): Int = text.split(':').fold(0) { total, part -> total * 60 + (part.toIntOrNull() ?: 0) }

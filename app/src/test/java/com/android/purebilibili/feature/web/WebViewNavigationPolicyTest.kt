@@ -9,6 +9,19 @@ import kotlin.test.assertTrue
 
 class WebViewNavigationPolicyTest {
     @Test
+    fun spaceSubpagesKeepTheirWebPathWhileRootProfilesStillOpenNatively() {
+        listOf("upload/video", "upower/rank", "favlist").forEach { path ->
+            listOf(false, true).forEach { gesture ->
+                assertEquals(WebViewNavigationAction.AllowWebLoad,
+                    resolveWebViewNavigationAction("https://space.bilibili.com/42/$path", gesture))
+            }
+        }
+        assertEquals(WebViewNavigationAction.DispatchTarget(BilibiliNavigationTarget.Space(42L)),
+            resolveWebViewNavigationAction("https://space.bilibili.com/42", true))
+        assertIs<WebViewNavigationAction.OpenExternal>(resolveWebViewNavigationAction("https://space.bilibili.com.example.org/42/upload/video", true))
+    }
+
+    @Test
     fun dynamicPreviewLinksRetainCommentIntentForHostDispatchInsteadOfIdOnlyCallback() {
         listOf(
             "bilibili://following/detail/123?tab=comment" to
