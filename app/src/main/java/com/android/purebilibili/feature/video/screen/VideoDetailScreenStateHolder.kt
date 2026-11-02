@@ -5097,9 +5097,19 @@ internal fun VideoDetailScreenStateHolder(
                                         position.y.toInt() + size.height
                                     )
                                     val nextRootBottomPx = (rootPosition.y + size.height).roundToInt()
+                                    // 只在「稳定的竖屏内联布局」下记录播放器底边。
+                                    // 横屏/全屏期间播放器铺满窗口，这个值没有意义；从横屏回竖屏的头几百毫秒
+                                    // 播放器会先报一个横屏残留高度（如 1439）再缩到正确值（1079），
+                                    // 中途记录下来会让楼中楼宿主按错误的高度算预留，出现空隙和高度跳变。
+                                    val shouldTrackPlayerBottom = !isFullscreenMode &&
+                                        !isLandscape &&
+                                        continuousPlayerPhase == ContinuousPlayerTransitionPhase.Inline
                                     if (
-                                        videoPlayerRootBottomPx == 0 ||
-                                        abs(videoPlayerRootBottomPx - nextRootBottomPx) > 3
+                                        shouldTrackPlayerBottom &&
+                                        (
+                                            videoPlayerRootBottomPx == 0 ||
+                                                abs(videoPlayerRootBottomPx - nextRootBottomPx) > 3
+                                            )
                                     ) {
                                         videoPlayerRootBottomPx = nextRootBottomPx
                                     }
@@ -5869,12 +5879,14 @@ internal fun VideoDetailScreenStateHolder(
             threadListModifier = commentThreadPlayerScrollConnection?.let {
                 Modifier.nestedScroll(it)
             } ?: Modifier,
-            // 横屏全屏时楼中楼宿主整个退出，只保留 ViewModel 里的 subReplyState，
-            // 转回竖屏后自动恢复成原来的楼中楼。
-            // 之前只在横屏评论面板已打开时才隐藏，面板没打开时楼中楼会按 60% 屏高
-            // 从底部展开，正好压住横屏视频的下半部分。
+            // 横屏全屏时宿主退出，只保留 ViewModel 里的 subReplyState。
+            // 早先试过让它留在 composition 里（移到屏幕外），但横屏时父容器高度为 0，
+            // 转回竖屏要重新测量好几次（1761→2200→2274），楼中楼会突然变高，
+            // 背景模糊也跟着渐入，割裂感比卡顿更明显。
             visible = shouldShowDetachedVideoCommentThreadHost(useTabletLayout = useTabletLayout) &&
                 !canShowLandscapeComments,
+            // 从横屏恢复时跳过进场动画，直接显示成原来的样子。
+            instantRestore = canShowLandscapeComments,
             successState = successState,
             commentState = commentState,
             commentViewModel = commentViewModel,
