@@ -214,21 +214,11 @@ object ArticleRepository {
     }
 
     private suspend fun signWithWbi(params: Map<String, String>): Map<String, String> {
-        return try {
-            val navResp = navApi.getNavInfo()
-            val wbiImg = navResp.data?.wbi_img
-            val imgKey = wbiImg?.img_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
-            val subKey = wbiImg?.sub_url?.substringAfterLast("/")?.substringBefore(".") ?: ""
-            if (imgKey.isNotEmpty() && subKey.isNotEmpty()) {
-                WbiUtils.sign(params, imgKey, subKey)
-            } else {
-                params
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            params
-        }
+        // 复用 WbiKeyManager 的缓存，避免每次请求都打一次 /x/web-interface/nav。
+        val keys = com.android.purebilibili.core.network.WbiKeyManager.getWbiKeys().getOrNull()
+            ?: com.android.purebilibili.core.network.WbiKeyManager.refreshKeys().getOrNull()
+            ?: return params
+        return com.android.purebilibili.core.network.WbiUtils.sign(params, keys.first, keys.second)
     }
 
     private fun String?.normalizeImageUrl(): String? {
