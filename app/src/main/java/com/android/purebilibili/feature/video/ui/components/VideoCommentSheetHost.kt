@@ -328,6 +328,8 @@ internal fun resolveVideoCommentSheetHostOverlayVisual(
 @Composable
 fun VideoCommentSheetHost(
     mainSheetVisible: Boolean,
+    /** 从横屏恢复时跳过进场动画，避免重新播放滑入和模糊渐入。 */
+    instantRestore: Boolean = false,
     onDismiss: () -> Unit,
     /**
      * 覆盖全屏 scrim 的峰值透明度。
@@ -400,7 +402,8 @@ fun VideoCommentSheetHost(
     val hostVisible = hostContent != VideoCommentSheetHostContent.HIDDEN
     // A host can be mounted already visible when opened from the inline list.
     // Start the sheet transition hidden so that first mount also slides upward.
-    val sheetVisibility = remember { MutableTransitionState(false) }
+    // 从横屏恢复时例外：直接以可见状态挂载，不跑进场动画。
+    val sheetVisibility = remember { MutableTransitionState(instantRestore && hostVisible) }
     LaunchedEffect(hostVisible) {
         sheetVisibility.targetState = hostVisible
     }
@@ -423,10 +426,10 @@ fun VideoCommentSheetHost(
     val hostVisibilityProgress by animateFloatAsState(
         targetValue = if (hostVisible) 1f else 0f,
         animationSpec = tween(
-            durationMillis = if (hostVisible) {
-                motionSpec.contentEnterFadeDurationMillis
-            } else {
-                motionSpec.contentExitFadeDurationMillis
+            durationMillis = when {
+                instantRestore -> 0
+                hostVisible -> motionSpec.contentEnterFadeDurationMillis
+                else -> motionSpec.contentExitFadeDurationMillis
             }
         ),
         label = "video_comment_host_visibility_progress"
