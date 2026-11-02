@@ -18,6 +18,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
 import com.android.purebilibili.feature.home.components.cards.VideoCardDurationPublishRow
 import org.junit.Assert.assertEquals
