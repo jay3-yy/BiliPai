@@ -21,6 +21,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.data.model.response.ReplyContent
+import com.android.purebilibili.data.model.response.ReplyContentUrl
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.feature.dynamic.components.dynamicInlineCommentItems
@@ -158,6 +159,74 @@ class SubReplyPreviewActionUiRegressionTest {
             assertEquals(listOf(100L to 301L, 100L to 301L), openedThreads)
             assertTrue(openedSpaces.isEmpty())
             assertTrue(openedUrls.isEmpty())
+        }
+    }
+
+    @Test
+    fun previewSearchKeywordsStayPlainWhileFullCommentsKeepSearchLinks() {
+        val searchUrl = "https://search.bilibili.com/all?keyword=%E5%8E%9F%E7%A5%9E"
+        val videoUrl = "https://www.bilibili.com/video/BV1xx411c7mD"
+        val content = ReplyContent(
+            message = "聊聊原神 @目标用户 https://b23.tv/demo",
+            urls = mapOf(
+                "原神" to ReplyContentUrl(
+                    title = "原神",
+                    url = searchUrl,
+                    appUrlSchema = "bilibili://search?keyword=%E5%8E%9F%E7%A5%9E",
+                    prefixIcon = "android.resource://android/drawable/ic_menu_search",
+                ),
+                "https://b23.tv/demo" to ReplyContentUrl(title = "参考视频", url = videoUrl),
+            ),
+            atNameToMid = mapOf("目标用户" to 99L),
+        )
+        val openedThreads = mutableListOf<Pair<Long, Long>>()
+        val openedUrls = mutableListOf<String>()
+        rule.setContent {
+            MaterialTheme {
+                ReplyItemView(
+                    item = reply(total = 1, loaded = 1).copy(
+                        content = content.copy(message = "完整评论：" + content.message),
+                        replies = listOf(mentionReply().copy(content = content)),
+                    ),
+                    onClick = {},
+                    onSubClick = { root, target -> openedThreads += root.rpid to target },
+                    onAvatarClick = {},
+                    onUrlClick = { openedUrls += it },
+                )
+            }
+        }
+
+        fun layoutOf(text: String): TextLayoutResult {
+            val results = mutableListOf<TextLayoutResult>()
+            rule.onNodeWithText(text, substring = true, useUnmergedTree = true)
+                .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(results) }
+            return results.single()
+        }
+
+        val previewLayout = layoutOf("回复者1: 聊聊原神")
+        val previewText = previewLayout.layoutInput.text
+        val keywordStart = previewText.text.indexOf("原神")
+        val keywordEnd = keywordStart + "原神".length
+        assertTrue(previewText.getLinkAnnotations(keywordStart, keywordEnd).isEmpty())
+        assertTrue(previewText.spanStyles.none { it.start < keywordEnd && it.end > keywordStart })
+        assertTrue(previewLayout.placeholderRects.isEmpty())
+        val mentionStart = previewText.text.indexOf("@目标用户")
+        assertEquals(1, previewText.getLinkAnnotations(mentionStart, mentionStart + 5).size)
+        val videoStart = previewText.text.indexOf("参考视频")
+        assertEquals(1, previewText.getLinkAnnotations(videoStart, videoStart + 4).size)
+
+        val fullLayout = layoutOf("完整评论：")
+        val fullText = fullLayout.layoutInput.text
+        val fullKeywordStart = fullText.text.indexOf("原神")
+        assertEquals(1, fullText.getLinkAnnotations(fullKeywordStart, fullKeywordStart + 2).size)
+        assertTrue(fullText.spanStyles.any { it.start <= fullKeywordStart && it.end > fullKeywordStart })
+        assertEquals(1, fullLayout.placeholderRects.size)
+
+        tapCharacter("回复者1: 聊聊原神", "原神")
+        tapCharacter("完整评论：", "原神")
+        rule.runOnIdle {
+            assertEquals(listOf(100L to 301L), openedThreads)
+            assertEquals(listOf(searchUrl), openedUrls)
         }
     }
 

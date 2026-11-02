@@ -81,6 +81,8 @@ import com.android.purebilibili.core.theme.calculateContrastRatio
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.core.util.BilibiliUrlParser
+import com.android.purebilibili.core.util.BilibiliNavigationTarget
+import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.data.model.response.ReplyFansDetail
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -455,6 +457,19 @@ internal fun buildSubReplyPreviewPrefix(
         }
         add(": ")
     }
+}
+
+internal fun resolveSubReplyPreviewContent(content: ReplyContent): ReplyContent {
+    var previewUrls: MutableMap<String, ReplyContentUrl>? = null
+    content.urls.forEach { (token, url) ->
+        val target = BilibiliNavigationTargetParser.parse(resolveReplyContentUrlNavigationUrl(token, url))
+        if (target is BilibiliNavigationTarget.Search) {
+            // Keep the original keyword as plain text, without its search icon or link styling.
+            val filtered = previewUrls ?: content.urls.toMutableMap().also { previewUrls = it }
+            filtered.remove(token)
+        }
+    }
+    return previewUrls?.let { content.copy(urls = it) } ?: content
 }
 
 internal fun resolveReplyItemContentType(item: ReplyItem): String {
@@ -2142,6 +2157,9 @@ fun ReplyItemView(
                                             resolveSubReplyOpenTargetId(item.rpid, subReply.rpid)
                                         )
                                     }
+                                    val previewContent = remember(subReply.content) {
+                                        resolveSubReplyPreviewContent(subReply.content)
+                                    }
 
                                     Box(
                                         modifier = Modifier
@@ -2164,7 +2182,7 @@ fun ReplyItemView(
                                             lineHeight = VideoCommentTypographyTokens.subReply * 1.6f,
                                             color = appearance.primaryTextColor.copy(alpha = 0.8f),
                                             emoteMap = subEmoteMap,
-                                            content = subReply.content,
+                                            content = previewContent,
                                             maxLines = 2,
                                             onTimestampClick = { openPreviewReply() },
                                             maxTimestampMs = maxTimestampMs,
