@@ -111,4 +111,18 @@ class VideoPlayerBufferPolicyTest {
         }
     }
 
+    @Test
+    fun normalForwardBufferHonorsNetworkPlaybackTimeTargets() {
+        for ((wifi, playbackTimeUs) in listOf(true to 6_000_000L, false to 4_000_000L)) {
+            val policy = resolvePlayerBufferPolicy(isOnWifi = wifi)
+            val mediaTimeUs = resolveEarlyPlaybackBufferLimitUs(
+                policy.earlyPlaybackMaxBufferMs,
+                policy.bufferForPlaybackMs,
+                policy.bufferForPlaybackAfterRebufferMs,
+                playbackSpeed = 2f,
+            )
+            assertEquals(playbackTimeUs, mediaTimeUs / 2, "wall-clock buffer wifi=$wifi")
+        }
+    }
+
 }
