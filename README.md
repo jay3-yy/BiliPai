@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.6.9-007AFF?style=flat-square" alt="Source 0.6.9" />
+<img src="https://img.shields.io/badge/Source-0.7.5-007AFF?style=flat-square" alt="Source 0.7.5" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -25,10 +25,10 @@
 | 视频播放 | DASH、高清画质、弹幕、手势、倍速、播放记忆、后台播放与画中画 |
 | 听视频 | 沉浸式与黑胶模式、歌词、队列、定时关闭、系统媒体控制 |
 | 字幕与笔记 | 本地字幕导入导出、样式与时间调整；私有笔记、时间点与 AI 总结草稿 |
-| 番剧与直播 | 追番、选集、进度预览、直播分区与实时弹幕 |
+| 番剧与直播 | 追番、自适应选集、大屏分栏与横屏布局；直播分区与实时弹幕 |
 | 动态与消息 | 关注动态、评论回复、图片预览与私信 |
 | 搜索与缓存 | 视频、UP 主与番剧搜索；离线下载、断点续传与本地播放 |
-| 外观与布局 | Google Material 3、Miuix、可选液态玻璃、动态取色与大屏布局 |
+| 外观与布局 | Google Material 3、Miuix、可选液态玻璃与弹性动效、动态取色、首页规则网格与大屏布局 |
 | 扩展能力 | 插件、DLNA / Google Cast 投屏、WebDAV 设置备份 |
 
 部分画质需要登录或相应账号权限。外观、播放、弹幕与后台行为可在设置中调整。
@@ -62,15 +62,22 @@
 
 ## 插件
 
-内置空降助手、去广告、Anime4K、弹幕增强、夜间护眼、推荐与投屏等 12 个插件，支持 JSON / `.bp` 规则通过 URL 导入。
+内置空降助手、去广告、Anime4K、弹幕增强、夜间护眼、推荐与投屏等插件，并提供多种扩展方式：
 
-导入第三方插件前，请检查来源与权限声明。插件开发见 [plugin-sdk](plugin-sdk)。
+- JSON / `.bp` 规则：通过 URL 导入，用于内容过滤与弹幕处理等。
+- `.bilipai.js` 插件：扩展内容源，支持直播源、影视目录与网页抓取。
+- `.bpskin` 皮肤包：导入背景、颜色与部分动效资源，不执行代码。
+- `.bpplugin` Kotlin 插件包：目前支持包预览与能力授权，尚不执行外部 Dex。
+
+导入第三方插件前，请检查来源与权限声明。开发说明见 [插件开发指南](docs/PLUGIN_DEVELOPMENT.md)、[Kotlin 插件 SDK](plugins/sdk/README.md) 与 [JS 插件示例](examples/plugins/README.md)。
 
 ## 最近更新
 
-- 竖屏播放支持上滑进入全屏，留白处显示动态环境光；弹幕轻触即可点赞、复制或举报。
-- 直播弹幕新增字体、行高等高级设置，输入框支持表情与富文本编辑。
-- 听视频更可靠地记忆播放进度；个人中心新增硬币、经验明细与更多隐私设置。
+- 空间增加漫画、文集、预约、勋章墙和更多账号入口；“网页投稿”支持原生列表、筛选、排序与跳页。
+- 跨设备续播优先使用最新云端进度，修正分 P、进度回退和历史记录显示。
+- 修复快速进入评论时误报加载失败，以及评论视频链接点击和长按菜单。
+- 修复私信键盘遮挡、播放器数量角标裁切，统一分区拖动振动并增加剧集卡片间距。
+- 内置网页跟随应用主题并保留浏览进度，修复空间切页和退出时的回弹节点崩溃。
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -120,6 +127,6 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 
 <div align="center">
 
-<sub>源码版本 0.6.9（535） · 更新于 2026-10-30 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>源码版本 0.7.5（544） · 更新于 2026-11-02 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

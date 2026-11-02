@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.6.9-007AFF?style=flat-square" alt="Source 0.6.9" />
+<img src="https://img.shields.io/badge/Source-0.7.5-007AFF?style=flat-square" alt="Source 0.7.5" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -25,10 +25,10 @@ Built with Kotlin and Jetpack Compose, BiliPai supports videos, bangumi, live st
 | Playback | DASH, HD quality, danmaku, gestures, speed controls, resume, background play and picture-in-picture |
 | Audio mode | Immersive and vinyl layouts, lyrics, queues, sleep timer and system media controls |
 | Subtitles and notes | Local subtitle import/export, styling and timing; private notes, timestamps and AI-summary drafts |
-| Bangumi and live | Following, episode selection, seek previews, live categories and danmaku |
+| Bangumi and live | Following, adaptive episode grids, large-screen panes and landscape layouts; live categories and danmaku |
 | Feeds and messages | Followed creators, comments, replies, image previews and direct messages |
 | Search and downloads | Video, creator and bangumi search; resumable downloads and local playback |
-| Appearance | Google Material 3, Miuix, optional Liquid Glass, dynamic colors and large-screen layouts |
+| Appearance | Google Material 3, Miuix, optional Liquid Glass with elastic motion, dynamic colors, regular home grids and large-screen layouts |
 | Extensions | Plugins, DLNA / Google Cast and WebDAV settings backup |
 
 Some quality tiers require login or account privileges. Appearance, playback, danmaku and background behavior are configurable in Settings.
@@ -39,7 +39,7 @@ Some quality tiers require login or account privileges. Appearance, playback, da
 
 **Liquid Glass, throughout the app**
 
-Live-sampled liquid glass across top bars, docks, menus and player controls — refracting with content, springing on touch, switching back to native Google Material 3 / Miuix anytime. Screenshots show a few scenes only.
+Screenshots show Liquid Glass in a few parts of the app.
 
 <img src="docs/images/screenshot-glass-1.png" height="400" alt="BiliPai home" />
 <img src="docs/images/screenshot-glass-2.png" height="400" alt="BiliPai appearance settings" />
@@ -62,15 +62,22 @@ Get APKs and release notes from the [Telegram channel](https://t.me/bilipai666).
 
 ## Plugins
 
-The 12 built-in plugins cover sponsor skipping, ad filtering, Anime4K, danmaku, eye care, recommendations and casting. Import JSON / `.bp` rules by URL.
+Built-in plugins cover sponsor skipping, ad filtering, Anime4K, danmaku, eye care, recommendations and casting. Additional extension formats include:
 
-Review the source and declared permissions before importing third-party plugins. For plugin development, see [plugin-sdk](plugin-sdk).
+- JSON / `.bp` rules: import by URL for content filtering, danmaku processing and more.
+- `.bilipai.js` plugins: add content sources such as live streams, video catalogs and scraped web content.
+- `.bpskin` skin packs: import backgrounds, colors and selected motion assets without executing code.
+- `.bpplugin` Kotlin packages: package previews and capability authorization are supported; external Dex execution is not yet available.
+
+Review the source and declared permissions before importing third-party plugins. See the [plugin development guide](docs/PLUGIN_DEVELOPMENT.md), [Kotlin plugin SDK](plugins/sdk/README.md) and [JS plugin examples](examples/plugins/README.md).
 
 ## Recent updates
 
-- Swipe up in portrait playback for fullscreen with dynamic ambient light; tap a danmaku to like, copy or report it.
-- New advanced live danmaku options for typography and spacing, with rich-text input and emoji in the editor.
-- Audio mode now remembers playback progress more reliably; the profile page adds coin/XP details and more privacy settings.
+- Spaces add comics, article collections, reservations, medal walls and more account tools. Web uploads support native lists, filters, sorting and page navigation.
+- Cross-device resume uses the latest cloud progress, with fixes for multi-part videos, seeking backward and history display.
+- Fixed false loading errors when opening comments quickly, video-link taps and long-press menus in comments.
+- Fixed keyboard overlap in chats and clipped player counts; aligned category drag haptics with the dock and added spacing between season cards.
+- In-app pages follow the app theme while keeping browsing state; fixed overscroll-node crashes when switching or leaving space tabs.
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
@@ -120,6 +127,6 @@ This is an unofficial client and is not affiliated with BiliBili. Content belong
 
 <div align="center">
 
-<sub>Source version 0.6.9 (535) · Updated 2026-10-30 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>Source version 0.7.5 (544) · Updated 2026-11-02 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>
