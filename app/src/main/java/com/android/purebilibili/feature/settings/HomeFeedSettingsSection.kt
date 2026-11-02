@@ -19,8 +19,6 @@ internal fun HomeFeedSettingsSection() {
     )
     val incrementalTimelineRefreshEnabled by SettingsManager.getIncrementalTimelineRefresh(context)
         .collectAsStateWithLifecycle(initialValue = false)
-    val homeRefreshCount by SettingsManager.getHomeRefreshCount(context)
-        .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT)
     val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
         .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
     val dynamicTabOrder by SettingsManager.getDynamicTabOrder(context)
@@ -48,7 +46,6 @@ internal fun HomeFeedSettingsSection() {
         dynamicFeedLayoutMode = dynamicFeedLayoutMode,
         dynamicVisibleTabIds = dynamicVisibleTabIds,
         dynamicTabOrder = dynamicTabOrder,
-        homeRefreshCount = homeRefreshCount,
         onFeedApiTypeChange = { value -> scope.launch { SettingsManager.setFeedApiType(context, value); android.widget.Toast.makeText(context, "已切换为${value.label}，下拉刷新后生效", android.widget.Toast.LENGTH_SHORT).show() } },
         onIncrementalTimelineRefreshChange = { value -> scope.launch { SettingsManager.setIncrementalTimelineRefresh(context, value) } },
         onDynamicImagePreviewTextVisibleChange = { value -> scope.launch { SettingsManager.setDynamicImagePreviewTextVisible(context, value) } },
@@ -57,7 +54,6 @@ internal fun HomeFeedSettingsSection() {
         onDynamicTopBarCollapseOnScrollChange = { value -> scope.launch { SettingsManager.setDynamicTopBarCollapseOnScroll(context, value) } },
         onDynamicFeedLayoutModeChange = { value -> scope.launch { SettingsManager.setDynamicFeedLayoutMode(context, value) } },
         onDynamicTabOrderChange = { value -> scope.launch { SettingsManager.setDynamicTabOrder(context, value) } },
-        onHomeRefreshCountChange = { value -> scope.launch { SettingsManager.setHomeRefreshCount(context, value) } },
         onDynamicTabVisibilityChange = { tabId ->
             scope.launch { SettingsManager.setDynamicTabVisibleTabs(context, resolveDynamicVisibleTabIdsAfterToggle(dynamicVisibleTabIds, tabId)) }
         },

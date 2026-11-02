@@ -528,13 +528,8 @@ internal fun normalizeDanmakuDisplayArea(value: Float): Float {
 internal fun normalizeDanmakuFontScale(value: Float): Float =
     if (value.isFinite()) value.coerceIn(0.5f, 2.5f) else 1f
 
-internal const val DEFAULT_HOME_REFRESH_COUNT = 20
-internal const val MIN_HOME_REFRESH_COUNT = 10
-internal const val MAX_HOME_REFRESH_COUNT = 30
-
-internal fun normalizeHomeRefreshCount(count: Int): Int {
-    return count.coerceIn(MIN_HOME_REFRESH_COUNT, MAX_HOME_REFRESH_COUNT)
-}
+/** 推荐流兜底条数；实际值由 HomeViewModel 按网格列数换算。 */
+internal const val DEFAULT_HOME_REFRESH_COUNT = 12
 
 enum class HomeFeedCardWidthPreset(
     val value: Int,
@@ -6124,7 +6119,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     
     private val KEY_FEED_API_TYPE = intPreferencesKey("feed_api_type")
     private val KEY_INCREMENTAL_TIMELINE_REFRESH = booleanPreferencesKey("incremental_timeline_refresh")
-    private val KEY_HOME_REFRESH_COUNT = intPreferencesKey("home_refresh_count")
     
     /**
      *  推荐流 API 类型
@@ -6173,28 +6167,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
-    fun getHomeRefreshCount(context: Context): Flow<Int> = context.settingsDataStore.data
-        .map { preferences ->
-            normalizeHomeRefreshCount(preferences[KEY_HOME_REFRESH_COUNT] ?: DEFAULT_HOME_REFRESH_COUNT)
-        }
-
-    suspend fun setHomeRefreshCount(context: Context, count: Int) {
-        val normalized = normalizeHomeRefreshCount(count)
-        context.settingsDataStore.edit { preferences ->
-            preferences[KEY_HOME_REFRESH_COUNT] = normalized
-        }
-        context.getSharedPreferences("feed_api", Context.MODE_PRIVATE)
-            .edit()
-            .putInt("home_refresh_count", normalized)
-            .apply()
-    }
-
-    fun getHomeRefreshCountSync(context: Context): Int {
-        val value = context.getSharedPreferences("feed_api", Context.MODE_PRIVATE)
-            .getInt("home_refresh_count", DEFAULT_HOME_REFRESH_COUNT)
-        return normalizeHomeRefreshCount(value)
-    }
-    
     // ==========  实验性功能 ==========
     
     private val KEY_AUTO_1080P = booleanPreferencesKey("exp_auto_1080p")
@@ -9089,7 +9061,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 KEY_DYNAMIC_TOP_BAR_COLLAPSE_ON_SCROLL,
                 SettingsShareSection.NAVIGATION
             ),
-            IntShareablePreferenceDefinition(KEY_HOME_REFRESH_COUNT, SettingsShareSection.NAVIGATION)
         )
     }
 
