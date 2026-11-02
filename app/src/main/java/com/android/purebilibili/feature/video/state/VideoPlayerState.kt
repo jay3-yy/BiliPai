@@ -87,7 +87,7 @@ internal data class PlayerBufferPolicy(
     val maxBufferMs: Int,
     val bufferForPlaybackMs: Int,
     val bufferForPlaybackAfterRebufferMs: Int,
-    /** Keep the initial part of a video close to the viewer's actual progress. */
+    /** Forward-buffer target in wall-clock milliseconds, converted to media time at playback speed. */
     val earlyPlaybackMaxBufferMs: Int
 )
 
@@ -98,7 +98,7 @@ internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean, resilient: Boolean = f
             maxBufferMs = 40000,
             bufferForPlaybackMs = 700,
             bufferForPlaybackAfterRebufferMs = 1400,
-            earlyPlaybackMaxBufferMs = 2000
+            earlyPlaybackMaxBufferMs = 6000
         )
     } else {
         PlayerBufferPolicy(
@@ -106,7 +106,7 @@ internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean, resilient: Boolean = f
             maxBufferMs = 45000,
             bufferForPlaybackMs = 1000,
             bufferForPlaybackAfterRebufferMs = 2200,
-            earlyPlaybackMaxBufferMs = 2000
+            earlyPlaybackMaxBufferMs = 4000
         )
     }
     return if (!resilient) normal else normal.copy(
@@ -117,7 +117,7 @@ internal fun resolvePlayerBufferPolicy(isOnWifi: Boolean, resilient: Boolean = f
     )
 }
 
-/** 前段限流必须覆盖按倍速折算后的起播及恢复门槛，并留出测量余量。 */
+/** 前段目标按实际播放时长折算，并始终覆盖起播/恢复门槛及测量余量。 */
 internal fun resolveEarlyPlaybackBufferLimitUs(
     earlyPlaybackMaxBufferMs: Int,
     bufferForPlaybackMs: Int,
@@ -126,7 +126,8 @@ internal fun resolveEarlyPlaybackBufferLimitUs(
 ): Long {
     val speed = playbackSpeed.takeIf { it.isFinite() && it > 0f } ?: 1f
     val requiredUs = (maxOf(bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs) * 1_000.0 * speed).toLong()
-    return maxOf(earlyPlaybackMaxBufferMs * 1_000L, requiredUs + 250_000L)
+    val targetUs = (earlyPlaybackMaxBufferMs * 1_000.0 * speed).toLong()
+    return maxOf(targetUs, requiredUs + 250_000L)
 }
 
 /**
