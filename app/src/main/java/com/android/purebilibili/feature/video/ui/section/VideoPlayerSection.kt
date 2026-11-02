@@ -2834,16 +2834,10 @@ private fun VideoPlayerSectionContent(
                                         fallbackDurationMs = gestureSeekFallbackDurationMs
                                     )
                                     val seekDelta = resolveHorizontalSeekDeltaMs(
-                                        isFullscreen = isFullscreen,
-                                        fullscreenSwipeSeekEnabled = fullscreenSwipeSeekEnabled,
                                         totalDragDistanceX = totalDragDistanceX,
                                         containerWidthPx = size.width.toFloat(),
-                                        fullscreenSwipeSeekSeconds = fullscreenSwipeSeekSeconds,
-                                        inlineSwipeSeekSeconds = inlineSwipeSeekSeconds,
                                         gestureSensitivity = gestureSensitivity,
                                         durationMs = duration,
-                                        useRelativeDuration = swipeSeekUseRelativeDuration,
-                                        relativeSeekPercent = swipeSeekRelativePercent
                                     )
                                     if (seekDelta != null) {
                                         seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)

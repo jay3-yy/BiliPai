@@ -3254,16 +3254,10 @@ private fun VideoPageItem(
                             if (isCurrentPage && isSeekGesture && progressState.duration > 0L) {
                                 totalDragDistanceX += dragAmount
                                 val seekDelta = resolveHorizontalSeekDeltaMs(
-                                    isFullscreen = true,
-                                    fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
                                     totalDragDistanceX = totalDragDistanceX,
                                     containerWidthPx = size.width.toFloat(),
-                                    fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds,
-                                    inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds,
                                     gestureSensitivity = playerInteractionSettings.gestureSensitivity,
                                     durationMs = progressState.duration,
-                                    useRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration,
-                                    relativeSeekPercent = playerInteractionSettings.swipeSeekRelativePercent
                                 )
                                 if (seekDelta != null) {
                                     seekTargetPosition = (seekStartPosition + seekDelta)

@@ -589,16 +589,10 @@ fun BangumiPlayerView(
                                     // null，拖动不再产生越界目标。
                                     val seekDelta = com.android.purebilibili.feature.video.ui.section
                                         .resolveHorizontalSeekDeltaMs(
-                                            isFullscreen = isFullscreen,
-                                            fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
                                             totalDragDistanceX = dragDelta,
                                             containerWidthPx = screenWidth,
-                                            fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds,
-                                            inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds,
                                             gestureSensitivity = playerInteractionSettings.gestureSensitivity,
                                             durationMs = duration,
-                                            useRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration,
-                                            relativeSeekPercent = playerInteractionSettings.swipeSeekRelativePercent,
                                         )
                                     if (seekDelta != null) {
                                         seekPreviewPosition = (seekGestureStartPosition + seekDelta).coerceIn(0L, duration)

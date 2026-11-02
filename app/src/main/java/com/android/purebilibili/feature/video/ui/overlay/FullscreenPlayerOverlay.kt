@@ -905,16 +905,10 @@ fun FullscreenPlayerOverlay(
                             }
                             FullscreenGestureMode.Seek -> {
                                 val seekDelta = resolveHorizontalSeekDeltaMs(
-                                    isFullscreen = true,
-                                    fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
                                     totalDragDistanceX = dragDelta,
                                     containerWidthPx = screenWidth,
-                                    fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds,
-                                    inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds,
                                     gestureSensitivity = playerInteractionSettings.gestureSensitivity,
                                     durationMs = duration,
-                                    useRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration,
-                                    relativeSeekPercent = playerInteractionSettings.swipeSeekRelativePercent
                                 )
                                 if (seekDelta != null) {
                                     seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)

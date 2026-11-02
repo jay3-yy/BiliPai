@@ -706,16 +706,10 @@ fun OfflineVideoPlayerScreen(
                                         totalDragDistanceX += dragAmount.x
                                         val duration = player.duration.coerceAtLeast(0L)
                                         val seekDelta = resolveHorizontalSeekDeltaMs(
-                                            isFullscreen = isFullscreen,
-                                            fullscreenSwipeSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
                                             totalDragDistanceX = totalDragDistanceX,
                                             containerWidthPx = size.width.toFloat(),
-                                            fullscreenSwipeSeekSeconds = playerInteractionSettings.fullscreenSwipeSeekSeconds,
-                                            inlineSwipeSeekSeconds = playerInteractionSettings.inlineSwipeSeekSeconds,
                                             gestureSensitivity = playerInteractionSettings.gestureSensitivity,
                                             durationMs = duration,
-                                            useRelativeDuration = playerInteractionSettings.swipeSeekUseRelativeDuration,
-                                            relativeSeekPercent = playerInteractionSettings.swipeSeekRelativePercent
                                         )
                                         if (seekDelta != null) {
                                             seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)

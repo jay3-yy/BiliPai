@@ -1357,8 +1357,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         com.android.purebilibili.core.util.Logger.d(
             "HomeFeed",
             "refresh 触发 category=$category 实际列=$feedGridColumns " +
-                "请求column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN} " +
-                "ps=${resolveHomeFeedPageSize(feedGridColumns)}",
+                "请求column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN}",
         )
         accountRequests.launch {
             _isRefreshing.value = true
@@ -1532,7 +1531,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (next != feedGridColumns) {
             com.android.purebilibili.core.util.Logger.d(
                 "HomeFeed",
-                "列数变化 $feedGridColumns → $next，ps=${resolveHomeFeedPageSize(next)}",
+                "列数变化 $feedGridColumns → $next（实际列只影响本地排版，" +
+                    "请求固定 column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN}）",
             )
         }
         feedGridColumns = next
@@ -1596,7 +1596,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             "HomeFeed",
             "loadMore 触发 category=$currentCategory 实际列=$feedGridColumns " +
                 "请求column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN} " +
-                "ps=${resolveHomeFeedPageSize(feedGridColumns)} current=${categoryState.videos.size}",
+                "current=${categoryState.videos.size}",
         )
 
         accountRequests.launch {
@@ -1768,8 +1768,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val prepared = preparedHomeFeed ?: return@onSuccess
             com.android.purebilibili.core.util.Logger.d(
                 "HomeFeed",
-                "响应 category=$currentCategory isLoadMore=$isLoadMore 原始=${videos.size} " +
-                    "过滤后=${prepared.validVideoCount} ps=${resolveHomeFeedPageSize(feedGridColumns)}",
+                "响应 category=$currentCategory isLoadMore=$isLoadMore " +
+                    "原始=${videos.size} 过滤后=${prepared.validVideoCount}",
             )
             if (shouldAdvanceRecommendFeedRequestIndex(
                     category = currentCategory,

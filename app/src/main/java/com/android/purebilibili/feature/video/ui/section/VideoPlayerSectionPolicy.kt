@@ -554,49 +554,54 @@ internal fun resolveVideoPlayerDanmakuSettingsScope(
     )
 }
 
+/**
+ * 官方全屏手势快进曲线：满屏宽度对应的跳转秒数，按时长分四段。
+ *
+ * 来源：官方客户端 PlayerSeekWidget3 的系数计算。短片一屏划完，长片按对数增长，
+ * 避免两小时的视频一屏只跳几秒。四段在 60s / 1380s / 2700s 处接续，是连续的。
+ *
+ *     时长 < 60s          → 满屏 = 全片
+ *     60s ~ 23min         → 100 - ((t-1380)/209)^2
+ *     23min ~ 45min       → 100 + ((t-1380)/295)^2
+ *     >= 45min            → 177 * atan((t-2700)/1000) + 120
+ *
+ * 实际系数：1min→60s，10min→86s，30min→102s，60min→250s，120min→359s。
+ */
+internal fun resolveOfficialSwipeSeekSecondsPerScreen(durationMs: Long): Float {
+    if (durationMs <= 0L) return 0f
+    val seconds = durationMs / 1000.0
+    return when {
+        seconds < 60.0 -> seconds.toFloat()
+        seconds < 1380.0 -> {
+            val offset = (seconds - 1380.0) / 209.0
+            (100.0 - offset * offset).toFloat()
+        }
+        seconds < 2700.0 -> {
+            val offset = (seconds - 1380.0) / 295.0
+            (100.0 + offset * offset).toFloat()
+        }
+        else -> (177.0 * kotlin.math.atan((seconds - 2700.0) / 1000.0) + 120.0).toFloat()
+    }
+}
+
 internal fun resolveHorizontalSeekDeltaMs(
-    isFullscreen: Boolean,
-    fullscreenSwipeSeekEnabled: Boolean,
     totalDragDistanceX: Float,
     containerWidthPx: Float,
-    fullscreenSwipeSeekSeconds: Int?,
-    inlineSwipeSeekSeconds: Int,
     gestureSensitivity: Float,
     durationMs: Long,
-    useRelativeDuration: Boolean,
-    relativeSeekPercent: Int
 ): Long? {
     if (containerWidthPx <= 0f || !containerWidthPx.isFinite()) return null
-    // Surface drags share this policy across all player/material variants; sliders stay absolute.
-    // Relative mode uses a full viewport width, independently of the fixed half-width range.
-    if (useRelativeDuration) {
-        if (durationMs <= 0L) return null
-        val maxDeltaMs = (durationMs * (relativeSeekPercent.coerceIn(1, 100) / 100.0)).toLong()
-        val rawDeltaMs = (
-            totalDragDistanceX.toDouble() / containerWidthPx * maxDeltaMs * gestureSensitivity
-        ).toLong()
-        return rawDeltaMs.coerceIn(-maxDeltaMs, maxDeltaMs)
-    }
-    if (isFullscreen && fullscreenSwipeSeekEnabled) {
-        val seekSeconds = fullscreenSwipeSeekSeconds ?: return null
-        if (seekSeconds == 0) return (totalDragDistanceX * 200f * gestureSensitivity).toLong()
-        return resolveConfiguredSeekDeltaMs(
-            totalDragDistanceX = totalDragDistanceX,
-            containerWidthPx = containerWidthPx,
-            seekSeconds = seekSeconds.coerceAtLeast(1),
-            gestureSensitivity = gestureSensitivity
-        )
-    }
-    if (!isFullscreen) {
-        if (inlineSwipeSeekSeconds == 0) return (totalDragDistanceX * 200f * gestureSensitivity).toLong()
-        return resolveConfiguredSeekDeltaMs(
-            totalDragDistanceX = totalDragDistanceX,
-            containerWidthPx = containerWidthPx,
-            seekSeconds = inlineSwipeSeekSeconds.coerceIn(1, 120),
-            gestureSensitivity = gestureSensitivity
-        )
-    }
-    return (totalDragDistanceX * 200f * gestureSensitivity).toLong()
+    if (durationMs <= 0L) return null
+    // 对齐官方：满屏宽度 = resolveOfficialSwipeSeekSecondsPerScreen(duration) 秒。
+    // 手势灵敏度作为最终乘数保留（官方没有这个设置，但不影响曲线形状）。
+    val secondsPerScreen = resolveOfficialSwipeSeekSecondsPerScreen(durationMs)
+    if (secondsPerScreen <= 0f) return null
+    val maxDeltaMs = (durationMs.toDouble()).coerceAtLeast(1.0)
+    val rawDeltaMs = (
+        totalDragDistanceX.toDouble() / containerWidthPx *
+            secondsPerScreen * 1000.0 * gestureSensitivity
+    ).toLong()
+    return rawDeltaMs.coerceIn(-maxDeltaMs.toLong(), maxDeltaMs.toLong())
 }
 
 internal const val VIDEO_PLAYER_HORIZONTAL_SEEK_DOMINANCE_RATIO = 1.2f
