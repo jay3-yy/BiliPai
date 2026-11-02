@@ -253,7 +253,13 @@ internal fun applyPlaybackButtonUserAction(
     player: Player,
     isShowingPauseIcon: Boolean
 ) {
-    if (isShowingPauseIcon && player.playbackState != Player.STATE_ENDED) {
+    // Buffering stops frame output, not the user's intent to play; the icon may lag a player event.
+    val shouldPause = if (player.playbackState == Player.STATE_BUFFERING) {
+        player.playWhenReady
+    } else {
+        isShowingPauseIcon
+    }
+    if (shouldPause && player.playbackState != Player.STATE_ENDED) {
         pausePlayerFromUserAction(player)
     } else {
         playPlayerFromUserAction(player)

@@ -1406,7 +1406,12 @@ private fun VideoPlayerOverlayContent(
                 player = player,
                 isShowingPauseIcon = isPlaying
             )
-            isPlaying = !isPlaying
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState,
+                hasPendingSeekResume = hasPendingSeekResume,
+            )
         }
     }
 
@@ -1965,15 +1970,19 @@ private fun VideoPlayerOverlayContent(
             }
         }
 
+        val showCenterPlaybackControl = showPlayerChrome &&
+            (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY ||
+                player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED) &&
+            !isSeekScrubbing && !endDrawerVisible && !landscapeCommentPanelVisible && !showInsightDetails
+
         CenterPlaybackControl(
-            visible = showPlayerChrome &&
-                (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED) &&
-                centerLoadingUiState == null && !isSeekScrubbing &&
-                !endDrawerVisible && !landscapeCommentPanelVisible && !showInsightDetails,
+            visible = showCenterPlaybackControl,
             isPlaying = effectiveIsPlaying,
             onPlayPause = { togglePlayPause() },
             diameter = if (isFullscreen) 72.dp else 56.dp,
             viewportTopInset = if (isFullscreen) 0.dp else statusBarBackdropHeight,
+            isBuffering = !pluginPlaybackStatus.first && player.playWhenReady &&
+                (player.playbackState == Player.STATE_BUFFERING || centerLoadingUiState != null),
         )
 
         // --- 5.4  缓冲加载指示器 ---
@@ -1984,7 +1993,7 @@ private fun VideoPlayerOverlayContent(
                 playWhenReady = player.playWhenReady,
                 hasRenderedFirstFrame = hasRenderedFirstFrame,
                 suppressTransientOverlays = suppressTransientOverlaysForTransition,
-            ) && centerLoadingUiState == null,
+            ) && centerLoadingUiState == null && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。
@@ -1998,7 +2007,7 @@ private fun VideoPlayerOverlayContent(
         }
 
         AnimatedVisibility(
-            visible = centerLoadingUiState != null,
+            visible = centerLoadingUiState != null && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(OverlayControlFadeSpec),
             exit = fadeOut(OverlayControlFadeSpec)
@@ -2035,7 +2044,7 @@ private fun VideoPlayerOverlayContent(
 
         // --- 5.5  清晰度切换中 Loading 指示器 ---
         AnimatedVisibility(
-            visible = isQualitySwitching && centerLoadingUiState == null,
+            visible = isQualitySwitching && centerLoadingUiState == null && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(OverlayControlFadeSpec),
             exit = fadeOut(OverlayControlFadeSpec)

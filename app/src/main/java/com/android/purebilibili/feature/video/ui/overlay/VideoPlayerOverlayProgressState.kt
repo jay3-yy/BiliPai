@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
@@ -37,6 +38,26 @@ internal fun rememberVideoPlayerOverlayProgress(
     onPlayingChanged: (Boolean) -> Unit,
 ): State<PlayerProgress> {
     val currentOnPlayingChanged = rememberUpdatedState(onPlayingChanged)
+    DisposableEffect(player, hasPendingSeekResume) {
+        fun updatePlayingState() {
+            currentOnPlayingChanged.value(
+                resolveOverlayPlaybackButtonPlayingState(
+                    isPlaying = player.isPlaying,
+                    playWhenReady = player.playWhenReady,
+                    playbackState = player.playbackState,
+                    hasPendingSeekResume = hasPendingSeekResume,
+                )
+            )
+        }
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                updatePlayingState()
+            }
+        }
+        player.addListener(listener)
+        updatePlayingState()
+        onDispose { player.removeListener(listener) }
+    }
     return produceState(
         initialValue = PlayerProgress(),
         player,
@@ -59,14 +80,6 @@ internal fun rememberVideoPlayerOverlayProgress(
                 ),
                 bufferedPositionMs = player.bufferedPosition,
                 playbackState = player.playbackState,
-            )
-            currentOnPlayingChanged.value(
-                resolveOverlayPlaybackButtonPlayingState(
-                    isPlaying = player.isPlaying,
-                    playWhenReady = player.playWhenReady,
-                    playbackState = player.playbackState,
-                    hasPendingSeekResume = hasPendingSeekResume,
-                )
             )
             if (!shouldPollInlineVideoOverlayProgress(
                     playerExists = true,

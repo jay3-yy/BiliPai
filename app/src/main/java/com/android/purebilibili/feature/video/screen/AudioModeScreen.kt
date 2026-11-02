@@ -92,7 +92,8 @@ internal fun resolveAudioModePlayPauseAction(
     return when (playbackState) {
         Player.STATE_ENDED -> AudioModePlayPauseAction.RESTART_FROM_BEGINNING
         Player.STATE_IDLE -> AudioModePlayPauseAction.PREPARE_AND_RESUME
-        Player.STATE_READY, Player.STATE_BUFFERING -> AudioModePlayPauseAction.RESUME
+        Player.STATE_BUFFERING -> if (playWhenReady) AudioModePlayPauseAction.PAUSE else AudioModePlayPauseAction.RESUME
+        Player.STATE_READY -> AudioModePlayPauseAction.RESUME
         else -> if (playWhenReady) AudioModePlayPauseAction.PAUSE else AudioModePlayPauseAction.RESUME
     }
 }

@@ -17,6 +17,8 @@ import com.android.purebilibili.feature.video.ambient.AmbientFrameController
 import com.android.purebilibili.feature.video.ambient.LocalAmbientPresentation
 import com.android.purebilibili.feature.video.ambient.LocalAmbientController
 import com.android.purebilibili.feature.video.ui.overlay.ImmersiveStatusBarBackdrop
+import com.android.purebilibili.feature.video.ui.overlay.resolveOverlayPlaybackButtonPlayingState
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import android.app.Activity
 import com.android.purebilibili.feature.bangumi.ui.player.BangumiPlayerFeatures
 import com.android.purebilibili.feature.bangumi.ui.player.rememberBangumiSubtitles
@@ -1418,17 +1420,15 @@ fun BangumiPlayerScreen(
                         BangumiCollapsedPlayerBar(
                             scrollRatio = animatedCollapseProgress,
                             topInset = 0.dp,
-                            isPlaying = exoPlayer?.isPlaying == true,
+                            isPlaying = exoPlayer?.let {
+                                resolveOverlayPlaybackButtonPlayingState(it.isPlaying, it.playWhenReady, it.playbackState)
+                            } == true,
                             isCompleted = exoPlayer?.playbackState == androidx.media3.common.Player.STATE_ENDED,
                             hasPlayed = (exoPlayer?.currentPosition ?: 0L) > 0L,
                             onBack = onBack,
                             onPlayClick = {
                                 inlinePlayerCollapseState.restore()
-                                if (exoPlayer?.isPlaying == true) {
-                                    exoPlayer?.pause()
-                                } else {
-                                    exoPlayer?.play()
-                                }
+                                exoPlayer?.let(::togglePlayerPlaybackFromUserAction)
                             },
                             modifier = Modifier.matchParentSize()
                         )

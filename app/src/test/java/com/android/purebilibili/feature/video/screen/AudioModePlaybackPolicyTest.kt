@@ -55,6 +55,18 @@ class AudioModePlaybackPolicyTest {
     }
 
     @Test
+    fun `buffering play button cancels or restores playback intent`() {
+        assertEquals(
+            AudioModePlayPauseAction.PAUSE,
+            resolveAudioModePlayPauseAction(false, Player.STATE_BUFFERING, true)
+        )
+        assertEquals(
+            AudioModePlayPauseAction.RESUME,
+            resolveAudioModePlayPauseAction(false, Player.STATE_BUFFERING, false)
+        )
+    }
+
+    @Test
     fun `play button restarts playback after media ended`() {
         assertEquals(
             AudioModePlayPauseAction.RESTART_FROM_BEGINNING,
