@@ -63,7 +63,7 @@ class AccountLedgerPolicyTest {
     @Test
     fun profileMenusAndRouteBridgeSelectTheRequestedLedger() {
         val opened = mutableListOf<AccountLedgerKind>()
-        val actions = ledgerMenuActions { opened += it }
+        val actions = ledgerMenuActions(open = { opened += it })
         actions.forEach { it.onClick?.invoke() }
         assertEquals(AccountLedgerKind.entries.toList(), opened)
         assertTrue(ledgerMenuActions(null).isEmpty())
