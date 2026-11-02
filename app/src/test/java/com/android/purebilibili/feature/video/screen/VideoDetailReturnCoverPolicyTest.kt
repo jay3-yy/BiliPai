@@ -216,6 +216,49 @@ class VideoDetailReturnCoverPolicyTest {
     }
 
     @Test
+    fun ordinaryDetailMediaRemainsVisibleThroughoutNavigation() {
+        for (phase in VideoCardTransitionBackgroundPhase.entries) {
+            for (sourceAlpha in listOf(0f, 0.5f, 1f)) {
+                assertEquals(1f, resolveVideoDetailNowPlayingMediaAlpha(
+                    ownsNowPlayingTransition = false,
+                    isCommittedCardReturn = false,
+                    phase = phase,
+                    sourceChromeAlpha = sourceAlpha,
+                ), 0.001f)
+            }
+        }
+    }
+
+    @Test
+    fun nowPlayingOpeningHandsSnapshotOverToVisiblePlayer() {
+        for ((depth, expectedMediaAlpha) in listOf(0f to 0f, 0.1f to 0.5f, 0.7f to 1f, 1f to 1f)) {
+            val sourceAlpha = resolveVideoDetailFlyingSourceChromeAlpha(
+                morphDepthProgress = depth,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                isReturnGestureInProgress = false,
+                sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE,
+                isNowPlayingBar = true,
+            )
+            assertEquals(expectedMediaAlpha, resolveVideoDetailNowPlayingMediaAlpha(
+                ownsNowPlayingTransition = true,
+                isCommittedCardReturn = false,
+                phase = VideoCardTransitionBackgroundPhase.OPENING,
+                sourceChromeAlpha = sourceAlpha,
+            ), 0.001f)
+        }
+    }
+
+    @Test
+    fun completedNowPlayingReturnRemovesDetailMedia() {
+        assertEquals(0f, resolveVideoDetailNowPlayingMediaAlpha(
+            ownsNowPlayingTransition = true,
+            isCommittedCardReturn = true,
+            phase = VideoCardTransitionBackgroundPhase.IDLE,
+            sourceChromeAlpha = 0f,
+        ), 0.001f)
+    }
+
+    @Test
     fun nowPlayingBarUsesOneSnapshotWindowForOpeningReturnAndGestureRestore() {
         for ((depth, expected) in listOf(1f to 0f, 0.7f to 0f, 0.1f to 0.5f, 0.02f to 1f, 0f to 1f)) {
             for (phase in listOf(

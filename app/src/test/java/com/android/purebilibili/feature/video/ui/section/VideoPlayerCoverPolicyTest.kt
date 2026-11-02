@@ -306,11 +306,11 @@ class VideoPlayerCoverPolicyTest {
         // 视频在封面之上淡入，封面同步淡出会让两层半透明叠加透出黑底（亮度凹陷）。
         assertTrue(
             shouldHoldEntryCoverUnderlay(
-                isFirstFrameRendered = true,
+                isFirstFrameRendered = false,
                 forceCoverDuringReturnAnimation = false,
                 shouldKeepCoverForManualStart = false,
-                hasStartedSmoothReveal = true,
-                isSurfaceRevealSettling = true,
+                hasStartedSmoothReveal = false,
+                isSurfaceRevealSettling = false,
             )
         )
         assertTrue(

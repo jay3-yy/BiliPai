@@ -176,6 +176,18 @@ internal fun resolveVideoDetailReturnInfoSurfaceSpec(
     )
 }
 
+/** 封面与真实播放器共用的媒体透明度；普通详情保持可见，底部入口与源快照互补交接。 */
+internal fun resolveVideoDetailNowPlayingMediaAlpha(
+    ownsNowPlayingTransition: Boolean,
+    isCommittedCardReturn: Boolean,
+    phase: VideoCardTransitionBackgroundPhase,
+    sourceChromeAlpha: Float,
+): Float {
+    if (!ownsNowPlayingTransition) return 1f
+    if (isCommittedCardReturn && phase == VideoCardTransitionBackgroundPhase.IDLE) return 0f
+    return 1f - sourceChromeAlpha
+}
+
 @Suppress("UNUSED_PARAMETER")
 internal fun resolveVideoDetailFlyingSourceChromeAlpha(
     morphDepthProgress: Float,

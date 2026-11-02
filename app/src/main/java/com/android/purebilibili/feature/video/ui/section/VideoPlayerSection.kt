@@ -1184,18 +1184,6 @@ private fun VideoPlayerSectionContent(
     var observedIsPlaying by remember(playerState.player) {
         mutableStateOf(playerState.player.isPlaying)
     }
-    // 有没有解码出画面尺寸。比 isPlaying 更准：无声视频照样有尺寸，
-    // 而纯音频播放没有尺寸（那种场景走 AudioModeMusicPlayer，不经过这里）。
-    var observedHasVideoFrame by remember(playerState.player) {
-        mutableStateOf(
-            playerState.player.videoSize.width > 0 && playerState.player.videoSize.height > 0
-        )
-    }
-    // 播放器里已经装载了媒体。videoSize 会在 reset/切轨时短暂归零，
-    // 而 mediaItemCount 只要装载过就稳定 > 0，用它兜住那种抖动。
-    var observedHasMedia by remember(playerState.player) {
-        mutableStateOf(playerState.player.mediaItemCount > 0)
-    }
     var keepVideoPlaybackAwake by remember(playerState.player) {
         mutableStateOf(
             shouldKeepVideoPlaybackAwake(
@@ -1210,8 +1198,6 @@ private fun VideoPlayerSectionContent(
             val player = playerState.player
             observedPlayWhenReady = player.playWhenReady
             observedIsPlaying = player.isPlaying
-            observedHasVideoFrame = player.videoSize.width > 0 && player.videoSize.height > 0
-            observedHasMedia = player.mediaItemCount > 0
             keepVideoPlaybackAwake = shouldKeepVideoPlaybackAwake(
                 playWhenReady = player.playWhenReady,
                 isPlaying = player.isPlaying,
@@ -1260,22 +1246,6 @@ private fun VideoPlayerSectionContent(
 
             override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
                 observedPlaybackSpeed = playbackParameters.speed
-            }
-
-            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
-                observedHasVideoFrame = videoSize.width > 0 && videoSize.height > 0
-            }
-
-            // 平板多面板布局下会有第二个实例复用同一个播放器。它挂载时播放器可能
-            // 已经解码完（videoSize 已定），onVideoSizeChanged 不会重放，
-            // 只在挂载时同步一次就会永久停留在 frame=false，封面不揭开。
-            // 这里在这些状态点都重新同步一次。
-            override fun onRenderedFirstFrame() {
-                syncPlayerObservation()
-            }
-
-            override fun onEvents(player: Player, events: Player.Events) {
-                syncPlayerObservation()
             }
         }
         playerState.player.addListener(listener)
@@ -4420,19 +4390,14 @@ private fun VideoPlayerSectionContent(
         hasSurfaceRevealSettled = true
     }
     val isSurfaceRevealSettling = hasStartedSmoothReveal && !hasSurfaceRevealSettled
-    // 已经解码出画面尺寸，封面必须让位。
-    // 平板多面板布局下会有第二个 VideoPlayerSection 实例，它拿不到首帧事件
-    // （identity 形如 BV..._0），isFirstFrameRendered 一直是 false，
-    // 只靠首帧标记判断会让那层封面永久盖在播放器上。
-    // 用 videoSize 而不是 isPlaying：前者直接表示「有画面」，与音轨无关。
-    val holdEntryCoverUnderlay = !observedHasVideoFrame && !observedHasMedia && (
-        !isPlayerSurfaceReady || shouldHoldEntryCoverUnderlay(
-            isFirstFrameRendered = isFirstFrameRendered,
-            forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
-            shouldKeepCoverForManualStart = keepCoverForManualStart,
-            hasStartedSmoothReveal = hasStartedSmoothReveal,
-            isSurfaceRevealSettling = isSurfaceRevealSettling,
-        )
+    // 装载媒体和 videoSize 不能证明当前输出面已经出画。玻璃与原生路径共用首帧揭开
+    // 时序：淡入期间保留不透明封面垫底，直到视频层不透明后才移除，避免中途露出黑底。
+    val holdEntryCoverUnderlay = !isPlayerSurfaceReady || shouldHoldEntryCoverUnderlay(
+        isFirstFrameRendered = isFirstFrameRendered,
+        forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
+        shouldKeepCoverForManualStart = keepCoverForManualStart,
+        hasStartedSmoothReveal = hasStartedSmoothReveal,
+        isSurfaceRevealSettling = isSurfaceRevealSettling,
     )
     val showCover = holdEntryCoverUnderlay
     val manualStartPlayButtonLayoutSpec = remember {

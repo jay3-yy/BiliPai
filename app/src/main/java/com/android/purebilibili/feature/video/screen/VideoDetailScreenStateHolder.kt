@@ -4933,30 +4933,14 @@ internal fun VideoDetailScreenStateHolder(
                         }
                         val residentCoverContentScale = VideoDetailCoverContentScale
                         val nowPlayingMediaAlphaProvider: () -> Float = {
-                            if (!entryOwnsMiuixCardTransition || !miuixLandingState.enabled ||
-                                miuixLandingState.sourceChromeSnapshot?.isNowPlayingBar != true
-                            ) {
-                                // 没有卡片转场时（例如从底部「正在播放」条进入），常驻封面
-                                // 没有共享元素接手，必须自己随导航转场淡出，否则会一直
-                                // 盖在播放器上方（表现为有声音、看不到画面）。
-                                (1f - detailTransitionProgress.value).coerceIn(0f, 1f)
-                            } else if (isCommittedCardReturn &&
-                                videoCardDepthBackgroundState.phaseProvider() ==
-                                    VideoCardTransitionBackgroundPhase.IDLE
-                            ) {
-                                0f
-                            } else if (videoCardDepthBackgroundState.phaseProvider() ==
-                                VideoCardTransitionBackgroundPhase.OPENING
-                            ) {
-                                // 从底部「正在播放」条进入：封面要随打开进度淡出，
-                                // 不能沿用 1f - flyingSourceChromeAlpha。
-                                // 后者在 isNowPlayingBar 且 phase == OPENING 时返回的是
-                                // 源卡片 chrome 的 reveal 值（接近 0），算出来恒为 1f，
-                                // 表现是封面一直盖着播放器，只有声音。
-                                (1f - miuixLandingState.progressProvider()).coerceIn(0f, 1f)
-                            } else {
-                                1f - flyingSourceChromeAlphaProvider()
-                            }
+                            resolveVideoDetailNowPlayingMediaAlpha(
+                                ownsNowPlayingTransition = entryOwnsMiuixCardTransition &&
+                                    miuixLandingState.enabled &&
+                                    miuixLandingState.sourceChromeSnapshot?.isNowPlayingBar == true,
+                                isCommittedCardReturn = isCommittedCardReturn,
+                                phase = videoCardDepthBackgroundState.phaseProvider(),
+                                sourceChromeAlpha = flyingSourceChromeAlphaProvider(),
+                            )
                         }
                         val returnMediaFrameProvider: () -> VideoDetailReturnMediaFrame = {
                             val returnGestureInProgress =
