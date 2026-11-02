@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.style.LineBreak
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import top.yukonga.miuix.kmp.theme.LocalContentColor as MiuixLocalContentColor
@@ -43,6 +44,12 @@ fun appIconGlyphTextStyle(): TextStyle = currentAppTextStyle().copy(
 @ReadOnlyComposable
 fun appTextStyleWithLineHeightStyle(lineHeightStyle: LineHeightStyle): TextStyle =
     currentAppTextStyle().copy(lineHeightStyle = lineHeightStyle)
+
+/** 长正文沿用当前材质的字体与字阶，仅调整段落换行。 */
+@Composable
+@ReadOnlyComposable
+fun appParagraphTextStyle(): TextStyle =
+    currentAppTextStyle().copy(lineBreak = LineBreak.Paragraph)
 
 /** Resolves the content color from the active native component tree. */
 @Composable

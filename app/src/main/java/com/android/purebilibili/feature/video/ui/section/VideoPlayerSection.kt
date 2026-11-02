@@ -1819,6 +1819,15 @@ private fun VideoPlayerSectionContent(
             showEndDrawer = false
         }
     }
+    // 两种材质共用：横屏侧栏打开时收起控件，保留之后手动唤出控件的能力。
+    LaunchedEffect(isFullscreen, configuration.orientation, showEndDrawer, landscapeCommentPanelVisible) {
+        if (isFullscreen &&
+            configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE &&
+            (showEndDrawer || landscapeCommentPanelVisible)
+        ) {
+            showControls = false
+        }
+    }
     val endDrawerReservedWidthDp = resolveLandscapeEndDrawerReservedWidthDp(
         drawerVisible = showEndDrawer,
         isFullscreen = isFullscreen,

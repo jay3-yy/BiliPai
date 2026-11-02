@@ -51,6 +51,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -425,7 +427,9 @@ private fun ArticleDetailContent(
     val articleQuoteColor = resolveArticleTextColor(AppContentColors.secondaryText(), articleTextColor, articleBackground)
     val articleCodeColor = resolveArticleTextColor(AppContentColors.primaryText(), articleTextColor, AppSurfaceTokens.surfaceContainer())
     val bodyStyle = MaterialTheme.typography.bodyLarge.withArticleReadingPreferences(readingPreferences)
+        .copy(lineBreak = LineBreak.Paragraph, hyphens = Hyphens.Auto)
     val headingStyle = MaterialTheme.typography.titleLarge.withArticleReadingPreferences(readingPreferences)
+        .copy(lineBreak = LineBreak.Heading)
     val codeStyle = MaterialTheme.typography.bodyMedium.withArticleReadingPreferences(readingPreferences)
     val sharedTransitionEnabled = transitionEnabled &&
         sharedTransitionScope != null &&
@@ -589,7 +593,7 @@ private fun ArticleDetailContent(
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         AppText(
                             text = article.title,
-                            style = MaterialTheme.typography.headlineSmall,
+                            style = MaterialTheme.typography.headlineSmall.copy(lineBreak = LineBreak.Heading),
                             fontWeight = FontWeight.Bold
                         )
                         if (article.authorName.isNotBlank() || article.publishTime.isNotBlank()) {
@@ -643,7 +647,7 @@ private fun ArticleDetailContent(
                         if (shouldShowArticleSummary(article.summary, article.blocks)) {
                             AppText(
                                 text = article.summary,
-                                style = MaterialTheme.typography.bodyMedium,
+                                style = MaterialTheme.typography.bodyMedium.copy(lineBreak = LineBreak.Paragraph),
                                 color = AppContentColors.secondaryText()
                             )
                         }

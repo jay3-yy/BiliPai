@@ -845,6 +845,12 @@ internal fun VideoDetailScreenStateHolder(
         composerViewModel = composerViewModel,
         supplementViewModel = supplementViewModel,
     )
+    VideoOnlineCountVisibilityEffect(
+        viewModel = viewModel,
+        bvid = currentBvid,
+        cid = playbackTargetCid,
+        pageActive = isVisible && !keepLoadedContentForBackPreview && !isPipMode && !isPortraitFullscreen,
+    )
     val commentListState = rememberSaveable(currentBvid, saver = LazyListState.Saver) {
         LazyListState()
     }

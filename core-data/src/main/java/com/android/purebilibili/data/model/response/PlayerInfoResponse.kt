@@ -33,7 +33,7 @@ data class PlayerInfoData(
     @SerialName("view_points")
     val viewPoints: List<ViewPoint> = emptyList(),
     @SerialName("online_count")
-    val onlineCount: Int = 0,
+    val onlineCount: Int? = null,
     val subtitle: SubtitleInfo? = null,
     @SerialName("dm_mask")
     val dmMask: DanmakuMaskInfo? = null,

@@ -9,6 +9,13 @@ import kotlin.test.assertNull
 
 class PlayerInfoHistoryTest {
     @Test
+    fun omittedOnlineCountStaysUnknownWhileServerZeroIsRetained() {
+        assertNull(Json.decodeFromString<PlayerInfoData>("""{"cid":101}""").onlineCount)
+        assertEquals(0, Json.decodeFromString<PlayerInfoData>("""{"cid":101,"online_count":0}""").onlineCount)
+        assertEquals(123, Json.decodeFromString<PlayerInfoData>("""{"cid":101,"online_count":123}""").onlineCount)
+    }
+
+    @Test
     fun playerInfoRetainsTheServerHistoryPart() {
         val data = Json.decodeFromString<PlayerInfoData>("""{"cid":101,"last_play_cid":202,"last_play_time":125000}""")
         assertEquals(202L, data.lastPlayCid)

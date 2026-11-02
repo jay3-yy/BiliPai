@@ -1,35 +1,9 @@
 package com.android.purebilibili.feature.video.danmaku
 
 import androidx.media3.ui.AspectRatioFrameLayout
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
-
-internal data class DanmakuDisplayBand(
-    val topRatio: Float,
-    val bottomRatio: Float
-) {
-    val heightRatio: Float
-        get() = (bottomRatio - topRatio).coerceAtLeast(0f)
-
-    fun normalized(): DanmakuDisplayBand {
-        val top = topRatio.coerceIn(0f, 1f)
-        val bottom = bottomRatio.coerceIn(top, 1f)
-        return DanmakuDisplayBand(topRatio = top, bottomRatio = bottom)
-    }
-}
-
-internal data class FaceOcclusionRegion(
-    val topRatio: Float,
-    val bottomRatio: Float
-) {
-    fun normalized(): FaceOcclusionRegion {
-        val top = topRatio.coerceIn(0f, 1f)
-        val bottom = bottomRatio.coerceIn(top, 1f)
-        return FaceOcclusionRegion(topRatio = top, bottomRatio = bottom)
-    }
-}
 
 internal data class FaceOcclusionMaskRect(
     val leftRatio: Float,
@@ -79,104 +53,6 @@ internal data class FaceOcclusionVisualMask(
     val fallbackRect: FaceOcclusionMaskRect,
     val polygonPoints: List<NormalizedPoint>
 )
-
-internal data class FaceOcclusionBandStabilizerConfig(
-    val requiredStableFrames: Int = 2,
-    val noFaceExtraStableFrames: Int = 1,
-    val noFaceHoldFrames: Int = 2,
-    val minUpdateDelta: Float = 0.025f,
-    val pendingBandTolerance: Float = 0.015f,
-    val minUpdateIntervalMs: Long = 1_800L,
-    val largeJumpDelta: Float = 0.08f,
-    val smoothingLerpFactor: Float = 0.18f,
-    val smoothingSnapThreshold: Float = 0.01f
-)
-
-internal class FaceOcclusionBandStabilizer(
-    private val config: FaceOcclusionBandStabilizerConfig = FaceOcclusionBandStabilizerConfig()
-) {
-    private var appliedBand: DanmakuDisplayBand? = null
-    private var pendingBand: DanmakuDisplayBand? = null
-    private var pendingStableFrames: Int = 0
-    private var consecutiveNoFaceFrames: Int = 0
-    private var lastApplyRealtimeMs: Long = Long.MIN_VALUE
-
-    fun reset(defaultBand: DanmakuDisplayBand? = null, nowRealtimeMs: Long = Long.MIN_VALUE) {
-        appliedBand = defaultBand?.normalized()
-        pendingBand = null
-        pendingStableFrames = 0
-        consecutiveNoFaceFrames = 0
-        lastApplyRealtimeMs = if (appliedBand != null) nowRealtimeMs else Long.MIN_VALUE
-    }
-
-    fun currentBand(): DanmakuDisplayBand? = appliedBand
-
-    fun step(
-        detectedBand: DanmakuDisplayBand,
-        hasFace: Boolean,
-        nowRealtimeMs: Long
-    ): DanmakuDisplayBand? {
-        val normalizedDetected = detectedBand.normalized()
-        if (hasFace) {
-            consecutiveNoFaceFrames = 0
-        } else {
-            consecutiveNoFaceFrames += 1
-        }
-
-        val currentApplied = appliedBand
-        if (currentApplied == null) {
-            appliedBand = normalizedDetected
-            lastApplyRealtimeMs = nowRealtimeMs
-            pendingBand = null
-            pendingStableFrames = 0
-            return normalizedDetected
-        }
-
-        val effectiveTarget = if (!hasFace && consecutiveNoFaceFrames <= config.noFaceHoldFrames) {
-            currentApplied
-        } else {
-            normalizedDetected
-        }
-
-        val smoothedTarget = smoothDisplayBand(
-            previousBand = currentApplied,
-            targetBand = effectiveTarget,
-            lerpFactor = config.smoothingLerpFactor,
-            snapThreshold = config.smoothingSnapThreshold
-        )
-
-        val delta = maxBandDelta(currentApplied, smoothedTarget)
-        if (delta < config.minUpdateDelta) {
-            pendingBand = null
-            pendingStableFrames = 0
-            return null
-        }
-
-        if (!bandsClose(pendingBand, smoothedTarget, config.pendingBandTolerance)) {
-            pendingBand = smoothedTarget
-            pendingStableFrames = 1
-        } else {
-            pendingStableFrames += 1
-        }
-
-        val requiredFrames = config.requiredStableFrames +
-            if (hasFace) 0 else config.noFaceExtraStableFrames
-        if (pendingStableFrames < requiredFrames.coerceAtLeast(1)) {
-            return null
-        }
-
-        val elapsedSinceApply = nowRealtimeMs - lastApplyRealtimeMs
-        if (elapsedSinceApply < config.minUpdateIntervalMs && delta < config.largeJumpDelta) {
-            return null
-        }
-
-        appliedBand = smoothedTarget
-        lastApplyRealtimeMs = nowRealtimeMs
-        pendingBand = null
-        pendingStableFrames = 0
-        return smoothedTarget
-    }
-}
 
 internal data class FaceOcclusionMaskStabilizerConfig(
     val positionLerpFactor: Float = 0.35f,
@@ -332,73 +208,6 @@ internal fun resolveMaskEdgeExpansionRatio(
     )
 }
 
-private data class VerticalInterval(val top: Float, val bottom: Float) {
-    val height: Float
-        get() = (bottom - top).coerceAtLeast(0f)
-    val center: Float
-        get() = (top + bottom) / 2f
-}
-
-internal fun resolveFaceAwareDisplayBand(
-    faceRegions: List<FaceOcclusionRegion>,
-    defaultBand: DanmakuDisplayBand,
-    minHeightRatio: Float = 0.22f,
-    facePaddingRatio: Float = 0.04f
-): DanmakuDisplayBand {
-    val fallback = defaultBand.normalized()
-    if (faceRegions.isEmpty()) return fallback
-
-    val minHeight = minHeightRatio.coerceIn(0.05f, 1f)
-    val padding = facePaddingRatio.coerceIn(0f, 0.2f)
-
-    val blockedIntervals = faceRegions
-        .map { it.normalized() }
-        .mapNotNull { region ->
-            val top = (region.topRatio - padding).coerceIn(0f, 1f)
-            val bottom = (region.bottomRatio + padding).coerceIn(0f, 1f)
-            if (bottom <= top) null else VerticalInterval(top, bottom)
-        }
-        .sortedBy { it.top }
-
-    if (blockedIntervals.isEmpty()) return fallback
-
-    val mergedBlocked = ArrayList<VerticalInterval>(blockedIntervals.size)
-    blockedIntervals.forEach { current ->
-        val last = mergedBlocked.lastOrNull()
-        if (last == null || current.top > last.bottom) {
-            mergedBlocked += current
-        } else {
-            mergedBlocked[mergedBlocked.lastIndex] = VerticalInterval(
-                top = last.top,
-                bottom = max(last.bottom, current.bottom)
-            )
-        }
-    }
-
-    val safeGaps = ArrayList<VerticalInterval>(mergedBlocked.size + 1)
-    var cursor = 0f
-    mergedBlocked.forEach { blocked ->
-        if (blocked.top > cursor) {
-            safeGaps += VerticalInterval(top = cursor, bottom = blocked.top)
-        }
-        cursor = max(cursor, blocked.bottom)
-    }
-    if (cursor < 1f) {
-        safeGaps += VerticalInterval(top = cursor, bottom = 1f)
-    }
-
-    val candidates = safeGaps.filter { it.height >= minHeight }
-    if (candidates.isEmpty()) return fallback
-
-    val preferredCenter = (fallback.topRatio + fallback.bottomRatio) / 2f
-    val selected = candidates.maxByOrNull { gap ->
-        val centerPenalty = abs(gap.center - preferredCenter)
-        gap.height - (centerPenalty * 0.15f) + if (gap.top <= 0.02f) 0.02f else 0f
-    } ?: return fallback
-
-    return DanmakuDisplayBand(topRatio = selected.top, bottomRatio = selected.bottom).normalized()
-}
-
 internal fun resolveFaceOcclusionMasks(
     rawRects: List<FaceOcclusionMaskRect>,
     expansionRatio: Float = 0.04f,
@@ -511,43 +320,6 @@ internal fun buildVisualMask(
         fallbackRect = normalizedRect.expanded(0.015f),
         polygonPoints = visualPolygon
     )
-}
-
-internal fun smoothDisplayBand(
-    previousBand: DanmakuDisplayBand?,
-    targetBand: DanmakuDisplayBand,
-    lerpFactor: Float = 0.35f,
-    snapThreshold: Float = 0.015f
-): DanmakuDisplayBand {
-    val target = targetBand.normalized()
-    val previous = previousBand?.normalized() ?: return target
-    val threshold = snapThreshold.coerceIn(0f, 0.2f)
-    val topDelta = abs(target.topRatio - previous.topRatio)
-    val bottomDelta = abs(target.bottomRatio - previous.bottomRatio)
-    if (topDelta <= threshold && bottomDelta <= threshold) {
-        return target
-    }
-
-    val factor = lerpFactor.coerceIn(0.05f, 1f)
-    return DanmakuDisplayBand(
-        topRatio = previous.topRatio + (target.topRatio - previous.topRatio) * factor,
-        bottomRatio = previous.bottomRatio + (target.bottomRatio - previous.bottomRatio) * factor
-    ).normalized()
-}
-
-private fun maxBandDelta(a: DanmakuDisplayBand, b: DanmakuDisplayBand): Float {
-    val topDelta = abs(a.topRatio - b.topRatio)
-    val bottomDelta = abs(a.bottomRatio - b.bottomRatio)
-    return max(topDelta, bottomDelta)
-}
-
-private fun bandsClose(
-    a: DanmakuDisplayBand?,
-    b: DanmakuDisplayBand,
-    tolerance: Float
-): Boolean {
-    if (a == null) return false
-    return maxBandDelta(a.normalized(), b.normalized()) <= tolerance.coerceIn(0f, 0.2f)
 }
 
 private fun FaceOcclusionVisualMask.normalizedVisualMask(): FaceOcclusionVisualMask {

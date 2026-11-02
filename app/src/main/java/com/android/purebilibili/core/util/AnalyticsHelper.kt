@@ -8,6 +8,8 @@ import com.android.purebilibili.BuildConfig
 import com.google.firebase.analytics.FirebaseAnalytics
 import java.time.LocalDate
 import java.util.Locale
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 private val ANALYTICS_DEDUPE_WHITESPACE_REGEX = Regex("\\s+")
 private val SENSITIVE_ANALYTICS_PARAM_KEYS = setOf(
@@ -69,8 +71,9 @@ object AnalyticsHelper {
     private var analytics: FirebaseAnalytics? = null
     private var appContext: Context? = null
     private var analyticsReady = false
-    @Volatile
-    private var isEnabled: Boolean = false
+    private val collectionEnabledState = MutableStateFlow(false)
+    internal val collectionEnabled = collectionEnabledState.asStateFlow()
+    private val isEnabled: Boolean get() = collectionEnabledState.value
     @Volatile
     private var collectionGeneration: Long = 0L
     private var isInForeground: Boolean = false
@@ -95,8 +98,8 @@ object AnalyticsHelper {
     fun prepare(context: Context, enabled: Boolean): Unit = synchronized(telemetryLock) {
         appContext = context.applicationContext
         if (isEnabled != enabled) collectionGeneration++
-        isEnabled = enabled
         startupEvents.setEnabled(enabled)
+        collectionEnabledState.value = enabled
     }
 
     private fun Bundle.param(key: String, value: String) {
@@ -150,9 +153,9 @@ object AnalyticsHelper {
             // Collection state must be applied before properties or queued events.
             instance.setAnalyticsCollectionEnabled(enabled)
             if (isEnabled != enabled) collectionGeneration++
-            isEnabled = enabled
             analytics = instance
             startupEvents.setEnabled(enabled)
+            collectionEnabledState.value = enabled
             if (enabled) {
                 writeAppProperties(instance)
             }
@@ -167,8 +170,8 @@ object AnalyticsHelper {
     /** Disabling collection also discards startup events and duplicate suppression history. */
     fun setEnabled(enabled: Boolean): Unit = synchronized(telemetryLock) {
         if (isEnabled != enabled) collectionGeneration++
-        isEnabled = enabled
         startupEvents.setEnabled(enabled)
+        collectionEnabledState.value = enabled
         if (!enabled) eventRateLimiter.clear()
         try {
             analytics?.let { instance ->

@@ -63,6 +63,8 @@ fun rememberPiliSubtitleTools(
     nativeTracks: List<SubtitleTrackMeta> = emptyList(),
     isFullscreen: Boolean = false,
     acquireNativeSubtitles: Boolean = false,
+    nativeTracksKnown: Boolean = false,
+    acquisitionActive: Boolean = true,
 ): PiliSubtitleTools {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -89,11 +91,14 @@ fun rememberPiliSubtitleTools(
             track.subtitleUrl, bvid, cid, track.id, track.idStr, track.lan
         ).getOrThrow()
     }
-    LaunchedEffect(identity, acquireNativeSubtitles, nativeTracks) {
-        if (!acquireNativeSubtitles || session.acquiredInitialized || bvid.isBlank() || cid <= 0L) return@LaunchedEffect
+    val visualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    LaunchedEffect(identity, acquireNativeSubtitles, nativeTracks, nativeTracksKnown, acquisitionActive, visualWorkActive) {
+        if (!acquireNativeSubtitles || !acquisitionActive || !visualWorkActive ||
+            session.acquiredInitialized || bvid.isBlank() || cid <= 0L
+        ) return@LaunchedEffect
         val initializationSelectionSerial = nativeSelectionSerial
         try {
-            val tracks = if (nativeTracks.isNotEmpty()) nativeTracks else withContext(Dispatchers.IO) {
+            val tracks = if (nativeTracksKnown || nativeTracks.isNotEmpty()) nativeTracks else withContext(Dispatchers.IO) {
                 mapPlayerInfoSubtitleTracks(SubtitleContentRepository.playerInfo(bvid, cid).getOrThrow().subtitle?.subtitles.orEmpty())
             }
             if (!subtitleDocumentResultBelongsTo(identity, currentIdentity)) return@LaunchedEffect

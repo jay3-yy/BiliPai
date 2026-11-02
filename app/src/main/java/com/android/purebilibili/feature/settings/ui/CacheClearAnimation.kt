@@ -234,11 +234,11 @@ private fun CacheClearCategoryRow(segment: CacheClearDonutSegment, description: 
 /** 与缓存选择内容共用一个窗口，避免任务切换时先关闭选择窗再弹出清理窗。 */
 @Composable
 fun CacheClearAnimationDialog(progress: CacheClearProgress, onDismiss: () -> Unit) {
-    val gate = rememberDecorativeAnimationGate(respectComponentMotion = false)
+    val gate = rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+        respectSystemReduceMotion = false
+    )
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    LaunchedEffect(progress.isComplete) {
-        if (progress.isComplete) { delay(1200L); latestOnDismiss() }
-    }
     val value = cacheClearProgressFraction(progress.current, progress.total)?.let { if (progress.isComplete) 1f else it.coerceAtMost(.99f) }
     val animated = animateFloatAsState(if (progress.isComplete) 1f else value ?: 0f,
         if (LocalSystemReduceMotion.current) snap() else AppMotionTokens.standardSpec(), label = "cacheClearProgress")
@@ -254,11 +254,20 @@ fun CacheClearAnimationDialog(progress: CacheClearProgress, onDismiss: () -> Uni
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 BlueSnowMaidAnimation(
                     animation = if (progress.isComplete) MaidAnimation.CLEAN_COMPLETE else MaidAnimation.CLEANING,
-                    modifier = Modifier.size(characterSize).then(gate.modifier), isVisible = gate.active
+                    modifier = Modifier.size(characterSize).then(gate.modifier),
+                    isVisible = gate.active,
+                    reducedMotion = LocalSystemReduceMotion.current,
+                    staticDisplayDurationMs = 600L,
+                    completionHoldDurationMs = if (progress.isComplete) 600L else 0L,
+                    onFinished = { if (progress.isComplete) latestOnDismiss() }
                 )
-                if (!progress.isComplete) {
-                    AppText(if (value == null) "准备中…" else "${ceil(value * 100).toInt()}%", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    if (value != null) AppLinearProgressIndicator(progress = { animated.value }, modifier = Modifier.widthIn(max = 240.dp).fillMaxWidth().height(5.dp))
+                // 完成时保留进度槽位，呈现 100% 并避免面板高度突然收缩；两条材质路径共用。
+                AppText(if (progress.isComplete) "100%" else if (value == null) "准备中…" else "${ceil(value * 100).toInt()}%",
+                    fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                if (value != null || progress.isComplete) {
+                    AppLinearProgressIndicator(progress = { animated.value }, modifier = Modifier.widthIn(max = 240.dp).fillMaxWidth().height(5.dp))
+                } else {
+                    Spacer(Modifier.height(5.dp))
                 }
                 AppText(if (progress.isComplete) "清理完成" else "正在清理", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 AppText(if (progress.isComplete) "已释放 ${progress.clearedSize} 磁盘空间" else progress.message,

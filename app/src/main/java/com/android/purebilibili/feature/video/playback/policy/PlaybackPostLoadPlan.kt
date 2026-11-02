@@ -20,8 +20,7 @@ internal data class PlaybackPostLoadTaskSpec(
 )
 
 internal fun buildPlaybackPostLoadPlan(
-    isLoggedIn: Boolean,
-    shouldShowOnlineCount: Boolean
+    isLoggedIn: Boolean
 ): List<PlaybackPostLoadTaskSpec> {
     val plan = mutableListOf(
         PlaybackPostLoadTaskSpec(
@@ -74,12 +73,11 @@ internal fun buildPlaybackPostLoadPlan(
         )
     }
 
-    if (shouldShowOnlineCount) {
-        plan += PlaybackPostLoadTaskSpec(
-            task = PlaybackPostLoadTask.ONLINE_COUNT,
-            delayMs = 1_500L
-        )
-    }
+    // 这里只绑定人数观察的内容身份，实际网络请求由实时设置和可见消费者控制。
+    plan += PlaybackPostLoadTaskSpec(
+        task = PlaybackPostLoadTask.ONLINE_COUNT,
+        delayMs = 1_500L,
+    )
 
     return plan.sortedWith(
         compareBy<PlaybackPostLoadTaskSpec> { spec -> spec.delayMs }

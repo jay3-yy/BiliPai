@@ -131,28 +131,6 @@ class VideoPlayerOverlayPolicyTest {
     }
 
     @Test
-    fun inlineOverlayProgressPolling_stopsWhenHostLifecycleStops() {
-        assertTrue(
-            shouldPollInlineVideoOverlayProgress(
-                playerExists = true,
-                hostLifecycleStarted = true
-            )
-        )
-        assertFalse(
-            shouldPollInlineVideoOverlayProgress(
-                playerExists = true,
-                hostLifecycleStarted = false
-            )
-        )
-        assertFalse(
-            shouldPollInlineVideoOverlayProgress(
-                playerExists = false,
-                hostLifecycleStarted = true
-            )
-        )
-    }
-
-    @Test
     fun episodeEntryHiddenWhenOnlyRelatedVideosExist() {
         assertFalse(
             shouldShowEpisodeEntryFromVideoData(

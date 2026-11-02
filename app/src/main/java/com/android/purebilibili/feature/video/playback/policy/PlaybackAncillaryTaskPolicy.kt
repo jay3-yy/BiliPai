@@ -17,10 +17,6 @@ internal fun shouldRefreshOnlineCount(
         currentCid > 0L
 }
 
-internal fun resolveOnlineCountPollingDelayMs(isInBackground: Boolean): Long {
-    return if (isInBackground) 90_000L else 30_000L
-}
-
 internal fun shouldSendPlaybackHeartbeat(
     isPlaying: Boolean,
     isInBackground: Boolean,

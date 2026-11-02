@@ -2,6 +2,7 @@ package com.android.purebilibili.core.util
 
 import android.content.Context
 import coil3.SingletonImageLoader
+import coil3.ImageLoader
 import coil3.request.ImageRequest
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -108,16 +109,18 @@ internal fun resolveHomeCoverReturnPrefetchCandidates(
 internal suspend fun prefetchHomeCoverImages(
     context: Context,
     entries: List<HomeCoverReturnPrefetchEntry>,
+    imageLoader: ImageLoader? = null,
 ) {
     if (entries.isEmpty()) return
-    val imageLoader = SingletonImageLoader.get(context)
+    val loader = imageLoader ?: SingletonImageLoader.get(context)
     // 入口再次校验，避免直接调用绕过尺寸和批次预算。
     val boundedEntries = resolveHomeCoverReturnPrefetchCandidates(entries, sourceBvid = null)
     prefetchHomeCoversWithBudget(boundedEntries) { entry ->
-        imageLoader.execute(
+        loader.execute(
             ImageRequest.Builder(context.applicationContext)
                 .data(entry.url)
                 .size(entry.decodeWidthPx, entry.decodeHeightPx)
+                .homeCoverDecodePolicy()
                 .memoryCacheKey(entry.cacheKey)
                 .diskCacheKey(entry.cacheKey)
                 .build()

@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalContext
 import coil3.ImageLoader
 import coil3.imageLoader
 import coil3.request.ImageRequest
+import com.android.purebilibili.core.util.homeCoverDecodePolicy
 import com.android.purebilibili.data.model.response.VideoItem
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -66,7 +67,7 @@ internal fun HomeFeedCoverPreload(
                             ImageRequest.Builder(context)
                                 .data(source.url)
                                 .size(requestSpec.widthPx, requestSpec.heightPx)
-                                .scale(coil3.size.Scale.FILL)
+                                .homeCoverDecodePolicy()
                                 .memoryCacheKey(source.cacheKey)
                                 .diskCacheKey(source.cacheKey)
                                 .build(),

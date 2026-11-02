@@ -43,6 +43,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -170,7 +171,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.lifecycle.compose.currentStateAsState
 import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.store.ChapterDisplayMode
@@ -298,13 +298,6 @@ internal suspend fun resolveCastPlayUrl(
             contentType = "video/mp4"
         )
     }.getOrNull()
-}
-
-internal fun shouldPollInlineVideoOverlayProgress(
-    playerExists: Boolean,
-    hostLifecycleStarted: Boolean
-): Boolean {
-    return playerExists && hostLifecycleStarted
 }
 
 internal fun resolveInlineVideoOverlayProgressPollingIntervalMs(
@@ -831,15 +824,13 @@ private fun VideoPlayerOverlayContent(
             selectedAudioQuality = selectedAudioQuality
         )
     }
-    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
-    val hostLifecycleStarted = lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)
     val configuration = LocalConfiguration.current
     val topActionDockBounds = remember(isFullscreen, configuration.screenWidthDp, configuration.screenHeightDp) {
         mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     }
     var showInsightDetails by remember(player, bvid, cid) { mutableStateOf(false) }
     val visualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    var progressInViewport by remember(player, bvid, cid) { mutableStateOf(false) }
     // The HUD needs only the existing decoder/error summary to decide whether it is visible.
     // Network/display queries and formatted detail rows belong to the visible diagnostics.
     val insightLevel = remember(debugInfo) {
@@ -1200,15 +1191,28 @@ private fun VideoPlayerOverlayContent(
         )
     }
 
-    DisposableEffect(player) {
+    DisposableEffect(player, hasPendingSeekResume) {
         currentSpeed = player.playbackParameters.speed
-        val speedListener = object : Player.Listener {
+        fun updatePlayingState() {
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                isPlaying = player.isPlaying,
+                playWhenReady = player.playWhenReady,
+                playbackState = player.playbackState,
+                hasPendingSeekResume = hasPendingSeekResume,
+            )
+        }
+        updatePlayingState()
+        val playbackListener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                updatePlayingState()
+            }
+
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 currentSpeed = playbackParameters.speed
             }
         }
-        player.addListener(speedListener)
-        onDispose { player.removeListener(speedListener) }
+        player.addListener(playbackListener)
+        onDispose { player.removeListener(playbackListener) }
     }
 
 
@@ -1253,16 +1257,15 @@ private fun VideoPlayerOverlayContent(
     // 先打开设备面板；只有用户选择搜索 DLNA 时才请求原始局域网权限。
     val onCastClickAction = { showCastDialog = true }
 
-    val progressState = rememberVideoPlayerOverlayProgress(
+    val progressState = state.progressSource ?: rememberVideoPlayerOverlayProgress(
         player = player,
         bvid = bvid,
         cid = cid,
         videoDuration = videoDuration,
         controlsVisible = isVisible,
-        hostLifecycleStarted = hostLifecycleStarted,
+        samplingActive = visualWorkActive && progressInViewport && state.progressSamplingActive,
         hasPendingSeekResume = hasPendingSeekResume,
         highFrequencyProgressActive = highFrequencyProgressActive,
-        onPlayingChanged = { isPlaying = it },
     )
     val effectiveProgressState = remember(progressState, pluginPlaybackState) {
         derivedStateOf {
@@ -1425,7 +1428,9 @@ private fun VideoPlayerOverlayContent(
                 player = player,
                 isShowingPauseIcon = isPlaying
             )
-            isPlaying = !isPlaying
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                player.isPlaying, player.playWhenReady, player.playbackState, hasPendingSeekResume,
+            )
         }
     }
 
@@ -1439,7 +1444,13 @@ private fun VideoPlayerOverlayContent(
         }
     }
 
-    Box(modifier = Modifier.then(autoHide.focusModifier).fillMaxSize().playerActionBounds { playerBoundsInWindow = it }) {
+    Box(
+        modifier = Modifier
+            .then(autoHide.focusModifier)
+            .fillMaxSize()
+            .onVisibilityChanged(minFractionVisible = 0f) { progressInViewport = it }
+            .playerActionBounds { playerBoundsInWindow = it },
+    ) {
         if (!isFullscreen) {
             ImmersiveStatusBarBackdrop(
                 ambientFrame = statusBarAmbientFrame,
@@ -1777,20 +1788,23 @@ private fun VideoPlayerOverlayContent(
             )
         }
 
-        // 玻璃横竖屏统一由中央入口控制播放与暂停，随控制栏显隐。
-        if ((isFullscreen || configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) &&
-            com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
-            val hideCenterPlayback = rememberHideGlassCenterPlayback()
-            CenterPlaybackControl(
-                visible = !hideCenterPlayback && isVisible &&
-                    (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_ENDED) &&
-                    centerLoadingUiState == null &&
-                    !isScreenLocked && !isSeekScrubbing && !danmakuComposerVisible &&
-                    !endDrawerVisible && !landscapeCommentPanelVisible && !showInsightDetails,
+        val centerPlaybackSupported = (isFullscreen ||
+            configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) &&
+            com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+        val hideCenterPlayback = if (centerPlaybackSupported) rememberHideGlassCenterPlayback() else true
+        val showCenterPlaybackControl = centerPlaybackSupported && !hideCenterPlayback && showPlayerChrome &&
+            (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY ||
+                player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED) &&
+            !isSeekScrubbing && !endDrawerVisible && !landscapeCommentPanelVisible && !showInsightDetails
+        if (centerPlaybackSupported) {
+            com.android.purebilibili.feature.video.ui.overlay.CenterPlaybackControl(
+                visible = showCenterPlaybackControl,
                 isPlaying = effectiveIsPlaying,
                 onPlayPause = { togglePlayPause() },
                 diameter = if (isFullscreen) 72.dp else 56.dp,
                 modifier = Modifier.align(Alignment.Center),
+                isBuffering = !pluginPlaybackStatus.first && player.playWhenReady &&
+                    (player.playbackState == Player.STATE_BUFFERING || centerLoadingUiState != null),
             )
         }
 
@@ -2029,7 +2043,7 @@ private fun VideoPlayerOverlayContent(
                 playWhenReady = player.playWhenReady,
                 hasRenderedFirstFrame = hasRenderedFirstFrame,
                 suppressTransientOverlays = suppressTransientOverlaysForTransition,
-            ) && centerLoadingUiState == null,
+            ) && centerLoadingUiState == null && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。
@@ -2043,7 +2057,7 @@ private fun VideoPlayerOverlayContent(
         }
 
         AnimatedVisibility(
-            visible = centerLoadingUiState != null,
+            visible = centerLoadingUiState != null && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(OverlayControlFadeSpec),
             exit = fadeOut(OverlayControlFadeSpec)
@@ -2080,7 +2094,7 @@ private fun VideoPlayerOverlayContent(
 
         // --- 5.5  清晰度切换中 Loading 指示器 ---
         AnimatedVisibility(
-            visible = isQualitySwitching && centerLoadingUiState == null,
+            visible = isQualitySwitching && centerLoadingUiState == null && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(OverlayControlFadeSpec),
             exit = fadeOut(OverlayControlFadeSpec)

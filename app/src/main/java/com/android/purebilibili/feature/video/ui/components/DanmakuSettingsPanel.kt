@@ -492,7 +492,7 @@ fun DanmakuSettingsPanel(
                                 })
                             }
                             if (showSmartOcclusionSection) {
-                                DanmakuSettingsToggle("智能避脸遮挡", smartOcclusion, onSmartOcclusionChange)
+                                DanmakuSettingsToggle("智能弹幕遮罩", smartOcclusion, onSmartOcclusionChange)
                             }
                         }
                         if (configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
@@ -1035,15 +1035,15 @@ fun DanmakuSettingsPanel(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                Column(Modifier.weight(1f).padding(end = 16.dp)) {
                                     AppText(
-                                        text = "智能避脸遮挡",
+                                        text = "智能弹幕遮罩",
                                         color = panelColors.titleColor,
                                         style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
                                     )
                                     Spacer(modifier = Modifier.height(2.dp))
                                     AppText(
-                                        text = "实时识别人脸并避让弹幕轨道",
+                                        text = "使用视频提供的遮罩避让人物，不改变显示区域；无可用遮罩时不生效",
                                         color = panelColors.supportingColor,
                                         style = MaterialTheme.typography.bodySmall
                                     )

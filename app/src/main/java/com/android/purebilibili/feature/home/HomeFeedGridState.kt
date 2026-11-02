@@ -14,6 +14,8 @@ internal class HomeFeedGridState(
     val waterfall: LazyStaggeredGridState,
     val regularLayout: Boolean,
 ) : ScrollableState by (if (regularLayout) regular else waterfall) {
+    private val visibleKeyCache = HomeVisibleItemKeyCache()
+
     val firstVisibleItemIndex: Int
         get() = if (regularLayout) regular.firstVisibleItemIndex else waterfall.firstVisibleItemIndex
     val firstVisibleItemScrollOffset: Int
@@ -25,9 +27,9 @@ internal class HomeFeedGridState(
             else waterfall.layoutInfo.visibleItemsInfo.maxOfOrNull { it.index } ?: -1
 
     fun visibleItemKeys(): Set<Any> = if (regularLayout) {
-        regular.layoutInfo.visibleItemsInfo.mapTo(HashSet()) { it.key }
+        visibleKeyCache.keys(regular.layoutInfo.visibleItemsInfo) { it.key }
     } else {
-        waterfall.layoutInfo.visibleItemsInfo.mapTo(HashSet()) { it.key }
+        visibleKeyCache.keys(waterfall.layoutInfo.visibleItemsInfo) { it.key }
     }
 
     fun anyVisibleItem(predicate: (Any) -> Boolean): Boolean = if (regularLayout) {

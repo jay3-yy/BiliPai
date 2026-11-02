@@ -29,8 +29,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onVisibilityChanged
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -44,14 +44,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.feature.home.LocalHomeCardCoverLoadingAllowed
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
+import com.android.purebilibili.core.util.homeCoverDecodePolicy
 import coil3.request.ImageRequest
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.iOSCardTapEffect
 import com.android.purebilibili.core.util.animateEnter
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
-import com.android.purebilibili.core.util.HomeCoverReturnPrefetchEntry
-import com.android.purebilibili.core.util.HomeCoverReturnPrefetchRegistry
 import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.core.util.rememberHapticFeedback
@@ -177,7 +176,8 @@ internal fun StoryVideoCard(
     val premiumBadgeLabel = remember(video.rights) {
         resolveVideoPremiumBadgeLabel(video.rights)
     }
-    var cardVisibleInWindow by remember(video.bvid, video.cid) { mutableStateOf(false) }
+    val cardVisibility = rememberVideoCardVisibility(video.bvid, video.cid)
+    val cardVisibleInWindow = cardVisibility.visible
     val useLowQualityCover = isDataSaverActive && preferLowQualityCover
     val coverSource = remember(video.bvid, video.id, video.cid, video.title, video.pic, useLowQualityCover, coverRequestSpec) {
         resolveHomeCoverImageSource(video, useLowQualityCover, coverRequestSpec)
@@ -317,6 +317,7 @@ internal fun StoryVideoCard(
     val coverImageRequest = remember(context, coverUrl, coverCacheKey, coverRequestSpec, coverCrossfadeEnabled) {
         ImageRequest.Builder(context)
             .data(coverUrl)
+            .homeCoverDecodePolicy()
             .apply { coverRequestSpec?.let { size(it.widthPx, it.heightPx) } }
             .crossfade(coverCrossfadeEnabled)
             .memoryCacheKey(coverCacheKey)
@@ -324,18 +325,14 @@ internal fun StoryVideoCard(
             .build()
     }
     val coverWorkAllowed = LocalPageImageLoadingAllowed.current && cardVisibleInWindow
-    LaunchedEffect(video.bvid, coverUrl, coverCacheKey, coverRequestSpec, measuredCoverSize, coverWorkAllowed) {
-        if (!coverWorkAllowed) return@LaunchedEffect
-        HomeCoverReturnPrefetchRegistry.onCardVisible(
-            HomeCoverReturnPrefetchEntry(
-                bvid = video.bvid.trim(),
-                url = coverUrl,
-                cacheKey = coverCacheKey,
-                decodeWidthPx = coverRequestSpec?.widthPx ?: measuredCoverSize.width,
-                decodeHeightPx = coverRequestSpec?.heightPx ?: measuredCoverSize.height,
-            ),
-        )
-    }
+    RegisterVisibleHomeCover(
+        allowed = coverWorkAllowed,
+        bvid = video.bvid,
+        url = coverUrl,
+        cacheKey = coverCacheKey,
+        widthPx = coverRequestSpec?.widthPx ?: measuredCoverSize.width,
+        heightPx = coverRequestSpec?.heightPx ?: measuredCoverSize.height,
+    )
     val transitionAdaptiveInfo = com.android.purebilibili.core.ui.transition
         .LocalVideoTransitionAdaptiveInfo.current
     val cardSharedTransitionMotionSpec = remember(
@@ -373,9 +370,7 @@ internal fun StoryVideoCard(
     Column(
         modifier = modifier
             .testTag("home_story_video_card")
-            .onVisibilityChanged(minFractionVisible = 0.01f, minDurationMs = 0L) {
-                cardVisibleInWindow = it
-            }
+            .then(cardVisibility.observerModifier)
             .fillMaxWidth()
             .adaptiveCardHoverEffect(shape = cardShellShape)
             .videoCardShellSharedBoundsOrEmpty(
@@ -405,9 +400,7 @@ internal fun StoryVideoCard(
                 landingFeedbackEnabled = true,
                 onRecorded = captureState?.let { { it.onCardRecorded() } },
             )
-            .onGloballyPositioned { coordinates ->
-                cardCoordinates.value = coordinates
-            }
+            .onPlaced { coordinates -> cardCoordinates.value = coordinates }
             .semantics { semanticClick(label = "播放视频") { requestCardClick(); true } }
             .then(
                 if (onDemandSource) Modifier.pointerInput(sourceInteraction) {
@@ -470,10 +463,10 @@ internal fun StoryVideoCard(
                 )
                 .testTag("home_story_video_cover")
                 .aspectRatio(coverAspectRatio)
-                .onGloballyPositioned { coordinates ->
-                    coverCoordinates.value = coordinates
-                    if (coverRequestSpec == null) measuredCoverSize = coordinates.size
-                }
+                .onPlaced { coordinates -> coverCoordinates.value = coordinates }
+                .then(if (coverRequestSpec == null) {
+                    Modifier.onSizeChanged { measuredCoverSize = it }
+                } else Modifier)
                 .clip(coverShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant) // 封面占位色
         ) {

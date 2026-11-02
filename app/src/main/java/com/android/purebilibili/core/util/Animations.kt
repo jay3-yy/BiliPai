@@ -95,11 +95,7 @@ fun Modifier.animateEnter(
     animationEnabled: Boolean = true,
     motionTier: MotionTier = MotionTier.Normal,
     coordinateWithSharedTransition: Boolean = false
-): Modifier = composed {
-    if (!animationEnabled) {
-        return@composed this
-    }
-
+): Modifier = if (!animationEnabled) this else composed {
     val motionPolicy = remember(motionTier, coordinateWithSharedTransition) {
         resolveEnterMotionPolicy(
             motionTier = motionTier,

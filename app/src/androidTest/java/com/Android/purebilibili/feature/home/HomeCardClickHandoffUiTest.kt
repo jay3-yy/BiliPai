@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.click
@@ -24,6 +25,8 @@ import com.android.purebilibili.feature.home.components.cards.StoryVideoCard
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardAuxiliaryWorkAllowed
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardScrolling
 import com.android.purebilibili.feature.home.components.cards.LocalHomeScrollTickProvider
+import com.android.purebilibili.feature.home.components.cards.LocalHomeCardVisibility
+import com.android.purebilibili.feature.home.components.cards.VideoCardVisibilityState
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -43,7 +46,7 @@ class HomeCardClickHandoffUiTest {
 
     @Test
     fun accessibilityClickWaitsForBothSourceLayersBeforeNavigationCallback() {
-        showCard()
+        showCard(sharedHomeVisibility = true)
         rule.onNodeWithTag("home_video_cover").performClick()
         rule.waitUntil { clicks == 1 }
         rule.runOnIdle { assertEquals(1, clicks) }
@@ -70,7 +73,7 @@ class HomeCardClickHandoffUiTest {
 
     @Test
     fun storyAccessibilityClickWaitsForBothSourceLayersAndKeepsCid() {
-        showCard(story = true)
+        showCard(story = true, sharedHomeVisibility = true)
         rule.onNodeWithTag("home_story_video_card").performClick()
         rule.waitUntil { clicks == 1 }
     }
@@ -114,15 +117,18 @@ class HomeCardClickHandoffUiTest {
         story: Boolean = false,
         sharedEnabled: Boolean = true,
         longPressEnabled: Boolean = false,
+        sharedHomeVisibility: Boolean = false,
     ) {
         val scrolling = mutableStateOf(false)
         rule.setContent {
             MaterialTheme {
+                val visibility = remember { VideoCardVisibilityState() }
                 CompositionLocalProvider(
                     LocalHomeScrollTickProvider provides { 0 },
                     LocalHomeCardScrolling provides scrolling,
                     LocalHomeCardAuxiliaryWorkAllowed provides false,
-                    LocalPageImageLoadingAllowed provides true,
+                    LocalHomeCardVisibility provides if (sharedHomeVisibility) visibility else null,
+                    LocalPageImageLoadingAllowed provides (!sharedHomeVisibility || visibility.visible),
                     LocalSharedTransitionEnabled provides sharedEnabled,
                     LocalVideoCardLongPressEnabled provides longPressEnabled,
                 ) {

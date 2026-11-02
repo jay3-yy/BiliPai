@@ -1,60 +1,49 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MiniPlayerOverlayChromePolicyTest {
-
     @Test
-    fun hiddenControls_useCleanVideoMode() {
-        val chrome = resolveMiniPlayerOverlayChrome(
-            showControls = false,
-            isDraggingProgress = false,
-            isDraggingPosition = false,
-            isResizing = false
-        )
-
+    fun hiddenControls_leaveOnlyVideoProgress() {
+        val chrome = resolveMiniPlayerOverlayChrome(false, false, false)
         assertFalse(chrome.showHeaderChrome)
         assertFalse(chrome.showCenterControls)
-        assertFalse(chrome.showDragHint)
-        assertFalse(chrome.showResizeHandle)
         assertTrue(chrome.showProgressBar)
-        assertEquals(0.46f, chrome.progressBarAlpha)
     }
 
     @Test
-    fun visibleControls_showInteractiveChrome() {
-        val chrome = resolveMiniPlayerOverlayChrome(
-            showControls = true,
-            isDraggingProgress = false,
-            isDraggingPosition = false,
-            isResizing = false
-        )
-
-        assertTrue(chrome.showHeaderChrome)
-        assertTrue(chrome.showCenterControls)
-        assertTrue(chrome.showDragHint)
-        assertTrue(chrome.showResizeHandle)
-        assertTrue(chrome.showProgressBar)
-        assertEquals(1f, chrome.progressBarAlpha)
+    fun movingAndResizing_hideTransportUntilGestureEnds() {
+        for ((dragging, resizing) in listOf(true to false, false to true)) {
+            val chrome = resolveMiniPlayerOverlayChrome(true, dragging, resizing)
+            assertTrue(chrome.showHeaderChrome)
+            assertFalse(chrome.showCenterControls)
+        }
+        assertTrue(resolveMiniPlayerOverlayChrome(true, false, false).showCenterControls)
     }
 
     @Test
-    fun seekingKeepsSeekFeedbackVisibleWithoutHeaderTitle() {
-        val chrome = resolveMiniPlayerOverlayChrome(
-            showControls = false,
-            isDraggingProgress = true,
-            isDraggingPosition = false,
-            isResizing = false
-        )
+    fun shortWindows_useOneControlRowWithoutBottomOverlap() {
+        val layout = resolveMiniPlayerControlLayout(220f, 92f, true)
+        assertTrue(layout.showHeaderTransport)
+        assertFalse(layout.showBottomTransport)
+        assertFalse(layout.showSeekButtons)
+    }
 
-        assertFalse(chrome.showHeaderChrome)
-        assertTrue(chrome.showCenterControls)
-        assertTrue(chrome.showSeekHint)
-        assertFalse(chrome.showDragHint)
-        assertFalse(chrome.showResizeHandle)
-        assertEquals(1f, chrome.progressBarAlpha)
+    @Test
+    fun narrowPortraitWindows_keepPlaybackAndMoveExpansionToMenu() {
+        val layout = resolveMiniPlayerControlLayout(112f, 200f, true)
+        assertTrue(layout.showCloseButton)
+        assertTrue(layout.showBottomTransport)
+        assertFalse(layout.showExpandButton)
+        assertFalse(layout.showSeekButtons)
+    }
+
+    @Test
+    fun seekControls_onlyAppearForSeekableVideoWithEnoughRoom() {
+        assertTrue(resolveMiniPlayerControlLayout(220f, 124f, true).showSeekButtons)
+        assertFalse(resolveMiniPlayerControlLayout(220f, 124f, false).showSeekButtons)
+        assertFalse(resolveMiniPlayerControlLayout(168f, 124f, true).showSeekButtons)
     }
 }

@@ -74,7 +74,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -87,6 +88,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import com.android.purebilibili.core.ui.components.PageAwareAsyncImage
+import com.android.purebilibili.core.util.homeCoverDecodePolicy
 import coil3.request.ImageRequest
 import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
 import com.android.purebilibili.core.ui.AppShapes
@@ -103,8 +105,7 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
-import com.android.purebilibili.core.util.HomeCoverReturnPrefetchEntry
-import com.android.purebilibili.core.util.HomeCoverReturnPrefetchRegistry
+import com.android.purebilibili.feature.home.components.cards.RegisterVisibleHomeCover
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.feature.home.components.cards.isVideoCardSharedSourceInstanceOwner
 import com.android.purebilibili.feature.home.components.cards.isVideoCardSharedReturnTarget
@@ -433,7 +434,7 @@ private fun HomeHeroCarouselCard(
         densityValue = d
     }
 
-    // 卡片坐标句柄：onGloballyPositioned 写入，点击时读取。
+    // 保存布局坐标引用，实际边界仅在点击时读取。
     val cardCoordsRef = remember { object { var value: LayoutCoordinates? = null } }
 
     val cardShape = AppShapes.container(ContainerLevel.Card)
@@ -445,6 +446,7 @@ private fun HomeHeroCarouselCard(
     val stationaryCoverRequest = remember(normalizedCoverUrl) {
         ImageRequest.Builder(context)
             .data(normalizedCoverUrl)
+            .homeCoverDecodePolicy()
             .crossfade(false)
             .memoryCacheKey(normalizedCoverUrl)
             .diskCacheKey(normalizedCoverUrl)
@@ -455,18 +457,14 @@ private fun HomeHeroCarouselCard(
     // video cards so a detail return can settle into the hero without a
     // second decode or a one-frame placeholder.
     val coverRegistrationAllowed = LocalPageImageLoadingAllowed.current
-    LaunchedEffect(video.bvid, normalizedCoverUrl, coverRegistrationAllowed, measuredCoverSize) {
-        if (!coverRegistrationAllowed) return@LaunchedEffect
-        HomeCoverReturnPrefetchRegistry.onCardVisible(
-            HomeCoverReturnPrefetchEntry(
-                bvid = video.bvid.trim(),
-                url = normalizedCoverUrl,
-                cacheKey = normalizedCoverUrl,
-                decodeWidthPx = measuredCoverSize.width,
-                decodeHeightPx = measuredCoverSize.height,
-            )
-        )
-    }
+    RegisterVisibleHomeCover(
+        allowed = coverRegistrationAllowed,
+        bvid = video.bvid,
+        url = normalizedCoverUrl,
+        cacheKey = normalizedCoverUrl,
+        widthPx = measuredCoverSize.width,
+        heightPx = measuredCoverSize.height,
+    )
 
     // 记录源卡位置后进入详情。
     val clickAction: () -> Unit = heroCardClick@{
@@ -595,10 +593,8 @@ private fun HomeHeroCarouselCard(
                 alpha = transform.alpha
             }
             .clip(cardShape)
-            .onGloballyPositioned { coordinates ->
-                cardCoordsRef.value = coordinates
-                measuredCoverSize = coordinates.size
-            }
+            .onPlaced { coordinates -> cardCoordsRef.value = coordinates }
+            .onSizeChanged { measuredCoverSize = it }
             .combinedClickable(
                 interactionSource = interactionSource,
                 indication = null,

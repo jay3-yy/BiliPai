@@ -4,8 +4,14 @@ import android.content.Context
 import android.database.Cursor
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
 import android.provider.OpenableColumns
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontVariation
+import androidx.compose.ui.text.font.FontWeight
+import kotlin.math.roundToInt
 import java.io.File
 import java.util.Locale
 
@@ -65,7 +71,29 @@ fun resolveStoredAppFontFile(context: Context, fileName: String): File? {
 fun loadStoredAppFontFamily(context: Context, fileName: String): FontFamily? {
     val fontFile = resolveStoredAppFontFile(context, fileName) ?: return null
     return runCatching {
-        FontFamily(Typeface.createFromFile(fontFile))
+        val typeface = Typeface.createFromFile(fontFile)
+        val style = if (typeface.isItalic) FontStyle.Italic else FontStyle.Normal
+        val weightAxis = readAppFontWeightAxis(fontFile)
+        if (weightAxis != null) {
+            // 只为真实存在的 wght 轴声明实例，其他轴保留字体默认值。
+            val weights = ((100..900 step 100).map { it.toFloat() } + weightAxis.default)
+                .map { it.coerceIn(weightAxis.min, weightAxis.max) }
+                .distinct()
+            FontFamily(weights.map { weight ->
+                Font(
+                    file = fontFile,
+                    weight = FontWeight(weight.roundToInt()),
+                    style = style,
+                    variationSettings = FontVariation.Settings(FontVariation.Setting("wght", weight))
+                )
+            })
+        } else {
+            // 静态文件只声明其实际字重，缺少的粗体/斜体仍交给 Compose 的字体匹配与合成。
+            val weight = if (Build.VERSION.SDK_INT >= 28) typeface.weight
+                else if (typeface.isBold) 700 else 400
+            FontFamily(Font(file = fontFile, weight = FontWeight(weight), style = style,
+                variationSettings = FontVariation.Settings()))
+        }
     }.getOrNull()
 }
 

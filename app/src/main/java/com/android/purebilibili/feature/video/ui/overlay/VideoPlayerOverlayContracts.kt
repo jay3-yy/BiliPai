@@ -113,6 +113,8 @@ data class VideoPlayerOverlayState(
     val subtitleControlState: SubtitleControlUiState = SubtitleControlUiState(),
     val subtitleTracks: List<com.android.purebilibili.feature.video.subtitle.SubtitleTrackMeta> = emptyList(),
     val acquireNativeSubtitles: Boolean = false,
+    val nativeSubtitleTracksKnown: Boolean = false,
+    val nativeSubtitleAcquisitionActive: Boolean = true,
     val doubleTapLikeEnabled: Boolean = true,
     val currentAspectRatio: VideoAspectRatio = VideoAspectRatio.FIT,
     val showDislikeAction: Boolean = true,
@@ -135,6 +137,9 @@ data class VideoPlayerOverlayState(
     val progressDisplayOverridePositionMs: Long? = null,
     val isPlaybackTransitionPending: Boolean = false,
     val highFrequencyProgressActive: Boolean = false,
+    // 竖屏页持有采样快照；原生和玻璃控制层只消费，不重复监听或轮询。
+    val progressSource: State<PlayerProgress>? = null,
+    val progressSamplingActive: Boolean = true,
     val currentCodec: String = "hev1",
     val availableCodecIds: List<String> = emptyList(),
     val currentSecondCodec: String = "avc1",

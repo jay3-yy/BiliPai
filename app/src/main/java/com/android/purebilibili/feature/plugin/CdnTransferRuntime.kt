@@ -43,8 +43,9 @@ internal object CdnTransferRuntime {
     private val mutableState = MutableStateFlow(CdnTransferSnapshot())
     val state = mutableState.asStateFlow()
     val permits = Semaphore(CDN_MAX_CONNECTIONS, true)
-    @Volatile var enabled: Boolean = false
-        private set
+    private val enabledState = MutableStateFlow(false)
+    val enabledFlow = enabledState.asStateFlow()
+    val enabled: Boolean get() = enabledState.value
     @Volatile var parallelEnabled: Boolean = false
         private set
     private var networkIdentity: String? = null
@@ -56,10 +57,10 @@ internal object CdnTransferRuntime {
 
     @Synchronized
     fun configure(active: Boolean, parallel: Boolean) {
-        enabled = active
         parallelEnabled = active && parallel
         snapshot = snapshot.copy(parallelEnabled = parallelEnabled)
         if (!active) { routes.clear(); observedMedia.clear(); snapshot = snapshot.copy(preferredHost = null) }
+        enabledState.value = active
         publish(true)
     }
 

@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 class PluginPollingPolicyTest {
 
@@ -19,9 +20,8 @@ class PluginPollingPolicyTest {
     }
 
     @Test
-    fun `paused playback should slow plugin poll interval`() {
-        assertEquals(
-            2_000L,
+    fun `paused playback waits for player events`() {
+        assertNull(
             resolvePluginPollingIntervalMs(
                 hasPlugins = true,
                 isPlaying = false
@@ -30,14 +30,30 @@ class PluginPollingPolicyTest {
     }
 
     @Test
-    fun `no plugin state should back off polling aggressively`() {
-        assertEquals(
-            5_000L,
+    fun `no plugin state has no position polling timer`() {
+        assertNull(
             resolvePluginPollingIntervalMs(
                 hasPlugins = false,
                 isPlaying = true
             )
         )
+    }
+
+    @Test
+    fun `sampling requires an enabled consumer and active playback or loading`() {
+        assertNull(resolvePlaybackSamplingIntervalMs(
+            isPlaying = false, isLoading = false, analyticsEnabled = true, cdnEnabled = true,
+        ))
+        assertNull(resolvePlaybackSamplingIntervalMs(
+            isPlaying = true, isLoading = true, analyticsEnabled = false, cdnEnabled = false,
+        ))
+        assertEquals(5_000L, resolvePlaybackSamplingIntervalMs(
+            isPlaying = true, isLoading = false, analyticsEnabled = true, cdnEnabled = false,
+        ))
+        // 暂停时仍在下载缓冲，CDN 的连接策略仍需要真实缓冲数据。
+        assertEquals(5_000L, resolvePlaybackSamplingIntervalMs(
+            isPlaying = false, isLoading = true, analyticsEnabled = false, cdnEnabled = true,
+        ))
     }
 
     @Test

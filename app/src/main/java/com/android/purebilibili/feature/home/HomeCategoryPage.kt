@@ -73,6 +73,8 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.LocalHomeScrollTickProvider
+import com.android.purebilibili.feature.home.components.cards.LocalHomeCardVisibility
+import com.android.purebilibili.feature.home.components.cards.VideoCardVisibilityState
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardScrolling
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardAuxiliaryWorkAllowed
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardTransitionRunning
@@ -424,7 +426,7 @@ internal fun HomeCategoryPageContent(
         mutableStateOf(false)
     }
 
-    // Share key extraction, but read each card's Boolean in its own restart scope.
+    // Share key extraction for cover load ranges and full-width header visibility.
     val visibleLazyItemKeys = remember(gridState) {
         derivedStateOf { gridState.visibleItemKeys() }
     }
@@ -467,9 +469,8 @@ internal fun HomeCategoryPageContent(
         val returnFlags by rememberHomeCardReturnFlags(
             video.bvid, sourceRoute, returnSourceKey, returningFromDetail, quickReturningFromDetail,
         )
-        val cardVisible by remember(visibleLazyItemKeys, lazyItemKey) {
-            derivedStateOf { lazyItemKey in visibleLazyItemKeys.value }
-        }
+        val cardVisibility = remember(lazyItemKey) { VideoCardVisibilityState() }
+        val cardVisible = cardVisibility.visible
         val coverInLoadWindow by remember(coverLoadRange, index) {
             derivedStateOf { coverLoadRange.value?.contains(index) == true }
         }
@@ -478,36 +479,46 @@ internal fun HomeCategoryPageContent(
         val isNativeNonVideoCard = video.contentType in setOf("bangumi", "picture") ||
             (video.dynamicId.isNotBlank() && !video.bvid.startsWith("BV", ignoreCase = true))
         val isDissolving = video.bvid in dissolvingVideos
-        val squishAmount = when (cardMotionTier) {
-            MotionTier.Reduced -> 0.004f
-            MotionTier.Normal -> 0.008f
-            MotionTier.Enhanced -> 0.009f
-        }
-        val squishActive = cardVisible && isActive && backToTopSquishActive
-        val cardSquishScaleX = animateFloatAsState(
-            targetValue = if (squishActive) 1f + squishAmount else 1f,
-            animationSpec = spring(
-                dampingRatio = if (squishActive) {
-                    Spring.DampingRatioNoBouncy
-                } else {
-                    0.64f
-                },
-                stiffness = Spring.StiffnessMedium,
-            ),
-            label = "home_back_to_top_card_squish_x",
-        )
-        val cardSquishScaleY = animateFloatAsState(
-            targetValue = if (squishActive) 1f - squishAmount else 1f,
-            animationSpec = spring(
-                dampingRatio = if (squishActive) {
-                    Spring.DampingRatioNoBouncy
-                } else {
-                    0.64f
-                },
-                stiffness = Spring.StiffnessMedium,
-            ),
-            label = "home_back_to_top_card_squish_y",
-        )
+        // Disabled motion has no animation state or graphics layer; enabled cards keep
+        // their spring mounted through the complete return to the resting scale.
+        val cardSquishModifier = if (cardAnimationEnabled && componentMotionEnabled &&
+            !reduceMotion && visualWorkActive && isActive && cardVisible
+        ) {
+            val squishAmount = when (cardMotionTier) {
+                MotionTier.Reduced -> 0.004f
+                MotionTier.Normal -> 0.008f
+                MotionTier.Enhanced -> 0.009f
+            }
+            val squishActive = cardVisible && isActive && backToTopSquishActive
+            val cardSquishScaleX = animateFloatAsState(
+                targetValue = if (squishActive) 1f + squishAmount else 1f,
+                animationSpec = spring(
+                    dampingRatio = if (squishActive) {
+                        Spring.DampingRatioNoBouncy
+                    } else {
+                        0.64f
+                    },
+                    stiffness = Spring.StiffnessMedium,
+                ),
+                label = "home_back_to_top_card_squish_x",
+            )
+            val cardSquishScaleY = animateFloatAsState(
+                targetValue = if (squishActive) 1f - squishAmount else 1f,
+                animationSpec = spring(
+                    dampingRatio = if (squishActive) {
+                        Spring.DampingRatioNoBouncy
+                    } else {
+                        0.64f
+                    },
+                    stiffness = Spring.StiffnessMedium,
+                ),
+                label = "home_back_to_top_card_squish_y",
+            )
+            Modifier.graphicsLayer {
+                scaleX = cardSquishScaleX.value
+                scaleY = cardSquishScaleY.value
+            }
+        } else Modifier
 
         MaybeDissolvableVideoCard(
             isDissolving = isDissolving,
@@ -523,13 +534,11 @@ internal fun HomeCategoryPageContent(
             preserveContentLayerWhenIdle = cardTransitionEnabled,
             propagateMinConstraints = gridState.regularLayout,
             modifier = itemModifier
-                .graphicsLayer {
-                    scaleX = cardSquishScaleX.value
-                    scaleY = cardSquishScaleY.value
-                }
+                .then(cardSquishModifier)
                 .then(if (index == 0) firstGridItemModifier else Modifier)
         ) {
             CompositionLocalProvider(
+                LocalHomeCardVisibility provides cardVisibility,
                 LocalPageImageLoadingAllowed provides cardImageWorkAllowed,
                 LocalHomeCardCoverLoadingAllowed provides cardCoverWorkAllowed,
                 LocalHomeCardAuxiliaryWorkAllowed provides (cardImageWorkAllowed && auxiliaryWorkAllowed),

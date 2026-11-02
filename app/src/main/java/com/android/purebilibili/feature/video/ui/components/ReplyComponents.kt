@@ -2655,6 +2655,7 @@ fun RichCommentText(
             fontSize = fontSize,
             color = color,
             lineHeight = lineHeight,
+            style = com.android.purebilibili.core.ui.appParagraphTextStyle(),
             maxLines = maxLines,
             onTextLayout = { textLayoutResult = it },
             modifier = textModifier

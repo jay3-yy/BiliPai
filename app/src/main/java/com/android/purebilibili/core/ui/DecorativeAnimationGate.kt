@@ -29,10 +29,13 @@ internal class DecorativeAnimationGate {
 internal fun rememberDecorativeAnimationGate(
     // 用户触发的有限动作可独立于卡片进场设置，仍遵守系统减弱动效与可见性。
     respectComponentMotion: Boolean = true,
+    // 有限反馈由播放器显示静态完成姿态并计时，减少动态时仍需传递可见性。
+    respectSystemReduceMotion: Boolean = true,
 ): DecorativeAnimationGate {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val gate = remember(lifecycle) { DecorativeAnimationGate() }
-    val allowed = (!respectComponentMotion || LocalComponentMotionEnabled.current) && !LocalSystemReduceMotion.current &&
+    val allowed = (!respectComponentMotion || LocalComponentMotionEnabled.current) &&
+        (!respectSystemReduceMotion || !LocalSystemReduceMotion.current) &&
         LocalWindowInfo.current.isWindowFocused && rememberVisualWorkActive()
     androidx.compose.runtime.SideEffect { gate.allowed = allowed }
     DisposableEffect(lifecycle, gate) {

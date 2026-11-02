@@ -45,6 +45,8 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextMotion
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import kotlin.math.cos
@@ -102,6 +104,10 @@ internal fun TimedLyricText(
     onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    // 动画字形只用于会位移的歌词；减少动态效果时采用静态文字渲染。
+    val lyricStyle = style.copy(
+        textMotion = if (LocalSystemReduceMotion.current) TextMotion.Static else TextMotion.Animated
+    )
     // TTML may encode the blank before a word as part of that word. Move it to the prior
     // karaoke unit before wrapping so every v1 line, including wrapped continuations, starts
     // at the same left edge. Right-aligned v2 rows are visually tolerant of this, but v1 is not.
@@ -127,7 +133,7 @@ internal fun TimedLyricText(
             .then(if (singleLine && statusBarMarquee) Modifier.basicMarquee() else Modifier)
         val textGlow = if (glowColor != null && glowRadius > 0f) {
             Shadow(
-                color = glowColor.copy(alpha = glowColor.alpha * style.color.alpha),
+                color = glowColor.copy(alpha = glowColor.alpha * lyricStyle.color.alpha),
                 offset = Offset.Zero,
                 blurRadius = glowRadius
             )
@@ -136,7 +142,7 @@ internal fun TimedLyricText(
             Box(modifier = modifier) {
                 BasicText(
                     text = text,
-                    style = style.copy(color = outlineColor, drawStyle = Stroke(width = outlineWidth), shadow = null),
+                    style = lyricStyle.copy(color = outlineColor, drawStyle = Stroke(width = outlineWidth), shadow = null),
                     maxLines = if (singleLine) 1 else Int.MAX_VALUE,
                     softWrap = !singleLine,
                     overflow = TextOverflow.Clip,
@@ -144,7 +150,7 @@ internal fun TimedLyricText(
                 )
                 BasicText(
                     text = text,
-                    style = style.copy(shadow = textGlow),
+                    style = lyricStyle.copy(shadow = textGlow),
                     maxLines = if (singleLine) 1 else Int.MAX_VALUE,
                     softWrap = !singleLine,
                     overflow = TextOverflow.Clip,
@@ -154,7 +160,7 @@ internal fun TimedLyricText(
         } else {
             BasicText(
                 text = text,
-                style = style.copy(shadow = textGlow),
+                style = lyricStyle.copy(shadow = textGlow),
                 maxLines = if (singleLine) 1 else Int.MAX_VALUE,
                 softWrap = !singleLine,
                 overflow = TextOverflow.Clip,
@@ -166,7 +172,7 @@ internal fun TimedLyricText(
     // Keep the timed units as individual layout children. This is the same important distinction
     // as the smooth renderer: a long timed line breaks between singable units, not at arbitrary
     // glyphs, so highlighted and dim lines retain identical visual rows.
-    val horizontalArrangement = when (style.textAlign) {
+    val horizontalArrangement = when (lyricStyle.textAlign) {
         TextAlign.End -> Arrangement.End
         TextAlign.Center -> Arrangement.Center
         else -> Arrangement.Start
@@ -184,7 +190,7 @@ internal fun TimedLyricText(
                 renderWord = renderWord,
                 positionMs = positionState,
                 active = active,
-                baseStyle = style,
+                baseStyle = lyricStyle,
                 contentColor = contentColor,
                 wordLiftEnabled = wordLiftEnabled,
                 wordLiftScale = wordLiftScale,
@@ -197,7 +203,7 @@ internal fun TimedLyricText(
                 fullTrailBreath = fullTrailBreath,
                 hdrHighlightEnabled = hdrHighlightEnabled,
                 ruby = rubies.getOrNull(index).orEmpty(),
-                rubyStyle = rubyStyle,
+                rubyStyle = rubyStyle?.copy(textMotion = lyricStyle.textMotion),
                 rubyBelow = rubyBelow,
                 onWordClick = onWordClick,
                 onLongPress = onLongPress
@@ -230,7 +236,7 @@ internal fun TimedLyricText(
         // visible for a translation below a long English line). Lay rows out ourselves against
         // the full line width so every row shares the exact same alignment anchor.
         AppleMusicTimedWordRows(
-            textAlign = style.textAlign,
+            textAlign = lyricStyle.textAlign,
             rubyBelow = rubyBelow,
             breakBefore = lyricUnitBreakAllowedBefore(timedWords.map { it.word.text }),
             modifier = modifier

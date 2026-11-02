@@ -69,10 +69,8 @@ class DanmakuConfig {
     var weightFilterLevel = 0
     var blockedRules: List<String> = emptyList()
 
-    // [新增] 智能避脸：根据检测到的人脸动态调整弹幕可显示带
+    // 服务端遮罩开关；不参与显示区域与轨道预算计算。
     var smartOcclusionEnabled = false
-    var safeBandTopRatio = 0f
-    var safeBandBottomRatio = 1f
     
     // 顶部边距（像素）
     var topMarginPx = 0
@@ -97,30 +95,27 @@ class DanmakuConfig {
             scrollFixedVelocity = scrollFixedVelocity,
             viewportWidthPx = viewWidth
         )
-        val activeBand = resolveActiveDisplayBand(displayAreaRatio)
+        val areaRatio = displayAreaRatio.coerceIn(0.1f, 1f)
         val hotBarSpace = resolveDanmakuHotBarReservedHeightPx(
             hotBarReservedHeightPx, viewHeight, massiveMode
         )
-        val topMargin = maxOf(
-            if (viewHeight > 0) viewHeight * activeBand.topRatio else 0f,
-            hotBarSpace,
-        )
+        val topMargin = hotBarSpace
         val visibleHeightPx = if (viewHeight > 0) {
-            (viewHeight * activeBand.bottomRatio - topMargin).coerceAtLeast(0f)
+            (viewHeight * areaRatio - topMargin).coerceAtLeast(0f)
         } else {
             0f
         }
         val maxLines = if (viewHeight > 0 && hotBarSpace > 0f && visibleHeightPx <= 0f) 0
         else resolveDanmakuVisibleLineCount(
             visibleHeightPx = visibleHeightPx,
-            areaRatioHint = activeBand.heightRatio,
+            areaRatioHint = areaRatio,
             fontSize = resolvedTextSize,
             strokeWidth = resolvedStrokeWidth,
             strokeEnabled = strokeEnabled,
             lineHeight = lineHeight,
             massiveMode = massiveMode
         )
-        val bottomInset = if (viewHeight > 0) viewHeight * (1f - activeBand.bottomRatio) else 0f
+        val bottomInset = if (viewHeight > 0) viewHeight * (1f - areaRatio) else 0f
         val pinnedDuration = resolveDanmakuPinnedDurationMillis(staticDurationSeconds)
         topMarginPx = topMargin.toInt()
 
@@ -140,18 +135,6 @@ class DanmakuConfig {
         )
     }
 
-    private fun resolveActiveDisplayBand(defaultArea: Float): DanmakuDisplayBand {
-        val fallback = DanmakuDisplayBand(0f, defaultArea.coerceIn(0.1f, 1f))
-        if (!smartOcclusionEnabled) return fallback
-
-        val requested = DanmakuDisplayBand(
-            topRatio = safeBandTopRatio,
-            bottomRatio = safeBandBottomRatio
-        ).normalized()
-        if (requested.heightRatio < 0.12f) return fallback
-        return requested
-    }
-    
     companion object {
         /**
          * 获取状态栏高度（像素）

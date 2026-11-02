@@ -10,8 +10,7 @@ class PlaybackPostLoadPlanPolicyTest {
     @Test
     fun `guest plan should prioritize player info and videoshot before enrichment`() {
         val plan = buildPlaybackPostLoadPlan(
-            isLoggedIn = false,
-            shouldShowOnlineCount = false
+            isLoggedIn = false
         )
 
         val playerInfoDelay = plan.firstDelayOf(PlaybackPostLoadTask.PLAYER_INFO)
@@ -34,8 +33,7 @@ class PlaybackPostLoadPlanPolicyTest {
     @Test
     fun `logged in plan should include deferred auth dependent enrichments`() {
         val plan = buildPlaybackPostLoadPlan(
-            isLoggedIn = true,
-            shouldShowOnlineCount = false
+            isLoggedIn = true
         )
 
         assertTrue(plan.containsTask(PlaybackPostLoadTask.REFRESH_DEFERRED_SIGNALS))
@@ -47,8 +45,7 @@ class PlaybackPostLoadPlanPolicyTest {
     @Test
     fun `guest plan should skip auth dependent enrichments`() {
         val plan = buildPlaybackPostLoadPlan(
-            isLoggedIn = false,
-            shouldShowOnlineCount = false
+            isLoggedIn = false
         )
 
         assertFalse(plan.containsTask(PlaybackPostLoadTask.REFRESH_DEFERRED_SIGNALS))
@@ -56,18 +53,10 @@ class PlaybackPostLoadPlanPolicyTest {
     }
 
     @Test
-    fun `online count should only be scheduled when enabled`() {
-        val disabled = buildPlaybackPostLoadPlan(
-            isLoggedIn = false,
-            shouldShowOnlineCount = false
-        )
-        val enabled = buildPlaybackPostLoadPlan(
-            isLoggedIn = false,
-            shouldShowOnlineCount = true
-        )
-
-        assertFalse(disabled.containsTask(PlaybackPostLoadTask.ONLINE_COUNT))
-        assertTrue(enabled.containsTask(PlaybackPostLoadTask.ONLINE_COUNT))
+    fun `online count observation starts after essential playback work`() {
+        val plan = buildPlaybackPostLoadPlan(isLoggedIn = false)
+        assertTrue(plan.firstDelayOf(PlaybackPostLoadTask.ONLINE_COUNT) >
+            plan.firstDelayOf(PlaybackPostLoadTask.PLAYER_INFO))
     }
 
     private fun List<PlaybackPostLoadTaskSpec>.containsTask(task: PlaybackPostLoadTask): Boolean {

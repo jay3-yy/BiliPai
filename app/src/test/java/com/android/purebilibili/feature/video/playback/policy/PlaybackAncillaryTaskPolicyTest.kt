@@ -36,12 +36,6 @@ class PlaybackAncillaryTaskPolicyTest {
     }
 
     @Test
-    fun `online count polling should back off harder in background`() {
-        assertEquals(30_000L, resolveOnlineCountPollingDelayMs(isInBackground = false))
-        assertEquals(90_000L, resolveOnlineCountPollingDelayMs(isInBackground = true))
-    }
-
-    @Test
     fun `heartbeat should only send for active foreground playback`() {
         assertTrue(
             shouldSendPlaybackHeartbeat(

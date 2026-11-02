@@ -73,7 +73,6 @@ class HomeHeroFlyoutStructureTest {
 
         assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
         assertTrue(source.contains("resolveVideoCardSharedTransitionMotionSpec("))
-        assertTrue(source.contains("HomeCoverReturnPrefetchRegistry.onCardVisible"))
         assertTrue(source.contains("memoryCacheKey(normalizedCoverUrl)"))
         assertTrue(source.contains("LocalSharedTransitionEnabled.current"))
         assertTrue(source.contains("sourceCornerDp = cardCornerDp.value.roundToInt()"))

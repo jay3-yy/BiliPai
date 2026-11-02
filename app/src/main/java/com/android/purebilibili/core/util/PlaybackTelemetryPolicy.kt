@@ -47,6 +47,7 @@ internal class QualitySwitchTelemetryAttempt(
     val source: String,
     private val startedAtMs: Long
 ) {
+    val timeoutAtMs: Long = startedAtMs + 30_000L
     private var actualQuality: Int? = null
     private var fallback = false
     private var finished = false
@@ -61,7 +62,7 @@ internal class QualitySwitchTelemetryAttempt(
         if (actualQuality != null && ready) {
             return finish(if (fallback) "fallback" else "success", "ready", nowMs)
         }
-        if (nowMs - startedAtMs >= 30_000L) return finish("timeout", "not_ready", nowMs)
+        if (nowMs >= timeoutAtMs) return finish("timeout", "not_ready", nowMs)
         return null
     }
 

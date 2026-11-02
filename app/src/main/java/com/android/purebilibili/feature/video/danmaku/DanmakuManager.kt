@@ -217,8 +217,6 @@ class DanmakuManager private constructor(
     private var currentVideoSpeed: Float = 1.0f
     private var pluginObserverJob: Job? = null
     private var lastDanmakuPluginUpdateToken: Long = 0L
-    private var currentFaceAwareBand: DanmakuDisplayBand? = null
-    private val faceBandStabilizer = FaceOcclusionBandStabilizer()
     private var wasBufferingWhilePlaying = false
     
     // 配置
@@ -400,25 +398,6 @@ class DanmakuManager private constructor(
             config.weightFilterLevel = value.coerceIn(0, 11)
             applyConfigToController("filter_changed")
         }
-
-    internal fun updateFaceOcclusion(faceRegions: List<FaceOcclusionRegion>) {
-        if (!config.smartOcclusionEnabled) return
-
-        val targetBand = resolveFaceAwareDisplayBand(
-            faceRegions = faceRegions,
-            defaultBand = DanmakuDisplayBand(0f, config.displayAreaRatio)
-        )
-        val nextBand = faceBandStabilizer.step(
-            detectedBand = targetBand,
-            hasFace = faceRegions.isNotEmpty(),
-            nowRealtimeMs = SystemClock.elapsedRealtime()
-        ) ?: return
-
-        currentFaceAwareBand = nextBand
-        config.safeBandTopRatio = nextBand.topRatio
-        config.safeBandBottomRatio = nextBand.bottomRatio
-        applyConfigToController("face_occlusion")
-    }
 
     private fun startDanmakuPluginObserver() {
         pluginObserverJob?.cancel()
@@ -1190,13 +1169,6 @@ class DanmakuManager private constructor(
 
         if (occlusionChanged) {
             if (smartOcclusion) {
-                currentFaceAwareBand = DanmakuDisplayBand(0f, config.displayAreaRatio)
-                config.safeBandTopRatio = currentFaceAwareBand?.topRatio ?: 0f
-                config.safeBandBottomRatio = currentFaceAwareBand?.bottomRatio ?: config.displayAreaRatio
-                faceBandStabilizer.reset(
-                    defaultBand = currentFaceAwareBand,
-                    nowRealtimeMs = SystemClock.elapsedRealtime()
-                )
                 if (webMaskBytes == null && cachedCid > 0L && cachedBvid.isNotBlank()) {
                     val expectedCid = cachedCid
                     val expectedGeneration = loadGeneration
@@ -1221,10 +1193,6 @@ class DanmakuManager private constructor(
                 maskFetchJob?.cancel()
                 webMaskWindowStartMs = Long.MIN_VALUE
                 webMaskWindowEndMs = Long.MIN_VALUE
-                currentFaceAwareBand = null
-                config.safeBandTopRatio = 0f
-                config.safeBandBottomRatio = 1f
-                faceBandStabilizer.reset()
                 controller?.replaceMaskFrames(emptyList(), player?.currentPosition ?: 0L)
             }
         }
@@ -1344,7 +1312,7 @@ class DanmakuManager private constructor(
                     "area=${config.displayAreaRatio}, strokeWidth=${config.strokeWidth}, lineHeight=${config.lineHeight}, " +
                     "staticSeconds=${config.staticDurationSeconds}, fixedVelocity=${config.scrollFixedVelocity}, " +
                     "massiveMode=${config.massiveMode}, staticToScroll=${config.staticDanmakuToScroll}, " +
-                    "smartOcclusion=${config.smartOcclusionEnabled}, band=${config.safeBandTopRatio}-${config.safeBandBottomRatio}, " +
+                    "smartOcclusion=${config.smartOcclusionEnabled}, " +
                     "allowScroll=${config.allowScroll}, allowTop=${config.allowTop}, allowBottom=${config.allowBottom}, " +
                     "allowColorful=${config.allowColorful}, allowSpecial=${config.allowSpecial}, " +
                     "baseMoveTime=$originalMoveTime, videoSpeed=$currentVideoSpeed, " +

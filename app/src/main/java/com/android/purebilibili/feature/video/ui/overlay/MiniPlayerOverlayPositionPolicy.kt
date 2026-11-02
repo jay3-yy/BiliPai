@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-import kotlin.math.abs
-
 internal data class MiniPlayerOverlayOffset(
     val x: Float,
     val y: Float
@@ -11,12 +9,6 @@ internal data class MiniPlayerResizeBounds(
     val minWidthDp: Float,
     val maxWidthDp: Float
 )
-
-internal enum class MiniPlayerContentDragIntent {
-    UNDECIDED,
-    SEEK,
-    MOVE
-}
 
 internal fun clampMiniPlayerOverlayOffset(
     offsetX: Float,
@@ -106,39 +98,6 @@ internal fun resolveMiniPlayerDockedBottomOffsetY(
     return screenHeightPx - miniPlayerHeightPx - outerPaddingPx - bottomInsetPx
 }
 
-internal fun resolveMiniPlayerContentDragIntent(
-    totalDragX: Float,
-    totalDragY: Float,
-    seekEnabled: Boolean,
-    touchSlopPx: Float
-): MiniPlayerContentDragIntent {
-    val horizontal = abs(totalDragX)
-    val vertical = abs(totalDragY)
-    val dominant = maxOf(horizontal, vertical)
-    if (dominant < touchSlopPx) return MiniPlayerContentDragIntent.UNDECIDED
-    if (!seekEnabled) return MiniPlayerContentDragIntent.MOVE
-    return if (horizontal > vertical * 1.35f) {
-        MiniPlayerContentDragIntent.SEEK
-    } else {
-        MiniPlayerContentDragIntent.MOVE
-    }
-}
-
-internal fun resolveMiniPlayerSeekTargetPosition(
-    dragStartPositionMs: Long,
-    dragDeltaPx: Float,
-    miniPlayerWidthPx: Float,
-    durationMs: Long
-): Long {
-    val safeDurationMs = durationMs.coerceAtLeast(0L)
-    if (safeDurationMs <= 0L) return 0L
-    val safeStartPositionMs = dragStartPositionMs.coerceIn(0L, safeDurationMs)
-    if (miniPlayerWidthPx <= 0f) return safeStartPositionMs
-
-    val seekDeltaMs = (dragDeltaPx / miniPlayerWidthPx * safeDurationMs).toLong()
-    return (safeStartPositionMs + seekDeltaMs).coerceIn(0L, safeDurationMs)
-}
-
 internal fun resolveMiniPlayerResizeBounds(
     defaultWidthDp: Int,
     defaultHeightDp: Int,
@@ -160,20 +119,6 @@ internal fun resolveMiniPlayerResizeBounds(
         maxWidthDp = maxWidth,
     )
 }
-
-internal fun resolveResizedMiniPlayerWidth(
-    currentWidthPx: Float,
-    dragDeltaX: Float,
-    dragDeltaY: Float,
-    aspectRatio: Float,
-    minWidthPx: Float,
-    maxWidthPx: Float
-): Float {
-    val safeAspectRatio = aspectRatio.coerceAtLeast(0.1f)
-    val projectedWidthDelta = (dragDeltaX + dragDeltaY * safeAspectRatio) / 2f
-    return (currentWidthPx + projectedWidthDelta).coerceIn(minWidthPx, maxWidthPx)
-}
-
 
 internal enum class MiniPlayerEdgeStashSide { LEFT, RIGHT }
 
