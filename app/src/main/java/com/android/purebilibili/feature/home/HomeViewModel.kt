@@ -267,11 +267,23 @@ private const val HOME_REFRESH_UNDO_TIMEOUT_MS = 5_000L
  * 官方客户端不传条数，服务端按 window_size_type（2/3/4 列）决定下发量；
  * 这里的 web 接口有 ps，按列数换算一个接近的值。
  */
+/**
+ * 请求场景码，对齐官方 feed/index 的 flush 参数。
+ *
+ * 5 = 首次进入 / 冷启动，6 = 下拉刷新，8 = 上滑加载更多。
+ * 原先写死 5，连续翻页时也一直告诉服务端「首次进入」。
+ */
+internal fun resolveHomeFeedFlush(isLoadMore: Boolean, isManualRefresh: Boolean): Int = when {
+    isLoadMore -> com.android.purebilibili.data.repository.HOME_FEED_FLUSH_PULL_UP
+    isManualRefresh -> com.android.purebilibili.data.repository.HOME_FEED_FLUSH_PULL_DOWN
+    else -> com.android.purebilibili.data.repository.HOME_FEED_FLUSH_DEFAULT
+}
+
 internal fun resolveHomeFeedPageSize(columns: Int): Int {
-    // 一屏大约 3 行，按「列数 × 3」给一屏的量，留一点余量给预加载。
-    // 服务端 ps 上限在 30 左右（实测 ps=50 返回 -400），超过就压到 30。
-    val perScreen = columns.coerceAtLeast(1) * 3
-    return (perScreen + 2).coerceIn(10, 30)
+    // 和请求里的 column 保持一致：统一按 7 列要量。
+    // 7 × 3 + 2 = 23，服务端 ps 上限在 30 左右（实测 ps=50 返回 -400）。
+    val requestColumns = com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN
+    return (requestColumns * 3 + 2).coerceIn(10, 30)
 }
 
 /** 本地列表上限，到顶后停止加载。与官方 pegasus.max_card_count 默认值一致。 */
@@ -1344,7 +1356,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         com.android.purebilibili.core.util.Logger.d(
             "HomeFeed",
-            "refresh 触发 category=$category columns=$feedGridColumns " +
+            "refresh 触发 category=$category 实际列=$feedGridColumns " +
+                "请求column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN} " +
                 "ps=${resolveHomeFeedPageSize(feedGridColumns)}",
         )
         accountRequests.launch {
@@ -1581,7 +1594,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         com.android.purebilibili.core.util.Logger.d(
             "HomeFeed",
-            "loadMore 触发 category=$currentCategory columns=$feedGridColumns " +
+            "loadMore 触发 category=$currentCategory 实际列=$feedGridColumns " +
+                "请求column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN} " +
                 "ps=${resolveHomeFeedPageSize(feedGridColumns)} current=${categoryState.videos.size}",
         )
 
@@ -1697,6 +1711,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             HomeCategory.RECOMMEND -> VideoRepository.getHomeFeed(
                 idx = recommendRequestIndex,
                 refreshCount = resolveHomeFeedPageSize(feedGridColumns),
+                columns = feedGridColumns,
+                flush = resolveHomeFeedFlush(isLoadMore = isLoadMore, isManualRefresh = isManualRefresh),
             ).map { page ->
                 homeFeedNotice = page.notice
                 page.videos
