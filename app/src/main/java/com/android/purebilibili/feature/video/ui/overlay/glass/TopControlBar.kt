@@ -453,6 +453,8 @@ fun TopControlBar(
                 Row(
                     modifier = if (isFullscreen || glassControls) Modifier
                         .horizontalScroll(rememberScrollState())
+                        // 在固定按钮行高度之外预留角标空间，避免滚动容器裁掉数字顶部。
+                        .padding(top = com.android.purebilibili.feature.video.ui.overlay.PlayerActionCountTopOverflow)
                         .padding(horizontal = 4.dp)
                         .then(alignedGlassDockHeight?.let { Modifier.height(it) } ?: Modifier)
                     else Modifier,

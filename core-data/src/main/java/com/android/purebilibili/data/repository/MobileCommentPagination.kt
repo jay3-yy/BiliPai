@@ -34,7 +34,9 @@ internal fun resolveMobileRestCommentPage(data: ReplyData, page: Int, pageSize: 
 internal fun requireAdvancingMobileCommentCursor(data: ReplyData, previous: CommentMainListContinuation?) {
     if (data.cursor.isEnd) return
     val next = requireNotNull(data.mainListContinuation) { "评论未加载完，但接口未返回后续游标，请重试" }
-    require(next.offset?.isNotBlank() == true || next.next > 0L) { "评论分页游标无效，请重试" }
+    val valid = if (next.route == CommentMainListRoute.GRPC) !next.offset.isNullOrBlank()
+        else next.offset?.isNotBlank() == true || next.next > 0L
+    require(valid) { "评论分页游标无效，请重试" }
     val repeats = previous != null && if (!next.offset.isNullOrBlank() && !previous.offset.isNullOrBlank()) {
         next.route == previous.route && next.offset == previous.offset
     } else next == previous

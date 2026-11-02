@@ -303,7 +303,9 @@ fun TopControlBar(
                         .fillMaxWidth()
                         // 两排玻璃轮廓留出独立呼吸空间；原生控件保持原有间距。
                         .then(if (glass) Modifier.padding(top = 6.dp) else Modifier)
-                        .horizontalScroll(rememberScrollState()),
+                        .horizontalScroll(rememberScrollState())
+                        // 角标伸出按钮的部分也必须位于滚动视口内；两种材质共用此边界。
+                        .padding(top = PlayerActionCountTopOverflow, end = PlayerActionCountEndOverflow),
                     horizontalArrangement = if (glass) Arrangement.spacedBy(buttonSpacing, Alignment.End) else Arrangement.End,
                 ) {
                     if (onCommentClick != null) {

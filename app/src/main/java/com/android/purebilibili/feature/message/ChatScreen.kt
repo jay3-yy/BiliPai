@@ -381,6 +381,9 @@ fun ChatScreen(
                         bottom = paddingValues.calculateBottomPadding(),
                     )
                     .consumeWindowInsets(paddingValues)
+                    // 消息列表和输入栏共同避让键盘，避免仅抬高输入栏后遮住消息；
+                    // 玻璃与原生样式共用此布局，已消费的导航栏高度不重复计入。
+                    .imePadding()
             ) {
                 Box(
                     modifier = Modifier
@@ -762,7 +765,7 @@ fun ChatInputBar(
     val keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
     val keyboardActions = KeyboardActions(onSend = { if (!isBusy && text.text.isNotBlank()) onSend() })
 
-    Column(modifier = modifier.fillMaxWidth().imePadding()) {
+    Column(modifier = modifier.fillMaxWidth()) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

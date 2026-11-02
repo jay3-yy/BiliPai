@@ -1753,7 +1753,9 @@ internal fun VideoCommentTab(
                     )
                 }
             }
-            if (isRepliesLoading && !isRepliesRefreshing && replies.isEmpty()) {
+            if (replies.isEmpty() && repliesError == null &&
+                (isRepliesLoading || isRepliesRefreshing || (paginationPage <= 1 && !isRepliesEnd))
+            ) {
                 // 骨架拆成多个独立 lazy item（而不是 1 个 item 里塞 5 行）：数据到达时是
                 // 一个槽位换一个槽位，列表锚点不失效，不会整体跳一下。
                 videoCommentSkeletonItems(
@@ -1763,19 +1765,12 @@ internal fun VideoCommentTab(
             } else if (replies.isEmpty() && voteCard == null && repliesError == null) {
                 item(key = "video_comment_empty", contentType = "video_comment_empty") {
                     val emptyMessage = pageControl?.emptyMessage()?.takeIf { it.isNotBlank() }
-                    if (replyCount > 0 && emptyMessage == null) {
-                        com.android.purebilibili.feature.video.ui.components.VideoCommentLoadError(
-                            message = "评论暂时无法加载，请重试或切换「最新」",
-                            onRetry = onRefreshReplies,
-                            modifier = Modifier.fillMaxWidth().fillParentMaxHeight(0.7f),
+                    // 数量种子不能证明加载失败；错误只消费请求链明确返回的 repliesError。
+                    Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        AppText(
+                            text = emptyMessage ?: "暂无评论",
+                            color = commentAppearance.secondaryTextColor
                         )
-                    } else {
-                        Box(modifier = Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            AppText(
-                                text = emptyMessage ?: "暂无评论",
-                                color = commentAppearance.secondaryTextColor
-                            )
-                        }
                     }
                 }
             } else {

@@ -46,10 +46,13 @@ internal class CommentPagingSession(
                     pages.drop(applied).forEach { onPage(it.request, it.data) }
                     applied = pages.size
                 }
+                val failure = (states.refresh as? LoadState.Error)?.error ?: (states.append as? LoadState.Error)?.error
                 onState(
-                    states.refresh is LoadState.Loading || states.append is LoadState.Loading,
+                    // Paging 初始化的 NotLoading 不代表首包已到达；先发布正文，再结束加载。
+                    (applied == 0 && failure == null) ||
+                        states.refresh is LoadState.Loading || states.append is LoadState.Loading,
                     states.append.endOfPaginationReached,
-                    (states.refresh as? LoadState.Error)?.error ?: (states.append as? LoadState.Error)?.error
+                    failure
                 )
             }
         }

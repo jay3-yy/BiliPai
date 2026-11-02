@@ -23,6 +23,9 @@ import com.android.purebilibili.core.store.FullscreenActionCountSettings
 import com.android.purebilibili.core.ui.components.AppText
 import java.util.Locale
 
+internal val PlayerActionCountTopOverflow = 5.dp
+internal val PlayerActionCountEndOverflow = 2.dp
+
 @Composable
 internal fun rememberVisibleFullscreenCounts(): Set<FullscreenActionCount> {
     val context = LocalContext.current
@@ -66,7 +69,7 @@ internal fun CountedPlayerAction(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .offset(x = 2.dp, y = (-5).dp),
+                    .offset(x = PlayerActionCountEndOverflow, y = -PlayerActionCountTopOverflow),
                 contentAlignment = Alignment.TopEnd,
             ) {
                 AppText(

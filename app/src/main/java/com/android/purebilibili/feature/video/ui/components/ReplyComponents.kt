@@ -1489,6 +1489,14 @@ fun ReplyItemView(
     var actionCarriedPress by remember(item.rpid) { mutableStateOf<com.android.purebilibili.core.ui.components.AppSingleChoicePopupPress?>(null) }
 
     val openButtonActions = { actionCarriedPress = null; actionSource = actionButtonSource; actionAnchor = null; showActionSheet = true }
+    val openLongPressActions = {
+        onLongClick?.invoke()
+        actionSource = null
+        actionCarriedPress = actionPressRelay[0]
+        val point = actionPressPosition[0] ?: actionCoordinates[0]?.boundsInWindow()?.center
+        actionAnchor = point?.let { Rect(it, androidx.compose.ui.geometry.Size(1f, 1f)) }
+        showActionSheet = true
+    }
 
     var showFreeCopyDialog by remember(item.rpid) { mutableStateOf(false) }
     var showReportDialog by remember(item.rpid) { mutableStateOf(false) }
@@ -1690,14 +1698,7 @@ fun ReplyItemView(
                         onClick()
                     }
                 },
-                onLongClick = {
-                    onLongClick?.invoke()
-                    actionSource = null
-                    actionCarriedPress = actionPressRelay[0]
-                    val point = actionPressPosition[0] ?: actionCoordinates[0]?.boundsInWindow()?.center
-                    actionAnchor = point?.let { Rect(it, androidx.compose.ui.geometry.Size(1f, 1f)) }
-                    showActionSheet = true
-                }
+                onLongClick = openLongPressActions
             )
     ) {
         BoxWithConstraints(
@@ -1864,6 +1865,7 @@ fun ReplyItemView(
                         onVoteClick = { voteId -> onUrlClick?.invoke("bilibili://vote?id=$voteId") },
                         noteCvidStr = item.noteCvidStr,
                         prefix = contentPrefix,
+                        onLongPress = openLongPressActions,
                         onPlainTextClick = if (openThreadFromRootClick) {
                             { onSubClick(previewRoot, 0L) }
                         } else {
@@ -2284,7 +2286,8 @@ internal fun ReplyMessageText(
     noteCvidStr: String = "",
     prefix: AnnotatedString? = null,
     lineHeight: TextUnit = fontSize * 1.5f,
-    onPlainTextClick: (() -> Unit)? = null
+    onPlainTextClick: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null
 ) {
     val videoReference = remember(text) { resolveReplyVideoReference(text) }
     var resolvedTitle by remember(videoReference?.bvid) {
@@ -2315,7 +2318,8 @@ internal fun ReplyMessageText(
             url = videoReference.navigationUrl,
             onUrlClick = onUrlClick,
             prefix = prefix,
-            copyText = text.trim()
+            copyText = text.trim(),
+            onLongPress = onLongPress,
         )
     } else {
         RichCommentText(
@@ -2334,7 +2338,8 @@ internal fun ReplyMessageText(
             onVoteClick = onVoteClick,
             noteCvidStr = noteCvidStr,
             prefix = prefix,
-            onPlainTextClick = onPlainTextClick
+            onPlainTextClick = onPlainTextClick,
+            onLongPress = onLongPress,
         )
     }
 }
@@ -2348,7 +2353,8 @@ private fun ReplyVideoReferenceText(
     onUrlClick: ((String) -> Unit)?,
     prefix: AnnotatedString? = null,
     copyText: String = text,
-    lineHeight: TextUnit = fontSize * 1.5f
+    lineHeight: TextUnit = fontSize * 1.5f,
+    onLongPress: (() -> Unit)? = null
 ) {
     val primaryColor = AppContentColors.accent()
     val annotatedString = remember(text, url, prefix, primaryColor) {
@@ -2391,12 +2397,11 @@ private fun ReplyVideoReferenceText(
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
     val modifier = if (onUrlClick != null) {
-        Modifier.pointerInput(annotatedString, url) {
+        Modifier.pointerInput(annotatedString, url, onUrlClick, onLongPress) {
             detectTapGestures(
                 onLongPress = {
-                    if (copyText.isNotEmpty()) {
-                        showTextSelectionSheet = true
-                    }
+                    if (onLongPress != null) onLongPress()
+                    else if (copyText.isNotEmpty()) showTextSelectionSheet = true
                 },
                 onTap = { offset ->
                     textLayoutResult?.let { layoutResult ->
@@ -2457,7 +2462,8 @@ fun RichCommentText(
     noteCvidStr: String = "",
     prefix: AnnotatedString? = null,
     lineHeight: TextUnit = fontSize * 1.5f,
-    onPlainTextClick: (() -> Unit)? = null
+    onPlainTextClick: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val timestampColor = AppContentColors.accent()
@@ -2466,8 +2472,7 @@ fun RichCommentText(
     val renderableEmoteKeys = remember(text, emoteMap) {
         collectRenderableEmoteKeys(text, emoteMap)
     }
-    // 原生链接分发：BasicText 在 Text 内部处理 LinkAnnotation 点击，
-    // 长按/划选/条目点击不再与 @、链接竞争。
+    // 触摸、键盘和无障碍入口共用链接动作，始终绑定当前页面的回调。
     val linkListener = remember(onUrlClick, onUserClick, onTopicClick, onVoteClick, onTimestampClick) {
         LinkInteractionListener { link ->
             when (val action = resolveRichCommentLinkAction((link as LinkAnnotation.Clickable).tag)) {
@@ -2496,7 +2501,8 @@ fun RichCommentText(
         maxTimestampMs,
         timestampColor,
         color,
-        urlColor
+        urlColor,
+        linkListener
     ) {
         buildRichCommentAnnotatedString(
             text = text,
@@ -2597,19 +2603,29 @@ fun RichCommentText(
     }
     val copyText = remember(text) { text.trim() }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
+    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
 
     val content: @Composable () -> Unit = {
-        // 纯文本兜底点击（如点空白处打开线程）。@/链接点击由 BasicText 内部的
-        // 原生链接手势消费 up 事件，这里的检测器收不到，不会双重触发。
-        val textModifier = if (onPlainTextClick != null) {
-            Modifier.pointerInput(annotatedString, onPlainTextClick) {
-                detectTapWithSelectionFriendly { _ ->
-                    onPlainTextClick.invoke()
-                }
+        // 以实际字符位置命中链接，跨行标题与内联图标共用同一跳转；
+        // 只接管链接手势，普通文字仍交给条目点击、长按或原生划选。
+        val textModifier = Modifier
+            .pointerInput(annotatedString, onLongPress) {
+                detectReplyLinkGestures(
+                    linkAt = { position -> textLayoutResult?.replyLinkAt(position) },
+                    onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
+                    onLongPress = {
+                        if (onLongPress != null) onLongPress()
+                        else if (copyText.isNotEmpty()) showTextSelectionSheet = true
+                    },
+                )
             }
-        } else {
-            Modifier
-        }
+            .then(
+                if (onPlainTextClick != null) {
+                    Modifier.pointerInput(annotatedString, onPlainTextClick) {
+                        detectTapWithSelectionFriendly { _ -> onPlainTextClick() }
+                    }
+                } else Modifier
+            )
 
         AppText(
             text = annotatedString,
@@ -2618,6 +2634,7 @@ fun RichCommentText(
             color = color,
             lineHeight = lineHeight,
             maxLines = maxLines,
+            onTextLayout = { textLayoutResult = it },
             modifier = textModifier
         )
     }

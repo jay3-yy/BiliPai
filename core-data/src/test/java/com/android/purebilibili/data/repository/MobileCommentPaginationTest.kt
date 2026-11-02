@@ -11,20 +11,39 @@ import kotlin.test.assertTrue
 
 class MobileCommentPaginationTest {
     @Test
-    fun `mobile MainList uses PiliPlus cursor request and preserves int64 next`() {
-        val next = 9_000_000_000L
-        val fields = ProtoWire.parseFields(CommentGrpcRepository.buildMainListRequest(
-            oid = 1L, type = 17, mode = 3, nextOffset = "must-not-be-sent",
-            useCursorPaging = true, cursorNext = next,
-        ))
-        val cursor = ProtoWire.parseFields(fields.single { it.number == 3 }.bytes)
-        assertEquals(next, cursor.single { it.number == 1 }.varint)
-        assertEquals(3L, cursor.single { it.number == 4 }.varint)
-        assertFalse(fields.any { it.number == 9 || it.number == 10 })
+    fun `first main page sends independent sort mode without legacy cursor`() {
+        for (mode in listOf(CommentGrpcRepository.MODE_TIME, CommentGrpcRepository.MODE_HOT)) {
+            val fields = ProtoWire.parseFields(CommentGrpcRepository.buildMainListRequest(
+                oid = 1L, type = 17, mode = mode, nextOffset = null,
+            ))
+            assertEquals(mode.toLong(), fields.single { it.number == 9 }.varint)
+            assertFalse(fields.any { it.number == 3 || it.number == 10 })
+        }
+    }
+
+    @Test
+    fun `loaded comments with offset and zero numeric cursor remain valid for the next request`() {
+        // 新分页响应只给 offset，旧 cursor.next 可以为 0；不能因此丢弃已经返回的正文。
         val data = CommentGrpcRepository.parseMainListReply(ProtoWire.message(
-            ProtoWire.bytes(1, ProtoWire.message(ProtoWire.int64(1, next))),
+            ProtoWire.bytes(1, ProtoWire.message(ProtoWire.bool(4, false))),
+            ProtoWire.bytes(2, ProtoWire.message(ProtoWire.int64(1, 123L))),
+            ProtoWire.bytes(3, ProtoWire.message(ProtoWire.int64(16, 50L))),
+            ProtoWire.bytes(20, ProtoWire.message(ProtoWire.string(1, "opaque-next-page"))),
         ))
-        assertEquals(CommentMainListContinuation(CommentMainListRoute.GRPC, next), data.mainListContinuation)
+        assertEquals(123L, data.replies.orEmpty().single().rpid)
+        val next = requireNotNull(data.mainListContinuation)
+        assertEquals(CommentMainListRoute.GRPC, next.route)
+        assertEquals(0L, next.next)
+        assertEquals("opaque-next-page", next.offset)
+        requireAdvancingMobileCommentCursor(data, null)
+
+        val fields = ProtoWire.parseFields(CommentGrpcRepository.buildMainListRequest(
+            oid = 1L, type = 17, mode = 3, nextOffset = next.offset,
+        ))
+        assertEquals(3L, fields.single { it.number == 9 }.varint)
+        assertFalse(fields.any { it.number == 3 })
+        val pagination = ProtoWire.parseFields(fields.single { it.number == 10 }.bytes)
+        assertEquals("opaque-next-page", ProtoWire.stringValue(pagination.single { it.number == 2 }))
     }
 
     @Test
@@ -53,8 +72,8 @@ class MobileCommentPaginationTest {
 
     @Test
     fun `empty or duplicate batches can continue while cursor advances`() {
-        val previous = CommentMainListContinuation(CommentMainListRoute.GRPC, 3)
-        val data = ReplyData(mainListContinuation = previous.copy(next = 8))
+        val previous = CommentMainListContinuation(CommentMainListRoute.GRPC, offset = "previous")
+        val data = ReplyData(mainListContinuation = previous.copy(offset = "next"))
         requireAdvancingMobileCommentCursor(data, previous)
         assertFailsWith<IllegalArgumentException> {
             requireAdvancingMobileCommentCursor(data.copy(mainListContinuation = previous), previous)
@@ -62,6 +81,16 @@ class MobileCommentPaginationTest {
         assertFailsWith<IllegalArgumentException> {
             requireAdvancingMobileCommentCursor(data.copy(mainListContinuation = null), previous)
         }
+    }
+
+    @Test
+    fun `numeric cursor alone cannot continue grpc offset pagination`() {
+        assertFailsWith<IllegalArgumentException> {
+            requireAdvancingMobileCommentCursor(ReplyData(
+                mainListContinuation = CommentMainListContinuation(CommentMainListRoute.GRPC, next = 9_000_000_000L),
+            ), null)
+        }
+        requireAdvancingMobileCommentCursor(ReplyData(cursor = ReplyCursor(isEnd = true)), null)
     }
 
     @Test
@@ -81,7 +110,7 @@ class MobileCommentPaginationTest {
 
     @Test
     fun `location supplementation keeps main pagination and pinned ordering`() {
-        val continuation = CommentMainListContinuation(CommentMainListRoute.GRPC, 9000000000L)
+        val continuation = CommentMainListContinuation(CommentMainListRoute.GRPC, offset = "ranked-page-2")
         val top = ReplyItem(rpid = 9, like = 100)
         val data = ReplyData(
             replies = listOf(ReplyItem(rpid = 2)), top = ReplyTop(upper = top),

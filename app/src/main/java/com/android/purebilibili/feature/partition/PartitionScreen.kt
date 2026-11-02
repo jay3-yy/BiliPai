@@ -8,6 +8,12 @@ import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import com.android.purebilibili.feature.home.LocalHomeWallpaperBackdrop
 
 import android.os.Build
+import android.os.SystemClock
+import androidx.compose.ui.platform.LocalViewConfiguration
+import com.android.purebilibili.core.ui.AppActionHaptics
+import com.android.purebilibili.core.util.HapticType
+import com.android.purebilibili.core.util.rememberHapticFeedback
+import com.android.purebilibili.feature.home.components.LiquidDockHapticPolicy
 import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
@@ -739,6 +745,14 @@ private fun PartitionSideRail(
     val partitionsLatest by rememberUpdatedState(partitions)
     val offsetAnimation = remember { Animatable(0f) }
     val holder = remember { PartitionSideRailDragHolder() }
+    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
+    val latestHaptic by rememberUpdatedState(haptic)
+    val hapticsEnabled by rememberUpdatedState(
+        liquidGlassIndicatorEnabled && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.hapticFeedbackEnabled
+    )
+    val touchSlopPx by rememberUpdatedState(LocalViewConfiguration.current.touchSlop)
+    // 与底栏复用起步阈值、跨槽滞回和节流；只接收真实拖动及其边缘滚动位置。
+    val gestureHaptics = remember(itemCount, liquidGlassIndicatorEnabled) { LiquidDockHapticPolicy() }
 
     // LazyList offsets include the real measured slot sizes and dynamic header padding.
     // Use the same anchor for the visible indicator, its hit test, and the glyph recording.
@@ -754,7 +768,7 @@ private fun PartitionSideRail(
         )
     }
 
-    val dampedDragAnimation = remember(animationScope, itemCount, density, liquidGlassIndicatorEnabled) {
+    val dampedDragAnimation = remember(animationScope, itemCount, density, liquidGlassIndicatorEnabled, gestureHaptics) {
         DampedDragAnimation(
             animationScope = animationScope,
             initialValue = selectedIndex.toFloat(),
@@ -773,6 +787,9 @@ private fun PartitionSideRail(
                     shouldStartPartitionSideRailIndicatorDrag(offset.y, 0f, holder.itemHeightPx)
             },
             onDragStarted = {
+                if (liquidGlassIndicatorEnabled) {
+                    gestureHaptics.start(targetValue, itemCount, touchSlopPx / holder.itemSlotHeightPx.coerceAtLeast(1f))
+                }
                 holder.dragCenterY = railOffset(value) + holder.itemHeightPx / 2f
             },
             onDragStopped = {
@@ -780,7 +797,12 @@ private fun PartitionSideRail(
                 val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, maxTabIndex)
                 if (liquidGlassIndicatorEnabled) updateValue(targetIndex.toFloat())
                 else animateToValue(targetIndex.toFloat(), animatePress = false)
-                partitionsLatest.getOrNull(targetIndex)?.let(onSelectedLatest)
+                val hadGestureFeedback = gestureHaptics.finish()
+                partitionsLatest.getOrNull(targetIndex)?.let { partition ->
+                    if (liquidGlassIndicatorEnabled && hadGestureFeedback) {
+                        AppActionHaptics.runWithoutAdditionalFeedback { onSelectedLatest(partition) }
+                    } else onSelectedLatest(partition)
+                }
                 holder.offsetJob?.cancel()
                 holder.offsetJob = animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
                     offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
@@ -804,6 +826,9 @@ private fun PartitionSideRail(
                             (targetValue + dragAmount.y / holder.itemSlotHeightPx)
                                 .fastCoerceIn(0f, maxTabIndex.toFloat()),
                         )
+                    }
+                    if (liquidGlassIndicatorEnabled && gestureHaptics.update(targetValue, SystemClock.uptimeMillis()) && hapticsEnabled) {
+                        latestHaptic(HapticType.GESTURE_STEP)
                     }
                     holder.offsetJob?.cancel()
                     holder.offsetJob = animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
@@ -842,6 +867,9 @@ private fun PartitionSideRail(
                         (dampedDragAnimation.targetValue + consumed / holder.itemSlotHeightPx)
                             .fastCoerceIn(0f, maxTabIndex.toFloat()),
                     )
+                    if (gestureHaptics.update(dampedDragAnimation.targetValue, SystemClock.uptimeMillis()) && hapticsEnabled) {
+                        latestHaptic(HapticType.GESTURE_STEP)
+                    }
                 }
             }
         }
@@ -1532,7 +1560,11 @@ private fun PartitionVideoList(
                 state = listState,
                 modifier = modifier.fillMaxHeight(),
                 contentPadding = contentPadding,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                // 剧集卡片带完整背景，需要独立卡片间距；普通透明视频行保留紧凑间距。
+                // 这是内容类型差异，玻璃、MD3、Miuix 共用，不修改各材质的卡片内部尺寸。
+                verticalArrangement = Arrangement.spacedBy(
+                    if (resolvePartitionBangumiType(state.selectedPartition.id) != null) 12.dp else 2.dp
+                )
             ) {
                 itemsIndexed(
                     items = state.videos,

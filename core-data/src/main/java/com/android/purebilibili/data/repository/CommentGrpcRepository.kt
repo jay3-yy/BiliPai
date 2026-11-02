@@ -50,23 +50,13 @@ object CommentGrpcRepository {
         type: Int,
         mode: Int,
         nextOffset: String?,
-        useCursorPaging: Boolean = false,
-        cursorNext: Long? = null,
     ): ByteArray {
         val fields = mutableListOf(
             ProtoWire.int64(1, oid),
             ProtoWire.int64(2, type.toLong()),
         )
-        if (useCursorPaging) {
-            // PiliPlus MainList: cursor.next (int64) + cursor.mode, fields 1 and 4.
-            fields += ProtoWire.bytes(3, ProtoWire.message(
-                ProtoWire.int64(1, cursorNext ?: 0L),
-                ProtoWire.int32(4, mode),
-            ))
-        } else {
-            fields += ProtoWire.int32(9, mode)
-        }
-        if (!useCursorPaging && !nextOffset.isNullOrBlank()) {
+        fields += ProtoWire.int32(9, mode)
+        if (!nextOffset.isNullOrBlank()) {
             fields += ProtoWire.bytes(
                 10,
                 ProtoWire.message(
@@ -84,8 +74,6 @@ object CommentGrpcRepository {
         type: Int,
         mode: Int,
         nextOffset: String?,
-        useCursorPaging: Boolean = false,
-        cursorNext: Long? = null,
     ): Result<ReplyData> {
         if (mode != MODE_TIME && mode != MODE_HOT) {
             return Result.failure(IllegalArgumentException("Unsupported gRPC reply mode: $mode"))
@@ -98,8 +86,6 @@ object CommentGrpcRepository {
                     type = type,
                     mode = mode,
                     nextOffset = nextOffset,
-                    useCursorPaging = useCursorPaging,
-                    cursorNext = cursorNext,
                 )
             )
             parseMainListReply(response)
@@ -330,6 +316,7 @@ object CommentGrpcRepository {
             mainListContinuation = if (cursor.isEnd) null else CommentMainListContinuation(
                 route = CommentMainListRoute.GRPC,
                 next = cursorNext,
+                offset = paginationNextOffset.takeIf { it.isNotBlank() },
             ),
         )
     }

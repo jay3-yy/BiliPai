@@ -600,8 +600,8 @@ object CommentRepository {
     }.map { filterGoodsRepliesIfEnabled(it) }
 
     /**
-     * 手机主评论沿用 PiliPlus 的 CursorReq。分页来源随缓存保存；中途失败保留原游标重试，
-     * 不将 gRPC 游标交给 REST。旧共享入口及 TV 的默认行为保持不变。
+     * 手机主评论通过独立排序字段与服务端 offset 分页。分页来源随缓存保存，
+     * 中途失败保留原 offset 重试，不将 gRPC 游标交给 REST。
      */
     suspend fun getMobileCommentsForSubject(
         oid: Long,
@@ -633,13 +633,12 @@ object CommentRepository {
                 (page <= 1 && supportsGrpc && !commentReadRouteMemo.shouldSkipGrpcAttempt())
             if (useGrpc) {
                 val result = CommentGrpcRepository.getMainList(
-                    oid = oid, type = type, mode = mode, nextOffset = null,
-                    useCursorPaging = true, cursorNext = continuation?.next,
+                    oid = oid, type = type, mode = mode, nextOffset = continuation?.offset,
                 )
                 currentCoroutineContext().ensureActive()
                 val data = result.getOrNull()
                 val missingCursor = data != null && !data.cursor.isEnd &&
-                    (data.mainListContinuation?.next ?: 0L) <= 0L
+                    data.mainListContinuation?.offset.isNullOrBlank()
                 val needsFirstPageFallback = page <= 1 && (missingCursor ||
                     shouldFallbackHotCommentReadOnEmptySuccess(page, mode, 0, data) ||
                     shouldFallbackCommentReadOnEmptyRenderableSuccess(0, data))
