@@ -2307,23 +2307,17 @@ internal fun DynamicTopicLabel(
         Row(
             modifier = modifier
                 .clip(AppShapes.container(ContainerLevel.Chip))
-                .appActionClickable(onClick = onClick),
+                .background(AppContentColors.accent().copy(alpha = 0.18f))
+                .appActionClickable(onClick = onClick)
+                .padding(horizontal = AppSpacingTokens.Micro),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(AppSpacingTokens.ExtraSmall))
-                    .background(AppContentColors.accent().copy(alpha = 0.18f))
-                    .padding(horizontal = AppSpacingTokens.Micro),
-                contentAlignment = Alignment.Center,
-            ) {
-                AppText(
-                    text = "#",
-                    color = AppContentColors.accent(),
-                    fontSize = MaterialTheme.typography.titleMedium.fontSize,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
+            AppText(
+                text = "#",
+                color = AppContentColors.accent(),
+                fontSize = MaterialTheme.typography.titleMedium.fontSize,
+                fontWeight = FontWeight.Bold,
+            )
             Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
             AppText(
                 text = topicName,
