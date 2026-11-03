@@ -2157,7 +2157,7 @@ internal fun ElegantVideoCard(
 
         if (hasTrailingCardAction) {
             Row(
-                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 5.dp, y = 2.dp),
+                modifier = Modifier.align(Alignment.BottomEnd),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (onUnfavorite != null) {
@@ -2200,8 +2200,8 @@ internal fun ElegantVideoCard(
                                 haptic(HapticType.LIGHT)
                                 openDismissMenu(menuButtonCoordsRef.value, null)
                             },
-                        // 触控区 48dp，但图标光学上贴卡片右下角，与发布时间行对齐。
-                        contentAlignment = Alignment.BottomEnd
+                        // 两种材质共用此布局；图标居中留出内边距，避开卡片右下圆角裁切。
+                        contentAlignment = Alignment.Center
                     ) {
                         AppIcon(
                             imageVector = Icons.Outlined.MoreVert,
