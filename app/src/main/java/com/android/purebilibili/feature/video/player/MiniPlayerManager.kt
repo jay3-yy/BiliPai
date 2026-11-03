@@ -98,10 +98,13 @@ internal fun shouldShowInAppMiniPlayerByPolicy(
     mode: SettingsManager.MiniPlayerMode,
     isActive: Boolean,
     isNavigatingToVideo: Boolean,
-    stopPlaybackOnExit: Boolean
+    stopPlaybackOnExit: Boolean,
+    forcedByUser: Boolean = false,
 ): Boolean {
     if (stopPlaybackOnExit) return false
-    return mode.supportsInAppMiniPlayer && isActive && !isNavigatingToVideo
+    // forcedByUser：用户点了播放器上的小窗按钮。那是显式意图，不该被
+    // 「小窗播放模式 = 关闭」的设置挡住，否则按钮点下去什么都不发生。
+    return (mode.supportsInAppMiniPlayer || forcedByUser) && isActive && !isNavigatingToVideo
 }
 
 internal fun shouldEnterPipByPolicy(
@@ -1469,6 +1472,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         private set
 
     var isMiniMode by mutableStateOf(false)
+
+    /** 用户点了播放器上的小窗按钮。显式意图，不受「小窗播放模式」设置限制。 */
+    var forcedMiniMode by mutableStateOf(false)
         private set
 
     /**
@@ -1891,7 +1897,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
             mode = mode,
             isActive = isActive,
             isNavigatingToVideo = isNavigatingToVideo,
-            stopPlaybackOnExit = stopPlaybackOnExit
+            stopPlaybackOnExit = stopPlaybackOnExit,
+            forcedByUser = forcedMiniMode,
         )
         Logger.d(TAG, "📲 shouldShowInAppMiniPlayer: mode=$mode, isActive=$isActive, navigating=$isNavigatingToVideo, result=$result")
         return result
@@ -2101,6 +2108,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
             )
             return
         }
+        // 小窗接管后仍是活跃播放会话，不能留下阻断后台播放与前台恢复的离开标记。
+        if (isMiniMode && !forceStop) {
+            isLeavingByNavigation = false
+            return
+        }
         if (!forceStop) prepareAudioNowPlayingForNavigationExit(expectedBvid)
         isLeavingByNavigation = true
         Logger.d(
@@ -2136,6 +2148,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             if (forceStop || !keepForAudioNowPlaying) AudioNowPlayingSession.dismiss()
             isPlaying = false
             isMiniMode = false
+            forcedMiniMode = false
             Logger.d(TAG, "🔇 ${mode.label}：通过导航离开，立即停止播放")
             // 停止所有播放器（外部和内部）
             _externalPlayer?.let { player ->
@@ -2277,6 +2290,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         currentOwner = owner
         isActive = true
         isMiniMode = false
+        forcedMiniMode = false
 
         // 构建媒体源
         val headers = mapOf(
@@ -2343,6 +2357,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         currentLiveUname = ""
         isActive = true
         isMiniMode = false
+        forcedMiniMode = false
         isLeavingByNavigation = false
         requestForegroundServiceIfNeeded()
 
@@ -2420,6 +2435,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isLeavingByNavigation = false
         if (!isMiniMode) miniPlayerSessionId++
         isMiniMode = true
+        if (forced) forcedMiniMode = true
         // Detail-session handoff may have muted the shared player; always restore for mini window.
         currentPlayer?.let(PlayerVolumeController::applyPreferredVolume)
         if (shouldResumePlayback && currentPlayer != null) {
@@ -2446,6 +2462,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         Logger.d(TAG) { "Exiting mini mode, animate=$animate" }
         shouldAnimateExit = animate
         isMiniMode = false
+        forcedMiniMode = false
     }
 
     /**
@@ -2535,6 +2552,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         }
         
         isMiniMode = false
+        forcedMiniMode = false
         isActive = false
         playbackServiceRequested = false
         lastForegroundStartAtMs = 0L
@@ -2636,6 +2654,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         pendingBackgroundOverride = null
         isActive = true
         isMiniMode = false
+        forcedMiniMode = false
         // A visible detail reclaim ends the previous navigation handoff.
         isLeavingByNavigation = false
 

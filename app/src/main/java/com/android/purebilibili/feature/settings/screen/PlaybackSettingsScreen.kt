@@ -185,6 +185,9 @@ fun PlaybackSettingsContent(
     val audioFocusEnabled = playbackPreferences.audioFocusEnabled
     val audioModeAutoPipEnabled = playbackPreferences.audioModeAutoPipEnabled
     val audioNowPlayingBarEnabled = playbackPreferences.audioNowPlayingBarEnabled
+    val audioNowPlayingBarDeleteButton by remember(context) {
+        SettingsManager.getAudioNowPlayingBarDeleteButton(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     val audioNowPlayingBarImmersiveEnabled = playbackPreferences.audioNowPlayingBarImmersiveEnabled
     val audioNowPlayingBarOpensAudioMode = playbackPreferences.audioNowPlayingBarOpensAudioMode
     val musicLyricsUiStyle = playbackPreferences.musicLyricsUiStyle
@@ -751,6 +754,19 @@ SettingsItemAnchor("playback.mini_player_mode") {
                                     }
                                 },
                                 iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("playback.audio_now_playing_bar_delete_button") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_BAR_DELETE_BUTTON),
+                                title = playbackSettingTitle("playback.audio_now_playing_bar_delete_button"),
+                                subtitle = "显示右上角删除按钮，点击后停止播放并移除小横条",
+                                checked = audioNowPlayingBarDeleteButton,
+                                onCheckedChange = { enabled ->
+                                    scope.launch { SettingsManager.setAudioNowPlayingBarDeleteButton(context, enabled) }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
                             )
                         }
                         AppPreferenceDivider()
@@ -2678,16 +2694,10 @@ SettingsItemAnchor("playback.fullscreen_aspect_ratio") {
         androidx.compose.animation.AnimatedVisibility(
             visible = videoAmbientSettings.enabled,
             enter = if (animateAmbientOptions) androidx.compose.animation.expandVertically(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = 180,
-                    easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.Continuity,
-                ),
+                animationSpec = com.android.purebilibili.core.ui.motion.continuityTween(180),
             ) else androidx.compose.animation.EnterTransition.None,
             exit = if (animateAmbientOptions) androidx.compose.animation.shrinkVertically(
-                animationSpec = androidx.compose.animation.core.tween(
-                    durationMillis = 140,
-                    easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.Continuity,
-                ),
+                animationSpec = com.android.purebilibili.core.ui.motion.continuityTween(140),
             ) else androidx.compose.animation.ExitTransition.None,
         ) {
             Column {

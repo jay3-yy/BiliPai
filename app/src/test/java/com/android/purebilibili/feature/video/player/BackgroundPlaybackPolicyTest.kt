@@ -34,6 +34,22 @@ class BackgroundPlaybackPolicyTest {
     }
 
     @Test
+    fun explicitMiniPlayerEntryOverridesDisabledModeOnlyForAnActiveSession() {
+        fun visible(forced: Boolean, active: Boolean = true, navigating: Boolean = false) =
+            shouldShowInAppMiniPlayerByPolicy(
+                mode = SettingsManager.MiniPlayerMode.OFF,
+                isActive = active,
+                isNavigatingToVideo = navigating,
+                stopPlaybackOnExit = false,
+                forcedByUser = forced,
+            )
+        assertTrue(visible(forced = true))
+        assertFalse(visible(forced = false))
+        assertFalse(visible(forced = true, active = false))
+        assertFalse(visible(forced = true, navigating = true))
+    }
+
+    @Test
     fun combinedMiniPlayerModeShowsInAppMiniPlayerAndCanEnterSystemPip() {
         assertTrue(
             shouldShowInAppMiniPlayerByPolicy(

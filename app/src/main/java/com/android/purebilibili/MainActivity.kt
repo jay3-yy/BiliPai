@@ -68,7 +68,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -90,7 +89,7 @@ import com.android.purebilibili.core.coroutines.AppScope
 import com.android.purebilibili.core.theme.LocalDisplayMetricsSnapshot
 import com.android.purebilibili.core.theme.PureBiliBiliTheme
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
 import com.android.purebilibili.core.ui.performance.AppRuntimeVisualGuardTracker
 import com.android.purebilibili.core.ui.performance.applyPreferredDisplayMode
 import com.android.purebilibili.core.ui.wallpaper.SplashWallpaperLayout
@@ -1937,8 +1936,9 @@ class MainActivity : AppCompatActivity() {
                     }
                     //  小窗播放器覆盖层 (非 PiP 模式下显示；PIP 期间保持挂载但内容
                     //  为空占位，避免退出 PIP 时重放飞入动画)
-                    if (playbackOverlayState.showMiniPlayerOverlay ||
-                        playbackOverlayState.showDedicatedPipPlayer
+                    if (!showFullscreen &&
+                        (playbackOverlayState.showMiniPlayerOverlay ||
+                            playbackOverlayState.showDedicatedPipPlayer)
                     ) {
                         MiniPlayerOverlay(
                             miniPlayerManager = miniPlayerManager,
@@ -1961,12 +1961,28 @@ class MainActivity : AppCompatActivity() {
                                     pendingNavigationRoute =
                                         ScreenRoutes.Live.createRoute(roomId, liveTitle, liveUname)
                                 } else {
-                                    //  [修改] 导航回详情页，而不是只显示全屏播放器
+                                    // 展开按钮 / 双击：进全屏覆盖层，全屏里退出即回小窗。
+                                    showFullscreen = true
+                                }
+                            },
+                            onOpenDetailClick = {
+                                if (miniPlayerManager.isLiveMode) {
+                                    val roomId = miniPlayerManager.currentRoomId
+                                    val liveTitle = miniPlayerManager.currentTitle
+                                    val liveUname = miniPlayerManager.currentLiveUname
+                                    miniPlayerManager.exitMiniMode(animate = false)
+                                    pendingNavigationRoute =
+                                        ScreenRoutes.Live.createRoute(roomId, liveTitle, liveUname)
+                                } else {
+                                    // 「返回播放详情」：回详情页，不强制全屏
                                     miniPlayerManager.currentBvid?.let { bvid ->
                                         miniPlayerManager.isNavigatingToVideo = true
                                         miniPlayerManager.exitMiniMode(animate = false)
-                                        val cid = miniPlayerManager.currentCid
-                                        pendingNavigationRoute = resolveMiniPlayerExpandVideoRoute(bvid = bvid, cid = cid)
+                                        pendingNavigationRoute = resolveMainActivityVideoRoute(
+                                            bvid = bvid,
+                                            cid = miniPlayerManager.currentCid,
+                                            startFullscreen = false,
+                                        )
                                     }
                                 }
                             }
@@ -2059,10 +2075,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     val splashOverlayAlpha by animateFloatAsState(
                         targetValue = if (showSplash) 1f else 0f,
-                        animationSpec = tween(
-                            durationMillis = customSplashFadeDurationMs(),
-                            easing = AppMotionEasing.EmphasizedEnter
-                        ),
+                        animationSpec = emphasizedEnterTween(customSplashFadeDurationMs()),
                         label = "customSplashOverlayAlpha"
                     )
                     val splashFadeProgress = customSplashFadeProgress(splashOverlayAlpha)
