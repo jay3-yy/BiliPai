@@ -35,8 +35,6 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.ui.platform.LocalContext
-import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
-import com.android.purebilibili.core.theme.resolveAdaptiveTertiaryAccentColors
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.BangumiDetail
 import com.android.purebilibili.data.model.response.BangumiEpisode
@@ -348,25 +346,12 @@ fun EpisodeChip(
 
             // 角标
             if (episode.badge.isNotEmpty()) {
-                val badgeColors = com.android.purebilibili.feature.bangumi.bangumiBrandBadgeColors(episode.badge) ?: if (episode.badge.contains("会员")) {
-                    resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
-                } else {
-                    resolveAdaptiveTertiaryAccentColors(MaterialTheme.colorScheme)
-                }
-                AppSurface(
+                com.android.purebilibili.feature.bangumi.ui.list.BangumiBadge(
+                    text = episode.badge,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(4.dp),
-                    color = badgeColors.backgroundColor,
-                    shape = AppShapes.container(ContainerLevel.Tag)
-                ) {
-                    AppText(
-                        text = episode.badge,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = badgeColors.contentColor
-                    )
-                }
+                )
             }
 
             // 集数和标题

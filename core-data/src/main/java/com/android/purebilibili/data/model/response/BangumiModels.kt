@@ -299,6 +299,7 @@ data class BangumiStat(
     val views: Long = 0,              // 播放量
     val danmakus: Long = 0,           // 弹幕数
     val favorites: Long = 0,          // 追番/追剧数
+    val favorite: Long? = null,       // 收藏量，与追番数分别展示
     val coins: Long = 0,
     val likes: Long = 0,
     val reply: Long = 0,              // 评论数
@@ -454,6 +455,20 @@ data class WatchProgress(
     val lastEpIndex: String = "",
     @SerialName("last_time")
     val lastTime: Long = 0            // 上次观看时间点
+)
+
+@Serializable
+data class BangumiEpisodeCommunityResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: BangumiEpisodeCommunity? = null,
+)
+
+@Serializable
+data class BangumiEpisodeCommunity(
+    val like: Int? = null,
+    val favorite: Int? = null,
+    @SerialName("coin_number") val coinNumber: Double? = null,
 )
 
 @Serializable

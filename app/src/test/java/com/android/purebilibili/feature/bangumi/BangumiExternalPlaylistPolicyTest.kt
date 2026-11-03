@@ -51,4 +51,18 @@ class BangumiExternalPlaylistPolicyTest {
         assertEquals(11L, external.playlistItems[0].epId)
         assertEquals(22L, external.playlistItems[1].epId)
     }
+    @Test
+    fun `preview playback exposes its own section to the external playlist`() {
+        val detail = BangumiDetail(
+            seasonId = 100L,
+            episodes = listOf(BangumiEpisode(id = 11L)),
+            section = listOf(com.android.purebilibili.data.model.response.BangumiSection(
+                episodes = listOf(BangumiEpisode(id = 21L), BangumiEpisode(id = 22L)),
+            )),
+        )
+        val external = assertNotNull(buildExternalPlaylistFromBangumi(detail, 22L))
+        assertEquals(listOf(21L, 22L), external.playlistItems.map { it.epId })
+        assertEquals(1, external.startIndex)
+    }
+
 }

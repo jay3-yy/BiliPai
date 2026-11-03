@@ -1,14 +1,38 @@
 package com.android.purebilibili.data.model.response
 
 import com.android.purebilibili.data.repository.decodeBangumiPlayUrlPayload
+import com.android.purebilibili.data.repository.shouldFallbackToLegacyBangumiPlayUrl
 import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertFalse
 
 class BangumiPlayUrlResponseParsingTest {
 
     private val json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun `successful envelope preserves region restriction instead of parsing empty video info`() {
+        for (envelope in listOf("data", "result")) {
+            val payload = decodeBangumiPlayUrlPayload(
+                """{
+                    "code":0,"message":"0",
+                    "$envelope":{
+                        "video_info":null,
+                        "not_playable_reason":{
+                            "code":-10403,"message":"根据版权方要求，您所在的地区无法观看本片"
+                        }
+                    }
+                }""",
+                json
+            )
+            assertEquals(-10403, payload.code)
+            assertEquals("根据版权方要求，您所在的地区无法观看本片", payload.message)
+            assertEquals(null, payload.videoInfo)
+            assertFalse(shouldFallbackToLegacyBangumiPlayUrl(payload))
+        }
+    }
 
     @Test
     fun `decodeBangumiPlayUrlPayload parses v2 video_info envelope`() {

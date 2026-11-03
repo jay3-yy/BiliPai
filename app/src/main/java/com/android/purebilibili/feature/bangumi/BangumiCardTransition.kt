@@ -10,8 +10,25 @@ internal data class BangumiCardTransition(val modifier: Modifier, val onClick: (
 @Composable
 internal fun rememberBangumiCardTransition(seasonId: Long, epId: Long = 0L, onClick: () -> Unit): BangumiCardTransition {
     val transition = com.android.purebilibili.core.ui.rememberNativeCardContainerTransition(
-        BiliPaiNavKey.BangumiDetail(seasonId = seasonId, epId = epId), onClick,
+        BiliPaiNavKey.BangumiPlayer(seasonId = seasonId, epId = epId), onClick,
     )
+    return BangumiCardTransition(transition.modifier, transition.onClick, transition.enabled)
+}
+
+/** 剧集封面打开播放页，沿用视频卡片的来源快照、景深与返回落点。 */
+@Composable
+internal fun rememberBangumiEpisodeCardTransition(
+    seasonId: Long,
+    episode: BangumiEpisode,
+    onClick: () -> Unit,
+): BangumiCardTransition {
+    val target = BiliPaiNavKey.BangumiPlayer(
+        seasonId = seasonId,
+        epId = episode.id,
+        preferredAid = episode.aid,
+        isCourse = episode.from == "pugv" || episode.playable || episode.episodeCanView,
+    )
+    val transition = com.android.purebilibili.core.ui.rememberNativeCardContainerTransition(target, onClick)
     return BangumiCardTransition(transition.modifier, transition.onClick, transition.enabled)
 }
 

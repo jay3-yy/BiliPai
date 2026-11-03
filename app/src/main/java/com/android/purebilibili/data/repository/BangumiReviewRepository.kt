@@ -10,7 +10,7 @@ import kotlinx.coroutines.withContext
 data class BangumiReviewPage(
     val items: List<BangumiReviewItem>,
     val next: String,
-    val count: Int,
+    val count: Int?,
     val hasMore: Boolean
 )
 
@@ -39,12 +39,12 @@ object BangumiReviewRepository {
                 error(response.message.ifBlank { "点评加载失败" })
             }
             val data = response.data ?: error("点评为空")
-            val count = if (data.count > 0) data.count else data.total
+            val count = data.count ?: data.total
             BangumiReviewPage(
                 items = data.list,
                 next = data.next,
                 count = count,
-                hasMore = data.next.isNotBlank()
+                hasMore = data.list.isNotEmpty() && data.next.isNotBlank() && data.next != cursor
             )
         }
     }

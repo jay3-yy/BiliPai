@@ -16,6 +16,10 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import android.app.Activity
+import android.os.SystemClock
+import com.android.purebilibili.core.player.SeekTickHapticPolicy
+import com.android.purebilibili.core.util.HapticType
+import com.android.purebilibili.core.util.rememberHapticFeedback
 import android.content.Context
 import android.media.AudioManager
 import android.view.Surface
@@ -385,10 +389,13 @@ fun BangumiPlayerView(
         )
     }
 
+    val seekHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.PLAYER_SEEK)
+    val latestSeekHaptic by rememberUpdatedState(seekHaptic)
+    val seekHaptics = remember(exoPlayer, epId, cid) { SeekTickHapticPolicy() }
+
     // 手势状态
     var gestureMode by remember { mutableStateOf(BangumiGestureMode.None) }
     var gestureValue by remember { mutableFloatStateOf(0f) }
-    var dragDelta by remember { mutableFloatStateOf(0f) }
     var startVolumeStep by remember { mutableIntStateOf(0) }
     var totalVolumeDragDistanceY by remember { mutableFloatStateOf(0f) }
     var seekPreviewPosition by remember { mutableLongStateOf(0L) }
@@ -411,8 +418,6 @@ fun BangumiPlayerView(
 
     // 播放器状态
     var isPlaying by remember { mutableStateOf(exoPlayer.isPlaying) }
-    var currentProgress by remember { mutableFloatStateOf(0f) }
-    var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(1L) }
 
     // 监听播放器状态
@@ -420,19 +425,14 @@ fun BangumiPlayerView(
         while (true) {
             isPlaying = exoPlayer.isPlaying
             duration = exoPlayer.duration.coerceAtLeast(1L)
-            currentPosition = exoPlayer.currentPosition
-            if (gestureMode != BangumiGestureMode.Seek) {
-                currentProgress = (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-            }
             kotlinx.coroutines.delay(200)
         }
     }
 
     val glassCaptureVisibility = androidx.compose.animation.core.animateFloatAsState(
         targetValue = if (showControls || !isPlaying || gestureMode != BangumiGestureMode.None) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(
+        animationSpec = com.android.purebilibili.core.ui.motion.continuityTween<Float>(
             com.android.purebilibili.feature.video.ui.overlay.PLAYER_GLASS_VISIBILITY_DURATION_MS,
-            easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.Continuity,
         ),
         label = "bangumiPageGlassCapture",
     )
@@ -490,15 +490,18 @@ fun BangumiPlayerView(
                             dragStartX = position.x
                             totalDragDistanceX = 0f
                             totalDragDistanceY = 0f
-                            dragDelta = 0f
                             totalVolumeDragDistanceY = 0f
-                            seekPreviewPosition = currentPosition
-                            seekGestureStartPosition = currentPosition
+                            seekPreviewPosition = exoPlayer.currentPosition
+                            seekGestureStartPosition = seekPreviewPosition
                             gestureMode = BangumiGestureMode.None
                         },
                         onDragEnd = {
-                            if (gestureMode == BangumiGestureMode.Seek && kotlin.math.abs(dragDelta) > 20f) {
-                                exoPlayer.seekTo(seekPreviewPosition)
+                            seekHaptics.finish()
+                            if (gestureMode == BangumiGestureMode.Seek) {
+                                com.android.purebilibili.feature.video.usecase.seekPlayerFromUserAction(
+                                    exoPlayer, seekPreviewPosition
+                                )
+                                danmakuManager.seekTo(seekPreviewPosition)
                             }
                             if (!isScreenLocked && gestureMode == BangumiGestureMode.SwipeToFullscreen &&
                                 shouldTriggerFullscreenBySwipe(
@@ -512,7 +515,10 @@ fun BangumiPlayerView(
                             }
                             gestureMode = BangumiGestureMode.None
                         },
-                        onDragCancel = { gestureMode = BangumiGestureMode.None },
+                        onDragCancel = {
+                            seekHaptics.finish()
+                            gestureMode = BangumiGestureMode.None
+                        },
                         onDrag = { change, dragAmount ->
                             change.consume()
                             if (isScreenLocked) return@detectDragGestures
@@ -523,7 +529,10 @@ fun BangumiPlayerView(
                                 if (kotlin.math.hypot(totalDragDistanceX, totalDragDistanceY) < minDragThreshold) {
                                     return@detectDragGestures
                                 }
-                                gestureMode = if (isFullscreen && kotlin.math.abs(totalDragDistanceX) > kotlin.math.abs(totalDragDistanceY)) {
+                                gestureMode = if (kotlin.math.abs(totalDragDistanceX) > kotlin.math.abs(totalDragDistanceY)) {
+                                    if (seekHaptics.start(seekGestureStartPosition, duration, SystemClock.uptimeMillis())) {
+                                        latestSeekHaptic(HapticType.LIGHT)
+                                    }
                                     BangumiGestureMode.Seek
                                 } else if (kotlin.math.abs(totalDragDistanceY) > kotlin.math.abs(totalDragDistanceX)) {
                                     when (resolveVerticalGestureMode(
@@ -584,20 +593,19 @@ fun BangumiPlayerView(
                                     }
                                 }
                                 BangumiGestureMode.Seek -> {
-                                    dragDelta += dragAmount.x
-                                    // 与普通视频共用同一横滑策略：遵守全屏/内联滑动秒数、
-                                    // 灵敏度与相对时长设置；全屏横滑被设置关闭时策略返回
-                                    // null，拖动不再产生越界目标。
+                                    // 详情页与全屏共用按时长和灵敏度计算的横滑进度。
                                     val seekDelta = com.android.purebilibili.feature.video.ui.section
                                         .resolveHorizontalSeekDeltaMs(
-                                            totalDragDistanceX = dragDelta,
+                                            totalDragDistanceX = totalDragDistanceX,
                                             containerWidthPx = screenWidth,
                                             gestureSensitivity = playerInteractionSettings.gestureSensitivity,
                                             durationMs = duration,
                                         )
                                     if (seekDelta != null) {
                                         seekPreviewPosition = (seekGestureStartPosition + seekDelta).coerceIn(0L, duration)
-                                        currentProgress = (seekPreviewPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                                        if (seekHaptics.update(seekPreviewPosition, SystemClock.uptimeMillis())) {
+                                            latestSeekHaptic(HapticType.GESTURE_STEP)
+                                        }
                                     }
                                 }
                                 else -> {}
@@ -769,9 +777,8 @@ fun BangumiPlayerView(
             }
         }
 
-        // 手势指示器（横屏：全部，竖屏：仅亮度和音量）
-        val showGestureIndicator = gestureMode != BangumiGestureMode.None &&
-            (isFullscreen || gestureMode == BangumiGestureMode.Brightness || gestureMode == BangumiGestureMode.Volume)
+        // 详情页与全屏都显示当前手势反馈。
+        val showGestureIndicator = gestureMode != BangumiGestureMode.None
         GestureLevelOverlayHost(
             visible = gestureMode == BangumiGestureMode.Brightness || gestureMode == BangumiGestureMode.Volume,
             mode = if (gestureMode == BangumiGestureMode.Brightness) VideoGestureMode.Brightness else VideoGestureMode.Volume,
@@ -848,6 +855,9 @@ fun BangumiPlayerView(
         ) {
         val captureAndShareScreenshot = com.android.purebilibili.feature.video.ui.components.rememberVideoScreenshotAction()
         BangumiPlayerOverlayHost(
+            gestureSeekPositionProvider = {
+                seekPreviewPosition.takeIf { gestureMode == BangumiGestureMode.Seek }
+            },
             viewportWidthDp = maxWidth.value.toInt(),
             player = exoPlayer,
             danmakuManager = danmakuManager,

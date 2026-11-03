@@ -2,8 +2,6 @@ package com.android.purebilibili.feature.bangumi
 
 import android.content.pm.ActivityInfo
 import androidx.compose.runtime.Composable
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.ui.graphics.luminance
 import com.android.purebilibili.core.theme.AdaptiveAccentColors
 import com.android.purebilibili.core.ui.components.userVipPink
 import androidx.compose.ui.graphics.Color
@@ -16,15 +14,16 @@ import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
 internal fun bangumiBrandBadgeColors(label: String): AdaptiveAccentColors? {
     val color = when (label.trim()) {
         "会员", "大会员", "会员专享" -> userVipPink()
-        "免费", "限免" -> if (MaterialTheme.colorScheme.surface.luminance() < 0.5f) {
-            Color(0xFFD66011)
-        } else {
-            Color(0xFFFF7F24)
-        }
+        "免费", "限免" -> bangumiFreeColor()
         else -> return null
     }
     return AdaptiveAccentColors(color, Color.White)
 }
+
+/** 免费与限免使用独立于主题强调色的橙色。 */
+@Composable
+internal fun bangumiFreeColor(): Color =
+    if (com.android.purebilibili.core.ui.isAppInDarkTheme()) Color(0xFFD66011) else Color(0xFFFF7F24)
 
 /**
  * Cover-corner badges (大会员 / 出品) sit on a small primary fill.

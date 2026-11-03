@@ -8,15 +8,19 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -42,18 +46,34 @@ internal fun BangumiEpisodeChoices(
     modifier: Modifier = Modifier,
 ) {
     if (!isLargeScreenLayout) {
+        val selectedIndex = episodes.indexOfFirst { it.id == currentEpisodeId }.coerceAtLeast(0)
+        val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
+        LaunchedEffect(currentEpisodeId) { listState.animateScrollToItem(selectedIndex) }
+        val cardHeight = (60f * LocalDensity.current.fontScale.coerceAtLeast(1f)).dp
         LazyRow(
+            state = listState,
             modifier = modifier,
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(episodes, key = { it.id }) { episode ->
-                EpisodeChipSelectable(
-                    episode = episode,
-                    isSelected = episode.id == currentEpisodeId,
-                    isCourse = isCourse,
-                    onClick = { onEpisodeClick(episode) },
-                )
+                if (isCourse) {
+                    EpisodeChipSelectable(
+                        episode = episode,
+                        isSelected = episode.id == currentEpisodeId,
+                        isCourse = true,
+                        onClick = { onEpisodeClick(episode) },
+                    )
+                } else {
+                    BangumiEpisodeGridCard(
+                        episode = episode,
+                        isSelected = episode.id == currentEpisodeId,
+                        isCourse = false,
+                        onClick = { onEpisodeClick(episode) },
+                        compact = true,
+                        modifier = Modifier.width(140.dp).height(cardHeight),
+                    )
+                }
             }
         }
         return
@@ -88,6 +108,7 @@ private fun BangumiEpisodeGridCard(
     isCourse: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     val selectedColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
     AppSurface(
@@ -98,8 +119,8 @@ private fun BangumiEpisodeGridCard(
     ) {
         Column(
             modifier = Modifier
-                .heightIn(min = 68.dp)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .then(if (compact) Modifier else Modifier.heightIn(min = 68.dp))
+                .padding(horizontal = if (compact) 10.dp else 12.dp, vertical = if (compact) 8.dp else 10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
@@ -116,23 +137,17 @@ private fun BangumiEpisodeGridCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (episode.badge.isNotBlank()) {
-                    AppText(
-                        text = episode.badge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) selectedColors.contentColor else AppContentColors.accent(),
-                        maxLines = 1,
-                    )
+                    BangumiEpisodeBadge(episode.badge)
                 }
             }
-            if (episode.longTitle.isNotBlank()) {
-                AppText(
-                    text = episode.longTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isSelected) selectedColors.contentColor else AppContentColors.secondaryText(),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+            AppText(
+                text = episode.longTitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isSelected) selectedColors.contentColor else AppContentColors.secondaryText(),
+                minLines = if (compact) 1 else 2,
+                maxLines = if (compact) 1 else 2,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

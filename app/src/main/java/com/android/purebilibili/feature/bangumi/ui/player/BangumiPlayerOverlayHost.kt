@@ -122,7 +122,8 @@ internal fun BangumiPlayerOverlayHost(
     onVideoEnhancementAlgorithmChange: (VideoEnhancementAlgorithm) -> Unit,
     onAnime4kPresetChange: (Anime4KPreset) -> Unit,
     onFsrSharpnessChange: (Float) -> Unit,
-    onShowMessage: (String) -> Unit
+    onShowMessage: (String) -> Unit,
+    gestureSeekPositionProvider: () -> Long? = { null },
 ) {
     var pendingContentShare by androidx.compose.runtime.remember(epId) {
         androidx.compose.runtime.mutableStateOf<com.android.purebilibili.feature.share.ContentSharePayload?>(null)
@@ -282,7 +283,8 @@ internal fun BangumiPlayerOverlayHost(
                 danmakuManager.seekTo(result.committedPositionMs)
             },
             progressDisplayOverridePositionProvider = {
-                seekSession.sliderPositionMs.takeIf { shouldUsePlaybackSeekSessionPosition(seekSession) }
+                gestureSeekPositionProvider()
+                    ?: seekSession.sliderPositionMs.takeIf { shouldUsePlaybackSeekSessionPosition(seekSession) }
             },
             onToggleVisible = onToggleVisible,
             onQualitySelected = { index ->

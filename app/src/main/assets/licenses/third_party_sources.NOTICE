@@ -250,3 +250,17 @@ https://github.com/NEORUAA/Glasmio/blob/main/glasmio-glass/src/main/java/io/gith
 Angle-weighted smooth union of capsule fields, adapted to local press geometry,
 shared material rendering and the existing Miuix backdrop infrastructure.
 Apache-2.0 license text: design-system/src/main/assets/licenses/AndroidLiquidGlass.LICENSE.
+
+Bangumi VIP icon and interaction reference:
+PiliPlus (GNU GPL v3), https://github.com/bggRGjQaUbCoE/PiliPlus
+assets/images/big-vip.svg converted to app/src/main/res/drawable/ic_bangumi_vip.xml.
+Details and episode badge behavior reference: lib/pages/video/introduction/pgc/widgets/
+intro_detail.dart, episode.dart, section.dart; lib/models_new/video/video_detail/episode.dart.
+The upstream license is retained in artwork/third-party/piliplus/LICENSE.
+
+Bangumi review UI behavior reference (PiliPlus, GNU GPL v3):
+lib/pages/pgc_review/view.dart, child/view.dart, child/controller.dart, post/view.dart;
+lib/models_new/pgc/pgc_review/; lib/common/widgets/sliver/sliver_floating_header.dart.
+Compose layout and gesture integration are implemented locally.
+Source: https://github.com/bggRGjQaUbCoE/PiliPlus
+License retained in artwork/third-party/piliplus/LICENSE.

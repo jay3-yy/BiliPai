@@ -13,8 +13,8 @@ data class BangumiReviewListResponse(
 data class BangumiReviewListData(
     val list: List<BangumiReviewItem> = emptyList(),
     val next: String = "",
-    val count: Int = 0,
-    val total: Int = 0
+    val count: Int? = null,
+    val total: Int? = null
 )
 
 @Serializable
@@ -34,7 +34,14 @@ data class BangumiReviewAuthor(
     val mid: Long = 0,
     val uname: String = "",
     val avatar: String = "",
-    val level: Int = 0
+    val level: Int = 0,
+    val vip: BangumiReviewVip? = null,
+)
+
+@Serializable
+data class BangumiReviewVip(
+    val status: Int = 0,
+    val type: Int = 0,
 )
 
 @Serializable

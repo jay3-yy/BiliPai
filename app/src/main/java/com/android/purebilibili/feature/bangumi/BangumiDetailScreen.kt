@@ -608,10 +608,11 @@ private fun TabletBangumiDetailContent(
 
                      items(displayedEpisodes, key = { it.id }) { episode ->
                          EpisodeChip(
-                                episode = episode,
-                                alignGridTitles = true,
-                                progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
-                                onClick = { onEpisodeClick(episode) }
+                             seasonId = detail.seasonId,
+                             episode = episode,
+                             alignGridTitles = true,
+                             progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
+                             onClick = { onEpisodeClick(episode) }
                          )
                      }
                  }
@@ -630,6 +631,7 @@ private fun TabletBangumiDetailContent(
 
                          items(section.episodes.orEmpty(), key = { it.id }) { episode ->
                              EpisodeChip(
+                                 seasonId = detail.seasonId,
                                  episode = episode,
                                  alignGridTitles = true,
                                  progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
@@ -1265,6 +1267,7 @@ private fun MobileBangumiDetailContent(
                     ) {
                         items(previewEpisodes, key = { it.id }) { episode ->
                             EpisodeChip(
+                                seasonId = detail.seasonId,
                                 episode = episode,
                                 progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                                 onClick = { onEpisodeClick(episode) }
@@ -1312,6 +1315,7 @@ private fun MobileBangumiDetailContent(
                 .forEachIndexed { index, section ->
                     item {
                         BangumiSectionPreview(
+                            seasonId = detail.seasonId,
                             title = resolveBangumiSectionTitle(section, index),
                             episodes = section.episodes.orEmpty(),
                             onEpisodeClick = onEpisodeClick,
@@ -1449,6 +1453,7 @@ private fun MobileBangumiDetailContent(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BangumiDetailMetaSection(
     detail: BangumiDetail,
@@ -1463,11 +1468,12 @@ private fun BangumiDetailMetaSection(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (metaChips.isNotEmpty()) {
-            LazyRow(
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 0.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(metaChips, key = { it }) { chip ->
+                metaChips.forEach { chip ->
                     AppStatusBadge(
                         label = chip,
                         emphasized = false,
@@ -1476,11 +1482,12 @@ private fun BangumiDetailMetaSection(
             }
         }
         if (restrictionLabels.isNotEmpty()) {
-            LazyRow(
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 0.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(restrictionLabels, key = { it }) { label ->
+                restrictionLabels.forEach { label ->
                     AppStatusBadge(
                         label = label,
                         emphasized = true,
@@ -1546,6 +1553,7 @@ private fun BangumiCreditRow(
 
 @Composable
 private fun BangumiSectionPreview(
+    seasonId: Long,
     title: String,
     episodes: List<BangumiEpisode>,
     onEpisodeClick: (BangumiEpisode) -> Unit,
@@ -1565,6 +1573,7 @@ private fun BangumiSectionPreview(
         ) {
             items(episodes.take(20), key = { it.id }) { episode ->
                 EpisodeChip(
+                    seasonId = seasonId,
                     episode = episode,
                     progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                     onClick = { onEpisodeClick(episode) }
@@ -1623,11 +1632,13 @@ private fun BangumiFollowStatusDialog(
 
 @Composable
 private fun EpisodeChip(
+    seasonId: Long,
     episode: BangumiEpisode,
     progressFraction: Float? = null,
     alignGridTitles: Boolean = false,
     onClick: () -> Unit
 ) {
+    val transition = rememberBangumiEpisodeCardTransition(seasonId, episode, onClick)
     val titleMaxLines = if (alignGridTitles) {
         com.android.purebilibili.core.ui.videoCardTitleMaxLines(1)
     } else Int.MAX_VALUE
@@ -1638,7 +1649,12 @@ private fun EpisodeChip(
     Column(
         modifier = Modifier
             .width(120.dp)
-            .clickable(onClick = onClick)
+            .then(transition.modifier)
+            .clickable(
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                indication = if (transition.enabled) null else androidx.compose.foundation.LocalIndication.current,
+                onClick = transition.onClick,
+            )
     ) {
         // 缩略图
         AppSurface(
@@ -1658,22 +1674,12 @@ private fun EpisodeChip(
 
                 // 角标（如：会员）
                 if (episode.badge.isNotEmpty()) {
-                    val badgeColors = com.android.purebilibili.feature.bangumi.bangumiBrandBadgeColors(episode.badge)
-                        ?: resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
-                    AppSurface(
+                    com.android.purebilibili.feature.bangumi.ui.list.BangumiBadge(
+                        text = episode.badge,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp),
-                        color = badgeColors.backgroundColor,
-                        shape = AppShapes.container(ContainerLevel.Tag)
-                    ) {
-                        AppText(
-                            text = episode.badge,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                            color = badgeColors.contentColor,
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    }
+                    )
                 }
 
                 // 单集观看进度条
@@ -1734,7 +1740,7 @@ private fun EpisodeChip(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun EpisodeSelectionSheet(
+internal fun EpisodeSelectionSheet(
     detail: BangumiDetail,
     onDismiss: () -> Unit,
     onEpisodeClick: (BangumiEpisode) -> Unit,
@@ -1962,22 +1968,12 @@ private fun EpisodeListItem(
 
             // VIP 角标
             if (episode.badge.isNotEmpty()) {
-                val badgeColors = com.android.purebilibili.feature.bangumi.bangumiBrandBadgeColors(episode.badge)
-                        ?: resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
-                AppSurface(
+                com.android.purebilibili.feature.bangumi.ui.list.BangumiBadge(
+                    text = episode.badge,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(2.dp),
-                    color = badgeColors.backgroundColor,
-                    shape = AppShapes.container(ContainerLevel.Tag)
-                ) {
-                    AppText(
-                        text = episode.badge,
-                        modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp),
-                        color = badgeColors.contentColor,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
+                )
             }
         }
 

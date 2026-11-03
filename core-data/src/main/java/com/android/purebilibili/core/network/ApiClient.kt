@@ -2494,6 +2494,11 @@ fun buildSpaceLikedArchiveParams(
 
 //  [新增] 番剧/影视 API
 interface BangumiApi {
+    @GET("pgc/season/episode/community")
+    suspend fun getBangumiEpisodeCommunity(
+        @Query("ep_id") episodeId: Long,
+    ): BangumiEpisodeCommunityResponse
+
     @FormUrlEncoded
     @POST("pgc/season/episode/like/triple")
     @Headers("Origin: https://www.bilibili.com")

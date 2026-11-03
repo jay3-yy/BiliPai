@@ -20,10 +20,12 @@ import kotlinx.serialization.json.jsonPrimitive
 internal data class BangumiPlayUrlPayload(
     val code: Int = -1,
     val message: String = "",
-    val videoInfo: BangumiVideoInfo? = null
+    val videoInfo: BangumiVideoInfo? = null,
+    val hasPlaybackRestriction: Boolean = false
 )
 
 internal fun shouldFallbackToLegacyBangumiPlayUrl(payload: BangumiPlayUrlPayload): Boolean {
+    if (payload.hasPlaybackRestriction) return false
     if (payload.code == 0) return payload.videoInfo == null
     return payload.code == -400 || payload.code == -404
 }
@@ -122,6 +124,18 @@ internal fun decodeBangumiPlayUrlPayload(
     val message = root["message"]?.jsonPrimitive?.contentOrNull.orEmpty()
     val resultObject = root["result"] as? JsonObject
     val dataObject = root["data"] as? JsonObject
+    // 外层成功并不代表允许播放；保留当前内容的版权和权限限制原因。
+    val unavailableReason = (resultObject?.get("not_playable_reason")
+        ?: dataObject?.get("not_playable_reason")) as? JsonObject
+    val nestedVideoInfo = resultObject?.get("video_info") ?: dataObject?.get("video_info")
+    if (code == 0 && nestedVideoInfo !is JsonObject && unavailableReason != null) {
+        return BangumiPlayUrlPayload(
+            code = unavailableReason["code"]?.jsonPrimitive?.intOrNull ?: -1,
+            message = unavailableReason["message"]?.jsonPrimitive?.contentOrNull.orEmpty(),
+            videoInfo = null,
+            hasPlaybackRestriction = true
+        )
+    }
     val videoInfoElement = resultObject?.get("video_info")
         ?: dataObject?.get("video_info")
         ?: dataObject
@@ -348,6 +362,8 @@ object BangumiRepository {
             android.util.Log.e("BangumiRepo", " getSeasonDetail OOM: 番剧数据过大，内存不足", e)
             System.gc() // 尝试触发 GC 回收内存
             Result.failure(Exception("加载失败：番剧数据过大，请稍后重试"))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("BangumiRepo", "getSeasonDetail error: ${e.message}")
             val pugvResult = getPugvSeasonDetail(seasonId = seasonId, epId = epId)
@@ -386,6 +402,8 @@ object BangumiRepository {
             } else {
                 Result.failure(Exception(response.message.ifBlank { "获取课程详情失败" }))
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             android.util.Log.e("BangumiRepo", "getPugvSeasonDetail error: ${e.message}")
             Result.failure(e)
@@ -503,7 +521,8 @@ object BangumiRepository {
                     }.getOrNull() ?: primaryResponse
                 }
                 // 如果常规 PGC playurl 失败（例如 -404 啥都木有，或异常），尝试 PUGV 课堂/课程 playurl
-                if (response != null && response.code == 0 && response.videoInfo != null) {
+                if (response != null && (response.hasPlaybackRestriction ||
+                        (response.code == 0 && response.videoInfo != null))) {
                     response
                 } else {
                     runCatching {
@@ -529,12 +548,16 @@ object BangumiRepository {
                 )
                 validateBangumiPlayableVideoInfo(result)
             } else {
-                val errorMsg = when (finalResponse.code) {
-                    -10403 -> "需要大会员才能观看"
+                val errorMsg = if (finalResponse.hasPlaybackRestriction) {
+                    finalResponse.message.ifBlank { "当前内容暂不可播放" }
+                } else when (finalResponse.code) {
+                    -10403 -> finalResponse.message.ifBlank { "当前内容暂不可播放，可能受地区或会员权限限制" }
                     -404 -> "视频或课程不存在"
                     -101 -> "请先登录后观看"
                     -400 -> "请求参数错误"
-                    -403 -> if (isCourse) "访问权限不足：该课程需购买后观看" else "访问权限不足"
+                    -403 -> finalResponse.message.ifBlank {
+                        if (isCourse) "访问权限不足：该课程需购买后观看" else "访问权限不足"
+                    }
                     else -> "获取播放地址失败: ${finalResponse.message} (code=${finalResponse.code})"
                 }
                 Result.failure(Exception(errorMsg))

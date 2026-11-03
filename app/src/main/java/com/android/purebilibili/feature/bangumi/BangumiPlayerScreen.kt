@@ -130,6 +130,7 @@ fun BangumiPlayerScreen(
     resumePositionMs: Long = 0L,
     isCourse: Boolean = false,
     preferredAid: Long = 0L,
+    mediaId: Long = 0L,
     onBack: () -> Unit,
     onNavigateToLogin: () -> Unit = {},
     onUserClick: (Long) -> Unit = {},
@@ -382,7 +383,7 @@ fun BangumiPlayerScreen(
 
     // 附加播放器到 ViewModel 并加载番剧
     // 使用同一个 LaunchedEffect 确保顺序执行，避免竞态条件
-    LaunchedEffect(exoPlayer, seasonId, epId, resumePositionMs, isCourse, preferredAid) {
+    LaunchedEffect(exoPlayer, seasonId, epId, resumePositionMs, isCourse, preferredAid, mediaId) {
         miniPlayerManager.beginBangumiPlayback(exoPlayer)
         // 先附加播放器
         viewModel.attachPlayer(exoPlayer)
@@ -392,7 +393,8 @@ fun BangumiPlayerScreen(
             epId,
             resumePositionMs,
             isCourse = isCourse,
-            preferredAid = preferredAid
+            preferredAid = preferredAid,
+            mediaId = mediaId,
         )
     }
 
@@ -951,12 +953,15 @@ fun BangumiPlayerScreen(
             .background(if (isFullscreen) Color.Black else AppSurfaceTokens.groupedListContainer())
     ) {
         //  获取清晰度数据
-        val bangumiPages = remember(successState) {
-            buildBangumiOverlayPages(successState?.seasonDetail?.episodes.orEmpty())
+        val playbackEpisodes = remember(successState?.seasonDetail, successState?.currentEpisode?.id) {
+            successState?.let { resolveBangumiPlaybackEpisodes(it.seasonDetail, it.currentEpisode.id) }.orEmpty()
+        }
+        val bangumiPages = remember(playbackEpisodes) {
+            buildBangumiOverlayPages(playbackEpisodes)
         }
         val currentPageIndex = remember(successState) {
             resolveBangumiOverlayCurrentPageIndex(
-                episodes = successState?.seasonDetail?.episodes.orEmpty(),
+                episodes = playbackEpisodes,
                 currentEpisodeId = successState?.currentEpisode?.id ?: 0L
             )
         }
@@ -1017,7 +1022,7 @@ fun BangumiPlayerScreen(
                             currentPageIndex = currentPageIndex,
                             onPageSelect = { selectedPageIndex ->
                                 val episode = resolveBangumiEpisodeForPageSelection(
-                                    episodes = successState?.seasonDetail?.episodes.orEmpty(),
+                                    episodes = playbackEpisodes,
                                     selectedPageIndex = selectedPageIndex
                                 )
                                 if (episode != null) {
@@ -1113,7 +1118,8 @@ fun BangumiPlayerScreen(
                             ).filter { it.isNotBlank() }.joinToString(" ").ifBlank {
                                 successState.seasonDetail.title
                             },
-                            message = successState.playbackErrorMessage ?: "该剧集需购买后观看",
+                            message = successState.playbackErrorMessage ?: "资源获取中",
+                            loading = successState.playbackErrorMessage == null,
                             coverUrl = successState.currentEpisode.cover.ifBlank { successState.seasonDetail.cover },
                             isFullscreen = isFullscreenMode,
                             onBack = if (isFullscreenMode) { { toggleOrientation() } } else onBack,
@@ -1252,12 +1258,10 @@ fun BangumiPlayerScreen(
             ) {
                 when (val state = uiState) {
                     is BangumiPlayerState.Loading -> {
-                        Box(
+                        com.android.purebilibili.feature.bangumi.ui.player.BangumiPlayerSkeleton(
+                            contentMode = contentMode,
                             modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AdaptiveLoadingIndicator()
-                        }
+                        )
                     }
 
                     is BangumiPlayerState.Error -> {
@@ -1556,7 +1560,8 @@ private fun BangumiPlayNoticeOverlay(
     coverUrl: String,
     isFullscreen: Boolean,
     onBack: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    loading: Boolean = false,
 ) {
     Box(
         modifier = Modifier
@@ -1570,7 +1575,7 @@ private fun BangumiPlayNoticeOverlay(
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,
-                alpha = 0.25f
+                alpha = if (loading) 0.7f else 0.25f
             )
         }
 
@@ -1600,31 +1605,34 @@ private fun BangumiPlayNoticeOverlay(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(modifier = Modifier.height(16.dp))
-            AppButton(
-                onClick = onRetry,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AppContentColors.accent(),
-                    contentColor = AppContentColors.onAccent()
-                )
-            ) {
-                AppText("重试", style = MaterialTheme.typography.labelMedium)
+            if (loading) {
+                AdaptiveLoadingIndicator()
+            } else {
+                AppButton(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AppContentColors.accent(),
+                        contentColor = AppContentColors.onAccent()
+                    )
+                ) {
+                    AppText("重试", style = MaterialTheme.typography.labelMedium)
+                }
             }
         }
 
-        if (isFullscreen) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
-            ) {
-                IconButton(onClick = onBack, modifier = Modifier.appElasticPress()) {
-                    AppIcon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "返回",
-                        tint = Color.White
-                    )
-                }
+        // 加载和失败提示盖住控制层时，竖屏仍保留返回入口。
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+        ) {
+            IconButton(onClick = onBack, modifier = Modifier.appElasticPress()) {
+                AppIcon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Color.White
+                )
             }
         }
     }

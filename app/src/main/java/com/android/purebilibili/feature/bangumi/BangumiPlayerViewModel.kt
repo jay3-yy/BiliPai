@@ -137,7 +137,7 @@ internal fun buildExternalPlaylistFromBangumi(
     currentEpisodeId: Long
 ): BangumiExternalPlaylist? {
     val seasonId = detail.seasonId
-    val episodes = detail.episodes.orEmpty().filter { it.id > 0L }
+    val episodes = resolveBangumiPlaybackEpisodes(detail, currentEpisodeId).filter { it.id > 0L }
     if (seasonId <= 0L || episodes.isEmpty()) return null
 
     val playlistItems = episodes.map { episode ->
@@ -203,6 +203,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     
     private var currentSeasonId: Long = 0
     private var currentEpId: Long = 0
+    private var currentMediaId: Long = 0
     private var isCourseMode: Boolean = false
     private var bangumiHeartbeatJob: Job? = null
     /** Only the latest episode request may update the player state. */
@@ -284,7 +285,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
      */
     fun playNextEpisode() {
         val currentState = _uiState.value as? BangumiPlayerState.Success ?: return
-        val episodes = currentState.seasonDetail.episodes ?: return
+        val episodes = resolveBangumiPlaybackEpisodes(currentState.seasonDetail, currentState.currentEpisode.id)
         val currentIndex = currentState.currentEpisodeIndex
         
         // 检查是否有下一集
@@ -356,7 +357,8 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
         epId: Long,
         resumePositionMs: Long = 0L,
         isCourse: Boolean = false,
-        preferredAid: Long = 0L
+        preferredAid: Long = 0L,
+        mediaId: Long = 0L,
     ) {
         val followSession = ensureFollowCacheSession()
         isCourseMode = isCourse
@@ -432,6 +434,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
         
         currentSeasonId = seasonId
         currentEpId = epId
+        currentMediaId = mediaId
         followVerificationJob?.cancel()
         playbackLoadJob?.cancel()
         videoshotLoadJob?.cancel()
@@ -440,7 +443,9 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             
             // 1. 获取番剧/课程详情（包含剧集列表）
             val detailRequest = resolveBangumiDetailRequest(seasonId, epId)
-            val detailResult = if (isCourse) {
+            val detailResult = if (mediaId > 0L && seasonId <= 0L && epId <= 0L) {
+                BangumiRepository.getSeasonDetailByMediaId(mediaId)
+            } else if (isCourse) {
                 BangumiRepository.getPugvSeasonDetail(
                     seasonId = detailRequest.seasonId,
                     epId = detailRequest.epId
@@ -470,15 +475,15 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 }
 
                 // 找到当前剧集 (优先 targetEpId，否则首集)
-                val episode = detail.episodes?.find { it.id == targetEpId }
-                    ?: detail.episodes?.firstOrNull()
+                val episode = bangumiAllEpisodes(detail).find { it.id == targetEpId }
+                    ?: bangumiAllEpisodes(detail).firstOrNull()
                 
                 if (episode == null) {
                     _uiState.value = BangumiPlayerState.Error("未找到可播放的剧集")
                     return@onSuccess
                 }
                 
-                val episodeIndex = detail.episodes?.indexOfFirst { it.id == episode.id } ?: 0
+                val episodeIndex = resolveBangumiPlaybackEpisodes(detail, episode.id).indexOfFirst { it.id == episode.id }
                 
                 // 2. 获取播放地址
                 fetchPlayUrl(
@@ -546,6 +551,20 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     ) {
         if (!acceptsFollowSession(followSession)) return
         com.android.purebilibili.core.util.Logger.d("BangumiPlayerVM", "🎬 fetchPlayUrl: epId=${episode.id}, cid=${episode.cid}, aid=${episode.aid}")
+        val current = (_uiState.value as? BangumiPlayerState.Success)?.takeIf { it.currentEpisode.id == episode.id }
+        _uiState.value = current?.copy(playUrl = null, audioUrl = null, playbackErrorMessage = null)
+            ?: BangumiPlayerState.Success(
+                seasonDetail = detail,
+                currentEpisode = episode,
+                currentEpisodeIndex = episodeIndex,
+                playUrl = null,
+                audioUrl = null,
+                quality = 0,
+                acceptQuality = emptyList(),
+                acceptDescription = emptyList(),
+            )
+        verifyPlaybackFollowStatus(detail)
+        refreshEpisodeInteractionState(episode.aid, episode.id)
         val isCourse = detail.seasonType == 10
         var requestedQn = resolveBangumiInitialQuality()
         var playUrlResult = BangumiRepository.getBangumiPlayUrl(
@@ -698,7 +717,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                         )
                         return
                     }
-                    _uiState.value = BangumiPlayerState.Error("无法获取播放地址：服务器未返回视频流")
+                    publishEpisodePlaybackFailure(detail, episode, episodeIndex, "无法获取播放地址：服务器未返回视频流")
                     return
                 }
             }
@@ -719,7 +738,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                     )
                     return
                 }
-                _uiState.value = BangumiPlayerState.Error("无法获取播放地址")
+                publishEpisodePlaybackFailure(detail, episode, episodeIndex, "无法获取播放地址")
                 return
             }
             
@@ -783,11 +802,6 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             )
 
             loadEpisodeVideoshot(episode)
-            verifyPlaybackFollowStatus(detail)
-            refreshEpisodeInteractionState(
-                episodeAid = episode.aid,
-                episodeId = episode.id
-            )
 
             buildExternalPlaylistFromBangumi(
                 detail = correctedDetail,
@@ -842,40 +856,44 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             startBangumiPlaybackHeartbeat(detail, episode)
             
         }.onFailure { e ->
-            val isPaidOrPermission = e.message?.contains("购买") == true || e.message?.contains("权限") == true
-            val errorMsg = e.message ?: "获取播放地址失败"
-
-            exoPlayer?.stop()
-            exoPlayer?.clearMediaItems()
-
-            val (authStateLoggedIn, authStateVip) = resolveBangumiPlaybackAuthState(
-                hasSessionCookie = com.android.purebilibili.data.repository.VideoRepository.hasPlaybackSessionCookie(),
-                hasAccessToken = !com.android.purebilibili.data.repository.VideoRepository.playbackAccessToken().isNullOrEmpty(),
-                cachedIsVip = com.android.purebilibili.data.repository.VideoRepository.isPlaybackVip(),
-                seasonUserVip = detail.userStatus?.vip == 1
-            )
-
-            _uiState.value = BangumiPlayerState.Success(
-                seasonDetail = detail,
-                currentEpisode = episode,
-                currentEpisodeIndex = episodeIndex,
-                playUrl = null,
-                audioUrl = null,
-                quality = 0,
-                acceptQuality = emptyList(),
-                acceptDescription = emptyList(),
-                cachedDash = null,
-                isPreview = false,
-                hasPaid = !isPaidOrPermission,
-                playbackStatus = if (isPaidOrPermission) 1 else 0,
-                playbackErrorMessage = errorMsg,
-                isLoggedIn = authStateLoggedIn,
-                isVip = authStateVip
-            )
-            _toastEvent.trySend(errorMsg)
+            publishEpisodePlaybackFailure(detail, episode, episodeIndex, e.message ?: "获取播放地址失败")
         }
     }
-    
+
+    private fun publishEpisodePlaybackFailure(
+        detail: BangumiDetail,
+        episode: BangumiEpisode,
+        episodeIndex: Int,
+        message: String,
+    ) {
+        exoPlayer?.stop()
+        exoPlayer?.clearMediaItems()
+        val current = _uiState.value as BangumiPlayerState.Success
+        val (loggedIn, vip) = resolveBangumiPlaybackAuthState(
+            hasSessionCookie = com.android.purebilibili.data.repository.VideoRepository.hasPlaybackSessionCookie(),
+            hasAccessToken = !com.android.purebilibili.data.repository.VideoRepository.playbackAccessToken().isNullOrEmpty(),
+            cachedIsVip = com.android.purebilibili.data.repository.VideoRepository.isPlaybackVip(),
+            seasonUserVip = detail.userStatus?.vip == 1,
+        )
+        val permissionRequired = message.contains("购买") || message.contains("权限")
+        _uiState.value = current.copy(
+            currentEpisode = episode,
+            currentEpisodeIndex = episodeIndex,
+            playUrl = null,
+            audioUrl = null,
+            quality = 0,
+            acceptQuality = emptyList(),
+            acceptDescription = emptyList(),
+            cachedDash = null,
+            playbackErrorMessage = message,
+            isLoggedIn = loggedIn,
+            isVip = vip,
+            hasPaid = !permissionRequired,
+            playbackStatus = if (permissionRequired) 1 else 0,
+        )
+        _toastEvent.trySend(message)
+    }
+
     private fun loadEpisodeVideoshot(episode: BangumiEpisode) {
         videoshotLoadJob?.cancel()
         if ((_uiState.value as? BangumiPlayerState.Success)?.videoshotData != null) return
@@ -915,7 +933,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
         playbackLoadJob?.cancel()
         currentEpId = episode.id
         videoshotLoadJob?.cancel()
-        val newIndex = currentState.seasonDetail.episodes?.indexOfFirst { it.id == episode.id } ?: 0
+        val newIndex = resolveBangumiPlaybackEpisodes(currentState.seasonDetail, episode.id).indexOfFirst { it.id == episode.id }
         
         _uiState.value = currentState.copy(
             currentEpisode = episode,
@@ -979,7 +997,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             groupKey = "course:${detail.seasonId}",
             groupTitle = detail.title,
             episodeSortIndex = state.currentEpisodeIndex,
-            episodeCount = detail.episodes?.size ?: 1,
+            episodeCount = resolveBangumiPlaybackEpisodes(detail, episode.id).size,
             cover = episode.cover.ifBlank { detail.cover },
             ownerName = owner?.uname.orEmpty(),
             ownerFace = owner?.avatar.orEmpty(),
@@ -1683,7 +1701,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             groupKey = "bangumi-audio:${state.seasonDetail.seasonId}",
             groupTitle = state.seasonDetail.title,
             episodeSortIndex = state.currentEpisodeIndex,
-            episodeCount = state.seasonDetail.episodes.orEmpty().size.coerceAtLeast(1),
+            episodeCount = resolveBangumiPlaybackEpisodes(state.seasonDetail, episode.id).size,
             cover = episode.cover.ifBlank { state.seasonDetail.cover },
             ownerName = state.seasonDetail.title, ownerFace = "",
             duration = (episode.duration / 1000L).toInt(), quality = 0, qualityDesc = "音频",
@@ -1696,7 +1714,7 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     }
 
     fun retry() {
-        loadBangumiPlay(currentSeasonId, currentEpId, isCourse = isCourseMode)
+        loadBangumiPlay(currentSeasonId, currentEpId, isCourse = isCourseMode, mediaId = currentMediaId)
     }
 
     private fun startBangumiPlaybackHeartbeat(
@@ -1818,8 +1836,39 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
     ) {
         val session = ensureFollowCacheSession()
         val revision = interactionRevision
-        if (episodeAid <= 0L) return
 
+        val state = _uiState.value as? BangumiPlayerState.Success ?: return
+        if (state.seasonDetail.seasonType != 10) {
+            if (session.session.isNullOrEmpty()) {
+                _uiState.value = state.copy(isLiked = false, likeStatusKnown = true, coinCount = 0, isFavorited = false)
+                return
+            }
+            viewModelScope.launch {
+                try {
+                    val response = NetworkModule.bangumiApi.getBangumiEpisodeCommunity(episodeId)
+                    ensureActive()
+                    if (!acceptsFollowSession(session) || revision != interactionRevision) return@launch
+                    val current = _uiState.value as? BangumiPlayerState.Success ?: return@launch
+                    if (current.currentEpisode.id != episodeId) return@launch
+                    check(response.code == 0) { response.message.ifBlank { "读取番剧互动状态失败" } }
+                    val data = requireNotNull(response.data) { "番剧互动状态为空" }
+                    _uiState.value = current.copy(
+                        isLiked = data.like?.let { it == 1 } ?: current.isLiked,
+                        likeStatusKnown = current.likeStatusKnown || data.like != null,
+                        coinCount = data.coinNumber?.toInt() ?: current.coinCount,
+                        isFavorited = data.favorite?.let { it == 1 } ?: current.isFavorited,
+                    )
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    if (acceptsFollowSession(session) && revision == interactionRevision &&
+                        (_uiState.value as? BangumiPlayerState.Success)?.currentEpisode?.id == episodeId
+                    ) _toastEvent.trySend(error.message ?: "读取番剧互动状态失败")
+                }
+            }
+            return
+        }
+        if (episodeAid <= 0L) return
         viewModelScope.launch {
             val likeResult = ActionRepository.queryLikeStatus(episodeAid)
             (likeResult.exceptionOrNull() as? kotlinx.coroutines.CancellationException)?.let { throw it }

@@ -3,13 +3,14 @@ package com.android.purebilibili.feature.bangumi.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -22,9 +23,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
@@ -38,6 +43,11 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnc
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.home.components.biliPaiProgressiveTopBlur
 import com.android.purebilibili.feature.video.screen.VideoCommentTab
+import com.android.purebilibili.feature.video.screen.isVideoContentCommentListAtTop
+import com.android.purebilibili.feature.video.screen.rememberVideoCommentHeaderScrollConnection
+import com.android.purebilibili.feature.video.screen.resolveVideoContentTabBarCollapseProgress
+import com.android.purebilibili.feature.video.screen.videoContentPadding
+import com.android.purebilibili.feature.video.screen.videoContentHeight
 import com.android.purebilibili.feature.video.screen.shouldUseLightweightCommentRendering
 import com.android.purebilibili.feature.video.ui.components.BottomInputBar
 import com.android.purebilibili.feature.video.ui.components.CommentFraudDetectingBanner
@@ -66,6 +76,16 @@ internal fun BangumiCommentPanel(
     onCommentUrlClick: (String) -> Unit,
     onTimestampClick: ((Long) -> Unit)?,
     onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
+    isLiked: Boolean,
+    likeStatusKnown: Boolean,
+    isFavorited: Boolean,
+    isCoined: Boolean,
+    onLikeClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    onShareClick: () -> Unit,
+    showActionButtons: Boolean,
+    topContentInsetPx: () -> Float = { 0f },
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.commentState.collectAsStateWithLifecycle()
@@ -86,6 +106,29 @@ internal fun BangumiCommentPanel(
     }
     val commentHeaderHeightProvider = remember(commentHeaderHeightPx) {
         { commentHeaderHeightPx.floatValue }
+    }
+    val hideSortDock by SettingsManager.getVideoDetailChromeScrollHideEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val headerCollapsePx = remember(listState) { mutableFloatStateOf(0f) }
+    val headerScroll = rememberVideoCommentHeaderScrollConnection(
+        listState = listState,
+        collapsePx = headerCollapsePx,
+        maxCollapsePx = commentHeaderHeightProvider,
+        enabled = true,
+    )
+    val titleCollapseProgress = {
+        resolveVideoContentTabBarCollapseProgress(
+            collapsePx = headerCollapsePx.floatValue,
+            maxCollapsePx = commentHeaderHeightPx.floatValue,
+            selectedTabIndex = 1,
+            listAtTop = isVideoContentCommentListAtTop(
+                listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset,
+            ),
+        )
+    }
+    val visibleHeaderHeight = {
+        val height = commentHeaderHeightPx.floatValue
+        if (hideSortDock) (height - headerCollapsePx.floatValue).coerceAtLeast(0f) else height
     }
     val showBackToTop by remember(listState) {
         derivedStateOf {
@@ -115,6 +158,10 @@ internal fun BangumiCommentPanel(
         showActionButtonsFallback = false,
     ) + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
+    val listPadding = remember(density, bottomPadding, topContentInsetPx) {
+        videoContentPadding(topContentInsetPx, bottomPadding, density)
+    }
+
     Column(modifier = modifier) {
         CommentFraudDetectingBanner(isDetecting = state.isDetectingFraud)
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -126,7 +173,8 @@ internal fun BangumiCommentPanel(
                     .fillMaxSize()
                     .layerBackdrop(backdrop)
                     .hazeSourceCompat(hazeState)
-                    .background(MaterialTheme.colorScheme.surface),
+                    .background(MaterialTheme.colorScheme.surface)
+                    .nestedScroll(headerScroll),
                 upMid = state.upMid,
                 maxTimestampMs = maxTimestampMs,
                 replies = state.replies,
@@ -146,7 +194,7 @@ internal fun BangumiCommentPanel(
                 onRefreshReplies = viewModel::refreshComments,
                 onImagePreview = onImagePreview,
                 onTimestampClick = onTimestampClick,
-                contentPadding = PaddingValues(bottom = bottomPadding),
+                contentPadding = listPadding,
                 currentMid = state.currentMid,
                 showUpFlag = state.showUpFlag,
                 dissolvingIds = state.dissolvingIds,
@@ -167,64 +215,67 @@ internal fun BangumiCommentPanel(
                 onSortModeChange = changeSort,
                 showNativeSortHeader = true,
                 showSortControlInHeader = true,
-                showHeader = !floatingHeader,
+                showHeader = false,
                 compactSortHeader = true,
-                floatingHeaderContentPaddingPx = if (floatingHeader) commentHeaderHeightProvider else null,
+                floatingHeaderContentPaddingPx = visibleHeaderHeight,
                 onSearchClick = { showSearch = true },
             )
-            if (floatingHeader) {
-                // 渐隐只覆盖列表采样层，标题和排序控件始终绘制在材质上方。
+            // 所有材质共用标题显隐；排序 dock 由视频详情滚动隐藏设置控制。
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, topContentInsetPx().roundToInt()) }
+                    .videoContentHeight(visibleHeaderHeight)
+                    .graphicsLayer { clip = true }
+                    .then(if (floatingHeader) Modifier else Modifier.background(MaterialTheme.colorScheme.surface)),
+            ) {
                 Box(
+                    modifier = Modifier.matchParentSize()
+                        .biliPaiProgressiveTopBlur(
+                            backdrop = backdrop,
+                            enabled = progressiveHeaderEnabled,
+                            surfaceColor = androidx.compose.ui.graphics.Color.Transparent,
+                        )
+                        .topSolidProgressiveFade(
+                            surfaceColor = MaterialTheme.colorScheme.surface,
+                            enabled = solidHeaderEnabled,
+                        ),
+                )
+                VideoCommentFloatingHeader(
+                    count = state.replyCount,
+                    sortMode = state.sortMode,
+                    onSortModeChange = changeSort,
+                    onSearchClick = { showSearch = true },
+                    backdrop = backdrop,
+                    liquidGlassEnabled = liquidGlassEnabled,
+                    compactTitleTypography = true,
+                    titleCollapseProgress = titleCollapseProgress,
                     modifier = Modifier
-                        .fillMaxWidth(),
-                ) {
-                    Box(
-                        modifier = Modifier.matchParentSize()
-                            .biliPaiProgressiveTopBlur(
-                                backdrop = backdrop,
-                                enabled = progressiveHeaderEnabled,
-                                surfaceColor = androidx.compose.ui.graphics.Color.Transparent,
-                            )
-                            .topSolidProgressiveFade(
-                                surfaceColor = MaterialTheme.colorScheme.surface,
-                                enabled = solidHeaderEnabled,
-                            ),
-                    )
-                    VideoCommentFloatingHeader(
-                        count = state.replyCount,
-                        sortMode = state.sortMode,
-                        onSortModeChange = changeSort,
-                        onSearchClick = { showSearch = true },
-                        backdrop = backdrop,
-                        liquidGlassEnabled = liquidGlassEnabled,
-                        compactTitleTypography = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onSizeChanged { size ->
-                                if (size.height > 0 && commentHeaderHeightPx.floatValue != size.height.toFloat()) {
-                                    commentHeaderHeightPx.floatValue = size.height.toFloat()
-                                }
-                            },
-                    )
-                }
+                        .fillMaxWidth()
+                        .wrapContentHeight(unbounded = true)
+                        .onSizeChanged { size ->
+                            if (size.height > 0 && commentHeaderHeightPx.floatValue != size.height.toFloat()) {
+                                commentHeaderHeightPx.floatValue = size.height.toFloat()
+                            }
+                        },
+                )
             }
             BottomInputBar(
                 modifier = Modifier.align(Alignment.BottomCenter),
-                isLiked = false,
-                likeStatusKnown = false,
-                isFavorited = false,
-                isCoined = false,
-                onLikeClick = {},
-                onFavoriteClick = {},
-                onCoinClick = {},
-                onShareClick = {},
+                isLiked = isLiked,
+                likeStatusKnown = likeStatusKnown,
+                isFavorited = isFavorited,
+                isCoined = isCoined,
+                onLikeClick = onLikeClick,
+                onFavoriteClick = onFavoriteClick,
+                onCoinClick = onCoinClick,
+                onShareClick = onShareClick,
                 onCommentClick = onRootCommentClick,
                 backdrop = if (liquidGlassEnabled) backdrop else null,
                 hazeState = hazeState,
                 isScrollInProgressProvider = { listState.isScrollInProgress },
                 scrollPositionProvider = { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset },
-                // 番剧没有普通投稿的赞/币/收藏操作，仅复用真实可用的评论输入入口。
-                showActionButtons = false,
+                showActionButtons = showActionButtons,
             )
             AppLiquidGlassBackToTopButton(
                 visible = rememberBackToTopButtonEnabled() && showBackToTop,

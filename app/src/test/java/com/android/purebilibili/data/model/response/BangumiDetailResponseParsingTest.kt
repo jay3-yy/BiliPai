@@ -96,4 +96,23 @@ class BangumiDetailResponseParsingTest {
         assertEquals(null, detail.publish)
         assertEquals(null, detail.section)
     }
+    @Test
+    fun `collection count is independent from follow count and preserves unknown`() {
+        val stat = json.decodeFromString<BangumiStat>("""{"favorites":120,"favorite":34}""")
+        assertEquals(120L, stat.favorites)
+        assertEquals(34L, requireNotNull(stat.favorite))
+        assertEquals(0L, json.decodeFromString<BangumiStat>("""{"favorite":0}""").favorite)
+        assertEquals(null, json.decodeFromString<BangumiStat>("""{"favorites":120}""").favorite)
+    }
+
+    @Test
+    fun `episode community decodes all three interaction states`() {
+        val response = json.decodeFromString<BangumiEpisodeCommunityResponse>(
+            """{"code":0,"data":{"like":1,"favorite":0,"coin_number":2}}"""
+        )
+        assertEquals(1, response.data?.like)
+        assertEquals(0, response.data?.favorite)
+        assertEquals(2.0, requireNotNull(response.data?.coinNumber), 0.0)
+    }
+
 }
