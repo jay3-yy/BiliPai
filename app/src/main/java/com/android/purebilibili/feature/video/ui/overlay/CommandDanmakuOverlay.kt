@@ -217,15 +217,16 @@ private fun CommandDanmakuCard(
     }
     val requestedCardWidthPx = when {
         isVote -> {
-            with(visualDensity) { (VOTE_CARD_BODY_WIDTH_DP + VOTE_CLOSE_OVERHANG_DP).dp.roundToPx() }
+            with(visualDensity) { (VOTE_CARD_BODY_WIDTH_DP + COMMAND_CLOSE_OVERHANG_DP).dp.roundToPx() }
         }
         isGrade -> {
             // Keep the reference phone card's absolute width when entering fullscreen.
-            with(visualDensity) { (GRADE_CARD_BODY_WIDTH_DP + VOTE_CLOSE_OVERHANG_DP).dp.roundToPx() }
+            with(visualDensity) { (GRADE_CARD_BODY_WIDTH_DP + COMMAND_CLOSE_OVERHANG_DP).dp.roundToPx() }
         }
         else -> {
             val requestedCardWidthDp = when (item.type) {
-                CommandDanmakuType.ATTENTION -> resolveAttentionCommandCardWidthDp(item.attentionType, visualDensity.fontScale)
+                CommandDanmakuType.ATTENTION ->
+                    resolveAttentionCommandCardWidthDp(item.attentionType, visualDensity.fontScale) + COMMAND_CLOSE_OVERHANG_DP
                 else -> 220
             }
             with(visualDensity) { requestedCardWidthDp.dp.roundToPx() }
@@ -387,7 +388,7 @@ private const val ATTENTION_ICON_SLOT_DP = 44
 private const val ATTENTION_FOLLOW_TARGET_DP = 66
 private const val ATTENTION_ACTION_SPACING_DP = 8
 private const val ATTENTION_HORIZONTAL_PADDING_DP = 5
-private const val VOTE_CLOSE_OVERHANG_DP = 14
+private const val COMMAND_CLOSE_OVERHANG_DP = 14
 private const val VOTE_CARD_BODY_WIDTH_DP = 130
 private const val GRADE_CARD_BODY_WIDTH_DP = 180
 
@@ -411,64 +412,68 @@ private fun AttentionCommandCard(
     val showTriple = item.attentionType == 1 || item.attentionType == 2
     val followEnabled = canSubmitVideoFollowAction(followStatusKnown, isFollowing, isFollowSubmitting)
 
-    AppSurface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.Black.copy(alpha = 0.8f),
-        contentColor = Color.White,
-        shape = RoundedCornerShape(4.dp),
-    ) {
-        AppExactTouchTargets {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = ATTENTION_HORIZONTAL_PADDING_DP.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (showTriple) {
-                    AttentionCommandActions(
-                        likeStatusKnown = likeStatusKnown,
-                        isLiked = isLiked,
-                        isCoined = isCoined,
-                        isFavorited = isFavorited,
-                        isSubmitting = isTripleSubmitting,
-                        onLikeClick = onLikeClick,
-                        onCoinClick = onCoinClick,
-                        onFavoriteClick = onFavoriteClick,
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.size(width = ATTENTION_ICON_SLOT_DP.dp, height = 28.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (item.iconUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = item.iconUrl,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp).clip(CircleShape),
-                            )
-                        } else {
-                            AppIcon(Icons.Rounded.Person, contentDescription = null, tint = Color.White)
+    Box(modifier = Modifier.fillMaxWidth()) {
+        AppSurface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = COMMAND_CLOSE_OVERHANG_DP.dp, end = COMMAND_CLOSE_OVERHANG_DP.dp),
+            color = Color.Black.copy(alpha = 0.8f),
+            contentColor = Color.White,
+            shape = RoundedCornerShape(4.dp),
+        ) {
+            AppExactTouchTargets {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = ATTENTION_HORIZONTAL_PADDING_DP.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (showTriple) {
+                        AttentionCommandActions(
+                            likeStatusKnown = likeStatusKnown,
+                            isLiked = isLiked,
+                            isCoined = isCoined,
+                            isFavorited = isFavorited,
+                            isSubmitting = isTripleSubmitting,
+                            onLikeClick = onLikeClick,
+                            onCoinClick = onCoinClick,
+                            onFavoriteClick = onFavoriteClick,
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier.size(width = ATTENTION_ICON_SLOT_DP.dp, height = 28.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (item.iconUrl.isNotBlank()) {
+                                AsyncImage(
+                                    model = item.iconUrl,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(24.dp).clip(CircleShape),
+                                )
+                            } else {
+                                AppIcon(Icons.Rounded.Person, contentDescription = null, tint = Color.White)
+                            }
                         }
                     }
-                }
-                if (item.attentionType != 1) {
-                    Spacer(Modifier.width(ATTENTION_ACTION_SPACING_DP.dp))
-                    AttentionCommandFollowButton(
-                        isFollowing = isFollowing,
-                        followStatusKnown = followStatusKnown,
-                        enabled = followEnabled,
-                        isSubmitting = isFollowSubmitting,
-                        onClick = onFollowClick,
-                    )
-                }
-                if (!showTriple) {
-                    CommandDanmakuCloseButton(
-                        onDismiss = onDismiss,
-                        containerColor = Color.Transparent,
-                    )
+                    if (item.attentionType != 1) {
+                        Spacer(Modifier.width(ATTENTION_ACTION_SPACING_DP.dp))
+                        AttentionCommandFollowButton(
+                            isFollowing = isFollowing,
+                            followStatusKnown = followStatusKnown,
+                            enabled = followEnabled,
+                            isSubmitting = isFollowSubmitting,
+                            onClick = onFollowClick,
+                        )
+                    }
                 }
             }
+        }
+        AppExactTouchTargets {
+            OutsideCommandDanmakuCloseButton(
+                onDismiss = onDismiss,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
         }
     }
 }
@@ -710,7 +715,7 @@ internal fun resolveAttentionCommandCardWidthDp(attentionType: Int, fontScale: F
     val followWidth = ATTENTION_FOLLOW_TARGET_DP + (36f * (fontScale - 1f).coerceAtLeast(0f)).roundToInt()
     return when (attentionType) {
         2 -> tripleWidth + ATTENTION_ACTION_SPACING_DP + followWidth + padding
-        else -> ATTENTION_ICON_SLOT_DP + ATTENTION_ACTION_SPACING_DP + followWidth + COMMAND_ICON_BUTTON_SIZE_DP + padding
+        else -> ATTENTION_ICON_SLOT_DP + ATTENTION_ACTION_SPACING_DP + followWidth + padding
     }
 }
 
@@ -779,7 +784,7 @@ private fun VoteCommandCard(
         AppSurface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = VOTE_CLOSE_OVERHANG_DP.dp, end = VOTE_CLOSE_OVERHANG_DP.dp),
+                .padding(top = COMMAND_CLOSE_OVERHANG_DP.dp, end = COMMAND_CLOSE_OVERHANG_DP.dp),
             color = Color.Black.copy(alpha = 0.65f),
             contentColor = Color.White,
             shape = RoundedCornerShape(8.dp),
@@ -787,7 +792,7 @@ private fun VoteCommandCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = (maxHeightDp - VOTE_CLOSE_OVERHANG_DP.dp).coerceAtLeast(0.dp))
+                    .heightIn(max = (maxHeightDp - COMMAND_CLOSE_OVERHANG_DP.dp).coerceAtLeast(0.dp))
                     .verticalScroll(rememberScrollState())
                     .padding(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -955,7 +960,7 @@ private fun GradeCommandCard(
         AppSurface(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = VOTE_CLOSE_OVERHANG_DP.dp, end = VOTE_CLOSE_OVERHANG_DP.dp),
+                .padding(top = COMMAND_CLOSE_OVERHANG_DP.dp, end = COMMAND_CLOSE_OVERHANG_DP.dp),
             color = Color.Black.copy(alpha = 0.65f),
             contentColor = Color.White,
             shape = RoundedCornerShape(8.dp),
@@ -963,7 +968,7 @@ private fun GradeCommandCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = (maxHeightDp - VOTE_CLOSE_OVERHANG_DP.dp).coerceAtLeast(0.dp))
+                    .heightIn(max = (maxHeightDp - COMMAND_CLOSE_OVERHANG_DP.dp).coerceAtLeast(0.dp))
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),

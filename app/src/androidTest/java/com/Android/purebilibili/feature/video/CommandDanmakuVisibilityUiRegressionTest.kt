@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video
 
 import android.content.Context
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -14,9 +15,11 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -31,9 +34,11 @@ import com.android.purebilibili.feature.video.danmaku.DanmakuViewport
 import com.android.purebilibili.feature.video.danmaku.VoteOption
 import com.android.purebilibili.feature.video.ui.gesture.detectPlayerTapGestures
 import com.android.purebilibili.feature.video.ui.overlay.CommandDanmakuOverlay
+import com.android.purebilibili.feature.video.ui.overlay.CommandDanmakuOverlayState
 import com.android.purebilibili.feature.video.ui.overlay.rememberCommandDanmakuOverlayState
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -204,5 +209,76 @@ class CommandDanmakuVisibilityUiRegressionTest {
         rule.onNodeWithText("投票提交中…").assertIsDisplayed()
         rule.onNodeWithText("选项一").assertIsNotEnabled().performTouchInput { click(center) }
         rule.runOnIdle { assertEquals(1, voteSubmissions) }
+    }
+
+    @Test
+    fun attentionClose_onlyDismissesItsCard_withoutSubmittingActions_orReturningOnReentry() {
+        val visible = mutableStateOf(true)
+        val state = CommandDanmakuOverlayState()
+        var actionCount = 0
+        var playerTaps = 0
+        val triple = CommandDanmakuItem(
+            id = "triple-only", type = CommandDanmakuType.ATTENTION, content = "",
+            startTimeMs = 0, durationMs = 30_000, attentionType = 1,
+            positionXRatio = 0f, positionYRatio = 0f,
+        )
+        val combined = triple.copy(
+            id = "triple-and-follow", attentionType = 2,
+            positionXRatio = 1f, positionYRatio = 1f,
+        )
+        rule.setContent {
+            MaterialTheme {
+                val density = LocalDensity.current
+                Box(Modifier.size(320.dp, 240.dp).testTag("close-host")) {
+                    Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                        detectTapGestures(onTap = { playerTaps++ })
+                    })
+                    CommandDanmakuOverlay(
+                        items = listOf(triple, combined), player = player, visible = visible.value,
+                        viewport = DanmakuViewport(
+                            with(density) { 320.dp.roundToPx() },
+                            with(density) { 240.dp.roundToPx() }, density.density,
+                        ),
+                        bottomInsetPx = 0, state = state, fontScale = 1f,
+                        onFollowClick = { actionCount++ }, onLikeClick = { actionCount++ },
+                        onCoinClick = { actionCount++ }, onFavoriteClick = { actionCount++ },
+                        onVoteSubmit = { _, _, _ -> actionCount++ },
+                        followStatusKnown = true, likeStatusKnown = true,
+                        isFollowing = false, isLiked = false, isCoined = false, isFavorited = false,
+                        isFollowSubmitting = false, isTripleSubmitting = false,
+                    )
+                }
+            }
+        }
+        val closeButtons = rule.onAllNodesWithContentDescription("关闭提示")
+        closeButtons.assertCountEquals(2)
+        val hostOrigin = rule.onNodeWithTag("close-host").fetchSemanticsNode().boundsInRoot.topLeft
+        val firstClose = closeButtons[0].fetchSemanticsNode().boundsInRoot
+        val firstFavorite = rule.onAllNodesWithContentDescription("收藏")[0]
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(firstClose.center.x > firstFavorite.center.x)
+        assertTrue(firstClose.center.y < firstFavorite.top)
+        rule.onNodeWithTag("close-host").performTouchInput { click(firstClose.center - hostOrigin) }
+        closeButtons.assertCountEquals(1)
+        rule.onNodeWithContentDescription("关注").assertIsDisplayed()
+        rule.runOnIdle {
+            assertTrue(state.isDismissed(triple.id))
+            assertEquals(false, state.isDismissed(combined.id))
+            assertEquals(0, actionCount)
+            assertEquals(0, playerTaps)
+            visible.value = false
+        }
+        closeButtons.assertCountEquals(0)
+        rule.runOnIdle { visible.value = true }
+        closeButtons.assertCountEquals(1)
+        rule.onNodeWithContentDescription("关闭提示").performTouchInput { click(center) }
+        closeButtons.assertCountEquals(0)
+        rule.onNodeWithContentDescription("关注").assertDoesNotExist()
+        rule.onAllNodesWithContentDescription("点赞").assertCountEquals(0)
+        rule.runOnIdle {
+            assertTrue(state.isDismissed(combined.id))
+            assertEquals(0, actionCount)
+            assertEquals(0, playerTaps)
+        }
     }
 }
