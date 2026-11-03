@@ -68,7 +68,9 @@ data class ViewInfo(
     val honorReply: VideoHonorReply? = null,
     /** 新版简介分段:type=2 为 @提及,biz_id 是被@用户 mid,可跳空间。 */
     @SerialName("desc_v2")
-    val descV2: List<VideoDescSegment> = emptyList()
+    val descV2: List<VideoDescSegment> = emptyList(),
+    @SerialName("redirect_url")
+    val redirectUrl: String? = null
 ) {
     val isCooperation: Boolean
         get() = rights.isCooperation == 1 || staff.isNotEmpty()

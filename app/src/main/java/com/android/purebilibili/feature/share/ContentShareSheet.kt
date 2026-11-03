@@ -8,6 +8,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
@@ -47,8 +50,17 @@ internal fun ContentShareSheet(
             .verticalScroll(scrollState).then(if (anchoredGlass) Modifier else Modifier.navigationBarsPadding())
             .padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AppText("分享「${source.title}」", maxLines = 2)
-            if (source.positionMs > 0) Row {
-                AppCheckbox(checked = precise, onCheckedChange = { precise = it })
+            if (source.positionMs > 0) Row(
+                modifier = Modifier.fillMaxWidth().toggleable(
+                    value = precise,
+                    role = Role.Checkbox,
+                    onValueChange = { precise = it },
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    AppCheckbox(checked = precise, onCheckedChange = null)
+                }
                 AppText("从 ${source.positionMs / 60000}:${(source.positionMs / 1000 % 60).toString().padStart(2, '0')} 开始播放" +
                     if (source.dynamicType != null) "（动态分享除外）" else "", modifier = Modifier.weight(1f))
             }
@@ -72,7 +84,11 @@ internal fun ContentShareSheet(
             interactiveContent = true,
             content = shareContent,
         )) return
-    AppModalBottomSheet(modifier = modifier, onDismissRequest = onDismiss) { shareContent() }
+    AppModalBottomSheet(
+        modifier = modifier,
+        onDismissRequest = onDismiss,
+        useWindowPredictiveBack = true,
+    ) { shareContent() }
 }
 
 internal fun bangumiDynamicType(seasonType: Int): Int? = when (seasonType) {

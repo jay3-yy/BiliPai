@@ -22,6 +22,7 @@ internal fun loadErrorCategory(error: VideoLoadError): String = when (error) {
     VideoLoadError.WbiSignatureError -> "request_verification"
     VideoLoadError.VideoNotFound -> "unavailable"
     VideoLoadError.RegionRestricted -> "region_restricted"
+    is VideoLoadError.BangumiRedirect -> "content_redirect"
     VideoLoadError.VipRequired -> "vip_required"
     VideoLoadError.CidNotFound -> "missing_media_info"
     VideoLoadError.PlayUrlEmpty -> "empty_play_url"

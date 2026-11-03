@@ -15,6 +15,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 
+class ContentRedirectException(val url: String) : Exception("该内容应在番剧详情页打开")
+
 class ContentRequestException(val code: Int, message: String) : Exception(
     when (code) {
         -101 -> "登录已失效，请重新扫码登录"
@@ -23,7 +25,9 @@ class ContentRequestException(val code: Int, message: String) : Exception(
         -412 -> "请求暂时受限，请稍后重试"
         else -> message.ifBlank { "请求失败（$code）" }
     },
-)
+) {
+    val apiMessage: String = message
+}
 
 /** Shared calls used by both frontends; mobile retains its feed merge/filter policies. */
 object SharedContentRepository {
@@ -78,6 +82,7 @@ object SharedContentRepository {
             }
         }.getOrThrow()
         check(accountScope == videoMetadataAccountScope()) { "账号已切换，请重新加载" }
+        info.redirectUrl?.takeIf { it.isNotBlank() }?.let { throw ContentRedirectException(it) }
         val cid = resolveRequestedVideoCid(requestedCid, info.cid, info.pages)
         check(cid > 0) { "未找到可播放的分 P" }
         info.copy(cid = cid)

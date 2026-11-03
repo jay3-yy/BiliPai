@@ -14,6 +14,16 @@ class VideoDetailResponseParsingTest {
     }
 
     @Test
+    fun `decode video detail preserves bangumi redirect without a playable cid`() {
+        val response = json.decodeFromString<VideoDetailResponse>(
+            """{"code":0,"data":{"redirect_url":"https://www.bilibili.com/bangumi/play/ep123"}}"""
+        )
+        val info = assertNotNull(response.data)
+        assertEquals("https://www.bilibili.com/bangumi/play/ep123", info.redirectUrl)
+        assertEquals(0L, info.cid)
+    }
+
+    @Test
     fun `decode video detail exposes staff cooperation and upower exclusive fields`() {
         val payload = """
             {

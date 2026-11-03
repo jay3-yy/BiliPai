@@ -23,6 +23,8 @@ sealed class VideoLoadError {
     
     /** 地区限制，无法播放 */
     object RegionRestricted : VideoLoadError()
+
+    data class BangumiRedirect(val url: String) : VideoLoadError()
     
     /** 需要大会员才能观看 */
     object VipRequired : VideoLoadError()
@@ -60,6 +62,7 @@ sealed class VideoLoadError {
         is WbiSignatureError -> "验证失败，正在重试..."
         is VideoNotFound -> "视频不存在或已被删除"
         is RegionRestricted -> "该视频在当前地区不可用"
+        is BangumiRedirect -> "正在打开番剧详情"
         is VipRequired -> "该视频需要大会员才能观看"
         is CidNotFound -> "视频信息加载失败，请重试"
         is ApiError -> "加载失败: $message (错误码: $code)"
@@ -91,6 +94,7 @@ sealed class VideoLoadError {
         // 以下错误重试无意义
         is VideoNotFound -> false
         is RegionRestricted -> false
+        is BangumiRedirect -> false
         is VipRequired -> false
     }
     
@@ -116,6 +120,8 @@ sealed class VideoLoadError {
          * 从异常创建对应的错误类型
          */
         fun fromException(e: Throwable): VideoLoadError = when {
+            e is com.android.purebilibili.data.repository.ContentRedirectException -> BangumiRedirect(e.url)
+            e is com.android.purebilibili.data.repository.ContentRequestException -> fromApiCode(e.code, e.apiMessage)
             e is java.net.UnknownHostException -> NetworkError
             e is java.net.SocketTimeoutException -> NetworkError
             e is java.io.IOException -> NetworkError

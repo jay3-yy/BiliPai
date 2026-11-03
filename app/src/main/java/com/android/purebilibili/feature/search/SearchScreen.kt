@@ -98,7 +98,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.text.KeyboardOptions
 //  Material Icons
 import androidx.compose.runtime.*
@@ -236,7 +236,7 @@ import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
 import com.android.purebilibili.core.ui.blur.shouldAllowRenderEffectBackedHazeEffect
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import com.android.purebilibili.core.ui.blur.unifiedBlur
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.continuityTween
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.data.model.response.HotItem
 import com.android.purebilibili.data.model.response.SearchArticleItem
@@ -275,7 +275,7 @@ internal fun resolveSearchTopBarLayoutSpec(): SearchTopBarLayoutSpec {
 private const val SEARCH_INPUT_LINE_HEIGHT_SP = 20
 
 /** Total vertical padding around the search controls. */
-internal const val SEARCH_TOP_BAR_VERTICAL_PADDING_DP = 8
+internal const val SEARCH_TOP_BAR_VERTICAL_PADDING_DP = 4
 
 internal fun resolveSearchTopBarRowMinHeightDp(
     inputHeightDp: Int,
@@ -670,6 +670,7 @@ fun SearchScreen(
     onBack: () -> Unit,
     onOpenTrending: () -> Unit,
     onNavigateSearchTarget: (BilibiliNavigationTarget) -> Boolean,
+    onOpenSearchLink: (String) -> Unit,
     onVideoClick: (String, Long, String, Boolean) -> Unit,
     onWebClick: (String, String) -> Unit,
     onUpClick: (Long) -> Unit,  //  点击UP主跳转到空间
@@ -1062,10 +1063,7 @@ fun SearchScreen(
         // zero here leaves only Search's opaque scaffold background for the remainder of the
         // search-field morph, which reads as a white flash.
         targetValue = if (exitMotionInProgress) 0.72f else 1f,
-        animationSpec = tween(
-            durationMillis = 220,
-            easing = AppMotionEasing.Continuity,
-        ),
+        animationSpec = continuityTween(220),
         label = "searchExitContentAlpha",
     )
     val searchHazeAvailable = shouldAllowRenderEffectBackedHazeEffect(android.os.Build.VERSION.SDK_INT) &&
@@ -1161,6 +1159,10 @@ fun SearchScreen(
     val submitSearch: (String) -> Unit = submitSearch@{ keyword ->
         when (val action = resolveSearchSubmitAction(keyword)) {
             SearchSubmitAction.Ignore -> return@submitSearch
+            is SearchSubmitAction.OpenLink -> {
+                viewModel.dismissSuggestions()
+                onOpenSearchLink(action.url)
+            }
             is SearchSubmitAction.OpenSearch -> {
                 if (!state.showResults) restoreLandingFocusOnBack = searchFieldFocused
                 viewModel.search(action.keyword)
@@ -1275,7 +1277,7 @@ fun SearchScreen(
         if (normalizedKeyword.isNotBlank()) {
             if (shouldApplyInitialSearchKeyword(normalizedKeyword, state.query, state.showResults)) {
                 viewModel.onQueryChange(normalizedKeyword)
-                viewModel.search(normalizedKeyword)
+                submitSearch(normalizedKeyword)
             }
             onInitialKeywordConsumed(normalizedKeyword)
         }
@@ -2915,7 +2917,7 @@ private class SearchTopBarCallbacks(
     val isScrollInProgressProvider: () -> Boolean,
 )
 
-// 顶部搜索栏：中性 TextFieldValue 实现，保光标
+// 顶部搜索栏：输入状态持有选区，搜索逻辑只订阅文字变化。
 @Composable
 fun SearchTopBar(
     query: String,
@@ -2950,15 +2952,17 @@ fun SearchTopBar(
         resolveSearchTopBarRowMinHeightDp(inputHeightDp)
     }
     val searchInteractionSource = remember { MutableInteractionSource() }
+    val textFieldState = androidx.compose.foundation.text.input.rememberTextFieldState(initialText = query)
+    val inputText = textFieldState.text.toString()
     val backIcon = rememberAppBackIcon()
     val density = LocalDensity.current
     val entryMotionProgress = remember { Animatable(1f) }
     val latestOnEntryMotionFinished by rememberUpdatedState(onEntryMotionFinished)
     val latestOnExitMotionFinished by rememberUpdatedState(onExitMotionFinished)
     val backLabel = stringResource(R.string.common_back)
-    val resolvedSubmitKeyword = remember(query, suggestedKeyword) {
+    val resolvedSubmitKeyword = remember(inputText, suggestedKeyword) {
         resolveSearchSubmitKeyword(
-            query = query,
+            query = inputText,
             suggestedKeyword = suggestedKeyword
         )
     }
@@ -2970,9 +2974,6 @@ fun SearchTopBar(
     } else {
         HomeTopChromeRenderMode.PLAIN
     }
-    val searchElasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState(
-        feedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
-    )
     val backElasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState()
     fun Modifier.searchTopChromeGlass(
         shape: androidx.compose.ui.graphics.Shape,
@@ -2998,25 +2999,17 @@ fun SearchTopBar(
         )
     }
 
-    // Preserve caret/selection while typing; only resync when external text changes
-    // (clear, keyword click, initial keyword). Using TextFieldValue avoids String-field
-    // cursor jumps on every parent recomposition.
-    var textFieldValue by rememberSaveable(
-        stateSaver = androidx.compose.ui.text.input.TextFieldValue.Saver,
-    ) {
-        mutableStateOf(
-            androidx.compose.ui.text.input.TextFieldValue(
-                text = query,
-                selection = androidx.compose.ui.text.TextRange(query.length)
-            )
-        )
-    }
+    // 编辑状态由输入框直接持有，移动光标不经过外部 value 回传或搜索状态更新。
+    val latestQuery by rememberUpdatedState(query)
+    val latestOnQueryChange by rememberUpdatedState(onQueryChange)
     LaunchedEffect(query) {
-        if (query != textFieldValue.text) {
-            textFieldValue = androidx.compose.ui.text.input.TextFieldValue(
-                text = query,
-                selection = androidx.compose.ui.text.TextRange(query.length)
-            )
+        if (query != textFieldState.text.toString()) {
+            textFieldState.setTextAndPlaceCursorAtEnd(query)
+        }
+    }
+    LaunchedEffect(textFieldState) {
+        snapshotFlow { textFieldState.text.toString() }.collect { text ->
+            if (text != latestQuery) latestOnQueryChange(text)
         }
     }
 
@@ -3032,10 +3025,7 @@ fun SearchTopBar(
         } else {
             entryMotionProgress.animateTo(
                 targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = spec.durationMillis,
-                    easing = AppMotionEasing.Continuity
-                )
+                animationSpec = continuityTween(spec.durationMillis)
             )
         }
         latestOnEntryMotionFinished(entryMotionKey)
@@ -3048,10 +3038,7 @@ fun SearchTopBar(
         } else {
             entryMotionProgress.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = spec.durationMillis,
-                    easing = AppMotionEasing.Continuity
-                )
+                animationSpec = continuityTween(spec.durationMillis)
             )
         }
         latestOnExitMotionFinished(exitMotionKey)
@@ -3128,13 +3115,7 @@ fun SearchTopBar(
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                 }
                 SearchTopBarInputField(
-                    value = textFieldValue,
-                    onValueChange = { next ->
-                        textFieldValue = next
-                        if (next.text != query) {
-                            onQueryChange(next.text)
-                        }
-                    },
+                    state = textFieldState,
                     onSearch = {
                         if (canSubmit) onSearch(resolvedSubmitKeyword)
                     },
@@ -3148,8 +3129,8 @@ fun SearchTopBar(
                         .weight(1f)
                         .fillMaxWidth()
                         .height(inputHeightDp.dp)
-                        .appElasticPress(state = searchElasticState, transformInBackdrop = glassActive, highlightShape = inputShape)
-                        .searchTopChromeGlass(inputShape, inputHeightDp, searchElasticState)
+                        // 编辑区保持固定坐标，点按定位光标不触发整框回弹和按压叠光。
+                        .searchTopChromeGlass(inputShape, inputHeightDp)
                         .onFocusChanged { onFocusChanged(it.isFocused) }
                 )
 
@@ -3227,8 +3208,7 @@ private fun SearchTopBarIconButton(
 
 @Composable
 private fun SearchTopBarInputField(
-    value: androidx.compose.ui.text.input.TextFieldValue,
-    onValueChange: (androidx.compose.ui.text.input.TextFieldValue) -> Unit,
+    state: androidx.compose.foundation.text.input.TextFieldState,
     onSearch: () -> Unit,
     onClear: () -> Unit,
     placeholder: String,
@@ -3250,10 +3230,9 @@ private fun SearchTopBarInputField(
     )
     val cursorBrush = androidx.compose.ui.graphics.SolidColor(focusBorderColor)
 
-    // Shared implementation: BasicTextField + TextFieldValue keeps cursor state.
+    // 所有材质共用同一个编辑状态，选区与输入法组合文字不通过父级重组回传。
     androidx.compose.foundation.text.BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        state = state,
         modifier = modifier
             .focusRequester(focusRequester)
             .then(
@@ -3277,12 +3256,12 @@ private fun SearchTopBarInputField(
                 }
             ),
         textStyle = textStyle,
-        singleLine = true,
+        lineLimits = androidx.compose.foundation.text.input.TextFieldLineLimits.SingleLine,
         cursorBrush = cursorBrush,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+        onKeyboardAction = { onSearch() },
         interactionSource = interactionSource,
-        decorationBox = { innerTextField ->
+        decorator = { innerTextField ->
             // This is the search page's shared edit affordance, not a glass geometry override.
             // Native MD3/Miuix and liquid chrome keep their existing field dimensions and padding.
             Row(
@@ -3292,7 +3271,7 @@ private fun SearchTopBarInputField(
                     .padding(horizontal = 12.dp)
             ) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (value.text.isEmpty()) {
+                    if (state.text.isEmpty()) {
                         AppText(
                             text = placeholder,
                             maxLines = 1,
@@ -3308,7 +3287,7 @@ private fun SearchTopBarInputField(
                         innerTextField()
                     }
                 }
-                if (value.text.isNotEmpty()) {
+                if (state.text.isNotEmpty()) {
                     // The field owns the only surface; never decorate its clear icon as a top-bar dock.
                     CompositionLocalProvider(LocalAppTopBarIconDecorationEnabled provides false) {
                         AppIconButton(
