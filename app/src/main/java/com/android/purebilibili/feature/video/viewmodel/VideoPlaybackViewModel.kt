@@ -2458,6 +2458,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         override fun onPlaybackStateChanged(playbackState: Int) {
             pollQualitySwitchTelemetry()
             if (playbackState == Player.STATE_READY) {
+                // 分 P 切换、从推荐列表进入时，加载阶段拿到的 info 里可能没有当前 cid
+                // 的时长（info.cid 还没同步，或 pages 里没有这一条），videoDurationMs
+                // 会停在 0。进度条按 current/duration 算比例，duration=0 就不动，
+                // 播完才跳到末尾。播放器 prepare 完这里一定有时长，回写一次。
+                syncPlaybackDurationFromPlayer()
                 maybeAnnounceRestoredPlaybackPosition()
                 cancelPlaybackStallRecovery()
                 markPlaybackCdnReadyIfMediaReady()
@@ -8875,7 +8880,22 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    /** 播放中采样里程碑；暂停、seek 和结束由播放器事件结算。 */
+    /** 用播放器实际时长补齐 uiState，覆盖加载阶段拿不到分 P 时长的情况。 */
+    private fun syncPlaybackDurationFromPlayer() {
+        val playerDurationMs = exoPlayer?.duration ?: return
+        if (playerDurationMs <= 0L || playerDurationMs == C.TIME_UNSET) return
+        _uiState.update { state ->
+            if (state is VideoPlaybackUiState.Success &&
+                state.videoDurationMs != playerDurationMs
+            ) {
+                state.copy(videoDurationMs = playerDurationMs)
+            } else {
+                state
+            }
+        }
+    }
+
+    /** Sample locally using existing player callbacks and the plugin polling tick. */
     private fun samplePlaybackAnalytics(
         discontinuity: Boolean = false,
         ended: Boolean = false,
