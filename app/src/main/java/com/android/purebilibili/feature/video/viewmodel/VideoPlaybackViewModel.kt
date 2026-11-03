@@ -2458,6 +2458,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         override fun onPlaybackStateChanged(playbackState: Int) {
             pollQualitySwitchTelemetry()
             if (playbackState == Player.STATE_READY) {
+                // 播放就绪后同步当前媒体的实际时长，补齐加载阶段缺少分 P 时长的情况。
+                syncPlaybackDurationFromPlayer()
                 maybeAnnounceRestoredPlaybackPosition()
                 cancelPlaybackStallRecovery()
                 markPlaybackCdnReadyIfMediaReady()
@@ -3976,14 +3978,16 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             Logger.d("PlayerVM", "⏭️ Ignore stale load error: bvid=${playbackRequest.bvid} token=$requestToken")
                             return@launch
                         }
-                        AnalyticsHelper.logVideoError(
-                            com.android.purebilibili.core.util.loadErrorCategory(loadResult.error), "load"
-                        )
-                        CrashReporter.reportVideoError(
-                            playbackRequest.bvid,
-                            "load_failed",
-                            loadResult.error.toUserMessage()
-                        )
+                        if (loadResult.error !is VideoLoadError.BangumiRedirect) {
+                            AnalyticsHelper.logVideoError(
+                                com.android.purebilibili.core.util.loadErrorCategory(loadResult.error), "load"
+                            )
+                            CrashReporter.reportVideoError(
+                                playbackRequest.bvid,
+                                "load_failed",
+                                loadResult.error.toUserMessage()
+                            )
+                        }
                         Logger.d(
                             "PlayerVM",
                             "SUB_DBG loadVideo error: requested=${playbackRequest.bvid}/${playbackRequest.cid}, token=$requestToken, error=${loadResult.error}"
@@ -4810,7 +4814,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             state
                         }
                     }
-                    toast(if (it) "关注成功" else "已取消关注")
                     if (it) {
                         showFollowGroupDialogForUser(current.info.owner.mid)
                     }
@@ -4835,7 +4838,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             state.copy(followingMids = newSet, isFollowing = newIsFollowing)
                         } else state
                     }
-                    toast(if (isFollowing) "关注成功" else "已取消关注")
                     if (isFollowing) {
                         showFollowGroupDialogForUser(mid)
                     }
@@ -8875,7 +8877,22 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
-    /** 播放中采样里程碑；暂停、seek 和结束由播放器事件结算。 */
+    /** 用播放器实际时长补齐 uiState，覆盖加载阶段拿不到分 P 时长的情况。 */
+    private fun syncPlaybackDurationFromPlayer() {
+        val playerDurationMs = exoPlayer?.duration ?: return
+        if (playerDurationMs <= 0L || playerDurationMs == C.TIME_UNSET) return
+        _uiState.update { state ->
+            if (state is VideoPlaybackUiState.Success &&
+                state.videoDurationMs != playerDurationMs
+            ) {
+                state.copy(videoDurationMs = playerDurationMs)
+            } else {
+                state
+            }
+        }
+    }
+
+    /** Sample locally using existing player callbacks and the plugin polling tick. */
     private fun samplePlaybackAnalytics(
         discontinuity: Boolean = false,
         ended: Boolean = false,

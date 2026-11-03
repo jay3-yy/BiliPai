@@ -733,14 +733,14 @@ class VideoPlaybackUseCase(
                     )
                 },
                 onFailure = { e ->
-                    //  [风控冷却] 加载失败，记录失败
-                    PlaybackCooldownManager.recordFailure(bvid, e.message ?: "unknown")
-                    // Check if rate limited
                     val error = VideoLoadError.fromException(e)
-
+                    // 内容跳转及已确认的观看限制不属于请求风控失败。
+                    if (error.isRetryable()) {
+                        PlaybackCooldownManager.recordFailure(bvid, e.message ?: "unknown")
+                    }
                     VideoLoadResult.Error(
-                        error = VideoLoadError.fromException(e),
-                        canRetry = VideoLoadError.fromException(e).isRetryable()
+                        error = error,
+                        canRetry = error.isRetryable()
                     )
                 }
             )
@@ -749,11 +749,13 @@ class VideoPlaybackUseCase(
             Logger.d("VideoPlaybackUseCase", "🚫 加载已取消: $bvid")
             throw e
         } catch (e: Exception) {
-            //  [风控冷却] 异常失败，记录
-            PlaybackCooldownManager.recordFailure(bvid, e.message ?: "exception")
+            val error = VideoLoadError.fromException(e)
+            if (error.isRetryable()) {
+                PlaybackCooldownManager.recordFailure(bvid, e.message ?: "exception")
+            }
             return VideoLoadResult.Error(
-                error = VideoLoadError.fromException(e),
-                canRetry = true
+                error = error,
+                canRetry = error.isRetryable()
             )
         }
     }
