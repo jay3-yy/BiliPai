@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -150,14 +149,13 @@ internal fun PersonalMediaCardFrame(
                         androidx.compose.material3.ProvideTextStyle(
                             com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography().title,
                         ) { headlineContent() }
-                        if (supportingContent != null) {
+                    },
+                    supportingContent = supportingContent?.let { content ->
+                        {
                             androidx.compose.material3.ProvideTextStyle(
                                 com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography().author,
-                            ) {
-                                Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)) {
-                                    supportingContent()
-                                }
-                            }
+                                content = content,
+                            )
                         }
                     },
                     trailingContent = trailingContent?.let { content ->
@@ -259,7 +257,8 @@ internal fun PersonalMediaCardSkeleton(
                         .fillMaxWidth(0.86f)
                         .height(16.dp),
                 )
-                Spacer(modifier = Modifier.weight(1f))
+            },
+            supportingContent = {
                 ContentSkeletonBlock(
                     color = color,
                     modifier = Modifier
@@ -271,16 +270,6 @@ internal fun PersonalMediaCardSkeleton(
                     modifier = Modifier
                         .fillMaxWidth(0.62f)
                         .height(12.dp),
-                )
-            },
-            trailingContent = {
-                ContentSkeletonBlock(
-                    color = color,
-                    shape = CircleShape,
-                    modifier = Modifier
-                        .padding(end = AppSpacingTokens.Small)
-                        .size(24.dp)
-                        .align(Alignment.CenterEnd),
                 )
             },
         )

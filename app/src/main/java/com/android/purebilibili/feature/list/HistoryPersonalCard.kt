@@ -17,10 +17,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.DeleteOutline
@@ -110,6 +108,7 @@ internal fun HistoryPersonalCardSkeleton(
 
     HorizontalVideoCardFrame(
         stacked = stacked,
+        fillInfoHeight = !stacked,
         modifier = modifier
             .fillMaxWidth(),
         coverContent = {
@@ -133,28 +132,21 @@ internal fun HistoryPersonalCardSkeleton(
                     .fillMaxWidth(0.68f)
                     .height(16.dp),
             )
-            Spacer(modifier = Modifier.weight(1f))
+        },
+        supportingContent = {
             ContentSkeletonBlock(
                 color = color,
-                modifier = Modifier
-                    .fillMaxWidth(0.48f)
-                    .height(12.dp),
+                modifier = Modifier.fillMaxWidth(0.68f).height(12.dp),
             )
-            Spacer(modifier = Modifier.height(4.dp))
             ContentSkeletonBlock(
                 color = color,
-                modifier = Modifier
-                    .fillMaxWidth(0.34f)
-                    .height(12.dp),
+                modifier = Modifier.fillMaxWidth(0.48f).height(12.dp),
             )
         },
         trailingContent = {
             ContentSkeletonBlock(
                 color = color,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp)
-                    .size(24.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 2.dp).size(17.dp),
             )
         },
     )
@@ -254,12 +246,9 @@ internal fun HistoryPersonalCard(
     val viewedAt = FormatUtils.formatHistoryViewTime(video.view_at)
     val titleMaxLines = com.android.purebilibili.core.ui.videoCardTitleMaxLines()
 
-    val actionContent: @Composable () -> Unit = {
-        if (!batchMode) {
+    val actionContent: (@Composable () -> Unit)? = if (batchMode) null else {
+        {
             Box(
-                modifier = Modifier
-                    .heightIn(min = 48.dp)
-                    .width(48.dp),
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 AppWindowActionMenu(
@@ -289,8 +278,8 @@ internal fun HistoryPersonalCard(
                             ),
                         ),
                     ),
-                    modifier = Modifier.size(48.dp),
-                    // 按钮撑满 48dp 锚点并只承担触控/菜单源；可见字形由外层
+                    modifier = Modifier.size(29.dp),
+                    // 菜单源使用紧凑锚点；可见字形由外层
                     // 严格叠放在锚点右下角，绕开 IconButton 内容居中/裁切的内部布局。
                     anchorModifier = Modifier.fillMaxSize(),
                 ) {
@@ -303,7 +292,7 @@ internal fun HistoryPersonalCard(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 2.dp, bottom = 2.dp)
-                        .size(18.dp),
+                        .size(17.dp),
                 )
             }
         }
@@ -348,7 +337,7 @@ internal fun HistoryPersonalCard(
                 }
                 PersonalCardSelectMask(selected = selected)
             },
-            trailingContent = { actionContent() },
+            trailingContent = actionContent?.let { action -> { action() } },
             onClick = triggerClick,
             onLongClick = onLongClick,
         )
@@ -356,6 +345,7 @@ internal fun HistoryPersonalCard(
     }
 
     HorizontalVideoCardFrame(
+        fillInfoHeight = true,
         modifier = modifier
             .fillMaxWidth()
             .then(contentContainer?.modifier ?: transition.shellModifier)
@@ -410,11 +400,14 @@ internal fun HistoryPersonalCard(
         infoContent = {
             AppText(
                 text = video.title,
+                modifier = Modifier.fillMaxWidth(),
                 style = contentTypography.title,
                 maxLines = titleMaxLines,
                 overflow = com.android.purebilibili.core.ui.videoCardTitleOverflow(),
                 tapToCopyEnabled = false,
             )
+        },
+        supportingContent = {
             AppText(
                 text = owner,
                 style = contentTypography.author,
@@ -429,12 +422,11 @@ internal fun HistoryPersonalCard(
                     style = contentTypography.author,
                     color = AppContentColors.secondaryText(),
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     tapToCopyEnabled = false,
                 )
             }
         },
-        trailingContent = {
-            actionContent()
-        },
+        trailingContent = actionContent?.let { action -> { action() } },
     )
 }
