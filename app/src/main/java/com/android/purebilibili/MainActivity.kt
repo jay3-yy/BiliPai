@@ -1961,13 +1961,11 @@ class MainActivity : AppCompatActivity() {
                                     pendingNavigationRoute =
                                         ScreenRoutes.Live.createRoute(roomId, liveTitle, liveUname)
                                 } else {
-                                    //  [修改] 导航回详情页，而不是只显示全屏播放器
-                                    miniPlayerManager.currentBvid?.let { bvid ->
-                                        miniPlayerManager.isNavigatingToVideo = true
-                                        miniPlayerManager.exitMiniMode(animate = false)
-                                        val cid = miniPlayerManager.currentCid
-                                        pendingNavigationRoute = resolveMiniPlayerExpandVideoRoute(bvid = bvid, cid = cid)
-                                    }
+                                    // 点击小窗回首页，小窗继续播放。
+                                    // 原来导航回详情页，但 currentBvid 在「从推荐列表进入」
+                                    // 时可能还是上一个视频，会退回到错误的视频再无事发生；
+                                    // 而且此时详情页已经不在返回栈上，重建它要重新拉一遍数据。
+                                    pendingNavigationRoute = ScreenRoutes.Home.route
                                 }
                             }
                         )
