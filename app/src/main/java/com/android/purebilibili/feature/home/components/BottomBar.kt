@@ -2646,7 +2646,13 @@ private fun MaterialBottomBar(
             AppNavigationBar(
                 containerColor = Color.Transparent,
                 tonalElevation = AppSpacingTokens.None,
-                modifier = Modifier.windowInsetsPadding(WindowInsets.navigationBars)
+                // 贴底原生栏只由组件消费系统导航区；常规字阶收紧内容行，大字体保留原生行高。
+                // 悬浮玻璃、Miuix 与皮肤导航在各自入口处理，不借此改变它们的几何。
+                windowInsets = WindowInsets.navigationBars,
+                modifier = if (uiSkinDecoration == null) {
+                    val rowHeight = (64f + 16f * (LocalDensity.current.fontScale - 1f).coerceIn(0f, 1f)).dp
+                    Modifier.height(rowHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                } else Modifier,
             ) {
                 bottomBarVisibleItems.forEach { item ->
                     val itemLabel = resolveBottomNavItemLabel(item, itemLabels)

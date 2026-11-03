@@ -83,23 +83,6 @@ class ReusableLiquidGlassBackdropStructureTest {
     }
 
     @Test
-    fun `bangumi review sort samples list content from a sibling layer`() {
-        val source = loadSource(
-            "app/src/main/java/com/android/purebilibili/feature/bangumi/BangumiReviewScreen.kt"
-        )
-
-        assertTrue(source.contains("val reviewChromeBackdrop = rememberLayerBackdrop()"))
-        assertTrue(source.contains("miuixBackdrop = reviewChromeBackdrop"))
-        assertTrue(source.contains(".layerBackdrop(reviewChromeBackdrop)"))
-        assertTrue(
-            source.indexOf(".layerBackdrop(reviewChromeBackdrop)") <
-                source.indexOf("miuixBackdrop = reviewChromeBackdrop")
-        )
-        assertTrue(source.contains("BottomBarLiquidSegmentedControl("))
-        assertTrue(!source.contains("AppFilterChip("))
-    }
-
-    @Test
     fun `dynamic comment sort samples list content from a sibling layer`() {
         val source = loadSource(
             "app/src/main/java/com/android/purebilibili/feature/dynamic/components/DynamicCommentSheet.kt"

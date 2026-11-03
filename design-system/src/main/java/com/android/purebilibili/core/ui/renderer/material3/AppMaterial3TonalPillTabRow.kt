@@ -74,6 +74,7 @@ fun <T> AppTonalPillTabRow(
     selectedContentColor: androidx.compose.ui.graphics.Color? = null,
     unselectedContentColor: androidx.compose.ui.graphics.Color? = null,
     indicatorPositionProvider: (() -> Float)? = null,
+    centerSelectedTab: Boolean = false,
 ) {
     if (options.isEmpty()) return
     val selectedIndex = options.indexOfFirst { it.value == selectedValue }.coerceAtLeast(0)
@@ -153,12 +154,13 @@ fun <T> AppTonalPillTabRow(
             }
             val contentWidth = widths.fold(padding * 2) { total, width -> total + width }
             val viewportWidth = minOf(contentWidth, maxWidth)
-            LaunchedEffect(selectedIndex, widths, viewportWidth, rowScrollState.maxValue, motionEnabled, density, scrollable) {
+            LaunchedEffect(selectedIndex, widths, viewportWidth, rowScrollState.maxValue, motionEnabled, density, scrollable, centerSelectedTab) {
                 if (scrollable) {
                     val left = with(density) { lefts[selectedIndex].roundToPx() }
                     val right = left + with(density) { widths[selectedIndex].roundToPx() }
                     val viewport = with(density) { viewportWidth.roundToPx() }
                     val target = when {
+                        centerSelectedTab -> left + (right - left) / 2 - viewport / 2
                         left < rowScrollState.value -> left
                         right > rowScrollState.value + viewport -> right - viewport
                         else -> rowScrollState.value

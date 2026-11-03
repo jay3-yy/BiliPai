@@ -138,6 +138,7 @@ internal fun <T> AppMiuixTabRow(
     labelFontSize: TextUnit = TextUnit.Unspecified,
     containerHorizontalPadding: Dp = 0.dp,
     stretchToFill: Boolean = false,
+    centerSelectedTab: Boolean = false,
     onSelectionChange: (T) -> Unit,
 ) {
     // Native Miuix controls keep measured, padding-aware slots under either material.
@@ -159,6 +160,7 @@ internal fun <T> AppMiuixTabRow(
             labelFontSize = labelFontSize,
             containerHorizontalPadding = containerHorizontalPadding,
             indicatorPositionProvider = indicatorPositionProvider,
+            centerSelectedTab = centerSelectedTab,
             drawTrack = drawNonGlassTrack,
             centerContent = centerContent,
             equalizeScrollableItemWidths = equalizeScrollableItemWidths,
@@ -183,6 +185,7 @@ internal fun <T> AppMiuixTabRow(
             centerContent = centerContent,
             contentSizedItems = true,
             contentSizedMaxItemWidth = contentSizedNonGlassMaxItemWidth,
+            centerSelectedTab = centerSelectedTab,
             drawTrack = drawNonGlassTrack,
             stretchToFill = stretchToFill,
             onSelectionChange = onSelectionChange,
@@ -217,6 +220,7 @@ internal fun <T> AppMiuixTabRow(
             centerContent = centerContent,
             contentSizedItems = contentSizedNonGlassItems,
             contentSizedMaxItemWidth = contentSizedNonGlassMaxItemWidth,
+            centerSelectedTab = centerSelectedTab,
             drawTrack = drawNonGlassTrack,
             stretchToFill = stretchToFill,
             onSelectionChange = onSelectionChange,
@@ -280,6 +284,7 @@ private fun <T> AppMiuixNonGlassTabs(
     containerHorizontalPadding: Dp = 0.dp,
     indicatorPositionProvider: (() -> Float)? = null,
     stretchToFill: Boolean = false,
+    centerSelectedTab: Boolean = false,
     onSelectionChange: (T) -> Unit,
 ) {
     val labels = options.map { it.label }
@@ -323,6 +328,7 @@ private fun <T> AppMiuixNonGlassTabs(
         AppMiuixSizedTabs(
             options = options,
             selectedIndex = selectedIndex,
+            centerSelectedTab = centerSelectedTab,
             enabled = enabled,
             scrollable = scrollable,
             fixedItemWidth = fixedItemWidth,
@@ -575,6 +581,7 @@ private fun <T> AppMiuixSizedTabs(
     drawTrack: Boolean,
     centerContent: Boolean,
     stretchToFill: Boolean = false,
+    centerSelectedTab: Boolean = false,
     onSelectionChange: (T) -> Unit,
 ) {
     val tabColors = resolveAppMiuixSegmentedColors(colors)
@@ -623,12 +630,13 @@ private fun <T> AppMiuixSizedTabs(
         }
         val contentWidth = widths.fold(padding * 2 + gap * (options.size - 1)) { total, width -> total + width }
         val viewportWidth = minOf(contentWidth, maxWidth)
-        LaunchedEffect(selectedIndex, widths, viewportWidth, scrollState.maxValue, motionEnabled, density, needsScroll) {
+        LaunchedEffect(selectedIndex, widths, viewportWidth, scrollState.maxValue, motionEnabled, density, needsScroll, centerSelectedTab) {
             if (needsScroll) {
                 val left = with(density) { lefts[selectedIndex].roundToPx() }
                 val right = left + with(density) { widths[selectedIndex].roundToPx() }
                 val viewport = with(density) { viewportWidth.roundToPx() }
                 val target = when {
+                    centerSelectedTab -> left + (right - left) / 2 - viewport / 2
                     right - left >= viewport -> left
                     left < scrollState.value -> left
                     right > scrollState.value + viewport -> right - viewport

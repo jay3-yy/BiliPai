@@ -93,6 +93,7 @@ internal enum class SettingsIconRole {
     NOW_PLAYING_BAR,
     AUDIO_MODE_ENTRY,
     AUDIO_TITLE_AUTO_HIDE,
+    AUDIO_BAR_DELETE_BUTTON,
     LOUDNESS_NORMALIZATION,
     AUDIO_SPECTRUM,
     STARTUP_RESUME,
@@ -109,6 +110,7 @@ internal enum class SettingsIconRole {
     VIDEO_AMBIENT_LIGHT,
     DRAG_FEEDBACK,
     LIQUID_INDICATOR_WOBBLE,
+    LIQUID_INDICATOR_DYNAMIC_LENGTH,
     RETURN_CONTENT_FOLLOW,
     RETURN_GESTURE_TRANSLATION,
     SKELETON_BREATHING,
@@ -349,6 +351,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.NOW_PLAYING_BAR -> R.drawable.ms_bottom_panel_open_24
     SettingsIconRole.AUDIO_MODE_ENTRY -> R.drawable.ms_library_music_24
     SettingsIconRole.AUDIO_TITLE_AUTO_HIDE -> R.drawable.ms_bottom_panel_close_24
+    SettingsIconRole.AUDIO_BAR_DELETE_BUTTON -> R.drawable.ms_delete_outline_24
     SettingsIconRole.LOUDNESS_NORMALIZATION -> R.drawable.ms_instant_mix_24
     SettingsIconRole.AUDIO_SPECTRUM -> R.drawable.ic_settings_cover_pulse_24
     SettingsIconRole.STARTUP_RESUME -> R.drawable.ms_resume_24
@@ -364,6 +367,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.COMPACT_PLAYER_CONTROLS -> R.drawable.ms_collapse_content_24
     SettingsIconRole.VIDEO_AMBIENT_LIGHT -> R.drawable.ms_lightbulb_circle_24
     SettingsIconRole.DRAG_FEEDBACK -> R.drawable.ms_drag_pan_24
+    SettingsIconRole.LIQUID_INDICATOR_DYNAMIC_LENGTH -> R.drawable.ic_settings_indicator_dynamic_length_24
     SettingsIconRole.LIQUID_INDICATOR_WOBBLE -> R.drawable.ic_settings_indicator_wobble_24
     SettingsIconRole.RETURN_CONTENT_FOLLOW -> R.drawable.ms_move_down_24
     SettingsIconRole.RETURN_GESTURE_TRANSLATION -> R.drawable.ms_drag_indicator_24

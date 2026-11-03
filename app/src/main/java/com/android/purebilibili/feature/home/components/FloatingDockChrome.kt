@@ -181,10 +181,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
         com.android.purebilibili.core.ui.blur.rememberContinuousBackdrop(it)
     }
     val shapeBlock = remember(shape) { { shape } }
-    // The linked dock transfers only shell pixels; child glyphs and native paths are unchanged.
-    val linkedShellAlpha = LocalLinkedDockGlassShellAlpha.current.takeIf { enabled }
     val baseModifier = this
-        .linkedDockGlassShellVisibility(linkedShellAlpha)
         .graphicsLayer { translationX = panelOffsetPx }
         .dropShadow(
             shape = shape,

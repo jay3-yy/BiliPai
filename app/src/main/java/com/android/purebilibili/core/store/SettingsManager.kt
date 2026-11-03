@@ -1063,6 +1063,7 @@ data class AppNavigationSettings(
     val settingsContainerMorphEnabled: Boolean = true,
     val settingsContainerRealtimeBlurEnabled: Boolean = false,
     val liquidIndicatorWobbleEnabled: Boolean = true,
+    val liquidIndicatorDynamicLengthEnabled: Boolean = true,
     // 编辑器保留原始配置，不能用运行时过滤后的可见项或生效策略反写用户选择。
     val bottomBarOrder: List<String> = listOf("HOME", "DYNAMIC", "HISTORY", "LISTEN_VIDEO", "PROFILE"),
     val bottomBarVisibleTabs: Set<String> = setOf("HOME", "DYNAMIC", "HISTORY", "LISTEN_VIDEO", "PROFILE"),
@@ -1762,6 +1763,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_AUDIO_FOCUS_ENABLED = booleanPreferencesKey("audio_focus_enabled")
     private val KEY_AUDIO_MODE_AUTO_PIP_ENABLED = booleanPreferencesKey("audio_mode_auto_pip_enabled")
     private val KEY_AUDIO_NOW_PLAYING_BAR_ENABLED = booleanPreferencesKey("audio_now_playing_bar_enabled")
+    private val KEY_AUDIO_NOW_PLAYING_BAR_DELETE_BUTTON = booleanPreferencesKey("audio_now_playing_bar_delete_button")
     private val KEY_AUDIO_NOW_PLAYING_BAR_IMMERSIVE_ENABLED =
         booleanPreferencesKey("audio_now_playing_bar_immersive_enabled")
     private val KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE =
@@ -7161,6 +7163,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             .getBoolean("audio_now_playing_bar_enabled", true)
     }
 
+    fun getAudioNowPlayingBarDeleteButton(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[KEY_AUDIO_NOW_PLAYING_BAR_DELETE_BUTTON] ?: true }
+
+    suspend fun setAudioNowPlayingBarDeleteButton(context: Context, value: Boolean) {
+        context.settingsDataStore.edit { it[KEY_AUDIO_NOW_PLAYING_BAR_DELETE_BUTTON] = value }
+    }
+
     fun getAudioNowPlayingBarOpensAudioMode(context: Context): Flow<Boolean> =
         context.settingsDataStore.data.map { preferences ->
             preferences[KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE] ?: false
@@ -8258,6 +8267,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         )
         // 用户选择的整栏显隐策略优先；Dock 收缩不能将下滑隐藏改成始终显示。
         return AppNavigationSettings(
+            liquidIndicatorDynamicLengthEnabled =
+                preferences[com.android.purebilibili.core.store.navigation.liquidIndicatorDynamicLengthPreferencesKey] ?: true,
             liquidIndicatorWobbleEnabled =
                 preferences[com.android.purebilibili.core.store.navigation.liquidIndicatorWobblePreferencesKey] ?: true,
             bottomBarVisibilityMode = savedVisibility,
@@ -8322,6 +8333,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setPredictiveBackEnabled(context: Context, enabled: Boolean) {
         NavigationSettingsStore.setPredictiveBackEnabled(context, enabled)
+    }
+
+    suspend fun setLiquidIndicatorDynamicLengthEnabled(context: Context, enabled: Boolean) {
+        NavigationSettingsStore.setLiquidIndicatorDynamicLengthEnabled(context, enabled)
     }
 
     suspend fun setLiquidIndicatorWobbleEnabled(context: Context, enabled: Boolean) {
@@ -8705,6 +8720,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_UI_ENTRANCE_ANIMATION_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_GLOBAL_DRAG_FEEDBACK_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(
+                com.android.purebilibili.core.store.navigation.liquidIndicatorDynamicLengthPreferencesKey,
+                SettingsShareSection.APPEARANCE,
+            ),
+            BooleanShareablePreferenceDefinition(
                 com.android.purebilibili.core.store.navigation.liquidIndicatorWobblePreferencesKey,
                 SettingsShareSection.APPEARANCE,
             ),
@@ -8800,6 +8819,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_STOP_PLAYBACK_ON_EXIT, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_BACKGROUND_PLAYBACK_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_AUDIO_FOCUS_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_AUDIO_NOW_PLAYING_BAR_DELETE_BUTTON, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(
                 KEY_AUDIO_NOW_PLAYING_BAR_OPENS_AUDIO_MODE,
                 SettingsShareSection.PLAYBACK,

@@ -11,7 +11,6 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
 import com.android.purebilibili.core.ui.AppSpacingTokens
-import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
@@ -257,8 +256,8 @@ private fun resolveVideoCardMetadataModifier(
         .fillMaxWidth()
         .then(
             if (trailingActionCount > 0) {
-                // Each bottom-end action owns a full touch target, including when both are present.
-                Modifier.padding(end = AppChromeSizeTokens.MinimumTouchTarget * trailingActionCount)
+                // 菜单叠放在卡片右下角，文字只保留行尾间隔，不按触控尺寸扣除整列宽度。
+                Modifier.padding(end = 10.dp * trailingActionCount)
             } else {
                 Modifier
             }
@@ -370,9 +369,9 @@ private fun VideoCardOwnerMetadata(
         metaColor = metadataColors.upMetaColor,
         badgeTextColor = metadataColors.upBadgeTextColor,
         badgeBackgroundColor = metadataColors.upBadgeBackgroundColor,
-        // 名称占满剩余宽度，省略号顶到卡片内边距附近；右侧留 6dp 空隙不与
-        // 后续元素贴死，长昵称也不会被提前折叠到卡片一半宽度。
-        nameEndPadding = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro,
+        // 行尾间隔由外层元信息布局统一预留，名称不重复扣除宽度。
+        nameEndPadding = 0.dp,
+        spacing = 2.dp,
         showUpBadge = showUpBadge,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -2008,9 +2007,9 @@ internal fun ElegantVideoCard(
         // Text keeps its inset; the trailing action aligns to the full info surface.
         Column(
             modifier = Modifier.padding(
-                start = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                start = 6.dp,
                 top = if (useCardEffectSurface) infoBottomPadding else AppSpacingTokens.None,
-                end = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                end = 6.dp,
                 bottom = infoBottomPadding,
             )
         ) {
@@ -2158,13 +2157,13 @@ internal fun ElegantVideoCard(
 
         if (hasTrailingCardAction) {
             Row(
-                modifier = Modifier.align(Alignment.BottomEnd),
+                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 5.dp, y = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (onUnfavorite != null) {
                     Box(
                         modifier = Modifier
-                            .size(AppChromeSizeTokens.MinimumTouchTarget)
+                            .size(29.dp)
                             .appActionClickable {
                                 haptic(HapticType.MEDIUM)
                                 showUnfavoriteDialog = true
@@ -2185,7 +2184,7 @@ internal fun ElegantVideoCard(
                 if (hasOverflowMenu) {
                     Box(
                         modifier = Modifier
-                            .size(AppChromeSizeTokens.MinimumTouchTarget)
+                            .size(29.dp)
                             .semantics { contentDescription = "更多操作" }
                             .onPlaced { coordinates ->
                                 menuButtonCoordsRef.value = coordinates
@@ -2209,8 +2208,7 @@ internal fun ElegantVideoCard(
                             contentDescription = null,
                             tint = adaptiveContentColors.subtitleColor,
                             modifier = Modifier
-                                .size(18.dp)
-                                .padding(end = AppSpacingTokens.ExtraSmall, bottom = AppSpacingTokens.ExtraSmall)
+                                .size(17.dp)
                         )
                     }
                 }

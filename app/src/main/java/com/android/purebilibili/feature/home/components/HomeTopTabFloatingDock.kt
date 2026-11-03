@@ -327,7 +327,7 @@ internal fun HomeTopTabFloatingDock(
         liquidGlassTuningOverride = liquidGlassTuning,
         onItemReselected = onReselected,
         scrollState = scrollState,
-        adaptIndicatorToLabel = if (liquidGlassEffectsEnabled) false else showText,
+        adaptIndicatorToLabel = showText,
         itemContent = { index, label, selected ->
             val contentColor = LocalFloatingBottomBarContentColor.current
             val selectionScale = LocalFloatingBottomBarItemSelectionScale.current

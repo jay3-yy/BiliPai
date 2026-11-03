@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.map
 
 internal val bottomBarItemLabelsPreferencesKey = stringPreferencesKey("bottom_bar_item_labels")
 internal val liquidIndicatorWobblePreferencesKey = booleanPreferencesKey("liquid_indicator_wobble_enabled")
+internal val liquidIndicatorDynamicLengthPreferencesKey = booleanPreferencesKey("liquid_indicator_dynamic_length_enabled")
 internal val miuixPredictiveBackMaxProgressPercentPreferencesKey =
     intPreferencesKey("miuix_predictive_back_max_progress_percent")
 
@@ -197,6 +198,10 @@ object NavigationSettingsStore {
         context.settingsDataStore.edit { preferences ->
             preferences[keyPredictiveBackEnabled] = enabled
         }
+    }
+
+    suspend fun setLiquidIndicatorDynamicLengthEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[liquidIndicatorDynamicLengthPreferencesKey] = enabled }
     }
 
     suspend fun setLiquidIndicatorWobbleEnabled(context: Context, enabled: Boolean) {

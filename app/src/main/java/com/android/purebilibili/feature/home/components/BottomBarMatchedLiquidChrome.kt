@@ -12,7 +12,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.background
@@ -43,8 +42,8 @@ import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.animation.DampedDragAnimationState
 import com.android.purebilibili.core.ui.animation.DampedDragTrackingMode
 import com.android.purebilibili.core.ui.animation.rememberDampedDragAnimationState
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.motion.BottomBarMotionSpec
+import com.android.purebilibili.core.ui.motion.continuityTween
 import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
 import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.ui.motion.softLandingSpring
@@ -257,10 +256,7 @@ internal fun Modifier.bottomBarMatchedLiquidDockSurface(
     } else {
         val animatedScrollProgress by animateFloatAsState(
             targetValue = if (isScrolling) 1f else 0f,
-            animationSpec = tween(
-                durationMillis = resolveBottomBarMaterialScrollAnimationDurationMillis(isScrolling),
-                easing = AppMotionEasing.Continuity
-            ),
+            animationSpec = continuityTween(resolveBottomBarMaterialScrollAnimationDurationMillis(isScrolling)),
             label = "bottomBarMatchedMaterialScrollProgress"
         )
         animatedScrollProgress

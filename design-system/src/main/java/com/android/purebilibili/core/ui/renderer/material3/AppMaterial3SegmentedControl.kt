@@ -122,6 +122,7 @@ internal fun <T> AppMaterial3TabRow(
     fixedItemWidth: Dp? = null,
     labelFontSize: TextUnit = TextUnit.Unspecified,
     containerHorizontalPadding: Dp = 0.dp,
+    centerSelectedTab: Boolean = false,
     onSelectionChange: (T) -> Unit,
 ) {
     val selectedIndex = resolveAppSegmentedSelectionIndex(options, selectedValue)
@@ -143,6 +144,7 @@ internal fun <T> AppMaterial3TabRow(
             fixedItemWidth = fixedItemWidth,
             containerHorizontalPadding = containerHorizontalPadding,
             indicatorPositionProvider = indicatorPositionProvider,
+            centerSelectedTab = centerSelectedTab,
         )
         return
     }

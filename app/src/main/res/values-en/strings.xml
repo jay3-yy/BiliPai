@@ -438,7 +438,7 @@
     <string name="preview_hold_speed">Hold · %1$s</string>
     <string name="preview_release_speed">Release · Restore 1x</string>
     <string name="preview_normal_speed">Normal playback · 1x</string>
-    <string name="animation_section_card">Card animations</string>
+    <string name="animation_section_card">Transition animations</string>
     <string name="preview_caption_card_entrance_on">Home cards fade in one at a time</string>
     <string name="preview_caption_card_entrance_off">Home cards appear immediately</string>
     <string name="preview_caption_live_on">The current frame keeps playing through the transition</string>
@@ -968,4 +968,6 @@
     <string name="preview_blur_compare_scroll">Move preview background</string>
     <string name="preview_blur_compare_unavailable">%1$s is unavailable. This device cannot display an actual preview of this renderer.</string>
     <string name="preview_blur_compare_api_requirement">The platform renderer requires API 37.2 or later. This device runs API %1$s, so Miuix is used.</string>
+    <string name="animation_indicator_dynamic_length_title">Dynamic glass indicator length</string>
+    <string name="animation_indicator_dynamic_length_summary">Fit the selected indicator to its label; turn off to fill the slot. Applies only to liquid glass.</string>
 </resources>

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,7 +63,6 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSpacingTokens
-import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.videoCardTitleMaxLines
 import com.android.purebilibili.core.ui.videoCardTitleOverflow
 import com.android.purebilibili.core.ui.components.UpBadgeName
@@ -324,11 +322,9 @@ internal fun HomeStyleSingleColumnVideoCard(
                 overflow = videoCardTitleOverflow(),
                 color = AppContentColors.primaryText(),
             )
-
-            if (!compactPartition) Spacer(Modifier.weight(1f))
+        },
+        supportingContent = {
             if (compactPartition) {
-                // 与 PiliPlus 一致：标题占据上方弹性空间，UP 主与播放量等元信息固定在卡片底部。
-                Spacer(Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     if (publishTimeText.isNotBlank()) {
                         AppText(
@@ -356,6 +352,7 @@ internal fun HomeStyleSingleColumnVideoCard(
                         nameStyle = contentTypography.author,
                         nameColor = AppContentColors.secondaryText(),
                         showUpBadge = showUpBadge,
+                        spacing = 2.dp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -420,6 +417,7 @@ internal fun HomeStyleSingleColumnVideoCard(
                     badgeTextColor = AppContentColors.secondaryText().copy(alpha = 0.85f),
                     badgeBorderColor = AppContentColors.secondaryText().copy(alpha = 0.35f),
                     showUpBadge = showUpBadge,
+                        spacing = 2.dp,
                     // The info column is a single horizontal-card row; keep the owner on one
                     // measured line so a long name cannot grow past the cover bounds.
                     maxLines = 1,
@@ -443,7 +441,7 @@ internal fun HomeStyleSingleColumnVideoCard(
                 {
                     Box(
                         modifier = Modifier
-                            .size(AppChromeSizeTokens.MinimumTouchTarget)
+                            .size(29.dp)
                             .clip(CircleShape)
                             .semantics { contentDescription = "更多操作" }
                             .appActionClickable(
@@ -459,7 +457,7 @@ internal fun HomeStyleSingleColumnVideoCard(
                             imageVector = Icons.Outlined.MoreVert,
                             contentDescription = null,
                             tint = AppContentColors.secondaryText(),
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(17.dp),
                         )
                     }
                 }

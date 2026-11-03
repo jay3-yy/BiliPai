@@ -3,6 +3,7 @@ package com.android.purebilibili.core.ui.animation
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import com.android.purebilibili.core.ui.BottomBarReferencePressedScale
+import com.android.purebilibili.core.ui.motion.pressFeedbackSpring
 import kotlin.math.PI
 import kotlin.math.floor
 import kotlin.math.sin
@@ -19,7 +20,7 @@ object LiquidIndicatorMotion {
 
     fun positionSpec(threshold: Float = 0.001f): SpringSpec<Float> = spring(1f, 1000f, threshold)
     fun velocitySpec(): SpringSpec<Float> = spring(0.5f, 300f, 0.01f)
-    fun pressSpec(): SpringSpec<Float> = spring(1f, 1000f, 0.001f)
+    fun pressSpec(): SpringSpec<Float> = pressFeedbackSpring()
     fun scaleXSpec(): SpringSpec<Float> = spring(0.6f, 250f, 0.001f)
     fun scaleYSpec(): SpringSpec<Float> = spring(0.7f, 250f, 0.001f)
 

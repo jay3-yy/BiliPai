@@ -86,6 +86,7 @@ internal fun BottomBarFloatingSegmentedControl(
     indicatorIdleSurfaceColorOverride: Color? = null,
     geometryMode: FloatingBottomBarGeometryMode = FloatingBottomBarGeometryMode.Segmented,
     adaptIndicatorToLabel: Boolean = true,
+    liquidGlassAlignShellStart: Boolean = false,
     liquidGlassLabelHorizontalPadding: Dp? = null,
     liquidGlassMeasurementLabels: List<String>? = null,
     liquidGlassAnimateLabelWidthChanges: Boolean = false,
@@ -175,7 +176,11 @@ internal fun BottomBarFloatingSegmentedControl(
     val effectiveItemWidth = itemWidth?.coerceAtLeast(0.dp)
     // This wrapper can also render without glass. Content-width capsules and shell trimming
     // belong exclusively to glass; disabled renderers retain their established slot geometry.
-    val contentAdaptiveIndicatorEnabled = adaptIndicatorToLabel && liquidGlassEnabled
+    // 文字标签统一由全局开关控制；自定义图标内容仍由入口声明是否有文字测量依据。
+    // 原生材质不读取此策略，继续使用原来的槽位几何。
+    val dynamicLengthEnabled = com.android.purebilibili.core.ui.animation.LocalLiquidIndicatorDynamicLengthEnabled.current
+    val contentAdaptiveIndicatorEnabled = liquidGlassEnabled && dynamicLengthEnabled &&
+        (itemContent == null || adaptIndicatorToLabel)
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val resolvedLabelFontSize = if (itemContent == null) {
@@ -220,11 +225,28 @@ internal fun BottomBarFloatingSegmentedControl(
     val contentWidth = effectiveItemWidth?.let { it * itemCount + horizontalPadding * 2 }
     // A scroll state enables overflow; it must not stretch a short glass shell to
     // the whole available viewport. width() still respects the parent's maximum.
-    val rootModifier = if (contentWidth != null) {
+    val widthModifier = if (contentWidth != null) {
         modifier.width(contentWidth)
     } else {
         modifier
     }
+    // 仅页面显式要求时补偿动态长度裁掉的首槽空白，外壳起点不随计数与字号变化。
+    // 滚动量在布局阶段读取，原生材质与其他 dock 的默认几何不变。
+    val rootModifier = if (liquidGlassAlignShellStart && contentAdaptiveIndicatorEnabled && effectiveItemWidth != null) {
+        widthModifier.layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints)
+            val leadingInsetPx = indicatorContentWidths?.firstOrNull()?.let { width ->
+                resolveFloatingDockScrollableShellInsetPx(
+                    slotWidthPx = effectiveItemWidth.toPx(),
+                    capsuleWidthPx = width.toPx(),
+                    distanceFromContentEdgePx = scrollState?.value?.toFloat() ?: 0f,
+                ).roundToInt()
+            } ?: 0
+            layout(placeable.width, placeable.height) {
+                placeable.placeRelative(-leadingInsetPx, 0)
+            }
+        }
+    } else widthModifier
     val selectedIndexState = rememberUpdatedState(safeSelectedIndex)
     val onSelectedState = rememberUpdatedState(onSelected)
     val enabledState = rememberUpdatedState(enabled)

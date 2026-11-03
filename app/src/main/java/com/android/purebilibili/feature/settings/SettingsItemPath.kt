@@ -35,7 +35,7 @@ internal fun settingItemPath(item: PlaybackSettingItem): String {
         "home_browsing" -> "浏览交互与手势"
         "home_options" -> "推荐与动态"
         "animation_page" -> "动画与振动"
-        "animation_card" -> "卡片动画"
+        "animation_card" -> "过渡动画"
         "animation_glass" -> "液态玻璃与磨砂"
         "navigation_behavior" -> "导航行为"
         "navigation_top_tabs" -> "顶部标签"

@@ -445,6 +445,7 @@ fun <T> AppNativeTabRow(
     // an extra full-width dock behind the items. Callers that intentionally own
     // a track (for example a liquid-glass rail) can still opt in explicitly.
     drawMiuixNonGlassTrack: Boolean = false,
+    centerSelectedTab: Boolean = false,
     onSelectionChange: (T) -> Unit,
 ) {
     if (options.isEmpty()) return
@@ -540,6 +541,7 @@ fun <T> AppNativeTabRow(
             labelFontSize = labelFontSize,
             containerHorizontalPadding = containerHorizontalPadding,
             modifier = modifier,
+            centerSelectedTab = centerSelectedTab,
             onSelectionChange = onSelectionChange,
         )
         AppSegmentedRenderer.MIUIX -> AppMiuixTabRow(
@@ -575,6 +577,7 @@ fun <T> AppNativeTabRow(
             contentSizedNonGlassMaxItemWidth = contentSizedMiuixNonGlassMaxItemWidth,
             drawNonGlassTrack = drawMiuixNonGlassTrack,
             stretchToFill = forceEqualWidth,
+            centerSelectedTab = centerSelectedTab,
             onSelectionChange = onSelectionChange,
         )
     }
