@@ -117,12 +117,20 @@ private fun excludePcdnCandidates(
     candidates: List<PlaybackCdnCandidate>
 ): List<PlaybackCdnCandidate> {
     return candidates.map { candidate ->
-        if (!isRiskyCdnHost(hostOf(candidate.videoUrl))) return@map candidate
+        // 视频和音频的 host 是独立下发的，B 站会只把其中一条分到 PCDN。
+        // 以前只看 videoUrl，视频走常规 CDN、音频走 PCDN 时整个候选被跳过，
+        // 音频就带着解析不了的 mcdn 域名进了播放器。
+        val videoRisky = isRiskyCdnHost(hostOf(candidate.videoUrl))
+        val audioRisky = candidate.audioUrl?.let { isRiskyCdnHost(hostOf(it)) } == true
+        if (!videoRisky && !audioRisky) return@map candidate
         candidate.copy(
-            videoUrl = rewriteBilivideoHost(candidate.videoUrl, FALLBACK_CDN_HOST)
-                ?: candidate.videoUrl,
+            videoUrl = if (videoRisky) {
+                rewriteBilivideoHost(candidate.videoUrl, FALLBACK_CDN_HOST) ?: candidate.videoUrl
+            } else {
+                candidate.videoUrl
+            },
             audioUrl = candidate.audioUrl?.let {
-                rewriteBilivideoHost(it, FALLBACK_CDN_HOST) ?: it
+                if (audioRisky) rewriteBilivideoHost(it, FALLBACK_CDN_HOST) ?: it else it
             },
         )
     }
