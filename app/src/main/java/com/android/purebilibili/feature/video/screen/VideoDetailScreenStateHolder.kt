@@ -3342,9 +3342,10 @@ internal fun VideoDetailScreenStateHolder(
             // 2. 进入小窗模式（强制，不管当前模式设置）
             manager.enterMiniMode(forced = true)
 
-            // 3. 返回上一页（首页）
+            // 3. 回首页。用 onBack 只会退到上一页（可能是列表、搜索、空间页），
+            //    用户点小窗的预期是回到首页继续看小窗。
             presentationState.markNavigatingToMiniMode()
-            onBack()
+            onHomeClick()
         } ?: run {
             // 如果 miniPlayerManager 不存在，直接返回
             com.android.purebilibili.core.util.Logger.w("VideoDetailScreen", "⚠️ miniPlayerManager 为 null，无法进入小窗")

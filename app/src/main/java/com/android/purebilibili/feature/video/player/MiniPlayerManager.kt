@@ -98,10 +98,13 @@ internal fun shouldShowInAppMiniPlayerByPolicy(
     mode: SettingsManager.MiniPlayerMode,
     isActive: Boolean,
     isNavigatingToVideo: Boolean,
-    stopPlaybackOnExit: Boolean
+    stopPlaybackOnExit: Boolean,
+    forcedByUser: Boolean = false,
 ): Boolean {
     if (stopPlaybackOnExit) return false
-    return mode.supportsInAppMiniPlayer && isActive && !isNavigatingToVideo
+    // forcedByUser：用户点了播放器上的小窗按钮。那是显式意图，不该被
+    // 「小窗播放模式 = 关闭」的设置挡住，否则按钮点下去什么都不发生。
+    return (mode.supportsInAppMiniPlayer || forcedByUser) && isActive && !isNavigatingToVideo
 }
 
 internal fun shouldEnterPipByPolicy(
@@ -1469,6 +1472,9 @@ class MiniPlayerManager private constructor(private val context: Context) :
         private set
 
     var isMiniMode by mutableStateOf(false)
+
+    /** 用户点了播放器上的小窗按钮。显式意图，不受「小窗播放模式」设置限制。 */
+    var forcedMiniMode by mutableStateOf(false)
         private set
 
     /**
@@ -1891,7 +1897,8 @@ class MiniPlayerManager private constructor(private val context: Context) :
             mode = mode,
             isActive = isActive,
             isNavigatingToVideo = isNavigatingToVideo,
-            stopPlaybackOnExit = stopPlaybackOnExit
+            stopPlaybackOnExit = stopPlaybackOnExit,
+            forcedByUser = forcedMiniMode,
         )
         Logger.d(TAG, "📲 shouldShowInAppMiniPlayer: mode=$mode, isActive=$isActive, navigating=$isNavigatingToVideo, result=$result")
         return result
@@ -2116,6 +2123,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
             Logger.d(TAG, "🎬 defer playback stop for shared return morph")
             return
         }
+        // 已经进入小窗：导航只是从详情页退到首页，播放要继续。
+        // 不拦的话下面会走停播分支，把刚起来的小窗一起拆掉。
+        if (isMiniMode && !forceStop) {
+            Logger.d(TAG, "🎬 小窗激活中，跳过导航离开的停播处理")
+            return
+        }
         val mode = getCurrentMode()
         val stopPlaybackOnExit = SettingsManager.getStopPlaybackOnExitSync(context)
         val keepForAudioNowPlaying = !forceStop &&
@@ -2136,6 +2149,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
             if (forceStop || !keepForAudioNowPlaying) AudioNowPlayingSession.dismiss()
             isPlaying = false
             isMiniMode = false
+            forcedMiniMode = false
             Logger.d(TAG, "🔇 ${mode.label}：通过导航离开，立即停止播放")
             // 停止所有播放器（外部和内部）
             _externalPlayer?.let { player ->
@@ -2420,6 +2434,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isLeavingByNavigation = false
         if (!isMiniMode) miniPlayerSessionId++
         isMiniMode = true
+        if (forced) forcedMiniMode = true
         // Detail-session handoff may have muted the shared player; always restore for mini window.
         currentPlayer?.let(PlayerVolumeController::applyPreferredVolume)
         if (shouldResumePlayback && currentPlayer != null) {
@@ -2446,6 +2461,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         Logger.d(TAG) { "Exiting mini mode, animate=$animate" }
         shouldAnimateExit = animate
         isMiniMode = false
+        forcedMiniMode = false
     }
 
     /**
