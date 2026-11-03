@@ -296,6 +296,24 @@ internal fun resolveVideoContentTabSwitchAnimationSpec(
     }
 }
 
+/** 普通视频与番剧共用点击及松手后的分页节奏。 */
+@Composable
+internal fun rememberVideoContentTabSelectionAnimationSpec(): androidx.compose.animation.core.FiniteAnimationSpec<Float> {
+    val liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
+    val playerChromeProfile = rememberAppPlayerChromeProfile()
+    val tabSwitchAnimationSpec = remember(playerChromeProfile.tabPresentation, liquidGlassEnabled) {
+        resolveVideoContentTabSwitchAnimationSpec(playerChromeProfile.tabPresentation, liquidGlassEnabled)
+    }
+    val componentMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+    val tabSelectionAnimationSpec = remember(tabSwitchAnimationSpec, liquidGlassEnabled, componentMotionEnabled) {
+        if (liquidGlassEnabled && !componentMotionEnabled) snap<Float>() else tween<Float>(
+            durationMillis = tabSwitchAnimationSpec.durationMs,
+            easing = AppMotionEasing.M1Standard,
+        )
+    }
+    return tabSelectionAnimationSpec
+}
+
 internal fun resolveVideoContentEffectiveSelectedTabIndex(
     currentPage: Int,
     targetPage: Int,
@@ -762,17 +780,7 @@ internal fun VideoContentSection(
             chooserTitle = "分享视频笔记"
         )
     }
-    val playerChromeProfile = rememberAppPlayerChromeProfile()
-    val tabSwitchAnimationSpec = remember(playerChromeProfile.tabPresentation, liquidGlassEnabled) {
-        resolveVideoContentTabSwitchAnimationSpec(playerChromeProfile.tabPresentation, liquidGlassEnabled)
-    }
-    val componentMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
-    val tabSelectionAnimationSpec = remember(tabSwitchAnimationSpec, liquidGlassEnabled, componentMotionEnabled) {
-        if (liquidGlassEnabled && !componentMotionEnabled) snap<Float>() else tween<Float>(
-            durationMillis = tabSwitchAnimationSpec.durationMs,
-            easing = AppMotionEasing.M1Standard,
-        )
-    }
+    val tabSelectionAnimationSpec = rememberVideoContentTabSelectionAnimationSpec()
     // Only glass opts into shared tap/release timing. Native pagers keep their default fling.
     val glassTabFlingBehavior = if (liquidGlassEnabled) {
         PagerDefaults.flingBehavior(pagerState, snapAnimationSpec = tabSelectionAnimationSpec)
@@ -825,7 +833,8 @@ internal fun VideoContentSection(
     var tabBarMaxHeightPx by remember { mutableFloatStateOf(0f) }
     // 标签栏不再随滚动收起；滚动折叠机制整体转移到浮动评论栏：
     // 「最热评论」标题文字不设开关、下滑必隐回顶出现，排序/搜索行由设置开关控制。
-    var commentHeaderCollapsePx by remember(commentListState) { mutableFloatStateOf(0f) }
+    val commentHeaderCollapseState = remember(commentListState) { mutableFloatStateOf(0f) }
+    var commentHeaderCollapsePx by commentHeaderCollapseState
     val commentListAtTop by remember(commentListState) {
         derivedStateOf {
             isVideoContentCommentListAtTop(
@@ -862,55 +871,13 @@ internal fun VideoContentSection(
             )
         }
     }
-    var commentListWasAtTop by remember(commentListState) { mutableStateOf(commentListAtTop) }
-    // 离开顶部时收净；滚动、排序或刷新使列表重新贴顶后恢复，无需额外下拉。
-    // 仍贴顶时保留当前跟手位移，避免打断正在进行的折叠手势。
-    LaunchedEffect(commentListState, commentHeaderCollapseEnabled, commentListAtTop, commentHeaderHeightPx.floatValue) {
-        commentHeaderCollapsePx = resolveVideoContentTabBarCollapsePxWhenListLeavesTop(
-            collapsePx = commentHeaderCollapsePx,
-            maxCollapsePx = commentHeaderHeightPx.floatValue,
-            listAtTop = commentListAtTop,
-            enabled = commentHeaderCollapseEnabled,
-            returningToTop = commentListAtTop && !commentListWasAtTop,
-        )
-        commentListWasAtTop = commentListAtTop
-    }
-    val tabBarCollapseConnection = remember(
-        pagerState,
-        commentListState,
-        commentHeaderCollapseEnabled,
-        commentListAtTop,
-    ) {
-        object : NestedScrollConnection {
-            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                val update = reduceVideoContentTabBarCollapseOnPreScroll(
-                    collapsePx = commentHeaderCollapsePx,
-                    maxCollapsePx = commentHeaderHeightPx.floatValue,
-                    availableY = available.y,
-                    listAtTop = commentListAtTop,
-                    enabled = commentHeaderCollapseEnabled && !pagerState.isScrollInProgress,
-                ) ?: return Offset.Zero
-                commentHeaderCollapsePx = update.nextCollapsePx
-                return Offset(0f, update.consumedY)
-            }
-
-            override fun onPostScroll(
-                consumed: Offset,
-                available: Offset,
-                source: NestedScrollSource,
-            ): Offset {
-                val update = reduceVideoContentTabBarCollapseOnPostScroll(
-                    collapsePx = commentHeaderCollapsePx,
-                    maxCollapsePx = commentHeaderHeightPx.floatValue,
-                    availableY = available.y,
-                    listAtTop = commentListAtTop,
-                    enabled = commentHeaderCollapseEnabled && !pagerState.isScrollInProgress,
-                ) ?: return Offset.Zero
-                commentHeaderCollapsePx = update.nextCollapsePx
-                return Offset(0f, update.consumedY)
-            }
-        }
-    }
+    val tabBarCollapseConnection = rememberVideoCommentHeaderScrollConnection(
+        listState = commentListState,
+        collapsePx = commentHeaderCollapseState,
+        maxCollapsePx = commentHeaderHeightProvider,
+        enabled = commentHeaderCollapseEnabled,
+        pagerScrolling = { pagerState.isScrollInProgress },
+    )
     // Read the scroll-driven collapse only in measure/draw, not while composing the pages.
     val commentHeaderCollapseProgress = {
         resolveVideoContentTabBarCollapseProgress(
@@ -1164,6 +1131,9 @@ internal fun VideoContentSection(
         ) {
             VideoContentTabBar(
                 tabs = tabs,
+                // 玻璃外壳对齐 UP 头像：MD3 为 16dp，Miuix 为 12dp；原生保留默认布局。
+                liquidGlassAlignShellStart = true,
+                liquidGlassTabsOffsetX = if (LocalAppUiStyle.current == AppUiStyle.MIUIX) (-4).dp else 0.dp,
                 measurementLabels = listOf(
                     "简介",
                     if (showVideoDetailCommentCount) {
@@ -1655,6 +1625,7 @@ internal fun VideoCommentTab(
     paginationPage: Int = 1,
     floatingHeaderContentPaddingPx: (() -> Float)? = null,
     pageControl: com.android.purebilibili.data.model.response.ReplyPageControl? = null,
+    scrollingHeader: (@Composable () -> Unit)? = null,
 ) {
     val commentAppearance = rememberVideoCommentAppearance()
     val avatarPushEnabled = com.android.purebilibili.feature.video.ui.components.rememberCommentAvatarPushEnabled()
@@ -1733,6 +1704,11 @@ internal fun VideoCommentTab(
                     .fillMaxSize(),
                 contentPadding = commentContentPadding
             ) {
+            if (scrollingHeader != null) {
+                item(key = "video_comment_scrolling_header", contentType = "video_comment_header") {
+                    scrollingHeader()
+                }
+            }
             commentSectionNotice(pageControl)
             if (repliesError != null) {
                 item(key = "video_comment_refresh_error", contentType = "video_comment_error") {
@@ -1907,7 +1883,15 @@ internal fun LandscapeCommentPanel(
     var previewTextContent by remember { mutableStateOf<ImagePreviewTextContent?>(null) }
     var showImagePreview by remember { mutableStateOf(false) }
     var showCommentSearchSheet by remember { mutableStateOf(false) }
-    val commentAppearance = rememberVideoCommentAppearance()
+    val density = LocalDensity.current
+    val panelHeaderHeightPx = remember(density) { mutableFloatStateOf(with(density) { 48.dp.toPx() }) }
+    val panelHeaderHeightProvider = remember(panelHeaderHeightPx) { { panelHeaderHeightPx.floatValue } }
+    val selectSortMode: (CommentSortMode) -> Unit = { mode ->
+        if (mode != sortMode) {
+            listState.requestScrollToItem(0)
+            onSortModeChange(mode)
+        }
+    }
 
     com.android.purebilibili.core.ui.adaptive.AppHingeSafeSidePanel(
         isStart = isOnLeft,
@@ -1927,9 +1911,9 @@ internal fun LandscapeCommentPanel(
                 modifier = Modifier.fillMaxSize(),
                 color = MaterialTheme.colorScheme.surface,
             ) {
-                Column(modifier = Modifier.fillMaxSize()) {
+                val panelHeader: @Composable (Modifier) -> Unit = { headerModifier ->
                     Row(
-                        modifier = Modifier
+                        modifier = headerModifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1966,28 +1950,10 @@ internal fun LandscapeCommentPanel(
                             )
                         }
                     }
-                    // 操作组跟随面板靠向屏幕外侧；玻璃与原生控件保留各自尺寸和触控范围。
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp)
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = if (isOnLeft) Arrangement.Start else Arrangement.End,
-                    ) {
-                        CommentSortFilterBar(
-                            sortMode = sortMode,
-                            onSortModeChange = { mode ->
-                                if (mode != sortMode) {
-                                    // 新排序从首条展示；取消旧滚动锚点对新评论列表的保位。
-                                    listState.requestScrollToItem(0)
-                                    onSortModeChange(mode)
-                                }
-                            },
-                            onSearchClick = { showCommentSearchSheet = true },
-                        )
-                    }
-                    AppHorizontalDivider(color = commentAppearance.secondaryTextColor.copy(alpha = 0.18f))
-                    if (threadContent != null) {
+                }
+                if (threadContent != null) {
+                    Column(Modifier.fillMaxSize()) {
+                        panelHeader(Modifier)
                         threadContent { images, index, rect, textContent ->
                             previewImages = images
                             previewInitialIndex = index
@@ -1995,10 +1961,13 @@ internal fun LandscapeCommentPanel(
                             previewTextContent = textContent
                             showImagePreview = true
                         }
-                    } else {
+                    }
+                } else {
+                    // 标题栏覆盖列表；排序与评论标题作为一个列表项随滚动移出、回顶出现。
+                    Box(Modifier.fillMaxSize()) {
                         VideoCommentTab(
                             listState = listState,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.fillMaxSize(),
                             upMid = info.owner.mid,
                             maxTimestampMs = info.pages.firstOrNull { it.cid == info.cid }?.duration?.times(1000L)
                                 ?: info.pages.firstOrNull()?.duration?.times(1000L),
@@ -2044,6 +2013,35 @@ internal fun LandscapeCommentPanel(
                             showIdentityDecorations = showIdentityDecorations,
                             lightweightCommentRendering = false,
                             compactSortHeader = true,
+                            showHeader = false,
+                            floatingHeaderContentPaddingPx = panelHeaderHeightProvider,
+                            scrollingHeader = {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    AppText(
+                                        text = "${sortMode.label}评论",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    CommentSortFilterBar(
+                                        sortMode = sortMode,
+                                        onSortModeChange = selectSortMode,
+                                        onSearchClick = { showCommentSearchSheet = true },
+                                    )
+                                }
+                            },
+                        )
+                        panelHeader(
+                            Modifier
+                                .onSizeChanged { panelHeaderHeightPx.floatValue = it.height.toFloat() }
+                                .background(MaterialTheme.colorScheme.surface),
                         )
                     }
                 }
@@ -2264,6 +2262,7 @@ internal fun VideoContentTabBar(
     showDanmakuActions: Boolean = true,
     measurementLabels: List<String>? = null,
     liquidGlassTabsOffsetX: Dp = 0.dp,
+    liquidGlassAlignShellStart: Boolean = false,
     liquidGlassAdaptIndicatorToLabel: Boolean = false,
 ) {
     val liquidGlassEnabledForTabBar = LocalAppThemeConfig.current.liquidGlassEnabled
@@ -2329,6 +2328,7 @@ internal fun VideoContentTabBar(
                 // Callers opt into content-sized glass indicators; native geometry is unchanged.
                 liquidGlassLabelHorizontalPadding = 10.dp,
                 liquidGlassAdaptIndicatorToLabel = liquidGlassAdaptIndicatorToLabel,
+                liquidGlassAlignShellStart = liquidGlassAlignShellStart,
                 selectedValue = selectedTabIndex,
                 onSelectionChange = onTabSelected,
                 // 仅移动页面显式指定的玻璃 dock；原生布局及右侧弹幕操作保持原位。

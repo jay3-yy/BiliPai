@@ -970,7 +970,7 @@ private fun ActionIcon(
     count: Long? = null,
     modifier: Modifier = Modifier,
 ) {
-    CountedPlayerAction(count = count, modifier = modifier) {
+    CountedPlayerAction(count = count, iconSize = iconSizeDp.dp, modifier = modifier) {
         PlayerControlGlassDock(enabled = glassEnabled && enabled, shape = androidx.compose.foundation.shape.CircleShape) {
             AppIconButton(
                 onClick = onClick,

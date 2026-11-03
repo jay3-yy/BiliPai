@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -23,7 +22,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import kotlin.math.roundToInt
 
@@ -65,7 +64,7 @@ internal fun PortraitPagerEntryViewport(
             // 进入途中返回，从当前边界退出，不先跳到全屏终点。
             progress.stop()
         } else if (animate && progress.value < 1f) {
-            progress.animateTo(1f, tween(durationMillis, easing = AppMotionEasing.EmphasizedEnter))
+            progress.animateTo(1f, emphasizedEnterTween(durationMillis))
         } else {
             // 失焦、退到后台、小窗或减少动态效果时完成交接，恢复后不重播入场。
             progress.snapTo(1f)

@@ -76,14 +76,18 @@ internal fun shouldHidePausedInlinePlayerForComments(
 internal fun shouldEnableCommentPullToRefresh(playerCollapseProgress: Float): Boolean =
     playerCollapseProgress <= 0f
 
-/** 恢复播放工具栏仅接替已收净且暂停的画面，紧凑预览仍使用播放器控件。 */
+/** 暂停画面收向工具栏终点时提前挂载，显隐跟随折叠进度；紧凑预览仍保留播放器控件。 */
 internal fun shouldShowCollapsedPlayerPlayToolbar(
     isPlaybackPaused: Boolean,
     collapseProgress: Float,
-    viewportHeightDp: Float,
+    collapsedViewportHeightDp: Float,
     isFullscreen: Boolean,
-): Boolean = !isFullscreen && isPlaybackPaused && collapseProgress >= 0.98f &&
-    viewportHeightDp.isFinite() && viewportHeightDp in 0f..56.5f
+): Boolean = !isFullscreen && isPlaybackPaused && collapseProgress > 0f &&
+    collapsedViewportHeightDp in 0f..56.5f
+
+/** 渐显中的工具栏不抢暂停画面的点击与无障碍焦点。 */
+internal fun canInteractWithCollapsedPlayerPlayToolbar(collapseProgress: Float): Boolean =
+    collapseProgress >= 0.98f
 
 internal fun shouldEnableInlinePortraitScrollTransform(
     collapseMode: PortraitPlayerCollapseMode,

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
@@ -41,15 +43,15 @@ class ReplyRichTextInteractionTest(private val style: AppUiStyle, private val gl
     private var displayedText = DISPLAY
 
     @Test
-    fun wrappedVideoLinkOpensFromBothLinesAndLongPressOpensMenuOnly() {
-        showComment()
+    fun pinnedWrappedVideoLinkOpensFromBothLinesAndLongPressOpensMenuOnly() {
+        showComment(pinned = true)
         val layout = layout()
-        val start = PREFIX.length + 1
+        val start = displayedText.indexOf(TITLE, displayedText.indexOf(PREFIX) + PREFIX.length)
         val last = start + TITLE.length - 1
         assertTrue(layout.getLineForOffset(start) < layout.getLineForOffset(last))
         tapAt(layout.getBoundingBox(start).center)
         tapAt(layout.getBoundingBox(last).center)
-        tapAt(layout.placeholderRects.single()!!.center)
+        tapAt(layout.placeholderRects.last()!!.center)
         assertEquals(List(3) { "0:$DESTINATION" }, clicks)
         node().performTouchInput { longClick(layout.getBoundingBox(last).center) }
         rule.runOnIdle {
@@ -71,11 +73,36 @@ class ReplyRichTextInteractionTest(private val style: AppUiStyle, private val gl
     }
 
     @Test
-    fun unchangedCommentUsesUpdatedNavigationCallback() {
-        showComment()
+    fun pinnedEmojiVideoTitleAndPlayIconOpenSameDestination() {
+        val title = "🍺 飞 宇 の 酒 🍺"
+        showComment(prefix = "", title = title, pinned = true)
+        val result = layout()
+        val start = displayedText.indexOf(title)
+        // 使用完整 emoji 字符簇的包围区域，避免将代理项当成独立字符。
+        val firstEmoji = result.getPathForRange(start, start + 2).getBounds()
+        tapAt(firstEmoji.center)
+        tapAt(result.getBoundingBox(displayedText.indexOf("飞")).center)
+        tapAt(result.placeholderRects.last()!!.center)
+        rule.runOnIdle {
+            assertEquals(List(3) { "0:$DESTINATION" }, clicks)
+            assertEquals(0, rowClicks)
+            assertEquals(0, menuOpens)
+        }
+    }
+
+    @Test
+    fun pinnedRichLinkKeepsPressAcrossCallbackRecomposition() {
+        showComment(pinned = true)
+        val titleStart = displayedText.indexOf(TITLE, displayedText.indexOf(PREFIX) + PREFIX.length)
+        val point = layout().getBoundingBox(titleStart).center
+        node().performTouchInput { down(point) }
         rule.runOnIdle { generation.value = 1 }
-        tapAt(layout().getBoundingBox(PREFIX.length + 1).center)
-        assertEquals(listOf("1:$DESTINATION"), clicks)
+        node().performTouchInput { advanceEventTime(50); up() }
+        rule.runOnIdle {
+            assertEquals(listOf("1:$DESTINATION"), clicks)
+            assertEquals(0, rowClicks)
+            assertEquals(0, menuOpens)
+        }
     }
 
     @Test
@@ -91,8 +118,53 @@ class ReplyRichTextInteractionTest(private val style: AppUiStyle, private val gl
         }
     }
 
-    private fun showComment(prefix: String = PREFIX, title: String = TITLE) {
-        displayedText = "$prefix $title\n哈哈哈"
+    @Test
+    fun pinnedStandaloneVideoTitleUsesLinkGestureAndLatestCallback() {
+        val title = "飞宇的酒"
+        displayedText = "TOP $title"
+        rule.setContent {
+            MaterialTheme {
+                CompositionLocalProvider(
+                    LocalAppUiStyle provides style,
+                    LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glass),
+                ) {
+                    val currentGeneration = generation.value
+                    Box(Modifier.width(220.dp).combinedClickable(
+                        onClick = { rowClicks++ },
+                        onLongClick = { menuOpens++ },
+                    )) {
+                        ReplyVideoReferenceText(
+                            text = title,
+                            fontSize = 16.sp,
+                            maxLines = Int.MAX_VALUE,
+                            url = DESTINATION,
+                            prefix = buildAnnotatedString {
+                                appendInlineContent(COMMENT_INLINE_TOP_BADGE_ID, "TOP")
+                                append(" ")
+                            },
+                            onUrlClick = { clicks.add("$currentGeneration:$it") },
+                            onLongPress = { menuOpens++ },
+                        )
+                    }
+                }
+            }
+        }
+        val start = displayedText.indexOf(title)
+        tapAt(layout().getBoundingBox(start).center)
+        val last = layout().getBoundingBox(displayedText.length - 1).center
+        node().performTouchInput { down(last) }
+        rule.runOnIdle { generation.value = 1 }
+        node().performTouchInput { advanceEventTime(50); up() }
+        node().performTouchInput { longClick(last) }
+        rule.runOnIdle {
+            assertEquals(listOf("0:$DESTINATION", "1:$DESTINATION"), clicks)
+            assertEquals(1, menuOpens)
+            assertEquals(0, rowClicks)
+        }
+    }
+
+    private fun showComment(prefix: String = PREFIX, title: String = TITLE, pinned: Boolean = false) {
+        displayedText = (if (pinned) "TOP " else "") + "$prefix $title\n哈哈哈"
         rule.setContent {
             MaterialTheme {
                 CompositionLocalProvider(
@@ -108,6 +180,10 @@ class ReplyRichTextInteractionTest(private val style: AppUiStyle, private val gl
                             text = "$prefix$TOKEN\n哈哈哈",
                             fontSize = 16.sp,
                             emoteMap = emptyMap(),
+                            prefix = if (pinned) buildAnnotatedString {
+                                appendInlineContent(COMMENT_INLINE_TOP_BADGE_ID, "TOP")
+                                append(" ")
+                            } else null,
                             content = ReplyContent(urls = mapOf(
                                 TOKEN to ReplyContentUrl(
                                     title = title,

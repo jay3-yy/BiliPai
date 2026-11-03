@@ -8,7 +8,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -23,6 +22,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
 internal const val PILI_HEADER_TRIPLE_DELAY_MILLIS = 200L
 internal const val PILI_HEADER_TRIPLE_HOLD_MILLIS = 1200L
 internal const val PILI_HEADER_TRIPLE_REVERSE_MILLIS = 400
-private val PiliTripleEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+private val PiliTripleEasing = AppMotionEasing.IosEaseInOut
 
 internal fun resolvePiliHeaderTripleProgress(elapsedNanos: Long): Float =
     PiliTripleEasing.transform(

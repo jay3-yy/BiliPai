@@ -2,6 +2,11 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
+import com.android.purebilibili.core.ui.LocalVisualWorkAllowed
 import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
@@ -9,6 +14,13 @@ import androidx.media3.common.Player
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.isActive
+
+/** 进度属于前台功能反馈，不依赖窗口焦点；保留页和后台仍停止采样。 */
+@Composable
+internal fun rememberPlayerProgressSamplingActive(): Boolean {
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    return LocalVisualWorkAllowed.current && lifecycle.isAtLeast(Lifecycle.State.RESUMED)
+}
 
 internal fun resolvePlayerProgressSnapshot(
     currentPositionMs: Long,

@@ -2367,7 +2367,7 @@ internal fun ReplyMessageText(
 }
 
 @Composable
-private fun ReplyVideoReferenceText(
+internal fun ReplyVideoReferenceText(
     text: String,
     fontSize: TextUnit,
     maxLines: Int,
@@ -2379,21 +2379,21 @@ private fun ReplyVideoReferenceText(
     onLongPress: (() -> Unit)? = null
 ) {
     val primaryColor = AppContentColors.accent()
-    val annotatedString = remember(text, url, prefix, primaryColor) {
+    val latestOnUrlClick by rememberUpdatedState(onUrlClick)
+    val latestOnLongPress by rememberUpdatedState(onLongPress)
+    val linkListener = remember(url) {
+        LinkInteractionListener { latestOnUrlClick?.invoke(url) }
+    }
+    val annotatedString = remember(text, url, prefix, primaryColor, linkListener) {
         buildAnnotatedString {
             if (prefix != null) {
                 append(prefix)
             }
-            pushStringAnnotation(tag = "URL", annotation = url)
-            withStyle(
-                SpanStyle(
-                    color = primaryColor,
-                    fontWeight = FontWeight.Medium
-                )
-            ) {
-                append(text)
+            withLink(commentLinkAnnotation(RICH_COMMENT_LINK_URL_PREFIX + url, linkListener)) {
+                withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
+                    append(text)
+                }
             }
-            pop()
         }
     }
     val upBadgeInlineContent = rememberInlineUpBadgeContent()
@@ -2419,24 +2419,15 @@ private fun ReplyVideoReferenceText(
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
     val modifier = if (onUrlClick != null) {
-        Modifier.pointerInput(annotatedString, url, onUrlClick, onLongPress) {
-            detectTapGestures(
+        Modifier.pointerInput(annotatedString) {
+            detectReplyLinkGestures(
+                linkAt = { position -> textLayoutResult?.replyLinkAt(position) },
+                onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
                 onLongPress = {
-                    if (onLongPress != null) onLongPress()
+                    val action = latestOnLongPress
+                    if (action != null) action()
                     else if (copyText.isNotEmpty()) showTextSelectionSheet = true
                 },
-                onTap = { offset ->
-                    textLayoutResult?.let { layoutResult ->
-                        val position = layoutResult.getOffsetForPosition(offset)
-                        annotatedString.getStringAnnotations(
-                            tag = COMMENT_URL_TAG,
-                            start = maxOf(0, position - 1),
-                            end = minOf(annotatedString.length, position + 1)
-                        ).firstOrNull()?.let { annotation ->
-                            onUrlClick(annotation.item)
-                        }
-                    }
-                }
             )
         }
     } else {
@@ -2494,16 +2485,23 @@ fun RichCommentText(
     val renderableEmoteKeys = remember(text, emoteMap) {
         collectRenderableEmoteKeys(text, emoteMap)
     }
-    // 触摸、键盘和无障碍入口共用链接动作，始终绑定当前页面的回调。
-    val linkListener = remember(onUrlClick, onUserClick, onTopicClick, onVoteClick, onTimestampClick) {
+    val latestOnUrlClick by rememberUpdatedState(onUrlClick)
+    val latestOnUserClick by rememberUpdatedState(onUserClick)
+    val latestOnTopicClick by rememberUpdatedState(onTopicClick)
+    val latestOnVoteClick by rememberUpdatedState(onVoteClick)
+    val latestOnTimestampClick by rememberUpdatedState(onTimestampClick)
+    val latestOnLongPress by rememberUpdatedState(onLongPress)
+    val latestOnPlainTextClick by rememberUpdatedState(onPlainTextClick)
+    // 播放进度等重组仅更新回调，不能重建链接注解、取消正在进行的按压。
+    val linkListener = remember {
         LinkInteractionListener { link ->
             when (val action = resolveRichCommentLinkAction((link as LinkAnnotation.Clickable).tag)) {
-                is RichCommentLinkAction.Url -> onUrlClick?.invoke(action.url)
-                is RichCommentLinkAction.User -> onUserClick?.invoke(action.mid)
-                is RichCommentLinkAction.Topic -> onTopicClick?.invoke(action.topic)
-                is RichCommentLinkAction.Vote -> onVoteClick?.invoke(action.voteId)
+                is RichCommentLinkAction.Url -> latestOnUrlClick?.invoke(action.url)
+                is RichCommentLinkAction.User -> latestOnUserClick?.invoke(action.mid)
+                is RichCommentLinkAction.Topic -> latestOnTopicClick?.invoke(action.topic)
+                is RichCommentLinkAction.Vote -> latestOnVoteClick?.invoke(action.voteId)
                 is RichCommentLinkAction.Timestamp ->
-                    onTimestampClick?.invoke(action.seconds * 1000)
+                    latestOnTimestampClick?.invoke(action.seconds * 1000)
                 null -> Unit
             }
         }
@@ -2631,20 +2629,21 @@ fun RichCommentText(
         // 以实际字符位置命中链接，跨行标题与内联图标共用同一跳转；
         // 只接管链接手势，普通文字仍交给条目点击、长按或原生划选。
         val textModifier = Modifier
-            .pointerInput(annotatedString, onLongPress) {
+            .pointerInput(annotatedString) {
                 detectReplyLinkGestures(
                     linkAt = { position -> textLayoutResult?.replyLinkAt(position) },
                     onLinkClick = { link -> link.linkInteractionListener?.onClick(link) },
                     onLongPress = {
-                        if (onLongPress != null) onLongPress()
+                        val action = latestOnLongPress
+                        if (action != null) action()
                         else if (copyText.isNotEmpty()) showTextSelectionSheet = true
                     },
                 )
             }
             .then(
                 if (onPlainTextClick != null) {
-                    Modifier.pointerInput(annotatedString, onPlainTextClick) {
-                        detectTapWithSelectionFriendly { _ -> onPlainTextClick() }
+                    Modifier.pointerInput(annotatedString) {
+                        detectTapWithSelectionFriendly { _ -> latestOnPlainTextClick?.invoke() }
                     }
                 } else Modifier
             )

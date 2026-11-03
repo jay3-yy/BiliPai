@@ -502,7 +502,6 @@ class VideoEngagementViewModel(
                                     }
                                 )
                             }
-                            emitMessage(if (following) "关注成功" else "已取消关注")
                             if (following) _events.send(VideoEngagementEvent.OpenFollowGroups(targetMid))
                         }
                         .onFailure {

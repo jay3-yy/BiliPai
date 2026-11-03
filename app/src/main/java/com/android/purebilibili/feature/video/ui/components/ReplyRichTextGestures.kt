@@ -12,6 +12,13 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** 按可见字符命中，避免跨行链接的外接矩形覆盖普通正文或行尾空白。 */
 internal fun TextLayoutResult.replyLinkAt(position: Offset): LinkAnnotation? {
     val text = layoutInput.text
+    // 内联播放图标按占位区域排版，字符框不一定覆盖它的实际可见区域。
+    placeholderRects.forEachIndexed { index, rect ->
+        if (rect != null && rect.contains(position)) {
+            val placeholder = layoutInput.placeholders[index]
+            return text.getLinkAnnotations(placeholder.start, placeholder.end).firstOrNull()?.item
+        }
+    }
     val offset = getOffsetForPosition(position)
     // 插入位置可能落在字符右侧，左右两个字符中只有实际包围触点的字符可命中。
     return listOf(offset, offset - 1).firstNotNullOfOrNull { index ->

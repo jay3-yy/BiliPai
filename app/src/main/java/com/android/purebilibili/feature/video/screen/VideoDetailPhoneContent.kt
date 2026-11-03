@@ -187,9 +187,8 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                     }
                 }
                 val detailContentRevealEnter = fadeIn(
-                    tween(
-                        motionSpec.contentRevealFadeDurationMillis,
-                        easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.Continuity
+                    com.android.purebilibili.core.ui.motion.continuityTween(
+                        motionSpec.contentRevealFadeDurationMillis
                     )
                 )
                 val detailContentExitFade = fadeOut(

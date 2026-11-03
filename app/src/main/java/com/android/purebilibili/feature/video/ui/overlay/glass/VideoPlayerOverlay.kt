@@ -20,7 +20,6 @@ import android.content.ClipData
 import android.content.Context
 import android.os.Build
 import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -55,8 +54,7 @@ import androidx.compose.ui.unit.offset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.IntOffset
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.continuityTween
 import androidx.media3.common.Player
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.DanmakuPanelWidthMode
@@ -140,6 +138,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -462,17 +461,6 @@ internal fun resolveDisplayedOnlineCount(
 }
 
 private const val SEEK_RESUME_TRANSITION_GRACE_MS = 350L
-
-// 播放器 overlay 色层动效 token：遮罩/控制栏/锁屏按钮/加载指示共用同一节奏与曲线。
-// 曲线取全局 alpha 主曲线 Continuity（AppMotionTokens 体系），时长保持既有节奏。
-private const val OVERLAY_CHROME_FADE_DURATION_MILLIS = PLAYER_GLASS_VISIBILITY_DURATION_MS
-private const val OVERLAY_CONTROL_FADE_DURATION_MILLIS = 200
-private val OverlayChromeFadeSpec =
-    tween<Float>(OVERLAY_CHROME_FADE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
-private val OverlayControlFadeSpec =
-    tween<Float>(OVERLAY_CONTROL_FADE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
-private val OverlayControlSlideSpec =
-    tween<IntOffset>(OVERLAY_CONTROL_FADE_DURATION_MILLIS, easing = AppMotionEasing.Continuity)
 
 @Composable
 fun VideoPlayerOverlay(
@@ -830,7 +818,9 @@ private fun VideoPlayerOverlayContent(
     }
     var showInsightDetails by remember(player, bvid, cid) { mutableStateOf(false) }
     val visualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    var progressInViewport by remember(player, bvid, cid) { mutableStateOf(false) }
+    // 可见性属于当前布局节点；媒体身份变化不会重新触发仍在视口内的可见性回调。
+    // 进度快照与采样会话仍在 rememberVideoPlayerOverlayProgress 内按媒体身份重建。
+    var progressInViewport by remember { mutableStateOf(false) }
     // The HUD needs only the existing decoder/error summary to decide whether it is visible.
     // Network/display queries and formatted detail rows belong to the visible diagnostics.
     val insightLevel = remember(debugInfo) {
@@ -1257,13 +1247,15 @@ private fun VideoPlayerOverlayContent(
     // 先打开设备面板；只有用户选择搜索 DLNA 时才请求原始局域网权限。
     val onCastClickAction = { showCastDialog = true }
 
+    val progressSamplingActive = com.android.purebilibili.feature.video.ui.overlay
+        .rememberPlayerProgressSamplingActive()
     val progressState = state.progressSource ?: rememberVideoPlayerOverlayProgress(
         player = player,
         bvid = bvid,
         cid = cid,
         videoDuration = videoDuration,
         controlsVisible = isVisible,
-        samplingActive = visualWorkActive && progressInViewport && state.progressSamplingActive,
+        samplingActive = progressSamplingActive && progressInViewport && state.progressSamplingActive,
         hasPendingSeekResume = hasPendingSeekResume,
         highFrequencyProgressActive = highFrequencyProgressActive,
     )
@@ -3370,7 +3362,7 @@ private fun TripleLikeInteractionButton(
         animationSpec = if (isLongPressing) {
             androidx.compose.animation.core.tween(durationMillis = progressDuration, easing = LinearEasing)
         } else {
-            androidx.compose.animation.core.tween(durationMillis = 200, easing = AppMotionEasing.Continuity)
+            continuityTween(200)
         },
         label = "tripleLikeProgress",
         finishedListener = { progress ->

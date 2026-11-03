@@ -638,7 +638,7 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
                 .landingLayer()
                 .infoSurface(AppShapes.bottomRounded(AppSpacingTokens.Small))
                 .padding(
-                    horizontal = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                    horizontal = 6.dp,
                     vertical = AppSpacingTokens.Small,
                 ),
         ) {
@@ -971,7 +971,7 @@ private fun BoxScope.LandingInfoContent(
             modifier.fillMaxWidth().height(constrainedHeight)
         }).padding(
             end = if (model.infoPresentation.showOverflowMenu) {
-                AppSpacingTokens.Large
+                if (sourceLayout == VideoCardSourceLayout.STACKED) 10.dp else AppSpacingTokens.Large
             } else {
                 AppSpacingTokens.None
             },

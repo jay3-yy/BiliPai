@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
+import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import kotlinx.coroutines.launch
@@ -133,10 +135,7 @@ fun AnimatedGesturePercentText(
         }
         alphaAnim.animateTo(
             targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = GesturePercentMotionDefaults.AlphaResetDurationMillis,
-                easing = AppMotionEasing.EmphasizedEnter
-            )
+            animationSpec = emphasizedEnterTween(GesturePercentMotionDefaults.AlphaResetDurationMillis)
         )
     }
 
@@ -162,19 +161,13 @@ fun AnimatedGesturePercentText(
                 animationSpec = GesturePercentMotionDefaults.slideSpring(),
                 initialOffsetY = enterOffset
             ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = GesturePercentMotionDefaults.EnterFadeDurationMillis,
-                    easing = AppMotionEasing.EmphasizedEnter
-                )
+                animationSpec = emphasizedEnterTween(GesturePercentMotionDefaults.EnterFadeDurationMillis)
             ) togetherWith
                 slideOutVertically(
                     animationSpec = GesturePercentMotionDefaults.slideSpring(),
                     targetOffsetY = exitOffset
                 ) + fadeOut(
-                    animationSpec = tween(
-                        durationMillis = GesturePercentMotionDefaults.ExitFadeDurationMillis,
-                        easing = AppMotionEasing.EmphasizedExit
-                    )
+                    animationSpec = emphasizedExitTween(GesturePercentMotionDefaults.ExitFadeDurationMillis)
                 )) using
                 SizeTransform(clip = false)
         },

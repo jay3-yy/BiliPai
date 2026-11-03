@@ -460,7 +460,7 @@ private fun HeaderIcon(
     modifier: Modifier = Modifier,
 ) {
     val progressColor = AppContentColors.accent()
-    CountedPlayerAction(count = count, modifier = modifier) {
+    CountedPlayerAction(count = count, iconSize = iconSize.dp, modifier = modifier) {
         HeaderButton(description, onClick, active, onLongClick, gestureModifier) {
             if (progress > 0f) Canvas(Modifier.size(28.dp)) {
                 drawArc(progressColor, -90f, -360f * progress, useCenter = false, style = Stroke(2.dp.toPx()))

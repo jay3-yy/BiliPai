@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -398,9 +397,8 @@ fun RelatedVideoItem(
                     color = AppContentColors.primaryText(),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                if (!stacked) {
-                    Spacer(Modifier.weight(1f))
-                }
+            },
+            supportingContent = {
                 Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -472,6 +470,7 @@ fun RelatedVideoItem(
                             badgeTextColor = AppContentColors.secondaryText().copy(alpha = 0.85f),
                             badgeBorderColor = AppContentColors.secondaryText().copy(alpha = 0.35f),
                             showUpBadge = showUpBadge,
+                            spacing = 2.dp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f),
@@ -487,7 +486,7 @@ fun RelatedVideoItem(
                 {
                     Box(
                         modifier = Modifier
-                            .size(48.dp)
+                            .size(29.dp)
                             .then(moreMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = moreClick) } ?: Modifier)
                             .clip(CircleShape)
                             .clickable(
@@ -503,7 +502,7 @@ fun RelatedVideoItem(
                             imageVector = Icons.Outlined.MoreVert,
                             contentDescription = "更多操作",
                             tint = AppContentColors.secondaryText(),
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(17.dp),
                         )
                         moreMenu()
                     }

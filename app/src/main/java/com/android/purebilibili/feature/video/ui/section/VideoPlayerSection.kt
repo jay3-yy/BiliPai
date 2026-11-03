@@ -78,6 +78,9 @@ import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerGesture
 import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerSpeedGestureMode
 import com.android.purebilibili.feature.video.playback.policy.resolveDisplayedQualityId
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.continuityTween
+import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
+import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.ui.transition.LocalVideoCardTransitionBackgroundState
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import androidx.compose.runtime.withFrameNanos
@@ -308,10 +311,7 @@ private fun GesturePercentDigit(
         }
         alphaAnim.animateTo(
             targetValue = 1f,
-            animationSpec = tween(
-                durationMillis = motionSpec.digitAlphaResetDurationMillis,
-                easing = AppMotionEasing.EmphasizedEnter
-            )
+            animationSpec = emphasizedEnterTween(motionSpec.digitAlphaResetDurationMillis)
         )
     }
 
@@ -339,10 +339,7 @@ private fun GesturePercentDigit(
                 ),
                 initialOffsetY = enterOffset
             ) + fadeIn(
-                animationSpec = tween(
-                    durationMillis = motionSpec.digitEnterFadeDurationMillis,
-                    easing = AppMotionEasing.EmphasizedEnter
-                )
+                animationSpec = emphasizedEnterTween(motionSpec.digitEnterFadeDurationMillis)
             ))
                 .togetherWith(
                     slideOutVertically(
@@ -352,10 +349,7 @@ private fun GesturePercentDigit(
                         ),
                         targetOffsetY = exitOffset
                     ) + fadeOut(
-                        animationSpec = tween(
-                            durationMillis = motionSpec.digitExitFadeDurationMillis,
-                            easing = AppMotionEasing.EmphasizedExit
-                        )
+                        animationSpec = emphasizedExitTween(motionSpec.digitExitFadeDurationMillis)
                     )
                 )
         },
@@ -2213,9 +2207,8 @@ private fun VideoPlayerSectionContent(
         )
     val pageGlassVisibility = animateFloatAsState(
         targetValue = if (pageGlassRequested) 1f else 0f,
-        animationSpec = if (suppressTransientOverlaysForTransition) snap() else tween<Float>(
+        animationSpec = if (suppressTransientOverlaysForTransition) snap() else continuityTween<Float>(
             com.android.purebilibili.feature.video.ui.overlay.PLAYER_GLASS_VISIBILITY_DURATION_MS,
-            easing = com.android.purebilibili.core.ui.motion.AppMotionEasing.Continuity,
         ),
         label = "playerPageCaptureVisibility",
     )

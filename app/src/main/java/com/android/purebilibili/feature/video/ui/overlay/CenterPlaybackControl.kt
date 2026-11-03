@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.video.ui.overlay
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +24,7 @@ import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.continuityTween
 
 /** The central play/pause target follows the visibility of the rest of the player controls. */
 @Composable
@@ -47,8 +46,8 @@ internal fun CenterPlaybackControl(
         AnimatedVisibility(
             visible = visible,
             modifier = Modifier.testTag("player_play_pause"),
-            enter = fadeIn(tween(200, easing = AppMotionEasing.Continuity)),
-            exit = fadeOut(tween(200, easing = AppMotionEasing.Continuity)),
+            enter = fadeIn(continuityTween(200)),
+            exit = fadeOut(continuityTween(200)),
         ) {
             PlayerControlTouchBounds(height = diameter) {
                 PlayerControlGlassDock(

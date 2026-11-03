@@ -61,20 +61,48 @@ internal fun Modifier.playerActionBounds(onBounds: (IntRect) -> Unit): Modifier 
 internal fun PiliPlayerBar(
     modifier: Modifier = Modifier,
     groupGlassControls: Boolean = false,
+    distributeActions: Boolean = false,
     left: @Composable () -> Unit,
     right: @Composable () -> Unit,
 ) {
     val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     val spacing = if (glass) 4.dp else 0.dp
     Layout(content = {
-        PlayerControlGlassGroup(enabled = groupGlassControls) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing)) { left() }
-        }
-        PlayerControlGlassGroup(enabled = groupGlassControls) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing)) { right() }
+        if (distributeActions) {
+            left()
+            right()
+        } else {
+            PlayerControlGlassGroup(enabled = groupGlassControls) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing)) { left() }
+            }
+            PlayerControlGlassGroup(enabled = groupGlassControls) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing)) { right() }
+            }
         }
     }, modifier = modifier) { measurables, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0, maxWidth = Constraints.Infinity)
+        if (distributeActions) {
+            // 内嵌底栏按每个实际按钮分配空隙；玻璃与原生保持相同的排列规则。
+            // 拥挤时延续整体缩放，避免按钮重叠或移出视口。
+            val actions = measurables.map { it.measure(loose) }
+            val totalWidth = actions.sumOf { it.width }
+            val width = constraints.maxWidth
+            val scale = if (totalWidth > width) width.toFloat() / totalWidth else 1f
+            val height = constraints.constrainHeight(actions.maxOf { it.height })
+            val gap = if (actions.size > 1) (width - totalWidth * scale) / (actions.size - 1) else 0f
+            return@Layout layout(width, height) {
+                var x = 0f
+                actions.forEach { action ->
+                    val y = ((height - action.height * scale) / 2f).roundToInt()
+                    action.placeWithLayer(x.roundToInt(), y) {
+                        scaleX = scale
+                        scaleY = scale
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    }
+                    x += action.width * scale + gap
+                }
+            }
+        }
         val leftGroup = measurables[0].measure(loose)
         val rightGroup = measurables[1].measure(loose)
         val totalWidth = leftGroup.width + rightGroup.width
