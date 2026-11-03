@@ -974,7 +974,8 @@ class DanmakuManager private constructor(
                 textSizeScale = (textSizeScale * style.scale).coerceIn(0.3f, 4f)
             }
         }
-        typeface = if (style?.bold == true) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+        // 未要求加粗时继承渲染配置的字重，不能用默认字体覆盖用户的粗细设置。
+        typeface = if (style?.bold == true) Typeface.DEFAULT_BOLD else null
     }
 
     private fun runDanmakuFilters(
