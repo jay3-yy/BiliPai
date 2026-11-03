@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppShapes
@@ -29,7 +32,7 @@ import com.android.purebilibili.core.ui.ContainerLevel
  * Shared side-by-side video-card geometry, based on the related-video row.
  *
  * Callers own shell effects (click, selection, shared transition and native snapshot) while this
- * frame keeps cover geometry, spacing, info padding and the trailing action lane identical.
+ * frame keeps cover geometry and full-width headings consistent, with actions beside footer text.
  */
 @Composable
 internal fun HorizontalVideoCardFrame(
@@ -41,6 +44,7 @@ internal fun HorizontalVideoCardFrame(
     infoModifier: Modifier = Modifier,
     coverOverlayContent: (@Composable BoxScope.() -> Unit)? = null,
     trailingContent: (@Composable BoxScope.() -> Unit)? = null,
+    supportingContent: (@Composable ColumnScope.() -> Unit)? = null,
     coverAspectRatio: Float = com.android.purebilibili.core.ui.videoCardCoverAspectRatio(),
     stacked: Boolean = false,
     compactPartition: Boolean = false,
@@ -61,11 +65,6 @@ internal fun HorizontalVideoCardFrame(
     }
         ?: HORIZONTAL_VIDEO_CARD_COVER_ASPECT_RATIO
     val infoPadding = if (plainRow) 0.dp else if (compactPartition) 4.dp else HORIZONTAL_VIDEO_CARD_INFO_PADDING_DP.dp
-    // The action occupies the bottom-end touch target in every material; reserve its
-    // width for the full info column so long metadata cannot run underneath it.
-    val infoEndPadding = if (trailingContent == null) infoPadding else
-        (HORIZONTAL_VIDEO_CARD_ACTION_SIZE_DP + HORIZONTAL_VIDEO_CARD_INFO_SPACING_DP).dp
-    val infoArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_CARD_INFO_SPACING_DP.dp)
 
     Box(modifier = modifier) {
         if (stacked) {
@@ -91,16 +90,12 @@ internal fun HorizontalVideoCardFrame(
                         )
                     }
                 }
-                Column(
-                    modifier = infoModifier
-                        .fillMaxWidth()
-                        .padding(
-                            top = infoPadding,
-                            bottom = infoPadding,
-                            end = infoEndPadding,
-                        ),
-                    verticalArrangement = infoArrangement,
-                    content = infoContent,
+                HorizontalVideoCardInfo(
+                    modifier = infoModifier.fillMaxWidth(),
+                    infoPadding = infoPadding,
+                    infoContent = infoContent,
+                    supportingContent = supportingContent,
+                    trailingContent = trailingContent,
                 )
             }
         } else {
@@ -120,14 +115,12 @@ internal fun HorizontalVideoCardFrame(
                             )
                         }
                     }
-                    Column(
-                        modifier = infoModifier.padding(
-                            top = infoPadding,
-                            bottom = infoPadding,
-                            end = infoEndPadding,
-                        ),
-                        verticalArrangement = infoArrangement,
-                        content = infoContent,
+                    HorizontalVideoCardInfo(
+                        modifier = infoModifier,
+                        infoPadding = infoPadding,
+                        infoContent = infoContent,
+                        supportingContent = supportingContent,
+                        trailingContent = trailingContent,
                     )
                 },
             ) { measurables, constraints ->
@@ -165,8 +158,8 @@ internal fun HorizontalVideoCardFrame(
                     ?: naturalCoverWidth
                 val coverHeight = (coverWidth / effectiveAspectRatio).toInt()
                 val infoWidth = (width - gap - coverWidth).coerceAtLeast(0)
-                // 按入口选择信息列与封面等高，供底部元信息使用弹性空白；上下排列不扩高。
-                val infoMinHeight = if (fillInfoHeight) {
+                // 操作区保持封面底部对齐；没有操作时仍由入口决定信息区是否扩至封面高度。
+                val infoMinHeight = if (fillInfoHeight || trailingContent != null) {
                     coverHeight.coerceAtMost(
                         if (constraints.maxHeight != Constraints.Infinity) constraints.maxHeight else coverHeight
                     )
@@ -188,16 +181,52 @@ internal fun HorizontalVideoCardFrame(
                 }
             }
         }
+    }
+}
 
-        if (trailingContent != null) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .widthIn(min = HORIZONTAL_VIDEO_CARD_ACTION_SIZE_DP.dp)
-                    .heightIn(min = HORIZONTAL_VIDEO_CARD_ACTION_SIZE_DP.dp),
-                contentAlignment = Alignment.BottomEnd,
-                content = trailingContent,
-            )
+@Composable
+private fun HorizontalVideoCardInfo(
+    modifier: Modifier,
+    infoPadding: Dp,
+    infoContent: @Composable ColumnScope.() -> Unit,
+    supportingContent: (@Composable ColumnScope.() -> Unit)?,
+    trailingContent: (@Composable BoxScope.() -> Unit)?,
+) {
+    val spacing = HORIZONTAL_VIDEO_CARD_INFO_SPACING_DP.dp
+    Column(
+        modifier = modifier.padding(top = infoPadding, bottom = infoPadding, end = infoPadding),
+        // Use the measured minimum height, not a weighted spacer that expands to the viewport.
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(spacing),
+            content = infoContent,
+        )
+        if (supportingContent != null || trailingContent != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = spacing),
+                horizontalArrangement = Arrangement.spacedBy(spacing),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                if (supportingContent != null) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(spacing),
+                        content = supportingContent,
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                if (trailingContent != null) {
+                    Box(
+                        modifier = Modifier
+                            .widthIn(min = HORIZONTAL_VIDEO_CARD_ACTION_SIZE_DP.dp)
+                            .heightIn(min = HORIZONTAL_VIDEO_CARD_ACTION_SIZE_DP.dp),
+                        contentAlignment = Alignment.BottomEnd,
+                        content = trailingContent,
+                    )
+                }
+            }
         }
     }
 }

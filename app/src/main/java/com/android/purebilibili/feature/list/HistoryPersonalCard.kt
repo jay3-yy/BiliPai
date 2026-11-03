@@ -110,6 +110,7 @@ internal fun HistoryPersonalCardSkeleton(
 
     HorizontalVideoCardFrame(
         stacked = stacked,
+        fillInfoHeight = !stacked,
         modifier = modifier
             .fillMaxWidth(),
         coverContent = {
@@ -133,28 +134,21 @@ internal fun HistoryPersonalCardSkeleton(
                     .fillMaxWidth(0.68f)
                     .height(16.dp),
             )
-            Spacer(modifier = Modifier.weight(1f))
+        },
+        supportingContent = {
             ContentSkeletonBlock(
                 color = color,
-                modifier = Modifier
-                    .fillMaxWidth(0.48f)
-                    .height(12.dp),
+                modifier = Modifier.fillMaxWidth(0.68f).height(12.dp),
             )
-            Spacer(modifier = Modifier.height(4.dp))
             ContentSkeletonBlock(
                 color = color,
-                modifier = Modifier
-                    .fillMaxWidth(0.34f)
-                    .height(12.dp),
+                modifier = Modifier.fillMaxWidth(0.48f).height(12.dp),
             )
         },
         trailingContent = {
             ContentSkeletonBlock(
                 color = color,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp)
-                    .size(24.dp),
+                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 2.dp, bottom = 2.dp).size(18.dp),
             )
         },
     )
@@ -254,8 +248,8 @@ internal fun HistoryPersonalCard(
     val viewedAt = FormatUtils.formatHistoryViewTime(video.view_at)
     val titleMaxLines = com.android.purebilibili.core.ui.videoCardTitleMaxLines()
 
-    val actionContent: @Composable () -> Unit = {
-        if (!batchMode) {
+    val actionContent: (@Composable () -> Unit)? = if (batchMode) null else {
+        {
             Box(
                 modifier = Modifier
                     .heightIn(min = 48.dp)
@@ -348,7 +342,7 @@ internal fun HistoryPersonalCard(
                 }
                 PersonalCardSelectMask(selected = selected)
             },
-            trailingContent = { actionContent() },
+            trailingContent = actionContent?.let { action -> { action() } },
             onClick = triggerClick,
             onLongClick = onLongClick,
         )
@@ -356,6 +350,7 @@ internal fun HistoryPersonalCard(
     }
 
     HorizontalVideoCardFrame(
+        fillInfoHeight = true,
         modifier = modifier
             .fillMaxWidth()
             .then(contentContainer?.modifier ?: transition.shellModifier)
@@ -410,11 +405,14 @@ internal fun HistoryPersonalCard(
         infoContent = {
             AppText(
                 text = video.title,
+                modifier = Modifier.fillMaxWidth(),
                 style = contentTypography.title,
                 maxLines = titleMaxLines,
                 overflow = com.android.purebilibili.core.ui.videoCardTitleOverflow(),
                 tapToCopyEnabled = false,
             )
+        },
+        supportingContent = {
             AppText(
                 text = owner,
                 style = contentTypography.author,
@@ -429,12 +427,11 @@ internal fun HistoryPersonalCard(
                     style = contentTypography.author,
                     color = AppContentColors.secondaryText(),
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     tapToCopyEnabled = false,
                 )
             }
         },
-        trailingContent = {
-            actionContent()
-        },
+        trailingContent = actionContent?.let { action -> { action() } },
     )
 }

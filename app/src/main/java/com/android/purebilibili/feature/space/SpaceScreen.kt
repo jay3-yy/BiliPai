@@ -5204,6 +5204,8 @@ private fun SpaceArchiveListItemRow(
                 overflow = videoCardTitleOverflow(),
                 color = AppContentColors.primaryText()
             )
+        },
+        supportingContent = {
             AppText(
                 text = if (progressState?.progressSec == -1) "$publishTime · 已看完" else publishTime,
                 style = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography().author,

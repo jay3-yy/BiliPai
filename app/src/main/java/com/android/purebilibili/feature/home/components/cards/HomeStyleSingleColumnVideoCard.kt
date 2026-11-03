@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -324,11 +323,9 @@ internal fun HomeStyleSingleColumnVideoCard(
                 overflow = videoCardTitleOverflow(),
                 color = AppContentColors.primaryText(),
             )
-
-            if (!compactPartition) Spacer(Modifier.weight(1f))
+        },
+        supportingContent = {
             if (compactPartition) {
-                // 与 PiliPlus 一致：标题占据上方弹性空间，UP 主与播放量等元信息固定在卡片底部。
-                Spacer(Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     if (publishTimeText.isNotBlank()) {
                         AppText(

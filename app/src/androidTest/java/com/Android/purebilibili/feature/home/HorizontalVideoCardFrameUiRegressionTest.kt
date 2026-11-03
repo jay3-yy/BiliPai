@@ -2,7 +2,6 @@ package com.android.purebilibili.feature.home
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
@@ -215,6 +214,96 @@ class HorizontalVideoCardFrameUiRegressionTest {
         assertTrue(card.bottom >= info.bottom)
     }
 
+    @Test
+    fun actionsOnlyShareFooterWidthAcrossRowsStackedCardsAndLargeFonts() {
+        val width = mutableStateOf(320)
+        val stacked = mutableStateOf(false)
+        val fontScale = mutableStateOf(1f)
+        val actionCount = mutableStateOf(1)
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, fontScale.value)) {
+                MaterialTheme {
+                    actionCard(width.value, stacked.value, actionCount.value, showActions = true)
+                }
+            }
+        }
+        for ((widthDp, isStacked, scale) in listOf(
+            Triple(320, false, 1f),
+            Triple(480, false, 1f),
+            Triple(220, false, 2f),
+            Triple(160, true, 1f),
+            Triple(160, true, 2f),
+        )) {
+            for (count in 1..2) {
+                rule.runOnIdle {
+                    width.value = widthDp
+                    stacked.value = isStacked
+                    fontScale.value = scale
+                    actionCount.value = count
+                }
+                val card = bounds("action_card")
+                val title = bounds("action_title")
+                val footer = bounds("action_footer")
+                val actions = bounds("actions")
+                assertEquals(card.right - if (isStacked) 8f else 0f, title.right, 1f)
+                assertTrue("Actions must stay below the complete title", actions.top >= title.bottom)
+                assertTrue("Footer must not enter the action touch targets", footer.right <= actions.left)
+                assertTrue("Every action retains its full touch target", actions.width >= 48f && actions.height >= 48f * count)
+                assertTrue("Tall actions must remain inside the card", card.bottom >= actions.bottom)
+                assertTrue("Metadata must remain inside the card", card.bottom >= footer.bottom)
+            }
+        }
+    }
+
+    @Test
+    fun hidingActionsReleasesFooterWidthWithoutChangingHeadingWidth() {
+        val showActions = mutableStateOf(true)
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f, 1f)) {
+                MaterialTheme { actionCard(320, false, 1, showActions.value) }
+            }
+        }
+        val heading = bounds("action_title")
+        rule.runOnIdle { showActions.value = false }
+        rule.onNodeWithTag("actions").assertDoesNotExist()
+        assertEquals(heading.width, bounds("action_title").width, 1f)
+        assertEquals(heading.right, bounds("action_footer").right, 1f)
+        assertEquals(heading.left, bounds("action_footer").left, 1f)
+    }
+
+    @androidx.compose.runtime.Composable
+    private fun actionCard(widthDp: Int, stacked: Boolean, actionCount: Int, showActions: Boolean) {
+        HorizontalVideoCardFrame(
+            plainHorizontal = true,
+            stacked = stacked,
+            modifier = Modifier.width(widthDp.dp).testTag("action_card"),
+            coverContent = { Box(Modifier.fillMaxSize()) },
+            infoContent = {
+                Text(
+                    "长标题应当使用信息区完整宽度，不因右下角操作区缩窄",
+                    Modifier.fillMaxWidth().testTag("action_title"),
+                    fontSize = 16.sp,
+                    lineHeight = 20.sp,
+                    maxLines = 2,
+                )
+            },
+            supportingContent = {
+                Text(
+                    "较长的作者名称与统计信息不能被操作按钮遮挡",
+                    Modifier.fillMaxWidth().testTag("action_footer"),
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                    maxLines = 2,
+                )
+            },
+            trailingContent = if (!showActions) null else ({
+                Column(Modifier.testTag("actions")) {
+                    repeat(actionCount) { Box(Modifier.size(48.dp)) }
+                }
+            }),
+        )
+    }
+
     private fun bounds(tag: String) = rule.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
 
     @androidx.compose.runtime.Composable
@@ -251,7 +340,8 @@ class HorizontalVideoCardFrameUiRegressionTest {
                     minLines = minOf(2, maxLines),
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!stacked) Spacer(Modifier.weight(1f))
+            },
+            supportingContent = {
                 Text(metadata, fontSize = 12.sp, lineHeight = 16.sp)
             },
         )

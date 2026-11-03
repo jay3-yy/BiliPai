@@ -339,6 +339,7 @@ private fun RelatedVideoItemSkeleton(
     coverAspectRatio: Float = com.android.purebilibili.core.ui.videoCardCoverAspectRatio(),
     stacked: Boolean = false,
 ) {
+    val typography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()
     HorizontalVideoCardFrame(
         plainHorizontal = true,
         fillInfoHeight = true,
@@ -353,13 +354,14 @@ private fun RelatedVideoItemSkeleton(
             )
         },
         infoContent = {
-            val typography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()
             RelatedSkeletonText(
                 text = "推荐视频标题占位\n第二行标题占位",
                 style = typography.title,
                 maxLines = videoCardTitleMaxLines(),
                 modifier = Modifier.fillMaxWidth(),
             )
+        },
+        supportingContent = {
             Column(verticalArrangement = Arrangement.spacedBy(com.android.purebilibili.core.ui.AppSpacingTokens.ExtraSmall)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
