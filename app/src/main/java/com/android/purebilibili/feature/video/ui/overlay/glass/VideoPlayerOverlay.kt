@@ -140,6 +140,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -1257,13 +1258,33 @@ private fun VideoPlayerOverlayContent(
     // 先打开设备面板；只有用户选择搜索 DLNA 时才请求原始局域网权限。
     val onCastClickAction = { showCastDialog = true }
 
+    // [ProgressDiag] 定位「进度条动着动着卡住」：采样被谁关掉了
+    LaunchedEffect(
+        visualWorkActive,
+        progressInViewport,
+        state.progressSamplingActive,
+        isVisible,
+    ) {
+        com.android.purebilibili.core.util.Logger.d(
+            "ProgressDiag",
+            "sampling inputs: visualWork=$visualWorkActive inViewport=$progressInViewport " +
+                "flag=${state.progressSamplingActive} controlsVisible=$isVisible " +
+                "-> samplingActive=${progressInViewport && state.progressSamplingActive} " +
+                "bvid=$bvid cid=$cid",
+        )
+    }
+
     val progressState = state.progressSource ?: rememberVideoPlayerOverlayProgress(
         player = player,
         bvid = bvid,
         cid = cid,
         videoDuration = videoDuration,
         controlsVisible = isVisible,
-        samplingActive = visualWorkActive && progressInViewport && state.progressSamplingActive,
+        // 不掺 visualWorkActive：它的 focused 来自 LocalWindowInfo.isWindowFocused，
+        // 下拉状态栏、分屏、系统对话框都会让它变 false（MIUI 上还可能不恢复）。
+        // 播放器在播时进度条必须继续跟随，否则拉一下状态栏进度条就永久停在那一刻，
+        // 直到播放结束才跳到最后。页面是否在屏由 progressInViewport 负责。
+        samplingActive = progressInViewport && state.progressSamplingActive,
         hasPendingSeekResume = hasPendingSeekResume,
         highFrequencyProgressActive = highFrequencyProgressActive,
     )

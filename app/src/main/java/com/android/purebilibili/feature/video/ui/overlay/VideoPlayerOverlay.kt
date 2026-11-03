@@ -1245,7 +1245,7 @@ private fun VideoPlayerOverlayContent(
         cid = cid,
         videoDuration = videoDuration,
         controlsVisible = isVisible,
-        samplingActive = visualWorkActive && progressInViewport && state.progressSamplingActive,
+        samplingActive = progressInViewport && state.progressSamplingActive,
         hasPendingSeekResume = hasPendingSeekResume,
         highFrequencyProgressActive = highFrequencyProgressActive,
     )
