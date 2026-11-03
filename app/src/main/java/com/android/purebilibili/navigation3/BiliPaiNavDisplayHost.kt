@@ -229,6 +229,7 @@ internal fun BiliPaiNavDisplayHost(
     ) {
         liveContainerSnapshot.mapValues { (target, source) ->
             val articleTarget = target is BiliPaiNavKey.ArticleDetail || target is BiliPaiNavKey.DynamicDetail
+            val bangumiPlayerTarget = target is BiliPaiNavKey.BangumiPlayer
             val generalContainer = target is BiliPaiNavKey.Web || target is BiliPaiNavKey.Space || target is BiliPaiNavKey.BangumiDetail
             SettingsContainerTransition(
                 source = source,
@@ -240,9 +241,10 @@ internal fun BiliPaiNavDisplayHost(
                 } },
                 durationMillis = if (generalContainer) SETTINGS_CONTAINER_DURATION_MILLIS
                     else videoSharedTransitionDurationMillis.coerceAtLeast(1),
-                // 专栏使用视频卡片的导航时钟、曲线与景深，正文仍保持自己的页面底色。
-                videoCardMotionEnabled = articleTarget,
-                cardBackgroundEffectsEnabled = articleTarget || target is BiliPaiNavKey.Live || target is BiliPaiNavKey.LiveAreaDetail,
+                // 专栏与番剧播放页复用视频卡片的导航时钟、曲线与景深。
+                videoCardMotionEnabled = articleTarget || bangumiPlayerTarget,
+                cardBackgroundEffectsEnabled = articleTarget || bangumiPlayerTarget ||
+                    target is BiliPaiNavKey.Live || target is BiliPaiNavKey.LiveAreaDetail,
                 isolateContentDrawing = target is BiliPaiNavKey.Live,
                 useSharedSnapshotBlur = target is BiliPaiNavKey.Live,
                 realtimeBlurEnabled = if (generalContainer) settingsContainerRealtimeBlurEnabled

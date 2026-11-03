@@ -2,12 +2,12 @@
 package com.android.purebilibili.navigation3.predictiveback
 
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
@@ -36,10 +36,10 @@ internal val SizePageNavTransition: NavTransition = object : NavTransition {
 }
 
 internal fun sharedAxisMovement(progress: Float): Float =
-    FastOutSlowInEasing.transform(progress.coerceIn(0f, 1f))
+    AppMotionEasing.M1Standard.transform(progress.coerceIn(0f, 1f))
 
 internal fun sharedAxisIncomingAlpha(progress: Float): Float =
-    FastOutSlowInEasing.transform(((progress - 0.15f) / 0.85f).coerceIn(0f, 1f))
+    AppMotionEasing.M1Standard.transform(((progress - 0.15f) / 0.85f).coerceIn(0f, 1f))
 
 internal val SharedAxisPageNavTransition: NavTransition = navGraphicsTransition(
     motion = PagePresetMotion, scrim = { 0f },

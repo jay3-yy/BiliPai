@@ -1,7 +1,6 @@
 package com.android.purebilibili.feature.nearby
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
@@ -28,7 +27,7 @@ import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
-import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import com.android.purebilibili.core.ui.motion.continuityTween
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 
@@ -158,8 +157,7 @@ internal fun NearbyFlightOverlay(flight: NearbyFlight, modifier: Modifier = Modi
     val glassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
     val blurEnabled = !reduceMotion && !isLowBlurBudgetForced()
     LaunchedEffect(flight, reduceMotion) {
-        progress.animateTo(1f, tween(if (reduceMotion) 0 else NEARBY_FLIGHT_DURATION_MS,
-            easing = AppMotionEasing.Continuity))
+        progress.animateTo(1f, continuityTween(if (reduceMotion) 0 else NEARBY_FLIGHT_DURATION_MS))
     }
     BoxWithConstraints(modifier.fillMaxSize()) {
         val travel = constraints.maxHeight * 0.55f

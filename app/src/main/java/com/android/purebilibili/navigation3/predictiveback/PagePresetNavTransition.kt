@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.android.purebilibili.navigation3.predictiveback
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
@@ -34,8 +34,8 @@ internal fun resolvePageTransitionPreset(style: BiliPaiPredictiveBackAnimationSt
     }
 
 internal val PagePresetMotion = NavMotion(
-    programmatic = NavSettleSpec.Tween(300, CubicBezierEasing(0.2f, 0f, 0f, 1f)),
-    commit = NavSettleSpec.Tween(220, CubicBezierEasing(0.2f, 0f, 0f, 1f), matchReleaseVelocity = true),
+    programmatic = NavSettleSpec.Tween(300, AppMotionEasing.Md3Standard),
+    commit = NavSettleSpec.Tween(220, AppMotionEasing.Md3Standard, matchReleaseVelocity = true),
     cancel = NavSettleSpec.Spring(stiffness = 1500f),
 )
 

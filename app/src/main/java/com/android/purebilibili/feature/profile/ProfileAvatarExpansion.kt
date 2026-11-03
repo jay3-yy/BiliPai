@@ -1,7 +1,6 @@
 /** 下拉头像展开的手势、状态与收放动画。 */
 package com.android.purebilibili.feature.profile
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyListState
@@ -23,6 +22,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Velocity
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
 import kotlinx.coroutines.CoroutineStart
@@ -32,7 +32,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 internal const val PROFILE_AVATAR_PULL_THRESHOLD = 0.33f
-internal val ProfileAvatarExpandEasing = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+internal val ProfileAvatarExpandEasing = AppMotionEasing.IosEaseInOut
 
 internal fun profileAvatarExpandDuration(from: Float, to: Float, velocity: Float, density: Float): Int {
     val durationFactor = abs(velocity).coerceIn(1100f * density, 2000f * density) / (1100f * density)

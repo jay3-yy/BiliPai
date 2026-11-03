@@ -79,34 +79,35 @@ fun indicatorSpring(): SpringSpec<Float> =
  * 两值主题的运动 tokens。Screens should call the @Composable accessors
  * (e.g. [AppMotionTokens.standardSpec]) instead of writing literal `tween(...)`
  * or `spring(...)` calls. MIUIX resolves to denser tween durations; MATERIAL3
- * resolves to the standard Material tween durations.
+ * resolves to the standard Material tween durations. Durations are single-sourced
+ * from [resolveAndroidNativeChromeTokens] so both token layers stay in sync.
  */
 object AppMotionTokens {
 
     fun <T> resolveStandardSpec(
         uiStyle: AppUiStyle
-    ): FiniteAnimationSpec<T> = when (uiStyle) {
-        AppUiStyle.MIUIX -> tween(
-            durationMillis = 180,
-            easing = AppMotionEasing.Continuity
-        )
-        AppUiStyle.MATERIAL3 -> tween(
-            durationMillis = 200,
-            easing = AppMotionEasing.Md3Standard
-        )
+    ): FiniteAnimationSpec<T> {
+        val tokens = resolveAndroidNativeChromeTokens(uiStyle)
+        return when (uiStyle) {
+            AppUiStyle.MIUIX -> continuityTween(tokens.motionStandardMillis)
+            AppUiStyle.MATERIAL3 -> tween(
+                durationMillis = tokens.motionStandardMillis,
+                easing = AppMotionEasing.Md3Standard
+            )
+        }
     }
 
     fun <T> resolveEmphasizedSpec(
         uiStyle: AppUiStyle
-    ): FiniteAnimationSpec<T> = when (uiStyle) {
-        AppUiStyle.MIUIX -> tween(
-            durationMillis = 240,
-            easing = AppMotionEasing.EmphasizedEnter
-        )
-        AppUiStyle.MATERIAL3 -> tween(
-            durationMillis = 300,
-            easing = AppMotionEasing.Md3EmphasizedDecelerate
-        )
+    ): FiniteAnimationSpec<T> {
+        val tokens = resolveAndroidNativeChromeTokens(uiStyle)
+        return when (uiStyle) {
+            AppUiStyle.MIUIX -> emphasizedEnterTween(tokens.motionEmphasizedMillis)
+            AppUiStyle.MATERIAL3 -> tween(
+                durationMillis = tokens.motionEmphasizedMillis,
+                easing = AppMotionEasing.Md3EmphasizedDecelerate
+            )
+        }
     }
 
     fun <T> resolveExpressiveSpec(

@@ -7,6 +7,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.android.purebilibili.core.ui.components.AppGlassMenuPlacement
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
@@ -54,7 +55,7 @@ internal object AppGlassPopupMotion {
     private val easeOut = CubicBezierEasing(0f, 0f, 0.58f, 1f)
     private val easeIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     private val glyphIn = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
-    private val easeInOut = CubicBezierEasing(0.42f, 0f, 0.58f, 1f)
+    private val easeInOut = AppMotionEasing.IosEaseInOut
 
     private fun spring(t: Float, stiffness: Float, ratio: Float): Float {
         val omega = sqrt(stiffness)

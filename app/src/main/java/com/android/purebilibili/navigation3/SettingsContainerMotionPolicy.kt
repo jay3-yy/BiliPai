@@ -1,10 +1,10 @@
 package com.android.purebilibili.navigation3
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 
 internal const val SETTINGS_CONTAINER_DURATION_MILLIS = 300
 
@@ -27,8 +27,8 @@ internal fun resolveSettingsContainerFrame(
 ): SettingsContainerFrame {
     val open = (1f + relativeDepth.coerceAtMost(0f)).coerceIn(0f, 1f)
     val geometry = if (springDriven) open else if (returning) {
-        1f - FastOutSlowInEasing.transform(1f - open)
-    } else FastOutSlowInEasing.transform(open)
+        1f - AppMotionEasing.M1Standard.transform(1f - open)
+    } else AppMotionEasing.M1Standard.transform(open)
     val fadeStart = if (returning) 0.6f else 0.2f
     // 官方导航弹簧越过终点时，只在来源尺寸附近收敛，避免用页面尺寸放大微小过冲。
     val landingScale = if (springDriven && returning) 1f + (1f + relativeDepth).coerceAtMost(0f) else 1f

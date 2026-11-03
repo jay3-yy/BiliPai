@@ -18,17 +18,21 @@ internal fun rememberNativeCardContainerTransition(
     target: BiliPaiNavKey,
     onClick: () -> Unit,
     enabled: Boolean = true,
-) =
-    rememberLiveCardContainerTransition(
+): com.android.purebilibili.feature.live.LiveCardContainerTransition {
+    val resolvedTarget = com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(target)
+    val transition = rememberLiveCardContainerTransition(
         roomId = 0,
         title = "",
         hostName = "",
         color = MaterialTheme.colorScheme.surface,
         cornerRadius = 12.dp,
-        containerTarget = target,
+        containerTarget = resolvedTarget,
         enabled = enabled && LocalNativeCardNavigate.current != null &&
-            (if (target is BiliPaiNavKey.ArticleDetail || target is BiliPaiNavKey.DynamicDetail) {
+            (if (resolvedTarget is BiliPaiNavKey.ArticleDetail || resolvedTarget is BiliPaiNavKey.DynamicDetail ||
+                resolvedTarget is BiliPaiNavKey.BangumiPlayer) {
                 LocalNativeArticleCardMotionEnabled.current
             } else com.android.purebilibili.feature.space.LocalShopContainerMotionEnabled.current),
-        onClick = LocalNativeCardNavigate.current?.let { navigate -> { navigate(target) } } ?: onClick,
+        onClick = LocalNativeCardNavigate.current?.let { navigate -> { navigate(resolvedTarget) } } ?: onClick,
     )
+    return transition
+}

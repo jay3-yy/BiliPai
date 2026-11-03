@@ -142,18 +142,20 @@ fun BoxScope.BrandSuccessFeedbackHost(
             completionHoldDurationMs = if (current.kind == BrandSuccessKind.UNFOLLOW) 500L else 800L,
             onFinished = { if (feedback?.id == current.id) feedback = null }
         )
-        AppText(
-            text = when (current.kind) {
-                BrandSuccessKind.FAVORITE -> "收藏成功"
-                BrandSuccessKind.DOWNLOAD -> "缓存完成"
-                BrandSuccessKind.FOLLOW -> "关注成功"
-                BrandSuccessKind.UNFOLLOW -> "已取消关注"
-            },
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-            tapToCopyEnabled = false
-        )
+        val completionText = when (current.kind) {
+            BrandSuccessKind.FAVORITE -> "收藏成功"
+            BrandSuccessKind.DOWNLOAD -> "缓存完成"
+            BrandSuccessKind.FOLLOW, BrandSuccessKind.UNFOLLOW -> null
+        }
+        if (completionText != null) {
+            AppText(
+                text = completionText,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                tapToCopyEnabled = false
+            )
+        }
         current.detail?.takeIf { it.isNotBlank() }?.let { detail ->
             AppText(
                 text = detail,

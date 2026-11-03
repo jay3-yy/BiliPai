@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.android.purebilibili.navigation3.predictiveback
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import top.yukonga.miuix.kmp.nav.transition.NavGesture
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavRole
@@ -76,7 +76,7 @@ private val ScaleExitMotion = NavMotion(
     cancel = NavSettleSpec.Spring(stiffness = 1500f),
     programmatic = NavSettleSpec.Tween(
         durationMillis = 200,
-        easing = CubicBezierEasing(0.2f, 0f, 0f, 1f),
+        easing = AppMotionEasing.Md3Standard,
     ),
 )
 

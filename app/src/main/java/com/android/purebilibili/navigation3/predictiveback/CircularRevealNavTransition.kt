@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package com.android.purebilibili.navigation3.predictiveback
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import kotlin.math.hypot
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
@@ -21,8 +21,8 @@ internal val CircularRevealNavTransition: NavTransition = object : NavTransition
     // 自身提供圆形裁剪，不再叠加宿主的方向性圆角裁剪。
     override val handlesOwnClipping: Boolean = true
     override val motion = NavMotion(
-        programmatic = NavSettleSpec.Tween(380, CubicBezierEasing(0.2f, 0f, 0f, 1f)),
-        commit = NavSettleSpec.Tween(240, CubicBezierEasing(0.2f, 0f, 0f, 1f), matchReleaseVelocity = true),
+        programmatic = NavSettleSpec.Tween(380, AppMotionEasing.Md3Standard),
+        commit = NavSettleSpec.Tween(240, AppMotionEasing.Md3Standard, matchReleaseVelocity = true),
         cancel = NavSettleSpec.Spring(stiffness = 1500f),
     )
 

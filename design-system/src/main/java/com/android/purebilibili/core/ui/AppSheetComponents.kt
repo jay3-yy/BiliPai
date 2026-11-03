@@ -46,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -76,6 +77,7 @@ import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 data class AdaptiveBottomSheetVisualSpec(
     val cornerRadiusDp: Int,
@@ -214,36 +216,48 @@ fun AppModalSheetNavigationHost(
     onDismissRequest: () -> Unit,
     content: @Composable (Modifier) -> Unit,
 ) {
-    val owner = LocalView.current.findViewTreeNavigationEventDispatcherOwner()
-    val host: @Composable () -> Unit = {
-        val backState = rememberNavigationEventState(NavigationEventInfo.None)
+    val backState = rememberNavigationEventState(NavigationEventInfo.None)
+    AppModalSheetWindowNavigationScope {
         NavigationBackHandler(
             state = backState,
             isBackEnabled = dismissOnBackPress,
             onBackCompleted = onDismissRequest,
         )
-        val transition = backState.transitionState as? NavigationEventTransitionState.InProgress
-        val reducedMotion = LocalSystemReduceMotion.current || !LocalComponentMotionEnabled.current
-        val backProgress = animateFloatAsState(
-            targetValue = if (dismissOnBackPress && !reducedMotion && transition != null &&
-                transition.direction == NavigationEventTransitionState.TRANSITIONING_BACK
-            ) transition.latestEvent.progress.coerceIn(0f, 1f) else 0f,
-            animationSpec = if (transition != null || reducedMotion) snap() else tween(180),
-            label = "centered_sheet_predictive_back",
-        )
-        content(Modifier.graphicsLayer {
-            // Read gesture frames in the layer; keep the surface inside its adaptive region.
-            val progress = backProgress.value
-            scaleX = 1f - 0.08f * progress
-            scaleY = 1f - 0.08f * progress
-        })
+        content(appModalSheetBackModifier(backState.transitionState, dismissOnBackPress))
     }
+}
+
+@Composable
+private fun AppModalSheetWindowNavigationScope(content: @Composable () -> Unit) {
+    val owner = LocalView.current.findViewTreeNavigationEventDispatcherOwner()
     if (owner == null) {
-        host()
+        content()
     } else {
         CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides owner) {
-            host()
+            content()
         }
+    }
+}
+
+@Composable
+private fun appModalSheetBackModifier(
+    transitionState: NavigationEventTransitionState,
+    enabled: Boolean,
+): Modifier {
+    val transition = transitionState as? NavigationEventTransitionState.InProgress
+    val reducedMotion = LocalSystemReduceMotion.current || !LocalComponentMotionEnabled.current
+    val backProgress = animateFloatAsState(
+        targetValue = if (enabled && !reducedMotion && transition != null &&
+            transition.direction == NavigationEventTransitionState.TRANSITIONING_BACK
+        ) transition.latestEvent.progress.coerceIn(0f, 1f) else 0f,
+        animationSpec = if (transition != null || reducedMotion) snap() else tween(180),
+        label = "centered_sheet_predictive_back",
+    )
+    return Modifier.graphicsLayer {
+        // Read gesture frames in the layer; keep the surface inside its adaptive region.
+        val progress = backProgress.value
+        scaleX = 1f - 0.08f * progress
+        scaleY = 1f - 0.08f * progress
     }
 }
 
@@ -253,6 +267,8 @@ fun AppModalSheetNavigationHost(
  * Hinge-safe presentation keeps the existing region host to avoid spanning a fold.
  * Controlled callers keep this composable mounted when [visible] becomes false;
  * [onDismissRequest] reports completion after native hiding finishes.
+ * [useWindowPredictiveBack] opts the MD3 sheet into window-scoped navigation;
+ * Miuix and adaptive dialog hosts keep their existing window gesture handling.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -275,6 +291,7 @@ fun AppModalBottomSheet(
     visible: Boolean = true,
     onDismissStarted: () -> Unit = {},
     useTimedSlideMotion: Boolean = false,
+    useWindowPredictiveBack: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
     // Controlled callers keep this host in composition while native sheets finish hiding.
@@ -506,13 +523,19 @@ fun AppModalBottomSheet(
             sheetState.show()
         }
     }
+    val windowBackState = rememberNavigationEventState(NavigationEventInfo.None)
+    val windowBackModifier = if (useWindowPredictiveBack) {
+        appModalSheetBackModifier(windowBackState.transitionState, dismissOnBackPress)
+    } else Modifier
+    val dismissScope = rememberCoroutineScope()
     ModalBottomSheet(
         onDismissRequest = finishDismiss,
-        modifier = modifier,
+        modifier = modifier.then(windowBackModifier),
         sheetState = sheetState,
-        // Let MD3 own gesture progress, cancellation and the final native hide animation.
-        // Comment/reply callers opt out and keep their window-scoped back handlers.
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = dismissOnBackPress),
+        // 默认保留 MD3 手势；显式启用窗口导航的入口自行接收进度，仍使用原生 hide。
+        properties = ModalBottomSheetProperties(
+            shouldDismissOnBackPress = dismissOnBackPress && !useWindowPredictiveBack,
+        ),
         shape = shape ?: BottomSheetDefaults.ExpandedShape,
         containerColor = windowColor,
         contentColor = contentColor,
@@ -521,6 +544,22 @@ fun AppModalBottomSheet(
         dragHandle = dragHandle,
         contentWindowInsets = { windowInsets },
     ) {
+        if (useWindowPredictiveBack) {
+            // 分享入口将事件绑定到弹窗窗口，避免继承页面 dispatcher 后丢失手势进度。
+            // 完成后仍走原生 hide；取消时只还原面板形变，不关闭分享或下层页面。
+            AppModalSheetWindowNavigationScope {
+                NavigationBackHandler(
+                    state = windowBackState,
+                    isBackEnabled = dismissOnBackPress && sheetState.isVisible,
+                    onBackCompleted = {
+                        dismissScope.launch {
+                            sheetState.hide()
+                            if (!sheetState.isVisible) finishDismiss()
+                        }
+                    },
+                )
+            }
+        }
         val blurMotionModifier = rememberSheetBlurMotionModifier(blurBehind)
         Column(Modifier.fillMaxWidth().then(blurMotionModifier).then(sheetSurfaceModifier), content = content)
     }
