@@ -8,13 +8,27 @@ import kotlin.test.assertTrue
 
 class PortraitDetailPresentationPolicyTest {
     @Test
-    fun collapsedPlayToolbarDoesNotCoverPlayingOrCompactPortraitMedia() {
+    fun collapsedPlayToolbarJoinsTheScrollTransitionBeforeTheViewportReachesItsEndpoint() {
+        // 横、竖视频都收向工具栏时，途中就必须绘制渐显层，不能等收起到位才突然出现。
+        listOf(0.25f, 0.7f, 1f).forEach { progress ->
+            assertTrue(shouldShowCollapsedPlayerPlayToolbar(true, progress, 56f, false))
+        }
+        assertFalse(shouldShowCollapsedPlayerPlayToolbar(true, 0f, 56f, false))
+    }
+
+    @Test
+    fun collapsedPlayToolbarDoesNotReplacePlayingOrCompactPortraitMedia() {
         assertFalse(shouldShowCollapsedPlayerPlayToolbar(false, 1f, 56f, false))
         assertFalse(shouldShowCollapsedPlayerPlayToolbar(false, 1f, 231.75f, false))
         assertFalse(shouldShowCollapsedPlayerPlayToolbar(true, 1f, 231.75f, false))
-        assertFalse(shouldShowCollapsedPlayerPlayToolbar(true, 0.7f, 56f, false))
-        assertTrue(shouldShowCollapsedPlayerPlayToolbar(true, 1f, 56f, false))
         assertFalse(shouldShowCollapsedPlayerPlayToolbar(true, 1f, 56f, true))
+    }
+
+    @Test
+    fun fadingToolbarOnlyTakesInputAtTheCollapsedEndpoint() {
+        assertFalse(canInteractWithCollapsedPlayerPlayToolbar(0f))
+        assertFalse(canInteractWithCollapsedPlayerPlayToolbar(0.7f))
+        assertTrue(canInteractWithCollapsedPlayerPlayToolbar(1f))
     }
 
 

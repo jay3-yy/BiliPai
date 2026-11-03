@@ -46,7 +46,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.CubicBezierEasing
+import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -534,7 +534,7 @@ fun SpaceScreen(
     val backLabel = stringResource(R.string.common_back)
     val collapsedTitleAlpha = animateFloatAsState(
         targetValue = if (pinContentTabs && pinnedTopChromeScrim >= 1f) 1f else 0f,
-        animationSpec = tween(500, easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)),
+        animationSpec = tween(500, easing = AppMotionEasing.Md3Standard),
         label = "space_collapsed_title",
     )
     val moreLabel = stringResource(R.string.common_more)
@@ -4097,6 +4097,8 @@ private fun SpaceSecondarySwitchRow(
                 allowLabelOverflow = true,
                 miuixNonGlassItemWidthMode = MiuixNonGlassTabItemWidthMode.CONTENT,
                 contentSizedMiuixNonGlassMaxItemWidth = Dp.Infinity,
+                // 投稿分类按各项实际宽度横向定位；共享组件默认仍只保证选中项可见。
+                centerSelectedTab = true,
             )
         }
     }
@@ -5204,6 +5206,8 @@ private fun SpaceArchiveListItemRow(
                 overflow = videoCardTitleOverflow(),
                 color = AppContentColors.primaryText()
             )
+        },
+        supportingContent = {
             AppText(
                 text = if (progressState?.progressSec == -1) "$publishTime · 已看完" else publishTime,
                 style = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography().author,
