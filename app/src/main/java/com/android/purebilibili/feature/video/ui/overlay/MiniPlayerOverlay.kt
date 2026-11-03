@@ -108,6 +108,8 @@ private const val MINI_PLAYER_VISIBILITY_DURATION_MILLIS = 280
 fun MiniPlayerOverlay(
     miniPlayerManager: MiniPlayerManager,
     onExpandClick: () -> Unit,
+    /** 三个点里的「返回播放详情」：回详情页但不强制全屏。 */
+    onOpenDetailClick: () -> Unit = onExpandClick,
     onPictureInPictureClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     /**
@@ -118,7 +120,10 @@ fun MiniPlayerOverlay(
     suppressContentForPip: Boolean = false,
 ) {
     key(miniPlayerManager.miniPlayerSessionId) {
-        MiniPlayerSessionOverlay(miniPlayerManager, onExpandClick, onPictureInPictureClick, modifier, suppressContentForPip)
+        MiniPlayerSessionOverlay(
+            miniPlayerManager, onExpandClick, onPictureInPictureClick, modifier,
+            suppressContentForPip, onOpenDetailClick,
+        )
     }
 }
 
@@ -130,6 +135,7 @@ private fun MiniPlayerSessionOverlay(
     onPictureInPictureClick: (() -> Unit)?,
     modifier: Modifier,
     suppressContentForPip: Boolean,
+    onOpenDetailClick: () -> Unit = onExpandClick,
 ) {
     val clearIcon = rememberAppClearIcon()
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -949,7 +955,7 @@ private fun MiniPlayerSessionOverlay(
                                 }
                                 AppDropdownMenuItem(text = { AppText("返回播放详情") }, onClick = {
                                     moreExpanded = false
-                                    onExpandClick()
+                                    onOpenDetailClick()
                                 })
                                 AppDropdownMenuItem(text = { AppText("恢复默认大小") }, onClick = {
                                     moreExpanded = false
