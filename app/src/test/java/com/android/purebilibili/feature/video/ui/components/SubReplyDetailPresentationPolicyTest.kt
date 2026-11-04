@@ -17,6 +17,26 @@ class SubReplyDetailPresentationPolicyTest {
 
 
     @Test
+    fun `recreated thread keeps its restored position while sort changes reset it`() {
+        assertEquals(
+            SubReplyDetailScrollRestoreAction.KEEP_POSITION,
+            resolveSubReplyDetailScrollRestoreAction(null, false, false),
+        )
+        assertEquals(
+            SubReplyDetailScrollRestoreAction.KEEP_POSITION,
+            resolveSubReplyDetailScrollRestoreAction(true, true, true),
+        )
+        assertEquals(
+            SubReplyDetailScrollRestoreAction.SCROLL_TO_TOP,
+            resolveSubReplyDetailScrollRestoreAction(false, false, true, sortChanged = true),
+        )
+        assertEquals(
+            SubReplyDetailScrollRestoreAction.SCROLL_TO_TOP,
+            resolveSubReplyDetailScrollRestoreAction(true, false, true, sortChanged = true),
+        )
+    }
+
+    @Test
     fun `sub reply prefetch continues when list cannot scroll but more replies remain`() {
         assertTrue(
             shouldPrefetchSubRepliesWhenListNotScrollable(
