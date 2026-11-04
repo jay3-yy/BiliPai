@@ -12,6 +12,7 @@ import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorSegment
 import com.android.purebilibili.data.repository.SponsorBlockRepository
 import com.android.purebilibili.plugin.sdk.SkipAction
+import com.android.purebilibili.feature.video.viewmodel.resolveSponsorBlockSkipTargetPositionMs
 import io.mockk.Runs
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -92,6 +93,83 @@ class SponsorBlockPlaybackSessionTest {
         assertEquals(SkipAction.None, first.onPositionUpdate(12_500L))
         assertEquals(SkipAction.None, second.onPositionUpdate(12_500L))
         verify(exactly = 2) { AnalyticsHelper.logSponsorBlockSkip(segment.UUID, segment.categoryName) }
+    }
+
+    @Test
+    fun automaticTailSkipReachesDurationOnlyOnceDespiteRepeatedTailTicks() = runTest {
+        for (endSeconds in listOf(120f, 121.5f)) {
+            val tail = segment.copy(segment = listOf(115f, endSeconds))
+            coEvery { SponsorBlockRepository.loadSegments(any(), any(), any(), any()) } returns listOf(tail)
+            val session = SponsorBlockPlaybackSession()
+            session.onVideoLoad("BV1", 1L)
+
+            val action = assertIs<SkipAction.SkipTo>(session.onPositionUpdate(115_000L))
+            val target = resolveSponsorBlockSkipTargetPositionMs(action.positionMs, 120_000L)
+            assertEquals(120_000L, target)
+            // Completion and decoder position callbacks must not seek back into the tail.
+            for (position in listOf(115_000L, 119_000L, target, target, target)) {
+                assertEquals(SkipAction.None, session.onPositionUpdate(position))
+            }
+            assertNull(session.getActiveSegment())
+        }
+        verify(exactly = 2) { AnalyticsHelper.logSponsorBlockSkip(segment.UUID, segment.categoryName) }
+    }
+
+    @Test
+    fun slightlyShortTailTargetLeavesRemainingFramesWithoutSkippingAgain() = runTest {
+        val tail = segment.copy(segment = listOf(115f, 119.95f))
+        coEvery { SponsorBlockRepository.loadSegments(any(), any(), any(), any()) } returns listOf(tail)
+        val session = SponsorBlockPlaybackSession()
+        session.onVideoLoad("BV1", 1L)
+
+        val action = assertIs<SkipAction.SkipTo>(session.onPositionUpdate(115_000L))
+        val target = resolveSponsorBlockSkipTargetPositionMs(action.positionMs, 120_000L)
+        assertEquals(tail.endTimeMs, target)
+        assertTrue(target in 119_900L until 120_000L)
+        for (position in listOf(target, target, 119_999L, 120_000L)) {
+            assertEquals(SkipAction.None, session.onPositionUpdate(position))
+        }
+        verify(exactly = 1) { AnalyticsHelper.logSponsorBlockSkip(segment.UUID, segment.categoryName) }
+    }
+
+    @Test
+    fun explicitSeekRearmsAutomaticTailEvenImmediatelyAfterSkip() = runTest {
+        val tail = segment.copy(segment = listOf(115f, 121.5f))
+        coEvery { SponsorBlockRepository.loadSegments(any(), any(), any(), any()) } returns listOf(tail)
+        val session = SponsorBlockPlaybackSession()
+        session.onVideoLoad("BV1", 1L)
+        assertIs<SkipAction.SkipTo>(session.onPositionUpdate(115_000L))
+        assertEquals(SkipAction.None, session.onPositionUpdate(120_000L))
+
+        session.onUserSeek(115_500L)
+        assertIs<SkipAction.SkipTo>(session.onPositionUpdate(115_500L))
+        assertEquals(SkipAction.None, session.onPositionUpdate(120_000L))
+        verify(exactly = 2) { AnalyticsHelper.logSponsorBlockSkip(segment.UUID, segment.categoryName) }
+    }
+
+    @Test
+    fun manualTailSkipStaysConsumedUntilUserReturnsToTheSegment() = runTest {
+        storedJson = Json.encodeToString(SponsorBlockConfig(autoSkip = false, userId = "persistent-user"))
+        for (endSeconds in listOf(120f, 121.5f)) {
+            val tail = segment.copy(segment = listOf(115f, endSeconds))
+            coEvery { SponsorBlockRepository.loadSegments(any(), any(), any(), any()) } returns listOf(tail)
+            val session = SponsorBlockPlaybackSession()
+            session.onVideoLoad("BV1", 1L)
+
+            val button = assertIs<SkipAction.ShowButton>(session.onPositionUpdate(115_000L))
+            assertEquals(tail, session.markAsSkipped(button.segmentId))
+            val target = resolveSponsorBlockSkipTargetPositionMs(button.skipToMs, 120_000L)
+            assertEquals(120_000L, target)
+            repeat(3) {
+                assertEquals(SkipAction.None, session.onPositionUpdate(target))
+            }
+
+            session.onUserSeek(115_500L)
+            assertEquals(button, session.onPositionUpdate(115_500L))
+            session.markAsSkipped(button.segmentId)
+            assertEquals(SkipAction.None, session.onPositionUpdate(target))
+        }
+        verify(exactly = 0) { AnalyticsHelper.logSponsorBlockSkip(any(), any()) }
     }
 
     @Test

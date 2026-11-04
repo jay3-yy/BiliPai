@@ -37,6 +37,20 @@ class VideoDomainViewModelTest {
     }
 
     @Test
+    fun `watch later status arriving after binding updates the action`() = runTest(dispatcher) {
+        val viewModel = VideoEngagementViewModel(actions = FakeEngagementActions())
+        val video = subject("BV1", generation = 1L)
+        viewModel.bindSubject(video, VideoEngagementSeed())
+        viewModel.bindSubject(video, VideoEngagementSeed(isInWatchLater = true))
+        assertTrue(viewModel.uiState.value.isInWatchLater)
+        viewModel.toggleWatchLater()
+        runCurrent()
+        assertFalse(viewModel.uiState.value.isInWatchLater)
+        viewModel.sync(VideoEngagementSeed(isInWatchLater = true))
+        assertFalse(viewModel.uiState.value.isInWatchLater)
+    }
+
+    @Test
     fun `unknown playback seed preserves confirmed relations but confirmed changes still apply`() {
         val viewModel = VideoEngagementViewModel()
         viewModel.bindSubject(subject("BV1", generation = 1L), VideoEngagementSeed(

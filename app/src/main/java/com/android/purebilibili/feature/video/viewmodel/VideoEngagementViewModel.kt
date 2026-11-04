@@ -326,6 +326,7 @@ class VideoEngagementViewModel(
                 likeCount = if (VideoEngagementField.LIKE in locallyModifiedFields) current.likeCount else seed.likeCount,
                 coinCount = if (VideoEngagementField.COIN in locallyModifiedFields ||
                     (current.relationshipStatusKnown && !seed.relationshipStatusKnown)) current.coinCount else seed.coinCount,
+                isInWatchLater = if (VideoEngagementField.WATCH_LATER in locallyModifiedFields) current.isInWatchLater else seed.isInWatchLater,
                 isRepost = seed.isRepost,
                 followingMids = if (VideoEngagementField.FOLLOWING_MIDS in locallyModifiedFields ||
                     (current.followStatusKnown && !seed.followStatusKnown)) current.followingMids else seed.followingMids

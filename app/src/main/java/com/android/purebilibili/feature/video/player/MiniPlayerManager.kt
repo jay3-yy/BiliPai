@@ -81,6 +81,8 @@ import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.playback.policy.resolvePlaybackWakeMode
 import com.android.purebilibili.feature.video.playback.session.resolveShouldContinuePlaybackDuringPause
+import com.android.purebilibili.feature.video.playback.session.PlaybackFirstFrameTracker
+import com.android.purebilibili.feature.video.playback.session.PlayerHistorySessions
 import com.android.purebilibili.feature.video.state.isPlaybackActiveForLifecycle
 import com.android.purebilibili.feature.video.usecase.VideoLoadResult
 import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
@@ -2241,6 +2243,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 .build().withAppVideoDecoderDiagnostics(context)
                 .apply {
                     addListener(playerListener)
+                    PlaybackFirstFrameTracker.observe(this)
                     //  [修复] 确保音量正常
                     volume = com.android.purebilibili.core.player.PlayerVolumeController
                         .preferredVolumeSync()
@@ -2603,6 +2606,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
 
     private fun replaceExternalPlayer(incomingPlayer: ExoPlayer) {
+        PlaybackFirstFrameTracker.observe(incomingPlayer)
         if (remoteAudio.active) {
             remotePreferencesJob?.cancel()
             remoteAudio.close()
@@ -2908,6 +2912,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
                 )
             ) {
                 is VideoLoadResult.Success -> {
+                    // Queue navigation can outlive every detail ViewModel. Bind before preparing
+                    // the next source so its real playback is recorded under its own identity.
+                    PlayerHistorySessions.forPlayer(currentPlayer).bindMedia(
+                        loadResult.info.bvid,
+                        loadResult.info.cid,
+                    )
                     if (loadResult.audioUrl != null) {
                         backgroundPlaybackUseCase.playDashVideo(
                             videoUrl = loadResult.playUrl,

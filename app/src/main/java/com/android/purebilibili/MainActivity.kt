@@ -2790,12 +2790,17 @@ class MainActivity : AppCompatActivity() {
                 // ON_PAUSE saved the position at the moment the app left the foreground. Refresh
                 // that cache before navigation so an emergency re-prepare cannot seek back to it
                 // after background playback has continued on the same ExoPlayer.
-                PlaybackProgressManager.getInstance(this).savePosition(
-                    bvid = requireNotNull(activeBvid),
-                    cid = activeCid,
-                    positionMs = activePositionMs,
-                    durationMs = activePlayer?.duration?.coerceAtLeast(0L) ?: 0L,
-                )
+                if (activePlayer != null && activeBvid != null &&
+                    com.android.purebilibili.feature.video.playback.session.PlayerHistorySessions
+                        .forPlayer(activePlayer).canWriteHistory(activeBvid, activeCid)
+                ) {
+                    PlaybackProgressManager.getInstance(this).savePosition(
+                        bvid = activeBvid,
+                        cid = activeCid,
+                        positionMs = activePositionMs,
+                        durationMs = activePlayer.duration.coerceAtLeast(0L),
+                    )
+                }
                 if (!isInVideoDetail) {
                     pendingNavigationRoute = activePlaybackRoute
                 }

@@ -75,9 +75,6 @@ internal fun LargeScreenVideoPlayerTransitionHost(
     isCommittedReturn: Boolean,
     coverSource: VideoDetailResidentCoverSource?,
     hasRenderedFirstFrame: Boolean,
-    /** 播放器是否已经解出画面（videoSize > 0）。debugInfo 的 firstFrame 标记
-     *  在复用播放器时不会更新，只看它会让封面永远不揭开。 */
-    hasVideoFrame: Boolean = false,
     detailContentLoading: Boolean,
     entryCoverAlphaProvider: () -> Float = { 0f },
     followProgressEnabledProvider: () -> Boolean = { true },
@@ -242,7 +239,7 @@ internal fun LargeScreenVideoPlayerTransitionHost(
                         // 封面要跟着一起淡出，所以是正相关；写成 1 - sourceChrome
                         // 会在源 chrome 消失后把封面画成全不透明，一直盖住播放器。
                         sourceChromeAlpha()
-                    } else if (!hasRenderedFirstFrame && !hasVideoFrame) {
+                    } else if (!hasRenderedFirstFrame) {
                         1f
                     } else {
                         // Use the same handoff as the source information band; geometry
