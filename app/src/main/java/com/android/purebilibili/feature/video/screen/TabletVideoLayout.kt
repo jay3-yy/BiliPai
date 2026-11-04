@@ -1273,8 +1273,8 @@ internal fun TabletSecondaryContent(
                                         },
                                         onLikeClick = { commentActions.likeComment(reply.rpid) },
                                         onHateClick = { commentActions.hateComment(reply.rpid) },
-                                        isLiked = reply.action == 1 || reply.rpid in commentState.likedComments,
-                                        isHated = reply.action == 2 || reply.rpid in commentState.hatedComments,
+                                        isLiked = reply.rpid in commentState.likedComments,
+                                        isHated = reply.rpid in commentState.hatedComments,
                                         onReplyClick = { playbackActions.replyTo(reply) },
                                         onReportClick = { reason -> commentActions.reportComment(reply.rpid, reason) },
                                         canToggleTop = shouldShowReplyTopAction(

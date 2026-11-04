@@ -229,6 +229,11 @@ class VideoCommentViewModel : ViewModel() {
     private val _commentState = MutableStateFlow(CommentUiState())
     val commentState = _commentState.asStateFlow()
 
+    private val pendingReactions = mutableSetOf<Pair<Long, Long>>()
+    private val pendingDeletes = mutableSetOf<Pair<Long, Long>>()
+    private var commentSessionId = 0L
+    private val reactionOverrides = mutableMapOf<Long, Int>()
+
     private var commentLoadJob: Job? = null
     private var mainPagingSession: CommentPagingSession? = null
     private val removedMainReplyIds = mutableSetOf<Long>()
@@ -329,6 +334,8 @@ class VideoCommentViewModel : ViewModel() {
         currentAid = 0L
         currentSubject = CommentSubjectKey(0L)
         allReplies = emptyList()
+        commentSessionId++
+        reactionOverrides.clear()
         _commentState.value = CommentUiState(
             currentMid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L,
             composerDrafts = _commentState.value.composerDrafts.reset()
@@ -376,6 +383,8 @@ class VideoCommentViewModel : ViewModel() {
         currentAid = aid
         currentSubject = CommentSubjectKey(oid = aid, type = commentType)
         allReplies = emptyList()
+        commentSessionId++
+        reactionOverrides.clear()
         resetFullCommentSearch()
         // 获取当前登录用户 mid
         val myMid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
@@ -488,6 +497,8 @@ class VideoCommentViewModel : ViewModel() {
             allReplies = sentReplies.merge(cached.replies)
             _commentState.value = _commentState.value.copy(
                 replies = allReplies.toImmutableList(),
+                likedComments = reactionIds(emptySet(), allReplies.flatMap { listOf(it) + it.replies.orEmpty() }, 1),
+                hatedComments = reactionIds(emptySet(), allReplies.flatMap { listOf(it) + it.replies.orEmpty() }, 2),
                 pageControl = cached.pageControl,
                 replyCount = maxOf(cached.replyCount, currentState.replyCount),
                 replyCountSubject = requestSubject,
@@ -561,12 +572,8 @@ class VideoCommentViewModel : ViewModel() {
                     replies = combinedReplies.toImmutableList(),
                     voteCard = if (pageToLoad == 1) data.voteCard else current.voteCard,
                     pageControl = if (pageToLoad == 1) data.control else current.pageControl,
-                    likedComments = (current.likedComments + combinedReplies.flatMap { root ->
-                        (listOf(root) + root.replies.orEmpty()).filter { it.action == 1 }.map { it.rpid }
-                    }).toImmutableSet(),
-                    hatedComments = (current.hatedComments + combinedReplies.flatMap { root ->
-                        (listOf(root) + root.replies.orEmpty()).filter { it.action == 2 }.map { it.rpid }
-                    }).toImmutableSet(),
+                    likedComments = reactionIds(current.likedComments, combinedReplies.flatMap { listOf(it) + it.replies.orEmpty() }, 1),
+                    hatedComments = reactionIds(current.hatedComments, combinedReplies.flatMap { listOf(it) + it.replies.orEmpty() }, 2),
                     replyCount = totalCount,
                     replyCountSubject = requestSubject,
                     replyCountIsAuthoritative = true,
@@ -1008,8 +1015,8 @@ class VideoCommentViewModel : ViewModel() {
                             retryRequest = null
                         )
                         _commentState.update { comments -> comments.copy(
-                            likedComments = (comments.likedComments + items.filter { it.action == 1 }.map { it.rpid }).toImmutableSet(),
-                            hatedComments = (comments.hatedComments + items.filter { it.action == 2 }.map { it.rpid }).toImmutableSet()
+                            likedComments = reactionIds(comments.likedComments, listOfNotNull(mergedRoot) + items, 1),
+                            hatedComments = reactionIds(comments.hatedComments, listOfNotNull(mergedRoot) + items, 2)
                         ) }
                         appliedPages = pages.size
                     }
@@ -1364,52 +1371,68 @@ class VideoCommentViewModel : ViewModel() {
         _commentState.value = _commentState.value.copy(replyTarget = null)
     }
     
-    fun likeComment(rpid: Long) {
-        val currentState = _commentState.value
-        val isCurrentlyLiked = rpid in currentState.likedComments
-        val newLikedComments = if (isCurrentlyLiked) currentState.likedComments - rpid else currentState.likedComments + rpid
-        val newHatedComments = currentState.hatedComments - rpid
-        _commentState.value = currentState.copy(
-            likedComments = newLikedComments.toImmutableSet(),
-            hatedComments = newHatedComments.toImmutableSet()
-        )
-        
-        viewModelScope.launch {
-            CommentRepository.likeCommentForSubject(
-                oid = currentSubject.oid,
-                type = currentSubject.type,
-                rpid = rpid,
-                like = !isCurrentlyLiked
-            ).onFailure {
-                _commentState.value = _commentState.value.copy(likedComments = currentState.likedComments, hatedComments = currentState.hatedComments)
-            }
-        }
-    }
-    
-    fun hateComment(rpid: Long) {
-        val currentState = _commentState.value
-        val isCurrentlyHated = rpid in currentState.hatedComments
-        val newHatedComments = if (isCurrentlyHated) currentState.hatedComments - rpid else currentState.hatedComments + rpid
-        val newLikedComments = currentState.likedComments - rpid
-        _commentState.value = currentState.copy(
-            likedComments = newLikedComments.toImmutableSet(),
-            hatedComments = newHatedComments.toImmutableSet()
-        )
-        
-        viewModelScope.launch {
-            CommentRepository.hateCommentForSubject(
-                oid = currentSubject.oid,
-                type = currentSubject.type,
-                rpid = rpid,
-                hate = !isCurrentlyHated
-            ).onFailure {
-                _commentState.value = _commentState.value.copy(likedComments = currentState.likedComments, hatedComments = currentState.hatedComments)
-            }
-        }
-    }
-    
+    fun likeComment(rpid: Long) = reactToComment(rpid, liked = true)
 
-    
+    fun hateComment(rpid: Long) = reactToComment(rpid, liked = false)
+
+    private fun reactToComment(rpid: Long, liked: Boolean) {
+        val subject = currentSubject
+        val account = TokenManager.accountIdentity.value
+        val store = sentReplies
+        val sessionId = commentSessionId
+        val operation = sessionId to rpid
+        // 同一评论提交期间保持当前反馈，其他评论仍可独立操作。
+        if (!pendingReactions.add(operation)) return
+        val before = _commentState.value
+        val previousAction = when (rpid) {
+            in before.likedComments -> 1
+            in before.hatedComments -> 2
+            else -> 0
+        }
+        val action = if (liked) {
+            if (previousAction == 1) 0 else 1
+        } else {
+            if (previousAction == 2) 0 else 2
+        }
+        fun applyAction(value: Int) {
+            reactionOverrides[rpid] = value
+            _commentState.update { state -> state.copy(
+                likedComments = ((state.likedComments - rpid) + if (value == 1) setOf(rpid) else emptySet()).toImmutableSet(),
+                hatedComments = ((state.hatedComments - rpid) + if (value == 2) setOf(rpid) else emptySet()).toImmutableSet(),
+            ) }
+        }
+        applyAction(action)
+        viewModelScope.launch {
+            try {
+                val result = if (liked) CommentRepository.likeCommentForSubject(
+                    subject.oid, subject.type, rpid, action == 1
+                ) else CommentRepository.hateCommentForSubject(
+                    subject.oid, subject.type, rpid, action == 2
+                )
+                if (commentSessionId == sessionId && sentReplies === store && currentSubject == subject &&
+                    TokenManager.accountIdentity.value == account) {
+                    result.onFailure { error ->
+                        applyAction(previousAction)
+                        showCommentActionError(error.message ?: "操作失败，请重试")
+                    }
+                }
+            } finally {
+                pendingReactions.remove(operation)
+            }
+        }
+    }
+
+    private fun showCommentActionError(message: String) {
+        android.widget.Toast.makeText(NetworkModule.appContext, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    /** 加载只更新未被本次会话操作覆盖的服务器状态。 */
+    private fun reactionIds(existing: Set<Long>, replies: List<ReplyItem>, action: Int): ImmutableSet<Long> {
+        val loadedIds = replies.mapTo(mutableSetOf()) { it.rpid }
+        val server = existing - loadedIds + replies.filter { it.action == action }.map { it.rpid }
+        return (server - reactionOverrides.keys + reactionOverrides.filterValues { it == action }.keys).toImmutableSet()
+    }
+
     fun reportComment(rpid: Long, reason: Int, content: String = "") {
         viewModelScope.launch {
             CommentRepository.reportCommentForSubject(
@@ -1541,11 +1564,38 @@ class VideoCommentViewModel : ViewModel() {
     /**
      * 实际删除操作 (动画完成后调用)
      */
-    fun deleteComment(rpid: Long) {
-        if (!removedMainReplyIds.add(rpid)) return
+    fun deleteComment(rpid: Long) = requestDelete(rpid, subReply = false)
+
+    private fun requestDelete(rpid: Long, subReply: Boolean) {
         val subject = currentSubject
+        val account = TokenManager.accountIdentity.value
+        val store = sentReplies
+        val sessionId = commentSessionId
+        val operation = sessionId to rpid
+        val rootId = _subReplyState.value.rootReply?.rpid
+        if (!pendingDeletes.add(operation)) return
+        viewModelScope.launch {
+            try {
+                val result = CommentRepository.deleteCommentForSubject(subject.oid, subject.type, rpid)
+                if (commentSessionId != sessionId || sentReplies !== store || currentSubject != subject ||
+                    TokenManager.accountIdentity.value != account) return@launch
+                result.onSuccess {
+                    if (subReply) applyDeletedSubComment(rpid, rootId) else applyDeletedComment(rpid)
+                }.onFailure { error ->
+                    _commentState.update { it.copy(dissolvingIds = (it.dissolvingIds - rpid).toImmutableSet()) }
+                    _subReplyState.update { it.copy(dissolvingIds = (it.dissolvingIds - rpid).toImmutableSet()) }
+                    showCommentActionError(error.message ?: "删除失败，请重试")
+                }
+            } finally {
+                pendingDeletes.remove(operation)
+            }
+        }
+    }
+
+    private fun applyDeletedComment(rpid: Long) {
+        if (!removedMainReplyIds.add(rpid)) return
         sentReplies.removeRoot(rpid)
-        // 先从 UI 移除 (乐观更新)
+        // 服务端确认后同步列表和数量。
         val current = _commentState.value
         val updatedReplies = allReplies.filter { it.rpid != rpid }
         allReplies = updatedReplies
@@ -1556,20 +1606,6 @@ class VideoCommentViewModel : ViewModel() {
             replyCount = maxOf(0, current.replyCount - 1),
             dissolvingIds = (current.dissolvingIds - rpid).toImmutableSet()
         )
-
-        // 发起网络请求
-        viewModelScope.launch {
-            CommentRepository.deleteCommentForSubject(
-                oid = subject.oid,
-                type = subject.type,
-                rpid = rpid
-            ).onFailure { e ->
-                // 如果删除失败，可能需要恢复? 暂时只需提示
-                // 实际场景中很少失败，除非网络极差
-                // 若要严格一致性，可以在这里重新加载评论列表
-                android.util.Log.e("CommentVM", "Delete failed for $rpid: ${e.message}")
-            }
-        }
     }
     
     /**
@@ -1583,13 +1619,14 @@ class VideoCommentViewModel : ViewModel() {
     /**
      * [新增] 删除二级评论（动画完成后调用）
      */
-    fun deleteSubComment(rpid: Long) {
-        val subject = currentSubject
+    fun deleteSubComment(rpid: Long) = requestDelete(rpid, subReply = true)
+
+    private fun applyDeletedSubComment(rpid: Long, rootId: Long?) {
         val newlyRemoved = removedSubReplyIds.add(rpid)
-        localSubReplies.remove(rpid)
         val current = _subReplyState.value
+        val matchesThread = current.rootReply?.rpid == rootId
+        if (matchesThread) localSubReplies.remove(rpid)
         if (newlyRemoved) {
-            val rootId = current.rootReply?.rpid
             rootId?.let { sentReplies.removeReply(it, rpid) }
             allReplies = allReplies.map { root ->
                 if (root.rpid != rootId) root else root.copy(
@@ -1602,7 +1639,7 @@ class VideoCommentViewModel : ViewModel() {
         }
         // 从二级评论列表中移除
         val updatedItems = current.items.filter { it.rpid != rpid }
-        _subReplyState.value = current.copy(
+        if (matchesThread) _subReplyState.value = current.copy(
             rootReply = current.rootReply?.let { root ->
                 if (!newlyRemoved) root else root.copy(
                     replies = root.replies?.filterNot { it.rpid == rpid },
@@ -1626,18 +1663,7 @@ class VideoCommentViewModel : ViewModel() {
         }
 
         android.util.Log.d("CommentVM", " deleteSubComment: rpid=$rpid, remaining=${updatedItems.size}")
-        
-        // 发起网络删除请求（使用 rootReply 的 oid）
-        val oid = subject.oid.takeIf { it > 0L } ?: return
-        viewModelScope.launch {
-            CommentRepository.deleteCommentForSubject(
-                oid = oid,
-                type = subject.type,
-                rpid = rpid
-            ).onFailure { e ->
-                android.util.Log.e("CommentVM", "Delete sub-comment failed for $rpid: ${e.message}")
-            }
-        }
+
     }
 
 }

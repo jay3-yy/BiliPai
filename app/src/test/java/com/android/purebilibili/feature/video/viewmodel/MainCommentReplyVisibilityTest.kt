@@ -11,6 +11,9 @@ import com.android.purebilibili.core.store.AccountSessionIdentity
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.feature.comment.SentCommentReplyStores
 import com.android.purebilibili.data.repository.CommentRepository
+import io.mockk.coVerify
+import io.mockk.mockkStatic
+import android.widget.Toast
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -77,6 +80,8 @@ class MainCommentReplyVisibilityTest {
         coEvery {
             CommentFraudRepository.saveRecord(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns Unit
+        mockkStatic(Toast::class)
+        every { Toast.makeText(any(), any<CharSequence>(), any()) } returns mockk(relaxed = true)
         model = VideoCommentViewModel()
         store.put("comments", model)
         model.init(1001L)
@@ -91,6 +96,90 @@ class MainCommentReplyVisibilityTest {
         SentCommentReplyStores.clear()
         unmockkAll()
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `canceling a server like survives a stale refresh`() = runTest(dispatcher) {
+        remoteRoot = root.copy(action = 1)
+        model.refreshComments()
+        runCurrent()
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } returns Result.success(Unit)
+        model.likeComment(root.rpid)
+        runCurrent()
+        assertFalse(root.rpid in model.commentState.value.likedComments)
+        coVerify { CommentRepository.likeCommentForSubject(1001L, 1, root.rpid, false) }
+        model.refreshComments()
+        runCurrent()
+        assertFalse(root.rpid in model.commentState.value.likedComments)
+    }
+
+    @Test
+    fun `failed like preserves another comment successful like`() = runTest(dispatcher) {
+        val first = CompletableDeferred<Result<Unit>>()
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), 10L, any()) } coAnswers { first.await() }
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), 20L, any()) } returns Result.success(Unit)
+        model.likeComment(10L)
+        model.likeComment(20L)
+        runCurrent()
+        first.complete(Result.failure(IllegalStateException("offline")))
+        runCurrent()
+        assertFalse(10L in model.commentState.value.likedComments)
+        assertTrue(20L in model.commentState.value.likedComments)
+    }
+
+    @Test
+    fun `old like failure cannot update a reopened subject`() = runTest(dispatcher) {
+        remoteRoot = root.copy(action = 1)
+        model.refreshComments()
+        runCurrent()
+        val pending = CompletableDeferred<Result<Unit>>()
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } coAnswers { pending.await() }
+        model.likeComment(root.rpid)
+        runCurrent()
+        model.clearForVideoChange()
+        sharedVideoCommentCache.clear()
+        remoteRoot = root
+        model.init(1001L)
+        runCurrent()
+        pending.complete(Result.failure(IllegalStateException("old response")))
+        runCurrent()
+        assertTrue(model.commentState.value.likedComments.isEmpty())
+    }
+
+    @Test
+    fun `failed deletion retains comment count and permits retry`() = runTest(dispatcher) {
+        coEvery { CommentRepository.deleteCommentForSubject(any(), any(), any()) } returns
+            Result.failure(IllegalStateException("offline"))
+        val count = model.commentState.value.replyCount
+        model.startDissolve(root.rpid)
+        model.deleteComment(root.rpid)
+        runCurrent()
+        assertTrue(model.commentState.value.replies.any { it.rpid == root.rpid })
+        assertEquals(count, model.commentState.value.replyCount)
+        assertFalse(root.rpid in model.commentState.value.dissolvingIds)
+        coEvery { CommentRepository.deleteCommentForSubject(any(), any(), any()) } returns Result.success(Unit)
+        model.deleteComment(root.rpid)
+        runCurrent()
+        assertFalse(model.commentState.value.replies.any { it.rpid == root.rpid })
+        assertEquals(count - 1, model.commentState.value.replyCount)
+    }
+
+    @Test
+    fun `failed thread deletion preserves preview and counts`() = runTest(dispatcher) {
+        coEvery { CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any()) } returns
+            Result.success(ReplyData(root = root, replies = root.replies, cursor = ReplyCursor(isEnd = true)))
+        coEvery { CommentRepository.deleteCommentForSubject(any(), any(), any()) } returns
+            Result.failure(IllegalStateException("offline"))
+        model.openSubReply(root)
+        runCurrent()
+        val count = model.subReplyState.value.totalCount
+        model.startSubDissolve(20L)
+        model.deleteSubComment(20L)
+        runCurrent()
+        assertTrue(model.subReplyState.value.items.any { it.rpid == 20L })
+        assertEquals(count, model.subReplyState.value.totalCount)
+        assertEquals(root.replies, model.commentState.value.replies.single().replies)
+        assertFalse(20L in model.subReplyState.value.dissolvingIds)
     }
 
     @Test

@@ -1791,8 +1791,8 @@ internal fun VideoCommentTab(
                             ),
                             onToggleTopClick = { onToggleTopComment(reply) },
                             // [修复] 正确传递点赞状态 (API数据 或 本地乐观更新)
-                            isLiked = reply.action == 1 || reply.rpid in likedComments,
-                            isHated = reply.action == 2 || reply.rpid in hatedComments,
+                            isLiked = reply.rpid in likedComments,
+                            isHated = reply.rpid in hatedComments,
                             // [新增] 仅当评论 mid 与当前登录用户 mid 一致时显示删除按钮
                             onDeleteClick = if (currentMid > 0 && reply.mid == currentMid) {
                                 { onDissolveStart(reply.rpid) }

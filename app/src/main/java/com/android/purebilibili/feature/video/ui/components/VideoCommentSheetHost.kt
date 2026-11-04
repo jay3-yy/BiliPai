@@ -1046,9 +1046,10 @@ internal fun VideoCommentMainList(
                             onTimestampClick = onTimestampClick,
                             maxTimestampMs = maxTimestampMs,
                             onImagePreview = onImagePreview,
+                            isLiked = reply.rpid in state.likedComments,
                             onLikeClick = { viewModel.likeComment(reply.rpid) },
                             onHateClick = { viewModel.hateComment(reply.rpid) },
-                            isHated = reply.action == 2 || reply.rpid in state.hatedComments,
+                            isHated = reply.rpid in state.hatedComments,
                             onReplyClick = {
                                 if (shouldOpenPortraitCommentReplyComposer()) {
                                     onReplyClick(reply)
