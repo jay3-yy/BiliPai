@@ -252,6 +252,7 @@ data class VideoItem(
                 (rights?.ugcPay ?: 0) > 0 || (rights?.ugcPayPreview ?: 0) > 0,
             paid = (rights?.pay ?: 0) > 0 || (rights?.arcPay ?: 0) > 0,
             serverLabels = listOfNotNull(pgcLabel) + badges.map { it.text } +
+                (if (isVertical) listOf("竖屏") else emptyList()) +
                 when (contentType) {
                     "live_room" -> listOf("直播")
                     "picture" -> listOf("动态")

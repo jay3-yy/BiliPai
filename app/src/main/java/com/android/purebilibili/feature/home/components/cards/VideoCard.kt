@@ -983,10 +983,6 @@ internal fun ElegantVideoCard(
     val publishTimeRowText = rememberVideoCardPublishTimeText(video, showPublishTime, cardVisibleInWindow)
     val emphasizePublishTime = false
 
-    //  判断是否为竖屏视频（通过封面图 URL 中的尺寸信息或默认不显示）
-    // B站封面 URL 通常包含尺寸信息，如 width=X&height=Y
-    // 简单方案：暂不显示竖屏标签（因推荐API不提供视频尺寸信息）
-
     //  获取屏幕尺寸用于计算归一化坐标
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current

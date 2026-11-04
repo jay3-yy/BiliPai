@@ -11,6 +11,19 @@ class VideoStatusLabelsTest {
     private val json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 
     @Test
+    fun mobileFeedPlaybackDimensionsProduceVerticalBadge() {
+        val portrait = json.decodeFromString<MobileFeedItem>(
+            """{"goto":"av","uri":"bilibili://video/123?player_width=1080&player_height=1920"}""",
+        ).toVideoItem()
+        assertTrue(portrait.isVertical)
+        assertTrue("竖屏" in portrait.statusLabels)
+        val landscape = json.decodeFromString<MobileFeedItem>(
+            """{"goto":"av","uri":"bilibili://video/123?player_width=1920&player_height=1080"}""",
+        ).toVideoItem()
+        assertTrue("竖屏" !in landscape.statusLabels)
+    }
+
+    @Test
     fun popularChargingAndServerLabelsSurviveConversionWithoutDuplicates() {
         val item = json.decodeFromString<PopularItem>(
             """{"charging_pay":{"level":0},"rights":{"is_cooperation":1},
