@@ -3,6 +3,7 @@ import android.content.pm.ActivityInfo
 import com.android.purebilibili.core.util.AppDisplayContext
 import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.util.FormatUtils
 
 internal const val LIVE_INPUT_HEIGHT_DP = 70
 internal const val LIVE_CHAT_INPUT_GAP_DP = 55
@@ -151,12 +152,9 @@ fun formatLiveDuration(
 }
 
 fun formatLiveViewerCount(count: Int): String {
-    return when {
-        count >= 100_000_000 -> "%.1f亿".format(count / 100_000_000f)
-        count >= 10_000 -> "%.1f万".format(count / 10_000f)
-        count > 0 -> count.toString()
-        else -> "-"
-    }
+    // 0 表示人数未知/未开播，与真实零值区分，保留 "-" 占位。
+    if (count <= 0) return "-"
+    return FormatUtils.formatStat(count.toLong())
 }
 
 /** 未就绪的尺寸不覆盖详情方向；像素宽高比参与实际画面方向判断。 */

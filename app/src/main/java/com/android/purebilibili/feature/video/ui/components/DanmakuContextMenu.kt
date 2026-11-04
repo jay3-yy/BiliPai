@@ -45,6 +45,7 @@ import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
 import com.android.purebilibili.core.ui.common.TextSelectionBottomSheet
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.util.FormatUtils
 
 // Popup surfaces and content follow the active application theme.
 
@@ -483,12 +484,8 @@ private fun MainMenu(
 }
 
 
-private fun formatVoteCount(rawCount: Int): String {
-    val count = rawCount.coerceAtLeast(0)
-    if (count < 10_000) return count.toString()
-    val compact = ((count / 1000) / 10f).toString().removeSuffix(".0")
-    return "${compact}万"
-}
+private fun formatVoteCount(rawCount: Int): String =
+    FormatUtils.formatStat(rawCount.toLong())
 
 private fun formatDanmakuTimestampJumpLabel(timeMs: Long): String {
     val totalSeconds = timeMs / 1000L

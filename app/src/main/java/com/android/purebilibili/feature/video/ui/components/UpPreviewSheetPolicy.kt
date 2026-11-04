@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.components
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import com.android.purebilibili.core.util.FormatUtils
 
 /**
  * UP 半屏预览在深/浅色下的表面色。
@@ -74,21 +75,7 @@ internal fun resolveUpPreviewStatLine(
     return parts.joinToString("  ")
 }
 
-internal fun formatUpPreviewCount(count: Int): String {
-    val safe = count.coerceAtLeast(0)
-    return when {
-        safe >= 100_000_000 -> String.format("%.1f亿", safe / 100_000_000f)
-        safe >= 10_000 -> {
-            val wan = safe / 10_000f
-            if (wan >= 100f) {
-                String.format("%.0f万", wan)
-            } else {
-                String.format("%.1f万", wan)
-            }
-        }
-        else -> safe.toString()
-    }
-}
+internal fun formatUpPreviewCount(count: Int): String = FormatUtils.formatStat(count.toLong())
 
 internal data class UpPreviewVideoItem(
     val bvid: String,

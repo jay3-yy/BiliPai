@@ -65,16 +65,13 @@ import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.data.model.response.SessionItem
 import com.android.purebilibili.core.ui.AppSurfaceTokens
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
 import com.android.purebilibili.core.ui.skeleton.rememberStaticSkeletonBlockColor
+import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.resolveSingleColumnFeedMaxWidth
 import com.android.purebilibili.core.util.responsiveContentWidth
 
@@ -771,7 +768,7 @@ fun SessionListItem(
 
         Column(horizontalAlignment = Alignment.End) {
             AppText(
-                text = formatTime(session.last_msg?.timestamp ?: 0),
+                text = FormatUtils.formatPublishTime(session.last_msg?.timestamp ?: 0),
                 style = MaterialTheme.typography.bodySmall,
                 color = AppContentColors.secondaryText()
             )
@@ -809,48 +806,3 @@ private fun MessageSmallFlag(text: String) {
     )
 }
 
-// 会话行组合期热路径：共享 formatter，避免每行新建 SimpleDateFormat。
-// 仅主线程（Compose 组合）调用，不涉及 SimpleDateFormat 的线程安全问题。
-private val inboxDayFormatter = SimpleDateFormat("MM-dd", Locale.getDefault())
-private val inboxYearDayFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-private val inboxClockFormatter = SimpleDateFormat("HH:mm", Locale.getDefault())
-private val inboxTimeCalendar = Calendar.getInstance()
-
-/**
- * 会话列表按时间距离显示：
- * 刚刚 / N分钟前 / N小时前 / 昨天 HH:mm / N天前 / 同年 MM-dd / 跨年 yyyy-MM-dd。
- */
-private fun formatTime(timestamp: Long): String {
-    if (timestamp <= 0L) return ""
-    val nowMillis = System.currentTimeMillis()
-    val date = Date(timestamp * 1000)
-    val diffMinutes = ((nowMillis - date.time) / 60_000L).toInt()
-    if (diffMinutes < 1) return "刚刚"
-    if (diffMinutes < 60) return "${diffMinutes}分钟前"
-    val diffHours = diffMinutes / 60
-    if (diffHours < 24) return "${diffHours}小时前"
-
-    val calendar = inboxTimeCalendar
-    val today = (calendar.clone() as Calendar).apply {
-        timeInMillis = nowMillis
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    calendar.time = date
-    val dateDay = (calendar.clone() as Calendar).apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    val dayDiff = ((today.timeInMillis - dateDay.timeInMillis) / 86_400_000L).toInt()
-    if (dayDiff == 1) return "昨天 ${inboxClockFormatter.format(date)}"
-    if (dayDiff < 4) return "${dayDiff}天前"
-    return if (today.get(Calendar.YEAR) == calendar.get(Calendar.YEAR)) {
-        inboxDayFormatter.format(date)
-    } else {
-        inboxYearDayFormatter.format(date)
-    }
-}

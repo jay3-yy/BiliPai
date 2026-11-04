@@ -23,7 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.FullscreenActionCount
 import com.android.purebilibili.core.store.FullscreenActionCountSettings
 import com.android.purebilibili.core.ui.components.AppText
-import java.util.Locale
+import com.android.purebilibili.core.util.FormatUtils
 
 internal val PlayerActionCountTopOverflow = 5.dp
 internal val PlayerActionCountEndOverflow = 2.dp
@@ -36,17 +36,7 @@ internal fun rememberVisibleFullscreenCounts(): Set<FullscreenActionCount> {
     return visible
 }
 
-internal fun formatPlayerActionCount(count: Long): String {
-    val value = count.coerceAtLeast(0)
-    return when {
-        value >= 100_000_000L -> if (value >= 99_900_000_000L) "999亿+"
-            else if (value >= 10_000_000_000L) "${value / 100_000_000L}亿"
-            else String.format(Locale.ROOT, "%.1f亿", value / 100_000_000.0)
-        value >= 1_000_000L -> "${value / 10_000L}万"
-        value >= 10_000L -> String.format(Locale.ROOT, "%.1f万", value / 10_000.0)
-        else -> value.toString()
-    }
-}
+internal fun formatPlayerActionCount(count: Long): String = FormatUtils.formatStat(count)
 
 /** 播放器顶栏计数以图标右上角定位，不参与按钮测量；未知不显示，真实零值显示 0。 */
 @Composable

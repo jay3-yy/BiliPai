@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.dynamic
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.util.FormatUtils
 import kotlin.math.roundToInt
 
 internal enum class DynamicVideoCardLayoutMode {
@@ -92,13 +93,7 @@ internal fun resolveDynamicActionButtonText(
     }
 }
 
-private fun formatDynamicActionCount(count: Int): String {
-    return when {
-        count >= 10000 -> "${count / 10000}万"
-        count >= 1000 -> String.format("%.1fk", count / 1000f)
-        else -> count.toString()
-    }
-}
+private fun formatDynamicActionCount(count: Int): String = FormatUtils.formatStat(count.toLong())
 
 internal const val DYNAMIC_SIDEBAR_MAX_CASCADE_ITEMS = 8
 internal const val DYNAMIC_SIDEBAR_AVATAR_PREFETCH_COUNT = 6

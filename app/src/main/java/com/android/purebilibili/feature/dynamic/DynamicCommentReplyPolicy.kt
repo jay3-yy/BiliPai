@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.video.viewmodel.resolveSentSubReply
 
@@ -178,16 +179,4 @@ internal fun replaceDynamicCommentInList(
     else reply.copy(replies = reply.replies?.let { replaceDynamicCommentInList(it, replacement) })
 }
 
-private fun formatDynamicCommentCount(count: Int): String {
-    return when {
-        count >= 100_000_000 -> formatScaledCount(count, 100_000_000, "亿")
-        count >= 10_000 -> formatScaledCount(count, 10_000, "万")
-        else -> count.toString()
-    }
-}
-
-private fun formatScaledCount(count: Int, unit: Int, suffix: String): String {
-    val whole = count / unit
-    val tenths = (count % unit) / (unit / 10)
-    return if (tenths == 0) "$whole$suffix" else "$whole.$tenths$suffix"
-}
+private fun formatDynamicCommentCount(count: Int): String = FormatUtils.formatStat(count.toLong())

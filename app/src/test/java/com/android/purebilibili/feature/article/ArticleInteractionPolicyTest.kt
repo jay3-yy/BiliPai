@@ -20,11 +20,14 @@ class ArticleInteractionPolicyTest {
     }
 
     @Test
-    fun `action count remains bounded for large counts`() {
+    fun `action count follows unified stat format`() {
         assertEquals("0", formatArticleActionCount(0))
         assertEquals("9999", formatArticleActionCount(9999))
-        assertEquals("1.0万", formatArticleActionCount(10000))
-        assertEquals("1.0亿", formatArticleActionCount(100000000))
-        assertEquals("9999亿+", formatArticleActionCount(Long.MAX_VALUE))
+        assertEquals("1万", formatArticleActionCount(10000))
+        assertEquals("1.2万", formatArticleActionCount(12345))
+        assertEquals("120万", formatArticleActionCount(1_234_567))
+        assertEquals("1亿", formatArticleActionCount(100000000))
+        assertEquals("1.2亿", formatArticleActionCount(123_456_789))
+        assertEquals("999亿+", formatArticleActionCount(Long.MAX_VALUE))
     }
 }

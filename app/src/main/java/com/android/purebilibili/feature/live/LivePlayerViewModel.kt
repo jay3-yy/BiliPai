@@ -42,6 +42,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
+import com.android.purebilibili.core.util.FormatUtils
 
 /**
  * 直播弹幕 UI 模型
@@ -1540,13 +1541,8 @@ class LivePlayerViewModel : ViewModel() {
         )
     }
 
-    private fun formatLiveCompactCount(value: Long): String {
-        return when {
-            value >= 100_000_000L -> "%.1f亿".format(value / 100_000_000f)
-            value >= 10_000L -> "%.1f万".format(value / 10_000f)
-            else -> value.toString()
-        }
-    }
+    private fun formatLiveCompactCount(value: Long): String =
+        FormatUtils.formatStat(value)
 
     private fun updateLiveHeartbeatForRoom(roomInfo: RoomInfo) {
         if (roomInfo.liveStatus == 1 && currentRoomId > 0L) {
