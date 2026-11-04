@@ -622,12 +622,16 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             if (playData.dash != null) {
                 val checkedPlayDataDash = requireNotNull(playData.dash)
                 // DASH 格式
-                val dash = checkedPlayDataDash
+                val dash = checkedPlayDataDash.let { source ->
+                    source.copy(video = com.android.purebilibili.core.util.VideoTrackCapabilities.filterForPlayback(
+                        checkNotNull(NetworkModule.appContext), source.video,
+                    ))
+                }
                 val targetQuality = if (requestedQn >= 127) {
                     dash.video.map { it.id }.filter { quality ->
                         when (quality) {
-                            126 -> MediaUtils.isDolbyVisionSupported()
-                            125 -> MediaUtils.isHdrSupported()
+                            126 -> MediaUtils.isDolbyVisionSupported(NetworkModule.appContext)
+                            125 -> MediaUtils.isHdrSupported(NetworkModule.appContext)
                             else -> true
                         }
                     }.maxOrNull() ?: playData.quality
@@ -1059,7 +1063,11 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
                 val audioUrl: String?
                 val dashManifest: String?
                 val durlSegmentUrls: List<String>
-                val dash = playData.dash
+                val dash = playData.dash?.let { source ->
+                    source.copy(video = com.android.purebilibili.core.util.VideoTrackCapabilities.filterForPlayback(
+                        checkNotNull(NetworkModule.appContext), source.video,
+                    ))
+                }
                 val audioSelection = dash?.let {
                     resolveAudioStreamSelection(
                         dash = it,

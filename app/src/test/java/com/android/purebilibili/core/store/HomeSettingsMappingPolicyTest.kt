@@ -27,6 +27,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.isBottomBarFloating)
         assertEquals(0, result.bottomBarLabelMode)
         assertEquals(SettingsManager.TopTabLabelMode.TEXT_ONLY, result.topTabLabelMode)
+        assertFalse(result.partitionSideRailOnRight)
         assertFalse(result.hideTopTabs)
         assertEquals(HomeTopRightAction.SETTINGS, result.homeTopRightAction)
         assertEquals(HomeTopLayoutOrder.SEARCH_THEN_TABS, result.homeTopLayoutOrder)
@@ -90,6 +91,7 @@ class HomeSettingsMappingPolicyTest {
             booleanPreferencesKey("bottom_bar_floating") to false,
             intPreferencesKey("bottom_bar_label_mode") to 2,
             intPreferencesKey("top_tab_label_mode") to 1,
+            booleanPreferencesKey("partition_side_rail_on_right") to true,
             intPreferencesKey("home_top_right_action") to HomeTopRightAction.INBOX.value,
             intPreferencesKey("home_top_layout_order") to HomeTopLayoutOrder.TABS_THEN_SEARCH.value,
             booleanPreferencesKey("header_blur_enabled") to false,
@@ -141,6 +143,7 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.isBottomBarFloating)
         assertEquals(2, result.bottomBarLabelMode)
         assertEquals(1, result.topTabLabelMode)
+        assertTrue(result.partitionSideRailOnRight)
         assertEquals(HomeTopRightAction.INBOX, result.homeTopRightAction)
         assertEquals(HomeTopLayoutOrder.TABS_THEN_SEARCH, result.homeTopLayoutOrder)
         assertFalse(result.isHeaderBlurEnabled)

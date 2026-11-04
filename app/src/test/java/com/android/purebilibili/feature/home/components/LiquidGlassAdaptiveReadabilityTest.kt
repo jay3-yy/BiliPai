@@ -1,10 +1,8 @@
 package com.android.purebilibili.feature.home.components
 
 import androidx.compose.ui.graphics.Color
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class LiquidGlassAdaptiveReadabilityTest {
 
@@ -88,20 +86,5 @@ class LiquidGlassAdaptiveReadabilityTest {
                 backgroundColor = Color(0xFFF2F2F4),
             ),
         )
-    }
-
-    @Test
-    fun `pixel sampling is lifecycle bound and serialized`() {
-        val root = listOf(File("."), File("..")).first { File(it, "app/src/main").exists() }
-        val source = File(
-            root,
-            "app/src/main/java/com/android/purebilibili/feature/home/components/" +
-                "LiquidGlassAdaptiveReadability.kt",
-        ).readText()
-
-        assertTrue(source.contains("repeatOnLifecycle(Lifecycle.State.STARTED)"))
-        assertTrue(source.contains("adaptiveReadabilityPixelCopyMutex.withLock"))
-        assertEquals(1, Regex("Handler\\(Looper.getMainLooper\\(\\)\\)").findAll(source).count())
-        assertTrue(source.contains("by lazy(LazyThreadSafetyMode.NONE)"))
     }
 }

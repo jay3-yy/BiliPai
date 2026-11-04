@@ -340,7 +340,11 @@ private fun BangumiHubScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .then(chromeSource?.modifier ?: Modifier)
-                    .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
+                    .then(
+                        if (hazeState != null &&
+                            com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                        ) Modifier.hazeSourceCompat(hazeState) else Modifier
+                    )
                     .globalWallpaperAwareBackground(MaterialTheme.colorScheme.background),
             ) {
                 // 沉浸顶栏使用列表内部留白，让滚动内容进入采样区域；普通顶栏保留外部避让。

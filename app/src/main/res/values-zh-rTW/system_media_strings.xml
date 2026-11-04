@@ -1,0 +1,16 @@
+<resources>
+    <string name="playback_widget_name">播放與續播</string>
+    <string name="playback_widget_description">查看目前影片、繼續聽影片，或開啟稍後再看與搜尋</string>
+    <string name="playback_widget_empty">請先在 BiliPai 播放一段影片</string>
+    <string name="playback_widget_play">繼續播放</string>
+    <string name="playback_widget_pause">暫停</string>
+    <string name="playback_widget_previous">上一首</string>
+    <string name="playback_widget_next">下一首</string>
+    <string name="playback_widget_error">暫時無法控制播放，請開啟 BiliPai</string>
+    <string name="audio_library_title">聽影片</string>
+    <string name="audio_library_queue">最近播放佇列</string>
+    <string name="audio_library_more">更多稍後再看</string>
+    <string name="audio_library_login">請先在手機上登入 BiliPai</string>
+    <string name="audio_library_empty">尚無可續播記錄，請先在手機播放影片</string>
+    <string name="audio_library_locked">已開啟隱私內容驗證，請在手機上管理播放</string>
+</resources>

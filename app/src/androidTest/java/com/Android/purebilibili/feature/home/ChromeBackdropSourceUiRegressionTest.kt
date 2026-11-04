@@ -37,6 +37,8 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.components.LocalAppTopBarIconBackdrop
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import com.android.purebilibili.core.ui.blur.ChromeBackdropSource
+import com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed
+import com.android.purebilibili.core.ui.blur.rememberPagerChromeBackdropRecordingAllowed
 import com.android.purebilibili.feature.home.components.floatingDockCaptureOverflow
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
 import com.android.purebilibili.core.ui.wallpaper.sharedGlobalWallpaperBackground
@@ -46,6 +48,8 @@ import org.junit.Assert.assertSame
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -53,6 +57,7 @@ import top.yukonga.miuix.kmp.blur.blur
 import com.android.purebilibili.core.ui.effect.lens
 import androidx.compose.foundation.shape.RoundedCornerShape
 import top.yukonga.miuix.kmp.blur.drawBackdrop
+import kotlinx.coroutines.launch
 
 class ChromeBackdropSourceUiRegressionTest {
     @get:Rule
@@ -168,6 +173,134 @@ class ChromeBackdropSourceUiRegressionTest {
 
     @Test
     fun hiddenDockCaptureStillUpdatesItsConsumer() = verifySource(hidden = true)
+
+    @Test
+    fun pausedRecordingResumesWithCurrentContentAndTheSameSource() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val recording = mutableStateOf(true)
+        val tint = mutableStateOf(Color.Red)
+        lateinit var currentSource: ChromeBackdropSource
+        lateinit var originalSource: ChromeBackdropSource
+        composeRule.setContent {
+            val source = rememberChromeBackdropSource(
+                drawContentToScreen = false,
+                isolateContentDrawing = true,
+                recordingEnabled = recording.value,
+            )
+            SideEffect { currentSource = source }
+            Box(Modifier.size(80.dp).background(Color.Blue).testTag("backdrop-result")) {
+                Box(
+                    Modifier.matchParentSize()
+                        .then(source.modifier)
+                        .drawBehind { drawRect(tint.value) },
+                )
+                if (recording.value) {
+                    Box(Modifier.matchParentSize().drawBackdrop(
+                        backdrop = source.backdrop,
+                        shape = { RectangleShape },
+                        effects = {},
+                    ))
+                }
+            }
+        }
+        assertCenterColor(Color.Red)
+        composeRule.runOnIdle {
+            originalSource = currentSource
+            recording.value = false
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { tint.value = Color.Green }
+        assertCenterColor(Color.Blue)
+        composeRule.runOnIdle { assertFalse(currentSource.isReady) }
+
+        composeRule.runOnIdle { recording.value = true }
+        assertCenterColor(Color.Green)
+        composeRule.runOnIdle { assertSame(originalSource, currentSource) }
+    }
+
+    @Test
+    fun pausedVisibleSourceStillDrawsLiveContentWithoutPublishingARecording() {
+        val tint = mutableStateOf(Color.Red)
+        lateinit var source: ChromeBackdropSource
+        composeRule.setContent {
+            val current = rememberChromeBackdropSource(recordingEnabled = false)
+            SideEffect { source = current }
+            Box(Modifier.size(80.dp).testTag("backdrop-result").then(current.modifier).drawBehind {
+                drawRect(tint.value)
+            })
+        }
+        assertCenterColor(Color.Red)
+        composeRule.runOnIdle {
+            assertFalse(source.isReady)
+            tint.value = Color.Green
+        }
+        assertCenterColor(Color.Green)
+        composeRule.runOnIdle { assertFalse(source.isReady) }
+    }
+
+    @Test
+    fun pagerRetainedSourcesOnlyRecordExposedPagesAndKeepIdentityAcrossReturn() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+        val parentRecordingAllowed = mutableStateOf(true)
+        val sources = mutableMapOf<Int, ChromeBackdropSource>()
+        lateinit var pager: androidx.compose.foundation.pager.PagerState
+        lateinit var scope: kotlinx.coroutines.CoroutineScope
+        lateinit var firstSource: ChromeBackdropSource
+        composeRule.setContent {
+            val state = androidx.compose.foundation.pager.rememberPagerState { 3 }
+            val pagerScope = androidx.compose.runtime.rememberCoroutineScope()
+            SideEffect { pager = state; scope = pagerScope }
+            CompositionLocalProvider(LocalChromeBackdropRecordingAllowed provides parentRecordingAllowed.value) {
+                androidx.compose.foundation.pager.HorizontalPager(
+                    state = state,
+                    beyondViewportPageCount = 2,
+                    modifier = Modifier.width(100.dp).height(80.dp),
+                ) { page ->
+                    CompositionLocalProvider(
+                        LocalChromeBackdropRecordingAllowed provides
+                            rememberPagerChromeBackdropRecordingAllowed(state, page),
+                    ) {
+                        val source = rememberChromeBackdropSource()
+                        SideEffect { sources[page] = source }
+                        Box(Modifier.size(100.dp, 80.dp).then(source.modifier).background(Color.Red))
+                    }
+                }
+            }
+        }
+        composeRule.runOnIdle {
+            firstSource = sources.getValue(0)
+            assertTrue(firstSource.isReady)
+            assertFalse(sources.getValue(1).isReady)
+            assertFalse(sources.getValue(2).isReady)
+            scope.launch { pager.scrollToPage(0, 0.4f) }
+        }
+        composeRule.runOnIdle {
+            assertTrue(sources.getValue(0).isReady)
+            assertTrue(sources.getValue(1).isReady)
+            assertFalse(sources.getValue(2).isReady)
+            scope.launch { pager.scrollToPage(1) }
+        }
+        composeRule.runOnIdle {
+            assertFalse(sources.getValue(0).isReady)
+            assertTrue(sources.getValue(1).isReady)
+            scope.launch { pager.scrollToPage(0) }
+        }
+        composeRule.runOnIdle {
+            assertSame(firstSource, sources.getValue(0))
+            assertTrue(firstSource.isReady)
+            assertFalse(sources.getValue(1).isReady)
+            parentRecordingAllowed.value = false
+        }
+        composeRule.runOnIdle {
+            assertFalse(firstSource.isReady)
+            assertFalse(sources.getValue(1).isReady)
+            parentRecordingAllowed.value = true
+        }
+        composeRule.runOnIdle {
+            assertSame(firstSource, sources.getValue(0))
+            assertTrue(firstSource.isReady)
+        }
+    }
 
     @Test
     fun hiddenDockCaptureIncludesBadgePixelsAboveItsContentBand() {

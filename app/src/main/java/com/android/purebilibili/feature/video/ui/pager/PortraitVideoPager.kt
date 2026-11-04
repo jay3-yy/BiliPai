@@ -2265,6 +2265,11 @@ private fun VideoPageItem(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    val surfaceHdrRequired = if (isCurrentPage) {
+        com.android.purebilibili.feature.video.ui.components.rememberVideoSurfaceHdrRequired(
+            exoPlayer, selectedQualityId,
+        )
+    } else requiresHdrSurfaceOutput(selectedQualityId)
     val portraitPageBackdrop = com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
     val portraitGlassSupported = com.android.purebilibili.feature.video.ui.section.supportsPlayerPageGlass(
         liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
@@ -3340,12 +3345,9 @@ private fun VideoPageItem(
 
         // Wait for persisted surface settings while retaining format-aware HDR selection.
         if (isCurrentPage && isPlayerReadyForThisVideo && isPlayerSurfaceReady && !isAudioOnly) {
-            val surfaceHdrRequired = com.android.purebilibili.feature.video.ui.components.rememberVideoSurfaceHdrRequired(
-                exoPlayer, selectedQualityId,
-            )
             val preferTexture = shouldUseTextureSurfaceForFlip(
-                isFlippedHorizontal = portraitFlippedHorizontal,
-                isFlippedVertical = portraitFlippedVertical,
+                isFlippedHorizontal = portraitFlippedHorizontal && !surfaceHdrRequired,
+                isFlippedVertical = portraitFlippedVertical && !surfaceHdrRequired,
                 navigationTransformEnabled = useTextureSurfaceForNavigation || portraitGlassSupported,
                 requiresHdrSurfaceOutput = surfaceHdrRequired,
             )
@@ -3366,8 +3368,8 @@ private fun VideoPageItem(
                             preferTexture = preferTexture,
                             resizeMode = portraitPagerResizeMode,
                             keepScreenOn = shouldKeepPortraitPagerItemAwake,
-                            flippedHorizontal = portraitFlippedHorizontal,
-                            flippedVertical = portraitFlippedVertical,
+                            flippedHorizontal = portraitFlippedHorizontal && !surfaceHdrRequired,
+                            flippedVertical = portraitFlippedVertical && !surfaceHdrRequired,
                             onPlayerViewChanged = { playerViewRef = it },
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -3947,8 +3949,8 @@ private fun VideoPageItem(
                 currentVideoUrl = videoUrl,
                 currentAudioUrl = audioUrl,
                 isScreenLocked = portraitScreenLocked,
-                isFlippedHorizontal = portraitFlippedHorizontal,
-                isFlippedVertical = portraitFlippedVertical,
+                isFlippedHorizontal = portraitFlippedHorizontal && !surfaceHdrRequired,
+                isFlippedVertical = portraitFlippedVertical && !surfaceHdrRequired,
                 isAudioOnly = isAudioOnly,
                 currentAspectRatio = aspectRatio,
                 currentAudioQuality = requestedAudioQuality,
@@ -4096,8 +4098,16 @@ private fun VideoPageItem(
                     portraitLockHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
                     portraitScreenLocked = !portraitScreenLocked
                 },
-                onFlipHorizontal = { portraitFlippedHorizontal = !portraitFlippedHorizontal },
-                onFlipVertical = { portraitFlippedVertical = !portraitFlippedVertical },
+                onFlipHorizontal = {
+                    if (surfaceHdrRequired) {
+                        android.widget.Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", android.widget.Toast.LENGTH_SHORT).show()
+                    } else portraitFlippedHorizontal = !portraitFlippedHorizontal
+                },
+                onFlipVertical = {
+                    if (surfaceHdrRequired) {
+                        android.widget.Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", android.widget.Toast.LENGTH_SHORT).show()
+                    } else portraitFlippedVertical = !portraitFlippedVertical
+                },
                 onAudioOnlyToggle = onAudioOnlyToggle,
                 onCaptureScreenshot = {
                     val playerView = playerViewRef

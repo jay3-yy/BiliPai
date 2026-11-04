@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="12dp"
+    android:background="@drawable/widget_playback_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="BiliPai" android:textStyle="bold" android:textSize="12sp"
+            android:textColor="@color/widget_playback_accent" android:importantForAccessibility="no" />
+        <TextView android:id="@+id/widget_title" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="48dp" android:gravity="center_vertical" android:paddingStart="12dp"
+            android:maxLines="2" android:ellipsize="end" android:textSize="15sp" android:textStyle="bold"
+            android:textColor="@color/widget_playback_text" android:text="@string/playback_widget_empty" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:minHeight="48dp" android:orientation="horizontal" android:gravity="center">
+        <ImageButton android:id="@+id/widget_previous" android:layout_width="48dp" android:layout_height="48dp"
+            android:src="@drawable/widget_skip_previous" android:background="@android:color/transparent"
+            android:padding="12dp" android:tint="@color/widget_playback_text" android:contentDescription="@string/playback_widget_previous" />
+        <ImageButton android:id="@+id/widget_toggle" android:layout_width="64dp" android:layout_height="48dp"
+            android:src="@drawable/ms_play_arrow_24" android:background="@android:color/transparent"
+            android:padding="10dp" android:tint="@color/widget_playback_accent" android:contentDescription="@string/playback_widget_play" />
+        <ImageButton android:id="@+id/widget_next" android:layout_width="48dp" android:layout_height="48dp"
+            android:src="@drawable/ms_skip_next_24" android:background="@android:color/transparent"
+            android:padding="12dp" android:tint="@color/widget_playback_text" android:contentDescription="@string/playback_widget_next" />
+        <TextView android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" android:importantForAccessibility="no" />
+        <ImageButton android:id="@+id/widget_later" android:layout_width="48dp" android:layout_height="48dp"
+            android:src="@drawable/ms_watch_later_24" android:background="@android:color/transparent"
+            android:padding="12dp" android:tint="@color/widget_playback_text" android:contentDescription="@string/shortcut_watch_later_short" />
+        <ImageButton android:id="@+id/widget_search" android:layout_width="48dp" android:layout_height="48dp"
+            android:src="@drawable/ms_search_24" android:background="@android:color/transparent"
+            android:padding="12dp" android:tint="@color/widget_playback_text" android:contentDescription="@string/shortcut_search_short" />
+    </LinearLayout>
+</LinearLayout>

@@ -587,6 +587,7 @@ fun FloatingBottomBar(
         liquidGlassTuning.readabilityMode == LiquidGlassReadabilityMode.ADAPTIVE
     val adaptiveReadabilityState = rememberLiquidGlassAdaptiveReadabilityState(
         enabled = adaptiveReadabilityEnabled,
+        samplingAllowed = enabled,
     )
     val resolvedContentColor = rememberLiquidGlassAdaptiveContentColor(
         stableColor = colors.contentColor,
@@ -975,7 +976,10 @@ fun FloatingBottomBar(
         // field keeps press bloom in sync without recreating the pointerInput owner.
         dampedDragAnimation.pressedScale = pressedScale
     }
-    LaunchedEffect(dampedDragAnimation, dragScrollState, density) {
+    // 玻璃拖拽的逐帧任务跟随可见性；原生菜单仍保留原有边缘滚动行为。
+    val dragEdgeScrollActive = !isLiquidGlassMode || (enabled && gravityGate?.active == true)
+    LaunchedEffect(dampedDragAnimation, dragScrollState, density, dragEdgeScrollActive) {
+        if (!dragEdgeScrollActive) return@LaunchedEffect
         val scroll = dragScrollState ?: return@LaunchedEffect
         snapshotFlow { dampedDragAnimation.isDragging }.collectLatest { dragging ->
             if (!dragging) return@collectLatest

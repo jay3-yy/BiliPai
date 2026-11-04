@@ -30,6 +30,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.*  // 🌊 瀑布流布局
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
+import com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed
+import com.android.purebilibili.core.ui.blur.rememberPagerChromeBackdropRecordingAllowed
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -2139,7 +2141,7 @@ fun HomeScreen(
                             .then(homeMiuixBackdropSource?.modifier ?: Modifier)
                             // 首页使用 Pager + Lazy 子层，source 挂在外层容器更稳定。
                             .then(
-                                if (hazeState != null) {
+                                if (hazeState != null && LocalChromeBackdropRecordingAllowed.current) {
                                     Modifier.hazeSourceCompat(state = hazeState)
                                 } else {
                                     Modifier
@@ -2190,6 +2192,10 @@ fun HomeScreen(
                                 .fillMaxSize(),
                             key = { index -> resolveHomeTopTabEntryKey(topTabEntries, index) }
                         ) { page ->
+                        CompositionLocalProvider(
+                            LocalChromeBackdropRecordingAllowed provides
+                                rememberPagerChromeBackdropRecordingAllowed(pagerState, page),
+                        ) {
                         when (val entry = resolveHomeTopTabEntryOrNull(topTabEntries, page)) {
                             HomeTopTabEntry.Partition -> {
                                 CompositionLocalProvider(
@@ -2763,6 +2769,7 @@ fun HomeScreen(
                             }
                             null -> Unit
                         }
+                        } // Close page backdrop exposure provider
                 } // Close HorizontalPager lambda
                         } // Close AppHingeSafeContent
             } // Close Box wrapper

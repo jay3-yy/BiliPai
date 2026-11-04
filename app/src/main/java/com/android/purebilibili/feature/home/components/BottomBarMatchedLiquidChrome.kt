@@ -416,7 +416,11 @@ internal fun BottomBarMatchedReusableLiquidDock(
                         Modifier.bottomBarMatchedCaptureOverflow(captureSafeInset)
                     } else Modifier)
                     .alpha(0f)
-                    .layerBackdrop(localBackdrop)
+                    .then(
+                        if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
+                            Modifier.layerBackdrop(localBackdrop)
+                        } else Modifier
+                    )
                     .background(AppSurfaceTokens.background())
             )
         }

@@ -151,7 +151,11 @@ private fun WeeklySeriesContent(
             modifier = Modifier
                 .fillMaxSize()
                 .then(chromeSource?.modifier ?: Modifier)
-                .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
+                .then(
+                    if (hazeState != null &&
+                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                    ) Modifier.hazeSourceCompat(hazeState) else Modifier
+                )
                 .globalWallpaperAwareBackground(pageColor)
                 .padding(
                     start = padding.calculateStartPadding(layoutDirection),

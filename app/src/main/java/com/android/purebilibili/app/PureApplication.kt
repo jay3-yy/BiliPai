@@ -320,6 +320,9 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     }
 
     private fun initializeNormalRuntime() {
+        AppScope.ioScope.launch {
+            com.android.purebilibili.feature.audio.player.SystemMediaPreferences.observe(this@PureApplication)
+        }
         launcherIconUiModeSnapshot = resources.configuration.uiMode
         AppScope.ioScope.launch {
             CacheUtils.clearCacheAutomaticallyIfDue(this@PureApplication)

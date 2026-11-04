@@ -248,7 +248,9 @@ fun AdaptiveScaffold(
         ) { topBar() }
     }
     val recordedContent: @Composable (PaddingValues) -> Unit = { padding ->
-        val hazeSourceModifier = if (scaffoldHaze != null) {
+        val hazeSourceModifier = if (scaffoldHaze != null &&
+            com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+        ) {
             Modifier.hazeSource(scaffoldHaze.state)
         } else {
             Modifier

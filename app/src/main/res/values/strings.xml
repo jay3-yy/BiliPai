@@ -285,7 +285,7 @@
     <string name="icon_bilipai_white">BiliPai 白</string>
     <string name="icon_bilipai_white_description">霜白配色</string>
     <string name="icon_bilipai_monet">BiliPai Monet</string>
-    <string name="icon_bilipai_monet_description">随系统主题图标取色</string>
+    <string name="icon_bilipai_monet_description">Android 12 及以上随系统配色，旧版本使用蓝色</string>
     <string name="icon_settings_apply_notice">图标切换可能需要几秒钟生效，系统可能会短暂卡顿。</string>
     <string name="icon_appearance_title">女仆图标外观</string>
     <string name="icon_appearance_summary">可跟随系统，或在任意系统主题下固定明亮、暗黑外壳</string>

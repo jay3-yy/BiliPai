@@ -1,0 +1,16 @@
+<resources>
+    <string name="playback_widget_name">Playback</string>
+    <string name="playback_widget_description">Control playback, resume audio, or open Watch later and Search</string>
+    <string name="playback_widget_empty">Play a video in BiliPai first</string>
+    <string name="playback_widget_play">Resume</string>
+    <string name="playback_widget_pause">Pause</string>
+    <string name="playback_widget_previous">Previous</string>
+    <string name="playback_widget_next">Next</string>
+    <string name="playback_widget_error">Unable to control playback. Open BiliPai.</string>
+    <string name="audio_library_title">Listen to videos</string>
+    <string name="audio_library_queue">Recent queue</string>
+    <string name="audio_library_more">More Watch later</string>
+    <string name="audio_library_login">Sign in to BiliPai on your phone first</string>
+    <string name="audio_library_empty">No playback history. Play a video on your phone first.</string>
+    <string name="audio_library_locked">Private content is locked. Manage playback on your phone.</string>
+</resources>

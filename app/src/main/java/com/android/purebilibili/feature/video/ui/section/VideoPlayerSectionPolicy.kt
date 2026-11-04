@@ -1093,7 +1093,7 @@ internal fun resolveAllowLivePlayerSharedElementForMorph(
 /**
  * Whether the PlayerView must use TextureView (instead of SurfaceView).
  *
- * TextureView is required for flip transforms and shared-element morph capture.
+ * SDR uses TextureView for flip transforms and shared-element morph capture.
  * SurfaceView is required for HDR/Dolby Vision so color metadata reaches the display
  * (TextureView GPU composition always tone-maps to SDR). When [requiresHdrSurfaceOutput]
  * is true, navigation morph may fall back to cover-only transitions rather than
@@ -1107,10 +1107,9 @@ internal fun shouldUseTextureSurfaceForFlip(
     requiresHdrSurfaceOutput: Boolean = false,
     preferCompatibleTextureSurface: Boolean = com.android.purebilibili.core.util.prefersTextureVideoSurface()
 ): Boolean {
-    // Flip is the only hard TextureView requirement under HDR; matrix transform
-    // cannot run on SurfaceView. Navigation morph yields to HDR fidelity.
+    // HDR 保持原始输出；镜像/翻转入口明确提示切换普通画质，不通过纹理合成降为 SDR。
     if (requiresHdrSurfaceOutput) {
-        return isFlippedHorizontal || isFlippedVertical
+        return false
     }
     return preferCompatibleTextureSurface ||
         isFlippedHorizontal ||
@@ -1120,7 +1119,7 @@ internal fun shouldUseTextureSurfaceForFlip(
 }
 
 /**
- * HDR10 (125) / Dolby Vision (126) streams, or Media3 formats with PQ/HLG transfer,
+ * HDR10 (125) / Dolby Vision (126) / HDR Vivid (129), or formats with PQ/HLG transfer,
  * must output via SurfaceView so the display can enter HDR mode.
  *
  * @param colorTransfer Media3 [androidx.media3.common.C] color transfer constant, or 0 if unknown.
@@ -1129,7 +1128,7 @@ internal fun requiresHdrSurfaceOutput(
     currentQualityId: Int,
     colorTransfer: Int = 0
 ): Boolean {
-    if (currentQualityId == 125 || currentQualityId == 126) {
+    if (currentQualityId == 125 || currentQualityId == 126 || currentQualityId == 129) {
         return true
     }
     // Keep numeric constants local so this policy stays free of Media3 imports.

@@ -2183,6 +2183,8 @@ private fun VideoPlayerSectionContent(
         currentQualityId = (uiState as? VideoPlaybackUiState.Success)?.currentQuality ?: 0,
         colorTransfer = videoInputFormat?.colorInfo?.colorTransfer ?: 0
     )
+    val effectiveFlippedHorizontal = isFlippedHorizontal && !navigationHdrSurfaceRequired
+    val effectiveFlippedVertical = isFlippedVertical && !navigationHdrSurfaceRequired
     val playerPageBackdrop = rememberPlayerPageBackdrop()
     val pageGlassSupported = supportsPlayerPageGlass(
         liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
@@ -3912,8 +3914,8 @@ private fun VideoPlayerSectionContent(
             retainedGlassTexture = hasUsedPageGlassTexture,
             hdr = requiresHdrSurface,
             existingTextureRequest = shouldUseTextureSurfaceForFlip(
-                isFlippedHorizontal = isFlippedHorizontal,
-                isFlippedVertical = isFlippedVertical,
+                isFlippedHorizontal = effectiveFlippedHorizontal,
+                isFlippedVertical = effectiveFlippedVertical,
                 liveBackPreview = liveBackPreview || hasUsedLiveBackPreviewTexture,
                 navigationTransformEnabled = useTextureSurfaceForNavigation,
                 requiresHdrSurfaceOutput = requiresHdrSurface,
@@ -3927,7 +3929,7 @@ private fun VideoPlayerSectionContent(
         // isPortraitFullscreen 不作为 key：退出竖屏全屏保留 PlayerView 实例，由上方
         // LaunchedEffect 在退出瞬间直接重绑 surface（rebindPlayerSurfaceIfNeeded）恢复画面。
         // HDR/色彩元数据与纹理翻转维度仍触发重建。
-        key(isFlippedHorizontal, isFlippedVertical, useTextureSurface) {
+        key(effectiveFlippedHorizontal, effectiveFlippedVertical, useTextureSurface) {
             val viewportAspectRatio = if (liquidGlassLayoutEnabled && !isFullscreen) VideoAspectRatio.FIT else currentAspectRatio
             val playerVideoSize = playerState.player.videoSize
             BoxWithConstraints(
@@ -4123,8 +4125,8 @@ private fun VideoPlayerSectionContent(
                         sizeModifier
                             .onSizeChanged { measuredPlayerViewportSize = it }
                             .graphicsLayer {
-                                scaleX = if (isFlippedHorizontal) -scale else scale
-                                scaleY = if (isFlippedVertical) -scale else scale
+                                scaleX = if (effectiveFlippedHorizontal) -scale else scale
+                                scaleY = if (effectiveFlippedVertical) -scale else scale
                                 translationX = panX
                                 translationY = panY
                             }
@@ -4143,8 +4145,8 @@ private fun VideoPlayerSectionContent(
                                     height = viewportLayout.height.toDp(),
                                 )
                                 .graphicsLayer {
-                                    scaleX = if (isFlippedHorizontal) -scale else scale
-                                    scaleY = if (isFlippedVertical) -scale else scale
+                                    scaleX = if (effectiveFlippedHorizontal) -scale else scale
+                                    scaleY = if (effectiveFlippedVertical) -scale else scale
                                     translationX = panX
                                     translationY = panY
                                 }
@@ -4175,7 +4177,7 @@ private fun VideoPlayerSectionContent(
                                 }
                                 updateConfig(anime4kConfig)
                                 updateInputSize(videoSizeState.first, videoSizeState.second)
-                                updateFlip(isFlippedHorizontal, isFlippedVertical)
+                                updateFlip(effectiveFlippedHorizontal, effectiveFlippedVertical)
                                 updateDisplayScaleMode(viewportAspectRatio.toAnime4KDisplayScaleMode())
                                 visibility = View.VISIBLE
                             }
@@ -4200,7 +4202,7 @@ private fun VideoPlayerSectionContent(
                             }
                             surfaceView.updateConfig(anime4kConfig)
                             surfaceView.updateInputSize(videoSizeState.first, videoSizeState.second)
-                            surfaceView.updateFlip(isFlippedHorizontal, isFlippedVertical)
+                            surfaceView.updateFlip(effectiveFlippedHorizontal, effectiveFlippedVertical)
                             surfaceView.updateDisplayScaleMode(viewportAspectRatio.toAnime4KDisplayScaleMode())
                             surfaceView.visibility = View.VISIBLE
                         },
@@ -5573,8 +5575,8 @@ private fun VideoPlayerSectionContent(
                     currentVideoUrl = uiState.playUrl,
                     currentAudioUrl = uiState.audioUrl ?: "",
                     coverUrl = uiState.info.pic,
-                    isFlippedHorizontal = isFlippedHorizontal,
-                    isFlippedVertical = isFlippedVertical,
+                    isFlippedHorizontal = effectiveFlippedHorizontal,
+                    isFlippedVertical = effectiveFlippedVertical,
                     //  [新增] CDN 线路切换
                     currentCdnIndex = currentCdnIndex,
                     cdnCount = cdnCount,
@@ -5701,8 +5703,16 @@ private fun VideoPlayerSectionContent(
                     },
                     //  [新增] 视频设置面板回调
                     onReloadVideo = onReloadVideo,
-                    onFlipHorizontal = { isFlippedHorizontal = !isFlippedHorizontal },
-                    onFlipVertical = { isFlippedVertical = !isFlippedVertical },
+                    onFlipHorizontal = {
+                        if (navigationHdrSurfaceRequired) {
+                            Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", Toast.LENGTH_SHORT).show()
+                        } else isFlippedHorizontal = !isFlippedHorizontal
+                    },
+                    onFlipVertical = {
+                        if (navigationHdrSurfaceRequired) {
+                            Toast.makeText(context, "HDR 原色输出不支持画面翻转，请先切换至普通画质", Toast.LENGTH_SHORT).show()
+                        } else isFlippedVertical = !isFlippedVertical
+                    },
                     //  [新增] 画质切换（用于设置面板）
                     onQualityChange = { qid ->
                         onQualityChange(qid)

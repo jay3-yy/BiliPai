@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.7.6%20%28549%29-007AFF?style=flat-square" alt="Source 0.7.6 (549)" />
+<img src="https://img.shields.io/badge/Source-0.7.7%20%28550%29-007AFF?style=flat-square" alt="Source 0.7.7 (550)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -23,7 +23,8 @@
 | 功能 | 说明 |
 | --- | --- |
 | 视频播放 | DASH、高清画质、弹幕、手势、倍速、播放记忆、后台播放与画中画 |
-| 听视频 | 沉浸式与黑胶模式、歌词、队列、定时关闭、系统媒体控制 |
+| 听视频 | 沉浸式与黑胶模式、歌词、队列、定时关闭、系统媒体控制与 Android Auto |
+| 桌面小组件 | 当前标题、播放控制、音频续播，以及稍后再看与搜索快捷入口 |
 | 字幕与笔记 | 本地字幕导入导出、样式与时间调整；私有笔记、时间点与 AI 总结草稿 |
 | 番剧与直播 | 追番、自适应选集、大屏分栏与横屏布局；直播分区与实时弹幕 |
 | 动态与消息 | 关注动态、评论回复、图片预览与私信 |
@@ -31,7 +32,7 @@
 | 外观与布局 | Google Material 3、Miuix、可选液态玻璃与弹性动效、动态取色、首页规则网格与大屏布局 |
 | 扩展能力 | 插件、DLNA / Google Cast 投屏、WebDAV 设置备份 |
 
-部分画质需要登录或相应账号权限。外观、播放、弹幕与后台行为可在设置中调整。
+部分画质需要登录或相应账号权限。外观、播放、弹幕与后台行为可在设置中调整。桌面小组件与车载入口见[系统媒体使用说明](docs/wiki/SYSTEM_MEDIA.md)。
 
 ## 界面预览
 
@@ -129,6 +130,6 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 
 <div align="center">
 
-<sub>源码版本 0.7.6（549） · 更新于 2026-11-04 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>源码版本 0.7.7（550） · 更新于 2026-11-04 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

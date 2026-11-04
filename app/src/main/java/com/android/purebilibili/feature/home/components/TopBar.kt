@@ -1742,9 +1742,14 @@ private fun LightweightHomeTopTabs(
         // Glass motion uses frame timestamps, not the timing of derived-state reads.
         // Sampling the latest position once per frame also observes zero velocity at rest.
         val glassTopTabVelocity = remember { mutableFloatStateOf(0f) }
-        LaunchedEffect(shouldUseLiquidGlassIndicator, indicatorIsInteracting, topTabIndicatorPositionState) {
+        val glassMotionGate = if (shouldUseLiquidGlassIndicator) {
+            com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+        } else null
+        val sampleGlassMotion = shouldUseLiquidGlassIndicator && indicatorIsInteracting &&
+            isViewportSyncEnabled && glassMotionGate?.active == true
+        LaunchedEffect(sampleGlassMotion, topTabIndicatorPositionState) {
             glassTopTabVelocity.floatValue = 0f
-            if (!shouldUseLiquidGlassIndicator || !indicatorIsInteracting) return@LaunchedEffect
+            if (!sampleGlassMotion) return@LaunchedEffect
             var previousPosition = topTabIndicatorPositionState.value
             var previousFrame = withFrameNanos { it }
             try {
@@ -1992,7 +1997,8 @@ private fun LightweightHomeTopTabs(
                 .trackLiquidGlassAdaptiveReadability(
                     state = adaptiveReadabilityState,
                     enabled = adaptiveReadabilityEnabled,
-                ),
+                )
+                .then(glassMotionGate?.modifier ?: Modifier),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(

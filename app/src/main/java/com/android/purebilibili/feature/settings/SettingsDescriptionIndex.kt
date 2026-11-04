@@ -76,6 +76,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "home.incremental_timeline_refresh_enabled" to "下拉刷新只把新动态加到顶部，不重新排列已看到的内容",
     "navigation.bottom_bar_search_enabled" to "显示搜索按钮，并随浏览收起或展开",
     "navigation.hide_top_tabs" to "首页不显示推荐、热门等分类标签",
+    "navigation.partition_side_rail_position" to "选择首页分区分类侧栏位于列表的左侧或右侧",
     "navigation.is_bottom_bar_floating" to "开启后底栏与屏幕边缘留出间距；关闭后贴近底部显示",
     "navigation.keep_home_top_search" to "开启时顶部与底栏搜索同时显示；关闭时隐藏首页顶部搜索条",
     "navigation.bottom_bar_scroll_compact_enabled" to "浏览时收起底栏，上滑或点击展开；有播放条时保持联动",

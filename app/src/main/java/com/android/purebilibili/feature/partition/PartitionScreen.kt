@@ -87,6 +87,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -102,6 +103,7 @@ import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -579,12 +581,14 @@ fun PartitionContent(
         }
     }
     val layoutDirection = LocalLayoutDirection.current
-    val startPadding = contentPadding.calculateStartPadding(layoutDirection)
-    val endPadding = contentPadding.calculateEndPadding(layoutDirection)
+    val sideRailOnRight = homeSettings.partitionSideRailOnRight
+    val leftPadding = contentPadding.calculateLeftPadding(layoutDirection)
+    val rightPadding = contentPadding.calculateRightPadding(layoutDirection)
+    val railOuterPadding = if (sideRailOnRight) rightPadding else leftPadding
     val topPadding = contentPadding.calculateTopPadding()
     val bottomPadding = contentPadding.calculateBottomPadding()
     // 给标签保留文字缩放空间，侧栏和内容间距在所有材质下使用同一布局。
-    val sideRailWidth = 56.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.35f) + startPadding
+    val sideRailWidth = 56.dp * LocalDensity.current.fontScale.coerceIn(1f, 1.35f) + railOuterPadding
     var sideRailVideoPushTargetPx by remember { mutableFloatStateOf(0f) }
     val sideRailVideoPushPx = animateFloatAsState(
         targetValue = sideRailVideoPushTargetPx,
@@ -613,78 +617,93 @@ fun PartitionContent(
             .globalWallpaperAwareBackground()
             .responsiveContentWidth(maxWidth = 1000.dp)
     ) {
-        Row(
+        Layout(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (hazeState != null) {
+                    if (hazeState != null &&
+                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                    ) {
                         Modifier.hazeSource(state = hazeState)
                     } else {
                         Modifier
                     }
-                )
-        ) {
-            PartitionSideRail(
-                partitions = partitionTabs,
-                selectedId = state.selectedPartition.id,
-                labelMode = homeSettings.topTabLabelMode,
-                iconFamily = topChromeIconFamily,
-                modifier = Modifier
-                    .width(sideRailWidth)
-                    // 纵向 dock 的外边距仅用于玻璃；关闭时保留原生侧栏的视口和内边距。
-                    .then(
-                        if (liquidGlassIndicatorEnabled) {
-                            Modifier.padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = bottomPadding)
-                        } else Modifier
-                    )
-                    .zIndex(if (liquidGlassIndicatorEnabled) 1f else 0f),
-                contentPadding = if (liquidGlassIndicatorEnabled) {
-                    PaddingValues(
-                        horizontal = ((startPadding + 4.dp) / 2 - 4.dp).coerceAtLeast(4.dp),
-                        // 竖向首末项与左右边沿共用 dock 的比例内缩，避免固定 8dp 多留一层空白。
-                        vertical = com.android.purebilibili.feature.home.components
-                            .resolveFloatingDockRestIndicatorVerticalInsetDp(
-                                (sideRailWidth - 8.dp).value,
-                            ).dp,
-                    )
-                } else PaddingValues(
-                    start = startPadding,
-                    top = topPadding + 8.dp,
-                    bottom = bottomPadding,
-                    end = 4.dp
                 ),
-                liquidGlassIndicatorEnabled = liquidGlassIndicatorEnabled,
-                liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
-                liquidGlassTuning = liquidGlassTuning,
-                onVideoListPushChanged = { sideRailVideoPushTargetPx = it },
-                onPartitionSelected = viewModel::selectPartition
-            )
-
-            // Match list content top (status/insets + 8dp) so indicator sits above first row.
-            val partitionRefreshIndicatorTopInset = topPadding + 8.dp
-            AdaptivePullToRefreshBox(
-                isRefreshing = state.isRefreshing,
-                onRefresh = viewModel::refresh,
-                indicatorTopInset = partitionRefreshIndicatorTopInset,
-                modifier = Modifier
-                    .weight(1f)
-                    .graphicsLayer { translationX = sideRailVideoPushPx.value }
-            ) {
-                PartitionVideoList(
-                    state = state,
-                    listState = activeListState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 4.dp,
-                        top = partitionRefreshIndicatorTopInset,
-                        end = endPadding,
-                        bottom = bottomPadding
+            content = {
+                PartitionSideRail(
+                    partitions = partitionTabs,
+                    selectedId = state.selectedPartition.id,
+                    labelMode = homeSettings.topTabLabelMode,
+                    iconFamily = topChromeIconFamily,
+                    modifier = Modifier
+                        .width(sideRailWidth)
+                        // 纵向 dock 的外边距仅用于玻璃；关闭时保留原生侧栏的视口和内边距。
+                        .then(
+                            if (liquidGlassIndicatorEnabled) {
+                                Modifier.padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = bottomPadding)
+                            } else Modifier
+                        )
+                        .zIndex(if (liquidGlassIndicatorEnabled) 1f else 0f),
+                    contentPadding = if (liquidGlassIndicatorEnabled) {
+                        PaddingValues(
+                            horizontal = ((railOuterPadding + 4.dp) / 2 - 4.dp).coerceAtLeast(4.dp),
+                            // 竖向首末项与左右边沿共用 dock 的比例内缩，避免固定 8dp 多留一层空白。
+                            vertical = com.android.purebilibili.feature.home.components
+                                .resolveFloatingDockRestIndicatorVerticalInsetDp(
+                                    (sideRailWidth - 8.dp).value,
+                                ).dp,
+                        )
+                    } else PaddingValues(
+                        start = if (sideRailOnRight) 4.dp else railOuterPadding,
+                        top = topPadding + 8.dp,
+                        bottom = bottomPadding,
+                        end = if (sideRailOnRight) railOuterPadding else 4.dp
                     ),
-                    onVideoClick = { video ->
-                        if (video.contentType == "pgc_rank") onBangumiSeasonClick(video.id)
-                        else onVideoClick(video)
-                    }
+                    liquidGlassIndicatorEnabled = liquidGlassIndicatorEnabled,
+                    liquidGlassPreset = homeSettings.bottomBarLiquidGlassPreset,
+                    liquidGlassTuning = liquidGlassTuning,
+                    onVideoListPushChanged = { sideRailVideoPushTargetPx = it },
+                    onPartitionSelected = viewModel::selectPartition
                 )
+
+                // Match list content top (status/insets + 8dp) so indicator sits above first row.
+                val partitionRefreshIndicatorTopInset = topPadding + 8.dp
+                AdaptivePullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = viewModel::refresh,
+                    indicatorTopInset = partitionRefreshIndicatorTopInset,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            translationX = sideRailVideoPushPx.value * if (sideRailOnRight) -1f else 1f
+                        }
+                ) {
+                    PartitionVideoList(
+                        state = state,
+                        listState = activeListState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues.Absolute(
+                            left = if (sideRailOnRight) leftPadding else 4.dp,
+                            top = partitionRefreshIndicatorTopInset,
+                            right = if (sideRailOnRight) 4.dp else rightPadding,
+                            bottom = bottomPadding
+                        ),
+                        onVideoClick = { video ->
+                            if (video.contentType == "pgc_rank") onBangumiSeasonClick(video.id)
+                            else onVideoClick(video)
+                        }
+                    )
+                }
+            },
+        ) { measurables, constraints ->
+            // 两种位置只改变摆放，保持侧栏与列表的组合身份及滚动状态。
+            // 所有材质共用正常测量，不查询内部懒列表的固有尺寸。
+            val rail = measurables[0].measure(constraints.copy(minWidth = 0))
+            val list = measurables[1].measure(
+                Constraints.fixed(constraints.maxWidth - rail.width, constraints.maxHeight)
+            )
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                rail.place(if (sideRailOnRight) list.width else 0, 0)
+                list.place(if (sideRailOnRight) 0 else rail.width, 0)
             }
         }
     }
@@ -1040,7 +1059,11 @@ private fun PartitionSideRail(
                     .matchParentSize()
                     .bottomBarMatchedCaptureOverflow(captureSafeInset)
                     .then(
-                        glassPageSource?.modifier ?: Modifier.alpha(0f).layerBackdrop(railPageBackdrop)
+                        glassPageSource?.modifier ?: Modifier.alpha(0f).then(
+                            if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
+                                Modifier.layerBackdrop(railPageBackdrop)
+                            } else Modifier
+                        )
                     )
                     .background(AppSurfaceTokens.background())
                     .then(railHighlight?.modifier ?: Modifier)

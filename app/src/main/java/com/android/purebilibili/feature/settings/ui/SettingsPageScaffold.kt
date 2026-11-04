@@ -266,7 +266,11 @@ internal fun SettingsPageScaffold(
             val scrollModifier = Modifier
                 .fillMaxSize()
                 .then(chromeSource?.modifier ?: Modifier)
-                .then(if (hazeState != null) Modifier.hazeSourceCompat(hazeState) else Modifier)
+                .then(
+                    if (hazeState != null &&
+                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                    ) Modifier.hazeSourceCompat(hazeState) else Modifier
+                )
                 .globalWallpaperAwareBackground(pageContainerColor)
 
             val windowSizeClass = LocalWindowSizeClass.current

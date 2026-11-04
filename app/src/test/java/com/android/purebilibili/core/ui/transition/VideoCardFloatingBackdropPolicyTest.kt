@@ -6,24 +6,55 @@ import kotlin.test.assertTrue
 
 class VideoCardFloatingBackdropPolicyTest {
     @Test
-    fun onlyPausesForCoveredVideoWithoutConsumers() {
-        fun record(
-            glass: Boolean = true,
-            video: Boolean = true,
-            exposure: VideoCardTransitionExposure = VideoCardTransitionExposure.SettledHidden,
-            audio: Boolean = false,
-            consumer: Boolean = false,
-        ) = shouldRecordVideoCardFloatingBackdrop(glass, video, exposure, audio, consumer)
-
-        assertFalse(record())
-        assertTrue(record(glass = false))
-        assertTrue(record(video = false))
-        assertTrue(record(audio = true))
-        assertTrue(record(consumer = true))
+    fun glassStopsRecordingWhenNoChromeConsumesTheSource() {
         for (exposure in VideoCardTransitionExposure.entries) {
-            if (exposure != VideoCardTransitionExposure.SettledHidden) {
-                assertTrue(record(exposure = exposure), "采样应在 $exposure 恢复")
+            for (video in listOf(false, true)) {
+                assertFalse(record(video = video, exposure = exposure))
             }
         }
     }
+
+    @Test
+    fun bottomBarRetainsRecordingDuringMotionExceptWhenFullyCovered() {
+        assertTrue(record(bottomBar = true))
+        for (exposure in VideoCardTransitionExposure.entries) {
+            val records = record(video = true, exposure = exposure, bottomBar = true)
+            if (exposure == VideoCardTransitionExposure.SettledHidden) {
+                assertFalse(records)
+            } else {
+                assertTrue(records, "底栏在 $exposure 仍需要背景")
+            }
+        }
+    }
+
+    @Test
+    fun independentPlaybackAndFloatingContentKeepTheirBackgroundWithoutTheBottomBar() {
+        for (exposure in VideoCardTransitionExposure.entries) {
+            assertTrue(record(video = true, exposure = exposure, audio = true))
+            assertTrue(record(video = true, exposure = exposure, consumer = true))
+        }
+    }
+
+    @Test
+    fun nativeMaterialsKeepTheirExistingRecordingPolicy() {
+        for (exposure in VideoCardTransitionExposure.entries) {
+            assertTrue(record(glass = false, video = true, exposure = exposure))
+        }
+    }
+
+    private fun record(
+        glass: Boolean = true,
+        video: Boolean = false,
+        exposure: VideoCardTransitionExposure = VideoCardTransitionExposure.Idle,
+        bottomBar: Boolean = false,
+        audio: Boolean = false,
+        consumer: Boolean = false,
+    ) = shouldRecordVideoCardFloatingBackdrop(
+        liquidGlassEnabled = glass,
+        isVideoDetailDestination = video,
+        exposure = exposure,
+        hasBottomBarConsumer = bottomBar,
+        hasAudioBarConsumer = audio,
+        hasFloatingConsumer = consumer,
+    )
 }

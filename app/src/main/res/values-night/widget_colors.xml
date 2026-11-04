@@ -1,0 +1,5 @@
+<resources>
+    <color name="widget_playback_surface">#FF211F26</color>
+    <color name="widget_playback_text">#FFE6E0E9</color>
+    <color name="widget_playback_accent">#FFD0BCFF</color>
+</resources>

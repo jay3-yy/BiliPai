@@ -2147,6 +2147,38 @@ fun AppNavigation(
             homeFeedScrollInProgressState.value = false
         }
 
+        val isLandscapeNowPlaying =
+            androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+                android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val effectiveAudioDockRoute = bottomBarMountRoute ?: currentRoute
+        val isPlayerNowPlayingDestination = isAudioNowPlayingPlayerDestination(effectiveAudioDockRoute)
+        val showAudioNowPlayingInDock = resolveAudioNowPlayingVisible(
+            sessionActive = audioNowPlayingActive,
+            isOnAudioModeScreen = currentNavigation3Key is BiliPaiNavKey.AudioMode,
+            isInPipMode = isInPipMode,
+            hasCurrentItem = audioNowPlayingItem != null,
+            barEnabled = audioNowPlayingBarEnabled,
+            isInMiniMode = miniPlayerManager?.isMiniMode == true,
+            isLandscape = isLandscapeNowPlaying,
+            isTabletLayout = isTabletLayout,
+            isPlayerDestination = isPlayerNowPlayingDestination
+        )
+        val isReturningSameAudioVideo = navigation3ReturnSession.isReturningFromDetail &&
+            navigation3ReturnSession.transitionSession?.bvid == audioNowPlayingItem?.bvid
+        val isPlayerIndependentDestination = isAudioNowPlayingPlayerDestination(currentRoute) || isReturningSameAudioVideo
+        val showAudioNowPlayingIndependent = resolveAudioNowPlayingVisible(
+            sessionActive = audioNowPlayingActive,
+            isOnAudioModeScreen = currentNavigation3Key is BiliPaiNavKey.AudioMode,
+            isInPipMode = isInPipMode,
+            hasCurrentItem = audioNowPlayingItem != null,
+            barEnabled = audioNowPlayingBarEnabled,
+            isInMiniMode = miniPlayerManager?.isMiniMode == true,
+            isVideoDetailDestination = isVideoDetailDestination,
+            isLandscape = isLandscapeNowPlaying,
+            isTabletLayout = isTabletLayout,
+            isPlayerDestination = isPlayerIndependentDestination
+        )
+
         // [LayerBackdrop] Create backdrop for bottom bar refraction effect.
         // Capture the wallpaper and navigation content together so transparent wallpaper-aware
         // pages feed the same background into the floating dock as Home.
@@ -2172,12 +2204,17 @@ fun AppNavigation(
             null
         }
         val bottomBarBackdrop = bottomBarBackdropSource?.backdrop
-        // 仅玻璃路径在视频完全覆盖来源页时暂停采样；返回和悬浮内容会重新请求。
+        // 玻璃仅为实际挂载或正在进出的控件录制；保留源身份，恢复时重新挂回录制。
+        // 原生模糊仍沿用原有背景源。退出动画结束前不能只看 finalBottomBarVisible。
+        val hasBottomBarBackdropConsumer = bottomBarCanMount &&
+            (bottomBarVisibilityState.currentState || bottomBarVisibilityState.targetState ||
+                !bottomBarVisibilityState.isIdle)
         val recordBottomBarBackdrop = com.android.purebilibili.core.ui.transition.shouldRecordVideoCardFloatingBackdrop(
             liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
             isVideoDetailDestination = isVideoDetailDestination,
             exposure = videoCardChromeExposure,
-            hasActiveAudioPlayback = hasActiveAudioPlayback,
+            hasBottomBarConsumer = hasBottomBarBackdropConsumer,
+            hasAudioBarConsumer = !bottomBarCanMount && showAudioNowPlayingIndependent,
             hasFloatingConsumer = floatingBackdropDemand.isRequired,
         )
         val componentMotionEnabled = com.android.purebilibili.core.ui.resolveComponentMotionEnabled(
@@ -5272,6 +5309,10 @@ fun AppNavigation(
                                                 resolveBottomPagerSaveableStateKey(slotItem)
                                             ) {
                                                 CompositionLocalProvider(
+                                                    com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed provides
+                                                        com.android.purebilibili.core.ui.blur.rememberPagerChromeBackdropRecordingAllowed(
+                                                            bottomPagerState, page,
+                                                        ),
                                                     LocalGlobalWallpaperBackdropVisible provides (
                                                         globalWallpaperEnabled && shouldRenderGlobalHomeWallpaperBackdrop(
                                                             effectScope = effectiveHomeSettings.homeWallpaperEffectScope,
@@ -5541,37 +5582,6 @@ fun AppNavigation(
             } // End of Content Box
             } // End of navigation content row
 
-            val isLandscapeNowPlaying =
-                androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
-                    android.content.res.Configuration.ORIENTATION_LANDSCAPE
-            val effectiveAudioDockRoute = bottomBarMountRoute ?: currentRoute
-            val isPlayerNowPlayingDestination = isAudioNowPlayingPlayerDestination(effectiveAudioDockRoute)
-            val showAudioNowPlayingInDock = resolveAudioNowPlayingVisible(
-                sessionActive = audioNowPlayingActive,
-                isOnAudioModeScreen = currentNavigation3Key is BiliPaiNavKey.AudioMode,
-                isInPipMode = isInPipMode,
-                hasCurrentItem = audioNowPlayingItem != null,
-                barEnabled = audioNowPlayingBarEnabled,
-                isInMiniMode = miniPlayerManager?.isMiniMode == true,
-                isLandscape = isLandscapeNowPlaying,
-                isTabletLayout = isTabletLayout,
-                isPlayerDestination = isPlayerNowPlayingDestination
-            )
-            val isReturningSameAudioVideo = navigation3ReturnSession.isReturningFromDetail &&
-                navigation3ReturnSession.transitionSession?.bvid == audioNowPlayingItem?.bvid
-            val isPlayerIndependentDestination = isAudioNowPlayingPlayerDestination(currentRoute) || isReturningSameAudioVideo
-            val showAudioNowPlayingIndependent = resolveAudioNowPlayingVisible(
-                sessionActive = audioNowPlayingActive,
-                isOnAudioModeScreen = currentNavigation3Key is BiliPaiNavKey.AudioMode,
-                isInPipMode = isInPipMode,
-                hasCurrentItem = audioNowPlayingItem != null,
-                barEnabled = audioNowPlayingBarEnabled,
-                isInMiniMode = miniPlayerManager?.isMiniMode == true,
-                isVideoDetailDestination = isVideoDetailDestination,
-                isLandscape = isLandscapeNowPlaying,
-                isTabletLayout = isTabletLayout,
-                isPlayerDestination = isPlayerIndependentDestination
-            )
             // 发布“听视频小横条是否悬浮在内容上方”，供首页/动态等悬浮元素避让
             androidx.compose.runtime.SideEffect {
                 com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
@@ -5918,6 +5928,14 @@ fun AppNavigation(
                             )
                         }
                     } else {
+                    // 独立横条退场仍需要玻璃；到本体退出组合才释放背景采样。
+                    if (effectiveHomeSettings.androidNativeLiquidGlassEnabled && bottomBarBackdrop != null) {
+                        DisposableEffect(floatingBackdropDemand) {
+                            val token = Any()
+                            floatingBackdropDemand.acquire(token)
+                            onDispose { floatingBackdropDemand.release(token) }
+                        }
+                    }
                     AudioNowPlayingBar(
                     state = AudioNowPlayingBarState(
                         bvid = audioNowPlayingItem.bvid,

@@ -190,7 +190,7 @@ fun BottomBarSettingsContent(
     SettingsSectionFocusEffect(
         listState = listState,
         target = SettingsSearchTarget.BOTTOM_BAR,
-        sectionKeys = listOf("navigation_intro") + listOf("navigation_behavior", "navigation_display", "navigation_top_tabs", "navigation_search_tabs", "navigation_tablet", "navigation_current", "navigation_available").flatMap { listOf(it + "_title", it) } + listOf("navigation_restore", "navigation_hint"),
+        sectionKeys = listOf("navigation_intro") + listOf("navigation_behavior", "navigation_display", "navigation_top_tabs", "navigation_partition", "navigation_search_tabs", "navigation_tablet", "navigation_current", "navigation_available").flatMap { listOf(it + "_title", it) } + listOf("navigation_restore", "navigation_hint"),
         legacyKeys = mapOf(
             SettingsSearchFocusIds.BOTTOM_BAR_START to "navigation_intro",
             SettingsSearchFocusIds.BOTTOM_BAR_BEHAVIOR to "navigation_behavior_title",
@@ -727,6 +727,35 @@ fun BottomBarSettingsContent(
                                 }
                             }
                         }
+                        }
+                    }
+                }
+            }
+
+            // 首页分区
+            item(key = "navigation_partition_title") {
+                Box(modifier = Modifier.entrance()) {
+                    AppPreferenceSectionTitle("首页分区")
+                }
+            }
+            item(key = "navigation_partition") {
+                Box(modifier = Modifier.entrance()) {
+                    AppPreferenceGroup {
+                        SettingsItemAnchor("navigation.partition_side_rail_position") {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.PARTITION_RAIL_POSITION),
+                                iconTint = AppContentColors.secondaryText(),
+                                title = settingItemTitle("navigation.partition_side_rail_position"),
+                                subtitle = "选择分区分类侧栏位于列表的左侧或右侧",
+                                options = listOf(
+                                    AppSegmentOption(false, "左侧"),
+                                    AppSegmentOption(true, "右侧"),
+                                ),
+                                selectedValue = homeConfiguration.partitionSideRailOnRight,
+                                onSelectionChange = { onRight ->
+                                    scope.launch { SettingsManager.setPartitionSideRailOnRight(context, onRight) }
+                                },
+                            )
                         }
                     }
                 }

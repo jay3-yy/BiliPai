@@ -76,12 +76,21 @@ class VideoPlayerSurfacePolicyTest {
                 preferCompatibleTextureSurface = true,
             )
         )
-        // Flip still needs TextureView for matrix transforms under HDR.
-        assertTrue(
+        // 请求翻转也不能让 HDR 输出降为纹理合成的 SDR。
+        assertFalse(
             shouldUseTextureSurfaceForFlip(
                 isFlippedHorizontal = true,
                 isFlippedVertical = false,
                 navigationTransformEnabled = true,
+                requiresHdrSurfaceOutput = true,
+                preferCompatibleTextureSurface = true,
+            )
+        )
+        assertFalse(
+            shouldUseTextureSurfaceForFlip(
+                isFlippedHorizontal = false,
+                isFlippedVertical = true,
+                liveBackPreview = true,
                 requiresHdrSurfaceOutput = true,
                 preferCompatibleTextureSurface = true,
             )
@@ -138,6 +147,7 @@ class VideoPlayerSurfacePolicyTest {
     fun `hdr surface required for quality 125 126 and pq hlg transfer`() {
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 125))
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 126))
+        assertTrue(requiresHdrSurfaceOutput(currentQualityId = 129))
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 80, colorTransfer = 6))
         assertTrue(requiresHdrSurfaceOutput(currentQualityId = 80, colorTransfer = 7))
         assertFalse(requiresHdrSurfaceOutput(currentQualityId = 80, colorTransfer = 0))

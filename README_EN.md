@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.7.6%20%28549%29-007AFF?style=flat-square" alt="Source 0.7.6 (549)" />
+<img src="https://img.shields.io/badge/Source-0.7.7%20%28550%29-007AFF?style=flat-square" alt="Source 0.7.7 (550)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -23,7 +23,8 @@ Built with Kotlin and Jetpack Compose, BiliPai supports videos, bangumi, live st
 | Feature | Details |
 | --- | --- |
 | Playback | DASH, HD quality, danmaku, gestures, speed controls, resume, background play and picture-in-picture |
-| Audio mode | Immersive and vinyl layouts, lyrics, queues, sleep timer and system media controls |
+| Audio mode | Immersive and vinyl layouts, lyrics, queues, sleep timer, system media controls and Android Auto |
+| Home screen widget | Current title, playback controls, audio resumption, and Watch later / Search shortcuts |
 | Subtitles and notes | Local subtitle import/export, styling and timing; private notes, timestamps and AI-summary drafts |
 | Bangumi and live | Following, adaptive episode grids, large-screen panes and landscape layouts; live categories and danmaku |
 | Feeds and messages | Followed creators, comments, replies, image previews and direct messages |
@@ -31,7 +32,7 @@ Built with Kotlin and Jetpack Compose, BiliPai supports videos, bangumi, live st
 | Appearance | Google Material 3, Miuix, optional Liquid Glass with elastic motion, dynamic colors, regular home grids and large-screen layouts |
 | Extensions | Plugins, DLNA / Google Cast and WebDAV settings backup |
 
-Some quality tiers require login or account privileges. Appearance, playback, danmaku and background behavior are configurable in Settings.
+Some quality tiers require login or account privileges. Appearance, playback, danmaku and background behavior are configurable in Settings. See the [widget and Android Auto guide (Chinese)](docs/wiki/SYSTEM_MEDIA.md) for system media entry points.
 
 ## Preview
 
@@ -129,6 +130,6 @@ This is an unofficial client and is not affiliated with BiliBili. Content belong
 
 <div align="center">
 
-<sub>Source version 0.7.6 (549) · Updated 2026-11-04 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>Source version 0.7.7 (550) · Updated 2026-11-04 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

@@ -3,21 +3,82 @@ package com.android.purebilibili.feature.video.usecase
 import com.android.purebilibili.data.model.response.Dash
 import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.data.model.response.DashVideo
+import com.android.purebilibili.data.model.response.Durl
 import com.android.purebilibili.data.model.response.PlayUrlData
 import com.android.purebilibili.data.model.response.SegmentBase
 import com.android.purebilibili.core.player.dash.AdaptiveDashPlaybackSource
 import com.android.purebilibili.core.player.policy.PlaybackQualityMode
+import com.android.purebilibili.core.util.VideoTrackDecoderSupport
+import com.android.purebilibili.core.util.selectPlayableVideoTracks
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoPlaybackUseCaseAdaptiveSourceTest {
 
     @Test
+    fun `unsupported dash does not bypass capability checks while empty dash keeps legacy url playback`() {
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { emptyList() })
+        val legacy = Durl(url = "https://example.com/legacy.mp4")
+        fun select(videos: List<DashVideo>) = useCase.resolvePlaybackSelection(
+            playUrlData = PlayUrlData(quality = 80, dash = Dash(video = videos), durl = listOf(legacy)),
+            targetQuality = 80,
+            isHevcSupported = true,
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false,
+            allowPremiumApiOnlyQualities = false,
+        )
+        assertEquals(legacy.url, select(emptyList())?.videoUrl)
+        assertNull(select(listOf(DashVideo(id = 80, codecs = "hev1", baseUrl = "https://example.com/unsupported"))))
+    }
+
+    @Test
+    fun `first play and cached quality switch keep software only av1 out of hardware preferred manifest`() {
+        val av1 = DashVideo(id = 80, codecs = "av01", baseUrl = "https://example.com/av1.m4s")
+        val hevc = DashVideo(id = 80, codecs = "hev1", baseUrl = "https://example.com/hevc.m4s")
+        val dash = Dash(video = listOf(av1, hevc))
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { tracks ->
+            selectPlayableVideoTracks(tracks, preferHardware = true) { video ->
+                VideoTrackDecoderSupport(true, hardware = video == hevc, software = video == av1)
+            }
+        })
+        val first = useCase.resolvePlaybackSelection(
+            playUrlData = PlayUrlData(quality = 80, dash = dash),
+            targetQuality = 80,
+            videoCodecPreference = "av01",
+            isHevcSupported = true,
+            isAv1Supported = true,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false,
+            allowPremiumApiOnlyQualities = false,
+        )
+        assertEquals(hevc.baseUrl, first?.videoUrl)
+        assertEquals(listOf(hevc), first?.adaptiveDashSource?.videoTracks)
+
+        val cached = useCase.changeQualityFromCache(
+            qualityId = 80,
+            cachedVideos = dash.video,
+            cachedAudios = emptyList(),
+            cachedDash = dash,
+            currentPos = 20_000L,
+            videoCodecPreference = "av01",
+            isHevcSupported = true,
+            isAv1Supported = true,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false,
+            applyToPlayer = false,
+        )
+        assertEquals(hevc.baseUrl, cached?.videoUrl)
+        assertEquals(listOf(hevc), cached?.adaptiveDashSource?.videoTracks)
+    }
+
+    @Test
     fun `resolve playback selection exposes adaptive dash source in auto mode`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
         val playUrlData = PlayUrlData(
             quality = 80,
             acceptQuality = listOf(80, 64, 32),

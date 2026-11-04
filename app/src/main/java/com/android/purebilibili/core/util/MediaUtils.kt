@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.hardware.display.DisplayManager
 import android.media.MediaCodecList
+import android.media.MediaCodecInfo.CodecProfileLevel
 import android.os.Build
 import android.view.Display
 import androidx.media3.common.MimeTypes
@@ -55,13 +56,12 @@ object MediaUtils {
     }
 
     /**
-     * Check if HDR (HDR10/HLG) video is supported
+     * Check if the HDR10 quality is supported
      * HDR requires both decoder support and display capability
      */
     fun isHdrSupported(context: Context? = null): Boolean {
-        // HDR10 uses HEVC with specific profile
-        // Check for HEVC support first, then verify display HDR capability when context is available
-        if (!hasDecoder("video/hevc") || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
+        // HDR10 需要 HEVC 10bit 解码能力，播放轨道仍会单独检查其具体 profile、尺寸和帧率。
+        if (!hasHevcMain10Decoder() || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
             return false
         }
         if (context == null) {
@@ -87,8 +87,29 @@ object MediaUtils {
     }
 
     private fun hasHdrDisplaySupport(context: Context): Boolean {
-        return supportsGenericHdrTypes(getSupportedHdrTypes(context))
+        // HDR 画质使用 PQ/HDR10，不能仅凭屏幕支持 HLG 就声明可用。
+        return supportsHdr10Types(getSupportedHdrTypes(context))
     }
+
+    private fun hasHevcMain10Decoder(): Boolean = decoderSupportCache.getOrPut("hevc-main10") {
+        MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos.any { codec ->
+            !codec.isEncoder && codec.supportedTypes.any { type ->
+                type.equals("video/hevc", ignoreCase = true) &&
+                    codec.getCapabilitiesForType(type).profileLevels.any { profile ->
+                        profile.profile == CodecProfileLevel.HEVCProfileMain10 ||
+                            profile.profile == CodecProfileLevel.HEVCProfileMain10HDR10 ||
+                            (Build.VERSION.SDK_INT >= 29 &&
+                                profile.profile == CodecProfileLevel.HEVCProfileMain10HDR10Plus)
+                    }
+            }
+        }
+    }
+
+    internal fun supportsHdr10Types(supportedHdrTypes: IntArray?): Boolean =
+        supportedHdrTypes?.any { type ->
+            type == Display.HdrCapabilities.HDR_TYPE_HDR10 ||
+                (Build.VERSION.SDK_INT >= 29 && type == Display.HdrCapabilities.HDR_TYPE_HDR10_PLUS)
+        } == true
 
     private fun hasDolbyVisionDisplaySupport(context: Context): Boolean {
         return supportsDolbyVisionType(getSupportedHdrTypes(context))
@@ -107,25 +128,6 @@ object MediaUtils {
             Logger.e("MediaUtils", "Failed to read display HDR capabilities", e)
             null
         }
-    }
-
-    internal fun supportsGenericHdrTypes(supportedHdrTypes: IntArray?): Boolean {
-        if (supportedHdrTypes == null || supportedHdrTypes.isEmpty()) {
-            return false
-        }
-        for (type in supportedHdrTypes) {
-            if (type == Display.HdrCapabilities.HDR_TYPE_HDR10 ||
-                type == Display.HdrCapabilities.HDR_TYPE_HLG
-            ) {
-                return true
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-                type == Display.HdrCapabilities.HDR_TYPE_HDR10_PLUS
-            ) {
-                return true
-            }
-        }
-        return false
     }
 
     internal fun supportsDolbyVisionType(supportedHdrTypes: IntArray?): Boolean {

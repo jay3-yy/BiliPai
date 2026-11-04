@@ -1,0 +1,16 @@
+<resources>
+    <string name="playback_widget_name">播放与续播</string>
+    <string name="playback_widget_description">查看当前视频、继续听视频，或打开稍后再看与搜索</string>
+    <string name="playback_widget_empty">先在 BiliPai 播放一段视频</string>
+    <string name="playback_widget_play">继续播放</string>
+    <string name="playback_widget_pause">暂停</string>
+    <string name="playback_widget_previous">上一首</string>
+    <string name="playback_widget_next">下一首</string>
+    <string name="playback_widget_error">暂时无法控制播放，请打开 BiliPai</string>
+    <string name="audio_library_title">听视频</string>
+    <string name="audio_library_queue">最近播放队列</string>
+    <string name="audio_library_more">更多稍后再看</string>
+    <string name="audio_library_login">请先在手机上登录 BiliPai</string>
+    <string name="audio_library_empty">还没有可续播记录，请先在手机播放视频</string>
+    <string name="audio_library_locked">已开启隐私内容验证，请在手机上管理播放</string>
+</resources>

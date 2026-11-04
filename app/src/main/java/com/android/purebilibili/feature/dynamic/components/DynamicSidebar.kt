@@ -326,7 +326,9 @@ fun DynamicSidebar(
                         } else Modifier
                     )
                     .then(
-                        if (glassWallpaperSidebar) Modifier
+                        if (glassWallpaperSidebar ||
+                            !com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                        ) Modifier
                         else Modifier.hazeSourceCompat(sidebarHazeState)
                     )
             ) {

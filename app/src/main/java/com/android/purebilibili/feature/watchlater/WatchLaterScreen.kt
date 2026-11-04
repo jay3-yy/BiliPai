@@ -1404,7 +1404,9 @@ fun WatchLaterScreen(
                 .fillMaxSize()
                 .then(watchLaterChromeSource?.modifier ?: Modifier)
                 .then(
-                    if (hazeState != null) {
+                    if (hazeState != null &&
+                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                    ) {
                         Modifier.hazeSourceCompat(state = hazeState)
                     } else {
                         Modifier
@@ -1889,7 +1891,6 @@ private fun WatchLaterVideoCard(
                 // 让播放器接管移动中的整卡，返回时再在 morph 末段接回源卡，避免与播放器重叠。
                 crossfadeSourceContent = true,
             )
-            .height(IntrinsicSize.Min)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.videoCardSourceBoundsInRoot()
             },

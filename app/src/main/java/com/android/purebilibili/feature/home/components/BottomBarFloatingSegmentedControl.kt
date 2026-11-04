@@ -298,7 +298,11 @@ internal fun BottomBarFloatingSegmentedControl(
                         verticalInset = captureInsets.verticalDp.dp,
                     )
                     .alpha(0f)
-                    .layerBackdrop(localBackdrop)
+                    .then(
+                        if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
+                            Modifier.layerBackdrop(localBackdrop)
+                        } else Modifier
+                    )
                     .background(AppSurfaceTokens.background())
             )
         }

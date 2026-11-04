@@ -2,7 +2,6 @@ package com.android.purebilibili.feature.video.viewmodel
 
 import com.android.purebilibili.plugin.sdk.SkipAction
 import com.android.purebilibili.data.model.response.Owner
-import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.feature.plugin.SponsorBlockVideoSnapshot
 import kotlin.test.Test
@@ -14,25 +13,47 @@ import kotlin.test.assertTrue
 class VideoPlaybackViewModelSponsorBlockPolicyTest {
 
     @Test
-    fun sponsorSkip_clampsOrdinarySegmentBeforePlaybackEnd() {
+    fun sponsorSkip_reachesPlaybackEndForSegmentsAtOrBeyondDuration() {
+        for (segmentEndMs in listOf(120_000L, 121_500L)) {
+            assertEquals(
+                120_000L,
+                resolveSponsorBlockSkipTargetPositionMs(
+                    requestedPositionMs = segmentEndMs,
+                    durationMs = 120_000L,
+                )
+            )
+        }
+    }
+
+    @Test
+    fun sponsorSkip_keepsSegmentEndBeforeDuration() {
         assertEquals(
-            119_000L,
+            119_500L,
             resolveSponsorBlockSkipTargetPositionMs(
-                requestedPositionMs = 121_500L,
+                requestedPositionMs = 119_500L,
                 durationMs = 120_000L,
-                category = SponsorCategory.SPONSOR,
             )
         )
     }
 
     @Test
-    fun sponsorSkip_allowsOutroToFinishNaturally() {
+    fun sponsorSkip_doesNotRewindShortVideoToBeginning() {
         assertEquals(
-            120_000L,
+            800L,
+            resolveSponsorBlockSkipTargetPositionMs(
+                requestedPositionMs = 900L,
+                durationMs = 800L,
+            )
+        )
+    }
+
+    @Test
+    fun sponsorSkip_preservesTargetUntilDurationIsKnown() {
+        assertEquals(
+            121_500L,
             resolveSponsorBlockSkipTargetPositionMs(
                 requestedPositionMs = 121_500L,
-                durationMs = 120_000L,
-                category = SponsorCategory.OUTRO,
+                durationMs = 0L,
             )
         )
     }

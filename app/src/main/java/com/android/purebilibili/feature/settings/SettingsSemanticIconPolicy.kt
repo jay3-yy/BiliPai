@@ -11,6 +11,7 @@ internal enum class SettingsIconRole {
     INTERFACE_THEME,
     HOME_FEED,
     NAVIGATION,
+    PARTITION_RAIL_POSITION,
     PLAYBACK_QUALITY,
     FULLSCREEN_GESTURE,
     COPY_TEXT,
@@ -266,6 +267,7 @@ internal fun rememberSettingsSemanticIcon(
  * 外层容器、着色和控件形态，避免用无关 glyph 填补其图标库缺项。
  */
 internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int = when (role) {
+    SettingsIconRole.PARTITION_RAIL_POSITION -> R.drawable.ic_settings_partition_rail_position_24
     SettingsIconRole.INTERFACE_THEME -> R.drawable.ms_color_lens_24
     SettingsIconRole.HOME_FEED -> R.drawable.ms_home_24
     SettingsIconRole.NAVIGATION -> R.drawable.ms_dashboard_24

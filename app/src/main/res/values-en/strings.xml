@@ -283,7 +283,7 @@
     <string name="icon_bilipai_white">BiliPai White</string>
     <string name="icon_bilipai_white_description">Frost white colorway</string>
     <string name="icon_bilipai_monet">BiliPai Monet</string>
-    <string name="icon_bilipai_monet_description">Icon colors follow the system theme</string>
+    <string name="icon_bilipai_monet_description">Follows system colors on Android 12 and later; blue on older versions</string>
     <string name="icon_settings_apply_notice">Changing the icon may take a few seconds. The system may briefly become unresponsive.</string>
     <string name="icon_appearance_title">Maid icon appearance</string>
     <string name="icon_appearance_summary">Follow the system theme or keep the icon light or dark in any system theme</string>

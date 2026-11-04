@@ -8,9 +8,9 @@ import kotlin.test.assertTrue
 class MediaUtilsHdrCapabilityTest {
 
     @Test
-    fun `supportsGenericHdrTypes returns true for hdr10 and hlg`() {
+    fun `hdr10 playback accepts hdr10 display`() {
         assertTrue(
-            MediaUtils.supportsGenericHdrTypes(
+            MediaUtils.supportsHdr10Types(
                 intArrayOf(
                     Display.HdrCapabilities.HDR_TYPE_HDR10,
                     Display.HdrCapabilities.HDR_TYPE_HLG
@@ -20,9 +20,10 @@ class MediaUtilsHdrCapabilityTest {
     }
 
     @Test
-    fun `supportsGenericHdrTypes returns false for null or empty types`() {
-        assertFalse(MediaUtils.supportsGenericHdrTypes(null))
-        assertFalse(MediaUtils.supportsGenericHdrTypes(intArrayOf()))
+    fun `hdr10 playback rejects hlg only and unknown displays`() {
+        assertFalse(MediaUtils.supportsHdr10Types(intArrayOf(Display.HdrCapabilities.HDR_TYPE_HLG)))
+        assertFalse(MediaUtils.supportsHdr10Types(null))
+        assertFalse(MediaUtils.supportsHdr10Types(intArrayOf()))
     }
 
     @Test

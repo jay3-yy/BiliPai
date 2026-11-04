@@ -79,6 +79,15 @@
         android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density"
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="31">
+        <meta-data android:name="com.google.android.gms.car.application" android:resource="@xml/automotive_app_desc" />
+        <receiver android:name=".feature.widget.PlaybackWidgetProvider" android:exported="false"
+            android:label="@string/playback_widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/playback_widget_info" />
+        </receiver>
+
 
         <!-- Collection starts only after the stored app preference is applied. SDK initialization
              remains automatic so Crashlytics can retain the original uncaught exception handler. -->
@@ -1021,10 +1030,12 @@
         <service
             android:name=".feature.audio.player.BackgroundAudioService"
             android:process=":playback"
-            android:exported="false"
+            android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="androidx.media3.session.MediaLibraryService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
 

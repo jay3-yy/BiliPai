@@ -23,7 +23,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `initial selection locks the available quality at or below the preference`() {
-        val result = VideoPlaybackUseCase().resolvePlaybackSelection(
+        val result = VideoPlaybackUseCase(videoTrackFilter = { it }).resolvePlaybackSelection(
             playUrlData = PlayUrlData(dash = Dash(video = listOf(
                 DashVideo(id = 125, baseUrl = "https://example.com/hdr", codecs = "hev1"),
                 DashVideo(id = 120, baseUrl = "https://example.com/4k", codecs = "hev1"),
@@ -53,7 +53,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `changeQualityFromCache returns null when target quality not cached`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.changeQualityFromCache(
             qualityId = 120,
@@ -67,7 +67,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `changeQualityFromCache returns exact match when target quality exists`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.changeQualityFromCache(
             qualityId = 64,
@@ -86,7 +86,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `changeQualityFromCache prefers supported codec when same quality has multiple tracks`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.changeQualityFromCache(
             qualityId = 80,
@@ -110,7 +110,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `mergeQualityOptions keeps api high tiers when dash list misses them`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.mergeQualityOptions(
             apiQualities = listOf(120, 116, 80, 64, 32, 16),
@@ -123,7 +123,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `mergeQualityOptions keeps api advertised 1080P when dash list is capped at 720P`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.mergeQualityOptions(
             apiQualities = listOf(80, 64, 32, 16),
@@ -136,7 +136,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `mergeQualityOptions uses dash list when api list is empty`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.mergeQualityOptions(
             apiQualities = emptyList(),
@@ -149,7 +149,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildQualitySelectionState keeps api advertised 1080P label when dash is capped at 720P`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildQualitySelectionState(
             apiQualities = listOf(80, 64, 32, 16),
@@ -163,7 +163,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildQualitySelectionState keeps vip tiers visible after api re-fetch`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildQualitySelectionState(
             apiQualities = listOf(120, 116, 80, 64, 32),
@@ -177,7 +177,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildQualitySelectionState keeps premium labels visible but disables missing dash tiers`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildQualitySelectionState(
             apiQualities = listOf(120, 116, 80, 64, 32),
@@ -191,7 +191,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildQualitySelectionState hides premium api only tiers during app cooldown`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildQualitySelectionState(
             apiQualities = listOf(120, 116, 112, 80, 64, 32),
@@ -206,7 +206,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildQualitySelectionState does not invent low tiers missing from api list`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildQualitySelectionState(
             apiQualities = listOf(80, 64),
@@ -220,7 +220,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `mergeQualityOptions keeps dash-only lower tiers when api only reports current max quality`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.mergeQualityOptions(
             apiQualities = listOf(64),
@@ -233,7 +233,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildQualitySelectionState keeps lower dash tiers under api capped guest payload`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildQualitySelectionState(
             apiQualities = listOf(64),
@@ -247,7 +247,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildQualitySelectionState keeps dash lower tiers alongside api-only login tier`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildQualitySelectionState(
             apiQualities = listOf(80, 64),
@@ -261,7 +261,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `auto highest uses actual streams instead of advertised entitlement tiers`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
         // The advertised list may mention 4K while this account only received 1080P.
         assertEquals(80, useCase.resolveAutoHighestTargetQuality(
             playableQualities = listOf(80, 64, 32),
@@ -278,7 +278,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `auto highest chooses HDR Vivid when present and falls back for device capability`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
         assertEquals(129, useCase.resolveAutoHighestTargetQuality(
             playableQualities = listOf(129, 127, 126, 125, 120, 80),
             isHdrSupported = true,
@@ -293,7 +293,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildPlaybackSelectionSummary describes final selection context`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildPlaybackSelectionSummary(
             bvid = "BV1TEST12345",
@@ -315,7 +315,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `buildPlaybackSelectionSummary includes selected stream bitrate when available`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.buildPlaybackSelectionSummary(
             bvid = "BV1TEST12345",
@@ -340,7 +340,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `resolvePlaybackSelection chooses requested dash quality and keeps merged labels`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.resolvePlaybackSelection(
             playUrlData = PlayUrlData(
@@ -375,7 +375,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `resolvePlaybackSelection uses standard dash audio for hi res preference at high speed`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.resolvePlaybackSelection(
             playUrlData = PlayUrlData(
@@ -409,7 +409,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `resolvePlaybackSelection selects flac and exposes real audio options`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
         val hiResAudio = DashAudio(
             id = AUDIO_QUALITY_HI_RES,
             baseUrl = "https://example.com/audio-hires.m4s",
@@ -451,7 +451,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `resolvePlaybackSelection excludes dolby when device decoder is unavailable`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
         val standardAudio = DashAudio(
             id = 30280,
             baseUrl = "https://example.com/audio-aac.m4s",
@@ -511,7 +511,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
                 dolby = Dolby(type = 1, audio = listOf(alternateDolby))
             )
         )
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
         for ((request, speed, expectedTrack) in listOf(
             Triple(30216, 1f, standard64),
             Triple(30280, 1f, standard192),
@@ -558,7 +558,7 @@ class VideoPlaybackUseCaseQualitySwitchTest {
 
     @Test
     fun `resolvePlaybackSelection falls back to durl when dash is missing`() {
-        val useCase = VideoPlaybackUseCase()
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
 
         val result = useCase.resolvePlaybackSelection(
             playUrlData = PlayUrlData(

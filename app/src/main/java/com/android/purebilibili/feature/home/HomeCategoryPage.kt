@@ -1138,7 +1138,11 @@ private fun TodayWatchPlanCard(
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .layerBackdrop(todayWatchBackdrop)
+                    .then(
+                        if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
+                            Modifier.layerBackdrop(todayWatchBackdrop)
+                        } else Modifier
+                    )
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)),
             )
             Column(

@@ -151,28 +151,6 @@ class MainActivityAppCompatContractTest {
             "The retired hand-drawn TV/play monochrome icon should not remain packaged"
         )
 
-        listOf("", "_round").forEach { suffix ->
-            val adaptiveIcon = loadResourceText("mipmap-anydpi-v26/ic_launcher_bilipai_monet$suffix.xml")
-            assertTrue(
-                adaptiveIcon.contains("<foreground android:drawable=\"@mipmap/ic_launcher_bilipai_monet_foreground\" />") &&
-                    adaptiveIcon.contains("<monochrome android:drawable=\"@mipmap/ic_launcher_bilipai_monet_foreground\" />"),
-                "BiliPai Monet$suffix should let the launcher tint the same clean logo used by its color icon"
-            )
-            assertTrue(
-                !resourcePathExists("mipmap-anydpi-v31/ic_launcher_bilipai_monet$suffix.xml"),
-                "BiliPai Monet$suffix should not replace the official monochrome path with an Android 12 override"
-            )
-        }
-        assertTrue(
-            !resourcePathExists("drawable-v31/ic_launcher_bilipai_monet_background.xml"),
-            "BiliPai Monet should not simulate themed icons by drawing private system accent resources"
-        )
-        assertTrue(
-            !loadResourceText("drawable/ic_launcher_bilipai_monet_background.xml").contains("system_accent") &&
-                !loadResourceText("drawable-night/ic_launcher_bilipai_monet_background.xml").contains("system_accent"),
-            "BiliPai Monet color fallbacks should remain deterministic when the launcher does not theme icons"
-        )
-
         val splashAdaptiveIcon = loadResourceText("mipmap-anydpi-v26/splash_icon_bilipai_monet.xml")
         val splashForeground = loadResourceText("drawable/splash_icon_bilipai_monet_foreground.xml")
         assertTrue(

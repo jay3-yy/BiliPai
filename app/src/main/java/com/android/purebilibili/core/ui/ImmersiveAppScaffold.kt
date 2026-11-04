@@ -136,7 +136,9 @@ internal fun ImmersiveAppScaffold(
                     if (chromeBackdropSource == null) source?.modifier ?: Modifier else Modifier
                 )
                 .then(
-                    if (externalHazeState == null && hazeState != null) {
+                    if (externalHazeState == null && hazeState != null &&
+                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                    ) {
                         Modifier.hazeSourceCompat(hazeState)
                     } else {
                         Modifier

@@ -1319,7 +1319,9 @@ fun CommonListScreen(
                     commonListChromeSource?.modifier ?: Modifier
                 )
                 .then(
-                    if (localHazeState != null) {
+                    if (localHazeState != null &&
+                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                    ) {
                         Modifier.hazeSourceCompat(state = localHazeState)
                     } else {
                         Modifier

@@ -842,7 +842,9 @@ fun DynamicScreen(
                                         dynamicDockSource?.modifier ?: Modifier
                                     )
                                     .then(
-                                        if (dynamicTopBarHazeState != null) {
+                                        if (dynamicTopBarHazeState != null &&
+                                            com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                                        ) {
                                             Modifier.hazeSourceCompat(state = dynamicTopBarHazeState)
                                         } else {
                                             Modifier
@@ -1044,7 +1046,9 @@ fun DynamicScreen(
                                     dynamicDockSource?.modifier ?: Modifier
                                 )
                                 .then(
-                                    if (dynamicTopBarHazeState != null) {
+                                    if (dynamicTopBarHazeState != null &&
+                                        com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
+                                    ) {
                                         Modifier.hazeSourceCompat(state = dynamicTopBarHazeState)
                                     } else {
                                         Modifier

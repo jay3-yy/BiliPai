@@ -286,25 +286,18 @@ internal fun shouldResumePlaybackAfterSponsorBlockSkip(
     return true
 }
 
-private const val SPONSOR_SKIP_END_GUARD_MS = 1_000L
 private const val PUBLIC_VIDEO_NOTE_PAGE_SIZE = 10
 
 internal fun resolveSponsorBlockSkipTargetPositionMs(
     requestedPositionMs: Long,
     durationMs: Long,
-    category: String?,
 ): Long {
     val safeRequestedPositionMs = requestedPositionMs.coerceAtLeast(0L)
     if (durationMs <= 0L) return safeRequestedPositionMs
 
-    // 片尾跳过允许自然进入播放完成；其他社区片段不能因时间轴误差 seek 到
-    // duration 或其后，否则部分 Media3/解码器组合会直接进入 STATE_ENDED。
-    if (category == com.android.purebilibili.data.model.response.SponsorCategory.OUTRO) {
-        return safeRequestedPositionMs.coerceAtMost(durationMs)
-    }
-    val latestContinuousPlaybackPositionMs =
-        (durationMs - SPONSOR_SKIP_END_GUARD_MS).coerceAtLeast(0L)
-    return safeRequestedPositionMs.coerceAtMost(latestContinuousPlaybackPositionMs)
+    // 所有类别都可能覆盖视频末尾。跳到实际结尾以进入正常完成流程，
+    // 不再拉回结尾前一秒，避免重播已跳过的尾段或将短视频跳回开头。
+    return safeRequestedPositionMs.coerceAtMost(durationMs)
 }
 
 internal fun buildSponsorBlockVideoSnapshot(currentState: VideoPlaybackUiState): SponsorBlockVideoSnapshot? {
@@ -9009,7 +9002,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                 val resolvedTargetPositionMs = resolveSponsorBlockSkipTargetPositionMs(
                                     requestedPositionMs = action.positionMs,
                                     durationMs = playerDurationMs,
-                                    category = action.category,
                                 )
                                 clearSponsorSkipUi()
                                 playbackUseCase.seekTo(
@@ -9101,7 +9093,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val entry = currentSponsorSessionEntry() ?: return
         val plugin = entry.session as SponsorBlockSessionApi
         val segment = segmentId?.let(plugin::markAsSkipped)
-        val segmentCategory = segment?.category
         recordSponsorBlockSkip(
             snapshot = snapshot,
             segmentId = segment?.UUID ?: segmentId,
@@ -9113,7 +9104,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         val resolvedTargetPosition = resolveSponsorBlockSkipTargetPositionMs(
             requestedPositionMs = targetPosition,
             durationMs = playbackUseCase.getDuration(),
-            category = segmentCategory,
         )
         playbackUseCase.seekTo(
             position = resolvedTargetPosition,
