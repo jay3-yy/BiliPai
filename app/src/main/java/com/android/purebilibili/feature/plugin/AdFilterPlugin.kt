@@ -110,6 +110,17 @@ internal fun removeAdFilterCustomListItem(
     return items.filterNot { it == item }
 }
 
+internal suspend fun <T> filterVideoTagMatches(
+    items: List<T>,
+    bvid: (T) -> String,
+    asVideoItem: (T) -> VideoItem,
+): List<T> {
+    if (items.isEmpty()) return items
+    PluginManager.awaitPluginReady(BuiltinPluginIds.AD_FILTER)
+    return PluginManager.getEnabledPlugin(AdFilterPlugin::class)
+        ?.filterVideoTags(items, bvid, asVideoItem) ?: items
+}
+
 /**
  * 🚫 去广告增强插件 v2.0
  *
@@ -124,7 +135,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
     override val id = BuiltinPluginIds.AD_FILTER
     override val name = "去广告增强"
-    override val description = "过滤广告、拉黑UP主、屏蔽关键词"
+    override val description = "过滤广告、拉黑UP主、屏蔽标题与视频标签关键词"
     override val version = "2.0.1"
     override val author = "BiliPai项目组"
     override val icon: ImageVector = Icons.Outlined.Close
@@ -137,12 +148,31 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         capabilities = setOf(
             PluginCapability.RECOMMENDATION_CANDIDATES,
             PluginCapability.LOCAL_FEEDBACK_READ,
-            PluginCapability.PLUGIN_STORAGE
+            PluginCapability.PLUGIN_STORAGE,
+            PluginCapability.NETWORK,
         )
     )
 
+    @Volatile
     private var config: AdFilterConfig = AdFilterConfig()
     private var filteredCount = 0
+    private val videoTagFilter = VideoTagFilter(
+        loadTags = { bvid ->
+            val response = NetworkModule.api.getVideoTags(bvid)
+            check(response.code == 0) { response.message.ifBlank { "标签加载失败(${response.code})" } }
+            response.data.orEmpty().map { it.tag_name }
+        },
+        onFailure = { bvid, error -> Logger.w(TAG, "视频 $bvid 标签加载失败，保留条目: ${error.message}") },
+    )
+
+    internal suspend fun <T> filterVideoTags(
+        items: List<T>,
+        bvid: (T) -> String,
+        asVideoItem: (T) -> VideoItem,
+    ): List<T> = videoTagFilter.filter(items, config.blockedTagKeywords, bvid) { item, keyword ->
+        filteredCount++
+        recordFilteredItem(asVideoItem(item), AdFilterReasonType.TAG_KEYWORD, keyword)
+    }
 
     //  配置版本号，用于检测是否需要重载
     @Volatile
@@ -448,14 +478,17 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         var filterLowQuality by remember { mutableStateOf(config.filterLowQuality) }
         var blockedUpNames by remember { mutableStateOf(config.blockedUpNames) }
         var blockedKeywords by remember { mutableStateOf(config.blockedKeywords) }
+        var blockedTagKeywords by remember { mutableStateOf(config.blockedTagKeywords) }
         var upListExpanded by remember { mutableStateOf(false) }
         var keywordListExpanded by remember { mutableStateOf(false) }
+        var tagKeywordListExpanded by remember { mutableStateOf(false) }
         var insightRecords by remember { mutableStateOf<List<AdFilterRecord>>(emptyList()) }
         var cachedUpProfiles by remember { mutableStateOf<List<AdFilterUpProfile>>(emptyList()) }
 
         // 输入对话框状态
         var showAddUpDialog by remember { mutableStateOf(false) }
         var showAddKeywordDialog by remember { mutableStateOf(false) }
+        var showAddTagKeywordDialog by remember { mutableStateOf(false) }
         var inputText by remember { mutableStateOf("") }
         fun persistConfig(updatedConfig: AdFilterConfig) {
             config = updatedConfig
@@ -470,6 +503,7 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
             filterLowQuality = config.filterLowQuality
             blockedUpNames = config.blockedUpNames
             blockedKeywords = config.blockedKeywords
+            blockedTagKeywords = config.blockedTagKeywords
             insightRecords = AdFilterInsightStore.readRecords(context)
             cachedUpProfiles = AdFilterInsightStore.readUpProfiles(context)
             cachedUpProfiles = refreshMissingAdFilterUpProfiles(
@@ -581,6 +615,28 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
                     persistConfig(config.copy(blockedKeywords = blockedKeywords))
                 }
             )
+
+            Spacer(modifier = Modifier.height(16.dp))
+            AdFilterCustomListSection(
+                title = "视频标签屏蔽词",
+                items = blockedTagKeywords,
+                emptyText = "暂无标签屏蔽词",
+                expanded = tagKeywordListExpanded,
+                icon = Icons.Outlined.Tag,
+                itemIconTint = AppContentColors.error(),
+                addButtonText = "添加标签屏蔽词",
+                onExpandedChange = { tagKeywordListExpanded = it },
+                onAddClick = { showAddTagKeywordDialog = true },
+                onRemove = { keyword ->
+                    blockedTagKeywords = removeAdFilterCustomListItem(blockedTagKeywords, keyword)
+                    persistConfig(config.copy(blockedTagKeywords = blockedTagKeywords))
+                },
+            )
+            AppText(
+                text = "按视频实际标签匹配，覆盖首页、搜索和详情推荐。刷新后生效；标签请求失败时保留视频。",
+                style = MaterialTheme.typography.bodySmall,
+                color = AppContentColors.secondaryText(),
+            )
         }
 
         // ========== 对话框 ==========
@@ -626,16 +682,22 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
             )
         }
 
-        // 添加关键词对话框
-        if (showAddKeywordDialog) {
+        // 标题词与标签词独立保存，共用输入界面。
+        if (showAddKeywordDialog || showAddTagKeywordDialog) {
+            val addingTagKeyword = showAddTagKeywordDialog
+            fun dismissKeywordDialog() {
+                showAddKeywordDialog = false
+                showAddTagKeywordDialog = false
+                inputText = ""
+            }
             AppAlertDialog(
-                onDismissRequest = { showAddKeywordDialog = false; inputText = "" },
-                title = { AppText("添加屏蔽关键词") },
+                onDismissRequest = ::dismissKeywordDialog,
+                title = { AppText(if (addingTagKeyword) "添加标签屏蔽词" else "添加屏蔽关键词") },
                 text = {
                     AppOutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        label = { AppText("关键词") },
+                        label = { AppText(if (addingTagKeyword) "视频标签关键词" else "标题关键词") },
                         placeholder = { AppText("输入要屏蔽的关键词") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -645,16 +707,23 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
                     AppTextButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
-                                blockedKeywords = blockedKeywords + inputText.trim()
-                                persistConfig(config.copy(blockedKeywords = blockedKeywords))
+                                if (addingTagKeyword) {
+                                    val keyword = inputText.trim()
+                                    if (blockedTagKeywords.none { it.equals(keyword, ignoreCase = true) }) {
+                                        blockedTagKeywords = blockedTagKeywords + keyword
+                                        persistConfig(config.copy(blockedTagKeywords = blockedTagKeywords))
+                                    }
+                                } else {
+                                    blockedKeywords = blockedKeywords + inputText.trim()
+                                    persistConfig(config.copy(blockedKeywords = blockedKeywords))
+                                }
                             }
-                            showAddKeywordDialog = false
-                            inputText = ""
+                            dismissKeywordDialog()
                         }
                     ) { AppText("添加") }
                 },
                 dismissButton = {
-                    AppTextButton(onClick = { showAddKeywordDialog = false; inputText = "" }) { AppText("取消") }
+                    AppTextButton(onClick = ::dismissKeywordDialog) { AppText("取消") }
                 }
             )
         }
@@ -841,7 +910,7 @@ private fun AdFilterInsightPanel(summary: AdFilterInsightSummary) {
             upProfiles = summary.upProfiles
         )
         AdFilterRecordSection(
-            title = "自定义关键词",
+            title = "自定义标题与标签关键词",
             emptyText = "暂无关键词过滤记录",
             records = summary.customKeywordRecords,
             upProfiles = summary.upProfiles
@@ -1270,7 +1339,8 @@ data class AdFilterConfig(
     val blockedUpMids: List<Long> = emptyList(),     // 拉黑UP主MID
 
     // 自定义关键词
-    val blockedKeywords: List<String> = emptyList()  // 自定义屏蔽词
+    val blockedKeywords: List<String> = emptyList(),  // 标题屏蔽词
+    val blockedTagKeywords: List<String> = emptyList(),
 )
 
 private fun formatAdFilterEventTime(timestampMs: Long): String {

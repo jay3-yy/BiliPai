@@ -97,14 +97,15 @@ internal data class PreparedHomeFeedMerge(
     val addedCount: Int,
 )
 
-/** CPU-only: callers run selection, full-list deduplication and copying on Default. */
-internal fun prepareHomeFeedMerge(
+/** 在后台过滤增量刷新保留的旧卡片，再合并新内容；调用方负责发布前的列表身份检查。 */
+internal suspend fun prepareHomeFeedMerge(
     currentVideos: List<VideoItem>,
     responseVideos: List<VideoItem>,
     isLoadMore: Boolean,
     isIncrementalRefresh: Boolean,
     keySelector: (VideoItem) -> String,
     requestVideos: List<VideoItem> = currentVideos,
+    filterRetainedVideos: suspend (List<VideoItem>) -> List<VideoItem> = { it },
 ): PreparedHomeFeedMerge {
     val removedKeys = if (requestVideos === currentVideos) emptySet() else {
         val currentKeys = currentVideos.mapTo(HashSet(), keySelector)
@@ -115,17 +116,18 @@ internal fun prepareHomeFeedMerge(
     val eligibleResponse = if (removedKeys.isEmpty()) responseVideos else {
         responseVideos.filterNot { keySelector(it) in removedKeys }
     }
+    val retainedVideos = if (isIncrementalRefresh) filterRetainedVideos(currentVideos) else currentVideos
     val incoming = selectHomeFeedIncomingVideos(
-        eligibleResponse, currentVideos, isLoadMore, isIncrementalRefresh,
+        eligibleResponse, retainedVideos, isLoadMore, isIncrementalRefresh,
     )
     var addedCount = 0
     val merged = when {
         isLoadMore -> appendDistinctByKey(currentVideos, incoming, keySelector)
         isIncrementalRefresh -> {
-            val prepended = prependDistinctByKey(currentVideos, incoming, keySelector)
-            addedCount = (prepended.size - currentVideos.size).coerceAtLeast(0)
-            val keptOldCount = resolveHomeRefreshKeptOldItemCount(currentVideos.size)
-            if (keptOldCount < currentVideos.size) prepended.take(addedCount + keptOldCount)
+            val prepended = prependDistinctByKey(retainedVideos, incoming, keySelector)
+            addedCount = (prepended.size - retainedVideos.size).coerceAtLeast(0)
+            val keptOldCount = resolveHomeRefreshKeptOldItemCount(retainedVideos.size)
+            if (keptOldCount < retainedVideos.size) prepended.take(addedCount + keptOldCount)
             else prepended
         }
         else -> incoming
@@ -138,7 +140,7 @@ private data class PreparedHomeFeedVideos(
     val filteredVideos: List<VideoItem>,
 )
 
-private fun prepareHomeFeedVideos(
+private suspend fun prepareHomeFeedVideos(
     videos: List<VideoItem>,
     blockedMids: Set<Long>,
     feedKind: FeedKind,
@@ -148,8 +150,11 @@ private fun prepareHomeFeedVideos(
     val blockedFiltered = validVideos.filter { video -> video.owner.mid !in blockedMids }
     val feedbackFiltered = feedbackFilter(blockedFiltered)
     val builtinFiltered = PluginManager.filterFeedItems(feedbackFiltered, feedKind = feedKind)
-    val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager
-        .filterVideos(builtinFiltered)
+    val filteredVideos = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+        com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtinFiltered),
+        bvid = { it.bvid },
+        asVideoItem = { it },
+    )
     return PreparedHomeFeedVideos(
         validVideoCount = validVideos.size,
         filteredVideos = filteredVideos,
@@ -848,7 +853,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val nowMillis = System.currentTimeMillis()
         val cached = expandedCandidateCache
         if (canReuseTodayWatchExpandedCache(cached, baseSignature, nowMillis)) {
-            val mergedCandidates = mergeTodayWatchCandidates(recommendVideos, cached?.candidates.orEmpty())
+            val currentCandidates = filterTodayWatchExpandedCandidates(cached?.candidates.orEmpty())
+            ensureAccountCurrent(identity)
+            val mergedCandidates = mergeTodayWatchCandidates(recommendVideos, currentCandidates)
             if (mergedCandidates.size > recommendVideos.size &&
                 shouldApplyTodayWatchBuildResult(generation, todayWatchBuildGeneration)
             ) {
@@ -868,7 +875,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val expandedCandidates = filterTodayWatchExpandedCandidates(rawCandidates)
             expandedCandidateCache = TodayWatchExpandedCandidateCache(
                 baseSignature = baseSignature,
-                candidates = expandedCandidates,
+                candidates = rawCandidates,
                 loadedAtMillis = System.currentTimeMillis()
             )
             val mergedCandidates = mergeTodayWatchCandidates(recommendVideos, expandedCandidates)
@@ -890,7 +897,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun filterTodayWatchExpandedCandidates(videos: List<VideoItem>): List<VideoItem> {
+    private suspend fun filterTodayWatchExpandedCandidates(videos: List<VideoItem>): List<VideoItem> {
         val validVideos = videos.filter {
             it.bvid.isNotBlank() && it.title.isNotBlank() && it.contentType !in setOf("bangumi", "picture")
         }
@@ -900,9 +907,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             feedbackFiltered,
             feedKind = FeedKind.HOME_RECOMMEND
         )
-        return com.android.purebilibili.core.plugin.json.JsonPluginManager
-            .filterVideos(builtinFiltered)
-            .distinctBy { it.bvid }
+        return com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+            com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtinFiltered)
+                .distinctBy { it.bvid },
+            bvid = { it.bvid },
+            asVideoItem = { it },
+        )
     }
 
     private suspend fun loadHistorySample(forceReload: Boolean, sampleLimit: Int): List<VideoItem> {
@@ -1746,8 +1756,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             refreshUserInfoInBackground()
         }
 
-        // Feed filtering and de-duplication are CPU-only work. Keep it off the UI dispatcher so
-        // the list can continue drawing while plugin and feedback rules process the response.
+        // Keep local rules off the UI dispatcher; opt-in tag rules additionally await archive metadata.
         val preparedHomeFeed = videoResult.getOrNull()?.let { videos ->
             withContext(Dispatchers.Default) {
                 prepareHomeFeedVideos(
@@ -1805,6 +1814,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         isIncrementalRefresh = useIncrementalRecommendRefresh,
                         keySelector = ::videoItemKey,
                         requestVideos = currentCategoryState.videos,
+                        filterRetainedVideos = { retained ->
+                            com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+                                retained,
+                                bvid = { it.bvid },
+                                asVideoItem = { it },
+                            )
+                        },
                     )
                 }
                 ensureAccountCurrent(identity)

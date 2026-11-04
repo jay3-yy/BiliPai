@@ -669,7 +669,27 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         suspend fun videos(items: List<VideoItem>): List<VideoItem> {
             val native = items.filter { it.owner.mid !in blockedMids }
             val builtin = com.android.purebilibili.core.plugin.PluginManager.filterFeedItems(native, feedKind = FeedKind.SEARCH)
-            return com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtin)
+            return com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+                com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtin),
+                bvid = { it.bvid },
+                asVideoItem = { it },
+            )
+        }
+        suspend fun ups(items: List<com.android.purebilibili.data.model.response.SearchUpItem>):
+            List<com.android.purebilibili.data.model.response.SearchUpItem> {
+            val visibleUps = items.filter { it.mid !in blockedMids }
+            val nested = visibleUps.flatMap { it.res.orEmpty() }
+            if (nested.isEmpty()) return visibleUps
+            val visibleVideos = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+                nested.filter { it.mid !in blockedMids },
+                bvid = { it.bvid },
+                asVideoItem = { it.toVideoItem() },
+            )
+            if (visibleVideos.size == nested.size) return visibleUps
+            val allowed = visibleVideos.mapTo(hashSetOf()) { it.bvid }
+            return visibleUps.map { up ->
+                up.copy(res = up.res?.filter { it.mid !in blockedMids && it.bvid in allowed })
+            }
         }
         fun chunk(page: SearchResultPageUiState, info: SearchRepository.SearchPageInfo, rawCount: Int): SearchPageChunk {
             val visible = page.searchResults.size + page.upResults.size + page.bangumiResults.size +
@@ -692,8 +712,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                     result.ups.flatMap { up -> up.res.orEmpty().map { it.toVideoItem() } }
                 )
                 chunk(empty.copy(searchResults = videos(result.videos),
-                    upResults = result.ups.filter { it.mid !in blockedMids }.map { up ->
-                        up.copy(res = up.res?.filterNot { it.mid in blockedMids }) },
+                    upResults = ups(result.ups),
                     bangumiResults = result.bangumi,
                     matchResults = result.matches), result.pageInfo,
                     result.videos.size + result.ups.size + result.bangumi.size + result.matches.size)
@@ -706,7 +725,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             }
             SearchType.UP -> {
                 val (items, info) = SearchRepository.searchUp(keyword = keyword, page = number, order = filters.upOrder, orderSort = filters.upOrderSort, userType = filters.upUserType).getOrThrow()
-                val filteredUps = items.filter { it.mid !in blockedMids }
+                val filteredUps = ups(items)
                 // UP 主卡片里嵌着「最近投稿」，这些视频同样要预热，
                 // 否则点卡片里的竖屏视频仍会先铺横屏。
                 VideoRepository.prefetchVerticalFlagsForVideos(
