@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.7.7%20%28550%29-007AFF?style=flat-square" alt="Source 0.7.7 (550)" />
+<img src="https://img.shields.io/badge/Source-0.7.8%20%28551%29-007AFF?style=flat-square" alt="Source 0.7.8 (551)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -70,17 +70,18 @@
 - `.bpskin` 皮肤包：导入背景、颜色与部分动效资源，不执行代码。
 - `.bpplugin` Kotlin 插件包：目前支持包预览与能力授权，尚不执行外部 Dex。
 
+在插件中心启用“去广告增强”，可在“视频标签屏蔽词”中添加、删除关键词，按视频实际标签过滤首页推荐、搜索结果和详情相关推荐。修改规则后刷新对应列表生效；未配置标签词时不增加标签请求，查询失败或超时时保留未确认命中的视频。
+
 导入第三方插件前，请检查来源与权限声明。开发说明见 [插件开发指南](docs/PLUGIN_DEVELOPMENT.md)、[Kotlin 插件 SDK](plugins/sdk/README.md) 与 [JS 插件示例](examples/plugins/README.md)。
 
 ## 最近更新
 
-- 切换倍速保留播放源与首帧；评论预览和动态热评直接定位对应楼层。
-- 推荐流减少重复请求、统一卡片请求量；改进拖动快进幅度及平板评论加载体验。
-- 空间增加漫画、文集、预约、勋章墙和更多账号入口；“网页投稿”支持原生列表、筛选、排序与跳页。
-- 跨设备续播优先使用最新云端进度，修正分 P、进度回退和历史记录显示。
-- 修复快速进入评论时误报加载失败，以及评论视频链接点击和长按菜单。
-- 修复私信键盘遮挡、播放器数量角标裁切，统一分区拖动振动并增加剧集卡片间距。
-- 内置网页跟随应用主题并保留浏览进度，修复空间切页和退出时的回弹节点崩溃。
+- 去广告增强支持视频标签屏蔽词；推荐卡片按播放尺寸显示「竖屏」标识；动态页可关闭顶部 UP 主头像栏。
+- 平板嵌入与全屏播放器共用横屏弹幕样式；播放器新增独立的加载与缓冲提示。
+- 短视频返回首页后重新进入时续接未浏览内容；未真实播放不再写入观看历史，返回详情不再停留在封面。
+- 评论翻译识别中文回复前缀与中外文混排，中文为主的评论不再出现翻译入口；楼中楼保持滚动位置，点赞状态不再回退。
+- 搜索输入单向同步查询，修复光标、选区与输入法组合文字被异步回写重置。
+- 全屏切小窗回首页释放方向锁；稍后再看卡片补齐移除操作，Miuix 悬浮底栏磨砂覆盖两种材质。
 
 完整记录见 [CHANGELOG.md](CHANGELOG.md)。
 
@@ -130,6 +131,6 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 
 <div align="center">
 
-<sub>源码版本 0.7.7（550） · 更新于 2026-11-04 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>源码版本 0.7.8（551） · 更新于 2026-11-05 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.7.7%20%28550%29-007AFF?style=flat-square" alt="Source 0.7.7 (550)" />
+<img src="https://img.shields.io/badge/Source-0.7.8%20%28551%29-007AFF?style=flat-square" alt="Source 0.7.8 (551)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -70,17 +70,18 @@ Built-in plugins cover sponsor skipping, ad filtering, Anime4K, danmaku, eye car
 - `.bpskin` skin packs: import backgrounds, colors and selected motion assets without executing code.
 - `.bpplugin` Kotlin packages: package previews and capability authorization are supported; external Dex execution is not yet available.
 
+Enable **去广告增强** (ad filtering) in the plugin center and edit **视频标签屏蔽词** to block keywords in actual video tags across home recommendations, search results and related videos. Refresh the list after changing rules. With no tag keywords, no extra tag requests are made; failed or timed-out lookups keep videos whose tags could not be checked.
+
 Review the source and declared permissions before importing third-party plugins. See the [plugin development guide](docs/PLUGIN_DEVELOPMENT.md), [Kotlin plugin SDK](plugins/sdk/README.md) and [JS plugin examples](examples/plugins/README.md).
 
 ## Recent updates
 
-- Speed changes retain the playback source and first frame; reply previews and dynamic comment summaries open the correct thread.
-- Recommendation feeds reduce duplicate requests and align batch sizes; improved seek gestures and tablet comment loading.
-- Spaces add comics, article collections, reservations, medal walls and more account tools. Web uploads support native lists, filters, sorting and page navigation.
-- Cross-device resume uses the latest cloud progress, with fixes for multi-part videos, seeking backward and history display.
-- Fixed false loading errors when opening comments quickly, video-link taps and long-press menus in comments.
-- Fixed keyboard overlap in chats and clipped player counts; aligned category drag haptics with the dock and added spacing between season cards.
-- In-app pages follow the app theme while keeping browsing state; fixed overscroll-node crashes when switching or leaving space tabs.
+- Ad filtering supports blocked video-tag keywords; video cards show a "竖屏" (vertical) badge by playback size; the dynamic page can hide its top uploader avatar bar.
+- Tablet embedded and fullscreen players share landscape danmaku styling; the player gains standalone loading and buffering indicators.
+- Returning to the story feed resumes unseen content; history is only written after real playback, and returning to details no longer sticks to the cover.
+- Comment translation handles Chinese reply prefixes and mixed-language text, while Chinese-dominant comments no longer show the translate action; sub-reply details keep scroll position and like states no longer revert.
+- Search input syncs one-way into the query, fixing cursors, selections and IME composition being reset by async writes.
+- Fullscreen-to-mini-player transitions release the orientation lock; watch-later cards gain a remove action and the Miuix floating dock uses frosted backgrounds in both materials.
 
 See [CHANGELOG.md](CHANGELOG.md) for details.
 
@@ -130,6 +131,6 @@ This is an unofficial client and is not affiliated with BiliBili. Content belong
 
 <div align="center">
 
-<sub>Source version 0.7.7 (550) · Updated 2026-11-04 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>Source version 0.7.8 (551) · Updated 2026-11-05 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>
