@@ -696,6 +696,11 @@ fun SearchScreen(
     val backToTopButtonEnabled = rememberBackToTopButtonEnabled()
     val searchChromeSpec = remember(topChromePolicy) { resolveSearchChromeVisualSpec(topChromePolicy) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // The editable draft is authoritative. VM query is only its search/suggestion projection,
+    // never a value to replay into an active IME session.
+    val searchInputState = androidx.compose.foundation.text.input.rememberTextFieldState(
+        initialText = state.query
+    )
     val listLayout = rememberVideoListLayoutControl()
     // Entry-scoped: consuming the initial keyword or returning from a detail must not add a landing.
     val openedWithKeyword = rememberSaveable { initialKeyword.isNotBlank() }
@@ -1142,11 +1147,18 @@ fun SearchScreen(
         }
         viewModel.onQueryChange(query)
     }
+    val latestUpdateSearchQuery by rememberUpdatedState(updateSearchQuery)
+    LaunchedEffect(searchInputState) {
+        snapshotFlow { searchInputState.text.toString() }.collect { query ->
+            if (query != viewModel.uiState.value.query) latestUpdateSearchQuery(query)
+        }
+    }
     // Clear is an edit action, including when invoked from an unfocused result field.
     val clearSearchQuery = {
         pendingLandingFocusRestore = true
         searchQueryClearedAtElapsedMs = android.os.SystemClock.elapsedRealtime()
         if (state.showResults) viewModel.exitResultsToLanding()
+        searchInputState.setTextAndPlaceCursorAtEnd("")
         updateSearchQuery("")
     }
     LaunchedEffect(retainSearchImeAfterClear) {
@@ -1165,12 +1177,19 @@ fun SearchScreen(
             }
             is SearchSubmitAction.OpenSearch -> {
                 if (!state.showResults) restoreLandingFocusOnBack = searchFieldFocused
+                if (searchInputState.text.toString() != action.keyword) {
+                    searchInputState.setTextAndPlaceCursorAtEnd(action.keyword)
+                }
                 viewModel.search(action.keyword)
             }
             is SearchSubmitAction.OpenNativeTarget -> {
                 viewModel.dismissSuggestions()
                 if (!onNavigateSearchTarget(action.target)) {
                     if (!state.showResults) restoreLandingFocusOnBack = searchFieldFocused
+                    val normalizedKeyword = keyword.trim()
+                    if (searchInputState.text.toString() != normalizedKeyword) {
+                        searchInputState.setTextAndPlaceCursorAtEnd(normalizedKeyword)
+                    }
                     viewModel.search(keyword)
                 }
             }
@@ -1190,7 +1209,7 @@ fun SearchScreen(
             SearchBackAction.RETURN_TO_LANDING -> {
                 pendingLandingFocusRestore = restoreLandingFocusOnBack || searchFieldFocused
                 viewModel.exitResultsToLanding()
-                if (pendingLandingFocusRestore) viewModel.onQueryChange(state.query)
+                if (pendingLandingFocusRestore) viewModel.onQueryChange(searchInputState.text.toString())
                 else dismissSearchKeyboardAndFocus()
             }
             SearchBackAction.LEAVE_SEARCH -> {
@@ -1276,6 +1295,7 @@ fun SearchScreen(
         val normalizedKeyword = initialKeyword.trim()
         if (normalizedKeyword.isNotBlank()) {
             if (shouldApplyInitialSearchKeyword(normalizedKeyword, state.query, state.showResults)) {
+                searchInputState.setTextAndPlaceCursorAtEnd(normalizedKeyword)
                 viewModel.onQueryChange(normalizedKeyword)
                 submitSearch(normalizedKeyword)
             }
@@ -1285,7 +1305,6 @@ fun SearchScreen(
 
     val searchTopBarCallbacks = SearchTopBarCallbacks(
         onBack = handleSearchBack,
-        onQueryChange = updateSearchQuery,
         onSearch = submitSearch,
         onClearQuery = clearSearchQuery,
         onFocusChanged = { focused ->
@@ -1295,7 +1314,7 @@ fun SearchScreen(
                 if (state.showResults) {
                     pendingLandingFocusRestore = true
                     viewModel.exitResultsToLanding()
-                    viewModel.onQueryChange(state.query)
+                    viewModel.onQueryChange(searchInputState.text.toString())
                 }
             }
         },
@@ -1308,19 +1327,18 @@ fun SearchScreen(
         isScrollInProgressProvider = { isSearchResultsScrolling },
     )
     // One BasicTextField moves between the results scaffold and the landing overlay.
-    // Call sites pass the current query, placement, trailing actions, and callbacks so
+    // Call sites pass the same edit state, placement, trailing actions, and callbacks so
     // this remembered content does not close over the first composition's state.
     val searchTopBarContent = remember {
         movableContentOf<
-            String,
+            androidx.compose.foundation.text.input.TextFieldState,
             SearchTopBarPlacement,
             (@Composable RowScope.() -> Unit)?,
             SearchTopBarCallbacks,
-        > { query, placement, trailingActions, callbacks ->
+        > { inputState, placement, trailingActions, callbacks ->
             SearchTopBar(
-                query = query,
+                textFieldState = inputState,
                 onBack = callbacks.onBack,
-                onQueryChange = callbacks.onQueryChange,
                 onSearch = callbacks.onSearch,
                 onClearQuery = callbacks.onClearQuery,
                 onFocusChanged = callbacks.onFocusChanged,
@@ -1477,7 +1495,7 @@ fun SearchScreen(
                                                 }
                                         ) {
                                             searchTopBarContent(
-                                                state.query,
+                                                searchInputState,
                                                 SearchTopBarPlacement(
                                                     focusRequester = searchFocusRequester,
                                                     placeholder = displayedSearchHint.ifBlank { resolveSearchDefaultPlaceholder() },
@@ -2805,7 +2823,7 @@ fun SearchScreen(
                 modifier = Modifier.align(Alignment.TopCenter),
             ) {
             searchTopBarContent(
-                state.query,
+                searchInputState,
                 SearchTopBarPlacement(
                     focusRequester = searchFocusRequester,
                     placeholder = displayedSearchHint.ifBlank { resolveSearchDefaultPlaceholder() },
@@ -2908,7 +2926,6 @@ private class SearchTopBarPlacement(
 
 private class SearchTopBarCallbacks(
     val onBack: () -> Unit,
-    val onQueryChange: (String) -> Unit,
     val onSearch: (String) -> Unit,
     val onClearQuery: () -> Unit,
     val onFocusChanged: (Boolean) -> Unit,
@@ -2920,9 +2937,8 @@ private class SearchTopBarCallbacks(
 // 顶部搜索栏：输入状态持有选区，搜索逻辑只订阅文字变化。
 @Composable
 fun SearchTopBar(
-    query: String,
+    textFieldState: androidx.compose.foundation.text.input.TextFieldState,
     onBack: () -> Unit,
-    onQueryChange: (String) -> Unit,
     onSearch: (String) -> Unit,
     onClearQuery: () -> Unit,
     onFocusChanged: (Boolean) -> Unit = {},
@@ -2952,7 +2968,6 @@ fun SearchTopBar(
         resolveSearchTopBarRowMinHeightDp(inputHeightDp)
     }
     val searchInteractionSource = remember { MutableInteractionSource() }
-    val textFieldState = androidx.compose.foundation.text.input.rememberTextFieldState(initialText = query)
     val inputText = textFieldState.text.toString()
     val backIcon = rememberAppBackIcon()
     val density = LocalDensity.current
@@ -2999,20 +3014,6 @@ fun SearchTopBar(
         )
     }
 
-    // 编辑状态由输入框直接持有，移动光标不经过外部 value 回传或搜索状态更新。
-    val latestQuery by rememberUpdatedState(query)
-    val latestOnQueryChange by rememberUpdatedState(onQueryChange)
-    LaunchedEffect(query) {
-        if (query != textFieldState.text.toString()) {
-            textFieldState.setTextAndPlaceCursorAtEnd(query)
-        }
-    }
-    LaunchedEffect(textFieldState) {
-        snapshotFlow { textFieldState.text.toString() }.collect { text ->
-            if (text != latestQuery) latestOnQueryChange(text)
-        }
-    }
-
     LaunchedEffect(entryMotionKey, entryMotionSpec) {
         val spec = entryMotionSpec
         if (spec == null) {
@@ -3045,7 +3046,7 @@ fun SearchTopBar(
     }
     LaunchedEffect(autoFocusEnabled, focusRequester) {
         if (autoFocusEnabled) {
-            kotlinx.coroutines.delay(80)
+            // Focus is available after composition; do not queue it behind an app timer.
             runCatching { focusRequester.requestFocus() }
         }
     }
