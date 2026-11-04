@@ -57,7 +57,6 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
-import com.android.purebilibili.core.ui.animation.jiggleOnDissolve
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
@@ -162,10 +161,7 @@ private fun formatDuration(seconds: Int): String {
 
 // 辅助函数：格式化数字
 private fun formatNumber(num: Int): String {
-    return when {
-        num >= 10000 -> String.format("%.1f万", num / 10000f)
-        else -> num.toString()
-    }
+    return FormatUtils.formatStat(num.toLong())
 }
 
 // 辅助函数：修复封面 URL 协议（B站API可能返回http或缺少协议的URL）
@@ -1549,10 +1545,6 @@ fun WatchLaterScreen(
                                                     onDissolveComplete = { viewModel.completeVideoDissolve(item.bvid) },
                                                     cardId = item.bvid,
                                                     preset = DissolveAnimationPreset.TELEGRAM_FAST,
-                                                    modifier = Modifier.jiggleOnDissolve(
-                                                        cardId = item.bvid,
-                                                        isCurrentCardDissolving = isDissolving
-                                                    )
                                                 ) {
                                                     WatchLaterVideoCard(
                                                         item = item,
@@ -1562,6 +1554,7 @@ fun WatchLaterScreen(
                                                         isBatchMode = isBatchMode,
                                                         isSelected = isSelected,
                                                         transitionEnabled = pageActive && homeSettings.cardTransitionEnabled,
+                                                        onRemove = { viewModel.startVideoDissolve(item.bvid) },
                                                         onLongClick = {
                                                             isBatchMode = true
                                                             selectedBvids = selectedBvids + item.bvid
@@ -1769,6 +1762,7 @@ private fun WatchLaterVideoCard(
     isSelected: Boolean,
     transitionEnabled: Boolean,
     onLongClick: () -> Unit,
+    onRemove: () -> Unit,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1873,6 +1867,8 @@ private fun WatchLaterVideoCard(
 
     PersonalMediaCardFrame(
         stacked = stacked,
+        stackedSupportingContentAtBottom = stacked &&
+            !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current,
         horizontalCoverMaxWidthDp = com.android.purebilibili.feature.home.components.cards.WIDE_LIST_COVER_MAX_WIDTH_DP,
         enabled = enabled,
         coverModifier = Modifier.onGloballyPositioned { coordinates ->
@@ -1931,10 +1927,30 @@ private fun WatchLaterVideoCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                HorizontalVideoStatRow(
-                    playText = formatNumber(item.stat.view),
-                    danmakuText = formatNumber(item.stat.danmaku),
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    HorizontalVideoStatRow(
+                        playText = formatNumber(item.stat.view),
+                        danmakuText = formatNumber(item.stat.danmaku),
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (!isBatchMode) {
+                        AppIconButton(
+                            onClick = onRemove,
+                            enabled = enabled,
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            AppIcon(
+                                imageVector = Icons.Rounded.Close,
+                                contentDescription = "从稍后再看移除",
+                                modifier = Modifier.size(20.dp),
+                                tint = AppContentColors.secondaryText(),
+                            )
+                        }
+                    }
+                }
             }
         },
         coverContent = {

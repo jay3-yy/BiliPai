@@ -21,8 +21,10 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
@@ -80,6 +82,7 @@ internal fun PersonalMediaCardFrame(
     trailingContent: (@Composable RowScope.() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     nativeSnapshotModifier: Modifier = Modifier,
+    stackedSupportingContentAtBottom: Boolean = false,
 ) {
     val fontScale = LocalDensity.current.fontScale
     val minimumHeight = resolvePersonalMediaCardMinHeightDp(fontScale).dp
@@ -103,7 +106,9 @@ internal fun PersonalMediaCardFrame(
     ) {
         Box {
             if (stacked) {
-                Column {
+                Column(
+                    modifier = if (stackedSupportingContentAtBottom) Modifier.fillMaxHeight() else Modifier,
+                ) {
                     Box(
                         modifier = coverModifier.fillMaxWidth().aspectRatio(coverAspectRatio).clip(cardShape),
                     ) {
@@ -115,11 +120,15 @@ internal fun PersonalMediaCardFrame(
                     // 多列的标题占满信息区；底部操作只与辅助信息并排。
                     // 玻璃和原生材质共用此布局，单列仍使用原有横向卡片。
                     Column(
-                        modifier = Modifier.padding(AppSpacingTokens.Small),
+                        modifier = (if (stackedSupportingContentAtBottom) Modifier.weight(1f) else Modifier)
+                            .padding(AppSpacingTokens.Small),
                         verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
                     ) {
                         overlineContent?.invoke()
                         headlineContent()
+                        // 等高行把剩余空间放在标题之后，辅助信息和操作保持相同底部边距。
+                        // 由入口显式启用；不改变其他列表及单列卡片的自然高度布局。
+                        if (stackedSupportingContentAtBottom) Spacer(Modifier.weight(1f))
                         if (trailingContent == null) {
                             supportingContent?.invoke()
                         } else {
