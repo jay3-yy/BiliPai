@@ -86,6 +86,7 @@ fun ForwardedContent(
     gifImageLoader: ImageLoader,
     defaultPreviewTextVisible: Boolean = true,
     collapseWebLinks: Boolean = false,
+    isDetail: Boolean = false,
 ) {
     val context = LocalContext.current
     val author = orig.modules.module_author
@@ -249,6 +250,7 @@ fun ForwardedContent(
         }
         preferredDesc?.let { desc ->
             if (shouldRenderDynamicRichText(desc)) {
+                var bodyTextOverflow by remember(origDynamicId, desc, isDetail) { mutableStateOf(false) }
                 RichTextContent(
                     collapseWebLinks = collapseWebLinks,
                     desc = desc,
@@ -265,7 +267,18 @@ fun ForwardedContent(
                     onLiveClick = onLiveClick,
                     onMusicClick = onMusicClick,
                     extraEmoteUrlMap = forwardedEmoteMap,
+                    maxLines = if (isDetail) Int.MAX_VALUE else DYNAMIC_FEED_TEXT_MAX_LINES,
+                    overflow = if (isDetail) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    onTextLayout = { bodyTextOverflow = it.hasVisualOverflow },
                 )
+                if (!isDetail && bodyTextOverflow && onDynamicDetailClick != null && origDynamicId.isNotEmpty()) {
+                    AppText(
+                        text = "展开更多",
+                        fontSize = MaterialTheme.typography.bodySmall.fontSize,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.appActionClickable(onClick = openOrigDynamic),
+                    )
+                }
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
             }
         }

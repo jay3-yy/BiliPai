@@ -1094,6 +1094,8 @@ fun FeedApiSection(
             )
         }
         SettingsAdaptiveDivider()
+        com.android.purebilibili.feature.settings.DynamicUpListVisibilityPreference()
+        SettingsAdaptiveDivider()
         SettingsItemAnchor("home.dynamic_comment_preview_visible") {
             SettingSwitchItem(
                 icon = commentPreviewIcon,

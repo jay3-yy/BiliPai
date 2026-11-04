@@ -172,9 +172,8 @@ data class DynamicCardPresentation(
     val detailImageLayout: DynamicDetailImageLayout = DynamicDetailImageLayout.EXPANDED,
 )
 
-/** Feed 卡正文折叠参数：超过该长度折叠到 6 行，用「展开更多」进详情。 */
-private const val DYNAMIC_FEED_TEXT_FOLD_THRESHOLD = 108
-private const val DYNAMIC_FEED_TEXT_MAX_LINES = 6
+/** 信息流正文最多展示 6 行，溢出后通过「展开更多」进入详情。 */
+internal const val DYNAMIC_FEED_TEXT_MAX_LINES = 6
 
 /**
  * 动态卡片 V2。将导航、交互和展示状态分组，避免 Compose/R8 处理超大参数签名。
@@ -1049,10 +1048,9 @@ fun DynamicCardV2(
         }
         if (!hasFullOpusDetailContent) preferredBodyDesc?.let { desc ->
             if (shouldRenderDynamicRichText(desc)) {
-                // Feed 卡长文折叠：超过 6 行只显示部分正文，用「展开更多」打开详情。
-                // 详情页全文展示，不折叠。
-                val foldBodyText = !isDetail &&
-                    (desc.text.length > DYNAMIC_FEED_TEXT_FOLD_THRESHOLD)
+                // 信息流按实际排版折叠，换行较多的短文本与窄窗口同样受行数限制。
+                // 详情页保留全文；转发引用遵循相同的行数限制。
+                var bodyTextOverflow by remember(item.id_str, desc, isDetail) { mutableStateOf(false) }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1073,11 +1071,12 @@ fun DynamicCardV2(
                             onArticleClick = onArticleClick,
                             onLiveClick = onLiveClick,
                             onMusicClick = onMusicClick,
-                            maxLines = if (foldBodyText) DYNAMIC_FEED_TEXT_MAX_LINES else Int.MAX_VALUE,
-                            overflow = if (foldBodyText) TextOverflow.Ellipsis else TextOverflow.Clip,
+                            maxLines = if (!isDetail) DYNAMIC_FEED_TEXT_MAX_LINES else Int.MAX_VALUE,
+                            overflow = if (!isDetail) TextOverflow.Ellipsis else TextOverflow.Clip,
+                            onTextLayout = { bodyTextOverflow = it.hasVisualOverflow },
                             extraEmoteUrlMap = dynamicCardEmoteMap,
                         )
-                        if (foldBodyText && openDynamicDetail != null) {
+                        if (!isDetail && bodyTextOverflow && openDynamicDetail != null) {
                             AppText(
                                 text = "展开更多",
                                 fontSize = MaterialTheme.typography.bodySmall.fontSize,
@@ -1997,6 +1996,7 @@ fun DynamicCardV2(
                 gifImageLoader = gifImageLoader,
                 defaultPreviewTextVisible = dynamicPreviewTextVisible,
                 collapseWebLinks = isDetail,
+                isDetail = isDetail,
             )
             Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
         }
@@ -2375,6 +2375,7 @@ fun RichTextContent(
     extraEmoteUrlMap: Map<String, String> = emptyMap(),
     collapseWebLinks: Boolean = false,
     onTextTap: (() -> Unit)? = null,
+    onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {},
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -2477,6 +2478,7 @@ fun RichTextContent(
         lineHeight = lineHeight,
         maxLines = maxLines,
         overflow = overflow,
+        onTextLayout = onTextLayout,
         color = textColor,
         modifier = modifier.then(textGestureModifier)
     )

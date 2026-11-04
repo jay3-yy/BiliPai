@@ -59,3 +59,19 @@ internal fun HomeFeedSettingsSection() {
         },
     )
 }
+
+@Composable
+internal fun DynamicUpListVisibilityPreference() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val visible by DynamicSettingsStore.observeUpListVisible(context).collectAsStateWithLifecycle(initialValue = true)
+    SettingsItemAnchor("home.dynamic_up_list_visible") {
+        com.android.purebilibili.core.ui.components.AppSwitchPreference(
+            title = settingItemTitle("home.dynamic_up_list_visible"),
+            subtitle = "显示动态页顶部横向头像栏；关闭后仍可浏览全部动态",
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_UP_LIST),
+            checked = visible,
+            onCheckedChange = { value -> scope.launch { DynamicSettingsStore.setUpListVisible(context, value) } },
+        )
+    }
+}

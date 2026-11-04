@@ -25,6 +25,7 @@ import com.android.purebilibili.core.ui.transition.VIDEO_SHARED_TRANSITION_CUSTO
 import com.android.purebilibili.core.ui.transition.VideoSharedTransitionSpeed
 import com.android.purebilibili.core.ui.transition.normalizeVideoSharedTransitionCustomDurationMillis
 import com.android.purebilibili.core.store.home.HomeSettingsStore
+import com.android.purebilibili.core.store.home.dynamicUpListVisiblePreferencesKey
 import com.android.purebilibili.core.store.home.dynamicCommentPreviewVisiblePreferencesKey
 import com.android.purebilibili.core.store.home.glassPopupPalettePreferencesKey
 import com.android.purebilibili.core.store.home.liquidGlassReadabilityModePreferencesKey
@@ -8997,6 +8998,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 KEY_DYNAMIC_IMAGE_PREVIEW_TEXT_VISIBLE,
                 SettingsShareSection.NAVIGATION
             ),
+            BooleanShareablePreferenceDefinition(dynamicUpListVisiblePreferencesKey, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(
                 dynamicCommentPreviewVisiblePreferencesKey,
                 SettingsShareSection.NAVIGATION

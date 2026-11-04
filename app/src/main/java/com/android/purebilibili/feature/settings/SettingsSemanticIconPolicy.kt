@@ -64,6 +64,7 @@ internal enum class SettingsIconRole {
     REFRESH_COUNT,
     DYNAMIC_PREVIEW_TEXT,
     DYNAMIC_TAB_VISIBILITY,
+    DYNAMIC_UP_LIST,
     EASTER_EGG,
     AUTO_CHECK_UPDATE,
     BUILD_SOURCE,
@@ -322,6 +323,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.FEED_API -> R.drawable.ms_rss_feed_24
     SettingsIconRole.REFRESH_COUNT -> R.drawable.ms_refresh_24
     SettingsIconRole.DYNAMIC_PREVIEW_TEXT -> R.drawable.ms_text_snippet_24
+    SettingsIconRole.DYNAMIC_UP_LIST -> R.drawable.ic_settings_dynamic_up_list_24
     SettingsIconRole.DYNAMIC_TAB_VISIBILITY -> R.drawable.ms_visibility_24
     SettingsIconRole.EASTER_EGG -> R.drawable.ms_auto_awesome_24
     SettingsIconRole.AUTO_CHECK_UPDATE -> R.drawable.ms_update_24

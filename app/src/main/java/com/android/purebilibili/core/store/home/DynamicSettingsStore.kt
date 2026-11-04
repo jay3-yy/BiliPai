@@ -12,7 +12,17 @@ import kotlinx.coroutines.flow.map
 internal val dynamicCommentPreviewVisiblePreferencesKey =
     booleanPreferencesKey("dynamic_comment_preview_visible")
 
+internal val dynamicUpListVisiblePreferencesKey = booleanPreferencesKey("dynamic_up_list_visible")
+
 object DynamicSettingsStore {
+
+    fun observeUpListVisible(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[dynamicUpListVisiblePreferencesKey] ?: true }.distinctUntilChanged()
+
+    suspend fun setUpListVisible(context: Context, visible: Boolean) {
+        context.settingsDataStore.edit { it[dynamicUpListVisiblePreferencesKey] = visible }
+    }
+
     internal fun resolveCommentPreviewVisible(preferences: Preferences): Boolean =
         preferences[dynamicCommentPreviewVisiblePreferencesKey] ?: false
 

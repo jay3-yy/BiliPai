@@ -398,7 +398,11 @@ fun DynamicScreen(
 
     //  布局模式状态（侧边栏/横向）
     val displayMode by viewModel.displayMode.collectAsStateWithLifecycle()
-    val shouldShowHorizontalUserList = remember(displayMode, displayedLogicalTab) {
+    val upListVisible by remember(context) {
+        com.android.purebilibili.core.store.home.DynamicSettingsStore.observeUpListVisible(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    val shouldShowHorizontalUserList = remember(displayMode, displayedLogicalTab, upListVisible) {
+        upListVisible &&
         shouldShowDynamicHorizontalUserList(
             isHorizontalMode = displayMode.isHorizontalUserList(),
             selectedTab = displayedLogicalTab
