@@ -1727,7 +1727,7 @@ object VideoRepository {
     }
     
     suspend fun getRelatedVideos(bvid: String): List<RelatedVideo> =
-        VideoCatalogRepository.getRelatedVideos(bvid).also { related ->
+        filterRelatedVideoTags(VideoCatalogRepository.getRelatedVideos(bvid)).also { related ->
             // 相关推荐里常混有竖屏视频，提前预热判定，点击时不必等详情页接口。
             prefetchVerticalFlags(related.map { it.bvid })
         }
@@ -1740,6 +1740,13 @@ object VideoRepository {
 
     suspend fun getCachedRelatedVideosResult(bvid: String): Result<List<RelatedVideo>>? =
         VideoCatalogRepository.getCachedRelatedVideosResult(bvid)
+
+    private suspend fun filterRelatedVideoTags(videos: List<RelatedVideo>): List<RelatedVideo> =
+        com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+            videos,
+            bvid = { it.bvid },
+            asVideoItem = { it.toVideoItem() },
+        )
 
 
     //  [新增] API 错误码分类，提供用户友好的错误提示

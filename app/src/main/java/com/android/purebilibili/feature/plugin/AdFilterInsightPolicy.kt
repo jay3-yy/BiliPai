@@ -24,6 +24,7 @@ internal enum class AdFilterReasonType {
     SPONSORED,
     CLICKBAIT,
     CUSTOM_KEYWORD,
+    TAG_KEYWORD,
     LOW_VIEW
 }
 
@@ -116,7 +117,7 @@ internal fun resolveAdFilterInsightSummary(
             .filter { it.reasonType == AdFilterReasonType.LOW_VIEW }
             .take(safeLimit),
         customKeywordRecords = sortedRecords
-            .filter { it.reasonType == AdFilterReasonType.CUSTOM_KEYWORD }
+            .filter { it.reasonType == AdFilterReasonType.CUSTOM_KEYWORD || it.reasonType == AdFilterReasonType.TAG_KEYWORD }
             .take(safeLimit),
         upProfiles = upProfiles,
         blockedUpProfiles = resolveAdFilterBlockedUpProfiles(
@@ -195,6 +196,7 @@ internal fun resolveAdFilterReasonLabel(reasonType: AdFilterReasonType): String 
         AdFilterReasonType.SPONSORED -> "广告推广"
         AdFilterReasonType.CLICKBAIT -> "标题党"
         AdFilterReasonType.CUSTOM_KEYWORD -> "关键词"
+        AdFilterReasonType.TAG_KEYWORD -> "视频标签"
         AdFilterReasonType.LOW_VIEW -> "低播放量"
     }
 }

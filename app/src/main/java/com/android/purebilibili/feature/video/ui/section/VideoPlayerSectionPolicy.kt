@@ -542,15 +542,16 @@ internal fun shouldPollVideoPlayerProgress(
 }
 
 /**
- * Persisted profile keys remain unchanged. The PiliPlus controls distinguish inline and
- * fullscreen font sizes, so both fullscreen orientations must use the fullscreen profile.
+ * Persisted profile keys remain unchanged. Tablet detail players share fullscreen styling
+ * in both embedded and fullscreen layouts; compact-phone inline styling stays independent.
  */
 internal fun resolveVideoPlayerDanmakuSettingsScope(
     isFullscreen: Boolean,
     isPortraitFullscreen: Boolean,
+    useTabletLayout: Boolean = false,
 ): DanmakuSettingsScope {
     return resolveDanmakuSettingsScope(
-        isLandscape = isFullscreen || isPortraitFullscreen
+        isLandscape = isFullscreen || isPortraitFullscreen || useTabletLayout
     )
 }
 

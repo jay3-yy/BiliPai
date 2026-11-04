@@ -138,7 +138,7 @@ private data class PreparedHomeFeedVideos(
     val filteredVideos: List<VideoItem>,
 )
 
-private fun prepareHomeFeedVideos(
+private suspend fun prepareHomeFeedVideos(
     videos: List<VideoItem>,
     blockedMids: Set<Long>,
     feedKind: FeedKind,
@@ -148,8 +148,11 @@ private fun prepareHomeFeedVideos(
     val blockedFiltered = validVideos.filter { video -> video.owner.mid !in blockedMids }
     val feedbackFiltered = feedbackFilter(blockedFiltered)
     val builtinFiltered = PluginManager.filterFeedItems(feedbackFiltered, feedKind = feedKind)
-    val filteredVideos = com.android.purebilibili.core.plugin.json.JsonPluginManager
-        .filterVideos(builtinFiltered)
+    val filteredVideos = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+        com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtinFiltered),
+        bvid = { it.bvid },
+        asVideoItem = { it },
+    )
     return PreparedHomeFeedVideos(
         validVideoCount = validVideos.size,
         filteredVideos = filteredVideos,
@@ -848,7 +851,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val nowMillis = System.currentTimeMillis()
         val cached = expandedCandidateCache
         if (canReuseTodayWatchExpandedCache(cached, baseSignature, nowMillis)) {
-            val mergedCandidates = mergeTodayWatchCandidates(recommendVideos, cached?.candidates.orEmpty())
+            val currentCandidates = filterTodayWatchExpandedCandidates(cached?.candidates.orEmpty())
+            ensureAccountCurrent(identity)
+            val mergedCandidates = mergeTodayWatchCandidates(recommendVideos, currentCandidates)
             if (mergedCandidates.size > recommendVideos.size &&
                 shouldApplyTodayWatchBuildResult(generation, todayWatchBuildGeneration)
             ) {
@@ -868,7 +873,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val expandedCandidates = filterTodayWatchExpandedCandidates(rawCandidates)
             expandedCandidateCache = TodayWatchExpandedCandidateCache(
                 baseSignature = baseSignature,
-                candidates = expandedCandidates,
+                candidates = rawCandidates,
                 loadedAtMillis = System.currentTimeMillis()
             )
             val mergedCandidates = mergeTodayWatchCandidates(recommendVideos, expandedCandidates)
@@ -890,7 +895,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun filterTodayWatchExpandedCandidates(videos: List<VideoItem>): List<VideoItem> {
+    private suspend fun filterTodayWatchExpandedCandidates(videos: List<VideoItem>): List<VideoItem> {
         val validVideos = videos.filter {
             it.bvid.isNotBlank() && it.title.isNotBlank() && it.contentType !in setOf("bangumi", "picture")
         }
@@ -900,9 +905,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             feedbackFiltered,
             feedKind = FeedKind.HOME_RECOMMEND
         )
-        return com.android.purebilibili.core.plugin.json.JsonPluginManager
-            .filterVideos(builtinFiltered)
-            .distinctBy { it.bvid }
+        return com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+            com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtinFiltered)
+                .distinctBy { it.bvid },
+            bvid = { it.bvid },
+            asVideoItem = { it },
+        )
     }
 
     private suspend fun loadHistorySample(forceReload: Boolean, sampleLimit: Int): List<VideoItem> {
@@ -1746,8 +1754,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             refreshUserInfoInBackground()
         }
 
-        // Feed filtering and de-duplication are CPU-only work. Keep it off the UI dispatcher so
-        // the list can continue drawing while plugin and feedback rules process the response.
+        // Keep local rules off the UI dispatcher; opt-in tag rules additionally await archive metadata.
         val preparedHomeFeed = videoResult.getOrNull()?.let { videos ->
             withContext(Dispatchers.Default) {
                 prepareHomeFeedVideos(

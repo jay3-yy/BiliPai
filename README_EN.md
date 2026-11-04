@@ -70,6 +70,8 @@ Built-in plugins cover sponsor skipping, ad filtering, Anime4K, danmaku, eye car
 - `.bpskin` skin packs: import backgrounds, colors and selected motion assets without executing code.
 - `.bpplugin` Kotlin packages: package previews and capability authorization are supported; external Dex execution is not yet available.
 
+Enable **去广告增强** (ad filtering) in the plugin center and edit **视频标签屏蔽词** to block keywords in actual video tags across home recommendations, search results and related videos. Refresh the list after changing rules. With no tag keywords, no extra tag requests are made; failed or timed-out lookups keep videos whose tags could not be checked.
+
 Review the source and declared permissions before importing third-party plugins. See the [plugin development guide](docs/PLUGIN_DEVELOPMENT.md), [Kotlin plugin SDK](plugins/sdk/README.md) and [JS plugin examples](examples/plugins/README.md).
 
 ## Recent updates

@@ -750,14 +750,14 @@ fun BangumiPlayerView(
                 AndroidView(
                     factory = { ctx ->
                         DanmakuRenderView(ctx).apply {
-                            danmakuManager.isFullscreenSurface = isFullscreen
+                            danmakuManager.useFullscreenTextSize = isFullscreen
                             setBackgroundColor(android.graphics.Color.TRANSPARENT)
                             android.util.Log.w("BangumiPlayer", "🎯 DanmakuView factory: creating new view")
                             danmakuManager.attachView(this)
                         }
                     },
                     update = { view ->
-                        danmakuManager.isFullscreenSurface = isFullscreen
+                        danmakuManager.useFullscreenTextSize = isFullscreen
                         if (view.width > 0 && view.height > 0) {
                             val sizeTag = "${view.width}x${view.height}"
                             if (view.tag != sizeTag) {

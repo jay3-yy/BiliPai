@@ -3196,7 +3196,7 @@ internal fun ReplyActionSheet(
             expanded = true, onDismissRequest = onDismiss, title = "评论操作",
             source = source, carriedPress = carriedPress, anchorBounds = anchorBounds, minWidth = 220.dp, maxWidth = 320.dp,
         ) { Column { actionItems() } }) return
-    AppModalBottomSheet(onDismissRequest = onDismiss) {
+    AppModalBottomSheet(onDismissRequest = onDismiss, useWindowPredictiveBack = true) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()

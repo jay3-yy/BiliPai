@@ -49,6 +49,13 @@ internal fun resolveNextStoryFeedAid(
         ?: previousAid
 }
 
+internal fun storyItemIdentityKeys(item: StoryItem): List<String> = buildList {
+    resolveStoryItemAid(item)?.let { add("aid:$it") }
+    item.bvid.ifBlank { item.playerArgs?.bvid.orEmpty() }.trim()
+        .takeIf { it.isNotEmpty() }?.let { add("bvid:$it") }
+    if (item.id > 0L) add("id:${item.id}")
+}
+
 internal fun mergeStoryFeedItems(
     existingItems: List<StoryItem>,
     newItems: List<StoryItem>

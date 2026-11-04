@@ -398,6 +398,13 @@ fun DanmakuSettingsPanel(
                     onBack = if (glass && showExtraSettings) ({ showExtraSettings = false }) else null,
                 ) {
                     if (!showExtraSettings) {
+                        if (com.android.purebilibili.feature.video.ui.section.LocalUseTabletDanmakuStyle.current) {
+                            AppText(
+                                "平板非全屏与全屏共用以下弹幕样式",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = panelColors.supportingColor,
+                            )
+                        }
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             AppText("屏蔽规则", modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelLarge)
                             if (showBlockRuleEditor) AppTextButton(onClick = { showBlockManager = true }) { AppText("屏蔽管理($totalBlockRuleCount)") }

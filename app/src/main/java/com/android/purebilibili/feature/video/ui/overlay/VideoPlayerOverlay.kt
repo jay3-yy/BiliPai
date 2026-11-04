@@ -838,12 +838,24 @@ private fun VideoPlayerOverlayContent(
         )
         sort == com.android.purebilibili.feature.video.ui.components.CollectionSortMode.DESCENDING
     } else collectionSession.isReversed
-    val inlineDanmakuFontScale by remember(context) {
-        SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.PORTRAIT)
-    }.collectAsStateWithLifecycle(initialValue = 1f)
-    val fullscreenDanmakuFontScale by remember(context) {
-        SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.LANDSCAPE)
-    }.collectAsStateWithLifecycle(initialValue = 1.2f)
+    val useTabletDanmakuStyle =
+        com.android.purebilibili.feature.video.ui.section.LocalUseTabletDanmakuStyle.current
+    val inlineDanmakuFontScale = if (useTabletDanmakuStyle) {
+        danmakuFontScale
+    } else {
+        val value by remember(context) {
+            SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.PORTRAIT)
+        }.collectAsStateWithLifecycle(initialValue = 1f)
+        value
+    }
+    val fullscreenDanmakuFontScale = if (useTabletDanmakuStyle) {
+        danmakuFontScale
+    } else {
+        val value by remember(context) {
+            SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.LANDSCAPE)
+        }.collectAsStateWithLifecycle(initialValue = 1.2f)
+        value
+    }
     val fullscreenLockButtonState = remember(isScreenLocked) {
         resolveFullscreenLockButtonVisualState(isScreenLocked = isScreenLocked)
     }
@@ -2149,10 +2161,10 @@ private fun VideoPlayerOverlayContent(
                     fontScale = danmakuFontScale,
                     inlineFontScale = inlineDanmakuFontScale,
                     fullscreenFontScale = fullscreenDanmakuFontScale,
-                    onInlineFontScaleChange = { value ->
+                    onInlineFontScaleChange = if (useTabletDanmakuStyle) null else { value ->
                         scope.launch { SettingsManager.setDanmakuFontScale(context, value, DanmakuSettingsScope.PORTRAIT) }
                     },
-                    onFullscreenFontScaleChange = { value ->
+                    onFullscreenFontScaleChange = if (useTabletDanmakuStyle) null else { value ->
                         scope.launch { SettingsManager.setDanmakuFontScale(context, value, DanmakuSettingsScope.LANDSCAPE) }
                     },
                     showAdvancedSection = true,

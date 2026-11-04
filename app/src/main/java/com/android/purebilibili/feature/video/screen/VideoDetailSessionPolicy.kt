@@ -33,6 +33,12 @@ internal fun shouldHandleVideoDetailDisposeAsNavigationExit(
         !isNavigatingToVideo
 }
 
+internal fun shouldRestoreVideoDetailOrientationOnDispose(
+    isNavigatingToAudioMode: Boolean,
+    isChangingConfigurations: Boolean,
+    isNavigatingToVideo: Boolean,
+): Boolean = !isNavigatingToAudioMode && !isChangingConfigurations && !isNavigatingToVideo
+
 internal fun resolveIsNavigatingToVideoDuringDispose(
     localNavigatingToVideo: Boolean,
     managerNavigatingToVideo: Boolean

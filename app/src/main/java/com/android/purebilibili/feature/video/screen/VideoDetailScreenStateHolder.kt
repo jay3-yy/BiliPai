@@ -10,7 +10,6 @@ import com.android.purebilibili.core.ui.components.appElasticPress
 import com.android.purebilibili.feature.video.ambient.PlayerAmbientLayout
 import coil3.request.crossfade
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import com.android.purebilibili.core.ui.resolveFilledButtonContainerColor
 import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
@@ -2090,6 +2089,16 @@ internal fun VideoDetailScreenStateHolder(
             val deferredActivity = activity
             val deferredContext = context
             val deferredShouldHandleAsNavExit = shouldHandleAsNavigationExit
+            // Playback can survive in the in-app mini player, but its fullscreen orientation
+            // must not survive on Home. Audio/new-detail handoffs own their own orientation.
+            val deferredShouldRestoreOrientation = shouldRestoreVideoDetailOrientationOnDispose(
+                isNavigatingToAudioMode = isNavigatingToAudioMode,
+                isChangingConfigurations = activity?.isChangingConfigurations == true,
+                isNavigatingToVideo = resolveIsNavigatingToVideoDuringDispose(
+                    localNavigatingToVideo = isNavigatingToVideo,
+                    managerNavigatingToVideo = miniPlayerManager?.isNavigatingToVideo == true,
+                ),
+            )
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 // 🔕 通知清理 + Service 停止
                 if (deferredShouldHandleAsNavExit && miniPlayerManager?.isActive != true) {
@@ -2106,8 +2115,8 @@ internal fun VideoDetailScreenStateHolder(
                     } catch (_: Exception) {}
                 }
 
-                // 仅真正退出详情时恢复；相关推荐接管后，旧页不得延迟覆盖新页的方向。
-                if (deferredShouldHandleAsNavExit) {
+                // 恢复方向与是否结束播放无关；相关推荐接管时仍不得覆盖新详情的方向。
+                if (deferredShouldRestoreOrientation) {
                     deferredActivity?.applyPlayerRequestedOrientation(
                         resolveVideoDetailExitRequestedOrientation(
                             originalRequestedOrientation = entryRequestedOrientation
@@ -2294,14 +2303,8 @@ internal fun VideoDetailScreenStateHolder(
             hasStartedCurrentVideoPlayback = true
         }
     }
-    // 返回动效只需要首帧信号；带宽、丢帧等诊断更新不应重组整个详情页。
-    val renderedFirstFrameFlow = remember(playerState) {
-        playerState.debugInfo
-            .map { it.firstFrame.equals("rendered", ignoreCase = true) }
-            .distinctUntilChanged()
-    }
-    val hasRenderedFirstFrameForReturn by renderedFirstFrameFlow.collectAsStateWithLifecycle(
-        initialValue = playerState.debugInfo.value.firstFrame.equals("rendered", ignoreCase = true),
+    // Real first-frame state survives detail disposal while the mini player owns this media.
+    val hasRenderedFirstFrameForReturn by playerState.hasRenderedFirstFrame.collectAsStateWithLifecycle(
         lifecycle = lifecycleOwner.lifecycle,
     )
     val entryFirstFrameReveal = rememberVideoDetailFirstFrameReveal(
@@ -4025,8 +4028,6 @@ internal fun VideoDetailScreenStateHolder(
                                 isCommittedReturn = isCommittedCardReturn,
                                 coverSource = residentCoverSource,
                                 hasRenderedFirstFrame = hasRenderedFirstFrameForReturn,
-                                hasVideoFrame = playerState.player.videoSize.width > 0 &&
-                                    playerState.player.videoSize.height > 0,
                                 entryCoverAlphaProvider = { 1f - entryFirstFrameReveal.value },
                                 detailContentLoading = uiState is VideoPlaybackUiState.Loading,
                                 followProgressEnabledProvider = videoCardDepthBackgroundState
@@ -5976,6 +5977,7 @@ internal fun VideoDetailScreenStateHolder(
     androidx.compose.runtime.CompositionLocalProvider(
         LocalPlaybackResumeFeedback provides playbackEventState,
         com.android.purebilibili.feature.video.ui.components.LocalRelatedVideoCardLayout provides relatedVideoCardLayout,
+        com.android.purebilibili.feature.video.ui.section.LocalUseTabletDanmakuStyle provides useTabletLayout,
     ) {
     VideoDetailScreenContent(
         transitionState = transitionState,

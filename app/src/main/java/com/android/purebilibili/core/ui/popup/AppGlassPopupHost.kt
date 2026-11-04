@@ -1,6 +1,5 @@
 package com.android.purebilibili.core.ui.popup
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.WindowInsets
@@ -762,7 +761,12 @@ private fun AppGlassChoicePopupOverlay(
         }
     }
 
-    BackHandler { controller.requestDismiss() }
+    // Menus share the host window; bind above the route's nested comment back stack.
+    com.android.purebilibili.core.ui.CommentWindowNavigation {
+        com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) {
+            controller.requestDismiss()
+        }
+    }
     val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current ||
         !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
     val latestBackdropReady by rememberUpdatedState(backdropReady)

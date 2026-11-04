@@ -58,6 +58,7 @@ import com.android.purebilibili.feature.video.playback.session.resolvePlaybackPa
 import com.android.purebilibili.feature.video.playback.session.resolvePlaybackResumeDecision
 import com.android.purebilibili.feature.video.playback.session.PlaybackPauseOwner
 import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
+import com.android.purebilibili.feature.video.playback.session.PlaybackFirstFrameTracker
 import com.android.purebilibili.feature.video.playback.session.PlaybackUserActionTracker
 import com.android.purebilibili.feature.video.player.resolveHandleAudioFocusByPolicy
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo
@@ -553,7 +554,11 @@ class VideoPlayerState(
     private val _apiDimension = MutableStateFlow<Pair<Int, Int>?>(null)
     val apiDimension: StateFlow<Pair<Int, Int>?> = _apiDimension.asStateFlow()
 
-    private val _debugInfo = MutableStateFlow(PlaybackDebugInfo())
+    val hasRenderedFirstFrame: StateFlow<Boolean> = PlaybackFirstFrameTracker.observe(player)
+    private val _debugInfo = MutableStateFlow(
+        if (hasRenderedFirstFrame.value) applyRenderedFirstFrameDebugInfo(PlaybackDebugInfo())
+        else PlaybackDebugInfo()
+    )
     val debugInfo: StateFlow<PlaybackDebugInfo> = kotlinx.coroutines.flow.combine(
         _debugInfo, com.android.purebilibili.core.player.VideoDecoderDiagnostics.observe(player)
     ) { info, decoder ->
@@ -563,7 +568,7 @@ class VideoPlayerState(
             videoDecoderPreference = decoder.preference,
             videoDecoderFallbackReason = decoder.fallbackReason,
         )
-    }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(0), PlaybackDebugInfo())
+    }.stateIn(scope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(0), _debugInfo.value)
     /** 当前解码视频格式，供需要严格旁路 HDR 的输出效果使用。 */
     private val _videoInputFormat = MutableStateFlow<Format?>(null)
     val videoInputFormat: StateFlow<Format?> = _videoInputFormat.asStateFlow()
