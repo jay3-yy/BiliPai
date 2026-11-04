@@ -98,6 +98,8 @@ cd BiliPai
 
 Miuix dependencies require GitHub Packages access. Set `gpr.user` and `gpr.key` in your local `~/.gradle/gradle.properties`, or use `GITHUB_ACTOR` and `GITHUB_TOKEN`. APKs are exported to `app/build/outputs/bilipai/dev/`. `app/google-services.json` is optional; Firebase is skipped when absent.
 
+Robolectric tests download Android runtimes separately on their first run. `app/build.gradle.kts` sets the canonical Maven Central endpoint, `https://repo.maven.apache.org/maven2`, in the test JVM; this downloader does not use Gradle's `repositories` configuration.
+
 ## Contributing
 
 Share bugs and ideas through [Issues](https://github.com/jay3-yy/BiliPai/issues/new/choose), or help improve features and translations with a [pull request](https://github.com/jay3-yy/BiliPai/pulls).

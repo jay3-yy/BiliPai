@@ -98,6 +98,8 @@ cd BiliPai
 
 Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properties` 配置 `gpr.user`、`gpr.key`（或设置 `GITHUB_ACTOR`、`GITHUB_TOKEN`）。APK 输出至 `app/build/outputs/bilipai/dev/`。`app/google-services.json` 为可选配置，缺失时跳过 Firebase。
 
+Robolectric 单测首次运行时会单独下载 Android 运行时。`app/build.gradle.kts` 在测试 JVM 中指定 Maven Central 标准端点 `https://repo.maven.apache.org/maven2`；该下载器不使用 Gradle 的 `repositories` 配置。
+
 ## 参与贡献
 
 欢迎通过 [Issue](https://github.com/jay3-yy/BiliPai/issues/new/choose) 反馈问题、提出建议，也欢迎提交 [Pull Request](https://github.com/jay3-yy/BiliPai/pulls)，一起完善功能和翻译。

@@ -278,6 +278,8 @@ android {
     testOptions {
         unitTests.all {
             it.useJUnitPlatform()
+            // Robolectric resolves Android runtimes itself, independently of Gradle repositories.
+            it.systemProperty("robolectric.dependency.repo.url", "https://repo.maven.apache.org/maven2")
         }
         // 🔥 允许 Android 类在单元测试中返回默认值而非抛出异常
         unitTests.isReturnDefaultValues = true
