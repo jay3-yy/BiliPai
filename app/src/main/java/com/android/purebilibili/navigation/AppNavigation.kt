@@ -4685,7 +4685,11 @@ fun AppNavigation(
                 }
 
                 @Composable
-                fun RenderStoryEntryContent(key: BiliPaiNavKey, isBottomPagerPageActive: Boolean) {
+                fun RenderStoryEntryContent(
+                    key: BiliPaiNavKey,
+                    isBottomPagerPageActive: Boolean,
+                    isFeedEntrySelected: Boolean,
+                ) {
                     val storyKey = key as BiliPaiNavKey.Story
                     com.android.purebilibili.feature.story.StoryScreen(
                         seedBvid = storyKey.seedBvid,
@@ -4695,6 +4699,7 @@ fun AppNavigation(
                         sourceRoute = storyKey.sourceRoute,
                         transitionEnabled = cardTransitionEnabled,
                         isActive = isBottomPagerPageActive,
+                        isFeedEntrySelected = isFeedEntrySelected,
                         onBack = { performSystemBackAction() },
                         onVideoClick = { bvid, cid, _ -> navigateToVideoInNavigation3(bvid, cid, "") },
                         onUserClick = { mid -> pushNavigation3Route(ScreenRoutes.Space.createRoute(mid)) },
@@ -5458,7 +5463,12 @@ fun AppNavigation(
                         BiliPaiNavEntryContentRole.LOGIN ->
                             RenderLoginEntryContent(key)
                         BiliPaiNavEntryContentRole.STORY ->
-                            RenderStoryEntryContent(key, isBottomPagerPageActive)
+                            RenderStoryEntryContent(
+                                key,
+                                isBottomPagerPageActive,
+                                isFeedEntrySelected = !isBottomPagerHosted ||
+                                    visibleBottomBarItems.getOrNull(bottomPagerState.settledPage) == BottomNavItem.STORY,
+                            )
                         BiliPaiNavEntryContentRole.AUDIO_MODE ->
                             RenderAudioModeEntryContent(key)
                         BiliPaiNavEntryContentRole.PARTITION ->
