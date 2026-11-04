@@ -32,7 +32,7 @@ internal fun rememberTabletDanmakuChromeState(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val danmakuSettings by SettingsManager
-        .getDanmakuSettings(context, DanmakuSettingsScope.PORTRAIT)
+        .getDanmakuSettings(context, DanmakuSettingsScope.LANDSCAPE)
         .collectAsStateWithLifecycle(initialValue = DanmakuSettings())
     val latestEnabled = rememberUpdatedState(danmakuSettings.enabled)
     val onToggle = remember(danmakuManager, context, scope) {
@@ -46,7 +46,7 @@ internal fun rememberTabletDanmakuChromeState(
                 SettingsManager.setDanmakuEnabled(
                     context,
                     newValue,
-                    DanmakuSettingsScope.PORTRAIT,
+                    DanmakuSettingsScope.LANDSCAPE,
                 )
             }
             Unit

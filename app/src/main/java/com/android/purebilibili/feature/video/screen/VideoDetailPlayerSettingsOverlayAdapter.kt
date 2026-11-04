@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.ui.section.resolveVideoPlayerDanmakuSettingsScope
+import com.android.purebilibili.feature.video.ui.section.LocalUseTabletDanmakuStyle
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
 
 @Composable
@@ -49,10 +50,12 @@ internal fun VideoDetailPlayerSettingsOverlayAdapter(
         qualitySwitchDialogScope = qualitySwitchDialogScope,
     )
 
-    val activeDanmakuScope = remember(isFullscreenMode, isPortraitFullscreen) {
+    val useTabletDanmakuStyle = LocalUseTabletDanmakuStyle.current
+    val activeDanmakuScope = remember(isFullscreenMode, isPortraitFullscreen, useTabletDanmakuStyle) {
         resolveVideoPlayerDanmakuSettingsScope(
             isFullscreen = isFullscreenMode,
-            isPortraitFullscreen = isPortraitFullscreen
+            isPortraitFullscreen = isPortraitFullscreen,
+            useTabletLayout = useTabletDanmakuStyle,
         )
     }
     val activeDanmakuBlockRulesRaw by remember(context, activeDanmakuScope) {

@@ -838,12 +838,24 @@ private fun VideoPlayerOverlayContent(
         )
         sort == com.android.purebilibili.feature.video.ui.components.CollectionSortMode.DESCENDING
     } else collectionSession.isReversed
-    val inlineDanmakuFontScale by remember(context) {
-        SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.PORTRAIT)
-    }.collectAsStateWithLifecycle(initialValue = 1f)
-    val fullscreenDanmakuFontScale by remember(context) {
-        SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.LANDSCAPE)
-    }.collectAsStateWithLifecycle(initialValue = 1.2f)
+    val useTabletDanmakuStyle =
+        com.android.purebilibili.feature.video.ui.section.LocalUseTabletDanmakuStyle.current
+    val inlineDanmakuFontScale = if (useTabletDanmakuStyle) {
+        danmakuFontScale
+    } else {
+        val value by remember(context) {
+            SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.PORTRAIT)
+        }.collectAsStateWithLifecycle(initialValue = 1f)
+        value
+    }
+    val fullscreenDanmakuFontScale = if (useTabletDanmakuStyle) {
+        danmakuFontScale
+    } else {
+        val value by remember(context) {
+            SettingsManager.getDanmakuFontScale(context, DanmakuSettingsScope.LANDSCAPE)
+        }.collectAsStateWithLifecycle(initialValue = 1.2f)
+        value
+    }
     val fullscreenLockButtonState = remember(isScreenLocked) {
         resolveFullscreenLockButtonVisualState(isScreenLocked = isScreenLocked)
     }
@@ -1984,7 +1996,7 @@ private fun VideoPlayerOverlayContent(
             onPlayPause = { togglePlayPause() },
             diameter = if (isFullscreen) 72.dp else 56.dp,
             viewportTopInset = if (isFullscreen) 0.dp else statusBarBackdropHeight,
-            isBuffering = !pluginPlaybackStatus.first && player.playWhenReady &&
+            isBuffering = hasRenderedFirstFrame && !pluginPlaybackStatus.first && player.playWhenReady &&
                 (player.playbackState == Player.STATE_BUFFERING || centerLoadingUiState != null),
         )
 
@@ -2010,7 +2022,7 @@ private fun VideoPlayerOverlayContent(
         }
 
         AnimatedVisibility(
-            visible = centerLoadingUiState != null && !showCenterPlaybackControl,
+            visible = hasRenderedFirstFrame && centerLoadingUiState != null && !showCenterPlaybackControl,
             modifier = Modifier.align(Alignment.Center),
             enter = fadeIn(OverlayControlFadeSpec),
             exit = fadeOut(OverlayControlFadeSpec)
@@ -2149,10 +2161,10 @@ private fun VideoPlayerOverlayContent(
                     fontScale = danmakuFontScale,
                     inlineFontScale = inlineDanmakuFontScale,
                     fullscreenFontScale = fullscreenDanmakuFontScale,
-                    onInlineFontScaleChange = { value ->
+                    onInlineFontScaleChange = if (useTabletDanmakuStyle) null else { value ->
                         scope.launch { SettingsManager.setDanmakuFontScale(context, value, DanmakuSettingsScope.PORTRAIT) }
                     },
-                    onFullscreenFontScaleChange = { value ->
+                    onFullscreenFontScaleChange = if (useTabletDanmakuStyle) null else { value ->
                         scope.launch { SettingsManager.setDanmakuFontScale(context, value, DanmakuSettingsScope.LANDSCAPE) }
                     },
                     showAdvancedSection = true,
@@ -2952,7 +2964,6 @@ fun LandscapeEndDrawer(
                                     isFollowing = isFollowed,
                                     onFollowClick = onToggleFollow,
                                 ),
-                                enabled = followStatusKnown,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (isFollowed) AppContentColors.primaryText().copy(0.2f) else AppContentColors.accent(),
                                     contentColor = if (isFollowed) AppContentColors.primaryText() else AppContentColors.onAccent(),
@@ -2962,10 +2973,10 @@ fun LandscapeEndDrawer(
                                     vertical = 0.dp
                                 ),
                                 modifier = Modifier.heightIn(min = layoutPolicy.followButtonHeightDp.dp),
-                                shape = AppShapes.container(ContainerLevel.Card)
+                                shape = com.android.purebilibili.feature.video.ui.VideoDetailShapes.action()
                             ) {
                                 AppText(
-                                    if (!followStatusKnown) "—" else if (isFollowed) "已关注" else "+ 关注",
+                                    if (!followStatusKnown) "待确认" else if (isFollowed) "已关注" else "+ 关注",
                                     fontSize = layoutPolicy.followButtonFontSp.sp,
                                     maxLines = 1,
                                     softWrap = false,

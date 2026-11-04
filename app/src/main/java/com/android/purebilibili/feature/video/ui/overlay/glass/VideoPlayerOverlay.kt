@@ -3140,7 +3140,6 @@ fun LandscapeEndDrawer(
                                     isFollowing = isFollowed,
                                     onFollowClick = onToggleFollow,
                                 ),
-                                enabled = followStatusKnown,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (isFollowed) AppContentColors.primaryText().copy(0.2f) else AppContentColors.accent(),
                                     contentColor = if (isFollowed) AppContentColors.primaryText() else AppContentColors.onAccent(),
@@ -3150,10 +3149,10 @@ fun LandscapeEndDrawer(
                                     vertical = 0.dp
                                 ),
                                 modifier = Modifier.heightIn(min = layoutPolicy.followButtonHeightDp.dp),
-                                shape = AppShapes.container(ContainerLevel.Card)
+                                shape = com.android.purebilibili.feature.video.ui.VideoDetailShapes.action()
                             ) {
                                 AppText(
-                                    if (!followStatusKnown) "—" else if (isFollowed) "已关注" else "+ 关注",
+                                    if (!followStatusKnown) "待确认" else if (isFollowed) "已关注" else "+ 关注",
                                     fontSize = layoutPolicy.followButtonFontSp.sp,
                                     maxLines = 1,
                                     softWrap = false,

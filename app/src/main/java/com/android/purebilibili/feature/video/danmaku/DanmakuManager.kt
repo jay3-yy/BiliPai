@@ -273,11 +273,12 @@ class DanmakuManager private constructor(
             applyConfigToController("opacity")
         }
     
-    var isFullscreenSurface: Boolean = false
+    /** Chooses only the 18dp text baseline; never changes host geometry or visibility. */
+    var useFullscreenTextSize: Boolean = false
         set(value) {
             if (field == value) return
             field = value
-            applyConfigToController("fullscreen")
+            applyConfigToController("textSizeBaseline")
         }
 
     var fontScale: Float
@@ -1256,7 +1257,7 @@ class DanmakuManager private constructor(
     private fun applyConfigToController(reason: String) {
         controller?.let { ctrl ->
             val currentViewport = viewport ?: danmakuView?.let(::resolveEffectiveViewport) ?: return
-            baseRenderConfig = config.resolveRenderConfig(currentViewport, isFullscreenSurface)
+            baseRenderConfig = config.resolveRenderConfig(currentViewport, useFullscreenTextSize)
 
             // 记录设置后的基准时间，供倍速同步使用
             originalMoveTime = baseRenderConfig.scrollDurationMs

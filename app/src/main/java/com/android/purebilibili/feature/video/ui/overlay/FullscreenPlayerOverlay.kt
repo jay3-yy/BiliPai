@@ -1131,7 +1131,7 @@ fun FullscreenPlayerOverlay(
                         AndroidView(
                             factory = { ctx ->
                                 DanmakuRenderView(ctx).apply {
-                                    danmakuManager.isFullscreenSurface = true
+                                    danmakuManager.useFullscreenTextSize = true
                                     setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                     configureAsPassiveDanmakuOverlay()
                                     danmakuManager.attachView(this)
@@ -1139,7 +1139,7 @@ fun FullscreenPlayerOverlay(
                                 }
                             },
                             update = { view ->
-                                danmakuManager.isFullscreenSurface = true
+                                danmakuManager.useFullscreenTextSize = true
                                 if (view.width > 0 && view.height > 0) {
                                     val sizeTag = "${view.width}x${view.height}"
                                     if (view.tag != sizeTag) {
