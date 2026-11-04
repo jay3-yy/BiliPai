@@ -4224,9 +4224,33 @@ private fun BiliPaiFloatingBottomBarChrome(
                             }
                         }
                         if (useNativeMiuixNavigation) {
+                            val nativeShape = resolveSharedBottomBarCapsuleShape()
+                            val nativeSurfaceColor = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.surfaceContainer
+                            val useNativeBlur = blurEnabled && (miuixBackdrop != null || hazeState != null)
                             AppPlatformNavigationBar(
-                                modifier = dockModifier.clip(resolveSharedBottomBarCapsuleShape()),
-                                color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.surfaceContainer,
+                                modifier = dockModifier
+                                    .clip(nativeShape)
+                                    .then(
+                                        if (useNativeBlur) {
+                                            // 原生悬浮导航保留自身布局，磨砂由壳层绘制；内部底色必须透明。
+                                            // 此分支仅用于关闭液态玻璃后的 Miuix，不改变 MD3 或玻璃材质。
+                                            Modifier.biliPaiMiuixFloatingDockSurface(
+                                                shape = nativeShape,
+                                                backdrop = miuixBackdrop,
+                                                containerColor = nativeSurfaceColor,
+                                                blurEnabled = true,
+                                                glassEnabled = false,
+                                                blurRadius = tuning.shellBlurRadiusDp.dp,
+                                                hazeState = hazeState,
+                                                motionTier = motionTier,
+                                                isTransitionRunning = isTransitionRunning,
+                                                forceLowBlurBudget = forceLowBlurBudget,
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    ),
+                                color = if (useNativeBlur) Color.Transparent else nativeSurfaceColor,
                                 showDivider = false,
                                 defaultWindowInsetsPadding = false,
                                 mode = resolveMd3BottomBarDisplayMode(labelMode).toAppPlatformNavigationDisplayMode(),
