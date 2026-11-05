@@ -53,6 +53,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.luminance  //  状态栏亮度计算
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.ui.AppPullRefreshLoadingIndicator
 import com.android.purebilibili.core.ui.AppScaffold
@@ -2549,6 +2550,15 @@ fun HomeScreen(
         }
     }
 
+
+    // 首页实际活跃时刷新角标，沿用账号请求归属与在途请求合并。
+    val unreadBadgeLifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(unreadBadgeLifecycleOwner, viewModel, isTopLevelActive, pageOnScreen) {
+        if (!isTopLevelActive || !pageOnScreen) return@LaunchedEffect
+        unreadBadgeLifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            viewModel.refreshMessageUnread()
+        }
+    }
 
     HomeReturnLifecycleEffect(
         state = returnState,

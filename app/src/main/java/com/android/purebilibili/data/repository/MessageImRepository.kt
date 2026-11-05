@@ -56,12 +56,45 @@ data class ImSetting(
 data class ImSettingsPage(val title: String, val settings: List<ImSetting>)
 data class ImBlockedKeywords(val words: List<String>, val listLimit: Int, val charLimit: Int, val hint: String)
 
+/** 私信角标：style 0=不显示 1=红点 2=数字，numberShow 是服务端格式化好的文本。 */
+data class ImTotalUnread(
+    val style: Int,
+    val number: Long,
+    val numberShow: String,
+)
+
+/** 消息中心：总未读 + 回复/@/赞/系统通知四项，来自官方消息中心同一条 GetTotalUnread。 */
+data class ImMessageCenterUnread(
+    val total: Int,
+    val reply: Int,
+    val at: Int,
+    val like: Int,
+    val sysMsg: Int,
+)
+
+
 /** IM 页码、会话身份和不透明分页参数均以服务端为准，不混用网页列表的分类编号。 */
 internal object MessageImRepository {
     private const val SERVICE = "/bilibili.app.im.v1.im/"
+    /** 消息中心 GetTotalUnread 的备用官方服务。 */
+    private const val INTERFACE_SERVICE = "/bilibili.im.interface.v1.ImInterface/"
+    /** 官方 6.5.0 首页角标实际走的网关服务。 */
+    private const val GATEWAY_SERVICE = "/bilibili.im.gateway.interface.v1.ImGatewayApi/"
     private suspend fun <T> request(method: String, message: ByteArray = byteArrayOf(), parse: (ByteArray) -> T): Result<T> =
         withContext(Dispatchers.IO) {
             runCatching { parse(BiliGrpcClient.request(SERVICE + method, message)) }
+                .onFailure { if (it is CancellationException) throw it }
+        }
+
+    private suspend fun <T> interfaceRequest(method: String, message: ByteArray, parse: (ByteArray) -> T): Result<T> =
+        withContext(Dispatchers.IO) {
+            runCatching { parse(BiliGrpcClient.request(INTERFACE_SERVICE + method, message)) }
+                .onFailure { if (it is CancellationException) throw it }
+        }
+
+    private suspend fun <T> gatewayRequest(method: String, message: ByteArray, parse: (ByteArray) -> T): Result<T> =
+        withContext(Dispatchers.IO) {
+            runCatching { parse(BiliGrpcClient.request(GATEWAY_SERVICE + method, message)) }
                 .onFailure { if (it is CancellationException) throw it }
         }
 
@@ -87,6 +120,70 @@ internal object MessageImRepository {
     suspend fun clearUnread(pageType: Int, session: ImSession? = null): Result<Unit> = request(
         "ClearUnread", ProtoWire.message(ProtoWire.int32(1, pageType), ProtoWire.bytes(2, session?.id ?: byteArrayOf())),
     ) { Unit }.onSuccess { MessageRepository.notifyReadStateChanged() }
+
+    /** 私信未读总数；进消息中心不会改变它，首页角标的清空是本地行为。 */
+    suspend fun totalUnread(): Result<ImTotalUnread> = request("GetTotalUnread") { bytes ->
+        val unread = ImFields(ImFields(bytes).bytes(1))
+        ImTotalUnread(
+            style = unread.number(1).toInt(),
+            number = unread.number(2),
+            numberShow = unread.text(3),
+        )
+    }
+
+    @Volatile
+    private var gatewayUnavailable = false
+
+    /** 消息中心未读：官方 gateway 优先，失败回退 ImInterface。 */
+    suspend fun messageCenterUnread(): Result<ImMessageCenterUnread> {
+        if (!gatewayUnavailable) {
+            val gateway = gatewayRequest(
+                "GetTotalUnread",
+                ProtoWire.message(
+                    ProtoWire.int32(1, 0),
+                    ProtoWire.int32(2, 1),
+                    ProtoWire.int32(3, 0),
+                ),
+            ) { parseMessageCenter(it) }
+            if (gateway.isSuccess) return gateway
+            gatewayUnavailable = true
+        }
+        return interfaceRequest(
+            "GetTotalUnread",
+            ProtoWire.message(ProtoWire.int32(1, 0), ProtoWire.int32(2, 1)),
+        ) { parseMessageCenter(it) }
+    }
+
+    private fun parseMessageCenter(bytes: ByteArray): ImMessageCenterUnread {
+        val rsp = ImFields(bytes)
+        val feed = ImFields(rsp.bytes(2)).all(1).mapNotNull { entry ->
+            val item = ImFields(entry.bytes)
+            val key = item.text(1)
+            if (key.isBlank()) null else key to item.number(2).toInt().coerceAtLeast(0)
+        }.toMap()
+        val newTotal = ImFields(rsp.bytes(6))
+        val single = ImFields(rsp.bytes(1))
+        val feedTotal = listOf("reply", "at", "like", "sys_msg").sumOf { feed[it] ?: 0 }
+        val badgePrivateTotal = (single.number(1) + single.number(2)).toInt().coerceAtLeast(0)
+        val total = if (newTotal.number(1) > 0) newTotal.number(1).toInt() else badgePrivateTotal + feedTotal
+        return ImMessageCenterUnread(
+            total = total,
+            reply = feed["reply"] ?: 0,
+            at = feed["at"] ?: 0,
+            like = feed["like"] ?: 0,
+            sysMsg = feed["sys_msg"] ?: 0,
+        )
+    }
+
+    /** 官方已读上报：ImInterface/UpdateAck；Web 的 update_ack 不动 IM 后端未读。 */
+    suspend fun updateAck(sessionType: Int, talkerId: Long, ackSeqno: Long): Result<Unit> = interfaceRequest(
+        "UpdateAck",
+        ProtoWire.message(
+            ProtoWire.int64(1, talkerId),
+            ProtoWire.int32(2, sessionType),
+            ProtoWire.int64(3, ackSeqno),
+        ),
+    ) { Unit }
 
     suspend fun clearList(pageType: Int): Result<Unit> = request("DeleteSessionList", ProtoWire.int32(1, pageType)) { Unit }
 

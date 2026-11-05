@@ -28,9 +28,9 @@ import com.android.purebilibili.data.model.response.RecommendationFeedbackLocalA
 import com.android.purebilibili.data.model.response.RecommendationFeedbackReason
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.data.repository.ActionRepository
+import com.android.purebilibili.data.repository.MessageImRepository
 import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.data.repository.VideoRepository
-import com.android.purebilibili.feature.message.totalMessageUnreadCount
 import com.android.purebilibili.plugin.sdk.EyeProtectionPluginApi
 import com.android.purebilibili.feature.plugin.TodayWatchControls
 import com.android.purebilibili.feature.plugin.TodayWatchPluginConfig
@@ -1203,6 +1203,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** 回首页时重拉角标。 */
+    fun refreshMessageUnread() {
+        refreshMessageUnreadInBackground()
+    }
+
     private suspend fun refreshMessageUnreadCount() {
         val identity = accountRequests.identity
         ensureAccountCurrent(identity)
@@ -1211,18 +1216,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val unreadResult = MessageRepository.getUnreadCount()
+        // 优先官方 gateway 的总未读 + 四项；失败回退私信 + REST 加总。
+        val mid = com.android.purebilibili.core.store.TokenManager.midCache ?: 0L
+        val center = MessageRepository.getMessageCenterUnread()
         ensureAccountCurrent(identity)
-        val feedUnreadResult = MessageRepository.getFeedUnread()
-        ensureAccountCurrent(identity)
-        if (unreadResult.isSuccess && feedUnreadResult.isSuccess) {
-            _uiState.value = _uiState.value.copy(
-                messageUnreadCount = totalMessageUnreadCount(
-                    unreadData = unreadResult.getOrNull(),
-                    feedUnread = feedUnreadResult.getOrNull()
-                )
-            )
+        val total = center.getOrNull()?.total ?: run {
+            val imUnread = MessageImRepository.totalUnread()
+            ensureAccountCurrent(identity)
+            val privateTotal = imUnread.getOrNull()?.number?.coerceIn(0L, Int.MAX_VALUE.toLong())?.toInt()
+                ?: return
+            val feedUnread = MessageRepository.getFeedUnread().getOrNull()
+            ensureAccountCurrent(identity)
+            privateTotal + (feedUnread?.let { it.reply + it.at + it.like + it.sysMsg } ?: 0)
         }
+        // 清理状态只决定显示 0 还是完整总数；总数上涨视为新消息。
+        val displayed = com.android.purebilibili.core.store.MessageBadgeCleanState.resolve(mid, total)
+        _uiState.value = _uiState.value.copy(messageUnreadCount = displayed)
     }
 
     private suspend fun fetchData(
