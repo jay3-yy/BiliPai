@@ -2942,8 +2942,6 @@ fun HomeHeader(
                                             HomeTopSearchPillContent(
                                                 searchIcon = topActionIcons.search,
                                                 contentColor = topForegroundColor,
-                                                textFontSize = MaterialTheme.typography.bodyLarge.fontSize,
-                                                iconTextGap = resolveHomeTopSearchIconTextGap(topChromePolicy),
                                                 modifier = Modifier.fillMaxWidth(),
                                                 pressed = searchPillPressed,
                                                 searchIconOpticalScale = searchIconOpticalScale,
@@ -2955,7 +2953,8 @@ fun HomeHeader(
                                                 haptic(HapticType.LIGHT)
                                                 onSearchClick()
                                             },
-                                            placeholder = "搜索视频、UP主...",
+                                            // 首页只显示图标，其他搜索入口保留默认提示。
+                                            showPlaceholder = false,
                                             centeredContent = true,
                                             containerColor = if (useTopControlBlur) {
                                                 Color.Transparent

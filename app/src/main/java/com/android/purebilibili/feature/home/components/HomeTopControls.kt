@@ -13,12 +13,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppPressShiftContent
@@ -37,9 +35,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -90,8 +85,6 @@ internal fun HomeTopAvatarContent(
 internal fun HomeTopSearchPillContent(
     searchIcon: ImageVector,
     contentColor: Color,
-    textFontSize: TextUnit,
-    iconTextGap: Dp,
     modifier: Modifier = Modifier,
     pressed: Boolean = false,
     searchIconOpticalScale: Float = 1f,
@@ -115,16 +108,6 @@ internal fun HomeTopSearchPillContent(
                         scaleX = searchIconOpticalScale
                         scaleY = searchIconOpticalScale
                     }
-            )
-            Spacer(modifier = Modifier.width(iconTextGap))
-            AppText(
-                text = "搜索视频、UP主...",
-                style = MaterialTheme.typography.bodyMedium,
-                fontSize = textFontSize,
-                fontWeight = FontWeight.Normal,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
