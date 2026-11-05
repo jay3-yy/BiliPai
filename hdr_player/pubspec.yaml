@@ -1,0 +1,19 @@
+name: hdr_player
+description: Android HDR player plugin
+version: 0.0.1
+publish_to: "none"
+
+environment:
+  sdk: ">=3.10.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.example.hdr_player
+        pluginClass: HdrPlayerPlugin
