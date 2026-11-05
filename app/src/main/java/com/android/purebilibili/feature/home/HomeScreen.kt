@@ -68,6 +68,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.luminance  //  状态栏亮度计算
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppPullRefreshLoadingIndicator
@@ -3279,6 +3280,14 @@ fun HomeScreen(
         }
     }
 
+
+    // 回首页重拉角标：清理状态和已读结果都要刷新后才可见。
+    val unreadBadgeLifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    LaunchedEffect(unreadBadgeLifecycleOwner) {
+        unreadBadgeLifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+            viewModel.refreshMessageUnread()
+        }
+    }
 
     //  使用生命周期事件：
     // ON_START: 非视频返回底栏立即恢复
