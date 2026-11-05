@@ -68,7 +68,7 @@ fun SubReplySheet(
         )
         val threadDrag = rememberCommentThreadDrag(
             visible = state.visible,
-            rootReplyId = rootReply?.rpid,
+            rootReplyId = state.threadRootId.takeIf { it > 0L },
             onDismiss = onDismiss,
         )
         val coveredBlurProgress = resolveCommentThreadCoveredBlurProgress(
@@ -107,17 +107,18 @@ fun SubReplySheet(
                     isBackEnabled = true,
                     onBackCompleted = onDismiss,
                 )
-                if (rootReply == null) {
+                if (rootReply == null && !state.isTargetOnly) {
                     SubReplyInitialContent(
                         isLoading = state.isLoading,
                         error = state.error,
-                        onRetry = onLoadMore,
+                        onRetry = onRefresh,
                         onDismiss = onDismiss,
                     )
                 } else {
                 SubReplyDetailContent(
                     headerDragModifier = threadDrag.headerModifier,
                     rootReply = rootReply,
+                    isTargetOnly = state.isTargetOnly,
                     subReplies = state.items,
                     sortMode = state.sortMode,
                     error = state.error,

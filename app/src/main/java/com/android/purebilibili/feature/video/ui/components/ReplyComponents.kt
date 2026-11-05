@@ -58,6 +58,8 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
@@ -2025,6 +2027,7 @@ fun ReplyItemView(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .appActionClickable(enabled = onLikeClick != null) { onLikeClick?.invoke() }
+                            .semantics { selected = isLiked }
                             .padding(4.dp)
                     ) {
                         AppIcon(

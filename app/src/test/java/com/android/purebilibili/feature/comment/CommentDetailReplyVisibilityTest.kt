@@ -77,6 +77,62 @@ class CommentDetailReplyVisibilityTest {
     }
 
     @Test
+    fun `target without readable root remains visible and can refresh into the complete thread`() = runTest(dispatcher) {
+        val target = first.copy(rpid = 91L, root = 90L, oid = 1001L, parent = 92L, dialog = 92L)
+        var complete = false
+        val requestedTargets = mutableListOf<Long>()
+        remotePage = { _, _, _, _, _, targetId ->
+            requestedTargets += targetId
+            if (complete) page(listOf(target, second.copy(root = 90L)), root = root.copy(rpid = 90L))
+            else ReplyData(replies = listOf(target), cursor = ReplyCursor(isEnd = true), isTargetOnly = true)
+        }
+        model.loadInitial(1001L, 90L, targetReplyId = 91L)
+        runCurrent()
+        assertNull(model.subReplyState.value.rootReply)
+        assertTrue(model.subReplyState.value.visible)
+        assertTrue(model.subReplyState.value.isTargetOnly)
+        assertEquals(90L, model.subReplyState.value.threadRootId)
+        assertEquals(listOf(91L), ids())
+        assertNull(model.subReplyState.value.error)
+        model.loadMore()
+        runCurrent()
+        assertEquals(listOf(91L), requestedTargets)
+
+        complete = true
+        model.refresh()
+        runCurrent()
+        assertEquals(listOf(91L, 91L), requestedTargets)
+        assertFalse(model.subReplyState.value.isTargetOnly)
+        assertEquals(90L, model.subReplyState.value.rootReply?.rpid)
+        assertEquals(listOf(91L, 30L), ids())
+    }
+
+    @Test
+    fun `unreadable root does not block replying to the recovered target or hide it after failed refresh`() = runTest(dispatcher) {
+        val target = first.copy(rpid = 91L, root = 90L, oid = 1001L, parent = 92L, dialog = 92L)
+        remotePage = { _, _, _, _, _, _ ->
+            ReplyData(replies = listOf(target), cursor = ReplyCursor(isEnd = true), isTargetOnly = true)
+        }
+        model.loadInitial(1001L, 90L, targetReplyId = 91L)
+        runCurrent()
+        send(target)
+        assertEquals(listOf(91L, 50L), ids())
+        assertEquals(90L, model.subReplyState.value.items.last().root)
+        assertEquals(91L, model.subReplyState.value.items.last().parent)
+        assertFalse(model.isSending.value)
+
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.failure(IllegalStateException("offline"))
+        model.refresh()
+        runCurrent()
+        assertTrue(model.subReplyState.value.isTargetOnly)
+        assertEquals(91L, model.subReplyState.value.targetReplyId)
+        assertEquals(listOf(91L, 50L), ids())
+        assertEquals("offline", model.subReplyState.value.error)
+    }
+
+    @Test
     fun `opening a just sent BGM reply shows its cached root before the unreadable target reaches the server`() = runTest(dispatcher) {
         val bgmRoot = root.copy(replyType = 47)
         val local = sent.copy(root = 10L, parent = 10L, oid = 1001L, replyType = 47)

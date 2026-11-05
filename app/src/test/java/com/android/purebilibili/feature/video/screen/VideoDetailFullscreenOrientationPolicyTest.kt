@@ -11,6 +11,23 @@ import kotlin.test.assertTrue
 class VideoDetailFullscreenOrientationPolicyTest {
 
     @Test
+    fun portraitPagerExcludesLandscapeFullscreenEvenBeforeConfigurationRotates() {
+        for (orientationDriven in listOf(false, true)) {
+            for (manualRequest in listOf(false, true)) {
+                for (smallWindow in listOf(false, true)) {
+                    assertFalse(resolveVideoDetailFullscreenMode(
+                        isOrientationDrivenFullscreen = orientationDriven,
+                        isLandscape = true,
+                        userRequestedFullscreen = manualRequest,
+                        isInMultiWindowMode = smallWindow,
+                        isPortraitFullscreen = true,
+                    ))
+                }
+            }
+        }
+    }
+
+    @Test
     fun `phone small window detail entry stays portrait despite stale landscape bounds`() {
         for (autoRotate in listOf(false, true)) {
             for (mode in listOf(FullscreenMode.AUTO, FullscreenMode.HORIZONTAL)) {

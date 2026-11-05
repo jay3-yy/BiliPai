@@ -159,7 +159,7 @@ fun CommentDetailScreen(
         ) {
             val rootReply = subReplyState.rootReply
             when {
-                subReplyState.isLoading && rootReply == null -> {
+                subReplyState.isLoading && rootReply == null && !subReplyState.isTargetOnly -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -167,7 +167,7 @@ fun CommentDetailScreen(
                         AdaptiveLoadingIndicator()
                     }
                 }
-                subReplyState.error != null && rootReply == null -> {
+                subReplyState.error != null && rootReply == null && !subReplyState.isTargetOnly -> {
                     MessageFeedError(
                         text = subReplyState.error ?: "加载失败",
                         onRetry = {
@@ -181,9 +181,10 @@ fun CommentDetailScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                rootReply != null -> {
+                rootReply != null || subReplyState.isTargetOnly -> {
                     SubReplyDetailContent(
                         rootReply = rootReply,
+                        isTargetOnly = subReplyState.isTargetOnly,
                         subReplies = subReplyState.items,
                         sortMode = subReplyState.sortMode,
                         error = subReplyState.error,
@@ -197,7 +198,7 @@ fun CommentDetailScreen(
                         onSortModeChange = viewModel::setSortMode,
                         onDismiss = onBack,
                         applyStatusBarPadding = false,
-                        onRootCommentClick = { viewModel.showReplyInput(rootReply) },
+                        onRootCommentClick = rootReply?.let { root -> { viewModel.showReplyInput(root) } },
                         onReplyClick = { reply -> viewModel.showReplyInput(reply) },
                         onConversationClick = viewModel::openConversation,
                         onConversationBack = viewModel::closeConversation,

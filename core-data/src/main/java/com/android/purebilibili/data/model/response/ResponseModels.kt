@@ -10,6 +10,7 @@ package com.android.purebilibili.data.model.response
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
@@ -68,7 +69,9 @@ data class ReplyData(
     @SerialName("grpc_next_offset")
     val grpcNextOffset: String = "",
     // 手机主评论的分页来源与游标；楼中楼继续使用 grpcNextOffset。
-    val mainListContinuation: CommentMainListContinuation? = null
+    val mainListContinuation: CommentMainListContinuation? = null,
+    // 仅目标子评论可读，不代表完整楼层或其总数已经加载。
+    @Transient val isTargetOnly: Boolean = false
 ) {
     //  统一获取总评论数
     fun getAllCount(): Int = when {

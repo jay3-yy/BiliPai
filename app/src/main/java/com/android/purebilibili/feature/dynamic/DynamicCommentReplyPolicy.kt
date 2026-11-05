@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.dynamic
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.video.viewmodel.resolveSentSubReply
+import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 
 internal fun canOpenDynamicSubReplies(reply: ReplyItem): Boolean {
     return resolveDynamicSubReplyCount(reply) > 0
@@ -105,6 +106,25 @@ internal fun removeDynamicCommentFromList(
 
 internal fun isDynamicCommentLiked(reply: ReplyItem): Boolean = reply.action == 1
 
+/** Both dynamic thread hosts must pass the same explicit state to the shared comment UI. */
+internal fun resolveDynamicThreadReactionIds(state: SubReplyUiState, action: Int): Set<Long> = buildSet {
+    state.rootReply?.takeIf { it.action == action }?.let { add(it.rpid) }
+    state.items.forEach { if (it.action == action) add(it.rpid) }
+}
+
+internal fun updateDynamicCommentReaction(
+    reply: ReplyItem,
+    rpid: Long,
+    action: Int,
+    like: Int,
+): ReplyItem {
+    val updated = if (reply.rpid == rpid) reply.copy(action = action, like = like) else reply
+    val nested = updated.replies
+    return if (nested.isNullOrEmpty()) updated else updated.copy(
+        replies = nested.map { updateDynamicCommentReaction(it, rpid, action, like) }
+    )
+}
+
 internal fun applyDynamicCommentLike(
     reply: ReplyItem,
     toLiked: Boolean
@@ -132,26 +152,6 @@ internal fun applyDynamicCommentHate(
     )
 }
 
-internal fun applyDynamicCommentLikeInList(
-    comments: List<ReplyItem>,
-    rpid: Long,
-    toLiked: Boolean
-): List<ReplyItem> {
-    if (rpid <= 0L) return comments
-    return comments.map { reply ->
-        val updated = if (reply.rpid == rpid) {
-            applyDynamicCommentLike(reply, toLiked)
-        } else {
-            reply
-        }
-        val nested = updated.replies
-        if (nested.isNullOrEmpty()) {
-            updated
-        } else {
-            updated.copy(replies = applyDynamicCommentLikeInList(nested, rpid, toLiked))
-        }
-    }
-}
 
 internal fun applyDynamicCommentHateInList(
     comments: List<ReplyItem>,

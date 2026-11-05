@@ -156,7 +156,7 @@ class CommentDetailViewModel : ViewModel() {
             currentTargetReplyId == targetReplyId &&
             _subReplyState.value.visible &&
             (_subReplyState.value.isLoading ||
-                (_subReplyState.value.rootReply != null && _subReplyState.value.error == null))
+                ((_subReplyState.value.rootReply != null || _subReplyState.value.isTargetOnly) && _subReplyState.value.error == null))
         ) {
             return
         }
@@ -197,7 +197,7 @@ class CommentDetailViewModel : ViewModel() {
 
     fun setSortMode(mode: SubReplySortMode) {
         val state = _subReplyState.value
-        if (!state.visible || state.sortMode == mode) return
+        if (!state.visible || state.isTargetOnly || state.sortMode == mode) return
         subReplyLoadJob?.cancel()
         val localItems = sentReplyStore?.repliesFor(currentRootId).orEmpty().toImmutableList()
         _subReplyState.update { it.resetForSort(mode).copy(items = localItems, baseItems = localItems) }
@@ -208,7 +208,8 @@ class CommentDetailViewModel : ViewModel() {
         val state = _subReplyState.value
         if (!state.visible || currentOid <= 0L || currentRootId <= 0L || state.isRefreshing) return
         _subReplyState.value = state.copy(
-            isLoading = true, isRefreshing = true, error = null, targetReplyId = 0L
+            isLoading = true, isRefreshing = true, error = null,
+            targetReplyId = if (state.isTargetOnly) state.targetReplyId else 0L,
         )
         startSubReplyPaging()
     }
@@ -246,7 +247,7 @@ class CommentDetailViewModel : ViewModel() {
                     check(data.root?.let { it.rpid == rootId } != false) { "回复楼层不匹配，请重试" }
                     currentCoroutineContext().ensureActive()
                     resolvedRoot = resolveRoutedCommentRootReply(emptyList(), data, rootId) ?: resolvedRoot
-                    check(resolvedRoot != null) { "评论可能已被删除或不可见" }
+                    check(resolvedRoot != null || data.isTargetOnly) { "评论可能已被删除或不可见" }
                     data
                 }
             },
@@ -263,7 +264,7 @@ class CommentDetailViewModel : ViewModel() {
                             val remoteRoot = resolveRoutedCommentRootReply(emptyList(), last.data, rootId)
                                 ?: current.rootReply ?: seedRoot
                             val root = remoteRoot?.let { store.merge(listOf(it)).firstOrNull { reply -> reply.rpid == rootId } }
-                            if (root != null) {
+                            if (root != null || last.data.isTargetOnly) {
                                 // Rebuild from server pages, never from items carrying a local overlay.
                                 val remoteItems = pages.flatMap { it.data.replies.orEmpty() }
                                     .filterNot { store.isReplyRemoved(it.rpid) }
@@ -271,13 +272,14 @@ class CommentDetailViewModel : ViewModel() {
                                     remoteItems,
                                     store.repliesFor(rootId).filterNot { store.isReplyRemoved(it.rpid) }
                                 )
-                                val total = resolveSubReplyLoadedTotalCount(
+                                val total = if (last.data.isTargetOnly) current.totalCount else resolveSubReplyLoadedTotalCount(
                                     rootReply = root, loadedReplyCount = items.size,
                                     remoteReplyCount = resolveSubReplyRemoteTotalCount(last.data, root), previousTotalCount = current.totalCount
                                 )
                                 next = current.copy(
                                     visible = true, rootReply = root,
                                     items = items.toImmutableList(), baseItems = items.toImmutableList(),
+                                    isTargetOnly = last.data.isTargetOnly,
                                     totalCount = total, page = last.request.page, basePage = last.request.page,
                                     grpcNextOffset = last.data.grpcNextOffset, baseGrpcNextOffset = last.data.grpcNextOffset,
                                     retryRequest = null
@@ -338,9 +340,11 @@ class CommentDetailViewModel : ViewModel() {
         onSuccess: () -> Unit = {}
     ) {
         if (_isSending.value || currentAccount != accountIdentity.value) return
-        val rootReply = _subReplyState.value.rootReply ?: return
-        val replying = _replyingTo.value ?: rootReply
-        val parentId = if (replying.rpid == rootReply.rpid) 0L else replying.rpid
+        val rootReply = _subReplyState.value.rootReply
+        val rootId = currentRootId
+        if (rootId <= 0L) return
+        val replying = _replyingTo.value ?: rootReply ?: return
+        val parentId = if (replying.rpid == rootId) 0L else replying.rpid
         val oid = currentOid
         val type = currentType
         val sendSession = threadSession
@@ -354,17 +358,17 @@ class CommentDetailViewModel : ViewModel() {
         viewModelScope.launch {
             // Bind the result to the thread that opened this composer, not the current destination.
             CommentRepository.addCommentForSubject(
-                oid = oid, type = type, message = message, root = rootReply.rpid,
+                oid = oid, type = type, message = message, root = rootId,
                 parent = parentId, syncToDynamic = syncToDynamic
             ).onSuccess { newReply ->
-                if (currentOid == oid && currentType == type && currentRootId == rootReply.rpid &&
+                if (currentOid == oid && currentType == type && currentRootId == rootId &&
                     threadSession == sendSession && accountIdentity.value == sendAccount
                 ) {
                     _isSending.value = false
                 }
                 if (currentOid != oid || currentType != type || accountIdentity.value != sendAccount ||
                     !shouldApplySentSubReplyResult(
-                        rootReply.rpid, sendSession, threadSession, _subReplyState.value
+                        rootId, sendSession, threadSession, _subReplyState.value
                     )
                 ) return@onSuccess
                 _composerDrafts.update {
@@ -374,11 +378,11 @@ class CommentDetailViewModel : ViewModel() {
                     hideReplyInput()
                 }
                 if (newReply != null) {
-                    if (store.isReplyRemoved(newReply.rpid) || store.isRootRemoved(rootReply.rpid)) return@onSuccess
+                    if (store.isReplyRemoved(newReply.rpid) || store.isRootRemoved(rootId)) return@onSuccess
                     val resolvedReply = resolveSentSubReply(
-                        newReply, rootReply.rpid, parentId, replying, oid = oid, replyType = type
+                        newReply, rootId, parentId, replying, oid = oid, replyType = type
                     )
-                    store.record(resolvedReply, listOf(rootReply))
+                    store.record(resolvedReply, listOfNotNull(rootReply))
                     _subReplyState.update {
                         it.withSentSubReply(resolvedReply, conversationItemsAreFiltered = false)
                     }
@@ -389,7 +393,7 @@ class CommentDetailViewModel : ViewModel() {
                     onSuccess()
                 }
             }.onFailure {
-                if (currentOid == oid && currentType == type && currentRootId == rootReply.rpid &&
+                if (currentOid == oid && currentType == type && currentRootId == rootId &&
                     threadSession == sendSession && accountIdentity.value == sendAccount
                 ) {
                     _isSending.value = false
@@ -439,8 +443,11 @@ class CommentDetailViewModel : ViewModel() {
                 if (session != threadSession || currentOid != oid || currentType != type ||
                     accountIdentity.value != account
                 ) return@onSuccess
-                if (rpid == currentRootId) {
-                    store.removeRoot(rpid)
+                val state = _subReplyState.value
+                if (rpid == currentRootId ||
+                    (state.isTargetOnly && state.rootReply == null && state.items.all { it.rpid == rpid })
+                ) {
+                    if (rpid == currentRootId) store.removeRoot(rpid) else store.removeReply(currentRootId, rpid)
                     close()
                     _subReplyState.value = SubReplyUiState(visible = true, error = "评论已删除", isEnd = true)
                     return@onSuccess

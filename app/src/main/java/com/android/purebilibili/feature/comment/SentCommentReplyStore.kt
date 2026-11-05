@@ -77,6 +77,19 @@ internal class SentCommentReplyStore {
     fun remoteTargetReplyId(rootId: Long, targetReplyId: Long): Long =
         if (previews[rootId]?.replies?.any { it.rpid == targetReplyId } == true) 0L else targetReplyId
 
+    /** Keep locally sent copies in sync when a consumer changes a reply's reaction. */
+    fun updateReaction(rpid: Long, action: Int, like: Int) {
+        fun update(reply: ReplyItem): ReplyItem {
+            val updated = if (reply.rpid == rpid) reply.copy(action = action, like = like) else reply
+            val nested = updated.replies
+            return if (nested.isNullOrEmpty()) updated
+            else updated.copy(replies = nested.map(::update))
+        }
+        roots.replaceAll { _, reply -> update(reply) }
+        knownRoots.replaceAll { _, reply -> update(reply) }
+        previews.replaceAll { _, preview -> preview.copy(replies = preview.replies.map(::update)) }
+    }
+
     fun removeRoot(rpid: Long) {
         removedRoots += rpid
         roots.remove(rpid)

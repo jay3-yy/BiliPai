@@ -1247,6 +1247,14 @@ interface BilibiliApi {
         @Query("ps") ps: Int = 20 // 每页数量
     ): ReplyResponse
 
+    // 单条评论；root 参数是待查询评论自身的 rpid，不一定是楼层根评论。
+    @GET("x/v2/reply/detail")
+    suspend fun getReplyDetail(
+        @Query("oid") oid: Long,
+        @Query("type") type: Int,
+        @Query("root") replyId: Long,
+    ): ReplyResponse
+
     @GET("x/v2/reply/count")
     suspend fun getReplyCount(
         @Query("oid") oid: Long,

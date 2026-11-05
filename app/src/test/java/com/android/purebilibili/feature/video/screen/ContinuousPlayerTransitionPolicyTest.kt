@@ -250,4 +250,54 @@ class ContinuousPlayerTransitionPolicyTest {
         assertEquals(ContinuousPlayerTransitionPhase.AwaitingLandscape, lateCollapse.phase)
         assertEquals(ContinuousPlayerOrientationRequest.None, lateCollapse.orientationRequest)
     }
+
+    @Test
+    fun landscapeToPortraitThenBackReturnsInlineAndCanEnterAgain() {
+        val portrait = reduceContinuousPlayerTransition(
+            phase = ContinuousPlayerTransitionPhase.Fullscreen,
+            event = ContinuousPlayerTransitionEvent.EnterPortraitFullscreen,
+        )
+        assertEquals(ContinuousPlayerTransitionPhase.AwaitingPortrait, portrait.phase)
+        assertEquals(ContinuousPlayerOrientationRequest.Portrait, portrait.orientationRequest)
+        // The old landscape Configuration may arrive after the portrait button click.
+        val staleLandscape = reduceContinuousPlayerTransition(
+            portrait.phase,
+            ContinuousPlayerTransitionEvent.OrientationChanged(true),
+        )
+        assertEquals(portrait.phase, staleLandscape.phase)
+        val collapsed = reduceContinuousPlayerTransition(
+            staleLandscape.phase,
+            ContinuousPlayerTransitionEvent.OrientationChanged(false),
+        )
+        val inline = reduceContinuousPlayerTransition(
+            collapsed.phase,
+            ContinuousPlayerTransitionEvent.CollapseFinished,
+        )
+        assertEquals(ContinuousPlayerTransitionPhase.Inline, inline.phase)
+        val reenter = reduceContinuousPlayerTransition(inline.phase, ContinuousPlayerTransitionEvent.Toggle)
+        assertEquals(ContinuousPlayerTransitionPhase.AwaitingLandscape, reenter.phase)
+        assertEquals(ContinuousPlayerOrientationRequest.Landscape, reenter.orientationRequest)
+    }
+
+    @Test
+    fun portraitLandscapeButtonEntersInsteadOfTogglingThePreviousLandscapePhase() {
+        for (oldPhase in ContinuousPlayerTransitionPhase.entries) {
+            val enter = reduceContinuousPlayerTransition(
+                oldPhase,
+                ContinuousPlayerTransitionEvent.EnterFullscreen,
+            )
+            assertEquals(ContinuousPlayerTransitionPhase.AwaitingLandscape, enter.phase)
+            assertEquals(ContinuousPlayerOrientationRequest.Landscape, enter.orientationRequest)
+            val landscape = reduceContinuousPlayerTransition(
+                enter.phase,
+                ContinuousPlayerTransitionEvent.OrientationChanged(true),
+            )
+            assertEquals(ContinuousPlayerTransitionPhase.Fullscreen, landscape.phase)
+            val exit = reduceContinuousPlayerTransition(
+                landscape.phase,
+                ContinuousPlayerTransitionEvent.Toggle,
+            )
+            assertEquals(ContinuousPlayerOrientationRequest.Portrait, exit.orientationRequest)
+        }
+    }
 }

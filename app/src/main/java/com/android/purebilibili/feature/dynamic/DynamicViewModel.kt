@@ -1241,6 +1241,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var commentSubjectSession = 0L
     private var remoteSubReplies: List<ReplyItem> = emptyList()
     private var remoteMainReplies: List<ReplyItem> = emptyList()
+    private val pendingCommentLikes = mutableSetOf<Pair<Long, Long>>()
 
     private fun selectCommentSubject(dynamicId: String, target: DynamicCommentTarget? = null) {
         val changedDynamic = sentCommentDynamicId != dynamicId
@@ -2067,8 +2068,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     fun setSubReplySortMode(mode: SubReplySortMode) {
         val state = _subReplyState.value
         val target = _selectedCommentTarget.value ?: return
-        val rootId = state.rootReply?.rpid ?: activeSubReplyRootId
-        if (!state.visible || state.sortMode == mode || rootId <= 0L) return
+        val rootId = state.threadRootId.takeIf { it > 0L } ?: activeSubReplyRootId
+        if (!state.visible || state.isTargetOnly || state.sortMode == mode || rootId <= 0L) return
         subCommentPagingSession = null
         subReplyLoadJob?.cancel()
         remoteSubReplies = emptyList()
@@ -2080,11 +2081,11 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     fun refreshSubReplies() {
         val state = _subReplyState.value
         val target = _selectedCommentTarget.value ?: return
-        val rootId = state.rootReply?.rpid ?: activeSubReplyRootId
+        val rootId = state.threadRootId.takeIf { it > 0L } ?: activeSubReplyRootId
         if (!state.visible || state.isRefreshing ||
             rootId <= 0L
         ) return
-        _subReplyState.value = state.copy(targetReplyId = 0L)
+        _subReplyState.value = state.copy(targetReplyId = if (state.isTargetOnly) state.targetReplyId else 0L)
         loadSubReplies(
             oid = target.oid,
             type = target.type,
@@ -2100,13 +2101,14 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         val target = _selectedCommentTarget.value ?: return
         if (!state.visible || state.isLoading || state.isRefreshing || (state.isEnd && state.error == null)) return
         if (subCommentPagingSession != null) { subCommentPagingSession?.loadMore(); return }
-        val rootReply = state.rootReply ?: return
+        val rootId = state.threadRootId.takeIf { it > 0L } ?: activeSubReplyRootId
+        if (rootId <= 0L) return
         val request = resolveSubReplyNextRequest(state)
         _subReplyState.value = state.copy(isLoading = true, error = null)
         loadSubReplies(
             oid = target.oid,
             type = target.type,
-            rootId = rootReply.rpid,
+            rootId = rootId,
             page = request.page,
             paginationOffset = request.offset
         )
@@ -2147,7 +2149,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     targetReplyId = targetReplyId.takeIf { request.page == 1 } ?: 0L, paginationOffset = request.offset
                 ).getOrThrow()
                 check(data.root?.let { it.rpid == rootId } != false) { "回复楼层不匹配，请重试" }
-                check(resolveRoutedCommentRootReply(emptyList(), data, rootId) != null ||
+                check(data.isTargetOnly || resolveRoutedCommentRootReply(emptyList(), data, rootId) != null ||
                     _subReplyState.value.rootReply?.rpid == rootId || seedRoot != null
                 ) { "回复可能已被删除或不可见" }
                 data
@@ -2180,7 +2182,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         data = data,
                         rootReply = root
                     )
-                    val totalCount = resolveSubReplyLoadedTotalCount(
+                    val totalCount = if (data.isTargetOnly) current.totalCount else resolveSubReplyLoadedTotalCount(
                         rootReply = root,
                         loadedReplyCount = updatedItems.size,
                         remoteReplyCount = remoteTotalCount,
@@ -2188,7 +2190,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     )
                     val isEnd = isSortedSubReplyPageEnd(data.cursor.isEnd, data.grpcNextOffset)
                     _subReplyState.value = resolveDynamicSubReplyStateAfterSuccess(
-                        currentState = current.copy(rootReply = root),
+                        currentState = current.copy(rootReply = root, isTargetOnly = data.isTargetOnly),
                         remoteItems = remoteSubReplies,
                         page = page,
                         isEnd = isEnd,
@@ -2393,7 +2395,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     } else {
                         // A successful add may omit its reply; keep the current subject and refresh.
                         refreshComments()
-                        if (_subReplyState.value.rootReply?.rpid == replyTarget?.rootRpid) refreshSubReplies()
+                        if (_subReplyState.value.threadRootId == replyTarget?.rootRpid) refreshSubReplies()
                     }
                     onResult(true, "评论成功")
                 } else {
@@ -2430,48 +2432,72 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
+    private fun updateCurrentCommentReaction(rpid: Long, action: Int, like: Int) {
+        fun update(reply: ReplyItem) = updateDynamicCommentReaction(reply, rpid, action, like)
+        remoteMainReplies = remoteMainReplies.map(::update)
+        remoteSubReplies = remoteSubReplies.map(::update)
+        sentCommentReplies.updateReaction(rpid, action, like)
+        updateCurrentComments { replies -> replies.map(::update) }
+        _subReplyState.update { state ->
+            state.copy(
+                rootReply = state.rootReply?.let(::update),
+                items = state.items.map(::update).toImmutableList(),
+                baseItems = state.baseItems.map(::update).toImmutableList(),
+            )
+        }
+    }
+
     fun likeComment(rpid: Long, onResult: (Boolean, String) -> Unit = { _, _ -> }) {
-        if (rpid <= 0L) return
-        val current = _commentUiState.value.pinnedReply?.let { findDynamicComment(it, rpid) }
-            ?: _commentUiState.value.comments.firstOrNull { it.rpid == rpid }
-            ?: _commentUiState.value.comments.firstNotNullOfOrNull { parent ->
-                parent.replies.orEmpty().firstOrNull { it.rpid == rpid }
-            }
-            ?: _subReplyState.value.items.firstOrNull { it.rpid == rpid }
-            ?: _subReplyState.value.rootReply?.takeIf { it.rpid == rpid }
-        if (current == null) return
-        val toLiked = !isDynamicCommentLiked(current)
+        if (rpid <= 0L || activeAccountIdentity != TokenManager.accountIdentity.value) return
+        val thread = _subReplyState.value
+        val current = (if (thread.visible) {
+            thread.items.firstNotNullOfOrNull { findDynamicComment(it, rpid) }
+                ?: thread.rootReply?.let { findDynamicComment(it, rpid) }
+                ?: thread.baseItems.firstNotNullOfOrNull { findDynamicComment(it, rpid) }
+        } else null)
+            ?: _commentUiState.value.pinnedReply?.let { findDynamicComment(it, rpid) }
+            ?: _commentUiState.value.comments.firstNotNullOfOrNull { findDynamicComment(it, rpid) }
+            ?: return
         val target = _selectedCommentTarget.value
         if (target == null) {
             onResult(false, "无法确定评论参数")
             return
         }
-        updateCurrentComments { applyDynamicCommentLikeInList(it, rpid, toLiked) }
-        val subState = _subReplyState.value
-        _subReplyState.value = subState.copy(
-            rootReply = subState.rootReply?.let { root ->
-                if (root.rpid == rpid) applyDynamicCommentLike(root, toLiked) else root
-            },
-            items = applyDynamicCommentLikeInList(subState.items, rpid, toLiked).toImmutableList()
-        )
+        val dynamicId = _selectedDynamic.value?.id_str ?: return
+        val subjectSession = commentSubjectSession
+        val accountIdentity = activeAccountIdentity
+        val requestKey = subjectSession to rpid
+        if (!pendingCommentLikes.add(requestKey)) {
+            onResult(false, "操作进行中，请稍候")
+            return
+        }
+        val toLiked = !isDynamicCommentLiked(current)
+        val updated = applyDynamicCommentLike(current, toLiked)
+        updateCurrentCommentReaction(rpid, updated.action, updated.like)
         launchAccount {
-            CommentRepository.likeCommentForSubject(
-                oid = target.oid,
-                type = target.type,
-                rpid = rpid,
-                like = toLiked
-            ).onFailure { error ->
-                updateCurrentComments { applyDynamicCommentLikeInList(it, rpid, !toLiked) }
-                val rollback = _subReplyState.value
-                _subReplyState.value = rollback.copy(
-                    rootReply = rollback.rootReply?.let { root ->
-                        if (root.rpid == rpid) applyDynamicCommentLike(root, !toLiked) else root
-                    },
-                    items = applyDynamicCommentLikeInList(rollback.items, rpid, !toLiked).toImmutableList()
+            try {
+                val result = CommentRepository.likeCommentForSubject(
+                    oid = target.oid,
+                    type = target.type,
+                    rpid = rpid,
+                    like = toLiked,
                 )
-                onResult(false, error.message ?: "操作失败")
-            }.onSuccess {
-                onResult(true, if (toLiked) "已点赞" else "已取消")
+                if (accountIdentity != activeAccountIdentity || accountIdentity != TokenManager.accountIdentity.value ||
+                    !shouldApplyDynamicSentComment(
+                        dynamicId, target, subjectSession, _selectedDynamic.value?.id_str,
+                        _selectedCommentTarget.value, commentSubjectSession,
+                    )
+                ) return@launchAccount
+                result.fold(
+                    onSuccess = { onResult(true, if (toLiked) "已点赞" else "已取消") },
+                    onFailure = { error ->
+                        // Restore the exact reaction, including a previous dislike or a clamped zero count.
+                        updateCurrentCommentReaction(rpid, current.action, current.like)
+                        onResult(false, error.message ?: "操作失败")
+                    },
+                )
+            } finally {
+                pendingCommentLikes.remove(requestKey)
             }
         }
     }
@@ -2568,7 +2594,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     updateCurrentComments {
                         sentCommentReplies.merge(removeDynamicCommentFromList(it, rpid, rootId))
                     }
-                    _subReplyState.value = if (subState.rootReply?.rpid == rpid) {
+                    _subReplyState.value = if (subState.rootReply?.rpid == rpid ||
+                        (subState.isTargetOnly && subState.rootReply == null && subState.items.all { it.rpid == rpid })
+                    ) {
                         SubReplyUiState()
                     } else {
                         subState.copy(
@@ -2578,7 +2606,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                                 _commentUiState.value.comments.find { it.rpid == root.rpid }
                                     ?: removeDynamicCommentFromList(listOf(root), rpid, rootId).firstOrNull()
                             },
-                            totalCount = (subState.totalCount - if (subState.rootReply?.rpid == rootId) 1 else 0)
+                            totalCount = (subState.totalCount - if (subState.threadRootId == rootId) 1 else 0)
                                 .coerceAtLeast(0),
                         )
                     }

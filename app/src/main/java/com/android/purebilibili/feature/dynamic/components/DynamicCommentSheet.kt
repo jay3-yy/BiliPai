@@ -54,6 +54,7 @@ import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.DynamicViewModel
 import com.android.purebilibili.feature.dynamic.isDynamicCommentLiked
+import com.android.purebilibili.feature.dynamic.resolveDynamicThreadReactionIds
 import com.android.purebilibili.feature.dynamic.resolveDynamicCommentCountLabel
 import com.android.purebilibili.feature.dynamic.resolveDynamicCommentEmptyLabel
 import com.android.purebilibili.feature.dynamic.resolveDynamicCommentSheetTotalCount
@@ -304,13 +305,11 @@ fun DynamicCommentSheet(
         emoteMap = DynamicEmoteCatalog.ensureLoaded()
     }
     val hostContent = resolveDynamicCommentSheetHostContent(subReplyState.visible)
-    val likedThreadComments = remember(subReplyState) {
-        buildSet {
-            subReplyState.rootReply?.takeIf { isDynamicCommentLiked(it) }?.let { add(it.rpid) }
-            subReplyState.items.forEach { reply ->
-                if (isDynamicCommentLiked(reply)) add(reply.rpid)
-            }
-        }
+    val likedThreadComments = remember(subReplyState.rootReply, subReplyState.items) {
+        resolveDynamicThreadReactionIds(subReplyState, action = 1)
+    }
+    val hatedThreadComments = remember(subReplyState.rootReply, subReplyState.items) {
+        resolveDynamicThreadReactionIds(subReplyState, action = 2)
     }
 
     AppModalBottomSheet(
@@ -370,7 +369,7 @@ fun DynamicCommentSheet(
             )
             val threadDrag = rememberCommentThreadDrag(
                 visible = subReplyState.visible,
-                rootReplyId = subReplyState.rootReply?.rpid,
+                rootReplyId = subReplyState.threadRootId.takeIf { it > 0L },
                 onDismiss = onCloseSubReply,
             )
             val commentChromeBackdrop = rememberLayerBackdrop()
@@ -586,7 +585,7 @@ fun DynamicCommentSheet(
                     exit = if (threadBackCompleted) androidx.compose.animation.ExitTransition.None else threadSheetMotion.contentExit,
                 ) {
                     val rootReply = subReplyState.rootReply
-                    if (rootReply != null) {
+                    if (rootReply != null || subReplyState.isTargetOnly) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -602,6 +601,7 @@ fun DynamicCommentSheet(
                             SubReplyDetailContent(
                                 headerDragModifier = threadDrag.headerModifier,
                                 rootReply = rootReply,
+                                isTargetOnly = subReplyState.isTargetOnly,
                                 upMid = dynamicAuthorMid,
                                 subReplies = subReplyState.items,
                                 sortMode = subReplyState.sortMode,
@@ -632,6 +632,7 @@ fun DynamicCommentSheet(
                                 onCommentHate = onThreadCommentHate,
                                 onReportComment = onThreadCommentReport,
                                 likedComments = likedThreadComments,
+                                hatedComments = hatedThreadComments,
                                 onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
                                 targetReplyId = subReplyState.targetReplyId,
                                 modifier = Modifier.fillMaxSize(),

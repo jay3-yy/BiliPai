@@ -69,7 +69,7 @@ class MainCommentReplyVisibilityTest {
         every { TokenManager.midCache } answers { identities.value.mid }
         every { PureApplication.instance } returns mockk(relaxed = true)
         coEvery {
-            CommentRepository.getMobileCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+            CommentRepository.getMobileCommentsForSubject(any(), any(), any(), any(), any(), any(), any(), any())
         } coAnswers {
             Result.success(ReplyData(replies = listOf(remoteRoot), cursor = ReplyCursor(allCount = 9, isEnd = true)))
         }
