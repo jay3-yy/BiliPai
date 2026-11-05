@@ -12,19 +12,6 @@ import org.junit.Test
 class SubReplyPagingSourceTest {
     private fun params(key: SubReplyPageRequest? = null) = PagingSource.LoadParams.Refresh(key, 1, false)
 
-    @Test fun forwardsOpaqueCursorAndStopsWhenServerRepeatsIt() = runTest {
-        val requested = mutableListOf<SubReplyPageRequest>()
-        val source = subReplyPagingSource { key ->
-            requested += key
-            ReplyData(grpcNextOffset = "opaque cursor")
-        }
-        val first = source.load(params()) as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
-        assertEquals(SubReplyPageRequest(2, "opaque cursor"), first.nextKey)
-        val last = source.load(params(first.nextKey)) as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
-        assertNull(last.nextKey)
-        assertEquals(listOf(SubReplyPageRequest(1, null), SubReplyPageRequest(2, "opaque cursor")), requested)
-    }
-
     @Test fun resumedBaseListUsesItsSavedCursorInsteadOfReloadingFirstPage() = runTest {
         val requested = mutableListOf<SubReplyPageRequest>()
         val resume = SubReplyPageRequest(4, "saved-base-cursor")
@@ -35,6 +22,28 @@ class SubReplyPagingSourceTest {
         val page = source.load(params()) as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
         assertEquals(listOf(resume), requested)
         assertEquals(SubReplyPageRequest(5, "next-base-cursor"), page.nextKey)
+    }
+
+    @Test fun missingCursorAndCursorCyclesFailWithoutDiscardingRetryProgress() = runTest {
+        for (badOffset in listOf("", " ", "second", "third")) {
+            var broken = true
+            val source = subReplyPagingSource { request ->
+                when (request.page) {
+                    1 -> ReplyData(grpcNextOffset = "second")
+                    2 -> ReplyData(grpcNextOffset = "third")
+                    else -> if (broken) ReplyData(grpcNextOffset = badOffset) else
+                        ReplyData(cursor = ReplyCursor(isEnd = true))
+                }
+            }
+            val first = source.load(params()) as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
+            val second = source.load(params(first.nextKey)) as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
+            val next = second.nextKey
+            assertTrue(source.load(params(next)) is PagingSource.LoadResult.Error)
+            broken = false
+            val retried = source.load(params(next)) as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
+            assertEquals(SubReplyPageRequest(3, "third"), retried.data.single().request)
+            assertNull(retried.nextKey)
+        }
     }
 
     @Test fun explicitServerEndOverridesNonemptyCursor() = runTest {
