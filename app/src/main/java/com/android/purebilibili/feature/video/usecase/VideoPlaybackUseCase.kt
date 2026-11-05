@@ -33,6 +33,7 @@ import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.data.repository.advertisedVideoQualityIds
 import com.android.purebilibili.data.repository.playableVideoQualityIds
 import com.android.purebilibili.core.player.PlaybackProgressManager
+import com.android.purebilibili.core.player.resolvePlaybackCompletionPositionMs
 import com.android.purebilibili.feature.video.controller.QualityManager
 import com.android.purebilibili.feature.video.playback.session.PlaybackUserActionTracker
 import com.android.purebilibili.feature.video.ui.overlay.PlaybackUserActionType
@@ -109,6 +110,16 @@ internal fun resolveVideoLoadDurationMs(
 
     val pageDurationSeconds = info.pages.firstOrNull { it.cid == info.cid }?.duration ?: 0L
     return pageDurationSeconds.coerceAtLeast(0L) * 1000L
+}
+
+/** 已到看完位置的缓存从 0 开始，否则沿用缓存位置。 */
+internal fun resolveRestoredPlaybackPositionMs(
+    cachedPositionMs: Long,
+    videoDurationMs: Long
+): Long {
+    if (cachedPositionMs <= 0L) return 0L
+    if (videoDurationMs > 0L && cachedPositionMs >= resolvePlaybackCompletionPositionMs(videoDurationMs)) return 0L
+    return cachedPositionMs
 }
 
 /**
@@ -234,6 +245,11 @@ internal fun shouldPreparePlayerBeforeExplicitPlay(
 internal fun playPlayerFromUserAction(player: Player) {
     Logger.d("VideoInputTrace") {
         "play_callback state=${player.playbackState} playing=${player.isPlaying} playWhenReady=${player.playWhenReady}"
+    }
+    // 播放结束后 play() 不会重新起播，必须先把位置拉回开头。
+    if (player.playbackState == Player.STATE_ENDED) {
+        Logger.d("VideoPlaybackUseCase", "USER_DBG playPlayerFromUserAction restart from beginning")
+        player.seekTo(0L)
     }
     playPlayerForUserIntent(player, trackUserAction = true)
 }
@@ -781,7 +797,9 @@ class VideoPlaybackUseCase(
             progressManager.savePosition(
                 bvid = bvid,
                 cid = cid,
-                positionMs = player.currentPosition
+                positionMs = player.currentPosition,
+                // 传时长才能按阈值清掉片尾进度。
+                durationMs = player.duration.coerceAtLeast(0L)
             )
         }
     }

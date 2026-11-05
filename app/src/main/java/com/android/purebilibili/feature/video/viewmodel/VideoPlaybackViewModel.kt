@@ -3345,7 +3345,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         !isPlayerPlayingSameVideo
 
                 if (shouldSoftRestorePlayer) {
-                    val restorePositionMs = playbackUseCase.getCachedPosition(currentBvid, currentCid)
+                    val restorePositionMs = resolveRestoredPlaybackPositionMs(
+                        cachedPositionMs = playbackUseCase.getCachedPosition(currentBvid, currentCid),
+                        videoDurationMs = currentSuccess.videoDurationMs,
+                    )
                     val shouldAutoPlay = playbackRequest.autoPlay ?: appContext?.let {
                         com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(it)
                     } ?: true
