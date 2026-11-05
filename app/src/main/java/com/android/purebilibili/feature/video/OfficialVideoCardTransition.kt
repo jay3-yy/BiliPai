@@ -20,7 +20,12 @@ import java.util.UUID
 internal data class OfficialVideoCardCapability(
     val available: Boolean,
     val configurableBlur: Boolean,
+    /** EXTRA_BACK_ANIM_TYPE 原始声明；null = 设备未声明，按协议不假定类型可写。 */
+    val backAnimMetadata: String?,
 )
+
+/** 详情窗口首帧的同步卡片种子；仅窗口转场打开时的首个播放身份使用。 */
+val LocalVideoDetailOpeningSeed = androidx.compose.runtime.staticCompositionLocalOf<Bitmap?> { null }
 
 /** 只保存本次来源的弱锚点与卡片像素，不以 bvid 查找替代实例。主线程访问。 */
 internal object OfficialVideoCardTransition {
@@ -44,18 +49,30 @@ internal object OfficialVideoCardTransition {
 
     fun deviceCapability(): OfficialVideoCardCapability {
         if (ViewAnimationManager.isViewAnimationSupported() <= 0) {
-            return OfficialVideoCardCapability(available = false, configurableBlur = false)
+            return OfficialVideoCardCapability(false, configurableBlur = false, backAnimMetadata = null)
         }
         val extras = ViewAnimationManager.getViewAnimationExtras()
-        val backTypes = extras?.get(ViewAnimationExtras.EXTRA_BACK_ANIM_TYPE)
-        // 必须能在来源消失或减少动态效果时停止返回形变，才接管整次往返。
-        val available = supportsOfficialBackType(backTypes, "VIEW_ANIM_DEFAULT") &&
-            supportsOfficialBackType(backTypes, "VIEW_ANIM_FOLLOW_SYSTEM") &&
-            supportsOfficialBackType(backTypes, "VIEW_ANIM_NONE")
+        val backAnimMetadata = extras?.get(ViewAnimationExtras.EXTRA_BACK_ANIM_TYPE)
+        // 协议声明支持即接管打开段；返回动画类型按设备声明的可写集合尽力控制，
+        // 未声明的类型不写入（协议默认值即设备默认策略），不把可用的设备挡在门外。
         return OfficialVideoCardCapability(
-            available = available,
+            available = true,
             configurableBlur = extras?.containsKey(ViewAnimationExtras.EXTRA_BLUR) == true,
+            backAnimMetadata = backAnimMetadata,
         )
+    }
+
+    /** 按声明顺序取第一个设备允许写入的返回类型常量；全部未声明时返回 null（不写入）。 */
+    private fun declaredBackType(
+        capability: OfficialVideoCardCapability,
+        vararg names: String,
+    ): Int? = names.firstOrNull { supportsOfficialBackType(capability.backAnimMetadata, it) }?.let { name ->
+        when (name) {
+            "VIEW_ANIM_NONE" -> ViewAnimationType.VIEW_ANIM_NONE
+            "VIEW_ANIM_FOLLOW_SYSTEM" -> ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM
+            "VIEW_ANIM_DEFAULT" -> ViewAnimationType.VIEW_ANIM_DEFAULT
+            else -> null
+        }
     }
 
     /** false 表示未启动窗口，调用方继续原有应用内导航；失效请求不得继续导航。 */
@@ -116,14 +133,26 @@ internal object OfficialVideoCardTransition {
         val token = activity.intent.getStringExtra(EXTRA_SESSION) ?: return
         val session = sessions[token]
         val bounds = session?.anchor?.bounds(session.windowCoordinates)
+        val capability = deviceCapability()
         val config = ViewAnimationConfig()
         when {
-            !motionEnabled -> config.setBackAnimType(ViewAnimationType.VIEW_ANIM_NONE)
-            session == null || bounds == null -> config.setBackAnimType(ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM)
+            !motionEnabled -> {
+                // 减少动效：优先无动画返回；设备未声明类型时不写入，由设备默认策略兜底。
+                declaredBackType(capability, "VIEW_ANIM_NONE", "VIEW_ANIM_FOLLOW_SYSTEM")
+                    ?.let { config.setBackAnimType(it) }
+            }
+            session == null || bounds == null -> {
+                // 来源消失：跟随系统返回，不收缩到过期位置。
+                declaredBackType(capability, "VIEW_ANIM_FOLLOW_SYSTEM", "VIEW_ANIM_DEFAULT")
+                    ?.let { config.setBackAnimType(it) }
+            }
             else -> {
                 config.setBounds(bounds)
                     .setRadius(requireNotNull(session.anchor.radiusPx()))
-                    .setBackAnimType(ViewAnimationType.VIEW_ANIM_DEFAULT)
+                // 一镜到底返回本就是协议默认值，仅在设备声明可写时显式设置。
+                if (supportsOfficialBackType(capability.backAnimMetadata, "VIEW_ANIM_DEFAULT")) {
+                    config.setBackAnimType(ViewAnimationType.VIEW_ANIM_DEFAULT)
+                }
             }
         }
         val bundle = config.toBundle()
@@ -139,6 +168,9 @@ internal object OfficialVideoCardTransition {
     fun release(token: String?) {
         if (token != null) sessions.remove(token)
     }
+
+    /** 打开时捕获的卡片像素，供详情首帧在封面就绪前同步垫底。 */
+    fun peekThumbnail(token: String?): Bitmap? = token?.let { sessions[it]?.thumbnail }
 
     fun initialRealtimeBlurEnabled(token: String?): Boolean? = token?.let { sessions[it]?.initialRealtimeBlurEnabled }
 }

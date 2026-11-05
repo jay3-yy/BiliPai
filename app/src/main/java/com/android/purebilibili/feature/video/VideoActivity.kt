@@ -299,6 +299,10 @@ class VideoActivity : ComponentActivity() {
                 com.android.purebilibili.core.ui.blur.ProvideUnifiedBlurIntensity {
                 ProvideAppTextSelectionHost {
                 CompositionLocalProvider(
+                    // 窗口转场打开时，首帧在封面就绪前同步显示打开时捕获的卡片像素。
+                    LocalVideoDetailOpeningSeed provides OfficialVideoCardTransition.peekThumbnail(
+                        intent.getStringExtra(OfficialVideoCardTransition.EXTRA_SESSION),
+                    ),
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->

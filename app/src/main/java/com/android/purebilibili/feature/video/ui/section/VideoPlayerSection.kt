@@ -23,6 +23,7 @@ import androidx.compose.ui.input.key.type
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
+import com.android.purebilibili.feature.video.LocalVideoDetailOpeningSeed
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
@@ -4609,6 +4610,19 @@ private fun VideoPlayerSectionContent(
                         playFromManualStartCover()
                     }
             ) {
+                // 窗口转场打开的首个播放身份：封面异步就绪前，用打开时捕获的卡片像素
+                // 同步垫住容器底色，避免系统转场读到首帧黑底。种子始终在封面之下。
+                val openingSeed = LocalVideoDetailOpeningSeed.current
+                val openingSeedIdentity = remember { currentPlaybackIdentity }
+                if (openingSeed != null && currentPlaybackIdentity == openingSeedIdentity) {
+                    androidx.compose.foundation.Image(
+                        bitmap = openingSeed.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = Alignment.TopCenter,
+                        modifier = Modifier.matchParentSize(),
+                    )
+                }
                 // 封面层存续期间始终复用当前封面，包括播放面就绪到首帧揭开的间隙及退场淡出。
                 // 竖屏、横屏与各材质共用此规则，避免已有图片被黑底替换。
                 if (currentCoverUrl.isNotEmpty()) {
