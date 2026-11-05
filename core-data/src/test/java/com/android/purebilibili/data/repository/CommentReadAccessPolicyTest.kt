@@ -26,10 +26,13 @@ class CommentReadAccessPolicyTest {
         assertFalse(CommentReadException(-101).commentInputBlocked)
     }
 
+
     @Test
-    fun `unknown comment error retains server message and diagnostic code`() {
-        assertEquals("评论暂不可见 (12345)", resolveCommentReadErrorMessage(12345, "评论暂不可见"))
-        assertEquals("加载评论失败 (12345)", resolveCommentReadErrorMessage(12345, "success"))
+    fun `unavailable reply preserves business code without blocking input`() {
+        val failure = CommentReadException(12006, "该评论已被删除")
+        assertEquals(12006, failure.code)
+        assertFalse(failure.commentInputBlocked)
+        assertFalse(shouldFallbackCommentRead(12006))
     }
 
     @Test

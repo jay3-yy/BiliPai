@@ -43,8 +43,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
@@ -74,7 +77,7 @@ const val SUB_REPLY_DETAIL_SORT_TAG = "subreply_detail_sort"
 const val SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX = "subreply_detail_conversation_"
 const val SUB_REPLY_DETAIL_ITEM_TAG_PREFIX = "subreply_detail_item_"
 
-private val SUB_REPLY_DIRECTED_MESSAGE_PATTERN = Regex("""^\s*回复\s*@.+?[：:]""")
+const val SUB_REPLY_DETAIL_PARTIAL_TAG = "subreply_detail_partial"
 
 internal data class SubReplyDetailLayoutPolicy(
     val listBottomPaddingDp: Int,
@@ -189,12 +192,12 @@ internal fun shouldShowSubReplyManualLoadMore(
 }
 
 internal fun resolveSubReplyDetailDisplayCount(
-    rootReply: ReplyItem,
+    rootReply: ReplyItem?,
     loadedReplyCount: Int,
     remoteReplyCount: Int = 0
 ): Int {
     return maxOf(
-        resolveReplyThreadCount(rootReply),
+        rootReply?.let(::resolveReplyThreadCount) ?: 0,
         remoteReplyCount,
         loadedReplyCount
     ).coerceAtLeast(0)
@@ -206,7 +209,7 @@ internal fun resolveSubReplyConversationSectionTitle(replyCount: Int): String {
 
 
 internal fun shouldShowSubReplyConversationAction(item: ReplyItem): Boolean {
-    return SUB_REPLY_DIRECTED_MESSAGE_PATTERN.containsMatchIn(item.content.message)
+    return item.root > 0L && item.dialog > 0L && item.parent != item.root
 }
 
 internal fun shouldRenderSubReplyConversationAction(
@@ -342,11 +345,11 @@ internal fun VideoInlineSubReplyDetailContent(
     com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) {
         onDismiss()
     }
-    if (rootReply == null) {
+    if (rootReply == null && !state.isTargetOnly) {
         SubReplyInitialContent(
             isLoading = state.isLoading,
             error = state.error,
-            onRetry = onLoadMore,
+            onRetry = onRefresh,
             onDismiss = onDismiss,
             modifier = modifier,
         )
@@ -358,10 +361,10 @@ internal fun VideoInlineSubReplyDetailContent(
     val motion = com.android.purebilibili.core.ui.rememberAppBottomSheetMotion()
     val motionEnabled = !motion.reducedMotion &&
         com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled
-    val entranceProgress = remember(rootReply.rpid) {
+    val entranceProgress = remember(state.threadRootId) {
         Animatable(if (motionEnabled) 1f else 0f)
     }
-    LaunchedEffect(rootReply.rpid, motionEnabled) {
+    LaunchedEffect(state.threadRootId, motionEnabled) {
         if (motionEnabled) {
             entranceProgress.animateTo(0f, animationSpec = motion.dragSettleSpec)
         } else {
@@ -372,6 +375,7 @@ internal fun VideoInlineSubReplyDetailContent(
 
     SubReplyDetailContent(
         rootReply = rootReply,
+        isTargetOnly = state.isTargetOnly,
         subReplies = state.items,
         sortMode = state.sortMode,
         error = state.error,
@@ -419,13 +423,14 @@ internal fun VideoInlineSubReplyDetailContent(
 
 private data class SubReplyDetailPage(
     val key: Triple<Long, Boolean, Long>,
-    val rootReply: ReplyItem,
+    val rootReply: ReplyItem?,
     val replies: List<ReplyItem>,
     val conversationMode: Boolean,
     val listState: LazyListState,
     val isRefreshing: Boolean,
     val isLoading: Boolean,
     val isEnd: Boolean,
+    val isTargetOnly: Boolean,
     val error: String?,
     val showManualLoadMore: Boolean,
     val replyDisplayCount: Int,
@@ -434,7 +439,7 @@ private data class SubReplyDetailPage(
 
 @Composable
 internal fun SubReplyDetailContent(
-    rootReply: ReplyItem,
+    rootReply: ReplyItem?,
     subReplies: List<ReplyItem>,
     sortMode: SubReplySortMode,
     error: String?,
@@ -478,6 +483,7 @@ internal fun SubReplyDetailContent(
     listModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
     paginationPage: Int = 1,
+    isTargetOnly: Boolean = false,
 ) {
     val layoutPolicy = remember {
         resolveSubReplyDetailLayoutPolicy()
@@ -488,31 +494,33 @@ internal fun SubReplyDetailContent(
         LocalConfiguration.current.screenHeightDp
     )
     val context = LocalContext.current
+    val threadRootId = rootReply?.rpid?.takeIf { it > 0L }
+        ?: subReplies.firstOrNull { it.root > 0L }?.root ?: 0L
     val showLoadedReplyCount by com.android.purebilibili.core.store.SettingsManager
         .getSubReplyLoadedCountEnabled(context)
         .collectAsStateWithLifecycle(initialValue = false)
     val avatarPushEnabled = rememberCommentAvatarPushEnabled()
-    var wasRefreshing by remember(rootReply.rpid) { mutableStateOf(false) }
+    var wasRefreshing by remember(threadRootId) { mutableStateOf(false) }
     LaunchedEffect(isRefreshing, error) {
         if (wasRefreshing && !isRefreshing && error != null) {
             Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
         }
         wasRefreshing = isRefreshing
     }
-    var highlightedTargetId by remember(rootReply.rpid) { mutableLongStateOf(0L) }
-    var targetReplyHandled by rememberSaveable(rootReply.rpid, targetReplyId) { mutableStateOf(false) }
-    var targetReplyMissing by rememberSaveable(rootReply.rpid, targetReplyId) { mutableStateOf(false) }
+    var highlightedTargetId by remember(threadRootId) { mutableLongStateOf(0L) }
+    var targetReplyHandled by rememberSaveable(threadRootId, targetReplyId) { mutableStateOf(false) }
+    var targetReplyMissing by rememberSaveable(threadRootId, targetReplyId) { mutableStateOf(false) }
     LaunchedEffect(highlightedTargetId) {
         if (highlightedTargetId <= 0L) return@LaunchedEffect
         delay(1_400)
         highlightedTargetId = 0L
     }
-    var conversationAnchor by remember(rootReply.rpid) { mutableStateOf<ReplyItem?>(null) }
+    var conversationAnchor by remember(threadRootId) { mutableStateOf<ReplyItem?>(null) }
     // 与 LazyListState 一起恢复，避免重建后用首次进场逻辑覆盖已保存的位置。
-    var previousConversationMode by rememberSaveable(rootReply.rpid) { mutableStateOf<Boolean?>(null) }
-    var previousSortMode by rememberSaveable(rootReply.rpid) { mutableIntStateOf(sortMode.apiMode) }
-    var savedListIndex by rememberSaveable(rootReply.rpid) { mutableIntStateOf(-1) }
-    var savedListOffset by rememberSaveable(rootReply.rpid) { mutableIntStateOf(0) }
+    var previousConversationMode by rememberSaveable(threadRootId) { mutableStateOf<Boolean?>(null) }
+    var previousSortMode by rememberSaveable(threadRootId) { mutableIntStateOf(sortMode.apiMode) }
+    var savedListIndex by rememberSaveable(threadRootId) { mutableIntStateOf(-1) }
+    var savedListOffset by rememberSaveable(threadRootId) { mutableIntStateOf(0) }
     val savedListScroll = if (savedListIndex >= 0) {
         SubReplyDetailSavedScrollPosition(savedListIndex, savedListOffset)
     } else null
@@ -530,8 +538,8 @@ internal fun SubReplyDetailContent(
     val localConversationMode = conversationAnchor != null
     val effectiveConversationMode = isConversationMode || localConversationMode
     val activeConversationId = conversationAnchor?.rpid ?: conversationAnchorId
-    val allRepliesListState = key(rootReply.rpid) { rememberLazyListState() }
-    val conversationListState = key(rootReply.rpid, activeConversationId) { rememberLazyListState() }
+    val allRepliesListState = key(threadRootId) { rememberLazyListState() }
+    val conversationListState = key(threadRootId, activeConversationId) { rememberLazyListState() }
     // Keep separate states: the outgoing list must not jump when the next level resets.
     val listState = if (effectiveConversationMode) conversationListState else allRepliesListState
     val detailReplyDisplayCount = remember(rootReply, subReplies.size, remoteReplyCount) {
@@ -542,12 +550,12 @@ internal fun SubReplyDetailContent(
         )
     }
     val listScrollResetKey = remember(
-        rootReply.rpid,
+        threadRootId,
         effectiveConversationMode,
         visibleReplies.firstOrNull()?.rpid
     ) {
         resolveSubReplyDetailListScrollResetKey(
-            rootReplyId = rootReply.rpid,
+            rootReplyId = threadRootId,
             effectiveConversationMode = effectiveConversationMode,
             visibleReplies = visibleReplies
         )
@@ -568,10 +576,10 @@ internal fun SubReplyDetailContent(
             )
         }
     }
-    val shouldLoadMore by remember(listState, isLoading, isEnd, error, localConversationMode) {
+    val shouldLoadMore by remember(listState, isLoading, isEnd, error, localConversationMode, isTargetOnly, effectiveConversationMode) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            error == null && !localConversationMode &&
+            error == null && !localConversationMode && (!isTargetOnly || isConversationMode) &&
                 shouldLoadMoreSubReplyList(
                     lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
                     totalItemsCount = layoutInfo.totalItemsCount,
@@ -581,10 +589,10 @@ internal fun SubReplyDetailContent(
         }
     }
     val shouldPrefetchShortList by remember(
-        canScrollForwardState, isLoading, isEnd, error, localConversationMode, visibleReplies.size, detailReplyDisplayCount
+        canScrollForwardState, isLoading, isEnd, error, localConversationMode, visibleReplies.size, detailReplyDisplayCount, isTargetOnly, isConversationMode
     ) {
         derivedStateOf {
-            error == null && !localConversationMode &&
+            error == null && !localConversationMode && (!isTargetOnly || isConversationMode) &&
                 shouldPrefetchSubRepliesWhenListNotScrollable(
                     isLoading = isLoading,
                     isEnd = isEnd,
@@ -597,9 +605,9 @@ internal fun SubReplyDetailContent(
         detailReplyDisplayCount,
         isLoading,
         isEnd,
-        localConversationMode
+        localConversationMode, isTargetOnly, isConversationMode
     ) {
-        !localConversationMode &&
+        !localConversationMode && (!isTargetOnly || isConversationMode) &&
             shouldShowSubReplyManualLoadMore(
                 isLoading = isLoading,
                 isEnd = isEnd
@@ -611,7 +619,7 @@ internal fun SubReplyDetailContent(
     LaunchedEffect(shouldPrefetchShortList, visibleReplies.size, detailReplyDisplayCount, paginationPage) {
         if (shouldPrefetchShortList) onLoadMore()
     }
-    LaunchedEffect(rootReply.rpid, effectiveConversationMode, activeConversationId, sortMode) {
+    LaunchedEffect(threadRootId, effectiveConversationMode, activeConversationId, sortMode) {
         val previousMode = previousConversationMode
         val currentMode = listScrollResetKey.conversationMode
         when (
@@ -649,7 +657,7 @@ internal fun SubReplyDetailContent(
         previousConversationMode = currentMode
         previousSortMode = sortMode.apiMode
     }
-    LaunchedEffect(rootReply.rpid, targetReplyId, visibleReplies, isLoading, isEnd, effectiveConversationMode, error, paginationPage) {
+    LaunchedEffect(threadRootId, targetReplyId, visibleReplies, isLoading, isEnd, effectiveConversationMode, error, paginationPage) {
         if (targetReplyId <= 0L) {
             highlightedTargetId = 0L
             return@LaunchedEffect
@@ -658,7 +666,7 @@ internal fun SubReplyDetailContent(
         // Loading/refreshing changes the effect keys but must not replay the jump.
         if (targetReplyHandled || effectiveConversationMode) return@LaunchedEffect
         val targetIndex = resolveSubReplyTargetListIndex(
-            rootReplyId = rootReply.rpid,
+            rootReplyId = threadRootId,
             visibleReplies = visibleReplies,
             targetReplyId = targetReplyId
         )
@@ -670,8 +678,8 @@ internal fun SubReplyDetailContent(
                 targetReplyHandled = true
                 highlightedTargetId = targetReplyId
             }
-            error == null && !isLoading && !isEnd -> onLoadMore()
-            error == null && !isLoading && isEnd -> {
+            error == null && !isLoading && !isEnd && !isTargetOnly -> onLoadMore()
+            error == null && !isLoading && isEnd && !isTargetOnly -> {
                 targetReplyHandled = true
                 targetReplyMissing = true
             }
@@ -700,18 +708,42 @@ internal fun SubReplyDetailContent(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CommentCascadingContent(
-                    targetState = effectiveConversationMode,
-                    contentKey = { it },
-                    isDeeper = { it },
-                ) { conversationMode ->
-                    AppText(
-                        text = if (conversationMode) "对话详情" else "评论详情",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = appearance.primaryTextColor,
-                    )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CommentCascadingContent(
+                        targetState = effectiveConversationMode,
+                        contentKey = { it },
+                        isDeeper = { it },
+                    ) { conversationMode ->
+                        AppText(
+                            text = if (conversationMode) "对话详情" else "评论详情",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = appearance.primaryTextColor,
+                        )
+                    }
+                    if (isTargetOnly) {
+                        AppText(
+                            text = "部分结果",
+                            modifier = Modifier
+                                .weight(1f, fill = false)
+                                .testTag(SUB_REPLY_DETAIL_PARTIAL_TAG)
+                                .clearAndSetSemantics {
+                                    contentDescription = if (effectiveConversationMode) {
+                                        "完整楼层暂不可用，当前显示目标回复的可读取对话"
+                                    } else {
+                                        "完整楼层暂不可用，当前仅显示可读取的目标回复；下拉刷新可重试完整楼层"
+                                    }
+                                },
+                            color = appearance.secondaryTextColor,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                Spacer(modifier = Modifier.weight(1f))
                 AppIconButton(
                     onClick = onDismiss,
                     modifier = Modifier.testTag(SUB_REPLY_DETAIL_CLOSE_TAG)
@@ -737,7 +769,7 @@ internal fun SubReplyDetailContent(
 
         CommentCascadingContent(
             targetState = SubReplyDetailPage(
-                key = Triple(rootReply.rpid, effectiveConversationMode, activeConversationId),
+                key = Triple(threadRootId, effectiveConversationMode, activeConversationId),
                 rootReply = rootReply,
                 replies = visibleReplies,
                 conversationMode = effectiveConversationMode,
@@ -745,6 +777,7 @@ internal fun SubReplyDetailContent(
                 isRefreshing = isRefreshing,
                 isLoading = isLoading,
                 isEnd = isEnd || localConversationMode,
+                isTargetOnly = isTargetOnly,
                 error = error,
                 showManualLoadMore = showManualLoadMore,
                 replyDisplayCount = detailReplyDisplayCount,
@@ -754,7 +787,7 @@ internal fun SubReplyDetailContent(
             isDeeper = { it.conversationMode },
             modifier = Modifier.fillMaxWidth().weight(1f),
         ) { page ->
-            val pageActive = page.key == Triple(rootReply.rpid, effectiveConversationMode, activeConversationId)
+            val pageActive = page.key == Triple(threadRootId, effectiveConversationMode, activeConversationId)
             val rootReply = page.rootReply
             val visibleReplies = page.replies
             val effectiveConversationMode = page.conversationMode
@@ -762,6 +795,7 @@ internal fun SubReplyDetailContent(
             val isRefreshing = page.isRefreshing
             val isLoading = page.isLoading
             val isEnd = page.isEnd
+            val isTargetOnly = page.isTargetOnly
             val error = page.error
             val showManualLoadMore = page.showManualLoadMore
             val detailReplyDisplayCount = page.replyDisplayCount
@@ -779,6 +813,7 @@ internal fun SubReplyDetailContent(
                     contentPadding = PaddingValues(bottom = layoutPolicy.listBottomPaddingDp.dp)
                 ) {
                     item(key = "root_reply") {
+                        if (rootReply != null) {
                         // The page transition owns reveal; avoid resizing the lazy-list anchor again.
                         Box(modifier = Modifier.testTag(SUB_REPLY_DETAIL_ROOT_TAG)) {
                             ReplyItemView(
@@ -812,6 +847,7 @@ internal fun SubReplyDetailContent(
                                 onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
                             )
                         }
+                        }
                         Column {
                             AppHorizontalDivider(
                                 thickness = layoutPolicy.sectionDividerThicknessDp.dp,
@@ -825,7 +861,9 @@ internal fun SubReplyDetailContent(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 AppText(
-                                    text = if (effectiveConversationMode) {
+                                    text = if (isTargetOnly) {
+                                        "可读取的回复"
+                                    } else if (effectiveConversationMode) {
                                         resolveSubReplyConversationSectionTitle(replyCount = visibleReplies.size)
                                     } else {
                                         resolveSubReplyDetailSectionTitle(
@@ -840,7 +878,7 @@ internal fun SubReplyDetailContent(
                                 Spacer(modifier = Modifier.weight(1f))
                                 if (effectiveConversationMode) {
                                     AppText(
-                                        text = "返回全部回复",
+                                        text = if (isTargetOnly) "返回目标回复" else "返回全部回复",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                         color = appearance.sortTint,
                                         modifier = Modifier
@@ -855,7 +893,7 @@ internal fun SubReplyDetailContent(
                                             .wrapContentHeight()
                                             .padding(horizontal = 4.dp, vertical = 6.dp)
                                     )
-                                } else {
+                                } else if (!isTargetOnly) {
                                     Row(
                                         modifier = Modifier
                                             .testTag(SUB_REPLY_DETAIL_SORT_TAG)
@@ -965,7 +1003,7 @@ internal fun SubReplyDetailContent(
                                     text = "$error，点击重试",
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable(onClick = onLoadMore)
+                                        .clickable(onClick = if (isTargetOnly && !isConversationMode) onRefresh else onLoadMore)
                                         .sizeIn(minHeight = 48.dp)
                                         .padding(16.dp),
                                     textAlign = TextAlign.Center,
@@ -994,7 +1032,7 @@ internal fun SubReplyDetailContent(
                                     color = appearance.sortTint
                                 )
                             }
-                            isEnd && !isLoading && !isRefreshing -> {
+                            isEnd && !isLoading && !isRefreshing && !isTargetOnly -> {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()

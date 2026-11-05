@@ -19,6 +19,16 @@ enum class BiliGrpcProfile(
     DYNAMIC_PREVIEW_GUEST("android", false),
 }
 
+/** Keep transport status and numeric Bilibili business errors separate from display text. */
+class BiliGrpcException(
+    val httpCode: Int,
+    val grpcStatus: String?,
+    val grpcMessage: String?,
+) : IllegalStateException("请求失败：HTTP $httpCode，gRPC $grpcStatus，${grpcMessage.orEmpty()}") {
+    val businessCode: Int? =
+        if (httpCode in 200..299 && grpcStatus == "2") grpcMessage?.toIntOrNull() else null
+}
+
 // gRPC 直连客户端为共享网络能力，手机与 TV 的评论、私信分享均通过它调用。
 object BiliGrpcClient {
     private const val APP_BASE_URL = "https://app.bilibili.com"
@@ -82,7 +92,7 @@ object BiliGrpcClient {
                     "BiliGrpc",
                     "gRPC request failed: path=$path http=${response.code} grpc=$grpcStatus message=${grpcMessage.orEmpty()}"
                 )
-                error("请求失败：HTTP ${response.code}，gRPC $grpcStatus，${grpcMessage.orEmpty()}")
+                throw BiliGrpcException(response.code, grpcStatus, grpcMessage)
             }
             return ProtoWire.unframe(body)
         }

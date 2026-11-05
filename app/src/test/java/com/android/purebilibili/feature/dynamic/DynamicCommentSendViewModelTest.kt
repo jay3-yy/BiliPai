@@ -809,6 +809,241 @@ class DynamicCommentSendViewModelTest {
         }
     }
 
+    @Test
+    fun `thread like and unlike use current thread reaction and synchronize preview base and subject`() = runTest(dispatcher) {
+        val child = ReplyItem(rpid = 20L, root = 10L, oid = 999L, replyType = 1, action = 1, like = 9)
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(threadPage(listOf(child), ""))
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } returns Result.success(Unit)
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.openSubReply(owner.commentUiState.value.comments.single())
+            runCurrent()
+
+            owner.likeComment(child.rpid)
+            assertThreadReaction(owner, child.rpid, action = 0, like = 8)
+            runCurrent()
+            coVerify(exactly = 1) { CommentRepository.likeCommentForSubject(3000L, 11, child.rpid, false) }
+
+            owner.likeComment(child.rpid)
+            assertThreadReaction(owner, child.rpid, action = 1, like = 9)
+            runCurrent()
+            coVerify(exactly = 1) { CommentRepository.likeCommentForSubject(3000L, 11, child.rpid, true) }
+            assertEquals(0, owner.commentUiState.value.comments.single().like)
+        }
+    }
+
+    @Test
+    fun `failed thread likes restore dislike and zero count exactly in all visible copies`() = runTest(dispatcher) {
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } returns Result.failure(IllegalStateException("offline"))
+        for (child in listOf(
+            ReplyItem(rpid = 20L, root = 10L, action = 2, like = 3),
+            ReplyItem(rpid = 20L, root = 10L, action = 1, like = 0),
+        )) {
+            coEvery {
+                CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(threadPage(listOf(child), ""))
+            withViewModel { owner ->
+                owner.openCommentSheet(subject)
+                runCurrent()
+                owner.openSubReply(owner.commentUiState.value.comments.single())
+                runCurrent()
+                var result: Boolean? = null
+                owner.likeComment(child.rpid) { success, _ -> result = success }
+                assertEquals(if (child.action == 1) 0 else 1, owner.subReplyState.value.items.single().action)
+                runCurrent()
+
+                assertEquals(false, result)
+                assertThreadReaction(owner, child.rpid, child.action, child.like)
+                assertEquals(child.action == 2, child.rpid in resolveDynamicThreadReactionIds(owner.subReplyState.value, 2))
+            }
+        }
+    }
+
+    @Test
+    fun `thread pagination does not replace a liked reply with the pre action remote snapshot`() = runTest(dispatcher) {
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } returns Result.success(Unit)
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.openSubReply(owner.commentUiState.value.comments.single())
+            runCurrent()
+            owner.likeComment(20L)
+            runCurrent()
+            coEvery {
+                CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(threadPage(listOf(ReplyItem(rpid = 30L, root = 10L)), ""))
+            owner.loadMoreSubReplies()
+            runCurrent()
+            assertThreadReaction(owner, 20L, action = 1, like = 1)
+            assertEquals(listOf(20L, 30L), owner.subReplyState.value.items.map { it.rpid })
+        }
+    }
+
+    @Test
+    fun `liking a newly sent thread reply persists when reopening before the server echoes the send`() = runTest(dispatcher) {
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } returns Result.success(Unit)
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.openSubReply(owner.commentUiState.value.comments.single())
+            runCurrent()
+            owner.startCommentReply(root)
+            owner.postComment(subject.id_str, "new child") { _, _ -> }
+            runCurrent()
+            owner.likeComment(40L)
+            runCurrent()
+            assertThreadReaction(owner, 40L, action = 1, like = 1)
+
+            owner.closeSubReply()
+            owner.openSubReply(owner.commentUiState.value.comments.single())
+            assertThreadReaction(owner, 40L, action = 1, like = 1)
+            runCurrent()
+            assertThreadReaction(owner, 40L, action = 1, like = 1)
+        }
+    }
+
+    @Test
+    fun `pending duplicate tap cannot reverse the reaction before the first like fails`() = runTest(dispatcher) {
+        val pending = CompletableDeferred<Result<Unit>>()
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } coAnswers { pending.await() }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.openSubReply(owner.commentUiState.value.comments.single())
+            runCurrent()
+            owner.likeComment(20L)
+            owner.likeComment(20L)
+            runCurrent()
+            assertThreadReaction(owner, 20L, action = 1, like = 1)
+            coVerify(exactly = 1) { CommentRepository.likeCommentForSubject(3000L, 11, 20L, true) }
+            pending.complete(Result.failure(IllegalStateException("offline")))
+            runCurrent()
+            assertThreadReaction(owner, 20L, action = 0, like = 0)
+        }
+    }
+
+    @Test
+    fun `failed like from an old subject cannot roll back a new subject with the same reply id`() = runTest(dispatcher) {
+        val pending = CompletableDeferred<Result<Unit>>()
+        coEvery { CommentRepository.likeCommentForSubject(any(), any(), any(), any()) } coAnswers {
+            withContext(NonCancellable) { pending.await() }
+        }
+        coEvery {
+            CommentRepository.getMobileCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            val loadedRoot = if (firstArg<Long>() == 3000L) root else root.copy(
+                replies = listOf(root.replies.orEmpty().single().copy(action = 1, like = 10)),
+            )
+            Result.success(ReplyData(replies = listOf(loadedRoot), cursor = ReplyCursor(isEnd = true)))
+        }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.likeComment(20L)
+            runCurrent()
+            owner.openCommentSheet(otherSubject)
+            runCurrent()
+            pending.complete(Result.failure(IllegalStateException("offline")))
+            runCurrent()
+            val child = owner.commentUiState.value.comments.single().replies.orEmpty().single()
+            assertEquals(1, child.action)
+            assertEquals(10, child.like)
+        }
+    }
+
+    @Test
+    fun `routed target stays readable without its root and refresh restores complete thread state`() = runTest(dispatcher) {
+        val target = ReplyItem(rpid = 91L, root = 90L, oid = 3000L, replyType = 11, parent = 92L, dialog = 92L)
+        var complete = false
+        val requestedTargets = mutableListOf<Long>()
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            requestedTargets += arg<Long>(5)
+            Result.success(if (complete) {
+                threadPage(listOf(target, ReplyItem(rpid = 93L, root = 90L)), "").copy(root = root.copy(rpid = 90L))
+            } else {
+                ReplyData(replies = listOf(target), cursor = ReplyCursor(isEnd = true), isTargetOnly = true)
+            })
+        }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            assertTrue(owner.openSubReplyFromRoute(90L, 91L))
+            runCurrent()
+            assertNull(owner.subReplyState.value.rootReply)
+            assertTrue(owner.subReplyState.value.isTargetOnly)
+            assertTrue(owner.subReplyState.value.visible)
+            assertEquals(90L, owner.subReplyState.value.threadRootId)
+            assertEquals(listOf(91L), owner.subReplyState.value.items.map { it.rpid })
+            assertEquals(listOf(10L), owner.commentUiState.value.comments.map { it.rpid })
+            owner.loadMoreSubReplies()
+            runCurrent()
+            assertEquals(listOf(91L), requestedTargets)
+
+            complete = true
+            owner.refreshSubReplies()
+            runCurrent()
+            assertEquals(listOf(91L, 91L), requestedTargets)
+            assertFalse(owner.subReplyState.value.isTargetOnly)
+            assertEquals(90L, owner.subReplyState.value.rootReply?.rpid)
+            assertEquals(listOf(91L, 93L), owner.subReplyState.value.items.map { it.rpid })
+        }
+    }
+
+    @Test
+    fun `recovered dynamic target survives reply sending and a failed full thread refresh`() = runTest(dispatcher) {
+        val target = ReplyItem(rpid = 91L, root = 90L, oid = 3000L, replyType = 11, parent = 92L, dialog = 92L)
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(
+            replies = listOf(target), cursor = ReplyCursor(isEnd = true), isTargetOnly = true,
+        ))
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            assertTrue(owner.openSubReplyFromRoute(90L, 91L))
+            runCurrent()
+            owner.startCommentReply(target)
+            owner.postComment(subject.id_str, "reply to recovered child") { _, _ -> }
+            runCurrent()
+            assertEquals(listOf(91L, 40L), owner.subReplyState.value.items.map { it.rpid })
+            assertEquals(90L, owner.subReplyState.value.items.last().root)
+            assertEquals(91L, owner.subReplyState.value.items.last().parent)
+
+            coEvery {
+                CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+            } returns Result.failure(IllegalStateException("offline"))
+            owner.refreshSubReplies()
+            runCurrent()
+            assertTrue(owner.subReplyState.value.isTargetOnly)
+            assertEquals(91L, owner.subReplyState.value.targetReplyId)
+            assertEquals(listOf(91L, 40L), owner.subReplyState.value.items.map { it.rpid })
+            assertEquals("offline", owner.subReplyState.value.error)
+        }
+    }
+
+    private fun assertThreadReaction(owner: DynamicViewModel, rpid: Long, action: Int, like: Int) {
+        val state = owner.subReplyState.value
+        val copies = listOf(
+            state.items.first { it.rpid == rpid },
+            state.baseItems.first { it.rpid == rpid },
+            owner.commentUiState.value.comments.single().replies.orEmpty().first { it.rpid == rpid },
+        )
+        copies.forEach {
+            assertEquals(action, it.action)
+            assertEquals(like, it.like)
+        }
+        val liked = rpid in resolveDynamicThreadReactionIds(state, 1)
+        assertEquals(action == 1, liked)
+        assertEquals(like, com.android.purebilibili.feature.video.ui.components.resolveReplyDisplayLikeCount(
+            baseLikeCount = copies.first().like, initialAction = copies.first().action, isLiked = liked,
+        ))
+    }
+
     private suspend fun TestScope.withViewModel(block: suspend TestScope.(DynamicViewModel) -> Unit) {
         val preferences = mockk<SharedPreferences>(relaxed = true)
         every { preferences.getString(any(), any()) } answers { secondArg<String?>() }

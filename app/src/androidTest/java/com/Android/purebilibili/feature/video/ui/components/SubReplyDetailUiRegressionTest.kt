@@ -37,6 +37,9 @@ import com.android.purebilibili.feature.video.ui.components.COMMENT_SUB_REPLY_PR
 import com.android.purebilibili.feature.video.ui.components.COMMENT_VIEW_ALL_REPLIES_TAG_PREFIX
 import com.android.purebilibili.feature.video.ui.components.COMMENT_PICTURE_TAG_PREFIX
 import com.android.purebilibili.feature.video.ui.components.SUB_REPLY_DETAIL_ITEM_TAG_PREFIX
+import com.android.purebilibili.feature.video.ui.components.SUB_REPLY_DETAIL_PARTIAL_TAG
+import com.android.purebilibili.feature.video.ui.components.SUB_REPLY_DETAIL_HEADER_TAG
+import com.android.purebilibili.feature.video.ui.components.SUB_REPLY_DETAIL_CLOSE_TAG
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
@@ -57,6 +60,83 @@ class SubReplyDetailUiRegressionTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
+
+    @Test
+    fun recoveredTargetWithoutRoot_remainsReadableWithoutFullThreadClaims() {
+        val target = buildSubReplyState().items.last().copy(
+            content = ReplyContent(message = "readable target without a directed prefix"),
+        )
+        var replyId: Long? = null
+        var loadMoreCount = 0
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = SubReplyUiState(
+                        visible = true, isTargetOnly = true, isEnd = true,
+                        items = listOf(target).toImmutableList(),
+                        baseItems = listOf(target).toImmutableList(),
+                        targetReplyId = target.rpid,
+                    ),
+                    emoteMap = emptyMap(),
+                    onDismiss = {}, onSortModeChange = {}, onRefresh = {},
+                    onLoadMore = { loadMoreCount++ },
+                    onReplyClick = { replyId = it.rpid },
+                )
+            }
+        }
+        composeTestRule.onNodeWithText("readable target without a directed prefix").assertIsDisplayed()
+        assertPartialIndicatorBesideTitle("评论详情")
+        composeTestRule.onNodeWithTag("subreply_detail_root").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("subreply_detail_sort").assertDoesNotExist()
+        composeTestRule.onNodeWithText("没有更多了").assertDoesNotExist()
+        composeTestRule.onNodeWithText("返回全部回复").assertDoesNotExist()
+        composeTestRule.onNodeWithText("相关回复共", substring = true).assertDoesNotExist()
+        composeTestRule.onNodeWithText("回复").performClick()
+        composeTestRule.runOnIdle {
+            assertEquals(target.rpid, replyId)
+            assertEquals(0, loadMoreCount)
+        }
+        composeTestRule.onNodeWithTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${target.rpid}").performClick()
+        composeTestRule.onNodeWithText("对话详情").assertIsDisplayed()
+        assertPartialIndicatorBesideTitle("对话详情")
+        composeTestRule.onNodeWithText("返回目标回复").performClick()
+        composeTestRule.onNodeWithText("readable target without a directed prefix").assertIsDisplayed()
+    }
+
+    private fun assertPartialIndicatorBesideTitle(title: String) {
+        val indicator = composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_PARTIAL_TAG)
+        indicator.assertIsDisplayed()
+        val indicatorBounds = indicator.fetchSemanticsNode().boundsInRoot
+        val titleBounds = composeTestRule.onNodeWithText(title).fetchSemanticsNode().boundsInRoot
+        val headerBounds = composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_HEADER_TAG)
+            .fetchSemanticsNode().boundsInRoot
+        val closeBounds = composeTestRule.onNodeWithTag(SUB_REPLY_DETAIL_CLOSE_TAG)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(indicatorBounds.left >= titleBounds.right)
+        assertTrue(indicatorBounds.right <= closeBounds.left)
+        assertTrue(indicatorBounds.top >= headerBounds.top)
+        assertTrue(indicatorBounds.bottom <= headerBounds.bottom)
+        assertTrue(kotlin.math.abs(indicatorBounds.center.y - titleBounds.center.y) <= 1f)
+    }
+
+    @Test
+    fun replyPrefixWithoutDialog_doesNotOfferConversation() {
+        val target = buildSubReplyState().items.last().copy(dialog = 0L)
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = SubReplyUiState(
+                        visible = true, isTargetOnly = true, isEnd = true,
+                        items = listOf(target).toImmutableList(),
+                    ),
+                    emoteMap = emptyMap(), onDismiss = {}, onSortModeChange = {},
+                    onRefresh = {}, onLoadMore = {},
+                )
+            }
+        }
+        composeTestRule.onNodeWithText(target.content.message).assertIsDisplayed()
+        composeTestRule.onNodeWithTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${target.rpid}").assertDoesNotExist()
+    }
 
     @Test
     fun dynamicCommentDelete_isOwnerOnlyBeforeVotesAndAbsentFromMoreMenu() {
@@ -611,6 +691,8 @@ class SubReplyDetailUiRegressionTest {
                     rpid = 203L,
                     mid = 14L,
                     root = 101L,
+                    parent = 202L,
+                    dialog = 202L,
                     ctime = 1_700_000_120L,
                     member = ReplyMember(
                         mid = "14",

@@ -119,6 +119,7 @@ internal fun resolveCommentReadErrorMessage(code: Int, serverMessage: String? = 
         -412 -> "请求被拦截，请稍后再试"
         12002 -> "评论区已关闭"
         12061 -> "评论区暂不可用"
+        12006 -> "评论不存在或暂不可见"
         12009 -> "评论内容不存在"
         else -> detail?.let { "$it ($code)" } ?: "加载评论失败 ($code)"
     }

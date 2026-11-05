@@ -199,22 +199,19 @@ class SubReplyDetailPresentationPolicyTest {
 
 
     @Test
-    fun `conversation action should only show for directed reply text`() {
-        assertTrue(
-            shouldShowSubReplyConversationAction(
-                buildReply(message = "回复 @前进四放映室：没错")
-            )
-        )
-        assertFalse(
-            shouldShowSubReplyConversationAction(
-                buildReply(message = "又又又又更新？？？？")
-            )
-        )
+    fun `conversation action uses structured thread fields rather than message prefixes`() {
+        val anchor = buildReply(message = "plain message", parent = 19L, dialog = 18L)
+            .copy(root = 10L)
+        assertTrue(shouldShowSubReplyConversationAction(anchor))
+        assertFalse(shouldShowSubReplyConversationAction(anchor.copy(dialog = 0L,
+            content = ReplyContent(message = "回复 @某人：有前缀也没有对话"))))
+        assertFalse(shouldShowSubReplyConversationAction(anchor.copy(root = 0L)))
+        assertFalse(shouldShowSubReplyConversationAction(anchor.copy(parent = 10L)))
     }
 
     @Test
     fun `conversation action should not reuse reply composer when handler is missing`() {
-        val directedReply = buildReply(message = "回复 @前进四放映室：没错")
+        val directedReply = buildReply(message = "plain message", parent = 19L, dialog = 18L).copy(root = 10L)
 
         assertFalse(
             shouldRenderSubReplyConversationAction(

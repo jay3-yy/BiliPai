@@ -84,7 +84,7 @@ class SubReplySortPolicyTest {
         assertEquals(4, state.totalCount)
         assertEquals(10L, state.items.last().root)
         assertEquals(20L, state.items.last().parent)
-        assertEquals(20L, state.items.last().dialog)
+        assertEquals(0L, state.items.last().dialog)
     }
 
     @Test
@@ -202,16 +202,32 @@ class SubReplySortPolicyTest {
     }
 
     @Test
-    fun `local reply context inherits nonroot parent dialog but keeps an explicit server dialog`() {
-        val target = ReplyItem(rpid = 20L, root = 10L, parent = 19L)
-        assertEquals(19L, resolveSentSubReply(ReplyItem(rpid = 50L), 10L, 20L, target).dialog)
+    fun `local reply context inherits only a structured dialog and keeps an explicit server dialog`() {
+        val target = ReplyItem(rpid = 20L, root = 10L, parent = 19L, dialog = 17L)
+        assertEquals(17L, resolveSentSubReply(ReplyItem(rpid = 50L), 10L, 20L, target).dialog)
         assertEquals(
             18L,
             resolveSentSubReply(ReplyItem(rpid = 50L, dialog = 18L), 10L, 20L, target).dialog
         )
         assertEquals(
-            20L,
+            0L,
             resolveSentSubReply(ReplyItem(rpid = 50L), 10L, 20L, target.copy(parent = 10L)).dialog
         )
+    }
+
+    @Test
+    fun `partial thread accepts sent replies using the real child root without inventing totals`() {
+        val target = ReplyItem(rpid = 20L, root = 10L)
+        val state = SubReplyUiState(
+            visible = true, isTargetOnly = true,
+            items = persistentListOf(target), baseItems = persistentListOf(target),
+        )
+        assertEquals(10L, state.threadRootId)
+        assertTrue(shouldApplySentSubReplyResult(10L, 1L, 1L, state))
+        val updated = state.withSentSubReply(ReplyItem(rpid = 50L, root = 10L, parent = 20L))
+        assertEquals(listOf(20L, 50L), updated.items.map { it.rpid })
+        assertEquals(0, updated.totalCount)
+        assertNull(updated.rootReply)
+        assertEquals(10L, state.copy(items = persistentListOf()).threadRootId)
     }
 }
