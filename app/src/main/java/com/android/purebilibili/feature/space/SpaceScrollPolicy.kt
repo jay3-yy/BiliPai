@@ -22,6 +22,18 @@ internal fun shouldShowSpacePinnedTabs(
     tabsOffsetPx + beforeContentPaddingPx <= chromeBottomPx
 } else firstVisibleItemIndex > 1
 
+/** 资料头和标签是各分页共用的前两个 item，切页时必须连同标签的局部偏移一起对齐。 */
+internal fun alignSpacePageHeader(
+    source: LazyStaggeredGridState,
+    target: LazyStaggeredGridState,
+) {
+    if (source.firstVisibleItemIndex <= 1) {
+        target.requestScrollToItem(source.firstVisibleItemIndex, source.firstVisibleItemScrollOffset)
+    } else if (target.firstVisibleItemIndex <= 1) {
+        target.requestScrollToItem(1)
+    }
+}
+
 /** 根据资料实际剩余高度收尾，长简介、大字号和宽屏不共用固定折叠距离。 */
 internal fun resolveSpaceHeaderClosingFraction(
     remainingHeightPx: Float,
