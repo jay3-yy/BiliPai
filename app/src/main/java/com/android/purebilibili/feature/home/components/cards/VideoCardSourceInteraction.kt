@@ -24,7 +24,7 @@ internal class VideoCardSourceInteraction {
     }
 }
 
-/** Navigation is sequenced after both native source layers have actually been recorded. */
+/** 快照允许准备时等待录制；滚动或图片加载门控只控制快照，不能丢弃已收到的点击。 */
 @Composable
 internal fun VideoCardPreparedClickEffect(
     interaction: VideoCardSourceInteraction,
@@ -33,17 +33,19 @@ internal fun VideoCardPreparedClickEffect(
     onClick: () -> Unit,
 ) {
     val currentOnClick by rememberUpdatedState(onClick)
-    val currentAllowed by rememberUpdatedState(allowed)
-    LaunchedEffect(interaction, allowed) {
-        if (!allowed) interaction.cancel()
-    }
     LaunchedEffect(interaction, interaction.clickPending, capture, allowed) {
-        if (!allowed || !interaction.clickPending || capture == null) return@LaunchedEffect
-        capture.awaitSourceRecorded()
-        // Completion can be signalled inside draw; return to the UI queue before navigation.
-        yield()
+        if (!interaction.clickPending) {
+            if (!allowed) interaction.cancel()
+            return@LaunchedEffect
+        }
+        if (allowed) {
+            if (capture == null) return@LaunchedEffect
+            capture.awaitSourceRecorded()
+            // Completion can be signalled inside draw; return to the UI queue before navigation.
+            yield()
+        }
         // No suspension between this check, freezing the source and starting navigation.
-        if (currentAllowed && interaction.clickPending) {
+        if (interaction.clickPending) {
             currentOnClick()
             interaction.cancel()
         }

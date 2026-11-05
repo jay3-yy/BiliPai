@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -27,6 +28,8 @@ import com.android.purebilibili.feature.home.components.cards.LocalHomeCardScrol
 import com.android.purebilibili.feature.home.components.cards.LocalHomeScrollTickProvider
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardVisibility
 import com.android.purebilibili.feature.home.components.cards.VideoCardVisibilityState
+import com.android.purebilibili.feature.home.components.cards.VideoCardPreparedClickEffect
+import com.android.purebilibili.feature.home.components.cards.VideoCardSourceInteraction
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -102,6 +105,42 @@ class HomeCardClickHandoffUiTest {
     }
 
     @Test
+    fun gridClickDuringScrollStillNavigatesWithoutPreparingSourceLayers() {
+        showCard(scrolling = mutableStateOf(true), expectSourceLayers = false)
+        rule.onNodeWithTag("home_video_cover").performClick()
+        rule.waitUntil { clicks == 1 }
+    }
+
+    @Test
+    fun storyClickWhileImageLoadingIsPausedStillNavigates() {
+        showCard(story = true, imageLoadingAllowed = false, expectSourceLayers = false)
+        rule.onNodeWithTag("home_story_video_card").performClick()
+        rule.waitUntil { clicks == 1 }
+    }
+
+    @Test
+    fun pendingClickSurvivesSourcePreparationBeingSuspended() {
+        val interaction = VideoCardSourceInteraction().apply { requestClick() }
+        val allowed = mutableStateOf(true)
+        rule.setContent {
+            VideoCardPreparedClickEffect(interaction, capture = null, allowed = allowed.value) {
+                clicks++
+            }
+        }
+        rule.runOnIdle {
+            assertEquals(0, clicks)
+            assertTrue(interaction.clickPending)
+            allowed.value = false
+        }
+        rule.waitUntil { clicks == 1 }
+        rule.runOnIdle {
+            assertTrue(!interaction.clickPending)
+            allowed.value = true
+        }
+        rule.runOnIdle { assertEquals(1, clicks) }
+    }
+
+    @Test
     fun storyLongPressStillOpensPreviewWithoutStartingVideoNavigation() {
         showCard(story = true, longPressEnabled = true)
         rule.onNodeWithTag("home_story_video_card").performTouchInput { longClick(center) }
@@ -118,8 +157,10 @@ class HomeCardClickHandoffUiTest {
         sharedEnabled: Boolean = true,
         longPressEnabled: Boolean = false,
         sharedHomeVisibility: Boolean = false,
+        scrolling: MutableState<Boolean> = mutableStateOf(false),
+        imageLoadingAllowed: Boolean? = null,
+        expectSourceLayers: Boolean = transitionEnabled && sharedEnabled,
     ) {
-        val scrolling = mutableStateOf(false)
         rule.setContent {
             MaterialTheme {
                 val visibility = remember { VideoCardVisibilityState() }
@@ -128,7 +169,8 @@ class HomeCardClickHandoffUiTest {
                     LocalHomeCardScrolling provides scrolling,
                     LocalHomeCardAuxiliaryWorkAllowed provides false,
                     LocalHomeCardVisibility provides if (sharedHomeVisibility) visibility else null,
-                    LocalPageImageLoadingAllowed provides (!sharedHomeVisibility || visibility.visible),
+                    LocalPageImageLoadingAllowed provides
+                        (imageLoadingAllowed ?: (!sharedHomeVisibility || visibility.visible)),
                     LocalSharedTransitionEnabled provides sharedEnabled,
                     LocalVideoCardLongPressEnabled provides longPressEnabled,
                 ) {
@@ -142,7 +184,7 @@ class HomeCardClickHandoffUiTest {
                             assertEquals(7L, cid)
                             val card = CardPositionManager.lastClickedNativeCardLayer
                             val overlay = CardPositionManager.lastClickedNativeCoverOverlayLayer
-                            if (transitionEnabled && sharedEnabled) {
+                            if (expectSourceLayers) {
                                 assertNotNull(card)
                                 assertNotNull(overlay)
                                 assertTrue(requireNotNull(card).size.width > 1)

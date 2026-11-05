@@ -214,7 +214,7 @@ internal fun StoryVideoCard(
     val sourceInteraction = remember(video.bvid, video.cid, effectiveSharedElementSourceRoute) {
         VideoCardSourceInteraction()
     }
-    val sourceInteractionAllowed by rememberUpdatedState(
+    val sourcePreparationAllowed by rememberUpdatedState(
         onDemandSource && LocalPageImageLoadingAllowed.current && cardVisibleInWindow &&
             com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
             LocalHomeCardScrolling.current?.value != true
@@ -228,7 +228,7 @@ internal fun StoryVideoCard(
     // Home sources mount for input or their own navigation session. Other lists keep
     // their existing eager source preparation; disabling transitions skips capture entirely.
     val prepareCardTransition = sourceEnabled && (
-        !onDemandSource || (sourceInteractionAllowed && sourceInteraction.preparing) || isSharedReturnTarget
+        !onDemandSource || (sourcePreparationAllowed && sourceInteraction.preparing) || isSharedReturnTarget
     )
     val captureState = if (prepareCardTransition) rememberVideoCardCaptureState(video.bvid) else null
     val captureScope = if (prepareCardTransition) rememberCoroutineScope() else null
@@ -279,14 +279,14 @@ internal fun StoryVideoCard(
 
     val requestCardClick by rememberUpdatedState {
         if (onDemandSource) {
-            if (sourceInteractionAllowed && !CardPositionManager.isVideoNavigationDebounceActive()) {
+            if (!CardPositionManager.isVideoNavigationDebounceActive()) {
                 sourceInteraction.requestClick()
             }
         } else triggerCardClick()
     }
     if (sourceInteraction.preparing) {
         VideoCardPreparedClickEffect(
-            sourceInteraction, captureState, onDemandSource && sourceInteractionAllowed,
+            sourceInteraction, captureState, onDemandSource && sourcePreparationAllowed,
             onClick = { triggerCardClick() },
         )
     }
@@ -399,7 +399,7 @@ internal fun StoryVideoCard(
                     // Observe before clickable/long-press handlers without consuming their events.
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        if (sourceInteractionAllowed) sourceInteraction.press()
+                        if (sourcePreparationAllowed) sourceInteraction.press()
                         try {
                             // Finish the down event before observing later moves/up: the
                             // existing clickable is allowed to consume this initial down.
