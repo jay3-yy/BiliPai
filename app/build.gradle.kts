@@ -416,6 +416,7 @@ composeCompiler {
 }
 
 dependencies {
+    implementation("gsai.sdk:sharedview-kit:1.0.0.5")
     lintChecks(project(":ci-lint"))
     implementation(project(":brand-motion"))
     val material3Version = "1.5.0-alpha29"

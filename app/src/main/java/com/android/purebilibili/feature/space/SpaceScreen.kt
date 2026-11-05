@@ -253,7 +253,7 @@ import com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey
 import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
@@ -4483,15 +4483,7 @@ private fun SpaceHomeVideoCard(
 
     Column(
         modifier = modifier
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = sharedTransitionKey.orEmpty(),
-                sourceRoute = sourceRoute,
-                motionSpec = cardSharedTransitionMotionSpec,
-                clipShape = coverShape
-            )
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape)
             .border(width = 3.dp, color = locateHighlightColor, shape = coverShape)
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
@@ -4712,6 +4704,7 @@ private fun SpaceAggregateMediaCard(
     Column(
         modifier = modifier
             .padding(horizontal = 8.dp)
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape)
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
             .onGloballyPositioned { coordinates ->
@@ -5068,16 +5061,7 @@ private fun SpaceArchiveListItemRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = sharedTransitionKey.orEmpty(),
-                sourceRoute = sourceRoute,
-                motionSpec = cardSharedTransitionMotionSpec,
-                clipShape = cardShellShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), cardShellShape)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShellShape)
             .background(AppSurfaceTokens.cardContainer())

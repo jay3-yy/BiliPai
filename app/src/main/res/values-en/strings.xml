@@ -318,9 +318,14 @@
     <string name="animation_section_maid">Blue Snow Maid</string>
     <string name="animation_maid_summary">Hides maid animations and static images when turned off</string>
     <string name="animation_card_entrance_summary">Fade cards in one at a time when opening Home</string>
-    <string name="animation_card_transition_summary">List and related video cards share cover and title expansion into the detail page; use the global page animation when off</string>
+    <string name="animation_card_transition_summary">Expand video details from the selected card and return to its position; disable card morphing when turned off or reduced motion is enabled</string>
+    <string name="animation_card_transition_source_official">This device prioritizes ITGSA animations; app-adapted animations are used when the card is ineligible or the request fails</string>
+    <string name="animation_card_transition_source_app">This device uses app-adapted animations to expand video details and return to the original card</string>
+    <string name="animation_card_transition_source_reduced_motion">Reduced motion is enabled in system settings; card transitions are currently inactive</string>
+    <string name="animation_transition_blur_official_supported">ITGSA and app-adapted animations share this switch for their own blur effects; the effects do not run together</string>
+    <string name="animation_transition_blur_official_system">Controls blur for app-adapted animations only; ITGSA blur is managed by the system and cannot be controlled separately on this device</string>
     <string name="animation_live_transition_summary">Keep the currently playing frame visible during the transition</string>
-    <string name="animation_transition_blur_summary">Adds depth to transitions; turn off to save power</string>
+    <string name="animation_transition_blur_summary">Controls background blur for app-adapted animations; card expansion and return remain enabled when off</string>
     <string name="animation_back_title">Page transition animation</string>
     <string name="animation_back_summary">Applies globally to ordinary pages, reversed on return. Shared cards, settings container morphs and large-screen panes keep their own transitions.</string>
     <string name="animation_settings_container_title">Settings container animation</string>

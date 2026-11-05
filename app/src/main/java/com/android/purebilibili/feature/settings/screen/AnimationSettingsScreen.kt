@@ -62,6 +62,8 @@ import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.EntranceGroup
 import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.animation.rememberEffectiveEntranceMotionSpec
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.feature.video.OfficialVideoCardTransition
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.os.Build
@@ -78,11 +80,8 @@ private fun localizedAnimationSettingTitle(settingId: String): String {
             "animation.maid_lottie_animation_enabled" -> R.string.animation_title_maid
             "animation.card_animation_enabled" -> R.string.animation_title_card_entrance
             "animation.card_transition_enabled" -> R.string.animation_title_card_transition
-            "animation.live_surface_card_transition_enabled" -> R.string.animation_title_live_transition
-            "animation.video_transition_realtime_blur_enabled" -> R.string.animation_title_transition_blur
             "animation.app_navigation_settings.miuix_transition_blur_enabled" -> R.string.animation_title_back_blur
             "animation.full_screen_swipe_back_enabled" -> R.string.animation_title_fullscreen_swipe_back
-            "animation.video_shared_transition_speed" -> R.string.animation_title_video_speed
             "animation.skeleton_breathing_enabled" -> R.string.animation_title_skeleton
             "animation.header_blur_enabled" -> R.string.animation_title_header_blur
             "animation.progressive_top_blur_enabled" -> R.string.animation_title_progressive_blur
@@ -137,15 +136,6 @@ fun AnimationSettingsContent(
     advancedOnly: Boolean = false,
 ) {
     val context = LocalContext.current
-    val previewWindowSize = LocalWindowSizeClass.current
-    val previewWindowInfo = LocalAppWindowAdaptiveInfo.current
-    val previewTransitionDurationMillis = resolveVideoSharedTransitionDurationMillis(
-        VideoSharedTransitionSpeedSettings(state.videoSharedTransitionSpeed, state.videoSharedTransitionCustomDurationMillis),
-        VideoTransitionAdaptiveInfo(
-            widthSizeClass = previewWindowSize.widthSizeClass,
-            foldPosture = previewWindowInfo.posture.toAdaptiveFoldPosture(),
-        ),
-    )
     val scope = rememberCoroutineScope()
     val liquidGlassShareService = remember(context.applicationContext) {
         SettingsShareService(context.applicationContext)
@@ -253,23 +243,33 @@ fun AnimationSettingsContent(
     }
     val videoTransitionRealtimeBlurEnabled by remember(context) { SettingsManager.getVideoTransitionRealtimeBlurEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
+    val videoTransitionCapability = remember(state.cardTransitionEnabled) {
+        OfficialVideoCardTransition.deviceCapability()
+    }
+    val systemReduceMotion = rememberSystemReduceMotion()
+    val cardTransitionSourceDescription = stringResource(
+        when {
+            systemReduceMotion -> R.string.animation_card_transition_source_reduced_motion
+            videoTransitionCapability.available -> R.string.animation_card_transition_source_official
+            else -> R.string.animation_card_transition_source_app
+        },
+    )
+    val transitionBlurDescription = stringResource(
+        when {
+            !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
+            videoTransitionCapability.configurableBlur -> R.string.animation_transition_blur_official_supported
+            else -> R.string.animation_transition_blur_official_system
+        },
+    )
     val settingsContainerRealtimeBlurEnabled by remember(context) { SettingsManager.getSettingsContainerRealtimeBlurEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val settingsContainerMorphEnabled by remember(context) { SettingsManager.getSettingsContainerMorphEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
-    val liveSurfaceCardTransitionEnabled by remember(context) { SettingsManager.getLiveSurfaceCardTransitionEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
     val fullScreenSwipeBackEnabled by remember(context) { SettingsManager.getFullScreenSwipeBackEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val effectiveEntranceSpec = rememberEffectiveEntranceMotionSpec()
     // 开关开着、但有效参数被降级为不动画 → 系统减弱动效在生效。
     val entranceDowngradedBySystem = uiEntranceAnimationEnabled && !effectiveEntranceSpec.animate
-    val sharedTransitionSpeedOptions = listOf(
-            AppSegmentOption(VideoSharedTransitionSpeed.FAST, stringResource(R.string.animation_speed_fast)),
-            AppSegmentOption(VideoSharedTransitionSpeed.STANDARD, stringResource(R.string.animation_speed_standard)),
-            AppSegmentOption(VideoSharedTransitionSpeed.SLOW, stringResource(R.string.animation_speed_slow)),
-            AppSegmentOption(VideoSharedTransitionSpeed.CUSTOM, stringResource(R.string.animation_speed_custom))
-    )
     val predictiveBackStyle = remember(appNavigationSettings) {
         if (appNavigationSettings.predictiveBackEnabled) {
             BiliPaiPredictiveBackAnimationStyle.fromStorageValue(
@@ -315,15 +315,6 @@ fun AnimationSettingsContent(
             AppSegmentOption(BiliPaiPredictiveBackExitDirection.ALWAYS_RIGHT, stringResource(R.string.animation_exit_always_right)),
             AppSegmentOption(BiliPaiPredictiveBackExitDirection.ALWAYS_LEFT, stringResource(R.string.animation_exit_always_left)),
     )
-    var customTransitionDurationMillis by remember(state.videoSharedTransitionCustomDurationMillis) {
-        mutableIntStateOf(state.videoSharedTransitionCustomDurationMillis)
-    }
-    fun snapCustomTransitionDuration(value: Float): Int {
-        val stepMillis = 20
-        val min = VIDEO_SHARED_TRANSITION_CUSTOM_MIN_MILLIS
-        val snapped = min + (((value - min) / stepMillis).roundToInt() * stepMillis)
-        return normalizeVideoSharedTransitionCustomDurationMillis(snapped)
-    }
     SettingsSectionFocusEffect(
         listState = listState,
         target = SettingsSearchTarget.ANIMATION,
@@ -585,7 +576,7 @@ fun AnimationSettingsContent(
                                 iconTint = AppContentColors.secondaryText()
                             )
                         }
-                        // 模糊家族条目统一收口在本分组:卡片背景模糊原属首页壁纸,转场模糊原属卡片动画。
+                        // 页面与卡片材质模糊共用此分组。
                         AppPreferenceDivider()
                         SettingsItemAnchor("appearance.home_card_frosted_glass_enabled") {
                             AppSwitchPreference(
@@ -605,12 +596,13 @@ fun AnimationSettingsContent(
                                 iconTint = AppContentColors.secondaryText()
                             )
                         }
+
                         AppPreferenceDivider()
                         SettingsItemAnchor("animation.video_transition_realtime_blur_enabled") {
                             AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.WALLPAPER_EFFECT),
                                 title = localizedAnimationSettingTitle("animation.video_transition_realtime_blur_enabled"),
-                                subtitle = stringResource(R.string.animation_transition_blur_summary),
+                                subtitle = transitionBlurDescription,
                                 checked = videoTransitionRealtimeBlurEnabled,
                                 onCheckedChange = { viewModel.toggleVideoTransitionRealtimeBlur(it) },
                                 iconTint = AppContentColors.secondaryText()
@@ -637,11 +629,7 @@ fun AnimationSettingsContent(
                     SettingsCardPreviewGroupHeader(
                         enabledStates = mapOf(
                             SettingsFeaturePreview.CARD_ENTRANCE to state.cardAnimationEnabled,
-                            SettingsFeaturePreview.CARD_EXPAND to state.cardTransitionEnabled,
-                            SettingsFeaturePreview.LIVE_FRAME to liveSurfaceCardTransitionEnabled,
-                            SettingsFeaturePreview.TRANSITION_BLUR to videoTransitionRealtimeBlurEnabled,
                         ),
-                        transitionDurationMillis = previewTransitionDurationMillis,
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -664,25 +652,20 @@ fun AnimationSettingsContent(
                             AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_TRANSITION_ANIMATION),
                                 title = localizedAnimationSettingTitle("animation.card_transition_enabled"),
-                                subtitle = stringResource(R.string.animation_card_transition_summary),
+                                subtitle = if (state.cardTransitionEnabled) cardTransitionSourceDescription
+                                    else stringResource(R.string.animation_card_transition_summary),
                                 checked = state.cardTransitionEnabled,
-                                onCheckedChange = { viewModel.toggleCardTransition(it) },
+                                onCheckedChange = { enabled ->
+                                    viewModel.toggleCardTransition(enabled)
+                                    if (enabled) {
+                                        Toast.makeText(context, cardTransitionSourceDescription, Toast.LENGTH_LONG).show()
+                                    }
+                                },
                                 iconTint = AppContentColors.secondaryText()
                             )
                         }
                         AppPreferenceDivider()
-                        SettingsItemAnchor("animation.live_surface_card_transition_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LIVE_SURFACE_TRANSITION),
-                                title = localizedAnimationSettingTitle("animation.live_surface_card_transition_enabled"),
-                                subtitle = stringResource(R.string.animation_live_transition_summary),
-                                checked = liveSurfaceCardTransitionEnabled,
-                                onCheckedChange = { viewModel.toggleLiveSurfaceCardTransition(it) },
-                                enabled = state.cardTransitionEnabled,
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
+
                         SettingsItemAnchor("animation.app_navigation_settings.settings_container_morph_enabled") {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.SETTINGS_CONTAINER_MORPH),
@@ -811,36 +794,6 @@ fun AnimationSettingsContent(
                                     }
                                 },
                                 iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("animation.video_shared_transition_speed") {
-                            SettingsSingleChoicePreference(
-                                title = localizedAnimationSettingTitle("animation.video_shared_transition_speed"),
-                                subtitle = stringResource(R.string.animation_video_speed_summary),
-                                options = sharedTransitionSpeedOptions,
-                                selectedValue = state.videoSharedTransitionSpeed,
-                                onSelectionChange = viewModel::setVideoSharedTransitionSpeed
-                            )
-                        }
-                        if (state.videoSharedTransitionSpeed == VideoSharedTransitionSpeed.CUSTOM) {
-                            AppPreferenceDivider()
-                            AppSliderDialogPreference(
-                                title = stringResource(R.string.animation_custom_duration_title),
-                                subtitle = stringResource(R.string.animation_custom_duration_summary),
-                                value = customTransitionDurationMillis.toFloat(),
-                                onValueChange = { value ->
-                                    val snappedValue = snapCustomTransitionDuration(value)
-                                    customTransitionDurationMillis = snappedValue
-                                    viewModel.setVideoSharedTransitionCustomDurationMillis(snappedValue)
-                                },
-                                valueRange = VIDEO_SHARED_TRANSITION_CUSTOM_MIN_MILLIS.toFloat()..
-                                    VIDEO_SHARED_TRANSITION_CUSTOM_MAX_MILLIS.toFloat(),
-                                steps = (
-                                    (VIDEO_SHARED_TRANSITION_CUSTOM_MAX_MILLIS -
-                                        VIDEO_SHARED_TRANSITION_CUSTOM_MIN_MILLIS) / 20
-                                    ) - 1,
-                                valueFormatter = { value -> "${value.roundToInt()}ms" },
                             )
                         }
                         AppPreferenceDivider()

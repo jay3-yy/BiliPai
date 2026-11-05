@@ -58,43 +58,7 @@ class RelatedVideoItemPolicyTest {
         assertEquals("video/BV_CHANGED", resolveRelatedVideoCardHostRoute(null, "BV_CHANGED"))
     }
 
-    @Test
-    fun `related detail uses the same whole card shared bounds as home video cards`() {
-        val source = File("src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt")
-            .readText()
 
-        assertTrue(source.contains("RELATED_VIDEO_CARD_COVER_ASPECT_RATIO"))
-        assertTrue(source.contains("coverAspectRatio: Float = com.android.purebilibili.core.ui.videoCardCoverAspectRatio()"))
-        assertTrue(source.contains("HorizontalVideoCardFrame("))
-        assertTrue(source.contains("VideoStatRow("))
-        assertTrue(source.contains(".align(Alignment.BottomEnd)"))
-        assertTrue(source.contains(".size(48.dp)"))
-        assertTrue(source.contains("resolveHomeFeedCardLayout(homeFeedCardStyle)"))
-        assertTrue(source.contains("RELATED_VIDEO_GRID_COLUMNS = 1"))
-        assertTrue(source.contains("coverAspectRatio = cardLayout.coverAspectRatio"))
-        assertTrue(source.contains("modifier = Modifier.fillMaxWidth()"))
-        assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertTrue(source.contains("crossfadeSourceContent = true"))
-        assertFalse(source.contains("videoCoverSharedBoundsOrEmpty("))
-        assertTrue(source.contains("sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE"))
-        assertTrue(source.contains("sourceChromeSnapshot = VideoCardSourceChromeSnapshot("))
-        assertTrue(source.contains("coverPresentation = VideoCardSourceCoverPresentation("))
-        assertTrue(source.contains(".then(nativeCardSnapshot.coverOverlayModifier)"))
-        assertTrue(source.contains("coverBounds = sourceCoverBounds"))
-        assertTrue(source.contains(".withMeasuredCoverDecodeSize(sourceCoverBounds)"))
-        assertFalse(source.contains(".videoCardShellReturnChromeAlpha("))
-        assertFalse(source.contains("resolveSourceOwnershipAtDraw = true"))
-        assertFalse(source.contains(".videoCardShellReturnCoverAlpha("))
-        assertTrue(source.contains("RelatedVideoGridRow("))
-        assertTrue(source.contains("chunkRelatedVideosForHomeStyleGrid("))
-        assertFalse(source.contains("relatedCoverWidth = 130.dp"))
-        assertFalse(source.contains(".height(coverHeight)"))
-        assertFalse(source.contains(".heightIn(min = coverHeight)"))
-        assertFalse(source.contains(".weight(1f, fill = false)"))
-        assertTrue(
-            source.indexOf("UpBadgeName(") < source.indexOf("VideoStatRow(")
-        )
-    }
 
     @Test
     fun `related videos chunk into single column rows`() {

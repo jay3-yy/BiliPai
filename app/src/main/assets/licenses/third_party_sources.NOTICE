@@ -264,3 +264,12 @@ lib/models_new/pgc/pgc_review/; lib/common/widgets/sliver/sliver_floating_header
 Compose layout and gesture integration are implemented locally.
 Source: https://github.com/bggRGjQaUbCoE/PiliPlus
 License retained in artwork/third-party/piliplus/LICENSE.
+
+Video-card motion behavioral references:
+Official API and demonstration: https://gitee.com/itgsa_sharedviewkit/SharedViewDemo
+Motion parameter observations: device ROM OS4.0.0.16.XPCCNXM, HyperViewScale.
+Official supported-device integration: gsai.sdk:sharedview-kit:1.0.0.5,
+published at http://nexus.itgsa.com:5566/repository/sharedViewKit/.
+The application fallback motion controller is authored locally using Compose animation APIs;
+no decompiled ROM implementation is bundled in the application.
+Investigation and sample hashes: docs/performance/video-card-transition/sharedview-rom-compatibility-2026-11-05.md

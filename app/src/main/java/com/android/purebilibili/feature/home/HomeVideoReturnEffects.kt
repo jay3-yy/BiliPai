@@ -2,6 +2,10 @@ package com.android.purebilibili.feature.home
 
 import android.os.SystemClock
 import androidx.compose.runtime.*
+import androidx.activity.compose.LocalActivity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -21,8 +25,13 @@ internal fun HomeVideoReturnEffects(
     onReturnAnimationConsumed: () -> Unit,
 ) {
     val latestOnConsumed by rememberUpdatedState(onReturnAnimationConsumed)
-    LaunchedEffect(state, pageOnScreen) {
-        state.onHomeVisibilityChanged(pageOnScreen)
+    val windowLifecycle = (LocalActivity.current as? LifecycleOwner)?.lifecycle
+        ?: LocalLifecycleOwner.current.lifecycle
+    val lifecycleState by windowLifecycle.currentStateAsState()
+    val sourceVisible = pageOnScreen && lifecycleState.isAtLeast(Lifecycle.State.RESUMED) &&
+        LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(state, sourceVisible) {
+        state.onHomeVisibilityChanged(sourceVisible)
     }
     LaunchedEffect(isReturningFromVideoDetail, returnAnimationSuppressionDurationMs) {
         if (!isReturningFromVideoDetail) return@LaunchedEffect

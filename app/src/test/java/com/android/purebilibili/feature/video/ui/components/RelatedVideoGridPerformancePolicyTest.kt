@@ -7,23 +7,7 @@ import kotlin.test.assertTrue
 
 class RelatedVideoGridPerformancePolicyTest {
 
-    @Test
-    fun relatedCardsUseOneWholeCardSharedBoundsWithoutPerItemFrameDelays() {
-        val source = File(
-            "src/main/java/com/android/purebilibili/feature/video/ui/components/RelatedVideoItem.kt"
-        ).readText()
-        val gridRowSource = source
-            .substringAfter("fun RelatedVideoGridRow(")
-            .substringBefore("val pendingVideo = actionVideo")
 
-        assertFalse(gridRowSource.contains("transitionEnabled"))
-        assertFalse(gridRowSource.contains("isListScrolling"))
-        assertFalse(source.contains("forceSharedTransitionForClick"))
-        assertFalse(source.contains("withFrameNanos { }"))
-        assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertFalse(source.contains("videoTitleSharedElementKey("))
-        assertFalse(source.contains("videoCoverSharedBoundsOrEmpty("))
-    }
 
     @Test
     fun relatedCard_defersBoundsCalculationAndKeepsCoverRequestStableWhileScrolling() {

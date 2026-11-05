@@ -1003,9 +1003,8 @@
             android:resizeableActivity="true"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden|uiMode"
             android:supportsPictureInPicture="true"
-            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.PureBiliBili" />
+            android:theme="@style/Theme.PureBiliBili.Main" />
 
         <service
             android:name=".feature.video.player.PlaybackService"

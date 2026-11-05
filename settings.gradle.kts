@@ -46,6 +46,11 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        maven {
+            url = uri("http://nexus.itgsa.com:5566/repository/sharedViewKit/")
+            isAllowInsecureProtocol = true
+            content { includeGroup("gsai.sdk") }
+        }
         // GitHub Packages (compose-miuix-ui/miuix).
         // Authentication is required even for this public package. Keep credentials outside
         // the repository in ~/.gradle/gradle.properties or environment variables.

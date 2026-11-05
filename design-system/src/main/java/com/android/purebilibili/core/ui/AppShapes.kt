@@ -31,6 +31,20 @@ internal data class MiuixContainerShape(val radius: Dp) : Shape {
  */
 object AppShapes {
 
+    /** 窗口转场使用像素圆角；原生连续曲率轮廓也保留同一名义半径。 */
+    fun transitionCornerRadiusPx(
+        shape: Shape,
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density,
+    ): Float = when (shape) {
+        is MiuixContainerShape -> with(density) { shape.radius.toPx() }
+        else -> when (val outline = shape.createOutline(size, layoutDirection, density)) {
+            is Outline.Rounded -> outline.roundRect.topLeftCornerRadius.x
+            else -> 0f
+        }
+    }
+
     /** 导航与分类选中态共用胶囊轮廓，随实际槽位高度适配字体与窗口尺寸。 */
     val SelectionIndicator: Shape = RoundedCornerShape(percent = 50)
 

@@ -281,6 +281,7 @@ object CardPositionManager {
             density = density,
             bottomBarHeightDp = bottomBarHeightDp
         )
+        com.android.purebilibili.core.ui.transition.VideoCardSourceInstances.recordClick(bvid, bounds)
         val normalizedBvid = bvid.trim()
         val normalizedRoute = normalizeVideoCardSourceRoute(sourceRoute)
         lastClickedVideoSourceKey = if (normalizedBvid.isNotEmpty() && normalizedRoute != null) {

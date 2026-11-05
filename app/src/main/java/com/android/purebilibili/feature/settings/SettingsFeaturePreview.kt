@@ -58,10 +58,7 @@ internal enum class SettingsFeaturePreview(
     TOP_BLUR("animation.progressive_top_blur_enabled", R.string.preview_title_top_blur, R.string.preview_summary_top_blur),
     IMAGE_PAGE("playback.image_preview3d_page_enabled", R.string.preview_title_image_page, R.string.preview_summary_image_page),
     LONG_PRESS("playback.long_press_speed", R.string.preview_title_long_press, R.string.preview_summary_long_press),
-    CARD_ENTRANCE("animation.card_animation_enabled", R.string.preview_title_card_entrance, R.string.preview_summary_card_entrance),
-    CARD_EXPAND("animation.card_transition_enabled", R.string.preview_title_card_expand, R.string.preview_summary_card_expand),
-    LIVE_FRAME("animation.live_surface_card_transition_enabled", R.string.preview_title_live_frame, R.string.preview_summary_live_frame),
-    TRANSITION_BLUR("animation.video_transition_realtime_blur_enabled", R.string.preview_title_transition_blur, R.string.preview_summary_transition_blur);
+    CARD_ENTRANCE("animation.card_animation_enabled", R.string.preview_title_card_entrance, R.string.preview_summary_card_entrance);
 }
 
 /** 演示状态只存在于面板内，不调用设置写入或真实播放器。材质由现有自适应控件处理。 */
@@ -97,11 +94,10 @@ internal fun SettingsFeaturePreviewEntry(
 @Composable
 internal fun SettingsCardPreviewGroupHeader(
     enabledStates: Map<SettingsFeaturePreview, Boolean>,
-    transitionDurationMillis: Int,
     modifier: Modifier = Modifier,
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
-    var selected by rememberSaveable { mutableStateOf(SettingsFeaturePreview.CARD_EXPAND) }
+    var selected by rememberSaveable { mutableStateOf(SettingsFeaturePreview.CARD_ENTRANCE) }
     val previewAccessibilityLabel = stringResource(R.string.preview_card_accessibility)
     Row(modifier = modifier, verticalAlignment = Alignment.Bottom) {
         Box(Modifier.weight(1f)) { AppPreferenceSectionTitle(stringResource(R.string.animation_section_card)) }
@@ -118,7 +114,7 @@ internal fun SettingsCardPreviewGroupHeader(
             feature = selected,
             currentEnabled = enabledStates[selected] ?: false,
             speed = 2f,
-            transitionDurationMillis = transitionDurationMillis.takeUnless { selected == SettingsFeaturePreview.CARD_ENTRANCE },
+            transitionDurationMillis = null,
             onDismiss = { open = false },
             availableFeatures = enabledStates.keys.toList(),
             onFeatureSelected = { selected = it },
@@ -219,7 +215,7 @@ private fun SettingsFeaturePreviewDialog(
                 if (reduceMotion) {
                     AppText(stringResource(R.string.preview_reduce_motion_notice), style = MaterialTheme.typography.bodySmall)
                 }
-                if (feature in setOf(SettingsFeaturePreview.TOP_BLUR, SettingsFeaturePreview.TRANSITION_BLUR) && Build.VERSION.SDK_INT < 31) {
+                if (feature == SettingsFeaturePreview.TOP_BLUR && Build.VERSION.SDK_INT < 31) {
                     AppText(stringResource(R.string.preview_blur_unavailable_notice), style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -337,7 +333,7 @@ private fun FeaturePreviewScene(
                     modifier = Modifier.align(Alignment.TopCenter).padding(12.dp), color = ink,
                 )
             }
-            else -> SettingsCardMotionPreview(feature, enabled, progress, Modifier.fillMaxSize())
+            else -> SettingsCardMotionPreview(enabled, progress, Modifier.fillMaxSize())
         }
     }
 }

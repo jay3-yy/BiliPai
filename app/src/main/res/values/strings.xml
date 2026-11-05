@@ -320,9 +320,14 @@
     <string name="animation_section_maid">蓝雪女仆</string>
     <string name="animation_maid_summary">关闭后隐藏女仆动画和静态图</string>
     <string name="animation_card_entrance_summary">打开首页时卡片依次淡入</string>
-    <string name="animation_card_transition_summary">列表与相关推荐共用卡片展开，封面和标题平滑过渡到详情页；关闭后使用全局页面动画</string>
+    <string name="animation_card_transition_summary">从所点卡片连续展开到视频详情，返回时收回原位；关闭或减少动态效果时不使用卡片形变</string>
+    <string name="animation_card_transition_source_official">当前设备优先使用金标联盟动画；卡片条件不满足或调用失败时使用应用适配动画</string>
+    <string name="animation_card_transition_source_app">当前设备使用应用适配动画，展开视频详情并在返回时收回原位</string>
+    <string name="animation_card_transition_source_reduced_motion">系统已开启减少动态效果，当前不使用卡片过渡动画</string>
+    <string name="animation_transition_blur_official_supported">金标联盟动画与应用适配动画共用此开关，分别控制各自的模糊，不叠加执行</string>
+    <string name="animation_transition_blur_official_system">仅控制应用适配动画的模糊；金标联盟动画的模糊由系统决定，当前设备不支持单独控制</string>
     <string name="animation_live_transition_summary">过渡时保留正在播放的画面</string>
-    <string name="animation_transition_blur_summary">转场更有层次感；关闭可省电</string>
+    <string name="animation_transition_blur_summary">控制应用适配动画的背景模糊；关闭后保留卡片展开与返回动画</string>
     <string name="animation_back_title">页面切换动画</string>
     <string name="animation_back_summary">普通页面全局生效，返回反向播放；卡片共享元素、设置容器形变与大屏分栏保留专属过渡</string>
     <string name="animation_settings_container_title">设置容器动画</string>

@@ -32,7 +32,6 @@ class BundledDefaultSettingsProfileTest {
         val profile = readProfile()
         listOf(
             "card_transition_enabled",
-            "live_surface_card_transition_enabled",
         ).forEach { key ->
             assertEquals(JsonPrimitive(true), profile.sections.appearance[key], key)
         }

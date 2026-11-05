@@ -1,6 +1,7 @@
 // 文件路径: feature/personal/PersonalCardVideoTransition.kt
 package com.android.purebilibili.feature.personal
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -21,7 +22,6 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 
@@ -120,16 +120,7 @@ internal fun rememberPersonalCardVideoTransition(
     )
     val boundsHolder = remember(bvid) { PersonalCardBoundsHolder() }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(bvid)
-    val shellModifier = Modifier.videoCardShellSharedBoundsOrEmpty(
-        enabled = useSharedBounds,
-        sharedTransitionScope = sharedTransitionScope,
-        animatedVisibilityScope = animatedVisibilityScope,
-        bvid = bvid,
-        sourceRoute = sourceRoute,
-        motionSpec = motionSpec,
-        clipShape = clipShape,
-        crossfadeSourceContent = true,
-    )
+    val shellModifier = Modifier.videoCardSourceAnchor(bvid, clipShape)
     val screenWidthPx = with(density) { configuration.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
     // 每次组合重建轻量包装：shellModifier 随 motionSpec 重建，避免持有过期 modifier。

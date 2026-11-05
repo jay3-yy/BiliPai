@@ -8741,14 +8741,12 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.APPEARANCE,
             ),
             BooleanShareablePreferenceDefinition(KEY_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),
-            BooleanShareablePreferenceDefinition(
-                KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED,
-                SettingsShareSection.APPEARANCE
-            ),
+
             BooleanShareablePreferenceDefinition(
                 booleanPreferencesKey("settings_container_realtime_blur_enabled"),
                 SettingsShareSection.APPEARANCE,
             ),
+
             BooleanShareablePreferenceDefinition(
                 KEY_VIDEO_TRANSITION_REALTIME_BLUR_ENABLED,
                 SettingsShareSection.APPEARANCE
@@ -8761,11 +8759,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 miuixPredictiveBackMaxProgressPercentPreferencesKey,
                 SettingsShareSection.APPEARANCE,
             ),
-            IntShareablePreferenceDefinition(KEY_VIDEO_SHARED_TRANSITION_SPEED, SettingsShareSection.APPEARANCE),
-            IntShareablePreferenceDefinition(
-                KEY_VIDEO_SHARED_TRANSITION_CUSTOM_DURATION_MILLIS,
-                SettingsShareSection.APPEARANCE
-            ),
+
+
             BooleanShareablePreferenceDefinition(KEY_COMPACT_VIDEO_STATS_ON_COVER, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_HOME_WALLPAPER_URI, SettingsShareSection.APPEARANCE),
             FloatShareablePreferenceDefinition(KEY_HOME_WALLPAPER_SCALE_MOBILE, SettingsShareSection.APPEARANCE),

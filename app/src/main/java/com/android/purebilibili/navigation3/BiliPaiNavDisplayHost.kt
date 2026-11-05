@@ -122,6 +122,7 @@ internal fun BiliPaiNavDisplayHost(
     backStack: SnapshotStateList<BiliPaiNavKey>,
     activeMainHostRoute: String? = null,
     cardTransitionEnabled: Boolean = true,
+    videoCardTransitionEnabled: Boolean = cardTransitionEnabled,
     videoTransitionRealtimeBlurEnabled: Boolean = false,
     isLightBackground: Boolean = false,
     reduceMotion: Boolean = false,
@@ -142,6 +143,7 @@ internal fun BiliPaiNavDisplayHost(
     onBack: () -> Unit,
     onOpenCardContainer: (BiliPaiNavKey) -> Unit = { backStack.add(it) },
     onPrepareVideoCardSharedReturn: () -> Boolean = { false },
+    onPrepareVideoCardGesture: () -> Unit = {},
     pendingRelatedReturnCount: Int = 0,
     relatedReturnRequestId: Long = 0L,
     onRelatedVideoDetailReturned: (Long, Long) -> Boolean = { _, _ -> false },
@@ -262,10 +264,11 @@ internal fun BiliPaiNavDisplayHost(
     val currentKey = stackSnapshot.lastOrNull()
     val latestOnBack by rememberUpdatedState(onBack)
     val latestPrepareReturn by rememberUpdatedState(onPrepareVideoCardSharedReturn)
+    val latestPrepareGesture by rememberUpdatedState(onPrepareVideoCardGesture)
     val latestRelatedReturn by rememberUpdatedState(onRelatedVideoDetailReturned)
     val latestPreferWholeCardReturn by rememberUpdatedState(preferWholeCardReturn)
     val cardMorphMode = resolveBiliPaiVideoCardMorphMode(
-        cardTransitionEnabled = cardTransitionEnabled,
+        cardTransitionEnabled = videoCardTransitionEnabled,
         reduceMotion = reduceMotion,
         sourceRoute = sourceMetadata.sourceRoute,
         hasUsableSourceBounds = sourceMetadata.sourceBounds
@@ -343,12 +346,14 @@ internal fun BiliPaiNavDisplayHost(
         }
     }
     // A restored parent session must not keep the departed child's scope at depth -1.
-    val videoCardTransitionProgress = remember(sourceMetadata.sourceKey) {
-        MiuixVideoCardTransitionProgress()
+    val motionDurationScale = androidx.compose.runtime.rememberCoroutineScope()
+        .coroutineContext[androidx.compose.ui.MotionDurationScale]
+    val videoCardTransitionProgress = remember(sourceMetadata.sourceKey, videoSourceGeneration, motionDurationScale) {
+        MiuixVideoCardTransitionProgress { motionDurationScale?.scaleFactor ?: 1f }
     }
     // 卡片形变开启时优先使用专属过渡，缺少来源时使用固定回退；关闭后使用当前页面过渡。
     val videoFallbackTransition = resolveVideoCardFallbackTransition(
-        cardTransitionEnabled = cardTransitionEnabled,
+        cardTransitionEnabled = videoCardTransitionEnabled,
         animationStyle = style,
         globalTransition = globalTransition,
         cardEnabledFallback = if (reduceMotion) globalTransition else
@@ -430,7 +435,7 @@ internal fun BiliPaiNavDisplayHost(
 
     DisposableEffect(cardMorphAvailable, videoCardClock, videoCardTransitionProgress) {
         videoCardClock.bindNavigationDriver(
-            if (cardMorphAvailable) ({ videoCardTransitionProgress.depthOrNull() }) else null,
+            if (cardMorphAvailable) ({ videoCardTransitionProgress.effectsDepthOrNull() }) else null,
         )
         onDispose { videoCardClock.bindNavigationDriver(null) }
     }
@@ -442,8 +447,9 @@ internal fun BiliPaiNavDisplayHost(
     // 只在**会动**的相位打拍：OPENING / RETURNING 才有逐帧插值。HELD 是稳态（用户正在看
     // 详情），此时不持有帧回调，避免长时间播放期间空转。帧序号跨帧单调递增，因此每次进入
     // 活动相位都从新序号开始，不会命中上一段的缓存。
-    LaunchedEffect(cardMorphAvailable, videoCardTransitionProgress, videoCardClock) {
-        if (!cardMorphAvailable) return@LaunchedEffect
+    val hostVisualActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    LaunchedEffect(cardMorphAvailable, videoCardTransitionProgress, videoCardClock, hostVisualActive) {
+        if (!cardMorphAvailable || !hostVisualActive) return@LaunchedEffect
         snapshotFlow {
             when (videoCardClock.phase) {
                 VideoCardTransitionBackgroundPhase.OPENING,
@@ -876,6 +882,11 @@ internal fun BiliPaiNavDisplayHost(
         NavDisplay(
             backStack = backStack as NavBackStack,
             onBack = performBack,
+            onBackStarted = {
+                if (cardMorphAvailable && backStack.lastOrNull() is BiliPaiNavKey.VideoDetail) {
+                    latestPrepareGesture()
+                }
+            },
             transition = globalTransition,
             effects = effects,
             backCompletionPolicy = if (cardMorphAvailable) VideoCardBackCompletionPolicy else null,
@@ -945,7 +956,7 @@ internal fun BiliPaiNavDisplayHost(
                         LocalClickToPlayEnabled provides clickToPlayEnabled,
                         LocalDynamicImagePreviewTextVisible provides dynamicImagePreviewTextVisible,
                         LocalDynamicCommentPreviewVisible provides dynamicCommentPreviewVisible,
-                        LocalSharedTransitionEnabled provides cardTransitionEnabled,
+                        LocalSharedTransitionEnabled provides videoCardTransitionEnabled,
                     ) {
                         ProvideMiuixNavViewModelApplicationExtras(application) {
                             Box(

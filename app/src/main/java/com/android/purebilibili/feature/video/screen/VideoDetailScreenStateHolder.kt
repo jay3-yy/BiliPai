@@ -240,8 +240,6 @@ import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedT
 import com.android.purebilibili.core.ui.transition.shouldForceCoverOnlyForReturnOwnership
 import com.android.purebilibili.core.ui.transition.shouldTreatLiveSurfaceRenderableForReturnMorph
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellContainerTransform
-import com.android.purebilibili.core.ui.transition.VideoCardShellSharedBoundsRole
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
 import com.android.purebilibili.core.ui.rememberAppCollectionIcon
 import com.android.purebilibili.core.ui.rememberAppDownloadIcon
@@ -517,17 +515,9 @@ internal fun VideoDetailScreenStateHolder(
         com.android.purebilibili.core.store.SettingsManager.getHomeUpBadgesVisible(context)
     }.collectAsStateWithLifecycle(initialValue = true
         )
-    // Keep unknown distinct from false: the first PlayerView must use the persisted surface type.
-    // The remembered flow never emits null, so lifecycle restarts retain the last known value.
-    val liveSurfaceCardTransitionPreference by remember(context) {
-        com.android.purebilibili.core.store.SettingsManager
-            .getLiveSurfaceCardTransitionEnabled(context)
-            .map<Boolean, Boolean?> { it }
-    }.collectAsStateWithLifecycle(initialValue = null)
-    val isPlayerSurfaceReady = liveSurfaceCardTransitionPreference != null
-    val liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionPreference == true
-    // SDR live morph TextureView only when both master transition + live-surface switch are on.
-    // HDR still forces SurfaceView inside shouldUseTextureSurfaceForFlip (no quality sacrifice).
+    // 卡片开合需要可合成的实时 SDR 画面；HDR 仍由播放器选择 SurfaceView。
+    val isPlayerSurfaceReady = true
+    val liveSurfaceCardTransitionEnabled = transitionEnabled
     val useTextureSurfaceForNavigation = remember(
         transitionEnabled,
         liveSurfaceCardTransitionEnabled,
@@ -1770,27 +1760,7 @@ internal fun VideoDetailScreenStateHolder(
             presentationState.clearNavigatingToVideo()
         }
     }
-    val detailShellModifier = Modifier.videoCardShellSharedBoundsOrEmpty(
-        // 全屏整窗播放不参与详情卡片的尺寸插值和圆角裁切。
-        enabled = detailShellSharedBoundsEnabled &&
-            !isFullscreenMode && !isPipMode && !isNavigatingToVideo,
-        sharedTransitionScope = rootSharedTransitionScope,
-        animatedVisibilityScope = rootAnimatedVisibilityScope,
-        bvid = bvid,
-        sourceRoute = sourceRouteForSharedElement,
-        motionSpec = homeSharedTransitionMotionSpec,
-        // 横屏详情与全屏画面均保持矩形，避免外壳保留来源卡片圆角。
-        clipShape = if (isLandscape) androidx.compose.ui.graphics.RectangleShape else detailShellShape,
-        role = VideoCardShellSharedBoundsRole.DetailShell,
-        // 竖屏全屏（点赞/关注/发弹幕那套）：整卡展开到全屏，不要按顶部横屏播放器 TopCenter 落点。
-        fillFullscreenShell = isPortraitFullscreen ||
-            shouldStartInPortraitFullscreenFromRouteHint(
-                autoEnterPortraitFromRoute = autoEnterPortraitFromRoute,
-                startAudioFromRoute = startAudioFromRoute,
-                initialVerticalFromRoute = initialVerticalFromRoute,
-                directPortraitEntryFromRoute = directPortraitEntryFromRoute,
-            ),
-    )
+    val detailShellModifier = Modifier
     val coverTakeoverBeforeBackDelayMillis = remember {
         resolveCoverTakeoverDelayBeforeBackNavigationMillis()
     }

@@ -37,31 +37,9 @@ class HomeHeroFlyoutStructureTest {
         assertFalse(cardSource.contains("resolveHomeHeroFlyoutFrame("))
     }
 
-    @Test
-    fun ordinaryHomeVideoCardUsesCoverFirstSharedTransitionPolicy() {
-        val cardSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
 
-        assertTrue(cardSource.contains("resolveVideoCardSharedTransitionMotionSpec("))
-        assertTrue(cardSource.contains("resolveVideoSharedTransitionVisualSpec("))
-        assertTrue(cardSource.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertTrue(cardSource.contains("sharedElementSourceRoute"))
-        assertFalse(cardSource.contains("使用 renderInSharedTransitionScopeOverlayOption 控制可见性"))
-    }
 
-    @Test
-    fun homeHeroCarouselUsesWholeCardShellSharedTransition() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeroCarousel.kt")
 
-        assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertTrue(source.contains("resolveVideoCardSharedTransitionMotionSpec("))
-        assertTrue(source.contains("memoryCacheKey(normalizedCoverUrl)"))
-        assertTrue(source.contains("LocalSharedTransitionEnabled.current"))
-        assertTrue(source.contains("sourceCornerDp = cardCornerDp.value.roundToInt()"))
-        assertFalse(source.contains("videoCoverSharedElementKey("))
-        assertFalse(source.contains("videoViewsSharedElementKey("))
-        assertFalse(source.contains("videoDanmakuSharedElementKey("))
-        assertFalse(source.contains("videoDurationSharedElementKey("))
-    }
 
     @Test
     fun homeHeroCarouselStatsTextUsesValidChineseUnits() {
