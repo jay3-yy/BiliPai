@@ -62,7 +62,7 @@ internal object HomeFeedMergePolicy {
     }
 
     /**
-     * 生成视频唯一 key，与 HomeViewModel.videoItemKey 保持一致：
+     * 首页视频列表共用的唯一标识：
      * 优先生态：dynamicId > bvid > aid > id。
      */
     fun keyOf(item: VideoItem): String {

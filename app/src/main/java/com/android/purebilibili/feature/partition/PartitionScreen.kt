@@ -1,6 +1,8 @@
 // 文件路径: feature/partition/PartitionScreen.kt
 package com.android.purebilibili.feature.partition
 
+import com.android.purebilibili.feature.home.collectAsHomeFeedState
+
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
@@ -554,7 +556,7 @@ fun PartitionContent(
     val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = HomeSettings())
     val topChromeIconFamily = rememberAppTopChromePolicy().effectiveIconFamily
     val liquidGlassIndicatorEnabled = rememberAppChromeLiquidGlassEnabled(
-        androidNativeEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+        androidNativeEnabled = homeSettings.otherGlassEnabled,
     )
     val liquidGlassTuning = remember(
         homeSettings.liquidGlassProgress,
@@ -567,7 +569,8 @@ fun PartitionContent(
             homeSettings.liquidGlassReadabilityMode,
         )
     }
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    val state by viewModel.uiState.collectAsHomeFeedState(pageWorkActive)
     val rankingListStates = partitionTabs.associate { partition ->
         partition.id to key(partition.id) { rememberLazyListState() }
     }
@@ -605,8 +608,8 @@ fun PartitionContent(
             lastVisibleIndex != null && lastVisibleIndex >= state.videos.lastIndex - 4
         }
     }
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore && !state.isLoading && state.videos.isNotEmpty()) {
+    LaunchedEffect(shouldLoadMore, pageWorkActive) {
+        if (pageWorkActive && shouldLoadMore && !state.isLoading && state.videos.isNotEmpty()) {
             viewModel.loadMore()
         }
     }

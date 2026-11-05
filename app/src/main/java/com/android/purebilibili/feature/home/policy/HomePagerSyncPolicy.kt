@@ -6,8 +6,6 @@ import com.android.purebilibili.feature.home.HomeTopTabEntry
 internal enum class HomePagerSettledAction {
     NONE,
     SWITCH_CATEGORY,
-    OPEN_LIVE_LIST,
-    OPEN_BANGUMI,
 }
 
 /**

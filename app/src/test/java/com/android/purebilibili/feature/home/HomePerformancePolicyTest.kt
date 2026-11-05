@@ -27,7 +27,7 @@ class HomePerformancePolicyTest {
         assertTrue(config.headerBlurEnabled)
         assertFalse(config.bottomBarBlurEnabled)
         assertTrue(config.topBarLiquidGlassEnabled)
-        assertTrue(config.bottomBarLiquidGlassEnabled)
+        assertFalse(config.bottomBarLiquidGlassEnabled)
         assertTrue(config.isAnyLiquidGlassEnabled)
         assertFalse(config.cardAnimationEnabled)
         assertTrue(config.cardTransitionEnabled)
@@ -187,14 +187,14 @@ class HomePerformancePolicyTest {
     }
 
     @Test
-    fun md3Preset_globalLiquidGlassReuseEnablesHomeDockSearchAndBottomBar() {
+    fun md3Preset_dockOnlyDoesNotEnableTopOrSearch() {
         val config = resolveHomePerformanceConfig(
             supportsIndependentLiquidGlass = false,
             headerBlurEnabled = true,
             bottomBarBlurEnabled = true,
             topBarLiquidGlassEnabled = false,
             homeSearchLiquidGlassEnabled = false,
-            bottomBarLiquidGlassEnabled = false,
+            bottomBarLiquidGlassEnabled = true,
             androidNativeLiquidGlassEnabled = true,
             cardAnimationEnabled = true,
             cardTransitionEnabled = true,
@@ -203,8 +203,8 @@ class HomePerformancePolicyTest {
             normalPreloadAheadCount = 5
         )
 
-        assertTrue(config.topBarLiquidGlassEnabled)
-        assertTrue(config.homeSearchLiquidGlassEnabled)
+        assertFalse(config.topBarLiquidGlassEnabled)
+        assertFalse(config.homeSearchLiquidGlassEnabled)
         assertTrue(config.bottomBarLiquidGlassEnabled)
         assertTrue(config.isAnyLiquidGlassEnabled)
     }

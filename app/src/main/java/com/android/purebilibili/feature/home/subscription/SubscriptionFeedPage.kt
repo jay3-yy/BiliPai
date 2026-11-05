@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.subscription
 
+import com.android.purebilibili.feature.home.collectAsHomeFeedState
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -209,10 +210,12 @@ fun SubscriptionFeedPage(
     onOpenPluginSettings: () -> Unit = {},
     /** 下拉中、请求中、回弹中任一阶段为 true，供首页顶栏在刷新会话期间保持展开。 */
     onRefreshInteractionActiveChanged: (Boolean) -> Unit = {},
+    pageActive: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val subscriptionRevision by SubscriptionFeedStore.revision.collectAsStateWithLifecycle()
+    val subscriptionRevision by SubscriptionFeedStore.revision
+        .collectAsHomeFeedState(pageActive)
     var sources by remember { mutableStateOf<List<FeedSource>>(emptyList()) }
     var items by remember { mutableStateOf<List<ParsedFeedItem>>(emptyList()) }
     var readKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -246,7 +249,7 @@ fun SubscriptionFeedPage(
     DisposableEffect(Unit) {
         onDispose { onArticleOpenChanged(false) }
     }
-    PredictiveBackHandler(enabled = isArticleOpen) { progress ->
+    PredictiveBackHandler(enabled = pageActive && isArticleOpen) { progress ->
         var lastFraction = 0f
         try {
             progress.collect { event ->
@@ -295,9 +298,10 @@ fun SubscriptionFeedPage(
     var lastFetchReloadToken by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(scrollToTopRequestId) {
-        if (scrollToTopRequestId > 0 && !isArticleOpen) listState.animateScrollToTop()
+        if (pageActive && scrollToTopRequestId > 0 && !isArticleOpen) listState.animateScrollToTop()
     }
-    LaunchedEffect(reloadToken, subscriptionRevision) {
+    LaunchedEffect(reloadToken, subscriptionRevision, pageActive) {
+        if (!pageActive) return@LaunchedEffect
         loading = true
         try {
             val loadedSources = withContext(Dispatchers.IO) { loadEnabledFeedSources(context) }
@@ -323,9 +327,7 @@ fun SubscriptionFeedPage(
                     items.isEmpty() ||
                     System.currentTimeMillis() - lastNetworkFetchAt >= MIN_NETWORK_REFRESH_INTERVAL_MS
                 )
-            lastFetchReloadToken = reloadToken
             if (!shouldFetchNetwork) return@LaunchedEffect
-            lastNetworkFetchAt = System.currentTimeMillis()
             refreshProgress = 0 to loadedSources.size
             val snapshot = loadFeedSources(loadedSources, FeedConditionalStore.load(context)) { update ->
                 refreshProgress = update.completedSources to update.totalSources
@@ -346,6 +348,9 @@ fun SubscriptionFeedPage(
                 runCatching { FeedConditionalStore.update(context, snapshot.validators) }
                     .onFailure { Logger.w("SubscriptionFeed", "刷新状态保存失败: ${it.message}") }
             }
+            // 离页取消的请求不算完成，重新可见时仍可继续本轮刷新。
+            lastFetchReloadToken = reloadToken
+            lastNetworkFetchAt = System.currentTimeMillis()
         } catch (failure: CancellationException) {
             throw failure
         } catch (failure: Exception) {

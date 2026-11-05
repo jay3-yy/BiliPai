@@ -192,13 +192,15 @@ internal fun BangumiHubContent(
     tabBackdrop: Backdrop? = null,
     showFollowStatusTabs: Boolean = true,
 ) {
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val homeGridStates = rememberSaveable(saver = BangumiGridStatesSaver) { mutableMapOf<String, LazyGridState>() }
     val indexGridStates = rememberSaveable(saver = BangumiGridStatesSaver) { mutableMapOf<String, LazyGridState>() }
     val followGridStates = rememberSaveable(saver = BangumiGridStatesSaver) { mutableMapOf<String, LazyGridState>() }
     val searchGridState = rememberLazyGridState()
     var handledScrollToTopRequestId by rememberSaveable { mutableIntStateOf(0) }
     val activeHomeGrid = homeGridStates.getOrPut(state.channel.name) { LazyGridState() }
-    LaunchedEffect(activeHomeGrid, state.page, state.channel) {
+    LaunchedEffect(activeHomeGrid, state.page, state.channel, pageWorkActive) {
+        if (!pageWorkActive) return@LaunchedEffect
         if (state.page != BangumiHubPage.HOME) return@LaunchedEffect
         snapshotFlow {
             activeHomeGrid.firstVisibleItemIndex to activeHomeGrid.firstVisibleItemScrollOffset
@@ -206,7 +208,8 @@ internal fun BangumiHubContent(
             onHomeScrollChanged(index, offset)
         }
     }
-    LaunchedEffect(scrollToTopRequestId, state.page, state.channel, state.followStatus, state.indexCategory) {
+    LaunchedEffect(scrollToTopRequestId, state.page, state.channel, state.followStatus, state.indexCategory, pageWorkActive) {
+        if (!pageWorkActive) return@LaunchedEffect
         if (scrollToTopRequestId <= handledScrollToTopRequestId) return@LaunchedEffect
         handledScrollToTopRequestId = scrollToTopRequestId
         val target = when (state.page) {
@@ -230,7 +233,9 @@ internal fun BangumiHubContent(
                 key = { channels[it].name },
             ) { page ->
                 val channel = channels[page]
-                LaunchedEffect(channel, state.accountGeneration) { onPrepareChannel(channel) }
+                LaunchedEffect(channel, state.accountGeneration, state.channel, pageWorkActive) {
+                    if (pageWorkActive && channel == state.channel) onPrepareChannel(channel)
+                }
                 BangumiHomeContent(
                     channel = channel,
                     state = state.homeStates[channel] ?: BangumiHomeState(),
@@ -332,6 +337,7 @@ private fun BangumiHomeContent(
     listTopPadding: Dp,
     tabBackdrop: Backdrop?,
 ) {
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val isRefreshing = state.recommendations.isRefreshing ||
         state.follows.isRefreshing || state.timeline.isRefreshing
     AdaptivePullToRefreshBox(
@@ -381,7 +387,9 @@ private fun BangumiHomeContent(
                                 modifier = Modifier.width(104.dp),
                             )
                             if (index == state.follows.items.lastIndex && state.follows.hasMore) {
-                                LaunchedEffect(item.seasonId, state.follows.page) { onLoadMoreFollows() }
+                                LaunchedEffect(item.seasonId, state.follows.page, pageWorkActive) {
+                                    if (pageWorkActive) onLoadMoreFollows()
+                                }
                             }
                         }
                         if (state.follows.isLoadingMore) item { InlineLoading(modifier = Modifier.width(64.dp)) }
@@ -428,7 +436,9 @@ private fun BangumiHomeContent(
                     onLongClick = { onSaveCover(item.cover, item.title) },
                 )
                 if (index == state.recommendations.items.lastIndex && state.recommendations.hasMore) {
-                    LaunchedEffect(item.seasonId, state.recommendations.page) { onLoadMoreRecommendations() }
+                    LaunchedEffect(item.seasonId, state.recommendations.page, pageWorkActive) {
+                        if (pageWorkActive) onLoadMoreRecommendations()
+                    }
                 }
             }
             if (state.recommendations.isLoadingMore) item(
@@ -569,6 +579,7 @@ private fun BangumiIndexContent(
     listTopPadding: Dp,
     tabBackdrop: Backdrop?,
 ) {
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val scope = rememberCoroutineScope()
     val categories = bangumiIndexCategoriesForChannel(channel)
     AdaptivePullToRefreshBox(
@@ -651,7 +662,9 @@ private fun BangumiIndexContent(
                     onLongClick = { onSaveCover(item.cover, item.title) },
                 )
                 if (index == state.results.items.lastIndex && state.results.hasMore) {
-                    LaunchedEffect(item.seasonId, state.results.page) { onLoadMore() }
+                    LaunchedEffect(item.seasonId, state.results.page, pageWorkActive) {
+                        if (pageWorkActive) onLoadMore()
+                    }
                 }
             }
             if (state.results.isLoadingMore) item(span = { GridItemSpan(maxLineSpan) }, key = "index_more") {
@@ -795,6 +808,7 @@ private fun BangumiFollowContent(
     tabBackdrop: Backdrop?,
     showStatusTabs: Boolean,
 ) {
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val selectionMode = state.selectedIds.isNotEmpty()
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -889,7 +903,9 @@ private fun BangumiFollowContent(
                                     onUnfollow = { onUnfollowSingle(item.seasonId) },
                                 )
                                 if (index == state.content.items.lastIndex && state.content.hasMore) {
-                                    LaunchedEffect(item.seasonId, state.content.page) { onLoadMore() }
+                                    LaunchedEffect(item.seasonId, state.content.page, pageWorkActive) {
+                                        if (pageWorkActive) onLoadMore()
+                                    }
                                 }
                             }
                             if (!alignRows) {
@@ -994,6 +1010,7 @@ private fun BangumiSearchContent(
     listTopPadding: Dp,
     tabBackdrop: Backdrop?,
 ) {
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val results = state.results
     Column(modifier = Modifier.fillMaxSize().padding(top = listTopPadding)) {
         val categories = resolveBangumiSearchCategories(channel)
@@ -1065,7 +1082,9 @@ private fun BangumiSearchContent(
                             onLongClick = { onSaveCover(item.cover, plainSearchTitle(item)) },
                         )
                         if (index == results.items.lastIndex && results.hasMore) {
-                            LaunchedEffect(item.seasonId, results.page) { onLoadMore() }
+                            LaunchedEffect(item.seasonId, results.page, pageWorkActive) {
+                                if (pageWorkActive) onLoadMore()
+                            }
                         }
                     }
                     if (results.isLoadingMore) item(span = { GridItemSpan(maxLineSpan) }) { InlineLoading() }
