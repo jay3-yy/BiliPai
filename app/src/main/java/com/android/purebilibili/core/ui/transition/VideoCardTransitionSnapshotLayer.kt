@@ -200,6 +200,25 @@ internal class VideoCardTransitionSnapshotHandle(
         with(scope) { drawLayer(sourceLayer) }
     }
 
+    /**
+     * 恒定半径混合：按内容缩放对齐绘制锐利原层，画在模糊层下方。
+     * 与模糊层合成等价于渐进模糊，且不依赖 live 内容垫底——来源页策略
+     * 不先 drawContent 时不会透出窗口底色。alpha 为锐利层可见度（1-混合强度）。
+     */
+    fun drawSharpSourceAligned(
+        scope: DrawScope,
+        contentScale: Float,
+        pivot: Offset,
+        alpha: Float,
+    ) {
+        if (alpha <= 0.001f) return
+        sourceLayer.alpha = alpha
+        sourceLayer.scaleX = contentScale
+        sourceLayer.scaleY = contentScale
+        sourceLayer.pivotOffset = pivot
+        with(scope) { drawLayer(sourceLayer) }
+    }
+
     /** 只重录效果壳的单条图层引用，不重新执行首页的绘制或改变原始来源缓存。 */
     fun prepareEffectLayer(scope: DrawScope, blurRadiusPx: Float): Float {
         val rasterScale = resolveVideoCardBlurRasterScale(blurRadiusPx)

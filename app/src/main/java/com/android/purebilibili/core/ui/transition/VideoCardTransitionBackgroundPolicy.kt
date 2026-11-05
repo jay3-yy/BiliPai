@@ -1254,19 +1254,24 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
             }
         }
 
-        // 恒定半径 + 合成混合，与 Host 层同语义：模糊只光栅化一次，进度驱动 layerAlpha。
+        // 恒定半径 + 合成混合，与 Host 层同语义：模糊只光栅化一次，
+        // 锐利原层垫底按混合强度叠合，不依赖 live 内容垫底。
         val fixedBlurRadiusPx = if (frame.blurRadiusPx > 0.01f) {
             resolveVideoCardTransitionMaxBlurRadiusPx(activeMotionTier, density)
         } else {
             0f
         }
+        val blendPivot = resolveVideoCardTransitionBackgroundScalePivotOffset(
+            sourceBounds = sourceBoundsProvider(),
+            canvasSize = size,
+        )
         applyVideoCardTransitionSnapshotFrame(
             contentLayer = contentLayer,
             snapshotState = snapshotState,
             frame = frame,
             canvasSize = size,
             sourceBounds = sourceBoundsProvider(),
-            layerAlpha = frozenLayerAlpha * frame.blurAlpha,
+            layerAlpha = frozenLayerAlpha,
             rasterScale = effectiveSnapshotHandle.prepareEffectLayer(this, fixedBlurRadiusPx),
             blurRadiusPxOverride = fixedBlurRadiusPx,
         )
@@ -1278,6 +1283,12 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
                 )
             )
         }
+        effectiveSnapshotHandle.drawSharpSourceAligned(
+            scope = this,
+            contentScale = frame.contentScale,
+            pivot = blendPivot,
+            alpha = frozenLayerAlpha * (1f - frame.blurAlpha),
+        )
         drawLayer(contentLayer)
         VideoCardTransitionDiagnostics.onSourceLayerDrawn()
 
