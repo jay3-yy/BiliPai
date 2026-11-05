@@ -38,6 +38,7 @@ import kotlinx.serialization.json.JsonObject
 
 // 评论 gRPC 读取为两端共用能力；手机功能层（翻译、排序常量）直接消费。
 object CommentGrpcRepository {
+    private const val BASE_URL = "https://grpc.biliapi.net"
     private const val PATH_MAIN_LIST = "/bilibili.main.community.reply.v1.Reply/MainList"
     private const val PATH_DETAIL_LIST = "/bilibili.main.community.reply.v1.Reply/DetailList"
     private const val PATH_DIALOG_LIST = "/bilibili.main.community.reply.v1.Reply/DialogList"
@@ -81,6 +82,7 @@ object CommentGrpcRepository {
         return runCatching {
             val response = BiliGrpcClient.request(
                 path = PATH_MAIN_LIST,
+                baseUrl = BASE_URL,
                 message = buildMainListRequest(
                     oid = oid,
                     type = type,
@@ -92,11 +94,11 @@ object CommentGrpcRepository {
         }
     }
 
+    // 完整楼层必须从开头分页。rpid 定位会返回中间窗口，单向分页无法补回之前的回复。
     fun buildDetailListRequest(
         oid: Long,
         type: Int,
         root: Long,
-        rpid: Long = 0L,
         mode: Int = MODE_TIME,
         nextOffset: String?
     ): ByteArray {
@@ -104,7 +106,6 @@ object CommentGrpcRepository {
             ProtoWire.int64(1, oid),
             ProtoWire.int64(2, type.toLong()),
             ProtoWire.int64(3, root),
-            ProtoWire.int64(4, rpid),
             ProtoWire.int32(6, 0),
             ProtoWire.int32(7, mode)
         )
@@ -151,18 +152,17 @@ object CommentGrpcRepository {
         oid: Long,
         type: Int,
         root: Long,
-        rpid: Long = 0L,
         mode: Int = MODE_TIME,
         nextOffset: String?
     ): Result<ReplyData> {
         return runCatching {
             val response = BiliGrpcClient.request(
                 path = PATH_DETAIL_LIST,
+                baseUrl = BASE_URL,
                 message = buildDetailListRequest(
                     oid = oid,
                     type = type,
                     root = root,
-                    rpid = rpid,
                     mode = mode,
                     nextOffset = nextOffset
                 )
@@ -181,6 +181,7 @@ object CommentGrpcRepository {
         return runCatching {
             val response = BiliGrpcClient.request(
                 path = PATH_DIALOG_LIST,
+                baseUrl = BASE_URL,
                 message = buildDialogListRequest(
                     oid = oid,
                     type = type,
@@ -210,6 +211,7 @@ object CommentGrpcRepository {
             )
             val response = BiliGrpcClient.request(
                 path = PATH_TRANSLATE_REPLY,
+                baseUrl = BASE_URL,
                 message = request
             )
             Result.success(parseTranslateReplyResp(response, rpid))

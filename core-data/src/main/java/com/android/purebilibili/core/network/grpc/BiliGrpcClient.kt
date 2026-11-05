@@ -31,7 +31,6 @@ class BiliGrpcException(
 
 // gRPC 直连客户端为共享网络能力，手机与 TV 的评论、私信分享均通过它调用。
 object BiliGrpcClient {
-    private const val APP_BASE_URL = "https://app.bilibili.com"
     private const val USER_AGENT =
         "Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd build/2001100 channel/master innerVer/2001100 osVer/15 network/2"
     private const val TRACE_ID = "11111111111111111111111111111111:1111111111111111:0:0"
@@ -48,8 +47,9 @@ object BiliGrpcClient {
         path: String,
         message: ByteArray,
         profile: BiliGrpcProfile = BiliGrpcProfile.ANDROID_HD,
+        baseUrl: String = "https://app.bilibili.com",
     ): ByteArray {
-        val url = "$APP_BASE_URL$path"
+        val url = "$baseUrl$path"
         val buvid = resolveBuvid()
         val request = Request.Builder()
             .url(url)

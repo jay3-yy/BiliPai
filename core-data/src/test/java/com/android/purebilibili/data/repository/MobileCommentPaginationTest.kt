@@ -26,7 +26,7 @@ class MobileCommentPaginationTest {
         // 新分页响应只给 offset，旧 cursor.next 可以为 0；不能因此丢弃已经返回的正文。
         val data = CommentGrpcRepository.parseMainListReply(ProtoWire.message(
             ProtoWire.bytes(1, ProtoWire.message(ProtoWire.bool(4, false))),
-            ProtoWire.bytes(2, ProtoWire.message(ProtoWire.int64(1, 123L))),
+            ProtoWire.bytes(2, ProtoWire.message(ProtoWire.int64(2, 123L))),
             ProtoWire.bytes(3, ProtoWire.message(ProtoWire.int64(16, 50L))),
             ProtoWire.bytes(20, ProtoWire.message(ProtoWire.string(1, "opaque-next-page"))),
         ))
