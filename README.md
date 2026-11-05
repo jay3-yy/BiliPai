@@ -120,6 +120,8 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 - [Haze](https://github.com/chrisbanes/haze) — 毛玻璃效果
 - [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) — 全局应用交互参考
 - [Bili Pilot](https://github.com/siwei-yuan/bili-pilot) — CDN 选线参考
+- [金标联盟（ITGSA）SharedViewKit](https://gitee.com/itgsa_sharedviewkit/SharedViewDemo) — 视频卡片系统级转场 SDK 与接入参考
+- 小米澎湃 OS 系统动效 — 卡片运动参数参考
 
 其余依赖与来源见 [第三方声明](THIRD_PARTY_NOTICES.md)。
 

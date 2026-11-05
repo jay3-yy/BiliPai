@@ -120,6 +120,8 @@ Share bugs and ideas through [Issues](https://github.com/jay3-yy/BiliPai/issues/
 - [Haze](https://github.com/chrisbanes/haze) — blur effects
 - [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) — overall app interaction reference
 - [Bili Pilot](https://github.com/siwei-yuan/bili-pilot) — CDN routing reference
+- [ITGSA SharedViewKit](https://gitee.com/itgsa_sharedviewkit/SharedViewDemo) — system-level video-card transition SDK and integration reference
+- Xiaomi HyperOS system motion — motion parameter reference
 
 See [third-party notices](THIRD_PARTY_NOTICES.md) for all other dependencies and sources.
 
