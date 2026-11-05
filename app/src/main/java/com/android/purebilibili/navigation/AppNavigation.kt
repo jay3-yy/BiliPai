@@ -2185,38 +2185,49 @@ fun AppNavigation(
         // 仅玻璃开启时绕过网页采集，关闭后的原生模糊和背景录制保持原有行为。
         // 网页有独立渲染树；页面关闭采集后，祖先也不能再次把它录入背景层。
         // 检查整个栈，覆盖网页上方的详情页及返回网页过程，避免来回切换录制状态。
-        val navigationBackdropCaptureEnabled = !homeSettings.androidNativeLiquidGlassEnabled ||
+        val navigationGlassEnabled = homeSettings.bottomDockGlassEnabled || homeSettings.nowPlayingGlassEnabled
+        val navigationBackdropCaptureEnabled = !navigationGlassEnabled ||
             navigation3BackStack.none {
                 it is BiliPaiNavKey.Web &&
                     !com.android.purebilibili.feature.web.shouldOpenWebUrlExternally(it.url)
             }
         val floatingBackdropDemand = remember { com.android.purebilibili.core.ui.blur.FloatingChromeBackdropDemand() }
         val shouldCaptureBottomBarBackdrop = navigationBackdropCaptureEnabled &&
-            (homeSettings.androidNativeLiquidGlassEnabled || isBottomBarBlurEnabled)
-        val bottomBarBackdropSource = if (shouldCaptureBottomBarBackdrop) {
-            // Bind the shared recording to every frame of the app theme palette,
-            // rather than waiting for navigation/layout to invalidate a static page.
-            rememberChromeBackdropSource(
-                recordingBackground = backgroundColor,
-                isolateContentDrawing = true,
-            )
-        } else {
-            null
-        }
-        val bottomBarBackdrop = bottomBarBackdropSource?.backdrop
+            (navigationGlassEnabled || isBottomBarBlurEnabled)
         // 玻璃仅为实际挂载或正在进出的控件录制；保留源身份，恢复时重新挂回录制。
         // 原生模糊仍沿用原有背景源。退出动画结束前不能只看 finalBottomBarVisible。
         val hasBottomBarBackdropConsumer = bottomBarCanMount &&
             (bottomBarVisibilityState.currentState || bottomBarVisibilityState.targetState ||
                 !bottomBarVisibilityState.isIdle)
         val recordBottomBarBackdrop = com.android.purebilibili.core.ui.transition.shouldRecordVideoCardFloatingBackdrop(
-            liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+            liquidGlassEnabled = navigationGlassEnabled,
             isVideoDetailDestination = isVideoDetailDestination,
             exposure = videoCardChromeExposure,
             hasBottomBarConsumer = hasBottomBarBackdropConsumer,
             hasAudioBarConsumer = !bottomBarCanMount && showAudioNowPlayingIndependent,
             hasFloatingConsumer = floatingBackdropDemand.isRequired,
         )
+        // 只有玻璃卡片转场复用导航视口的合成纹理；关闭玻璃后的 MD3、Miuix
+        // 仍共享绘制指令，不增加离屏纹理。无消费者、落位或取消恢复结束后归还 Auto。
+        val rasterizeNavigationBackdrop =
+            com.android.purebilibili.core.ui.transition.shouldRasterizeVideoCardChromeBackdrop(
+                liquidGlassEnabled = navigationGlassEnabled,
+                cardTransitionEnabled = cardTransitionEnabled,
+                reduceMotion = systemReduceMotion,
+                recordingAllowed = recordBottomBarBackdrop,
+                exposure = videoCardChromeExposure,
+            )
+        val bottomBarBackdropSource = if (shouldCaptureBottomBarBackdrop) {
+            rememberChromeBackdropSource(
+                recordingBackground = backgroundColor,
+                isolateContentDrawing = true,
+                recordingEnabled = recordBottomBarBackdrop,
+                rasterizeContent = rasterizeNavigationBackdrop,
+            )
+        } else {
+            null
+        }
+        val bottomBarBackdrop = bottomBarBackdropSource?.backdrop
         val componentMotionEnabled = com.android.purebilibili.core.ui.resolveComponentMotionEnabled(
             entranceEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled,
             cardEntranceEnabled = homeSettings.cardAnimationEnabled,
@@ -2387,7 +2398,7 @@ fun AppNavigation(
                 }
             }
             com.android.purebilibili.core.ui.popup.AppGlassPopupHost(
-                glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+                glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled &&
                     com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT),
                 tuning = liquidGlassRenderConfig.tuning,
             ) {
@@ -5531,15 +5542,9 @@ fun AppNavigation(
                         appNavigationSettings.miuixTransitionBlurEnabled,
                     miuixPredictiveBackMaxProgressPercent =
                         appNavigationSettings.miuixPredictiveBackMaxProgressPercent,
-                    videoSharedReturnGestureFollowEnabled =
-                        appNavigationSettings.videoSharedReturnGestureFollowEnabled,
-                    videoSharedReturnGestureTranslationEnabled =
-                        appNavigationSettings.videoSharedReturnGestureTranslationEnabled,
                     sourceMetadata = navigation3SourceMetadata,
                     programmaticBackDispatcher = navigation3ProgrammaticBackDispatcher,
                     // List cover waits for the live handoff window; list info is native throughout return.
-                    videoReturnContentFollowProgressEnabled =
-                        appNavigationSettings.videoReturnContentFollowProgressEnabled,
                     settingsContainerMorphEnabled =
                         appNavigationSettings.settingsContainerMorphEnabled,
                     settingsContainerRealtimeBlurEnabled =
@@ -5716,7 +5721,7 @@ fun AppNavigation(
                                         } else {
                                             "视频详情页"
                                         },
-                                        glassEnabled = effectiveHomeSettings.androidNativeLiquidGlassEnabled,
+                                        glassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
                                         blurEnabled = isBottomBarBlurEnabled,
                                         hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
                                         miuixBackdrop = bottomBarBackdrop,
@@ -5939,7 +5944,7 @@ fun AppNavigation(
                         }
                     } else {
                     // 独立横条退场仍需要玻璃；到本体退出组合才释放背景采样。
-                    if (effectiveHomeSettings.androidNativeLiquidGlassEnabled && bottomBarBackdrop != null) {
+                    if (effectiveHomeSettings.nowPlayingGlassEnabled && bottomBarBackdrop != null) {
                         DisposableEffect(floatingBackdropDemand) {
                             val token = Any()
                             floatingBackdropDemand.acquire(token)
@@ -5999,7 +6004,7 @@ fun AppNavigation(
                     } else {
                         "视频详情页"
                     },
-                    glassEnabled = effectiveHomeSettings.androidNativeLiquidGlassEnabled,
+                    glassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
                     blurEnabled = isBottomBarBlurEnabled,
                     hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
                     miuixBackdrop = bottomBarBackdrop,

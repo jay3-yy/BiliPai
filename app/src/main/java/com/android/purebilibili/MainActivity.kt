@@ -1491,14 +1491,21 @@ class MainActivity : AppCompatActivity() {
             val nativeMiuixPopupsEnabled by com.android.purebilibili.core.store.player.PlayerSettingsStore
                 .getNativeMiuixPlayerPopups(context)
                 .collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(context)
+            val liquidGlassMasterEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(context)
                 .collectAsStateWithLifecycle(initialValue = true)
             val liquidControlsUseThemeColor by SettingsManager.getLiquidControlsUseThemeColor(context)
                 .collectAsStateWithLifecycle(initialValue = false)
+            val liquidGlassScenes by SettingsManager.getLiquidGlassScenes(context)
+                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
+            val liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
+                com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS,
+            )
             val liquidSwitchThumbMode by SettingsManager.getLiquidSwitchThumbMode(context)
                 .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
             val appThemeConfig = remember(
                 liquidGlassEnabled,
+                liquidGlassMasterEnabled,
+                liquidGlassScenes,
                 liquidControlsUseThemeColor,
                 liquidSwitchThumbMode,
                 blurIntensity,
@@ -1516,6 +1523,9 @@ class MainActivity : AppCompatActivity() {
             ) {
                 AppThemeConfig(
                     liquidGlassEnabled = liquidGlassEnabled,
+                    playerGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.PLAYER_CONTROLS),
+                    popupGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.MENUS_DIALOGS),
+                    nowPlayingGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.NOW_PLAYING),
                     liquidControlsUseThemeColor = liquidControlsUseThemeColor,
                     liquidSwitchThumbMode = liquidSwitchThumbMode,
                     blurIntensity = blurIntensity,

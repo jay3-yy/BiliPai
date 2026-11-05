@@ -193,7 +193,6 @@ internal data class VideoCardTransitionBackgroundState(
      * 默认值仅供未接入导航宿主的调用方兜底；导航宿主应显式选择返回策略。
      */
     val preferWholeCardReturnProvider: () -> Boolean = { true },
-    val returnContentFollowProgressEnabledProvider: () -> Boolean = { true },
     val motionTierProvider: () -> MotionTier = { MotionTier.Normal },
     val isLightBackgroundProvider: () -> Boolean = { false },
     val realtimeBlurEnabledProvider: () -> Boolean = { false },

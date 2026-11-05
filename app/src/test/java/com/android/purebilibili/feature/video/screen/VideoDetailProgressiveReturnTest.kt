@@ -38,20 +38,17 @@ class VideoDetailProgressiveReturnTest {
     }
 
     @Test
-    fun aMissingFirstFrameOrDisabledFollowStillUsesTheCoverFallback() {
-        for ((waitingForFirstFrame, follow) in listOf(true to true, false to false)) {
-            assertEquals(
-                VideoDetailReturnMediaFrame(1f, 0f),
-                resolveVideoDetailReturnMediaFrame(
-                    transitionProgress = 0.9f,
-                    isCommittedCardReturn = true,
-                    hasResidentCover = true,
-                    progressiveResidentCover = true,
-                    showResidentCoverUntilFirstFrame = waitingForFirstFrame,
-                    followProgressEnabled = follow,
-                ),
-            )
-        }
+    fun missingFirstFrameKeepsTheResidentCoverOpaque() {
+        assertEquals(
+            VideoDetailReturnMediaFrame(1f, 0f),
+            resolveVideoDetailReturnMediaFrame(
+                transitionProgress = 0.9f,
+                isCommittedCardReturn = true,
+                hasResidentCover = true,
+                progressiveResidentCover = true,
+                showResidentCoverUntilFirstFrame = true,
+            ),
+        )
     }
 
     @Test
@@ -64,9 +61,8 @@ class VideoDetailProgressiveReturnTest {
             live: Boolean = false,
             forced: Boolean = false,
             reduced: Boolean = false,
-            follow: Boolean = true,
         ) = shouldUseProgressiveResidentCoverReturn(
-            sdk, ownsInline, firstFrame, decodedCover, live, forced, reduced, follow,
+            sdk, ownsInline, firstFrame, decodedCover, live, forced, reduced,
         )
         assertTrue(enabled())
         assertFalse(enabled(sdk = 34))
@@ -76,7 +72,6 @@ class VideoDetailProgressiveReturnTest {
         assertFalse(enabled(live = true))
         assertFalse(enabled(forced = true))
         assertFalse(enabled(reduced = true))
-        assertFalse(enabled(follow = false))
     }
 
     @Test

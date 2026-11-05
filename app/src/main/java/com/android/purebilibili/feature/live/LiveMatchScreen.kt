@@ -139,7 +139,7 @@ private fun LiveMatchContent(
                 )
                 // 赛事分类固定使用当前主题的原生组件，玻璃开关不改变分类栏材质和槽位。
                 CompositionLocalProvider(
-                    LocalAppThemeConfig provides LocalAppThemeConfig.current.copy(liquidGlassEnabled = false),
+                    LocalAppThemeConfig provides LocalAppThemeConfig.current.copy(liquidGlassEnabled = false, popupGlassEnabled = false, playerGlassEnabled = false),
                 ) {
                     AppNativeTabRow(
                         options = listOf(AppSegmentOption(0, "全部")) + state.games.map { AppSegmentOption(it.id, it.name) },

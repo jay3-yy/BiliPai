@@ -223,6 +223,8 @@ fun BottomControlBar(
         com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource()
     }
     val widthDp = viewportWidthDpOverride ?: LocalConfiguration.current.screenWidthDp
+    val compactInline = !isFullscreen &&
+        LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT
     val slotWidth = if (viewportIsLandscape && isFullscreen) 42.dp else 35.dp
     val showExtendedOptions = isFullscreen || widthDp >= 500
     // 画面宽高描述视频视口，不代表页面方向；竖屏页面播放横向视频也属于内嵌控制栏。
@@ -264,7 +266,7 @@ fun BottomControlBar(
                 WindowInsets(left = 20.dp, right = 20.dp),
             )
             val hasSegments = showViewPoints && viewPoints.isNotEmpty()
-            Box(Modifier.windowInsetsPadding(seekInsets).padding(bottom = PILI_PLAYER_PROGRESS_GAP_DP.dp)
+            Box(Modifier.windowInsetsPadding(seekInsets).padding(bottom = (if (compactInline) 2 else PILI_PLAYER_PROGRESS_GAP_DP).dp)
                 .height((if (hasSegments) PILI_PLAYER_CHAPTER_PROGRESS_HEIGHT_DP else PILI_PLAYER_PROGRESS_HEIGHT_DP).dp)) {
                 PlayerControlProgressBar(
                     progressProvider = progressProvider,
@@ -301,7 +303,8 @@ fun BottomControlBar(
             }
             PiliPlayerBar(
                 groupGlassControls = false,
-                distributeActions = !isFullscreen,
+                // 竖屏按时间与工具分组收口，两种材质均不将空隙摊到每个按钮之间。
+                distributeActions = !isFullscreen && !compactInline,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(PILI_PLAYER_BOTTOM_ROW_HEIGHT_DP.dp)
                     .testTag("player_control_row"),
                 left = {

@@ -28,8 +28,8 @@ import com.android.purebilibili.core.ui.LocalAppThemeConfig
 internal val LocalPlayerGlassSettingsSurface = compositionLocalOf { false }
 
 internal fun playerNativeMenuConfig(config: com.android.purebilibili.core.ui.AppThemeConfig) =
-    config.copy(nativeMiuixPopupsEnabled = false)
-/** 播放器保留原生面板结构，内部菜单跟随应用玻璃开关；关闭玻璃不启用独立 Miuix 菜单。 */
+    config.copy(nativeMiuixPopupsEnabled = false, liquidGlassEnabled = config.popupGlassEnabled)
+/** 播放器保留原生面板结构，内部菜单跟随菜单与弹窗场景；关闭玻璃不启用独立 Miuix 菜单。 */
 @Composable
 internal fun PlayerNativeMenuTheme(content: @Composable () -> Unit) {
     val config = LocalAppThemeConfig.current

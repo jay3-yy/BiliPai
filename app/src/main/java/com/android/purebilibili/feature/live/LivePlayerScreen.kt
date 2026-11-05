@@ -194,11 +194,16 @@ fun LivePlayerScreen(
 ) {
     LiveRoomTheme {
         com.android.purebilibili.core.ui.popup.AppGlassPopupHost(
-            glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+            glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled &&
                 com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT),
             tuning = com.android.purebilibili.feature.home.components.LocalLiquidGlassRenderConfig.current.tuning,
         ) {
-            LiveRoomScreen(roomId, title, uname, onBack, onUserClick, viewModel, siteId)
+            val config = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.android.purebilibili.core.ui.LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.playerGlassEnabled),
+            ) {
+                LiveRoomScreen(roomId, title, uname, onBack, onUserClick, viewModel, siteId)
+            }
         }
     }
 }

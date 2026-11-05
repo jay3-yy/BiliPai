@@ -322,12 +322,6 @@
     <string name="animation_card_entrance_summary">打开首页时卡片依次淡入</string>
     <string name="animation_card_transition_summary">列表与相关推荐共用卡片展开，封面和标题平滑过渡到详情页；关闭后使用全局页面动画</string>
     <string name="animation_live_transition_summary">过渡时保留正在播放的画面</string>
-    <string name="animation_return_follow_on">返回途中，封面和信息逐渐恢复为卡片</string>
-    <string name="animation_return_follow_off">返回完成后，再切换为视频卡片</string>
-    <string name="animation_return_tilt_on">滑动返回时，画面随手指倾斜</string>
-    <string name="animation_return_tilt_off">画面不倾斜；是否随手指移动由下方控制</string>
-    <string name="animation_return_translation_on">滑动返回时，画面随手指移动</string>
-    <string name="animation_return_translation_off">画面沿固定路线返回；倾斜由上方控制</string>
     <string name="animation_transition_blur_summary">转场更有层次感；关闭可省电</string>
     <string name="animation_back_title">页面切换动画</string>
     <string name="animation_back_summary">普通页面全局生效，返回反向播放；卡片共享元素、设置容器形变与大屏分栏保留专属过渡</string>
@@ -377,9 +371,6 @@
     <string name="animation_title_card_entrance">首页卡片淡入</string>
     <string name="animation_title_card_transition">卡片展开动画</string>
     <string name="animation_title_live_transition">用当前画面过渡</string>
-    <string name="animation_title_return_follow">返回时渐变为卡片</string>
-    <string name="animation_title_return_tilt">返回时倾斜</string>
-    <string name="animation_title_return_translation">返回时跟手</string>
     <string name="animation_title_transition_blur">转场时模糊背景</string>
     <string name="animation_title_back_blur">返回时模糊背景</string>
     <string name="animation_title_fullscreen_swipe_back">页面内右滑返回</string>
@@ -395,9 +386,6 @@
     <string name="preview_title_card_entrance">首页卡片淡入</string>
     <string name="preview_title_card_expand">卡片展开动画</string>
     <string name="preview_title_live_frame">用当前画面过渡</string>
-    <string name="preview_title_return_content">返回时渐变为卡片</string>
-    <string name="preview_title_return_tilt">返回时倾斜</string>
-    <string name="preview_title_return_follow">返回时跟手</string>
     <string name="preview_title_transition_blur">转场时模糊背景</string>
     <string name="preview_summary_top_blur">页面内容经过顶栏时，背景呈现由上到下逐渐减弱的模糊，标题保持清晰。实际效果需 Android 13+；与顶栏磨砂互斥，开启此功能会关闭顶栏磨砂。</string>
     <string name="preview_summary_image_page">左右滑动查看图片时，图片带有透视旋转；关闭后使用平面横滑。下方使用同一组示意图片对比。</string>
@@ -405,9 +393,6 @@
     <string name="preview_summary_card_entrance">打开首页时，卡片按顺序淡入；关闭后直接显示。</string>
     <string name="preview_summary_card_expand">点击视频卡片时，封面和标题从卡片位置平滑过渡到详情页；关闭后使用普通页面切换。</string>
     <string name="preview_summary_live_frame">展开过程中保留当前播放画面；关闭后使用封面作为过渡画面。需开启卡片展开动画。示意画面无需加载视频。</string>
-    <string name="preview_summary_return_content">返回途中，视频画面逐渐还原为封面和卡片信息；关闭后在返回完成时切换。需开启卡片展开动画。</string>
-    <string name="preview_summary_return_tilt">滑动返回时，画面随手指产生倾斜；关闭后不倾斜。这里保持相同的移动路线，单独比较倾斜。需开启卡片展开动画。</string>
-    <string name="preview_summary_return_follow">滑动返回时，画面随手指移动；关闭后沿固定路线返回。这里保持画面不倾斜，单独比较移动。需开启卡片展开动画。</string>
     <string name="preview_summary_transition_blur">卡片展开或返回时，后方页面实时模糊，前景视频保持清晰；关闭后背景保持清晰。</string>
     <string name="preview_accessibility">查看%1$s的动画演示</string>
     <string name="preview_card_accessibility">查看卡片动画效果预览</string>
@@ -445,12 +430,6 @@
     <string name="preview_caption_card_entrance_off">首页卡片直接显示</string>
     <string name="preview_caption_live_on">当前画面继续播放并参与过渡</string>
     <string name="preview_caption_live_off">使用静态封面过渡</string>
-    <string name="preview_caption_return_content_on">返回途中逐渐恢复封面与信息</string>
-    <string name="preview_caption_return_content_off">返回完成后恢复卡片</string>
-    <string name="preview_caption_return_tilt_on">画面随手指倾斜</string>
-    <string name="preview_caption_return_tilt_off">相同路线，画面不倾斜</string>
-    <string name="preview_caption_return_follow_on">画面随手指移动</string>
-    <string name="preview_caption_return_follow_off">画面沿固定路线返回</string>
     <string name="preview_caption_transition_blur_on">后方页面模糊，前景保持清晰</string>
     <string name="preview_caption_transition_blur_off">后方页面保持清晰</string>
     <string name="preview_caption_card_step_1">点击首页卡片</string>
@@ -653,7 +632,7 @@
     <string name="appearance_section_interface_effects">界面与效果</string>
     <string name="appearance_refresh_rate_title">屏幕刷新率：%1$s</string>
     <string name="appearance_refresh_rate_summary">手动固定刷新率后，LTPO 屏幕不再自动调节，可能增加耗电</string>
-    <string name="appearance_liquid_glass_summary">首页顶栏、搜索框、底栏和评论底栏使用玻璃效果</string>
+    <string name="appearance_liquid_glass_summary">液态玻璃总开关，可在液态玻璃场景中分别控制各处效果</string>
     <string name="appearance_liquid_glass_unsupported">当前 Android 版本暂不支持液态玻璃效果</string>
     <string name="appearance_liquid_controls_theme_title">液态控件跟随主题色</string>
     <string name="appearance_liquid_controls_theme_summary">开启后开关和滑块使用主题色；关闭保留默认绿色开关、蓝色滑块</string>

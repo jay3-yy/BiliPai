@@ -22,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.android.purebilibili.core.ui.AppContentColors
@@ -50,17 +49,9 @@ internal fun SettingsCardMotionPreview(
             }
         }
     }
-    val returning = feature in setOf(
-        SettingsFeaturePreview.RETURN_CONTENT,
-        SettingsFeaturePreview.RETURN_TILT,
-        SettingsFeaturePreview.RETURN_FOLLOW,
-    )
     val caption = when (feature) {
         SettingsFeaturePreview.CARD_ENTRANCE -> stringResource(if (enabled) R.string.preview_caption_card_entrance_on else R.string.preview_caption_card_entrance_off)
         SettingsFeaturePreview.LIVE_FRAME -> stringResource(if (enabled) R.string.preview_caption_live_on else R.string.preview_caption_live_off)
-        SettingsFeaturePreview.RETURN_CONTENT -> stringResource(if (enabled) R.string.preview_caption_return_content_on else R.string.preview_caption_return_content_off)
-        SettingsFeaturePreview.RETURN_TILT -> stringResource(if (enabled) R.string.preview_caption_return_tilt_on else R.string.preview_caption_return_tilt_off)
-        SettingsFeaturePreview.RETURN_FOLLOW -> stringResource(if (enabled) R.string.preview_caption_return_follow_on else R.string.preview_caption_return_follow_off)
         SettingsFeaturePreview.TRANSITION_BLUR -> stringResource(if (enabled) R.string.preview_caption_transition_blur_on else R.string.preview_caption_transition_blur_off)
         else -> if (enabled) listOf(
             stringResource(R.string.preview_caption_card_step_1),
@@ -104,51 +95,24 @@ internal fun SettingsCardMotionPreview(
             val small = Rect(size.width * 0.05f, contentHeight * 0.12f, size.width * 0.47f, contentHeight * 0.55f)
             val large = Rect(size.width * 0.06f, contentHeight * 0.06f, size.width * 0.94f, contentHeight * 0.94f)
             val expansion = when {
-                returning -> 1f - eased
                 feature == SettingsFeaturePreview.CARD_EXPAND && !enabled -> if (p < 0.5f) 0f else 1f
                 else -> eased
             }
             fun interpolate(a: Float, b: Float) = a + (b - a) * expansion
-            val handWave = sin(p * Math.PI).toFloat()
-            val follows = feature == SettingsFeaturePreview.RETURN_FOLLOW && enabled
-            val dx = if (follows) handWave * size.width * 0.14f else 0f
-            val dy = if (follows) sin(p * Math.PI * 2).toFloat() * contentHeight * 0.08f else 0f
             val frame = Rect(
-                interpolate(small.left, large.left) + dx,
-                interpolate(small.top, large.top) + dy,
-                interpolate(small.right, large.right) + dx,
-                interpolate(small.bottom, large.bottom) + dy,
+                interpolate(small.left, large.left),
+                interpolate(small.top, large.top),
+                interpolate(small.right, large.right),
+                interpolate(small.bottom, large.bottom),
             )
-            val tilt = if (feature == SettingsFeaturePreview.RETURN_TILT && enabled) handWave * 10f else 0f
-            rotate(tilt, frame.center) {
-                drawRoundRect(surface, frame.topLeft, frame.size, CornerRadius(10.dp.toPx()))
-                val cover = Rect(frame.left, frame.top, frame.right, frame.top + frame.height * 0.7f)
-                val live = feature == SettingsFeaturePreview.LIVE_FRAME && enabled
-                val restoring = feature == SettingsFeaturePreview.RETURN_CONTENT
-                drawPreviewCover(cover, accent, 1f, if (live || restoring) progress() else 0f)
-                if (restoring) {
-                    val coverAlpha = if (enabled) eased else if (p >= 1f) 1f else 0f
-                    // 返回时用静态封面逐渐替换播放画面，信息与封面同时恢复。
-                    drawRect(surface.copy(alpha = coverAlpha), cover.topLeft, cover.size)
-                    drawPreviewCover(cover, accent, coverAlpha, 0f)
-                    drawLine(ink.copy(alpha = coverAlpha * 0.65f),
-                        Offset(frame.left + frame.width * 0.06f, frame.top + frame.height * 0.84f),
-                        Offset(frame.left + frame.width * 0.8f, frame.top + frame.height * 0.84f), 4.dp.toPx())
-                } else {
-                    drawLine(ink.copy(alpha = 0.55f),
-                        Offset(frame.left + frame.width * 0.06f, frame.top + frame.height * 0.84f),
-                        Offset(frame.left + frame.width * 0.8f, frame.top + frame.height * 0.84f), 4.dp.toPx())
-                }
-            }
-            if (feature == SettingsFeaturePreview.RETURN_FOLLOW || feature == SettingsFeaturePreview.RETURN_TILT) {
-                // 两种状态使用同一手指轨迹：开启跟手时，画面与手指保持相对位置。
-                val pointer = Offset(
-                    interpolate(small.left, large.left) + handWave * size.width * 0.14f + 12.dp.toPx(),
-                    interpolate(small.bottom, large.bottom) + sin(p * Math.PI * 2).toFloat() * contentHeight * 0.08f - 12.dp.toPx(),
-                )
-                drawCircle(ink.copy(alpha = 0.15f), 12.dp.toPx(), pointer)
-                drawCircle(ink.copy(alpha = 0.75f), 4.dp.toPx(), pointer)
-            } else if (!returning && phase == 0) {
+            drawRoundRect(surface, frame.topLeft, frame.size, CornerRadius(10.dp.toPx()))
+            val cover = Rect(frame.left, frame.top, frame.right, frame.top + frame.height * 0.7f)
+            val live = feature == SettingsFeaturePreview.LIVE_FRAME && enabled
+            drawPreviewCover(cover, accent, 1f, if (live) progress() else 0f)
+            drawLine(ink.copy(alpha = 0.55f),
+                Offset(frame.left + frame.width * 0.06f, frame.top + frame.height * 0.84f),
+                Offset(frame.left + frame.width * 0.8f, frame.top + frame.height * 0.84f), 4.dp.toPx())
+            if (phase == 0) {
                 drawCircle(ink.copy(alpha = 0.55f), 5.dp.toPx(), small.center)
             }
         }

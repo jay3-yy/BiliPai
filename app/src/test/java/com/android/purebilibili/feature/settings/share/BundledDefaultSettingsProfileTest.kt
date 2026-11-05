@@ -33,7 +33,6 @@ class BundledDefaultSettingsProfileTest {
         listOf(
             "card_transition_enabled",
             "live_surface_card_transition_enabled",
-            "video_return_content_follow_progress_enabled",
         ).forEach { key ->
             assertEquals(JsonPrimitive(true), profile.sections.appearance[key], key)
         }

@@ -2377,8 +2377,6 @@ internal fun VideoDetailScreenStateHolder(
         forceCoverOnly = forceCoverOnlyOnReturn,
         reduceMotion = videoCardDepthBackgroundState.motionTierProvider() ==
             com.android.purebilibili.core.ui.adaptive.MotionTier.Reduced,
-        followProgressEnabled = videoCardDepthBackgroundState
-            .returnContentFollowProgressEnabledProvider(),
     )
     val useResidentCoverForCommittedReturn = shouldHandResidentCoverFromOwnership(
         ownership = returnCoverOwnership,
@@ -2457,8 +2455,6 @@ internal fun VideoDetailScreenStateHolder(
                                 videoCardDepthBackgroundState.isGestureRestoreInProgressProvider(),
                         motionTier = videoCardDepthBackgroundState.motionTierProvider(),
                         sourceLayout = currentLandingState.sourceLayout,
-                        followProgressEnabled = videoCardDepthBackgroundState
-                            .returnContentFollowProgressEnabledProvider(),
                         isCommittedCardReturn = isCommittedCardReturn,
                         preserveNativeViewport = scopedHeroDriver.enabled,
                     ).alpha
@@ -4000,7 +3996,6 @@ internal fun VideoDetailScreenStateHolder(
                             videoCardDepthBackgroundState.isReturnGestureInProgressProvider() ||
                                 videoCardDepthBackgroundState.isGestureRestoreInProgressProvider()
                         },
-                        followProgressProvider = videoCardDepthBackgroundState.returnContentFollowProgressEnabledProvider,
                     )
                     Box(modifier = Modifier
                         .fillMaxSize()
@@ -4033,8 +4028,6 @@ internal fun VideoDetailScreenStateHolder(
                                 hasRenderedFirstFrame = hasRenderedFirstFrameForReturn,
                                 entryCoverAlphaProvider = { 1f - entryFirstFrameReveal.value },
                                 detailContentLoading = uiState is VideoPlaybackUiState.Loading,
-                                followProgressEnabledProvider = videoCardDepthBackgroundState
-                                    .returnContentFollowProgressEnabledProvider,
                                 modifier = playerModifier,
                             ) { viewportWidth ->
                                 continuousPlayerContent(
@@ -4896,8 +4889,6 @@ internal fun VideoDetailScreenStateHolder(
                                             .isGestureRestoreInProgressProvider(),
                                 sourceLayout = landingLayoutForMedia?.layout
                                     ?: miuixLandingState.sourceLayout,
-                                followProgressEnabled = videoCardDepthBackgroundState
-                                    .returnContentFollowProgressEnabledProvider(),
                                 detailContentLoading = uiState is VideoPlaybackUiState.Loading,
                                 isNowPlayingBar =
                                     miuixLandingState.sourceChromeSnapshot?.isNowPlayingBar == true,
@@ -4977,8 +4968,6 @@ internal fun VideoDetailScreenStateHolder(
                                 hasResidentCover = hasResidentReturnCover,
                                 liveReturnMorph = liveReturnMorph,
                                 progressiveResidentCover = progressiveResidentCoverReturn,
-                                followProgressEnabled = videoCardDepthBackgroundState
-                                    .returnContentFollowProgressEnabledProvider(),
                                 isReturnGestureInProgress = returnGestureInProgress,
                                 showResidentCoverUntilFirstFrame =
                                     (entryOwnsMiuixCardTransition ||
@@ -5364,8 +5353,6 @@ internal fun VideoDetailScreenStateHolder(
                                             motionTier =
                                                 videoCardDepthBackgroundState.motionTierProvider(),
                                             sourceLayout = miuixLandingState.sourceLayout,
-                                            followProgressEnabled = videoCardDepthBackgroundState
-                                                .returnContentFollowProgressEnabledProvider(),
                                             isCommittedCardReturn = isCommittedCardReturn,
                                             preserveNativeViewport = scopedHeroDriver.enabled,
                                         )
@@ -5444,7 +5431,7 @@ internal fun VideoDetailScreenStateHolder(
                                         commentStateHandle = commentStateHandle,
                                         engagementState = engagementState,
                                         androidNativeLiquidGlassEnabled =
-                                            homeSettings.androidNativeLiquidGlassEnabled,
+                                            homeSettings.commentBarGlassEnabled,
                                         commentMemberDecorationsEnabled = commentMemberDecorationsEnabled,
                                         playbackActions = playbackActions,
                                         engagementActions = engagementActions,
@@ -5683,8 +5670,6 @@ internal fun VideoDetailScreenStateHolder(
                             morphDepthProgressProvider =
                                 miuixCardTransitionState.progressProvider,
                             phaseProvider = videoCardDepthBackgroundState.phaseProvider,
-                            followProgressEnabledProvider = videoCardDepthBackgroundState
-                                .returnContentFollowProgressEnabledProvider,
                             isReturnGestureInProgressProvider = {
                                 videoCardDepthBackgroundState
                                     .isReturnGestureInProgressProvider() ||
@@ -6004,7 +5989,6 @@ internal fun VideoDetailScreenStateHolder(
                     sourceLayout = rootCardTransition.sourceLayout,
                     isNowPlayingBar = true,
                     isCommittedCardReturn = isCommittedCardReturn,
-                    followProgressEnabled = videoCardDepthBackgroundState.returnContentFollowProgressEnabledProvider(),
                 )
             }
         },

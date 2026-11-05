@@ -313,6 +313,8 @@ internal fun BottomBarMatchedReusableLiquidDock(
      * Other chrome must leave this false.
      */
     reuseEnabled: Boolean = false,
+    // 独立场景由入口传入已包含总开关的结果；其余组件保留共享材质默认值。
+    materialEnabled: Boolean = LocalAppThemeConfig.current.liquidGlassEnabled,
     elasticFeedbackEnabled: Boolean = false,
     elasticFeedbackStrength: Float = 1f,
     allowConsumedDrag: () -> Boolean = { false },
@@ -327,7 +329,7 @@ internal fun BottomBarMatchedReusableLiquidDock(
     val elasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState(
         feedbackStrength = elasticFeedbackStrength,
     )
-    val reuseAllowed = LocalAppThemeConfig.current.liquidGlassEnabled
+    val reuseAllowed = materialEnabled
     if (!reuseEnabled || !reuseAllowed || !liquidGlassEffectsEnabled) {
         val fallbackElasticFeedbackEnabled = elasticFeedbackEnabled &&
             !com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
@@ -447,6 +449,7 @@ internal fun BottomBarMatchedReusableLiquidDock(
             ) {
                 com.android.purebilibili.core.ui.blur.AppGlassContainerContent(
                     enabled = glassEnabled,
+                    materialEnabled = materialEnabled,
                     backdrop = shellSource?.takeIf { it.isReady }?.backdrop ?: effectiveBackdrop,
                     ownsDeformation = elasticFeedbackEnabled,
                 ) { content(true) }

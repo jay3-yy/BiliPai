@@ -154,7 +154,7 @@ fun LandscapeDanmakuComposer(
     modifier: Modifier = Modifier
 ) {
     // Only the glass editor changes; native keeps its existing dialog, insets, and defaults.
-    if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
+    if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled) {
         GlassLandscapeDanmakuComposer(
             visible = visible,
             onDismiss = onDismiss,

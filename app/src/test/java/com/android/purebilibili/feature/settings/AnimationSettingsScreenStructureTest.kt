@@ -45,17 +45,6 @@ class AnimationSettingsScreenStructureTest {
     }
 
     @Test
-    fun animationSettingsScreen_exposesVideoSharedReturnGestureFollowToggle() {
-        val source = animationSettingsSource()
-
-        assertTrue(source.contains("title = \"返回时倾斜\""))
-        assertTrue(source.contains("滑动返回时，画面随手指移动"))
-        assertTrue(source.contains("checked = appNavigationSettings.videoSharedReturnGestureFollowEnabled"))
-        assertTrue(source.contains("SettingsManager.setVideoSharedReturnGestureFollowEnabled("))
-        assertTrue(source.contains("enabled = state.cardTransitionEnabled"))
-    }
-
-    @Test
     fun animationSettingsScreen_doesNotExposeLiveReturnPreviewToggle() {
         val source = animationSettingsSource()
 

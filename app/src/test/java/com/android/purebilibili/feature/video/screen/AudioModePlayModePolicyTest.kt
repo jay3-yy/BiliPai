@@ -27,8 +27,8 @@ class AudioModePlayModePolicyTest {
     }
 
     @Test
-    fun shouldUseAudioModeLiquidPlayModeControl_usesEitherAvailableLiquidCapability() {
-        assertTrue(
+    fun shouldUseAudioModeLiquidPlayModeControl_respectsSceneRegardlessOfCapability() {
+        assertFalse(
             shouldUseAudioModeLiquidPlayModeControl(
                 supportsIndependentLiquidGlass = true,
                 androidNativeLiquidGlassEnabled = false

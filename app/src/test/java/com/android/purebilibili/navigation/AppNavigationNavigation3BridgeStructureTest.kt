@@ -213,12 +213,6 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertFalse(source.contains("previewNativeVideoBackProgress("))
         assertFalse(source.contains("nativeVideoBackPreviewVideoKey"))
         assertFalse(navHostCall.contains("onNativeVideoBackProgress = ::previewNativeVideoBackProgress"))
-        assertTrue(
-            navHostCall.contains(
-                "videoSharedReturnGestureFollowEnabled =\n" +
-                    "                        appNavigationSettings.videoSharedReturnGestureFollowEnabled"
-            )
-        )
     }
 
     @Test

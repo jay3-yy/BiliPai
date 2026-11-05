@@ -284,7 +284,7 @@ fun PortraitFullscreenOverlay(
                     // Scope the opt-out here so player chrome keeps its configured glass material.
                     val infoThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
                     CompositionLocalProvider(
-                        com.android.purebilibili.core.ui.LocalAppThemeConfig provides infoThemeConfig.copy(liquidGlassEnabled = false),
+                        com.android.purebilibili.core.ui.LocalAppThemeConfig provides infoThemeConfig.copy(liquidGlassEnabled = false, popupGlassEnabled = false, playerGlassEnabled = false),
                         LocalPlayerControlGlassEnabled provides false,
                     ) {
                         Box(

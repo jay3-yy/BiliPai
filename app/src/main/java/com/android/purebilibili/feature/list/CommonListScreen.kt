@@ -305,7 +305,7 @@ fun CommonListScreen(
     val pinchListColumns = gridColumnPreference.columns
     val topChromePolicy = rememberAppTopChromePolicy()
     val liquidGlassEnabled = rememberAppChromeLiquidGlassEnabled(
-        androidNativeEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+        androidNativeEnabled = homeSettings.otherGlassEnabled,
     )
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
         resolveDeviceUiProfile(

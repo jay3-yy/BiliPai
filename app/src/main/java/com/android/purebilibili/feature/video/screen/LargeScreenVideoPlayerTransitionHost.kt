@@ -77,7 +77,6 @@ internal fun LargeScreenVideoPlayerTransitionHost(
     hasRenderedFirstFrame: Boolean,
     detailContentLoading: Boolean,
     entryCoverAlphaProvider: () -> Float = { 0f },
-    followProgressEnabledProvider: () -> Boolean = { true },
     modifier: Modifier = Modifier,
     content: @Composable (Dp) -> Unit,
 ) {
@@ -118,7 +117,6 @@ internal fun LargeScreenVideoPlayerTransitionHost(
             detailContentLoading = detailContentLoading,
             isNowPlayingBar = isNowPlayingBar,
             isCommittedCardReturn = isCommittedReturn,
-            followProgressEnabled = followProgressEnabledProvider(),
         )
     }
     val progress: () -> Float = {

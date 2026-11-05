@@ -672,6 +672,7 @@ data class HomeSettings(
     val bottomBarSearchLayoutMode: BottomBarSearchLayoutMode =
         BottomBarSearchLayoutMode.FULL_DOCK,
     val androidNativeLiquidGlassEnabled: Boolean = false,
+    val liquidGlassScenes: com.android.purebilibili.core.ui.AppLiquidGlassSettings = com.android.purebilibili.core.ui.AppLiquidGlassSettings(),
     val liquidGlassStyle: LiquidGlassStyle = LiquidGlassStyle.CLASSIC, // [New]
     val liquidGlassMode: LiquidGlassMode = LiquidGlassMode.BALANCED,
     val liquidGlassStrength: Float = 0.52f,
@@ -729,8 +730,18 @@ data class HomeSettings(
     // 当 Flow 加载完成后，如果实际值是 false，LaunchedEffect 会再次触发并显示弹窗
     val crashTrackingConsentShown: Boolean = true
 ) {
-    val isLiquidGlassEnabled: Boolean
-        get() = androidNativeLiquidGlassEnabled
+    fun isGlassSceneEnabled(scene: com.android.purebilibili.core.ui.AppLiquidGlassScene): Boolean =
+        androidNativeLiquidGlassEnabled && liquidGlassScenes.isEnabled(scene)
+
+    val bottomDockGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.BOTTOM_DOCK)
+    val homeTopGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.HOME_TOP_BAR)
+    val homeSearchGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.HOME_SEARCH)
+    val commentBarGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.COMMENT_BAR)
+    val otherGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS)
+    val playerGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.PLAYER_CONTROLS)
+    val popupGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.MENUS_DIALOGS)
+    val nowPlayingGlassEnabled: Boolean get() = isGlassSceneEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.NOW_PLAYING)
+    val isLiquidGlassEnabled: Boolean get() = otherGlassEnabled
 }
 
 internal fun resolveHomeCardFrostedGlassEnabled(
@@ -1059,9 +1070,6 @@ data class AppNavigationSettings(
     val predictiveBackExitDirection: String = "always_right",
     val miuixTransitionBlurEnabled: Boolean = true,
     val miuixPredictiveBackMaxProgressPercent: Int = 100,
-    val videoSharedReturnGestureFollowEnabled: Boolean = true,
-    val videoSharedReturnGestureTranslationEnabled: Boolean = true,
-    val videoReturnContentFollowProgressEnabled: Boolean = true,
     val settingsContainerMorphEnabled: Boolean = true,
     val settingsContainerRealtimeBlurEnabled: Boolean = false,
     val liquidIndicatorWobbleEnabled: Boolean = true,
@@ -1423,6 +1431,7 @@ object SettingsManager {
         stringPreferencesKey("single_choice_presentation")
     private val KEY_BG_PLAY = booleanPreferencesKey("bg_play")
     //  [新增] 触感反馈 (默认开启)
+    private val KEY_LIQUID_GLASS_SCENES_DISABLED = intPreferencesKey("liquid_glass_scenes_disabled")
     private val KEY_HAPTIC_SCENES_DISABLED = intPreferencesKey("haptic_scenes_disabled")
     private val KEY_HAPTIC_FEEDBACK_ENABLED = booleanPreferencesKey("haptic_feedback_enabled")
     private val KEY_GLOBAL_TEXT_TAP_COPY_ENABLED =
@@ -1870,6 +1879,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             androidNativeLiquidGlassEnabled =
                 preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED]
                     ?: false,
+            liquidGlassScenes = com.android.purebilibili.core.ui.AppLiquidGlassSettings(preferences[KEY_LIQUID_GLASS_SCENES_DISABLED] ?: 0),
             liquidGlassStyle = legacyLiquidGlassStyle,
             liquidGlassMode = liquidGlassMode,
             liquidGlassStrength = liquidGlassStrength,
@@ -4742,6 +4752,18 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     ) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_BOTTOM_BAR_SEARCH_LAYOUT_MODE] = value.value
+        }
+    }
+
+    fun getLiquidGlassScenes(context: Context): Flow<com.android.purebilibili.core.ui.AppLiquidGlassSettings> =
+        context.settingsDataStore.data.map {
+            com.android.purebilibili.core.ui.AppLiquidGlassSettings(it[KEY_LIQUID_GLASS_SCENES_DISABLED] ?: 0)
+        }
+
+    suspend fun setLiquidGlassSceneEnabled(context: Context, scene: com.android.purebilibili.core.ui.AppLiquidGlassScene, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            val current = com.android.purebilibili.core.ui.AppLiquidGlassSettings(preferences[KEY_LIQUID_GLASS_SCENES_DISABLED] ?: 0)
+            preferences[KEY_LIQUID_GLASS_SCENES_DISABLED] = current.withEnabled(scene, enabled).disabledMask
         }
     }
 
@@ -8243,10 +8265,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_PREDICTIVE_BACK_EXIT_DIRECTION = stringPreferencesKey("predictive_back_exit_direction")
     private val KEY_MIUIX_TRANSITION_BLUR_ENABLED =
         booleanPreferencesKey("miuix_transition_blur_enabled")
-    private val KEY_VIDEO_SHARED_RETURN_GESTURE_FOLLOW_ENABLED =
-        booleanPreferencesKey("video_shared_return_gesture_follow_enabled")
-    private val KEY_VIDEO_SHARED_RETURN_GESTURE_TRANSLATION_ENABLED =
-        booleanPreferencesKey("video_shared_return_gesture_translation_enabled")
     
     /**
      *  平板导航模式
@@ -8303,16 +8321,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             miuixPredictiveBackMaxProgressPercent =
                 (preferences[miuixPredictiveBackMaxProgressPercentPreferencesKey] ?: 100)
                     .coerceIn(0, 100),
-            videoSharedReturnGestureFollowEnabled =
-                preferences[KEY_VIDEO_SHARED_RETURN_GESTURE_FOLLOW_ENABLED] ?: true,
-            videoReturnContentFollowProgressEnabled =
-                preferences[booleanPreferencesKey("video_return_content_follow_progress_enabled")] ?: true,
             settingsContainerMorphEnabled =
                 preferences[booleanPreferencesKey("settings_container_morph_enabled")] ?: true,
             settingsContainerRealtimeBlurEnabled =
                 preferences[booleanPreferencesKey("settings_container_realtime_blur_enabled")] ?: false,
-            videoSharedReturnGestureTranslationEnabled =
-                preferences[KEY_VIDEO_SHARED_RETURN_GESTURE_TRANSLATION_ENABLED] ?: true,
         )
     }
 
@@ -8370,14 +8382,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         NavigationSettingsStore.setMiuixPredictiveBackMaxProgressPercent(context, percent)
     }
 
-    suspend fun setVideoSharedReturnGestureFollowEnabled(context: Context, enabled: Boolean) {
-        NavigationSettingsStore.setVideoSharedReturnGestureFollowEnabled(context, enabled)
-    }
-
-    suspend fun setVideoReturnContentFollowProgressEnabled(context: Context, enabled: Boolean) {
-        NavigationSettingsStore.setVideoReturnContentFollowProgressEnabled(context, enabled)
-    }
-
     fun getSettingsContainerRealtimeBlurEnabled(context: Context): Flow<Boolean> =
         NavigationSettingsStore.getSettingsContainerRealtimeBlurEnabled(context)
 
@@ -8390,10 +8394,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setSettingsContainerMorphEnabled(context: Context, enabled: Boolean) {
         NavigationSettingsStore.setSettingsContainerMorphEnabled(context, enabled)
-    }
-
-    suspend fun setVideoSharedReturnGestureTranslationEnabled(context: Context, enabled: Boolean) {
-        NavigationSettingsStore.setVideoSharedReturnGestureTranslationEnabled(context, enabled)
     }
 
     fun getFullScreenSwipeBackEnabled(context: Context): Flow<Boolean> =
@@ -8666,6 +8666,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED,
                 SettingsShareSection.APPEARANCE
             ),
+            IntShareablePreferenceDefinition(KEY_LIQUID_GLASS_SCENES_DISABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_LIQUID_GLASS_ENABLED, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_LIQUID_GLASS_STYLE, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_LIQUID_GLASS_MODE, SettingsShareSection.APPEARANCE),
@@ -8741,10 +8742,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             ),
             BooleanShareablePreferenceDefinition(KEY_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(
-                booleanPreferencesKey("video_return_content_follow_progress_enabled"),
-                SettingsShareSection.APPEARANCE,
-            ),
-            BooleanShareablePreferenceDefinition(
                 KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED,
                 SettingsShareSection.APPEARANCE
             ),
@@ -8762,14 +8759,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             ),
             IntShareablePreferenceDefinition(
                 miuixPredictiveBackMaxProgressPercentPreferencesKey,
-                SettingsShareSection.APPEARANCE,
-            ),
-            BooleanShareablePreferenceDefinition(
-                KEY_VIDEO_SHARED_RETURN_GESTURE_FOLLOW_ENABLED,
-                SettingsShareSection.APPEARANCE,
-            ),
-            BooleanShareablePreferenceDefinition(
-                KEY_VIDEO_SHARED_RETURN_GESTURE_TRANSLATION_ENABLED,
                 SettingsShareSection.APPEARANCE,
             ),
             IntShareablePreferenceDefinition(KEY_VIDEO_SHARED_TRANSITION_SPEED, SettingsShareSection.APPEARANCE),
@@ -9017,6 +9006,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val liquidGlassShareableStorageKeys: Set<String> by lazy {
         setOf(
             KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED.name,
+            KEY_LIQUID_GLASS_SCENES_DISABLED.name,
             KEY_LIQUID_CONTROLS_USE_THEME_COLOR.name,
             KEY_LIQUID_GLASS_ENABLED.name,
             KEY_TOP_BAR_LIQUID_GLASS_ENABLED.name,
@@ -9084,6 +9074,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             KEY_LIQUID_CONTROLS_USE_THEME_COLOR.name to JsonPrimitive(
                 preferences[KEY_LIQUID_CONTROLS_USE_THEME_COLOR] ?: false
             ),
+            KEY_LIQUID_GLASS_SCENES_DISABLED.name to JsonPrimitive(preferences[KEY_LIQUID_GLASS_SCENES_DISABLED] ?: 0),
             KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED.name to JsonPrimitive(
                 preferences[KEY_ANDROID_NATIVE_LIQUID_GLASS_ENABLED] ?: true
             ),

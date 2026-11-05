@@ -61,9 +61,6 @@ internal enum class SettingsFeaturePreview(
     CARD_ENTRANCE("animation.card_animation_enabled", R.string.preview_title_card_entrance, R.string.preview_summary_card_entrance),
     CARD_EXPAND("animation.card_transition_enabled", R.string.preview_title_card_expand, R.string.preview_summary_card_expand),
     LIVE_FRAME("animation.live_surface_card_transition_enabled", R.string.preview_title_live_frame, R.string.preview_summary_live_frame),
-    RETURN_CONTENT("animation.app_navigation_settings.video_return_content_follow_progress_enabled", R.string.preview_title_return_content, R.string.preview_summary_return_content),
-    RETURN_TILT("animation.app_navigation_settings.video_shared_return_gesture_follow_enabled", R.string.preview_title_return_tilt, R.string.preview_summary_return_tilt),
-    RETURN_FOLLOW("animation.app_navigation_settings.video_shared_return_gesture_translation_enabled", R.string.preview_title_return_follow, R.string.preview_summary_return_follow),
     TRANSITION_BLUR("animation.video_transition_realtime_blur_enabled", R.string.preview_title_transition_blur, R.string.preview_summary_transition_blur);
 }
 

@@ -16,6 +16,27 @@ internal enum class VideoCardTransitionExposure {
     Restoring,
 }
 
+/** 首页与导航宿主保留各自坐标系，仅在可录制的玻璃卡片转场期间复用合成纹理。 */
+internal fun shouldRasterizeVideoCardChromeBackdrop(
+    liquidGlassEnabled: Boolean,
+    cardTransitionEnabled: Boolean,
+    reduceMotion: Boolean,
+    recordingAllowed: Boolean,
+    exposure: VideoCardTransitionExposure,
+): Boolean {
+    if (!liquidGlassEnabled || !cardTransitionEnabled || reduceMotion || !recordingAllowed) {
+        return false
+    }
+    return when (exposure) {
+        VideoCardTransitionExposure.Opening,
+        VideoCardTransitionExposure.BackPreview,
+        VideoCardTransitionExposure.Returning,
+        VideoCardTransitionExposure.Restoring -> true
+        VideoCardTransitionExposure.Idle,
+        VideoCardTransitionExposure.SettledHidden -> false
+    }
+}
+
 /** Background feed work resumes when the source is fully restored, including cancellation. */
 internal fun shouldDeferVideoCardSourceHeavyWork(
     exposure: VideoCardTransitionExposure,

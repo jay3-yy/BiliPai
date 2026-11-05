@@ -123,8 +123,6 @@ class AppNavigationSettingsMappingPolicyTest {
         assertEquals("always_right", result.predictiveBackExitDirection)
         assertTrue(result.miuixTransitionBlurEnabled)
         assertEquals(100, result.miuixPredictiveBackMaxProgressPercent)
-        assertTrue(result.videoSharedReturnGestureFollowEnabled)
-        assertTrue(result.videoSharedReturnGestureTranslationEnabled)
     }
 
     @Test
@@ -142,20 +140,6 @@ class AppNavigationSettingsMappingPolicyTest {
     }
 
     @Test
-    fun gestureRotationAndTranslationPreferencesAreIndependent() {
-        for (poseEnabled in listOf(false, true)) {
-            for (translationEnabled in listOf(false, true)) {
-                val result = mapAppNavigationSettingsFromPreferences(mutablePreferencesOf(
-                    booleanPreferencesKey("video_shared_return_gesture_follow_enabled") to poseEnabled,
-                    booleanPreferencesKey("video_shared_return_gesture_translation_enabled") to translationEnabled,
-                ))
-                assertEquals(poseEnabled, result.videoSharedReturnGestureFollowEnabled)
-                assertEquals(translationEnabled, result.videoSharedReturnGestureTranslationEnabled)
-            }
-        }
-    }
-
-    @Test
     fun populatedPreferences_mapToNavigationSettingsCorrectly() {
         val prefs = mutablePreferencesOf(
             intPreferencesKey("bottom_bar_visibility_mode") to SettingsManager.BottomBarVisibilityMode.SCROLL_HIDE.value,
@@ -169,7 +153,6 @@ class AppNavigationSettingsMappingPolicyTest {
             booleanPreferencesKey("sidebar_account_switcher_enabled") to false,
             booleanPreferencesKey("miuix_transition_blur_enabled") to false,
             intPreferencesKey("miuix_predictive_back_max_progress_percent") to 120,
-            booleanPreferencesKey("video_shared_return_gesture_follow_enabled") to false,
         )
 
         val result = mapAppNavigationSettingsFromPreferences(prefs)
@@ -182,7 +165,6 @@ class AppNavigationSettingsMappingPolicyTest {
         assertFalse(result.sidebarAccountSwitcherEnabled)
         assertFalse(result.miuixTransitionBlurEnabled)
         assertEquals(100, result.miuixPredictiveBackMaxProgressPercent)
-        assertFalse(result.videoSharedReturnGestureFollowEnabled)
     }
 
     @Test

@@ -446,11 +446,13 @@ fun VideoPlayerOverlay(
     // 横竖屏共用原生功能布局；玻璃材质在共享控件入口显式分支。
     // Keep the non-inline backdrop slot small. Capturing this screen's locals
     // here exceeds DEX's 255 argument-register limit in synthetic constructors.
-    PlayerControlsBackdropHost(
-        enabled = true,
-        modifier = Modifier.fillMaxSize(),
+    val config = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.android.purebilibili.core.ui.LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.playerGlassEnabled),
     ) {
-        VideoPlayerOverlayContent(state, actions)
+        PlayerControlsBackdropHost(enabled = true, modifier = Modifier.fillMaxSize()) {
+            VideoPlayerOverlayContent(state, actions)
+        }
     }
 }
 
@@ -1466,7 +1468,10 @@ private fun VideoPlayerOverlayContent(
             .playerActionBounds { playerBoundsInWindow = it },
     ) {
         val subtitleChromeHeightSeed = with(androidx.compose.ui.platform.LocalDensity.current) {
-            piliPlayerBottomControlsHeightDp(showViewPointMarkers && viewPoints.isNotEmpty()).dp.roundToPx()
+            piliPlayerBottomControlsHeightDp(
+                hasChapters = showViewPointMarkers && viewPoints.isNotEmpty(),
+                compactInline = !isFullscreen && configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT,
+            ).dp.roundToPx()
         }
         var subtitleChromeHeightPx by remember(subtitleChromeHeightSeed) {
             mutableIntStateOf(subtitleChromeHeightSeed)

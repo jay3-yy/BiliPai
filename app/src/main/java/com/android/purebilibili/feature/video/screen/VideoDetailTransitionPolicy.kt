@@ -282,7 +282,6 @@ internal fun resolveVideoDetailReturnMediaFrame(
     liveReturnMorph: Boolean = false,
     isReturnGestureInProgress: Boolean = false,
     showResidentCoverUntilFirstFrame: Boolean = false,
-    followProgressEnabled: Boolean = true,
     progressiveResidentCover: Boolean = false,
     entryCoverAlpha: Float = 0f,
 ): VideoDetailReturnMediaFrame {
@@ -302,7 +301,7 @@ internal fun resolveVideoDetailReturnMediaFrame(
         )
     }
     if (!liveReturnMorph) {
-        if (progressiveResidentCover && followProgressEnabled) {
+        if (progressiveResidentCover) {
             // Take over early, while the playback surface stays fully opaque underneath.
             // The same depth reverses on gesture cancellation; no new reveal is scheduled.
             val fraction = ((1f - transitionProgress.coerceIn(0f, 1f)) /
@@ -318,9 +317,7 @@ internal fun resolveVideoDetailReturnMediaFrame(
     }
     // Keep the flying media slot opaque. Transparent cover + fading player is the empty
     // card: Miuix will not composite the list card through the flying clip.
-    val coverTakeover = if (!followProgressEnabled && transitionProgress > 0f) {
-        0f
-    } else resolveVideoCardLiveReturnVisualHandoffAlpha(transitionProgress)
+    val coverTakeover = resolveVideoCardLiveReturnVisualHandoffAlpha(transitionProgress)
     return VideoDetailReturnMediaFrame(
         coverAlpha = coverTakeover,
         // 封面覆盖在视频上。两层互补淡出会在中点只剩 75% 合成不透明度。
@@ -337,10 +334,8 @@ internal fun shouldUseProgressiveResidentCoverReturn(
     liveReturnMorph: Boolean,
     forceCoverOnly: Boolean,
     reduceMotion: Boolean,
-    followProgressEnabled: Boolean,
 ): Boolean = sdkInt >= 35 && ownsInlineCardTransition && hasRenderedFirstFrame &&
-    hasDecodedResidentCover && !liveReturnMorph && !forceCoverOnly && !reduceMotion &&
-    followProgressEnabled
+    hasDecodedResidentCover && !liveReturnMorph && !forceCoverOnly && !reduceMotion
 
 internal fun resolveVideoDetailReturnCoverAlpha(
     transitionProgress: Float,

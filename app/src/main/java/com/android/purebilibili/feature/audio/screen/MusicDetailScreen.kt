@@ -111,6 +111,6 @@ private fun MusicDetailContent(
         onLyricsRetry = viewModel::retryLyrics,
         onLyricsSearch = viewModel::searchLyrics,
         onLyricsCandidateSelected = viewModel::selectLyricsCandidate,
-        liquidGlassEffectsEnabled = homeSettings.androidNativeLiquidGlassEnabled
+        liquidGlassEffectsEnabled = homeSettings.otherGlassEnabled
     )
 }

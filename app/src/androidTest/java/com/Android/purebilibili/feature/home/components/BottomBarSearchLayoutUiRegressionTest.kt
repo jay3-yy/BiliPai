@@ -11,14 +11,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -33,6 +38,54 @@ import org.junit.runner.RunWith
 class BottomBarSearchLayoutUiRegressionTest {
     @get:Rule
     val rule = createComposeRule()
+
+    @Test
+    fun reversingTargetKeepsSearchIconAndTextAtTheCurrentVisualProgress() {
+        val expanded = mutableStateOf(true)
+        val progress = mutableFloatStateOf(0.5f)
+        val width = mutableStateOf(160.dp)
+        val glass = mutableStateOf(true)
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                Box(Modifier.width(width.value).height(56.dp).testTag("content")) {
+                    BiliPaiBottomBarSearchVisualContent(
+                        expanded = expanded.value,
+                        query = "",
+                        onQueryChange = {},
+                        onSubmit = {},
+                        contentColor = Color.Black,
+                        accentColor = Color.Blue,
+                        iconScale = { 1f },
+                        fieldAlpha = { progress.floatValue },
+                        interactive = false,
+                        iconStyle = SharedFloatingBottomBarIconStyle.MATERIAL,
+                        glassSearchVisuals = glass.value,
+                    )
+                }
+            }
+        }
+        for (useGlass in listOf(true, false)) {
+            rule.runOnIdle {
+                glass.value = useGlass
+                expanded.value = true
+                progress.floatValue = 0.5f
+                width.value = 160.dp
+            }
+            val before = rule.onNodeWithContentDescription("搜索").fetchSemanticsNode().boundsInRoot
+            rule.runOnIdle { expanded.value = false }
+            val reversed = rule.onNodeWithContentDescription("搜索").fetchSemanticsNode().boundsInRoot
+            assertEquals(before.left, reversed.left, 0.01f)
+            rule.onNodeWithText("搜索").assertExists()
+
+            rule.runOnIdle {
+                progress.floatValue = 0f
+                width.value = 56.dp
+            }
+            val collapsedIcon = rule.onNodeWithContentDescription("搜索").fetchSemanticsNode().boundsInRoot
+            val collapsedHost = rule.onNodeWithTag("content").fetchSemanticsNode().boundsInRoot
+            assertEquals(collapsedHost.center.x, collapsedIcon.center.x, 0.01f)
+        }
+    }
 
     @Test
     fun deferredSizeMatchesWidthAndHeightUnderParentConstraints() {

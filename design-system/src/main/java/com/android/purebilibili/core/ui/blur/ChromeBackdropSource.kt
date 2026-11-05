@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.blur
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.Stable
@@ -10,6 +11,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.layer.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -38,13 +40,16 @@ class ChromeBackdropSource internal constructor(
  *
  * This is not a bitmap snapshot or a frame cache: child invalidations still record fresh
  * content. Keep the replay layer separate from the backdrop layer to avoid recording itself.
- * No RenderEffect, alpha or clipping is applied to the replay layer, so it does not request
- * another offscreen raster pass. Miuix still owns coordinates and backdrop lifecycle.
+ * By default the replay layer has no extra offscreen raster pass.
+ * Miuix still owns coordinates and backdrop lifecycle.
  * Set [drawContentToScreen] to false for hidden captures: record without an alpha-zero layer
  * that can cause the renderer to skip drawing the source content.
  * [isolateContentDrawing] explicitly isolates live child commands for navigation/home sources;
  * other callers retain their existing drawing structure by default.
  * [recordingEnabled] 暂停时移除录制节点而保留源身份；普通内容照常显示，隐藏采样仍不显示。
+ * [rasterizeContent] 仅供已有视口边界的导航宿主在玻璃转场时显式启用：
+ * 屏幕与背景消费者复用合成纹理，子层失效仍更新画面，不冻结视频或动画。
+ * 离屏纹理按源尺寸裁切，不能用于需要越界绘制的图标或隐藏光学采样。
  */
 @Composable
 fun rememberChromeBackdropSource(
@@ -52,8 +57,16 @@ fun rememberChromeBackdropSource(
     recordingBackground: Color = Color.Unspecified,
     isolateContentDrawing: Boolean = false,
     recordingEnabled: Boolean = LocalChromeBackdropRecordingAllowed.current,
+    rasterizeContent: Boolean = false,
 ): ChromeBackdropSource {
     val contentLayer = rememberGraphicsLayer()
+    SideEffect {
+        contentLayer.compositingStrategy = if (rasterizeContent && recordingEnabled) {
+            CompositingStrategy.Offscreen
+        } else {
+            CompositingStrategy.Auto
+        }
+    }
     // Theme frames update the recording in draw, without replacing the source passed
     // to consumers or rebuilding its modifier chain. Child-layer invalidations still
     // record fresh content; this is not a frozen backdrop cache.

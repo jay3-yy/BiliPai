@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 class VideoDetailWholeCardReturnTest {
     @Test
     fun wholeCardTakesOverInTheLastSegmentAndSeeksBackOnCancel() {
-        fun alpha(depth: Float) = resolveVideoDetailWholeCardReturnAlpha(depth, true, true, false)
+        fun alpha(depth: Float) = resolveVideoDetailWholeCardReturnAlpha(depth, true, false)
         assertEquals(0f, alpha(1f))
         assertEquals(0f, alpha(0.45f))
         assertEquals(1f, alpha(0.02f), 0.0001f)
@@ -25,14 +25,12 @@ class VideoDetailWholeCardReturnTest {
             assertTrue(current <= previous)
             previous = current
         }
-        assertEquals(0f, resolveVideoDetailWholeCardReturnAlpha(0f, false, true, false))
+        assertEquals(0f, resolveVideoDetailWholeCardReturnAlpha(0f, false, false))
     }
 
     @Test
-    fun disabledContentFollowHoldsTheLiveGroupUntilTheEndpoint() {
-        assertEquals(0f, resolveVideoDetailWholeCardReturnAlpha(0.001f, true, false, false))
-        assertEquals(1f, resolveVideoDetailWholeCardReturnAlpha(0f, true, false, false))
+    fun committedIdleKeepsTheSnapshotUntilEntryRemoval() {
         // Navigation may release its depth metadata one frame before removing the entry.
-        assertEquals(1f, resolveVideoDetailWholeCardReturnAlpha(1f, false, false, true))
+        assertEquals(1f, resolveVideoDetailWholeCardReturnAlpha(1f, false, true))
     }
 }

@@ -123,7 +123,7 @@ fun AppearanceSettingsScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val homeConfiguration = rememberSettingsHomeConfiguration()
     val effectiveLiquidGlassEnabled = resolveHomeChromeLiquidGlassEnabled(
-        userEnabled = homeConfiguration.androidNativeLiquidGlassEnabled,
+        userEnabled = homeConfiguration.otherGlassEnabled,
         sdkInt = Build.VERSION.SDK_INT,
     )
     val coroutineScope = rememberCoroutineScope()
@@ -510,7 +510,7 @@ fun AppearanceSettingsContent(
     val showProfileEditButton by remember(context) { SettingsManager.getShowProfileEditButton(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val effectiveLiquidGlassEnabled = resolveHomeChromeLiquidGlassEnabled(
-        userEnabled = homeConfiguration.androidNativeLiquidGlassEnabled,
+        userEnabled = homeConfiguration.otherGlassEnabled,
         sdkInt = Build.VERSION.SDK_INT,
     )
     val wallpaperPreviewOverrides = themeConfiguration.wallpaperPaletteOverrides

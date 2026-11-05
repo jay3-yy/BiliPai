@@ -161,7 +161,10 @@ fun TopControlBar(
         }
     }
     val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-    val buttonSpacing = if (glass) 4.dp else 0.dp
+    // 仅收紧竖屏内嵌玻璃按钮的组内间距，原生与全屏保留既有几何。
+    val buttonSpacing = if (glass) {
+        if (!isFullscreen && isPortrait) 2.dp else 4.dp
+    } else 0.dp
     val motionEnabled = LocalComponentMotionEnabled.current
     val hasTitle = policy.showTitle && title.isNotEmpty()
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
@@ -178,7 +181,7 @@ fun TopControlBar(
             modifier = modifier.fillMaxWidth()
                 .windowInsetsPadding(playerControlHorizontalInsets(isFullscreen, isPortrait))
                 .playerControlTopSafeArea(isFullscreen, isPortrait, statusBarVisible)
-                .padding(vertical = policy.verticalPaddingDp.dp),
+                .padding(vertical = (if (!isFullscreen && isPortrait) 8 else policy.verticalPaddingDp).dp),
         ) {
             PiliHeaderSlots(
                 hasTitle = hasTitle,

@@ -31,4 +31,22 @@ class DanmakuControlCenterMotionPolicyTest {
         val menu = playerNativeMenuConfig(original)
         assertEquals(original, menu.copy(liquidGlassEnabled = true, nativeMiuixPopupsEnabled = original.nativeMiuixPopupsEnabled))
     }
+
+    @Test
+    fun menuMaterialIsIndependentOfPlayerAndPageMaterial() {
+        val menusOnly = AppThemeConfig(
+            liquidGlassEnabled = false,
+            playerGlassEnabled = false,
+            popupGlassEnabled = true,
+        )
+        assertTrue(playerNativeMenuConfig(menusOnly).liquidGlassEnabled)
+        val playerOnly = AppThemeConfig(
+            liquidGlassEnabled = true,
+            playerGlassEnabled = true,
+            popupGlassEnabled = false,
+        )
+        assertFalse(playerNativeMenuConfig(playerOnly).liquidGlassEnabled)
+        assertTrue(playerOnly.playerGlassEnabled)
+    }
+
 }

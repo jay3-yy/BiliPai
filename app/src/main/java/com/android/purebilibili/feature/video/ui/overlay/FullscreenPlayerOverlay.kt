@@ -223,6 +223,21 @@ internal fun shouldStartFullscreenDragGesture(
 fun FullscreenPlayerOverlay(
     miniPlayerManager: MiniPlayerManager,
     onDismiss: () -> Unit,
+    onNavigateToDetail: () -> Unit,
+) {
+    val config = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        com.android.purebilibili.core.ui.LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.playerGlassEnabled),
+    ) {
+        FullscreenPlayerOverlayContent(miniPlayerManager, onDismiss, onNavigateToDetail)
+    }
+}
+
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+@Composable
+private fun FullscreenPlayerOverlayContent(
+    miniPlayerManager: MiniPlayerManager,
+    onDismiss: () -> Unit,
     onNavigateToDetail: () -> Unit
 ) {
     val autoHide = rememberPlayerControlsAutoHide(4_000L)

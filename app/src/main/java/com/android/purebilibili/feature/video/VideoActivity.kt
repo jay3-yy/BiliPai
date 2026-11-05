@@ -192,12 +192,19 @@ class VideoActivity : ComponentActivity() {
             val runtimeVisualGuardEnabled by SettingsManager
                 .getRuntimeVisualGuardEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(this@VideoActivity)
+            val liquidGlassMasterEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
+            val liquidGlassScenes by SettingsManager.getLiquidGlassScenes(this@VideoActivity)
+                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
+            val liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
+                com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS,
+            )
             val liquidSwitchThumbMode by SettingsManager.getLiquidSwitchThumbMode(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
             val appThemeConfig = remember(
                 liquidGlassEnabled,
+                liquidGlassMasterEnabled,
+                liquidGlassScenes,
                 liquidSwitchThumbMode,
                 blurIntensity,
                 headerBlurEnabled,
@@ -213,6 +220,9 @@ class VideoActivity : ComponentActivity() {
             ) {
                 AppThemeConfig(
                     liquidGlassEnabled = liquidGlassEnabled,
+                    playerGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.PLAYER_CONTROLS),
+                    popupGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.MENUS_DIALOGS),
+                    nowPlayingGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.NOW_PLAYING),
                     liquidSwitchThumbMode = liquidSwitchThumbMode,
                     blurIntensity = blurIntensity,
                     headerBlurEnabled = headerBlurEnabled,
@@ -265,7 +275,7 @@ class VideoActivity : ComponentActivity() {
                 // Miuix 独立窗口弹窗在视频面上空采样 backdrop；关闭玻璃时不提供
                 // presenter，原生 Miuix / MD3 菜单路径保持不变。
                 com.android.purebilibili.core.ui.popup.AppGlassPopupHost(
-                    glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+                    glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled &&
                         com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(
                             android.os.Build.VERSION.SDK_INT,
                         ),

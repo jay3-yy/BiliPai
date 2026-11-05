@@ -331,7 +331,6 @@ internal fun resolveVideoCardSecondaryContentVisualFrame(
     isReturnGestureInProgress: Boolean,
     motionTier: MotionTier,
     sourceLayout: VideoCardSourceLayout = VideoCardSourceLayout.STACKED,
-    followProgressEnabled: Boolean = true,
     /**
      * 卡片返回是否**已提交**（`markReturning` / 用户点返回）。见
      * [resolveVideoCardDetailChromeAlpha] 的同名参数：用于堵住 `phase == IDLE`
@@ -348,14 +347,14 @@ internal fun resolveVideoCardSecondaryContentVisualFrame(
     )
     // Only the existing native-viewport path uses the shared envelope. Other material /
     // shared-bounds paths keep their own timing; media and source chrome keep the late handoff.
-    val handoff = if (!followProgressEnabled && depth > 0f) 0f else resolveVideoCardSourceChromeVisualFrame(
+    val handoff = resolveVideoCardSourceChromeVisualFrame(
         morphDepthProgress = depth,
         phase = phase,
         isReturnGestureInProgress = isReturnGestureInProgress,
         sourceLayout = sourceLayout,
     ).handoffProgress
     val alpha = when {
-        preserveNativeViewport && motionTier != MotionTier.Reduced && returning && followProgressEnabled ->
+        preserveNativeViewport && motionTier != MotionTier.Reduced && returning ->
             resolveVideoCardNativeBodyPresence(depth)
         preserveNativeViewport && motionTier != MotionTier.Reduced &&
             phase == VideoCardTransitionBackgroundPhase.OPENING ->

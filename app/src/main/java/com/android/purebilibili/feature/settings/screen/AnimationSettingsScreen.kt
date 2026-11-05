@@ -79,9 +79,6 @@ private fun localizedAnimationSettingTitle(settingId: String): String {
             "animation.card_animation_enabled" -> R.string.animation_title_card_entrance
             "animation.card_transition_enabled" -> R.string.animation_title_card_transition
             "animation.live_surface_card_transition_enabled" -> R.string.animation_title_live_transition
-            "animation.app_navigation_settings.video_return_content_follow_progress_enabled" -> R.string.animation_title_return_follow
-            "animation.app_navigation_settings.video_shared_return_gesture_follow_enabled" -> R.string.animation_title_return_tilt
-            "animation.app_navigation_settings.video_shared_return_gesture_translation_enabled" -> R.string.animation_title_return_translation
             "animation.video_transition_realtime_blur_enabled" -> R.string.animation_title_transition_blur
             "animation.app_navigation_settings.miuix_transition_blur_enabled" -> R.string.animation_title_back_blur
             "animation.full_screen_swipe_back_enabled" -> R.string.animation_title_fullscreen_swipe_back
@@ -122,7 +119,7 @@ fun AnimationSettingsScreen(
         externalContentHandlesTopPadding = true,
         topBarBlurEnabled = state.headerBlurEnabled,
     ) {
-        CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
+        CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
             AnimationSettingsContent(
                 state = state,
                 viewModel = viewModel,
@@ -371,6 +368,10 @@ fun AnimationSettingsContent(
                                 iconTint = AppContentColors.secondaryText()
                             )
                         }
+                        AppPreferenceDivider()
+                        com.android.purebilibili.feature.settings.LiquidGlassScenePreference(
+                            enabled = state.androidNativeLiquidGlassEnabled && isLiquidGlassAvailable,
+                        )
                         AppPreferenceDivider()
                         SettingsItemAnchor("appearance.liquid_controls_use_theme_color") {
                             AppSwitchPreference(
@@ -638,9 +639,6 @@ fun AnimationSettingsContent(
                             SettingsFeaturePreview.CARD_ENTRANCE to state.cardAnimationEnabled,
                             SettingsFeaturePreview.CARD_EXPAND to state.cardTransitionEnabled,
                             SettingsFeaturePreview.LIVE_FRAME to liveSurfaceCardTransitionEnabled,
-                            SettingsFeaturePreview.RETURN_CONTENT to appNavigationSettings.videoReturnContentFollowProgressEnabled,
-                            SettingsFeaturePreview.RETURN_TILT to appNavigationSettings.videoSharedReturnGestureFollowEnabled,
-                            SettingsFeaturePreview.RETURN_FOLLOW to appNavigationSettings.videoSharedReturnGestureTranslationEnabled,
                             SettingsFeaturePreview.TRANSITION_BLUR to videoTransitionRealtimeBlurEnabled,
                         ),
                         transitionDurationMillis = previewTransitionDurationMillis,
@@ -682,69 +680,6 @@ fun AnimationSettingsContent(
                                 onCheckedChange = { viewModel.toggleLiveSurfaceCardTransition(it) },
                                 enabled = state.cardTransitionEnabled,
                                 iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("animation.app_navigation_settings.video_return_content_follow_progress_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.RETURN_CONTENT_FOLLOW),
-                                title = localizedAnimationSettingTitle("animation.app_navigation_settings.video_return_content_follow_progress_enabled"),
-                                subtitle = if (appNavigationSettings.videoReturnContentFollowProgressEnabled) {
-                                    stringResource(R.string.animation_return_follow_on)
-                                } else {
-                                    stringResource(R.string.animation_return_follow_off)
-                                },
-                                checked = appNavigationSettings.videoReturnContentFollowProgressEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        SettingsManager.setVideoReturnContentFollowProgressEnabled(context, enabled)
-                                    }
-                                },
-                                enabled = state.cardTransitionEnabled,
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("animation.app_navigation_settings.video_shared_return_gesture_follow_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.RETURN_GESTURE_POSE),
-                                title = localizedAnimationSettingTitle("animation.app_navigation_settings.video_shared_return_gesture_follow_enabled"),
-                                subtitle = if (appNavigationSettings.videoSharedReturnGestureFollowEnabled) {
-                                    stringResource(R.string.animation_return_tilt_on)
-                                } else {
-                                    stringResource(R.string.animation_return_tilt_off)
-                                },
-                                checked = appNavigationSettings.videoSharedReturnGestureFollowEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        SettingsManager.setVideoSharedReturnGestureFollowEnabled(
-                                            context,
-                                            enabled,
-                                        )
-                                    }
-                                },
-                                enabled = state.cardTransitionEnabled,
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("animation.app_navigation_settings.video_shared_return_gesture_translation_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.RETURN_GESTURE_TRANSLATION),
-                                title = localizedAnimationSettingTitle("animation.app_navigation_settings.video_shared_return_gesture_translation_enabled"),
-                                subtitle = if (appNavigationSettings.videoSharedReturnGestureTranslationEnabled) {
-                                    stringResource(R.string.animation_return_translation_on)
-                                } else {
-                                    stringResource(R.string.animation_return_translation_off)
-                                },
-                                checked = appNavigationSettings.videoSharedReturnGestureTranslationEnabled,
-                                onCheckedChange = { enabled ->
-                                    scope.launch {
-                                        SettingsManager.setVideoSharedReturnGestureTranslationEnabled(context, enabled)
-                                    }
-                                },
-                                enabled = state.cardTransitionEnabled,
-                                iconTint = AppContentColors.secondaryText(),
                             )
                         }
                         AppPreferenceDivider()

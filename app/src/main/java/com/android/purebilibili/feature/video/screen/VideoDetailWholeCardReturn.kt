@@ -23,13 +23,10 @@ import com.android.purebilibili.core.util.CardPositionManager
 internal fun resolveVideoDetailWholeCardReturnAlpha(
     depth: Float,
     returning: Boolean,
-    followProgress: Boolean,
     committedIdle: Boolean,
 ): Float {
     if (committedIdle) return 1f
     if (!returning) return 0f
-    val progress = 1f - depth.coerceIn(0f, 1f)
-    if (!followProgress) return if (progress >= 1f) 1f else 0f
     return resolveVideoCardWholeCardReturnHandoffAlpha(depth)
 }
 
@@ -54,7 +51,6 @@ internal fun rememberVideoDetailWholeCardReturn(
     depthProvider: () -> Float,
     phaseProvider: () -> VideoCardTransitionBackgroundPhase,
     gestureProvider: () -> Boolean,
-    followProgressProvider: () -> Boolean,
 ): VideoDetailWholeCardReturn {
     val expectedKey = normalizeSharedElementSourceRoute(sourceRoute)?.let { "$it:${bvid.trim()}" }
     // Bind once per entry, before an asynchronous capture is ready. Mutable navigation keys
@@ -83,7 +79,6 @@ internal fun rememberVideoDetailWholeCardReturn(
         if (!active()) 0f else resolveVideoDetailWholeCardReturnAlpha(
             depth = depthProvider(),
             returning = true,
-            followProgress = followProgressProvider(),
             committedIdle = committedReturn && !gestureProvider() &&
                 phaseProvider() == VideoCardTransitionBackgroundPhase.IDLE,
         )

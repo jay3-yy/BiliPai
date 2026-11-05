@@ -37,6 +37,10 @@ data class AppThemeConfig(
     val nativeMiuixPopupsEnabled: Boolean = true,
     // Matches the persisted default; each application host supplies the observed preference.
     val liquidGlassEnabled: Boolean = false,
+    // 独立场景由应用宿主解析总开关与偏好；场景容器只覆盖其内容的材质选择。
+    val playerGlassEnabled: Boolean = liquidGlassEnabled,
+    val popupGlassEnabled: Boolean = liquidGlassEnabled,
+    val nowPlayingGlassEnabled: Boolean = liquidGlassEnabled,
     val liquidControlsUseThemeColor: Boolean = false,
     val liquidSwitchThumbMode: LiquidSwitchThumbMode = LiquidSwitchThumbMode.THEME,
 )

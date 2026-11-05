@@ -196,7 +196,6 @@ internal fun resolveVideoDetailFlyingSourceChromeAlpha(
     sourceLayout: VideoCardSourceLayout,
     detailContentLoading: Boolean = false,
     isNowPlayingBar: Boolean = false,
-    followProgressEnabled: Boolean = true,
     /**
      * 卡片返回是否**已提交**（`markReturning` / 用户点返回）。
      *
@@ -217,9 +216,6 @@ internal fun resolveVideoDetailFlyingSourceChromeAlpha(
     ) {
         return 0f
     }
-    if (!followProgressEnabled && morphDepthProgress > 0f &&
-        isVideoCardReturnContentYieldActive(phase, isReturnGestureInProgress, morphDepthProgress)
-    ) return 0f
     // The complete bar bitmap must use the same narrow window in both directions.
     // Ordinary opening chrome stays visible until depth 0.72, which stretches the
     // short capsule into large text before the real player has taken over.
@@ -296,7 +292,6 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
         VideoCardTransitionBackgroundPhase.RETURNING
     },
     isReturnGestureInProgressProvider: () -> Boolean = { true },
-    followProgressEnabledProvider: () -> Boolean = { true },
     horizontalMediaHandoffEnabled: Boolean = true,
     mediaFrameProvider: () -> VideoDetailReturnMediaLayoutFrame? = { null },
     /** 返回是否已提交；IDLE 时重建壳必须与详情 chrome 同时归零。见 [resolveVideoDetailFlyingSourceChromeAlpha]。 */
@@ -357,7 +352,6 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
             isReturnGestureInProgress = isReturnGestureInProgressProvider(),
             sourceLayout = layout.layout,
             detailContentLoading = detailContentLoading,
-            followProgressEnabled = followProgressEnabledProvider(),
             isCommittedCardReturn = isCommittedCardReturn,
             preserveNativeViewport = preserveNativeViewport,
         )
@@ -415,7 +409,6 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
             sourceLayout = layout.layout,
             detailContentLoading = detailContentLoading,
             isNowPlayingBar = isNowPlayingBar,
-            followProgressEnabled = followProgressEnabledProvider(),
             isCommittedCardReturn = isCommittedCardReturn,
             preserveNativeViewport = preserveNativeViewport,
         )
@@ -452,7 +445,6 @@ internal fun BoxScope.VideoDetailReturnSourceCardChrome(
                 sourceLayout = layout.layout,
                 detailContentLoading = detailContentLoading,
                 isNowPlayingBar = isNowPlayingBar,
-                followProgressEnabled = followProgressEnabledProvider(),
                 isCommittedCardReturn = isCommittedCardReturn,
                 preserveNativeViewport = preserveNativeViewport,
             )

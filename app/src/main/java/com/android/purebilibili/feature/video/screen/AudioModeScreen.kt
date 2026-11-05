@@ -74,7 +74,7 @@ internal fun resolveAudioPlayModeLabel(mode: PlayMode): String = when (mode) {
 internal fun shouldUseAudioModeLiquidPlayModeControl(
     supportsIndependentLiquidGlass: Boolean,
     androidNativeLiquidGlassEnabled: Boolean
-): Boolean = supportsIndependentLiquidGlass || androidNativeLiquidGlassEnabled
+): Boolean = androidNativeLiquidGlassEnabled
 
 internal enum class AudioModePlayPauseAction {
     PAUSE,
@@ -227,7 +227,7 @@ fun AudioModeScreen(
     val liquidPlayModeControlEnabled = shouldUseAudioModeLiquidPlayModeControl(
         supportsIndependentLiquidGlass =
             playerChromeProfile.effects.supportsIndependentLiquidGlass,
-        androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+        androidNativeLiquidGlassEnabled = homeSettings.otherGlassEnabled,
     )
     val shouldCreateStandalonePlayer = remember(initialBvid) {
         shouldCreateAudioModeStandalonePlayer(
