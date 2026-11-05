@@ -2955,7 +2955,7 @@ fun HomeHeader(
                                             },
                                             // 首页只显示图标，其他搜索入口保留默认提示。
                                             showPlaceholder = false,
-                                            centeredContent = true,
+                                            centeredContent = false,
                                             containerColor = if (useTopControlBlur) {
                                                 Color.Transparent
                                             } else {
