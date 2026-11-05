@@ -163,7 +163,7 @@ fun DynamicDetailScreen(
     val context = LocalContext.current
     val homeSettings by SettingsManager.getHomeSettings(context)
         .collectAsStateWithLifecycle(initialValue = HomeSettings())
-    val liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
+    val liquidGlassEnabled = homeSettings.commentBarGlassEnabled
     // Only scrolling content captures this backdrop. The comment controls remain sibling
     // overlays, matching video detail and preventing a RenderNode backdrop cycle.
     // Record a complete viewport, including its background. Capturing only the transparent

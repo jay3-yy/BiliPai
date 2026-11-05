@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.7.8%20%28551%29-007AFF?style=flat-square" alt="Source 0.7.8 (551)" />
+<img src="https://img.shields.io/badge/Source-0.7.9--beta.2%20%28553%29-007AFF?style=flat-square" alt="Source 0.7.9-beta.2 (553)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -131,6 +131,6 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 
 <div align="center">
 
-<sub>源码版本 0.7.8（551） · 更新于 2026-11-05 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>源码版本 0.7.9-beta.2（553） · 更新于 2026-11-05 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

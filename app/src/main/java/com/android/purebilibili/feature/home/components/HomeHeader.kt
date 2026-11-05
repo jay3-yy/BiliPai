@@ -220,7 +220,7 @@ internal fun resolveHomeTopLinkedBottomBarAppearance(
         isFloating = navigationAppearance.bottomBarFloating,
         blurEnabled = navigationAppearance.bottomBarBlurEnabled && !(
             presentation == AppTopTabPresentation.MATERIAL_UNDERLINE &&
-                !resolvedHomeSettings.androidNativeLiquidGlassEnabled
+                !resolvedHomeSettings.homeTopGlassEnabled
             ),
         liquidGlassEnabled = resolveHomeTopChromeLiquidGlassEnabled(
             homeSettings = resolvedHomeSettings,
@@ -288,7 +288,7 @@ internal fun resolveHomeTopChromeLiquidGlassEnabled(
 ): Boolean {
     val resolvedHomeSettings = homeSettings ?: HomeSettings()
     return resolveGlobalLiquidGlassReuseEnabled(
-        androidNativeLiquidGlassEnabled = resolvedHomeSettings.androidNativeLiquidGlassEnabled,
+        androidNativeLiquidGlassEnabled = resolvedHomeSettings.homeTopGlassEnabled,
     )
 }
 
@@ -301,7 +301,7 @@ internal fun resolveHomeTopTabIndicatorLiquidGlassEnabled(
 internal fun resolveHomeTopSearchLiquidGlassEnabled(
     homeSettings: HomeSettings?,
 ): Boolean {
-    return resolveHomeTopChromeLiquidGlassEnabled(homeSettings)
+    return homeSettings?.homeSearchGlassEnabled == true
 }
 
 internal fun resolveHomeTopChromeMaterialMode(
@@ -1795,7 +1795,7 @@ fun HomeHeader(
     // backdrop captures this header too, so using it as a fallback creates a RenderNode cycle.
     // Until the feed source is ready, keep the tinted/blur fallback without recording ourselves.
     val topActionBackdrop = miuixBackdrop
-    val topActionGlassActive = appThemeConfig.liquidGlassEnabled && topActionBackdrop != null
+    val topActionGlassActive = topChromeLiquidGlassEnabled && topActionBackdrop != null
     val topActionElasticState = rememberAppElasticPressState(
         visualSize = resolveHomeTopSettingsButtonSize(topChromePolicy),
     )
@@ -1814,18 +1814,18 @@ fun HomeHeader(
         )
     } else {
         Modifier.homeTopChromeSurface(
-            renderMode = if (appThemeConfig.liquidGlassEnabled || useTopControlBlur) {
+            renderMode = if (topChromeLiquidGlassEnabled || isTopChromeBlurEnabled) {
                 HomeTopChromeRenderMode.BLUR
             } else {
-                searchChromeRenderMode
+                topChromeRenderMode
             },
             shape = edgeButtonShape,
             surfaceColor = resolveHomeTopEdgeControlContainerColor(
                 isLightMode = isLightMode,
-                renderMode = if (appThemeConfig.liquidGlassEnabled || useTopControlBlur) {
+                renderMode = if (topChromeLiquidGlassEnabled || isTopChromeBlurEnabled) {
                     HomeTopChromeRenderMode.BLUR
                 } else {
-                    searchChromeRenderMode
+                    topChromeRenderMode
                 },
             ),
             hazeState = hazeState,
@@ -1839,8 +1839,8 @@ fun HomeHeader(
             forceLowBlurBudget = forceLowBlurBudget,
         )
     }
-    // 搜索栏液态玻璃必须复用顶部标签 dock 的材质链，避免单独的搜索胶囊渲染分支产生质感偏差。
-    val useBottomBarMatchedTopControls = resolveHomeTopSearchLiquidGlassEnabled(homeSettings)
+    // 顶栏按钮跟随顶栏场景，搜索胶囊另行读取搜索场景。
+    val useBottomBarMatchedTopControls = topChromeLiquidGlassEnabled
     val localTopChromeRenderMode = resolveHomeTopLocalChromeRenderMode(
         renderMode = topChromeRenderMode,
         usesNativeContainerTreatment = usesNativeContainerTreatment,
@@ -2789,7 +2789,7 @@ fun HomeHeader(
                                         .then(
                                             if (useBottomBarMatchedTopControls) {
                                                 Modifier.homeTopBottomBarMatchedSurface(
-                                                    renderMode = searchChromeRenderMode,
+                                                    renderMode = topChromeRenderMode,
                                                     shape = edgeButtonShape,
                                                     hazeState = hazeState,
                                                     miuixBackdrop = miuixBackdrop,
@@ -2909,6 +2909,7 @@ fun HomeHeader(
                                         ),
                                     backdrop = miuixBackdrop,
                                     reuseEnabled = true,
+                                    materialEnabled = searchLiquidGlassEnabled,
                                     elasticFeedbackEnabled = true,
                                     elasticFeedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
                                     liquidGlassEffectsEnabled =
@@ -2941,8 +2942,6 @@ fun HomeHeader(
                                             HomeTopSearchPillContent(
                                                 searchIcon = topActionIcons.search,
                                                 contentColor = topForegroundColor,
-                                                textFontSize = MaterialTheme.typography.bodyLarge.fontSize,
-                                                iconTextGap = resolveHomeTopSearchIconTextGap(topChromePolicy),
                                                 modifier = Modifier.fillMaxWidth(),
                                                 pressed = searchPillPressed,
                                                 searchIconOpticalScale = searchIconOpticalScale,
@@ -2954,8 +2953,9 @@ fun HomeHeader(
                                                 haptic(HapticType.LIGHT)
                                                 onSearchClick()
                                             },
-                                            placeholder = "搜索视频、UP主...",
-                                            centeredContent = true,
+                                            // 首页只显示图标，其他搜索入口保留默认提示。
+                                            showPlaceholder = false,
+                                            centeredContent = false,
                                             containerColor = if (useTopControlBlur) {
                                                 Color.Transparent
                                             } else {

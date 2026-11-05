@@ -31,6 +31,10 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.structuralEqualityPolicy
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -132,6 +136,68 @@ internal fun resolveSearchDiscoverOriginalCellColors(
             borderColor = colorScheme.outline.copy(alpha = 0.28f)
         )
     }
+}
+
+/** 热搜、历史和发现的更新只使落地页失效，不重新组织页面导航和结果 Pager。 */
+@Composable
+internal fun SearchLandingStateHost(
+    source: State<SearchUiState>,
+    historyListState: LazyListState,
+    useSplitLayout: Boolean,
+    layoutPolicy: SearchLayoutPolicy,
+    contentTopPadding: Dp,
+    bottomPadding: Dp,
+    onToggleHistoryRecording: () -> Unit,
+    showHotSection: Boolean,
+    showHistorySection: Boolean,
+    showDiscoverSection: Boolean,
+    hotSearchEnabled: Boolean,
+    discoverSectionEnabled: Boolean,
+    onToggleHotSearch: () -> Unit,
+    onToggleDiscoverSection: () -> Unit,
+    onRefreshHot: () -> Unit,
+    onOpenTrending: () -> Unit,
+    onRefreshDiscover: () -> Unit,
+    onKeywordClick: (String) -> Unit,
+    onClearHistory: () -> Unit,
+    onDeleteHistory: (SearchHistory) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val state by remember(source) {
+        derivedStateOf(structuralEqualityPolicy()) { source.value.toSearchLandingState() }
+    }
+    SearchLandingContent(
+        hotList = state.hotList,
+        hotListError = state.hotListError,
+        isRefreshingHotList = state.isRefreshingHotList,
+        discoverTitle = state.discoverTitle,
+        discoverList = state.discoverList,
+        discoverListError = state.discoverListError,
+        isRefreshingDiscoverList = state.isRefreshingDiscoverList,
+        historyList = state.historyList,
+        recordSearchHistory = state.recordSearchHistory,
+        globalPrivacyMode = state.globalPrivacyMode,
+        historyListState = historyListState,
+        useSplitLayout = useSplitLayout,
+        layoutPolicy = layoutPolicy,
+        contentTopPadding = contentTopPadding,
+        bottomPadding = bottomPadding,
+        onToggleHistoryRecording = onToggleHistoryRecording,
+        showHotSection = showHotSection,
+        showHistorySection = showHistorySection,
+        showDiscoverSection = showDiscoverSection,
+        hotSearchEnabled = hotSearchEnabled,
+        discoverSectionEnabled = discoverSectionEnabled,
+        onToggleHotSearch = onToggleHotSearch,
+        onToggleDiscoverSection = onToggleDiscoverSection,
+        onRefreshHot = onRefreshHot,
+        onOpenTrending = onOpenTrending,
+        onRefreshDiscover = onRefreshDiscover,
+        onKeywordClick = onKeywordClick,
+        onClearHistory = onClearHistory,
+        onDeleteHistory = onDeleteHistory,
+        modifier = modifier,
+    )
 }
 
 @Composable

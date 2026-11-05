@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.network.NetworkHeaders
@@ -74,7 +75,6 @@ import com.android.purebilibili.core.ui.transition.LocalClickToPlayEnabled
 import com.android.purebilibili.core.ui.transition.resolveVideoSharedTransitionVisualSpec
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
@@ -227,16 +227,7 @@ fun VideoCardLarge(
 
     Column(
         modifier = modifier
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = archive.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = sharedTransitionMotionSpec,
-                clipShape = coverShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(archive.bvid, coverShape)
             .then(nativeCardSnapshot.modifier)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates

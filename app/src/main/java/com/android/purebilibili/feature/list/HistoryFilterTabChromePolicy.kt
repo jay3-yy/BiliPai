@@ -36,7 +36,7 @@ internal fun resolveHistoryFilterTabChromeSpec(
     filterCount: Int = HistoryContentFilter.entries.size
 ): HistoryFilterTabChromeSpec {
     val useLiquidDock = shouldUseHistoryFilterLiquidDock(
-        androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
+        androidNativeLiquidGlassEnabled = homeSettings.otherGlassEnabled
     )
     val compactChrome = topChromePolicy.compactChromeSpec
     return if (useLiquidDock) {

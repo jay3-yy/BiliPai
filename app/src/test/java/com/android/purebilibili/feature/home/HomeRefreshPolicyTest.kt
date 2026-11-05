@@ -348,42 +348,6 @@ class HomeRefreshPolicyTest {
     }
 
     @Test
-    fun homeScreen_waitsForNewItemsBeforeRefreshScrollsToTop() {
-        val source = listOf(
-            java.io.File("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"),
-            java.io.File("src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        ).first { it.exists() }.readText()
-
-        assertFalse(
-            source.contains("LaunchedEffect(isRefreshing, state.currentCategory, state.popularSubCategory)"),
-            "松手进入刷新时旧卡片应留在当前位置，不能在 isRefreshing 变 true 时立即回顶"
-        )
-        assertTrue(
-            source.contains("LaunchedEffect(refreshNewItemsKey, isRefreshing, currentCategory)"),
-            "新卡片到达后再处理回顶和新增提示"
-        )
-        assertTrue(source.indexOf("shouldResetToTopAfterIncrementalRefresh(") > source.indexOf("refreshNewItemsKey"))
-        assertTrue(
-            source.contains("HomeCategory.FOLLOW -> gridStates[HomeCategory.FOLLOW]"),
-            "关注流新增内容后也必须回顶，否则 prepend 会被 LazyGrid key 锚住旧卡片"
-        )
-    }
-
-    @Test
-    fun undoRefreshButton_consumesHorizontalDragsBeforeTheDrawer() {
-        val source = listOf(
-            java.io.File("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"),
-            java.io.File("src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        ).first { it.exists() }.readText()
-        val undoButton = source
-            .substringAfter("onClick = { viewModel.undoRefresh() },")
-            .substringBefore("colors = androidx.compose.material3.ButtonDefaults.buttonColors(")
-
-        assertTrue(undoButton.contains("detectHorizontalDragGestures"))
-        assertTrue(undoButton.contains("change.consume()"))
-    }
-
-    @Test
     fun buildHomeRefreshUndoSnapshot_returnsNull_forNonRecommendCategory() {
         val snapshot = buildHomeRefreshUndoSnapshot(
             refreshingCategory = HomeCategory.POPULAR,

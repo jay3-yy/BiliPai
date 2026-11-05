@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.feature.home.collectAsHomeFeedState
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
@@ -54,11 +55,12 @@ fun HomeBangumiTabPage(
     initialType: Int = 1,
     scrollToTopRequestId: Int = 0,
     viewModel: BangumiHubViewModel = viewModel(),
+    pageActive: Boolean = true,
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val state by viewModel.uiState.collectAsHomeFeedState(pageActive)
     val channelPager = rememberBangumiChannelPagerState(
         channel = state.channel,
-        enabled = state.page == BangumiHubPage.HOME,
+        enabled = pageActive && state.page == BangumiHubPage.HOME,
         onChannelSelected = viewModel::selectChannel,
     )
     val context = LocalContext.current
@@ -69,8 +71,8 @@ fun HomeBangumiTabPage(
         BangumiChannel.entries.map { AppSegmentOption(it, it.label) }
     }
 
-    LaunchedEffect(initialType) { viewModel.initialize(initialType) }
-    LaunchedEffect(showPgcTimeline) { viewModel.setShowPgcTimeline(showPgcTimeline) }
+    LaunchedEffect(initialType, pageActive) { if (pageActive) viewModel.initialize(initialType) }
+    LaunchedEffect(showPgcTimeline, pageActive) { if (pageActive) viewModel.setShowPgcTimeline(showPgcTimeline) }
 
     val layoutDirection = LocalLayoutDirection.current
     val themeConfig = LocalAppThemeConfig.current

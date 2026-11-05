@@ -37,9 +37,12 @@ internal const val PILI_PLAYER_PROGRESS_GAP_DP = 7
 internal const val PILI_PLAYER_PROGRESS_HEIGHT_DP = 14
 internal const val PILI_PLAYER_CHAPTER_PROGRESS_HEIGHT_DP = 23
 
-internal fun piliPlayerBottomControlsHeightDp(hasChapters: Boolean): Int =
+internal fun piliPlayerBottomControlsHeightDp(
+    hasChapters: Boolean,
+    compactInline: Boolean = false,
+): Int =
     PILI_PLAYER_BOTTOM_VERTICAL_PADDING_DP * 2 + PILI_PLAYER_BOTTOM_ROW_HEIGHT_DP +
-        PILI_PLAYER_PROGRESS_GAP_DP + if (hasChapters) PILI_PLAYER_CHAPTER_PROGRESS_HEIGHT_DP
+        (if (compactInline) 2 else PILI_PLAYER_PROGRESS_GAP_DP) + if (hasChapters) PILI_PLAYER_CHAPTER_PROGRESS_HEIGHT_DP
         else PILI_PLAYER_PROGRESS_HEIGHT_DP
 
 internal fun Modifier.playerActionBounds(onBounds: (IntRect) -> Unit): Modifier =

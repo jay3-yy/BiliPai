@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.components.VideoStatusBadges
 import com.android.purebilibili.core.ui.components.wallpaperAwareMediaCardBackground
 import com.android.purebilibili.core.ui.AppContentColors
@@ -74,7 +75,6 @@ import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapsh
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
@@ -257,16 +257,7 @@ internal fun HomeStyleSingleColumnVideoCard(
             .onGloballyPositioned { coordinates ->
                 cardBounds.value = coordinates.videoCardSourceBoundsInRoot()
             }
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = video.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = motionSpec,
-                clipShape = cardShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(video.bvid, cardShape)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
             .then(

@@ -735,7 +735,12 @@ internal fun VideoPlayerSection(
     val hostedAmbient = LocalAmbientPresentation.current
     val ambient = hostedAmbient ?: remember(state.playerState.player) { AmbientPresentation() }
     val ambientController = LocalAmbientController.current ?: remember(ambient) { AmbientFrameController(ambient) }
-    CompositionLocalProvider(LocalAmbientPresentation provides ambient, LocalAmbientController provides ambientController) {
+    val themeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+    CompositionLocalProvider(
+        LocalAmbientPresentation provides ambient,
+        LocalAmbientController provides ambientController,
+        com.android.purebilibili.core.ui.LocalAppThemeConfig provides themeConfig.copy(liquidGlassEnabled = themeConfig.playerGlassEnabled),
+    ) {
         Box(modifier = modifier) {
             if (!state.isFullscreen && hostedAmbient == null) {
                 PlayerAmbientGlow(ambient, fullscreen = false, modifier = Modifier.matchParentSize())
@@ -963,7 +968,10 @@ private fun VideoPlayerSectionContent(
     val liquidGlassLayoutEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     // 两种材质共用控制栏几何，首帧与实际测量使用同一高度依据。
     val bottomGestureExclusionHeightDp =
-        com.android.purebilibili.feature.video.ui.overlay.piliPlayerBottomControlsHeightDp(viewPoints.isNotEmpty())
+        com.android.purebilibili.feature.video.ui.overlay.piliPlayerBottomControlsHeightDp(
+            hasChapters = viewPoints.isNotEmpty(),
+            compactInline = !isFullscreen && configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT,
+        )
     val gestureSeekFallbackDurationMs = remember(uiState) {
         (uiState as? VideoPlaybackUiState.Success)?.videoDurationMs ?: 0L
     }

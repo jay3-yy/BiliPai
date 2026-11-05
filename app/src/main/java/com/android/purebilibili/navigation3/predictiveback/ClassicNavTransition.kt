@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
+import top.yukonga.miuix.kmp.nav.transition.NavRole
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
@@ -32,7 +33,8 @@ private val ClassicScalePop: NavTransition = object : NavTransition {
     override fun scrimFraction(scope: NavTransitionScope): Float = coverProgress(scope.relativeDepth)
 
     override fun Modifier.transformEntry(scope: NavTransitionScope): Modifier {
-        val zIndex = if (scope.relativeDepth > 0f) 1f else 0f
+        // 层级只跟随角色边界，连续进度留在图层内，避免返回期间每帧重组入口。
+        val zIndex = if (scope.role == NavRole.Covered) 1f else 0f
         return graphicsLayer {
             val depth = scope.relativeDepth
             val widthPx = scope.layoutSize.width.toFloat()

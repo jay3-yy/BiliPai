@@ -1,6 +1,7 @@
 // 文件路径: feature/watchlater/WatchLaterScreen.kt
 package com.android.purebilibili.feature.watchlater
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.util.responsiveContentWidth
 
 import com.android.purebilibili.navigation.tabSelectedPage
@@ -127,7 +128,6 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.data.model.response.VideoItem
@@ -1876,17 +1876,7 @@ private fun WatchLaterVideoCard(
         },
         selected = isSelected,
         modifier = modifier
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = item.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = sharedTransitionMotionSpec,
-                clipShape = cardShellShape,
-                // 让播放器接管移动中的整卡，返回时再在 morph 末段接回源卡，避免与播放器重叠。
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(item.bvid, cardShellShape)
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.videoCardSourceBoundsInRoot()
             },

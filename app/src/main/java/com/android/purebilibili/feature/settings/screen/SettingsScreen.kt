@@ -768,7 +768,7 @@ fun SettingsScreen(
     }
 
     // 页面跳转逻辑
-    CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides state.isLiquidGlassEnabled) {
+    CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
         if (showBlockedList) {
             BlockedListScreen(onBack = { showBlockedList = false })
         } else if (showCommentFraudHistory) {

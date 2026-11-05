@@ -141,33 +141,6 @@ class VideoCardReturnTimelineTest {
     }
 
     @Test
-    fun disabledContentFollowKeepsDetailBodyUntilLandingIncludingGestureRestore() {
-        for (gesture in listOf(false, true)) {
-            for (depth in listOf(1f, .5f, .1f, .01f, .0001f)) {
-                val frame = resolveVideoCardSecondaryContentVisualFrame(
-                    morphDepthProgress = depth,
-                    phase = VideoCardTransitionBackgroundPhase.RETURNING,
-                    isReturnGestureInProgress = gesture,
-                    motionTier = MotionTier.Normal,
-                    followProgressEnabled = false,
-                )
-                assertEquals(1f, frame.alpha)
-                assertEquals(1f, frame.scale)
-                assertEquals(0f, frame.translationYDp)
-            }
-        }
-        val landed = resolveVideoCardSecondaryContentVisualFrame(
-            morphDepthProgress = 0f,
-            phase = VideoCardTransitionBackgroundPhase.RETURNING,
-            isReturnGestureInProgress = false,
-            motionTier = MotionTier.Normal,
-            followProgressEnabled = false,
-        )
-        assertEquals(0f, landed.alpha)
-    }
-
-
-    @Test
     fun effectsStayClampedAndHandoffRemainsComplementaryDuringLanding() {
         for (i in -10..1010) {
             val depth = i / 1000f

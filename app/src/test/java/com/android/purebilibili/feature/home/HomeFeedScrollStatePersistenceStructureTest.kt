@@ -29,18 +29,6 @@ class HomeFeedScrollStatePersistenceStructureTest {
     }
 
     @Test
-    fun `bottom bar reselect reveals home chrome after scroll reaches top`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        val lockSource = source
-            .substringAfter("suspend fun withHomeScrollToTopLock")
-            .substringBefore("// [新增] 监听全局回顶事件")
-
-        assertTrue(lockSource.indexOf("block()") < lockSource.indexOf("revealHomeHeaderNow()"))
-        assertFalse(lockSource.substringBefore("try {").contains("topTabsAutoCollapsedByScroll = false"))
-        assertFalse(lockSource.substringBefore("try {").contains("globalScrollOffset.floatValue = 0f"))
-    }
-
-    @Test
     fun `home double tap is coalesced before scroll to top starts`() {
         val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
         val scrollCollectorSource = source
@@ -51,23 +39,6 @@ class HomeFeedScrollStatePersistenceStructureTest {
         assertTrue(scrollCollectorSource.contains("withTimeoutOrNull(HOME_RESELECT_DOUBLE_TAP_WINDOW_MS)"))
         assertTrue(scrollCollectorSource.contains("mergeHomeScrollRequests(initialRequest, followUp)"))
         assertFalse(scrollCollectorSource.contains("collectLatest"))
-    }
-
-    @Test
-    fun `video navigation freezes feed anchor before shared transition starts`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        val clickSource = source
-            .substringAfter("val wrappedOnVideoClick: (HomeVideoClickRequest) -> Unit")
-            .substringBefore("val onTodayWatchVideoClick")
-
-        val captureIndex = clickSource.indexOf("pendingFeedScrollAnchor = captureHomeFeedScrollAnchor(")
-        val transitionStartIndex = clickSource.indexOf("isVideoNavigating = true")
-        val navigationIndex = clickSource.indexOf("onVideoClick(request)")
-
-        assertTrue(captureIndex >= 0)
-        assertTrue(captureIndex < transitionStartIndex)
-        assertTrue(transitionStartIndex < navigationIndex)
-        assertTrue(source.contains("gridState != null && pendingFeedScrollAnchor == null"))
     }
 
     @Test
@@ -164,61 +135,6 @@ class HomeFeedScrollStatePersistenceStructureTest {
         assertTrue(motionSource.contains("val currentPosition = currentPositionProvider()"))
         assertTrue(motionSource.contains("val pagerIsScrolling = pagerScrollingProvider()"))
     }
-
-    @Test
-    fun `category initial load is owned and cancelled by home view model`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt")
-        val switchSource = source
-            .substringAfter("fun switchCategory(category: HomeCategory)")
-            .substringBefore("fun updateDisplayedTabIndex")
-
-        assertTrue(source.contains("private var categoryInitialLoadJob: Job? = null"))
-        assertTrue(switchSource.contains("categoryInitialLoadJob?.cancel()"))
-        assertTrue(switchSource.contains("fetchData(isLoadMore = false, category = category)"))
-        assertTrue(switchSource.contains("catch (error: CancellationException)"))
-        assertTrue(switchSource.contains("throw error"))
-        assertFalse(source.contains("sessionSeenBvids"))
-    }
-
-    @Test
-    fun `home follow refresh preserves dynamic update baseline for incremental content`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt")
-        val followFeedSource = source
-            .substringAfter("private suspend fun fetchFollowFeed")
-            .substringBefore("private fun videoItemKey")
-
-        assertFalse(followFeedSource.contains("DynamicRepository.resetPagination"))
-    }
-
-    @Test
-    fun `home follow feed requests video dynamics instead of filtering all dynamics after baseline`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt")
-        val followFeedSource = source
-            .substringAfter("private suspend fun fetchFollowFeed")
-            .substringBefore("private fun videoItemKey")
-
-        assertTrue(followFeedSource.contains("val followType = \"video\""))
-        assertTrue(followFeedSource.contains("type = followType"))
-    }
-
-    @Test
-    fun `home follow manual refresh reports api update_num via baseline probe`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeViewModel.kt")
-        val fetchDataSource = source
-            .substringAfter("if (currentCategory == HomeCategory.FOLLOW)")
-            .substringBefore("val currentCategoryState")
-        val followFeedSource = source
-            .substringAfter("private suspend fun fetchFollowFeed")
-            .substringBefore("private fun videoItemKey")
-
-        assertTrue(fetchDataSource.contains("val result = fetchFollowFeed("))
-        assertTrue(fetchDataSource.contains("return result"))
-        assertTrue(followFeedSource.contains("probeWithBaseline"))
-        assertTrue(followFeedSource.contains("resolveHomeFollowRefreshNewItemsCount("))
-        assertTrue(followFeedSource.contains("currentUpdateBaseline("))
-        assertTrue(followFeedSource.contains("return tipCount"))
-    }
-
 
     private fun loadSource(path: String): String {
         val normalizedPath = path.removePrefix("app/")

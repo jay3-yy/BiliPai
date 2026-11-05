@@ -102,7 +102,7 @@ private fun LiveMatchSeasonContent(
             }
         }
         // 赛季筛选与赛事分类共用原生材质边界，不随玻璃开关转换为 dock。
-        CompositionLocalProvider(LocalAppThemeConfig provides LocalAppThemeConfig.current.copy(liquidGlassEnabled = false)) {
+        CompositionLocalProvider(LocalAppThemeConfig provides LocalAppThemeConfig.current.copy(liquidGlassEnabled = false, popupGlassEnabled = false, playerGlassEnabled = false)) {
             AppNativeTabRow(
                 options = listOf(AppSegmentOption(0, "晋级与积分"), AppSegmentOption(1, "全部赛程")),
                 selectedValue = tab, onSelectionChange = { tab = it },

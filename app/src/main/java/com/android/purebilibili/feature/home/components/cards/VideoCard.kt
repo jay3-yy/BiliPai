@@ -132,6 +132,7 @@ import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSo
 import com.android.purebilibili.core.ui.transition.LocalMiuixVideoCardTransitionState
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.transition.LocalClickToPlayEnabled
 import com.android.purebilibili.core.ui.transition.LocalVideoSharedTransitionSpeedSettings
 import com.android.purebilibili.core.ui.transition.VideoSharedTransitionMotionSpec
@@ -145,7 +146,6 @@ import com.android.purebilibili.core.store.SettingsManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedBoundsResizeMode
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey
 import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
@@ -1254,6 +1254,7 @@ internal fun ElegantVideoCard(
         propagateMinConstraints = true,
         modifier = modifier
             .fillMaxWidth()
+            .videoCardSourceAnchor(video.bvid, adaptiveHoverShape)
             .then(cardVisibility.observerModifier)
             .adaptiveCardHoverEffect(shape = adaptiveHoverShape)
             // 进场动画：挂载门控已含滚动/返回/切分类；与过渡并存时仅淡入不改几何
@@ -1395,15 +1396,7 @@ internal fun ElegantVideoCard(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .videoCardShellSharedBoundsOrEmpty(
-                        enabled = useCardShellSharedBounds,
-                        sharedTransitionScope = sharedTransitionScope,
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        bvid = video.bvid,
-                        sourceRoute = effectiveSharedElementSourceRoute,
-                        motionSpec = homeSharedTransitionMotionSpec,
-                        clipShape = cardShellShape
-                    )
+
                     .clip(cardShellShape)
             ) {
         //  [性能优化] 封面圆角形状缓存（避免重组时重复创建）

@@ -196,7 +196,9 @@ class ChatViewModel(
                         videoPreviews = videoPreviewCache.toMap(),
                     )
                 }
-                resolveChatReadSeqno(data.messages.orEmpty())?.let(::markAsRead)
+                // ack 边界用会话 max_seqno，历史页的 seqno 可能不够。
+                val readSeqno = maxOf(data.max_seqno, resolveChatReadSeqno(data.messages.orEmpty()) ?: 0L)
+                if (readSeqno > 0L) markAsRead(readSeqno)
                 scanAndLoadVideoPreviews(incoming)
             } catch (e: CancellationException) {
                 throw e
@@ -571,10 +573,14 @@ class ChatViewModel(
         accountRequests.launch {
             requestMutex.withLock {
                 if (!accountRequests.isCurrent(requestedIdentity) || seqno <= lastReadSeqno) return@withLock
-                val result = MessageRepository.markAsRead(talkerId, sessionType, seqno)
+                // 再用会话自身的 max_seqno 收口。
+                val detailMax = MessageRepository.getSessionMaxSeqno(talkerId, sessionType)
+                val targetSeqno = maxOf(seqno, detailMax)
+                if (targetSeqno <= lastReadSeqno) return@withLock
+                val result = MessageRepository.markAsRead(talkerId, sessionType, targetSeqno)
                 if (!accountRequests.isCurrent(requestedIdentity)) return@withLock
                 result.onSuccess {
-                    lastReadSeqno = maxOf(lastReadSeqno, seqno)
+                    lastReadSeqno = maxOf(lastReadSeqno, targetSeqno)
                 }.onFailure { error ->
                     _uiState.update { it.copy(refreshError = "标记已读失败：${error.message ?: "请稍后重试"}") }
                 }

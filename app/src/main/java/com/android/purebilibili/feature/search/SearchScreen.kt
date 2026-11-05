@@ -1,12 +1,10 @@
 // 文件路径: feature/search/SearchScreen.kt
 package com.android.purebilibili.feature.search
 
-import com.android.purebilibili.feature.home.resolveIsVerticalForNavigation
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.feature.home.effectiveGridColumnCount
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
-import com.android.purebilibili.feature.home.gridColumnPinchEnabled
 import com.android.purebilibili.core.ui.components.resolveAppCountedTabLabel
 import com.android.purebilibili.core.ui.components.appCountedTabOption
 import com.android.purebilibili.core.ui.AppContentColors
@@ -15,10 +13,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import com.android.purebilibili.core.util.HtmlEntityUtils
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
-import com.android.purebilibili.core.ui.components.resolveVideoListColumns
 import com.android.purebilibili.core.ui.components.rememberVideoListLayoutControl
-import com.android.purebilibili.core.ui.components.videoListItemModifier
-import com.android.purebilibili.core.ui.components.AnimatedVideoListItem
 import coil3.request.crossfade
 import com.android.purebilibili.core.ui.components.AppAssistChip
 import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
@@ -26,15 +21,10 @@ import com.android.purebilibili.core.ui.components.AppCheckbox
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
 import com.android.purebilibili.core.ui.components.AppFilterChip
-import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.core.ui.components.AppIcon
-import com.android.purebilibili.core.ui.components.appElasticPress
 import com.android.purebilibili.core.ui.components.AppIconButton
-import com.android.purebilibili.core.ui.components.AppIconButtonDefaults
-import com.android.purebilibili.core.ui.components.LocalAppTopBarIconDecorationEnabled
 import com.android.purebilibili.core.ui.components.AppInputChip
 import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.components.AppTab
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.components.KeepScrollableTabSelectionVisible
@@ -50,84 +40,47 @@ import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
 import com.android.purebilibili.feature.list.resolveCommonListHeaderOffsetAfterContentScroll
 import com.android.purebilibili.feature.list.resolveCommonListHeaderOffsetForSettledContent
 
-import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import com.android.purebilibili.core.ui.LocalSharedTransitionScope
-import com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import com.android.purebilibili.feature.home.rememberFeedGridColumnPreference
-import com.android.purebilibili.feature.home.homeFeedPinchZoom
-import com.android.purebilibili.feature.home.resolveHomeFeedPinchColumnBounds
-import com.android.purebilibili.feature.home.GridPinchColumnHudPill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
-import androidx.compose.foundation.focusable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
-import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
-import com.android.purebilibili.core.ui.components.AppLazyVerticalStaggeredGrid as LazyVerticalStaggeredGrid
-import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
-import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import androidx.compose.foundation.text.KeyboardOptions
 //  Material Icons
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.util.lerp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -143,41 +96,28 @@ import androidx.activity.compose.BackHandler
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppScaffold
 import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.feature.live.rememberLiveCardContainerTransition
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.AppUiStyle
-import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppTabRowIndicatorPresentation
 import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
-import com.android.purebilibili.core.theme.resolveFilledSelectionAccentColors
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.rememberContentCardSurfaceSpec
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import com.android.purebilibili.feature.home.components.resolveHomeTopSearchContainerShape
 import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
-import com.android.purebilibili.feature.home.components.HomeTopChromeRenderMode
-import com.android.purebilibili.feature.home.components.LocalLiquidGlassRenderConfig
-import com.android.purebilibili.feature.home.components.homeTopBottomBarMatchedSurface
-import com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale
-import com.android.purebilibili.feature.home.components.resolveHomeTopEdgeButtonShape
 import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
-import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
-import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
 import com.android.purebilibili.core.ui.videoCardTitleMaxLines
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
 import com.android.purebilibili.core.ui.videoCardTitleOverflow
-import com.android.purebilibili.core.ui.skeleton.ContentMediaListSkeleton
-import com.android.purebilibili.core.ui.skeleton.ContentVideoGridSkeleton
-import com.android.purebilibili.core.ui.skeleton.ContentVideoGridSkeletonFixedColumns
 import com.android.purebilibili.core.ui.OfficialVerifyAvatarBadge
 import com.android.purebilibili.core.ui.UserAvatarCornerMarkBadge
 import com.android.purebilibili.core.ui.resolveUserAvatarCornerMark
@@ -190,17 +130,11 @@ import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
 import com.android.purebilibili.core.ui.rememberAppChromeLiquidGlassEnabled
 import com.android.purebilibili.core.ui.rememberAppSemanticVisualPolicy
 import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
-import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppChevronDownIcon
-import com.android.purebilibili.core.ui.rememberAppChevronUpIcon
 import com.android.purebilibili.core.ui.rememberAppClearIcon
-import com.android.purebilibili.core.ui.rememberAppHistoryIcon
-import com.android.purebilibili.core.ui.rememberAppSearchIcon
 import com.android.purebilibili.core.ui.resolveOfficialVerifyBadge
 import com.android.purebilibili.core.ui.components.UserLevelBadge
 import com.android.purebilibili.core.ui.components.UpBadgeName
-import com.android.purebilibili.feature.home.resolveHomeCoverRequestSpec
-import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard  //  使用首页卡片
 import com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
 import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
@@ -272,7 +206,7 @@ internal fun resolveSearchTopBarLayoutSpec(): SearchTopBarLayoutSpec {
     )
 }
 
-private const val SEARCH_INPUT_LINE_HEIGHT_SP = 20
+internal const val SEARCH_INPUT_LINE_HEIGHT_SP = 20
 
 /** Total vertical padding around the search controls. */
 internal const val SEARCH_TOP_BAR_VERTICAL_PADDING_DP = 4
@@ -289,7 +223,7 @@ internal fun resolveSearchInputHeightDp(
 ): Int = maxOf(minHeightDp, ceil(maxOf(lineHeightDp, fontSizeDp) + 8f).toInt())
 
 @Composable
-private fun rememberSearchInputHeightDp(minHeightDp: Int): Int {
+internal fun rememberSearchInputHeightDp(minHeightDp: Int): Int {
     val density = LocalDensity.current
     val fontSize = MaterialTheme.typography.bodyLarge.fontSize
     return remember(minHeightDp, density, fontSize) {
@@ -695,11 +629,13 @@ fun SearchScreen(
     val contentCardSurfaceSpec = rememberContentCardSurfaceSpec()
     val backToTopButtonEnabled = rememberBackToTopButtonEnabled()
     val searchChromeSpec = remember(topChromePolicy) { resolveSearchChromeVisualSpec(topChromePolicy) }
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchState = viewModel.uiState.collectAsStateWithLifecycle()
+    val searchQuery = remember(searchState) { derivedStateOf { searchState.value.query } }
+    val state by rememberSearchScreenState(searchState)
     // The editable draft is authoritative. VM query is only its search/suggestion projection,
     // never a value to replay into an active IME session.
     val searchInputState = androidx.compose.foundation.text.input.rememberTextFieldState(
-        initialText = state.query
+        initialText = viewModel.uiState.value.query
     )
     val listLayout = rememberVideoListLayoutControl()
     // Entry-scoped: consuming the initial keyword or returning from a detail must not add a landing.
@@ -1036,10 +972,10 @@ fun SearchScreen(
             }
         }
     }
-    val searchMotionBudget by remember(state.query, state.isSearching, isSearchResultsScrolling) {
+    val searchMotionBudget by remember(state.hasQuery, state.isSearching, isSearchResultsScrolling) {
         derivedStateOf {
             resolveSearchMotionBudget(
-                hasQuery = state.query.isNotBlank(),
+                hasQuery = state.hasQuery,
                 isSearching = state.isSearching,
                 isScrolling = isSearchResultsScrolling
             )
@@ -1117,17 +1053,6 @@ fun SearchScreen(
         globalWallpaperVisible = globalWallpaperVisible,
         useHeaderBlur = shouldUseSearchTopBarBlur
     )
-    val emptyStateCopy = remember(state.emptyStateReason, state.searchType) {
-        if (state.emptyStateReason == SearchEmptyStateReason.NONE) {
-            null
-        } else {
-            resolveSearchEmptyStateCopy(
-                reason = state.emptyStateReason,
-                searchType = state.searchType
-            )
-        }
-    }
-
     val dismissSearchKeyboardAndFocus = {
         keyboardController?.hide()
         focusManager.clearFocus(force = true)
@@ -1138,7 +1063,7 @@ fun SearchScreen(
         if (
             shouldRetainSearchImeWhenQueryCleared(
                 fieldFocused = searchFieldFocused,
-                previousQuery = state.query,
+                previousQuery = searchState.value.query,
                 newQuery = query,
             )
         ) {
@@ -1201,7 +1126,7 @@ fun SearchScreen(
         when (
             resolveSearchBackAction(
                 showResults = state.showResults,
-                suggestionsVisible = state.suggestions.isNotEmpty(),
+                suggestionsVisible = searchState.value.suggestions.isNotEmpty(),
                 searchFieldFocused = searchFieldFocused,
                 openedWithKeyword = openedWithKeyword,
             )
@@ -1280,11 +1205,11 @@ fun SearchScreen(
             }
     }
 
-    LaunchedEffect(startupSettled, state.showResults, state.query) {
+    LaunchedEffect(startupSettled, state.showResults, state.hasQuery) {
         if (shouldBootstrapSearchLandingData(
                 startupSettled = startupSettled,
                 showResults = state.showResults,
-                query = state.query
+                query = searchState.value.query
             )
         ) {
             viewModel.ensureLandingBootstrap()
@@ -1294,7 +1219,7 @@ fun SearchScreen(
     LaunchedEffect(initialKeyword) {
         val normalizedKeyword = initialKeyword.trim()
         if (normalizedKeyword.isNotBlank()) {
-            if (shouldApplyInitialSearchKeyword(normalizedKeyword, state.query, state.showResults)) {
+            if (shouldApplyInitialSearchKeyword(normalizedKeyword, searchState.value.query, state.showResults)) {
                 searchInputState.setTextAndPlaceCursorAtEnd(normalizedKeyword)
                 viewModel.onQueryChange(normalizedKeyword)
                 submitSearch(normalizedKeyword)
@@ -1662,1112 +1587,96 @@ fun SearchScreen(
                     },
                 ) { resultChromePadding ->
                     val resultTopPadding = resultChromePadding.calculateTopPadding()
-                        com.android.purebilibili.core.ui.adaptive.AppHingeSafeContent(
-                            modifier = Modifier.fillMaxSize(),
+                    com.android.purebilibili.core.ui.adaptive.AppHingeSafeContent(
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        val requestedSkeletonColumns = videoGridColumns
+                        val videoGridColumns = if (
+                            com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.shouldAvoidHinge
                         ) {
-                            val requestedSkeletonColumns = videoGridColumns
-                            val videoGridColumns = if (
-                                com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.shouldAvoidHinge
-                            ) {
-                                com.android.purebilibili.core.ui.adaptive.resolveHingeSafeFeedColumns(
-                                    requestedSkeletonColumns, maxWidth.value,
-                                    homeSettings.homeFeedCardWidthPreset.minCardWidthDp ?: 180,
-                                )
-                            } else requestedSkeletonColumns
+                            com.android.purebilibili.core.ui.adaptive.resolveHingeSafeFeedColumns(
+                                requestedSkeletonColumns, maxWidth.value,
+                                homeSettings.homeFeedCardWidthPreset.minCardWidthDp ?: 180,
+                            )
+                        } else requestedSkeletonColumns
                         HorizontalPager(
                             state = searchPagerState,
                             userScrollEnabled = true,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(searchChromeSource?.modifier ?: Modifier)
-                        .globalWallpaperAwareBackground(),
+                                .globalWallpaperAwareBackground(),
                             beyondViewportPageCount = 1,
                             key = { page -> resolveSearchTypeForPagerPage(page, searchTabs) },
                         ) { page ->
-                        SearchResultPageHost(modifier = Modifier.fillMaxSize()) {
-                        val targetSearchType = resolveSearchTypeForPagerPage(page, searchTabs)
-                        val pageResultState = resolveSearchResultPageState(
-                            state = state,
-                            searchType = targetSearchType
-                        )
-                        val pageEmptyStateCopy = remember(pageResultState.emptyStateReason, targetSearchType) {
-                            if (pageResultState.emptyStateReason == SearchEmptyStateReason.NONE) {
-                                null
-                            } else {
-                                resolveSearchEmptyStateCopy(
-                                    reason = pageResultState.emptyStateReason,
-                                    searchType = targetSearchType
-                                )
-                            }
-                        }
-                        val isEmptyVideoPage = targetSearchType == SearchType.VIDEO &&
-                            pageResultState.totalCount == 0
-                        val pageError = pageResultState.error
-                            ?: pageResultState.loadMoreError.takeIf { isEmptyVideoPage }
-                        val isFillingEmptyVideoPage = isEmptyVideoPage &&
-                            pageResultState.hasMoreResults && pageError == null
-                        val pagePresentation = remember(
-                            pageResultState.totalCount,
-                            pageResultState.isSearching,
-                            pageError,
-                            pageResultState.emptyStateReason,
-                            pageResultState.isLoadingMore,
-                            pageResultState.loadMoreError,
-                            pageResultState.hasMoreResults,
-                            isFillingEmptyVideoPage
-                        ) {
-                            resolveSearchResultPresentation(
-                                itemCount = pageResultState.totalCount,
-                                isSearching = pageResultState.isSearching || isFillingEmptyVideoPage,
-                                error = pageError,
-                                emptyStateReason = pageResultState.emptyStateReason,
-                                isLoadingMore = pageResultState.isLoadingMore,
-                                loadMoreError = pageResultState.loadMoreError,
-                                hasMoreResults = pageResultState.hasMoreResults
-                            )
-                        }
-                        val pageGridState = rememberSaveable(
-                            pageResultState.query,
-                            targetSearchType.value,
-                            saver = com.android.purebilibili.core.ui.CompatibleStaggeredGridStateSaver
-                        ) {
-                            com.android.purebilibili.core.ui.createCompatibleStaggeredGridState()
-                        }
-                        val pageListState = rememberSaveable(
-                            pageResultState.query,
-                            targetSearchType.value,
-                            saver = LazyListState.Saver
-                        ) {
-                            LazyListState()
-                        }
-                        val activePageGridState = if (targetSearchType == state.searchType) {
-                            resultGridState
-                        } else {
-                            pageGridState
-                        }
-                        val activePageListState = if (targetSearchType == state.searchType) {
-                            resultListState
-                        } else {
-                            pageListState
-                        }
-                        // Observe the viewport, not a specific card's composition. This also
-                        // continues after a page is entirely removed by local search filters.
-                        val latestVideoPage by rememberUpdatedState(pageResultState)
-                        if ((targetSearchType == SearchType.VIDEO || targetSearchType == SearchType.ALL) &&
-                            targetSearchType == state.searchType
-                        ) {
-                            LaunchedEffect(activePageGridState, state.searchSessionId) {
-                                snapshotFlow {
-                                    val current = latestVideoPage
-                                    val itemCount = activePageGridState.layoutInfo.totalItemsCount
-                                    current.currentPage to shouldLoadMoreSearchVideos(
-                                        itemCount = itemCount,
-                                        lastVisibleItemIndex = activePageGridState.layoutInfo
-                                            .visibleItemsInfo.maxOfOrNull { it.index } ?: -1,
-                                        hasMoreResults = current.hasMoreResults,
-                                        isSearching = current.isSearching,
-                                        isLoadingMore = current.isLoadingMore,
-                                        hasError = current.error != null || current.loadMoreError != null,
-                                    )
-                                }.collect { (_, shouldLoad) ->
-                                    if (shouldLoad) viewModel.loadMoreResults()
-                                }
-                            }
-                        }
-                        LaunchedEffect(scrollToTopRequestId, scrollToTopSearchType, targetSearchType) {
-                            if (scrollToTopSearchType == targetSearchType && scrollToTopRequestId > 0) {
-                                if (targetSearchType == SearchType.VIDEO || targetSearchType == SearchType.ALL) {
-                                    activePageGridState.animateScrollToItem(0)
-                                } else {
-                                    activePageListState.animateScrollToItem(0)
-                                }
-                            }
-                        }
-                        if (pagePresentation.body == SearchResultBodyMode.LOADING) {
-                            // 结果形态已知：用骨架占位，不用主题 Loading 动画。
-                            when (targetSearchType) {
-                                SearchType.ALL, SearchType.VIDEO -> {
-                                    val skeletonModifier = Modifier
-                                        .then(
-                                            if (videoGridColumns == 1) {
-                                                Modifier.responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                            } else {
-                                                Modifier
-                                            }
-                                        )
-                                        .fillMaxSize()
-                                    ContentVideoGridSkeletonFixedColumns(
-                                        columns = videoGridColumns,
-                                        coverAspectRatio = cardLayout.coverAspectRatio,
-                                        contentPadding = PaddingValues(
-                                            top = resultTopPadding,
-                                            bottom = resultBottomPadding,
-                                            start = cardLayout.outerPaddingDp.dp,
-                                            end = cardLayout.outerPaddingDp.dp,
-                                        ),
-                                        spacing = cardLayout.itemSpacingDp.dp,
-                                        modifier = skeletonModifier,
-                                    )
-                                }
-                                SearchType.UP, SearchType.LIVE_USER -> ContentMediaListSkeleton(
-                                    useUserRow = true,
-                                    contentPadding = PaddingValues(
-                                        top = resultTopPadding,
-                                        bottom = resultBottomPadding,
-                                    ),
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize(),
-                                )
-                                else -> ContentMediaListSkeleton(
-                                    useUserRow = false,
-                                    contentPadding = PaddingValues(
-                                        top = resultTopPadding,
-                                        bottom = resultBottomPadding,
-                                    ),
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize(),
-                                )
-                            }
-                        } else if (pagePresentation.body == SearchResultBodyMode.ERROR) {
-                            SearchNativeMessageState(
-                                title = stringResource(R.string.search_failed),
-                                message = pageError,
-                                actionLabel = stringResource(R.string.search_retry),
-                                onAction = {
-                                    if (isEmptyVideoPage && pageResultState.loadMoreError != null) {
-                                        viewModel.loadMoreResults()
-                                    } else {
-                                        viewModel.search(pageResultState.query, updateDraft = false)
-                                    }
-                                },
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(top = resultTopPadding, bottom = resultBottomPadding),
-                                animation = com.android.purebilibili.core.ui.MaidAnimation.RETRY,
-                                isVisible = searchPagerState.currentPage == page
-                            )
-                        } else if (pagePresentation.body == SearchResultBodyMode.EMPTY) {
-                            val copy = pageEmptyStateCopy
-                            if (copy != null) {
-                                Box(
-                                    Modifier
-                                        .fillMaxSize()
-                                        .padding(top = resultTopPadding, bottom = resultBottomPadding),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    com.android.purebilibili.core.ui.EmptyState(
-                                        message = copy.title,
-                                        subtitle = copy.subtitle,
-                                        animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
-                                        actionText = stringResource(R.string.search_again),
-                                        onAction = { viewModel.search(pageResultState.query, updateDraft = false) },
-                                        enableEasterEgg = false,
-                                        isVisible = searchPagerState.currentPage == page
-                                    )
-                                }
-                            }
-                        } else {
-                        when (targetSearchType) {
-                            // 综合与视频共用卡片交互；材质差异仍由原卡片的玻璃开关隔离。
-                            SearchType.ALL, SearchType.VIDEO -> {
-                                // Size cover requests against the actual result pane, including split windows.
-                                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                                    val actualGridColumns = resolveSearchVideoGridColumns(
+                            val targetSearchType = resolveSearchTypeForPagerPage(page, searchTabs)
+                            SearchResultStateHost(
+                                source = searchState,
+                                searchType = targetSearchType,
+                                modifier = Modifier.fillMaxSize(),
+                            ) { pageResultState ->
+                                SearchResultPageContent(
+                                    pageResultState = pageResultState,
+                                    targetSearchType = targetSearchType,
+                                    activeSearchType = state.searchType,
+                                    searchSessionId = state.searchSessionId,
+                                    isPageVisible = { searchPagerState.currentPage == page },
+                                    resultGridState = resultGridState,
+                                    resultListState = resultListState,
+                                    scrollToTopSearchType = scrollToTopSearchType,
+                                    scrollToTopRequestId = scrollToTopRequestId,
+                                    appearance = SearchResultPageAppearance(
                                         singleColumn = listLayout.singleColumn,
-                                        contentWidthDp = maxWidth.value.toInt(),
-                                        fixedColumnCount = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
-                                            widthSizeClass = windowSizeClass.widthSizeClass,
-                                            compactColumnCount = homeSettings.effectiveGridColumnCountCompact,
-                                            defaultColumnCount = homeSettings.effectiveGridColumnCount,
-                                        ),
-                                        cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
-                                        widthSizeClass = windowSizeClass.widthSizeClass
-                                    )
-                                    val gridColumnPreference = rememberFeedGridColumnPreference(
-                                        settings = homeSettings,
-                                        widthSizeClass = windowSizeClass.widthSizeClass,
-                                        defaultColumns = actualGridColumns,
-                                        bounds = if (listLayout.singleColumn) 1..1 else resolveHomeFeedPinchColumnBounds(
-                                            windowSizeClass.widthSizeClass, maxWidth.value.toInt(),
-                                        ),
-                                    )
-                                    var isPinchPillVisible by remember { mutableStateOf(false) }
-                                    var pinchPillDismissJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-                                    val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.MENUS)
-                                    val requestedSearchGridColumns = gridColumnPreference.columns
-                                    val effectiveSearchGridColumns = if (
-                                        com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.shouldAvoidHinge
-                                    ) {
-                                        com.android.purebilibili.core.ui.adaptive.resolveHingeSafeFeedColumns(
-                                            requestedSearchGridColumns, maxWidth.value,
-                                            homeSettings.homeFeedCardWidthPreset.minCardWidthDp ?: 180,
-                                        )
-                                    } else requestedSearchGridColumns
-                                    val pinchColumnBounds = remember(windowSizeClass.widthSizeClass, maxWidth) {
-                                        resolveHomeFeedPinchColumnBounds(
-                                            widthSizeClass = windowSizeClass.widthSizeClass,
-                                            contentWidthDp = maxWidth.value.toInt(),
-                                        )
-                                    }
-                                    val searchGridCardLayout = remember(
-                                        homeFeedCardStyle,
-                                        effectiveSearchGridColumns,
-                                        windowSizeClass.widthSizeClass,
-                                    ) {
-                                        resolveHomeFeedCardLayout(
-                                            style = homeFeedCardStyle,
-                                            gridColumns = effectiveSearchGridColumns,
-                                            widthSizeClass = windowSizeClass.widthSizeClass,
-                                        )
-                                    }
-                                    val searchGridHorizontalArrangement =
-                                        Arrangement.spacedBy(searchGridCardLayout.itemSpacingDp.dp)
-                                    val searchCoverRequestSpec = remember(
-                                        maxWidth, density.density, searchGridCardLayout, searchLayoutPolicy, effectiveSearchGridColumns
-                                    ) {
-                                        resolveHomeCoverRequestSpec(
-                                            cardWidthDp = resolveSearchGridCardWidthDp(
-                                                availableWidthDp = maxWidth.value,
-                                                minItemWidthDp = searchLayoutPolicy.resultGridMinItemWidthDp.toFloat(),
-                                                horizontalPaddingDp = searchGridCardLayout.outerPaddingDp.toFloat(),
-                                                spacingDp = searchGridCardLayout.itemSpacingDp.toFloat(),
-                                                fixedColumnCount = effectiveSearchGridColumns,
-                                            ),
-                                            density = density.density,
-                                            useLowQualityCover = false,
-                                        )
-                                    }
-                                    val videoGridModifier = Modifier
-                                        .then(
-                                            if (effectiveSearchGridColumns == 1) {
-                                                Modifier.responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                            } else {
-                                                Modifier
-                                            }
-                                        )
-                                        .fillMaxSize()
-                                        .homeFeedPinchZoom(
-                                            enabled = !listLayout.singleColumn && homeSettings.gridColumnPinchEnabled,
-                                            currentColumns = effectiveSearchGridColumns,
-                                            bounds = pinchColumnBounds,
-                                            onColumnsChange = { newColumns ->
-                                                gridColumnPreference.onChange(newColumns)
-                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                isPinchPillVisible = true
-                                                pinchPillDismissJob?.cancel()
-                                            },
-                                            onGestureEnd = { finalColumns ->
-                                                gridColumnPreference.onGestureEnd(finalColumns)
-                                                pinchPillDismissJob?.cancel()
-                                                pinchPillDismissJob = scope.launch {
-                                                    kotlinx.coroutines.delay(1000)
-                                                    isPinchPillVisible = false
-                                                }
-                                            }
-                                        )
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                val showFullCardContent = com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
-                                LazyVerticalStaggeredGrid(
-                                    columns = StaggeredGridCells.Fixed(effectiveSearchGridColumns),
-                                    state = activePageGridState,
-                                    contentPadding = PaddingValues(
-                                        top = resultTopPadding,
-                                        bottom = resultBottomPadding,
-                                        start = searchGridCardLayout.outerPaddingDp.dp,
-                                        end = searchGridCardLayout.outerPaddingDp.dp
+                                        searchLayoutPolicy = searchLayoutPolicy,
+                                        cardAnimationEnabled = cardAnimationEnabled,
+                                        homeDurationStyle = homeDurationStyle,
+                                        compactVideoStatsOnCover = compactVideoStatsOnCover,
+                                        cardMotionTier = cardMotionTier,
+                                        videoCardAppearance = videoCardAppearance,
+                                        genericResultCardAppearance = genericResultCardAppearance,
+                                        showOnlineCount = showOnlineCount,
+                                        homeFeedCardStyle = homeFeedCardStyle,
+                                        homeSettings = homeSettings,
+                                        videoGridColumns = videoGridColumns,
+                                        cardLayout = cardLayout,
+                                        searchHazeEnabled = searchHazeEnabled,
+                                        effectiveCardTransitionEnabled = effectiveCardTransitionEnabled,
+                                        isReturningFromVideoDetail = isReturningFromVideoDetail,
+                                        isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                                     ),
-                                    horizontalArrangement = searchGridHorizontalArrangement,
-                                    verticalItemSpacing = searchGridCardLayout.itemSpacingDp.dp,
-                                    modifier = videoGridModifier
-                        ) {
-                                if (targetSearchType == SearchType.ALL) {
-                                    pageResultState.matchResults.firstOrNull()?.let { featuredMatch ->
-                                        item(key = "all_match_${featuredMatch.id}", span = StaggeredGridItemSpan.FullLine) {
-                                            MatchSearchResultCard(
-                                                item = featuredMatch,
-                                                appearance = genericResultCardAppearance,
-                                                onClick = {
-                                                    if (featuredMatch.id > 0L) {
-                                                        onNavigateSearchTarget(BilibiliNavigationTarget.Match(featuredMatch.id))
-                                                    }
-                                                },
-                                            )
-                                        }
-                                    }
-                                    if (pageResultState.upResults.isNotEmpty()) {
-                                        itemsIndexed(pageResultState.upResults, key = { _, up -> "all_up_${up.mid}" }, span = { _, _ -> StaggeredGridItemSpan.FullLine }) { _, up ->
-                                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                UpSearchResultCard(
-                                                    upItem = up,
-                                                    appearance = genericResultCardAppearance,
-                                                    onClick = { onUpClick(up.mid) },
-                                                    onLiveClick = { onLiveClick(up.room_id ?: 0L, up.uname, up.uname) },
-                                                    onTransitionClick = onUpResultClick?.let { openResult ->
-                                                        { key -> openResult(up.mid, key) }
-                                                    },
-                                                )
-                                                val relatedVideos = up.res.orEmpty().take(6).map { it.toVideoItem() }
-                                                if (relatedVideos.isNotEmpty()) {
-                                                    Row(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .horizontalScroll(rememberScrollState()),
-                                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                                    ) {
-                                                        relatedVideos.forEachIndexed { relatedIndex, video ->
-                                                            ElegantVideoCard(
-                                                                video = video,
-                                                                index = relatedIndex,
-                                                                modifier = Modifier.width(160.dp),
-                                                                animationEnabled = false,
-                                                                motionTier = cardMotionTier,
-                                                                transitionEnabled = effectiveCardTransitionEnabled,
-                                                                isReturningFromVideoDetail = isReturningFromVideoDetail,
-                                                                isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
-                                                                showPublishTime = true,
-                                                                glassEnabled = videoCardAppearance.glassEnabled,
-                                                                blurEnabled = videoCardAppearance.blurEnabled,
-                                                                showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
-                                                                showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
-                                                                homeDurationStyle = homeDurationStyle,
-                                                                coverAspectRatio = com.android.purebilibili.core.ui.videoCardCoverAspectRatio(),
-                                                                highlightedTitle = rememberSearchHighlightedTitle(video),
-                                                            ) { _, _ ->
-                                                                when (
-                                                                    val target = resolveVideoSearchNavigationTarget(
-                                                                        bvid = video.bvid,
-                                                                        contentType = video.contentType,
-                                                                        navigationUrl = video.navigationUrl,
-                                                                        title = video.title,
-                                                                    )
-                                                                ) {
-                                                                    is SearchResultNavigationTarget.Video -> {
-                                                                        com.android.purebilibili.core.util.AnalyticsHelper.logSearchResultClick(
-                                                                            position = relatedIndex,
-                                                                            resultSection = "creator_related"
-                                                                        )
-                                                                        onVideoClick(target.bvid, 0L, video.pic, video.resolveIsVerticalForNavigation())
-                                                                    }
-                                                                    is SearchResultNavigationTarget.Course -> onCheeseClick?.invoke(target.seasonId, target.epId)
-                                                                        ?: onBangumiClick(target.seasonId)
-                                                                    is SearchResultNavigationTarget.Web -> onWebClick(target.url, target.title)
-                                                                    else -> Unit
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (pageResultState.matchResults.isNotEmpty()) {
-                                        itemsIndexed(pageResultState.matchResults.drop(1), key = { _, item -> "all_match_${item.id}" }, span = { _, _ -> StaggeredGridItemSpan.FullLine }) { _, item ->
-                                            MatchSearchResultCard(
-                                                item = item,
-                                                appearance = genericResultCardAppearance,
-                                                onClick = {
-                                                    if (item.id > 0L) {
-                                                        onNavigateSearchTarget(BilibiliNavigationTarget.Match(item.id))
-                                                    }
-                                                },
-                                            )
-                                        }
-                                    }
-                                    if (pageResultState.bangumiResults.isNotEmpty()) {
-                                        itemsIndexed(pageResultState.bangumiResults, key = { _, item -> "all_bangumi_${item.seasonId}" }, span = { _, _ -> StaggeredGridItemSpan.FullLine }) { _, item ->
-                                            BangumiSearchResultCard(
-                                                item = item,
-                                                appearance = genericResultCardAppearance,
-                                                onClick = { onBangumiClick(item.seasonId) },
-                                                categoryLabel = item.seasonTypeName.ifBlank { "番剧 / 影视" },
-                                                onTransitionClick = onBangumiResultClick?.let { openResult ->
-                                                    { key ->
-                                                        if (item.seasonId > 0L) openResult(item.seasonId, key)
-                                                    }
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                                val searchVideoKeys = pageResultState.searchResults.mapIndexed { index, video ->
-                                    resolveSearchResultLazyItemKey(targetSearchType, index, video.bvid, video.id)
-                                }
-                                val renderSearchVideo: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
-                                        val video = pageResultState.searchResults[index]
-                                        // 直播卡片和历史页/直播区走同一套容器转场
-                                        // （rememberLiveCardContainerTransition），
-                                        // 之前这里直接 pushNavigation3Key，所以是旧动画。
-                                        val cardCornerRadius = AppShapes.resolveContainerCornerDp(
-                                            level = ContainerLevel.Card,
-                                            uiStyle = LocalAppUiStyle.current,
-                                        )
-                                        val liveContainerTransition =
-                                            if (video.contentType == "live_room") {
-                                                rememberLiveCardContainerTransition(
-                                                    roomId = video.id,
-                                                    title = video.title,
-                                                    hostName = video.owner.name,
-                                                    color = AppSurfaceTokens.cardContainer(),
-                                                    cornerRadius = cardCornerRadius,
-                                                    onClick = {
-                                                        onLiveClick(
-                                                            video.id,
-                                                            video.title,
-                                                            video.owner.name
-                                                        )
-                                                    },
-                                                    enabled = effectiveCardTransitionEnabled,
-                                                )
-                                            } else {
-                                                null
-                                            }
-                                        AnimatedVideoListItem(modifier = cardModifier, enabled = cardAnimationEnabled) {
-                                            val highlightedTitle = rememberSearchHighlightedTitle(video)
-                                            ElegantVideoCard(
-                                                video = video,
-                                                modifier = (if (!showFullCardContent && effectiveSearchGridColumns > 1) Modifier.fillMaxHeight() else Modifier)
-                                                    .then(liveContainerTransition?.modifier ?: Modifier),
-                                                singleColumn = effectiveSearchGridColumns == 1,
-                                                index = index,
-                                                animationEnabled = false, // The stable item wrapper owns column-switch motion.
-                                                motionTier = cardMotionTier,
-                                                transitionEnabled = effectiveCardTransitionEnabled,
-                                                isReturningFromVideoDetail = isReturningFromVideoDetail,
-                                                isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
-                                                showPublishTime = true,
-                                                coverRequestSpec = searchCoverRequestSpec,
-                                                glassEnabled = videoCardAppearance.glassEnabled,
-                                                blurEnabled = videoCardAppearance.blurEnabled,
-                                                showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
-                                                showInfoGlassBadges = videoCardAppearance.showInfoGlassBadges,
-                                                coverAspectRatio = searchGridCardLayout.coverAspectRatio,
-                                                compactMetadata = searchGridCardLayout.compactMetadata,
-                                                compactStatsOnCover = compactVideoStatsOnCover,
-                                                titleMinLines = 1,
-                                                homeDurationStyle = homeDurationStyle,
-                                                highlightedTitle = highlightedTitle,
-                                                showOnlineCount = showOnlineCount,
-                                                //  [交互优化] 传递 onWatchLater 用于显示菜单选项
-                                                onWatchLater = if (video.bvid.isNotBlank()) {
-                                                    { viewModel.addToWatchLater(video.bvid, video.id) }
-                                                } else {
-                                                    null
-                                                },
-                                                onUpClick = onUpClick,
-                                                onClick = { _, _ ->
-                                                    // 直播项走转场包装的点击（内部会调传入的导航），
-                                                    // 其余沿用原来的目标解析。
-                                                    val liveHandler = liveContainerTransition
-                                                    if (liveHandler != null) {
-                                                        liveHandler.onClick()
-                                                    } else when (
-                                                        val target = resolveVideoSearchNavigationTarget(
-                                                            bvid = video.bvid,
-                                                            contentType = video.contentType,
-                                                            navigationUrl = video.navigationUrl,
-                                                            title = video.title,
-                                                            videoId = video.id,
-                                                            ownerName = video.owner.name
-                                                        )
-                                                    ) {
-                                                        is SearchResultNavigationTarget.Video -> {
-                                                            com.android.purebilibili.core.util.AnalyticsHelper.logSearchResultClick(position = index)
-                                                            onVideoClick(target.bvid, 0, video.pic, video.resolveIsVerticalForNavigation())
-                                                        }
-                                                        is SearchResultNavigationTarget.Course -> {
-                                                            if (onCheeseClick != null) {
-                                                                onCheeseClick(target.seasonId, target.epId)
-                                                            } else {
-                                                                onBangumiClick(target.seasonId)
-                                                            }
-                                                        }
-                                                        is SearchResultNavigationTarget.Web ->
-                                                            onWebClick(target.url, target.title)
-                                                        is SearchResultNavigationTarget.LiveRoom ->
-                                                            onLiveClick(target.roomId, target.title, target.uname)
-                                                        else -> Unit
-                                                    }
-                                                }
-                                            )
-
-                                        }
-                                    }
-                                if (showFullCardContent || effectiveSearchGridColumns == 1) {
-                                    itemsIndexed(
-                                        pageResultState.searchResults,
-                                        key = { index, _ -> searchVideoKeys[index] },
-                                        contentType = { _, video -> "search_video_${video.contentType}" },
-                                    ) { index, _ ->
-                                        renderSearchVideo(index, videoListItemModifier(enabled = cardAnimationEnabled))
-                                    }
-                                } else {
-                                    com.android.purebilibili.feature.home.resolveHomeFeedAlignedRows(
-                                        pageResultState.searchResults.size, effectiveSearchGridColumns,
-                                    ).forEach { row ->
-                                        item(
-                                            key = row.joinToString(prefix = "search_video_row_", separator = "_") { searchVideoKeys[it] },
-                                            contentType = "search_video_row",
-                                            span = StaggeredGridItemSpan.FullLine,
-                                        ) {
-                                            com.android.purebilibili.feature.home.HomeAlignedVideoRow(
-                                                indices = row,
-                                                itemKeys = searchVideoKeys,
-                                                columns = effectiveSearchGridColumns,
-                                                horizontalArrangement = searchGridHorizontalArrangement,
-                                                modifier = videoListItemModifier(enabled = cardAnimationEnabled).fillMaxWidth(),
-                                                content = renderSearchVideo,
-                                            )
-                                        }
-                                    }
-                                }
-
-                                    // [新增] 空状态提示 (提示可能被屏蔽)
-                                    if (!pageResultState.isSearching && pageResultState.totalCount == 0 && pageResultState.error == null && pageEmptyStateCopy != null) {
-                                        item(span = StaggeredGridItemSpan.FullLine) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 64.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                com.android.purebilibili.core.ui.EmptyState(
-                                                    message = pageEmptyStateCopy.title,
-                                                    subtitle = pageEmptyStateCopy.subtitle,
-                                                    animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
-                                                    enableEasterEgg = false,
-                                                    isVisible = searchPagerState.currentPage == page
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    //  [新增] 加载更多指示器
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item(span = StaggeredGridItemSpan.FullLine) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(16.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                                    SearchLoadMoreIndicator(
-                                                        error = pageResultState.loadMoreError,
-                                                        onRetry = viewModel::loadMoreResults
-                                                    )
-                                                } else {
-                                                    AdaptiveLoadingIndicator(size = 24.dp, strokeWidth = 2.dp)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    //  [新增] 已加载全部提示
-                                    if (pagePresentation.footer == SearchResultFooterMode.END) {
-                                        item(span = StaggeredGridItemSpan.FullLine) {
-                                            AppText(
-                                                text = stringResource(R.string.search_all_loaded_count, pageResultState.totalCount),
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(16.dp),
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                                                color = AppContentColors.secondaryText(),
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                        }
-                                    }
-                                }
-
-                                    // [新增] 双指缩放切换网格列数 HUD 胶囊 (自适应 MD3 / MIUIX)
-                                    GridPinchColumnHudPill(
-                                        visible = isPinchPillVisible,
-                                        columns = effectiveSearchGridColumns,
-                                        modifier = Modifier
-                                            .align(Alignment.TopCenter)
-                                            .padding(top = resultTopPadding + 16.dp)
-                                    )
-                                }
-                            }
-                            com.android.purebilibili.data.model.response.SearchType.UP -> {
-                                //  UP主搜索结果
-                                LazyColumn(
-                                    contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    state = activePageListState,
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize()
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                ) {
-                                    itemsIndexed(
-                                        pageResultState.upResults,
-                                        key = { index, upItem ->
-                                            resolveSearchResultLazyItemKey(
-                                                searchType = SearchType.UP,
-                                                index = index,
-                                                numericKey = upItem.mid
-                                            )
-                                        },
-                                        contentType = { _, _ -> "search_up_card" }
-                                    ) { index, upItem ->
-                                        UpSearchResultCard(
-                                            upItem = upItem,
-                                            appearance = genericResultCardAppearance,
-                                            onClick = { onUpClick(upItem.mid) },
-                                            onLiveClick = { onLiveClick(upItem.room_id ?: 0L, upItem.uname, upItem.uname) },
-                                            onTransitionClick = onUpResultClick?.let { openResult ->
-                                                { transitionKey: String -> openResult(upItem.mid, transitionKey) }
-                                            },
-                                        )
-                                        if (targetSearchType == state.searchType && index == pageResultState.upResults.size - 3 && pageResultState.hasMoreResults && !pageResultState.isLoadingMore) {
-                                            LaunchedEffect(pageResultState.currentPage, targetSearchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
-                                    }
-
-                                     // [新增] 空状态提示
-                                    if (!pageResultState.isSearching && pageResultState.upResults.isEmpty() && pageResultState.error == null && pageEmptyStateCopy != null) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                com.android.purebilibili.core.ui.EmptyState(
-                                                    message = pageEmptyStateCopy.title,
-                                                    subtitle = pageEmptyStateCopy.subtitle,
-                                                    animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
-                                                    enableEasterEgg = false,
-                                                    isVisible = searchPagerState.currentPage == page
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 16.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                                    SearchLoadMoreIndicator(
-                                                        error = pageResultState.loadMoreError,
-                                                        onRetry = viewModel::loadMoreResults
-                                                    )
-                                                } else {
-                                                    AdaptiveLoadingIndicator(size = 24.dp, strokeWidth = 2.dp)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            com.android.purebilibili.data.model.response.SearchType.BANGUMI,
-                            com.android.purebilibili.data.model.response.SearchType.MEDIA_FT -> {
-                                //  番剧/影视搜索结果
-                                LazyColumn(
-                                    contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    state = activePageListState,
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize()
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                ) {
-                                    itemsIndexed(
-                                        pageResultState.bangumiResults,
-                                        key = { index, bangumiItem ->
-                                            resolveSearchResultLazyItemKey(
-                                                searchType = targetSearchType,
-                                                index = index,
-                                                numericKey = bangumiItem.seasonId,
-                                                secondaryNumericKey = bangumiItem.mediaId
-                                            )
-                                        },
-                                        contentType = { _, _ -> "search_bangumi_card" }
-                                    ) { index, bangumiItem ->
-                                        BangumiSearchResultCard(
-                                            item = bangumiItem,
-                                            categoryLabel = targetSearchType.displayName,
-                                            appearance = genericResultCardAppearance,
-                                            onClick = {
-                                                if (bangumiItem.seasonId > 0) {
-                                                    onBangumiClick(bangumiItem.seasonId)
-                                                }
-                                            },
-                                            onTransitionClick = onBangumiResultClick?.let { openResult ->
-                                                { transitionKey: String ->
-                                                    if (bangumiItem.seasonId > 0L) {
-                                                        openResult(bangumiItem.seasonId, transitionKey)
-                                                    }
-                                                }
-                                            },
-                                        )
-                                        if (targetSearchType == state.searchType && index == pageResultState.bangumiResults.size - 3 && pageResultState.hasMoreResults && !pageResultState.isLoadingMore) {
-                                            LaunchedEffect(pageResultState.currentPage, targetSearchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
-                                    }
-
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 16.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                                    SearchLoadMoreIndicator(
-                                                        error = pageResultState.loadMoreError,
-                                                        onRetry = viewModel::loadMoreResults
-                                                    )
-                                                } else {
-                                                    AdaptiveLoadingIndicator(size = 24.dp, strokeWidth = 2.dp)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if (!pageResultState.isSearching && pageResultState.bangumiResults.isEmpty() && pageResultState.error == null && pageEmptyStateCopy != null) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                com.android.purebilibili.core.ui.EmptyState(
-                                                    message = pageEmptyStateCopy.title,
-                                                    subtitle = pageEmptyStateCopy.subtitle,
-                                                    animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
-                                                    enableEasterEgg = false,
-                                                    isVisible = searchPagerState.currentPage == page
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            com.android.purebilibili.data.model.response.SearchType.LIVE -> {
-                                //  直播搜索结果
-                                LazyColumn(
-                                    contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    state = activePageListState,
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize()
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                ) {
-                                    itemsIndexed(
-                                        pageResultState.liveResults,
-                                        key = { index, liveItem ->
-                                            resolveSearchResultLazyItemKey(
-                                                searchType = SearchType.LIVE,
-                                                index = index,
-                                                numericKey = liveItem.roomid,
-                                                secondaryNumericKey = liveItem.uid
-                                            )
-                                        },
-                                        contentType = { _, _ -> "search_live_card" }
-                                    ) { index, liveItem ->
-                                        LiveSearchResultCard(
-                                            item = liveItem,
-                                            appearance = genericResultCardAppearance,
-                                            onClick = { onLiveClick(liveItem.roomid, liveItem.title, liveItem.uname) }
-                                        )
-                                        if (targetSearchType == state.searchType && index == pageResultState.liveResults.size - 3 && pageResultState.hasMoreResults && !pageResultState.isLoadingMore) {
-                                            LaunchedEffect(pageResultState.currentPage, targetSearchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
-                                    }
-
-                                    // [新增] 空状态提示
-                                    if (!pageResultState.isSearching && pageResultState.liveResults.isEmpty() && pageResultState.error == null && pageEmptyStateCopy != null) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                com.android.purebilibili.core.ui.EmptyState(
-                                                    message = pageEmptyStateCopy.title,
-                                                    subtitle = pageEmptyStateCopy.subtitle,
-                                                    animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
-                                                    enableEasterEgg = false,
-                                                    isVisible = searchPagerState.currentPage == page
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 16.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                                    SearchLoadMoreIndicator(
-                                                        error = pageResultState.loadMoreError,
-                                                        onRetry = viewModel::loadMoreResults
-                                                    )
-                                                } else {
-                                                    AdaptiveLoadingIndicator(size = 24.dp, strokeWidth = 2.dp)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            com.android.purebilibili.data.model.response.SearchType.LIVE_USER -> {
-                                LazyColumn(
-                                    contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    state = activePageListState,
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize()
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                ) {
-                                    itemsIndexed(
-                                        pageResultState.liveUserResults,
-                                        key = { index, item ->
-                                            resolveSearchResultLazyItemKey(
-                                                searchType = SearchType.LIVE_USER,
-                                                index = index,
-                                                numericKey = item.uid,
-                                                secondaryNumericKey = item.roomid
-                                            )
-                                        },
-                                        contentType = { _, _ -> "search_live_user_card" }
-                                    ) { index, item ->
-                                        LiveUserSearchResultCard(
-                                            item = item,
-                                            appearance = genericResultCardAppearance,
-                                            onClick = {
-                                                when (val target = resolveLiveUserSearchNavigationTarget(
-                                                    roomId = item.roomid,
-                                                    uid = item.uid,
-                                                    isLive = item.isLive || item.liveStatus == 1,
-                                                    title = item.uname,
-                                                    uname = item.uname
-                                                )) {
-                                                    is SearchResultNavigationTarget.LiveRoom -> onLiveClick(target.roomId, target.title, target.uname)
-                                                    is SearchResultNavigationTarget.Space -> onUpClick(target.mid)
-                                                    else -> Unit
-                                                }
-                                            }
-                                        )
-                                        if (targetSearchType == state.searchType && index == pageResultState.liveUserResults.size - 3 && pageResultState.hasMoreResults && !pageResultState.isLoadingMore) {
-                                            LaunchedEffect(pageResultState.currentPage, targetSearchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
-                                    }
-
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item {
-                                            SearchLoadMoreIndicator(
-                                                error = pageResultState.loadMoreError,
-                                                onRetry = viewModel::loadMoreResults
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            com.android.purebilibili.data.model.response.SearchType.ARTICLE -> {
-                                LazyColumn(
-                                    contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    state = activePageListState,
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize()
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                ) {
-                                    itemsIndexed(
-                                        pageResultState.articleResults,
-                                        key = { index, articleItem ->
-                                            resolveSearchResultLazyItemKey(
-                                                searchType = SearchType.ARTICLE,
-                                                index = index,
-                                                numericKey = articleItem.id
-                                            )
-                                        },
-                                        contentType = { _, _ -> "search_article_card" }
-                                    ) { index, articleItem ->
-                                        ArticleSearchResultCard(
-                                            item = articleItem,
-                                            appearance = genericResultCardAppearance,
-                                            onClick = { onArticleClick(articleItem.id, articleItem.title) },
-                                        )
-                                        if (targetSearchType == state.searchType && index == pageResultState.articleResults.size - 3 && pageResultState.hasMoreResults && !pageResultState.isLoadingMore) {
-                                            LaunchedEffect(pageResultState.currentPage, targetSearchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
-                                    }
-
-                                    if (!pageResultState.isSearching && pageResultState.articleResults.isEmpty() && pageResultState.error == null && pageEmptyStateCopy != null) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 64.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                com.android.purebilibili.core.ui.EmptyState(
-                                                    message = pageEmptyStateCopy.title,
-                                                    subtitle = pageEmptyStateCopy.subtitle,
-                                                    animation = com.android.purebilibili.core.ui.MaidAnimation.SEARCH_EMPTY,
-                                                    enableEasterEgg = false,
-                                                    isVisible = searchPagerState.currentPage == page
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(vertical = 16.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                if (pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                                    SearchLoadMoreIndicator(
-                                                        error = pageResultState.loadMoreError,
-                                                        onRetry = viewModel::loadMoreResults
-                                                    )
-                                                } else {
-                                                    AdaptiveLoadingIndicator(size = 24.dp, strokeWidth = 2.dp)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            com.android.purebilibili.data.model.response.SearchType.TOPIC -> {
-                                LazyColumn(
-                                    contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    state = activePageListState,
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize()
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                ) {
-                                    itemsIndexed(
-                                        pageResultState.topicResults,
-                                        key = { index, item ->
-                                            resolveSearchResultLazyItemKey(
-                                                searchType = SearchType.TOPIC,
-                                                index = index,
-                                                numericKey = item.topicId
-                                            )
-                                        },
-                                        contentType = { _, _ -> "search_topic_card" }
-                                    ) { index, item ->
-                                        TopicSearchResultCard(
-                                            item = item,
-                                            appearance = genericResultCardAppearance,
-                                            onClick = {
-                                                if (item.topicId > 0L) onTopicClick(item.topicId)
-                                            }
-                                        )
-                                        if (targetSearchType == state.searchType && index == pageResultState.topicResults.size - 3 && pageResultState.hasMoreResults && !pageResultState.isLoadingMore) {
-                                            LaunchedEffect(pageResultState.currentPage, targetSearchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
-                                    }
-
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item {
-                                            SearchLoadMoreIndicator(
-                                                error = pageResultState.loadMoreError,
-                                                onRetry = viewModel::loadMoreResults
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            com.android.purebilibili.data.model.response.SearchType.PHOTO -> {
-                                LazyColumn(
-                                    contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                    state = activePageListState,
-                                    modifier = Modifier
-                                        .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
-                                        .fillMaxSize()
-                                        .then(if (searchHazeEnabled) Modifier.hazeSourceCompat(state = hazeState) else Modifier)
-                                ) {
-                                    itemsIndexed(
-                                        pageResultState.photoResults,
-                                        key = { index, item ->
-                                            resolveSearchResultLazyItemKey(
-                                                searchType = SearchType.PHOTO,
-                                                index = index,
-                                                numericKey = item.id,
-                                                secondaryNumericKey = item.mid
-                                            )
-                                        },
-                                        contentType = { _, _ -> "search_photo_card" }
-                                    ) { index, item ->
-                                        PhotoSearchResultCard(
-                                            item = item,
-                                            appearance = genericResultCardAppearance
-                                        )
-                                        if (targetSearchType == state.searchType && index == pageResultState.photoResults.size - 3 && pageResultState.hasMoreResults && !pageResultState.isLoadingMore) {
-                                            LaunchedEffect(pageResultState.currentPage, targetSearchType) {
-                                                viewModel.loadMoreResults()
-                                            }
-                                        }
-                                    }
-
-                                    if (pagePresentation.footer == SearchResultFooterMode.LOADING || pagePresentation.footer == SearchResultFooterMode.ERROR) {
-                                        item {
-                                            SearchLoadMoreIndicator(
-                                                error = pageResultState.loadMoreError,
-                                                onRetry = viewModel::loadMoreResults
-                                            )
-                                        }
-                                    }
-                                }
+                                    hazeState = hazeState,
+                                    resultTopPadding = resultTopPadding,
+                                    resultBottomPadding = resultBottomPadding,
+                                    onLoadMore = viewModel::loadMoreResults,
+                                    onRetrySearch = { viewModel.search(it, updateDraft = false) },
+                                    onWatchLater = viewModel::addToWatchLater,
+                                    onNavigateSearchTarget = onNavigateSearchTarget,
+                                    onVideoClick = onVideoClick,
+                                    onWebClick = onWebClick,
+                                    onUpClick = onUpClick,
+                                    onBangumiClick = onBangumiClick,
+                                    onCheeseClick = onCheeseClick,
+                                    onLiveClick = onLiveClick,
+                                    onTopicClick = onTopicClick,
+                                    onArticleClick = onArticleClick,
+                                    onUpResultClick = onUpResultClick,
+                                    onBangumiResultClick = onBangumiResultClick,
+                                )
                             }
                         }
-                        }
-                        }
-                        }
-                }
+                    }
                 }
             } else {
                 val useSplitLayout = shouldUseSearchSplitLayout(
                     widthDp = configuration.screenWidthDp
                 )
-                SearchLandingContent(
+                SearchLandingStateHost(
+                    source = searchState,
                     historyListState = historyListState,
                     useSplitLayout = useSplitLayout,
                     layoutPolicy = searchLayoutPolicy,
                     contentTopPadding = contentTopPadding,
                     bottomPadding = resultBottomPadding,
-                    hotList = state.hotList,
-                    hotListError = state.hotListError,
-                    isRefreshingHotList = state.isRefreshingHotList,
-                    discoverTitle = state.discoverTitle,
-                    discoverList = state.discoverList,
-                    discoverListError = state.discoverListError,
-                    isRefreshingDiscoverList = state.isRefreshingDiscoverList,
-                    historyList = state.historyList,
-                    recordSearchHistory = state.recordSearchHistory,
-                    globalPrivacyMode = state.globalPrivacyMode,
                     onToggleHistoryRecording = viewModel::toggleSearchHistoryRecording,
                     showHotSection = showHotSection,
                     showHistorySection = showHistorySection,
@@ -2830,7 +1739,7 @@ fun SearchScreen(
                     suggestedKeyword = suggestedSearchKeyword,
                     autoFocusEnabled = shouldAutoFocusSearchField(
                         startupSettled = startupSettled,
-                        query = state.query,
+                        query = searchQuery.value,
                         showResults = state.showResults,
                         autoFocusConsumed = autoFocusConsumed
                     ),
@@ -2891,19 +1800,16 @@ fun SearchScreen(
                     ),
             )
 
-            // ---  搜索建议下拉列表 ---
-            if (state.suggestions.isNotEmpty() && state.query.isNotEmpty() && !state.showResults) {
-                SearchSuggestionDropdown(
-                    suggestions = state.suggestions,
-                    onSuggestionClick = submitSearch,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = contentTopPadding + 6.dp)
-                        .padding(horizontal = searchLayoutPolicy.resultHorizontalPaddingDp.dp)
-                        .align(Alignment.TopCenter)
-                        .responsiveContentWidth()
-                )
-            }
+            SearchSuggestionsHost(
+                source = searchState,
+                onSuggestionClick = submitSearch,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = contentTopPadding + 6.dp)
+                    .padding(horizontal = searchLayoutPolicy.resultHorizontalPaddingDp.dp)
+                    .align(Alignment.TopCenter)
+                    .responsiveContentWidth(),
+            )
         }
     }
 }
@@ -2933,385 +1839,6 @@ private class SearchTopBarCallbacks(
     val onExitMotionFinished: (Int) -> Unit,
     val isScrollInProgressProvider: () -> Boolean,
 )
-
-// 顶部搜索栏：输入状态持有选区，搜索逻辑只订阅文字变化。
-@Composable
-fun SearchTopBar(
-    textFieldState: androidx.compose.foundation.text.input.TextFieldState,
-    onBack: () -> Unit,
-    onSearch: (String) -> Unit,
-    onClearQuery: () -> Unit,
-    onFocusChanged: (Boolean) -> Unit = {},
-    placeholder: String = resolveSearchDefaultPlaceholder(),
-    suggestedKeyword: String = "",
-    focusRequester: androidx.compose.ui.focus.FocusRequester = remember { androidx.compose.ui.focus.FocusRequester() },
-    autoFocusEnabled: Boolean = true,
-    reducedMotionBudget: Boolean = false,
-    entryMotionSpec: SearchEntryMotionSpec? = null,
-    entryMotionKey: Int = 0,
-    onEntryMotionFinished: (Int) -> Unit = {},
-    exitMotionSpec: SearchEntryMotionSpec? = null,
-    exitMotionKey: Int = 0,
-    onExitMotionFinished: (Int) -> Unit = {},
-    isScrollInProgressProvider: () -> Boolean = { false },
-    liquidGlassEnabled: Boolean = false,
-    miuixBackdrop: MiuixBackdrop? = null,
-    includeStatusBarPadding: Boolean = true,
-    trailingActions: (@Composable RowScope.() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    val componentSpacing = resolveSearchComponentSpacingSpec(LocalAppUiStyle.current)
-    val topChromePolicy = rememberAppTopChromePolicy()
-    val chromeSpec = remember(topChromePolicy) { resolveSearchChromeVisualSpec(topChromePolicy) }
-    val inputHeightDp = rememberSearchInputHeightDp(chromeSpec.inputHeightDp)
-    val topBarRowMinHeightDp = remember(inputHeightDp) {
-        resolveSearchTopBarRowMinHeightDp(inputHeightDp)
-    }
-    val searchInteractionSource = remember { MutableInteractionSource() }
-    val inputText = textFieldState.text.toString()
-    val backIcon = rememberAppBackIcon()
-    val density = LocalDensity.current
-    val entryMotionProgress = remember { Animatable(1f) }
-    val latestOnEntryMotionFinished by rememberUpdatedState(onEntryMotionFinished)
-    val latestOnExitMotionFinished by rememberUpdatedState(onExitMotionFinished)
-    val backLabel = stringResource(R.string.common_back)
-    val resolvedSubmitKeyword = remember(inputText, suggestedKeyword) {
-        resolveSearchSubmitKeyword(
-            query = inputText,
-            suggestedKeyword = suggestedKeyword
-        )
-    }
-    val canSubmit = resolvedSubmitKeyword.isNotBlank()
-    val liquidGlassRenderConfig = LocalLiquidGlassRenderConfig.current
-    val glassActive = liquidGlassEnabled && miuixBackdrop != null && !isLowBlurBudgetForced()
-    val glassRenderMode = if (glassActive) {
-        HomeTopChromeRenderMode.LIQUID_GLASS_BACKDROP
-    } else {
-        HomeTopChromeRenderMode.PLAIN
-    }
-    val backElasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState()
-    fun Modifier.searchTopChromeGlass(
-        shape: androidx.compose.ui.graphics.Shape,
-        controlHeightDp: Int,
-        interactionState: com.android.purebilibili.core.ui.components.AppElasticPressState? = null,
-    ): Modifier {
-        if (!glassActive) return this
-        return homeTopBottomBarMatchedSurface(
-            renderMode = glassRenderMode,
-            shape = shape,
-            hazeState = null,
-            miuixBackdrop = miuixBackdrop,
-            liquidGlassStyle = com.android.purebilibili.core.store.LiquidGlassStyle.CLASSIC,
-            liquidGlassTuning = liquidGlassRenderConfig.tuning,
-            liquidGlassPreset = liquidGlassRenderConfig.preset,
-            motionTier = MotionTier.Normal,
-            isScrolling = isScrollInProgressProvider(),
-            isTransitionRunning = false,
-            forceLowBlurBudget = false,
-            drawShellLens = true,
-            shellLensIntensity = resolveFloatingDockGeometryScale(controlHeightDp.toFloat()),
-            interactionState = interactionState,
-        )
-    }
-
-    LaunchedEffect(entryMotionKey, entryMotionSpec) {
-        val spec = entryMotionSpec
-        if (spec == null) {
-            entryMotionProgress.snapTo(1f)
-            return@LaunchedEffect
-        }
-        entryMotionProgress.snapTo(0f)
-        if (spec.durationMillis <= 0) {
-            entryMotionProgress.snapTo(1f)
-        } else {
-            entryMotionProgress.animateTo(
-                targetValue = 1f,
-                animationSpec = continuityTween(spec.durationMillis)
-            )
-        }
-        latestOnEntryMotionFinished(entryMotionKey)
-    }
-    LaunchedEffect(exitMotionKey, exitMotionSpec) {
-        val spec = exitMotionSpec
-        if (exitMotionKey <= 0 || spec == null) return@LaunchedEffect
-        if (spec.durationMillis <= 0) {
-            entryMotionProgress.snapTo(0f)
-        } else {
-            entryMotionProgress.animateTo(
-                targetValue = 0f,
-                animationSpec = continuityTween(spec.durationMillis)
-            )
-        }
-        latestOnExitMotionFinished(exitMotionKey)
-    }
-    LaunchedEffect(autoFocusEnabled, focusRequester) {
-        if (autoFocusEnabled) {
-            // Focus is available after composition; do not queue it behind an app timer.
-            runCatching { focusRequester.requestFocus() }
-        }
-    }
-    val activeMotionSpec = entryMotionSpec ?: exitMotionSpec
-    val entryMotionModifier = if (activeMotionSpec != null) {
-        Modifier.graphicsLayer {
-            val progress = entryMotionProgress.value
-            val spec = activeMotionSpec
-            alpha = lerp(spec.initialAlpha, 1f, progress)
-            scaleX = lerp(spec.initialScale, 1f, progress)
-            scaleY = lerp(spec.initialScale, 1f, progress)
-            translationY = with(density) {
-                spec.initialTranslationYDp.dp.toPx()
-            } * (1f - progress)
-            transformOrigin = TransformOrigin(
-                spec.transformOriginPivotX,
-                spec.transformOriginPivotY
-            )
-        }
-    } else {
-        Modifier
-    }
-
-    // 外层只负责排列；MD3、Miuix 与玻璃控件都可把弹性绘制伸到布局边界外。
-    // 输入框与按钮自己保留圆角裁切，不用整个顶栏的 Surface 再裁一次。
-    Box(modifier = modifier.fillMaxWidth()) {
-        Column {
-            if (includeStatusBarPadding) {
-                Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-            }
-
-            Row(
-                modifier = Modifier
-                    .responsiveContentWidth()
-                    .heightIn(min = topBarRowMinHeightDp.dp)
-                    .padding(horizontal = componentSpacing.horizontalPaddingDp.dp, vertical = (SEARCH_TOP_BAR_VERTICAL_PADDING_DP / 2).dp)
-                    .padding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal).asPaddingValues())
-                    .then(entryMotionModifier),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val inputShape = resolveSearchInputShape(topChromePolicy)
-                val actionShape = resolveHomeTopEdgeButtonShape(topChromePolicy)
-                SearchTopBarIconButton(
-                    onClick = onBack,
-                    elasticState = backElasticState,
-                    shape = actionShape,
-                    transformInBackdrop = glassActive,
-                    modifier = Modifier
-                        .size(chromeSpec.clearActionSizeDp.dp)
-                        .searchTopChromeGlass(actionShape, chromeSpec.clearActionSizeDp, backElasticState)
-                ) {
-                    AppIcon(
-                        backIcon,
-                        contentDescription = backLabel,
-                        tint = AppContentColors.primaryText(),
-                        modifier = Modifier.size(chromeSpec.actionIconSizeDp.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(componentSpacing.actionGapDp.dp))
-
-                val containerColor = if (glassActive) {
-                    Color.Transparent
-                } else if (chromeSpec.useFilledSearchAction) {
-                    AppSurfaceTokens.surfaceContainerHigh()
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                }
-                SearchTopBarInputField(
-                    state = textFieldState,
-                    onSearch = {
-                        if (canSubmit) onSearch(resolvedSubmitKeyword)
-                    },
-                    onClear = onClearQuery,
-                    placeholder = placeholder,
-                    containerColor = containerColor,
-                    fieldShape = inputShape,
-                    focusRequester = focusRequester,
-                    interactionSource = searchInteractionSource,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .height(inputHeightDp.dp)
-                        // 编辑区保持固定坐标，点按定位光标不触发整框回弹和按压叠光。
-                        .searchTopChromeGlass(inputShape, inputHeightDp)
-                        .onFocusChanged { onFocusChanged(it.isFocused) }
-                )
-
-                if (trailingActions != null) {
-                    Spacer(modifier = Modifier.width(chromeSpec.horizontalGapDp.dp))
-                    trailingActions()
-                } else {
-                    val submitElasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState()
-                    Spacer(modifier = Modifier.width(chromeSpec.horizontalGapDp.dp))
-                    SearchTopBarIconButton(
-                        onClick = { onSearch(resolvedSubmitKeyword) },
-                        elasticState = submitElasticState,
-                        shape = actionShape,
-                        transformInBackdrop = glassActive,
-                        enabled = canSubmit,
-                        modifier = Modifier
-                            .size(chromeSpec.submitActionSizeDp.dp)
-                            .searchTopChromeGlass(actionShape, chromeSpec.submitActionSizeDp, submitElasticState),
-                    ) {
-                        AppIcon(
-                            imageVector = rememberAppSearchIcon(),
-                            contentDescription = stringResource(R.string.common_search),
-                            tint = AppContentColors.secondaryText().copy(alpha = if (canSubmit) 1f else 0.35f),
-                            modifier = Modifier.size(chromeSpec.actionIconSizeDp.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchTopBarIconButton(
-    onClick: () -> Unit,
-    elasticState: com.android.purebilibili.core.ui.components.AppElasticPressState,
-    shape: androidx.compose.ui.graphics.Shape,
-    transformInBackdrop: Boolean,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    elasticFeedbackEnabled: Boolean = enabled,
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = Modifier.sizeIn(
-            minWidth = AppChromeSizeTokens.MinimumTouchTarget,
-            minHeight = AppChromeSizeTokens.MinimumTouchTarget,
-        ),
-        contentAlignment = Alignment.Center,
-    ) {
-        // The surface owns motion; never move only the glyph inside a fixed clipping shell.
-        Box(
-            modifier = modifier.appElasticPress(
-                enabled = elasticFeedbackEnabled,
-                state = elasticState,
-                transformInBackdrop = transformInBackdrop,
-                highlightShape = shape,
-            ),
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.runtime.CompositionLocalProvider(
-                com.android.purebilibili.core.ui.components.LocalElasticPressEnabled provides false,
-            ) {
-                AppIconButton(
-                    onClick = onClick,
-                    // drawBackdrop already transforms the surface and its descendants.
-                    modifier = Modifier.matchParentSize(),
-                    enabled = enabled,
-                    content = content,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SearchTopBarInputField(
-    state: androidx.compose.foundation.text.input.TextFieldState,
-    onSearch: () -> Unit,
-    onClear: () -> Unit,
-    placeholder: String,
-    containerColor: Color,
-    fieldShape: androidx.compose.ui.graphics.Shape,
-    focusRequester: androidx.compose.ui.focus.FocusRequester,
-    interactionSource: MutableInteractionSource,
-    modifier: Modifier = Modifier
-) {
-    val isFocused by interactionSource.collectIsFocusedAsState()
-    // Use AppSurfaceTokens so capsule text keeps contrast in both themes.
-    val contentColor = AppSurfaceTokens.onSurface()
-    val placeholderColor = AppSurfaceTokens.onSurfaceVariantSummary()
-    val focusBorderColor = AppSurfaceTokens.primary()
-    val textStyle = MaterialTheme.typography.bodyLarge.copy(
-        color = contentColor,
-        // Explicit line height avoids type-scale clipping in single-line fields.
-        lineHeight = SEARCH_INPUT_LINE_HEIGHT_SP.sp
-    )
-    val cursorBrush = androidx.compose.ui.graphics.SolidColor(focusBorderColor)
-
-    // 所有材质共用同一个编辑状态，选区与输入法组合文字不通过父级重组回传。
-    androidx.compose.foundation.text.BasicTextField(
-        state = state,
-        modifier = modifier
-            .focusRequester(focusRequester)
-            .then(
-                if (containerColor.alpha > 0.001f) {
-                    Modifier
-                        .clip(fieldShape)
-                        .background(containerColor, fieldShape)
-                } else {
-                    Modifier
-                }
-            )
-            .then(
-                if (isFocused) {
-                    Modifier.border(
-                        width = 1.5.dp,
-                        color = focusBorderColor,
-                        shape = fieldShape
-                    )
-                } else {
-                    Modifier
-                }
-            ),
-        textStyle = textStyle,
-        lineLimits = androidx.compose.foundation.text.input.TextFieldLineLimits.SingleLine,
-        cursorBrush = cursorBrush,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        onKeyboardAction = { onSearch() },
-        interactionSource = interactionSource,
-        decorator = { innerTextField ->
-            // This is the search page's shared edit affordance, not a glass geometry override.
-            // Native MD3/Miuix and liquid chrome keep their existing field dimensions and padding.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp)
-            ) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (state.text.isEmpty()) {
-                        AppText(
-                            text = placeholder,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = textStyle,
-                            color = placeholderColor
-                        )
-                    }
-                    // Keep text contrast inside the transparent liquid capsule.
-                    androidx.compose.runtime.CompositionLocalProvider(
-                        androidx.compose.material3.LocalContentColor provides contentColor
-                    ) {
-                        innerTextField()
-                    }
-                }
-                if (state.text.isNotEmpty()) {
-                    // The field owns the only surface; never decorate its clear icon as a top-bar dock.
-                    CompositionLocalProvider(LocalAppTopBarIconDecorationEnabled provides false) {
-                        AppIconButton(
-                            onClick = onClear,
-                            modifier = Modifier.size(32.dp),
-                            colors = AppIconButtonDefaults.colors(
-                                containerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                            ),
-                        ) {
-                            AppIcon(
-                                imageVector = rememberAppClearIcon(),
-                                contentDescription = stringResource(R.string.common_clear),
-                                tint = placeholderColor,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    )
-}
 
 // 气泡化历史记录：中性 InputChip（AppInputChip），视觉跟随主题层。
 @Composable
@@ -3687,7 +2214,7 @@ private fun SearchResultTypeTabRow(
 }
 
 @Composable
-private fun rememberSearchHighlightedTitle(video: VideoItem): androidx.compose.ui.text.AnnotatedString? {
+internal fun rememberSearchHighlightedTitle(video: VideoItem): androidx.compose.ui.text.AnnotatedString? {
     val highlightColor = AppContentColors.accent()
     return remember(video.searchHighlightedTitle, highlightColor) {
         val segments = resolveSearchHighlightedTextSegments(video.searchHighlightedTitle)
@@ -4906,7 +3433,7 @@ internal fun LiveSearchResultCard(
 }
 
 @Composable
-private fun SearchLoadMoreIndicator(
+internal fun SearchLoadMoreIndicator(
     error: String? = null,
     onRetry: (() -> Unit)? = null,
 ) {
@@ -4933,7 +3460,7 @@ private fun SearchLoadMoreIndicator(
 }
 
 @Composable
-private fun SearchNativeMessageState(
+internal fun SearchNativeMessageState(
     title: String,
     message: String? = null,
     actionLabel: String? = null,

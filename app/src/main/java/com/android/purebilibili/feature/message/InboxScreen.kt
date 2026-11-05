@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -95,6 +96,11 @@ fun InboxScreen(
 ) {
     val accountIdentity by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // 进消息中心本地清空角标，退出不还原（官方 cleanUnread）。
+    LaunchedEffect(accountIdentity) {
+        com.android.purebilibili.core.store.MessageBadgeCleanState
+            .clean(com.android.purebilibili.core.store.TokenManager.midCache ?: 0L)
+    }
     val outsideActionLimit = if (LocalConfiguration.current.screenWidthDp < 360) 0 else 2
     val webThemeQuery = if (AppSurfaceTokens.surface().luminance() < 0.5f) "native.theme=2&night=1" else "native.theme=1&night=0"
     val disabledLikesFlow = remember(context) { MessageCenterPreferences.disabledLikes(context) }

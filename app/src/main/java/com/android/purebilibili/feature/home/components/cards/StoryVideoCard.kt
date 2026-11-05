@@ -1,6 +1,7 @@
 // 文件路径: feature/home/components/cards/StoryVideoCard.kt
 package com.android.purebilibili.feature.home.components.cards
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.request.crossfade
@@ -90,7 +91,6 @@ import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldEnableVideoCoverSharedTransition
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.feature.home.HomeCoverRequestSpec
 import com.android.purebilibili.feature.home.resolveHomeCoverImageSource
 import com.android.purebilibili.feature.home.resolveHomeCardEnterAnimationEnabledAtMount
@@ -373,15 +373,7 @@ internal fun StoryVideoCard(
             .then(cardVisibility.observerModifier)
             .fillMaxWidth()
             .adaptiveCardHoverEffect(shape = cardShellShape)
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = video.bvid,
-                sourceRoute = effectiveSharedElementSourceRoute,
-                motionSpec = cardSharedTransitionMotionSpec,
-                clipShape = cardShellShape
-            )
+            .videoCardSourceAnchor(video.bvid, cardShellShape)
             .padding(horizontal = cardHorizontalPadding, vertical = AppSpacingTokens.Small)
             .animateEnter(
                 index = index,

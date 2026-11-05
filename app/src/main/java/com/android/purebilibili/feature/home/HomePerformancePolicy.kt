@@ -66,11 +66,10 @@ internal fun resolveHomePerformanceConfig(
     // Feature retired: keep parameter for compatibility, but never apply runtime smoothness downgrade.
     val shouldPrioritizeSmoothness = false
     val effectiveDataSaver = isDataSaverActive
-    // The legacy per-surface values remain readable for settings migration/import compatibility,
-    // but the Android liquid-glass switch is now the only runtime enablement source.
-    val effectiveTopBarLiquidGlass = androidNativeLiquidGlassEnabled
-    val effectiveHomeSearchLiquidGlass = androidNativeLiquidGlassEnabled
-    val effectiveBottomBarLiquidGlass = androidNativeLiquidGlassEnabled
+    // 场景选择与总开关共同控制材质，关闭的场景保留原生模糊与布局策略。
+    val effectiveTopBarLiquidGlass = androidNativeLiquidGlassEnabled && topBarLiquidGlassEnabled
+    val effectiveHomeSearchLiquidGlass = androidNativeLiquidGlassEnabled && homeSearchLiquidGlassEnabled
+    val effectiveBottomBarLiquidGlass = androidNativeLiquidGlassEnabled && bottomBarLiquidGlassEnabled
     val effectivePreloadAheadCount = when {
         shouldPrioritizeSmoothness -> normalPreloadAheadCount.coerceAtLeast(0).coerceAtMost(2)
         else -> resolveHomePreloadAheadCount(

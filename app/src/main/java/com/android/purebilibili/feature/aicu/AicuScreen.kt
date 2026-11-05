@@ -117,7 +117,7 @@ internal fun AicuRoute(
     BackHandler(onBack = back)
     AicuScreen(
         state = state,
-        liquidEnabled = settings?.androidNativeLiquidGlassEnabled == true,
+        liquidEnabled = settings?.otherGlassEnabled == true,
         emoteMap = renderEmoteMap,
         onBack = back,
         onUidChange = model::editUid,

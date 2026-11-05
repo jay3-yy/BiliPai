@@ -143,7 +143,7 @@ fun <T> AppSingleChoicePreference(
     val menuPresenter = LocalAppGlassMenuPresenter.current
     val sameWindow = menuPresenter == null || menuPresenter.ownerView === androidx.compose.ui.platform.LocalView.current
     val glassPresenter = LocalAppSingleChoicePopupPresenter.current.takeIf {
-        sameWindow && LocalAppThemeConfig.current.liquidGlassEnabled
+        sameWindow && LocalAppThemeConfig.current.popupGlassEnabled
     }
     if (glassPresenter != null) {
         var anchorBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }

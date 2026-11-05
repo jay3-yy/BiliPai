@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.clipPath
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
 import kotlin.math.hypot
@@ -46,5 +47,6 @@ internal val CircularRevealNavTransition: NavTransition = object : NavTransition
                 clipPath(path) { this@onDrawWithContent.drawContent() }
             }
         }
-    }
+    // 内层独立记录页面绘制；外层裁剪变化不重新记录未变化的页面内容。
+    }.graphicsLayer()
 }

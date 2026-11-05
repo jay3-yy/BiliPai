@@ -92,225 +92,230 @@ internal fun AdaptiveAlertDialog(
     properties: DialogProperties = DialogProperties(),
     contentLayout: AppContentDialogLayoutPolicy = resolveAppCompactContentDialogLayoutPolicy(),
 ) {
-    val uiStyle = LocalAppUiStyle.current
-    val themeConfig = LocalAppThemeConfig.current
-    val renderer = resolveAppAlertDialogRenderer(
-        uiStyle = uiStyle,
-        nativeMiuixPopupsEnabled = themeConfig.nativeMiuixPopupsEnabled,
-    )
-    // Dialog actions are drawn on the dialog fill, not on primary. Keep the picked
-    // accent for fills elsewhere; only repair these standalone action foregrounds.
-    val baseActionBackground = containerColor ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-        AppSurfaceTokens.cardContainer()
-    } else MaterialTheme.colorScheme.surface
-    val actionBackground = if (renderer == AppAlertDialogRenderer.MATERIAL_ALERT &&
-        baseActionBackground == MaterialTheme.colorScheme.surface
-    ) MaterialTheme.colorScheme.surfaceColorAtElevation(tonalElevation ?: AlertDialogDefaults.TonalElevation)
-        else baseActionBackground
-    val confirmContentColor = resolveButtonContentColor(actionBackground, AppSurfaceTokens.primary(), MaterialTheme.colorScheme)
-    val dismissContentColor = resolveButtonContentColor(actionBackground, AppSurfaceTokens.onSurface(), MaterialTheme.colorScheme)
-    // 玻璃菜单需要完整的同窗坐标空间；关闭玻璃时继续下方原生 Dialog 路径。
-    // 对话框自身保留既有表面，内部下拉的背景只采样本窗口，不跨窗口读取页面。
-    if (themeConfig.liquidGlassEnabled && LocalAppPopupWindowHostRenderer.current != null) {
-        val retainedWindow: @Composable (AppDialogExitState) -> Unit = { exit ->
-            androidx.compose.runtime.CompositionLocalProvider(LocalAppDialogExitRunning provides exit.isClosing) {
-                androidx.compose.ui.window.Dialog(
-                    onDismissRequest = { if (!exit.isClosing) onDismissRequest() },
-                    properties = DialogProperties(
-                        dismissOnBackPress = properties.dismissOnBackPress,
-                        dismissOnClickOutside = properties.dismissOnClickOutside,
-                        securePolicy = properties.securePolicy,
-                        usePlatformDefaultWidth = false,
-                        decorFitsSystemWindows = false,
-                    ),
-                ) {
-                    AppDialogWindowExitEffect(exit.progress)
-                    ModalWindowBlurBehindEffect(progress = { 1f - exit.progress.value })
-                    AppPopupWindowHost {
-                        Box(Modifier.fillMaxSize().blockAppDialogExitInput(exit.isClosing)) {
-                            val surface: @Composable () -> Unit = {
-                                BoxWithConstraints {
-                                    AppPopupSurface(
-                                        type = AppPopupSurfaceType.DIALOG,
-                                        modifier = modifier
-                                            .graphicsLayer {
-                                                val fraction = exit.progress.value.coerceIn(0f, 1f)
-                                                scaleX = 1f - 0.2f * fraction
-                                                scaleY = scaleX
-                                                alpha = 1f - fraction
-                                            }
-                                            .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp)
-                                            .heightIn(max = maxHeight)
-                                            .fillMaxWidth()
-                                            .pointerInput(Unit) { detectTapGestures { } },
-                                        shape = shape ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-                                            AppShapes.resolveContainerShape(ContainerLevel.Dialog, uiStyle, liquidGlassEnabled = false)
-                                        } else MaterialTheme.shapes.extraLarge,
-                                        containerColor = baseActionBackground,
-                                        tonalElevation = tonalElevation ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-                                            0.dp
-                                        } else AlertDialogDefaults.TonalElevation,
-                                    ) {
-                                        MiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton,
-                                            confirmContentColor, dismissContentColor, constrainText = true)
+    val sceneConfig = LocalAppThemeConfig.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalAppThemeConfig provides sceneConfig.copy(liquidGlassEnabled = sceneConfig.popupGlassEnabled),
+    ) popupScene@ {
+        val uiStyle = LocalAppUiStyle.current
+        val themeConfig = LocalAppThemeConfig.current
+        val renderer = resolveAppAlertDialogRenderer(
+            uiStyle = uiStyle,
+            nativeMiuixPopupsEnabled = themeConfig.nativeMiuixPopupsEnabled,
+        )
+        // Dialog actions are drawn on the dialog fill, not on primary. Keep the picked
+        // accent for fills elsewhere; only repair these standalone action foregrounds.
+        val baseActionBackground = containerColor ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
+            AppSurfaceTokens.cardContainer()
+        } else MaterialTheme.colorScheme.surface
+        val actionBackground = if (renderer == AppAlertDialogRenderer.MATERIAL_ALERT &&
+            baseActionBackground == MaterialTheme.colorScheme.surface
+        ) MaterialTheme.colorScheme.surfaceColorAtElevation(tonalElevation ?: AlertDialogDefaults.TonalElevation)
+            else baseActionBackground
+        val confirmContentColor = resolveButtonContentColor(actionBackground, AppSurfaceTokens.primary(), MaterialTheme.colorScheme)
+        val dismissContentColor = resolveButtonContentColor(actionBackground, AppSurfaceTokens.onSurface(), MaterialTheme.colorScheme)
+        // 玻璃菜单需要完整的同窗坐标空间；关闭玻璃时继续下方原生 Dialog 路径。
+        // 对话框自身保留既有表面，内部下拉的背景只采样本窗口，不跨窗口读取页面。
+        if (themeConfig.liquidGlassEnabled && LocalAppPopupWindowHostRenderer.current != null) {
+            val retainedWindow: @Composable (AppDialogExitState) -> Unit = { exit ->
+                androidx.compose.runtime.CompositionLocalProvider(LocalAppDialogExitRunning provides exit.isClosing) {
+                    androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { if (!exit.isClosing) onDismissRequest() },
+                        properties = DialogProperties(
+                            dismissOnBackPress = properties.dismissOnBackPress,
+                            dismissOnClickOutside = properties.dismissOnClickOutside,
+                            securePolicy = properties.securePolicy,
+                            usePlatformDefaultWidth = false,
+                            decorFitsSystemWindows = false,
+                        ),
+                    ) {
+                        AppDialogWindowExitEffect(exit.progress)
+                        ModalWindowBlurBehindEffect(progress = { 1f - exit.progress.value })
+                        AppPopupWindowHost {
+                            Box(Modifier.fillMaxSize().blockAppDialogExitInput(exit.isClosing)) {
+                                val surface: @Composable () -> Unit = {
+                                    BoxWithConstraints {
+                                        AppPopupSurface(
+                                            type = AppPopupSurfaceType.DIALOG,
+                                            modifier = modifier
+                                                .graphicsLayer {
+                                                    val fraction = exit.progress.value.coerceIn(0f, 1f)
+                                                    scaleX = 1f - 0.2f * fraction
+                                                    scaleY = scaleX
+                                                    alpha = 1f - fraction
+                                                }
+                                                .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp)
+                                                .heightIn(max = maxHeight)
+                                                .fillMaxWidth()
+                                                .pointerInput(Unit) { detectTapGestures { } },
+                                            shape = shape ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
+                                                AppShapes.resolveContainerShape(ContainerLevel.Dialog, uiStyle, liquidGlassEnabled = false)
+                                            } else MaterialTheme.shapes.extraLarge,
+                                            containerColor = baseActionBackground,
+                                            tonalElevation = tonalElevation ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
+                                                0.dp
+                                            } else AlertDialogDefaults.TonalElevation,
+                                        ) {
+                                            MiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton,
+                                                confirmContentColor, dismissContentColor, constrainText = true)
+                                        }
                                     }
                                 }
-                            }
-                            val regions = LocalHingeSafeOverlayRegions.current.dialog
-                            val outsideDismiss = if (properties.dismissOnClickOutside && !exit.isClosing) onDismissRequest else null
-                            if (regions != null) {
-                                HingeSafeOverlayHost(
-                                    regionProvider = regions,
-                                    modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(),
-                                    onDismissRequest = outsideDismiss,
-                                ) { surface() }
-                            } else {
-                                Box(
-                                    Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
-                                        .pointerInput(outsideDismiss) { detectTapGestures { outsideDismiss?.invoke() } },
-                                    contentAlignment = Alignment.Center,
-                                ) { surface() }
+                                val regions = LocalHingeSafeOverlayRegions.current.dialog
+                                val outsideDismiss = if (properties.dismissOnClickOutside && !exit.isClosing) onDismissRequest else null
+                                if (regions != null) {
+                                    HingeSafeOverlayHost(
+                                        regionProvider = regions,
+                                        modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding(),
+                                        onDismissRequest = outsideDismiss,
+                                    ) { surface() }
+                                } else {
+                                    Box(
+                                        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).imePadding()
+                                            .pointerInput(outsideDismiss) { detectTapGestures { outsideDismiss?.invoke() } },
+                                        contentAlignment = Alignment.Center,
+                                    ) { surface() }
+                                }
                             }
                         }
                     }
                 }
             }
+            if (!RetainAppGlassDialog(retainedWindow)) {
+                retainedWindow(AppDialogExitState(rememberUpdatedState(0f)))
+            }
+            return@popupScene
         }
-        if (!RetainAppGlassDialog(retainedWindow)) {
-            retainedWindow(AppDialogExitState(rememberUpdatedState(0f)))
-        }
-        return
-    }
-    // 半开折叠屏：弹窗整体收进铰链安全侧，避免横跨折缝。
-    val hingeSafeRegions = LocalHingeSafeOverlayRegions.current.dialog
-    if (hingeSafeRegions != null) {
-        androidx.compose.ui.window.Dialog(
-            onDismissRequest = onDismissRequest,
-            properties = DialogProperties(
-                dismissOnBackPress = properties.dismissOnBackPress,
-                dismissOnClickOutside = properties.dismissOnClickOutside,
-                securePolicy = properties.securePolicy,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-        ) {
-            com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
-            HingeSafeOverlayHost(
-                regionProvider = hingeSafeRegions,
-                modifier = Modifier.fillMaxSize().imePadding(),
-                onDismissRequest = if (properties.dismissOnClickOutside) onDismissRequest else null,
+        // 半开折叠屏：弹窗整体收进铰链安全侧，避免横跨折缝。
+        val hingeSafeRegions = LocalHingeSafeOverlayRegions.current.dialog
+        if (hingeSafeRegions != null) {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = onDismissRequest,
+                properties = DialogProperties(
+                    dismissOnBackPress = properties.dismissOnBackPress,
+                    dismissOnClickOutside = properties.dismissOnClickOutside,
+                    securePolicy = properties.securePolicy,
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false,
+                ),
             ) {
-                BoxWithConstraints {
-                    AppPopupSurface(
-                        type = AppPopupSurfaceType.DIALOG,
-                        modifier = modifier
-                            .widthIn(max = contentLayout.maxWidthDp.dp)
-                            .heightIn(max = maxHeight)
-                            .fillMaxWidth()
-                            .pointerInput(Unit) { detectTapGestures { } },
-                        shape = shape ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-                            AppShapes.resolveContainerShape(ContainerLevel.Dialog, uiStyle, liquidGlassEnabled = false)
-                        } else MaterialTheme.shapes.extraLarge,
-                        containerColor = containerColor ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-                            AppSurfaceTokens.cardContainer()
-                        } else MaterialTheme.colorScheme.surface,
-                        tonalElevation = tonalElevation ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
-                            0.dp
-                        } else AlertDialogDefaults.TonalElevation,
-                    ) {
-                        MiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton,
-                            confirmContentColor, dismissContentColor, constrainText = true)
+                com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
+                HingeSafeOverlayHost(
+                    regionProvider = hingeSafeRegions,
+                    modifier = Modifier.fillMaxSize().imePadding(),
+                    onDismissRequest = if (properties.dismissOnClickOutside) onDismissRequest else null,
+                ) {
+                    BoxWithConstraints {
+                        AppPopupSurface(
+                            type = AppPopupSurfaceType.DIALOG,
+                            modifier = modifier
+                                .widthIn(max = contentLayout.maxWidthDp.dp)
+                                .heightIn(max = maxHeight)
+                                .fillMaxWidth()
+                                .pointerInput(Unit) { detectTapGestures { } },
+                            shape = shape ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
+                                AppShapes.resolveContainerShape(ContainerLevel.Dialog, uiStyle, liquidGlassEnabled = false)
+                            } else MaterialTheme.shapes.extraLarge,
+                            containerColor = containerColor ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
+                                AppSurfaceTokens.cardContainer()
+                            } else MaterialTheme.colorScheme.surface,
+                            tonalElevation = tonalElevation ?: if (renderer == AppAlertDialogRenderer.LOCAL_DIALOG) {
+                                0.dp
+                            } else AlertDialogDefaults.TonalElevation,
+                        ) {
+                            MiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton,
+                                confirmContentColor, dismissContentColor, constrainText = true)
+                        }
                     }
                 }
             }
+            return@popupScene
         }
-        return
-    }
-    when (renderer) {
-        AppAlertDialogRenderer.LOCAL_DIALOG -> {
-            if (isMiuixNonGlassEnabled() && shape == null) {
-                // 原生窗口负责表面、圆角、边距和动画；自定义材质继续走下方路径。
+        when (renderer) {
+            AppAlertDialogRenderer.LOCAL_DIALOG -> {
+                if (isMiuixNonGlassEnabled() && shape == null) {
+                    // 原生窗口负责表面、圆角、边距和动画；自定义材质继续走下方路径。
+                    WindowDialog(
+                        show = true,
+                        modifier = modifier,
+                        onDismissRequest = onDismissRequest,
+                        maxWidth = contentLayout.maxWidthDp.dp,
+                        backgroundColor = containerColor ?: top.yukonga.miuix.kmp.layout.DialogDefaults.backgroundColor(),
+                    ) {
+                        NativeMiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton)
+                    }
+                    return@popupScene
+                }
+                val dialogShape = shape ?: AppShapes.resolveContainerShape(
+                    level = ContainerLevel.Dialog,
+                    uiStyle = uiStyle,
+                    liquidGlassEnabled = false,
+                )
+                val dialogColor = containerColor ?: AppSurfaceTokens.cardContainer()
+                val dialogBody: @Composable () -> Unit = {
+                    MiuixAlertDialogBody(
+                        icon = icon,
+                        title = title,
+                        text = text,
+                        confirmButton = confirmButton,
+                        dismissButton = dismissButton,
+                        confirmContentColor = confirmContentColor,
+                        dismissContentColor = dismissContentColor,
+                        // 与玻璃/铰链路径一致：容器有高度上限时，text 槽用 weight 收缩，
+                        // 保证操作行始终在容器内可见。
+                        constrainText = true,
+                    )
+                }
                 WindowDialog(
                     show = true,
-                    modifier = modifier,
                     onDismissRequest = onDismissRequest,
                     maxWidth = contentLayout.maxWidthDp.dp,
-                    backgroundColor = containerColor ?: top.yukonga.miuix.kmp.layout.DialogDefaults.backgroundColor(),
+                    // WindowDialog 自带背景、圆角和 24dp 内边距。这里只用其窗口/动画，
+                    // 外观由 AppPopupSurface 负责，避免内外两张圆角卡片叠加。
+                    backgroundColor = Color.Transparent,
+                    insideMargin = DpSize(0.dp, 0.dp),
+                    cornerRadius = 0.dp,
                 ) {
-                    NativeMiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton)
+                    com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
+                    BoxWithConstraints {
+                        AppPopupSurface(
+                            type = AppPopupSurfaceType.DIALOG,
+                            modifier = modifier
+                                .fillMaxWidth()
+                                .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp)
+                                .heightIn(max = maxHeight),
+                            shape = dialogShape,
+                            containerColor = dialogColor,
+                            tonalElevation = tonalElevation ?: 0.dp,
+                        ) {
+                            dialogBody()
+                        }
+                    }
                 }
-                return
+                return@popupScene
             }
-            val dialogShape = shape ?: AppShapes.resolveContainerShape(
-                level = ContainerLevel.Dialog,
-                uiStyle = uiStyle,
-                liquidGlassEnabled = false,
-            )
-            val dialogColor = containerColor ?: AppSurfaceTokens.cardContainer()
-            val dialogBody: @Composable () -> Unit = {
-                MiuixAlertDialogBody(
+            AppAlertDialogRenderer.MATERIAL_ALERT -> {
+                AlertDialog(
+                    onDismissRequest = onDismissRequest,
+                    modifier = modifier,
                     icon = icon,
                     title = title,
                     text = text,
-                    confirmButton = confirmButton,
-                    dismissButton = dismissButton,
-                    confirmContentColor = confirmContentColor,
-                    dismissContentColor = dismissContentColor,
-                    // 与玻璃/铰链路径一致：容器有高度上限时，text 槽用 weight 收缩，
-                    // 保证操作行始终在容器内可见。
-                    constrainText = true,
+                    confirmButton = {
+                        ModalWindowBlurBehindEffect()
+                        ProvideAppActionContentColor(confirmContentColor) {
+                            confirmButton?.invoke() ?: Spacer(modifier = Modifier)
+                        }
+                    },
+                    dismissButton = dismissButton?.let { dismiss ->
+                        { ProvideAppActionContentColor(dismissContentColor, dismiss) }
+                    },
+                    properties = properties,
+                    shape = shape ?: MaterialTheme.shapes.extraLarge,
+                    containerColor = containerColor ?: MaterialTheme.colorScheme.surface,
+                    tonalElevation = tonalElevation ?: AlertDialogDefaults.TonalElevation,
                 )
+                return@popupScene
             }
-            WindowDialog(
-                show = true,
-                onDismissRequest = onDismissRequest,
-                maxWidth = contentLayout.maxWidthDp.dp,
-                // WindowDialog 自带背景、圆角和 24dp 内边距。这里只用其窗口/动画，
-                // 外观由 AppPopupSurface 负责，避免内外两张圆角卡片叠加。
-                backgroundColor = Color.Transparent,
-                insideMargin = DpSize(0.dp, 0.dp),
-                cornerRadius = 0.dp,
-            ) {
-                com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
-                BoxWithConstraints {
-                    AppPopupSurface(
-                        type = AppPopupSurfaceType.DIALOG,
-                        modifier = modifier
-                            .fillMaxWidth()
-                            .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp)
-                            .heightIn(max = maxHeight),
-                        shape = dialogShape,
-                        containerColor = dialogColor,
-                        tonalElevation = tonalElevation ?: 0.dp,
-                    ) {
-                        dialogBody()
-                    }
-                }
-            }
-            return
-        }
-        AppAlertDialogRenderer.MATERIAL_ALERT -> {
-            AlertDialog(
-                onDismissRequest = onDismissRequest,
-                modifier = modifier,
-                icon = icon,
-                title = title,
-                text = text,
-                confirmButton = {
-                    ModalWindowBlurBehindEffect()
-                    ProvideAppActionContentColor(confirmContentColor) {
-                        confirmButton?.invoke() ?: Spacer(modifier = Modifier)
-                    }
-                },
-                dismissButton = dismissButton?.let { dismiss ->
-                    { ProvideAppActionContentColor(dismissContentColor, dismiss) }
-                },
-                properties = properties,
-                shape = shape ?: MaterialTheme.shapes.extraLarge,
-                containerColor = containerColor ?: MaterialTheme.colorScheme.surface,
-                tonalElevation = tonalElevation ?: AlertDialogDefaults.TonalElevation,
-            )
-            return
         }
     }
 }

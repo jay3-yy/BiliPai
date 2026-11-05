@@ -59,6 +59,7 @@ internal fun DynamicCommentEntryBar(
                 .clip(shape),
             backdrop = backdrop,
             reuseEnabled = true,
+            materialEnabled = liquidGlassEnabled,
             elasticFeedbackEnabled = true,
             drawShellLens = true,
             shellLensIntensity = resolveFloatingDockGeometryScale(44f),

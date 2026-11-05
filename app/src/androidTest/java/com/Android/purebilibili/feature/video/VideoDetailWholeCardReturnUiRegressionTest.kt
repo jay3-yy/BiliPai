@@ -158,7 +158,6 @@ class VideoDetailWholeCardReturnUiRegressionTest {
     fun quickPredictiveReturnKeepsResidentCoverUntilSnapshotAndRestoresItOnCancel() {
         val depth = mutableFloatStateOf(0.9f)
         val gesture = mutableStateOf(true)
-        val follow = mutableStateOf(true)
         val decoded = mutableIntStateOf(0)
         val residentCover = Bitmap.createBitmap(240, 135, Bitmap.Config.ARGB_8888).apply {
             eraseColor(android.graphics.Color.BLUE)
@@ -185,7 +184,7 @@ class VideoDetailWholeCardReturnUiRegressionTest {
                         if (gesture.value) VideoCardTransitionBackgroundPhase.RETURNING
                         else VideoCardTransitionBackgroundPhase.HELD
                     },
-                    gestureProvider = { gesture.value }, followProgressProvider = { follow.value },
+                    gestureProvider = { gesture.value },
                 )
                 // Player has no decoded frame yet; the resident cover must hide its black backing.
                 Box(Modifier.size(240.dp, 240.dp).background(Color.Black)
@@ -232,12 +231,10 @@ class VideoDetailWholeCardReturnUiRegressionTest {
             for (progress in listOf(0.9f, 0.45f, 0.25f, 0.01f, 0.25f, 0.9f, 1f)) {
                 rule.runOnIdle { depth.floatValue = progress }
                 val weight = com.android.purebilibili.feature.video.screen.resolveVideoDetailWholeCardReturnAlpha(
-                    progress, returning = true, followProgress = true, committedIdle = false,
+                    progress, returning = true, committedIdle = false,
                 )
                 assertPixels(weight)
             }
-            rule.runOnIdle { follow.value = false; depth.floatValue = 0.001f }
-            assertPixels(0f)
             rule.runOnIdle { depth.floatValue = 0f }
             assertPixels(1f)
             rule.runOnIdle { gesture.value = false; depth.floatValue = 1f }
@@ -323,7 +320,7 @@ class VideoDetailWholeCardReturnUiRegressionTest {
                         sourceLayout = VideoCardSourceLayout.STACKED, isNowPlayingBar = false,
                         depthProvider = { 0f },
                         phaseProvider = { VideoCardTransitionBackgroundPhase.RETURNING },
-                        gestureProvider = { false }, followProgressProvider = { true },
+                        gestureProvider = { false },
                     )
                     Box(Modifier.size(120.dp, 90.dp).then(parent.modifier)
                         .background(Color.Blue).testTag("parent-return"))
@@ -335,7 +332,7 @@ class VideoDetailWholeCardReturnUiRegressionTest {
                             sourceLayout = VideoCardSourceLayout.SIDE_BY_SIDE, isNowPlayingBar = false,
                             depthProvider = { 0f },
                             phaseProvider = { VideoCardTransitionBackgroundPhase.RETURNING },
-                            gestureProvider = { false }, followProgressProvider = { true },
+                            gestureProvider = { false },
                         )
                         Box(Modifier.size(120.dp, 90.dp).then(child.modifier)
                             .background(Color.Blue).testTag("child-return"))

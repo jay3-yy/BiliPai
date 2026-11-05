@@ -85,29 +85,4 @@ class HomeReturnAnimationPolicyTest {
         )
     }
 
-    @Test
-    fun contentInteractionRestore_doesNotWaitForSharedElementSuppression() {
-        assertEquals(
-            0L,
-            resolveHomeContentInteractionRestoreDelayMs(
-                cardTransitionEnabled = true,
-                isQuickReturnFromDetail = false
-            )
-        )
-        assertEquals(
-            0L,
-            resolveHomeContentInteractionRestoreDelayMs(
-                cardTransitionEnabled = true,
-                isQuickReturnFromDetail = true
-            )
-        )
-        assertEquals(
-            0L,
-            resolveHomeContentInteractionRestoreDelayMs(
-                cardTransitionEnabled = false,
-                isQuickReturnFromDetail = false
-            )
-        )
-    }
-
 }

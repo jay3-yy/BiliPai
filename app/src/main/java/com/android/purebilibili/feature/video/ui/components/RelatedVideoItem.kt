@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.request.crossfade
@@ -87,7 +88,6 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSharedTransitionMotionSpec
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
@@ -346,16 +346,7 @@ fun RelatedVideoItem(
             .onGloballyPositioned { coordinates ->
                 cardCoordinatesRef.value = coordinates
             }
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = video.bvid,
-                sourceRoute = sourceRoute,
-                motionSpec = sharedTransitionMotionSpec,
-                clipShape = cardShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(video.bvid, cardShape)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShape)
             .clickable(onClick = triggerRelatedVideoClick)

@@ -294,274 +294,279 @@ fun AppModalBottomSheet(
     useWindowPredictiveBack: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    // Controlled callers keep this host in composition while native sheets finish hiding.
-    // The default remains visible; native theme geometry, material and motion are unchanged.
-    var retained by remember { mutableStateOf(visible) }
-    val latestDismiss by rememberUpdatedState(onDismissRequest)
-    val latestDismissStarted by rememberUpdatedState(onDismissStarted)
-    LaunchedEffect(visible) {
-        if (visible) retained = true
-    }
-    val finishDismiss: () -> Unit = {
-        if (retained) {
-            retained = false
-            latestDismiss()
+    val sceneConfig = LocalAppThemeConfig.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalAppThemeConfig provides sceneConfig.copy(liquidGlassEnabled = sceneConfig.popupGlassEnabled),
+    ) popupScene@ {
+        // Controlled callers keep this host in composition while native sheets finish hiding.
+        // The default remains visible; native theme geometry, material and motion are unchanged.
+        var retained by remember { mutableStateOf(visible) }
+        val latestDismiss by rememberUpdatedState(onDismissRequest)
+        val latestDismissStarted by rememberUpdatedState(onDismissStarted)
+        LaunchedEffect(visible) {
+            if (visible) retained = true
         }
-    }
-    if (!visible && !retained) return
-    val uiStyle = LocalAppUiStyle.current
-    val miuix = uiStyle == AppUiStyle.MIUIX
-    // Collection-style sheets keep the covered page sharp in glass, MD3 and Miuix,
-    // including centered/hinge-safe hosts. Surface material and scrim stay independent.
-    val blurBehind = backgroundBlurBehind
-    val configuration = LocalConfiguration.current
-    val hingeSafeRegions = LocalHingeSafeOverlayRegions.current.sheet
-    val layoutSpec = remember(configuration.screenWidthDp, miuix) {
-        resolveAppModalLayoutSpec(configuration.screenWidthDp, miuixNonGlass = miuix)
-    }
-    val centered = (presentationOverride ?: layoutSpec.presentation) == AppModalPresentation.CenteredDialog
-    val resolvedColor = if (containerColor == MaterialTheme.colorScheme.surface) {
-        if (isMiuixNonGlassEnabled()) top.yukonga.miuix.kmp.layout.BottomSheetDefaults.backgroundColor()
-        else if (miuix) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow
-    } else containerColor
-    // 仅背景模糊已获调用方启用的玻璃面板透出下层；原生拖动与清晰背景策略保持原样。
-    val glassWindowMaterial = LocalAppThemeConfig.current.liquidGlassEnabled && blurBehind &&
-        android.os.Build.VERSION.SDK_INT >= 33
-    val windowColor = if (glassWindowMaterial) {
-        resolvedColor.copy(alpha = resolvedColor.alpha * if (isAppInDarkTheme()) 0.84f else 0.88f)
-    } else resolvedColor
-
-    // 播放器显式选择横屏侧栏；其他调用方的原生弹层尺寸与呈现策略保持不变。
-    if (presentationOverride == AppModalPresentation.SideSheet) {
-        LaunchedEffect(visible) { if (!visible) finishDismiss() }
-        if (!visible) return
-        Dialog(
-            onDismissRequest = onDismissRequest,
-            properties = DialogProperties(
-                dismissOnBackPress = false,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-        ) {
-            AppPopupWindowHost(enableWindowMaterial = LocalAppThemeConfig.current.liquidGlassEnabled) {
-                AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest) { backModifier ->
-                    val panel: @Composable () -> Unit = {
-                        BoxWithConstraints {
-                            AppPopupSurface(
-                                type = AppPopupSurfaceType.SHEET,
-                                modifier = modifier
-                                    .widthIn(max = minOf(360.dp, (configuration.screenWidthDp * 0.46f).dp, maxWidth))
-                                    .fillMaxWidth()
-                                    .fillMaxHeight()
-                                    .then(backModifier)
-                                    .pointerInput(Unit) { detectTapGestures { } },
-                                shape = shape ?: RoundedCornerShape(24.dp),
-                                containerColor = resolvedColor,
-                                contentColor = contentColor,
-                                tonalElevation = tonalElevation,
-                            ) {
-                                Column(Modifier.fillMaxSize().then(sheetSurfaceModifier), content = content)
-                            }
-                        }
-                    }
-                    if (hingeSafeRegions != null) {
-                        HingeSafeOverlayHost(
-                            regionProvider = hingeSafeRegions,
-                            modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(8.dp),
-                            alignment = Alignment.CenterEnd,
-                            onDismissRequest = onDismissRequest,
-                        ) { panel() }
-                    } else {
-                        Box(
-                            Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(8.dp),
-                            contentAlignment = Alignment.CenterEnd,
-                        ) {
-                            Box(Modifier.matchParentSize().pointerInput(onDismissRequest) {
-                                detectTapGestures { onDismissRequest() }
-                            })
-                            panel()
-                        }
-                    }
-                }
+        val finishDismiss: () -> Unit = {
+            if (retained) {
+                retained = false
+                latestDismiss()
             }
         }
-        return
-    }
-
-    // 合集显式选择整面板位移；居中及铰链安全弹窗、其他原生面板不改变过渡。
-    if (useTimedSlideMotion && !centered && hingeSafeRegions == null) {
-        AppTimedSlideSheet(
-            visible = visible,
-            onDismissStarted = { latestDismissStarted() },
-            onDismissFinished = finishDismiss,
-            modifier = modifier,
-            shape = shape ?: if (miuix) RoundedCornerShape(28.dp) else BottomSheetDefaults.ExpandedShape,
-            containerColor = windowColor,
-            contentColor = contentColor,
-            scrimColor = scrimColor,
-            dismissOnBackPress = dismissOnBackPress,
-            dragHandle = dragHandle,
-            windowInsets = windowInsets,
-            sheetSurfaceModifier = sheetSurfaceModifier,
-            content = content,
-        )
-        return
-    }
-
-    if (miuix && hingeSafeRegions == null) {
-        var show by remember { mutableStateOf(true) }
-        LaunchedEffect(visible) { show = visible }
-        val body: @Composable () -> Unit = {
-            val blurMotionModifier = rememberSheetBlurMotionModifier(blurBehind, trackPosition = !centered)
-            // Consume back when the caller handles it inside the sheet (e.g. reply navigation).
-            // Drag/outside dismissal remains available independently of this back policy.
-            if (!dismissOnBackPress) {
-                NavigationBackHandler(
-                    state = rememberNavigationEventState(NavigationEventInfo.None),
-                    onBackCompleted = {},
-                )
-            }
-            Column(Modifier.fillMaxWidth().then(blurMotionModifier).then(sheetSurfaceModifier), content = content)
+        if (!visible && !retained) return@popupScene
+        val uiStyle = LocalAppUiStyle.current
+        val miuix = uiStyle == AppUiStyle.MIUIX
+        // Collection-style sheets keep the covered page sharp in glass, MD3 and Miuix,
+        // including centered/hinge-safe hosts. Surface material and scrim stay independent.
+        val blurBehind = backgroundBlurBehind
+        val configuration = LocalConfiguration.current
+        val hingeSafeRegions = LocalHingeSafeOverlayRegions.current.sheet
+        val layoutSpec = remember(configuration.screenWidthDp, miuix) {
+            resolveAppModalLayoutSpec(configuration.screenWidthDp, miuixNonGlass = miuix)
         }
-        if (centered) {
-            WindowDialog(
-                show = show,
-                modifier = modifier.heightIn(max = (configuration.screenHeightDp * layoutSpec.maxHeightFraction).dp),
-                backgroundColor = windowColor,
-                maxWidth = layoutSpec.maxWidthDp.dp,
-                largeScreen = true,
-                insideMargin = DpSize(0.dp, 0.dp),
-                onDismissRequest = { latestDismissStarted(); show = false },
-                onDismissFinished = { if (!show) finishDismiss() },
-                content = body,
-            )
-        } else {
-            WindowBottomSheet(
-                show = show,
-                modifier = modifier,
-                backgroundColor = windowColor,
-                insideMargin = DpSize(0.dp, 0.dp),
-                onDismissRequest = { latestDismissStarted(); show = false },
-                onDismissFinished = { if (!show) finishDismiss() },
-                content = body,
-            )
-        }
-        return
-    }
-    if (hingeSafeRegions != null || centered) {
-        // This branch already uses a plain centered/hinge-safe dialog, not a native sheet.
-        LaunchedEffect(visible) { if (!visible) finishDismiss() }
-        if (!visible) return
-        Dialog(
-            onDismissRequest = onDismissRequest,
-            properties = DialogProperties(
-                dismissOnBackPress = false,
-                usePlatformDefaultWidth = false,
-                decorFitsSystemWindows = false,
-            ),
-        ) {
-            ModalWindowBlurBehindEffect(enabled = blurBehind)
-            AppPopupWindowHost(enableWindowMaterial = blurBehind) {
-                AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest) { backModifier ->
-                    val surface: @Composable () -> Unit = {
-                        BoxWithConstraints {
-                            val surfaceModifier = modifier.then(backModifier).widthIn(max = layoutSpec.maxWidthDp.dp)
-                                .heightIn(max = minOf(maxHeight, (configuration.screenHeightDp * layoutSpec.maxHeightFraction).dp))
-                                .fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }
-                            val surfaceContent: @Composable () -> Unit = {
-                                Column(Modifier.then(sheetSurfaceModifier), content = content)
-                            }
-                            if (miuix || glassWindowMaterial) {
+        val centered = (presentationOverride ?: layoutSpec.presentation) == AppModalPresentation.CenteredDialog
+        val resolvedColor = if (containerColor == MaterialTheme.colorScheme.surface) {
+            if (isMiuixNonGlassEnabled()) top.yukonga.miuix.kmp.layout.BottomSheetDefaults.backgroundColor()
+            else if (miuix) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow
+        } else containerColor
+        // 仅背景模糊已获调用方启用的玻璃面板透出下层；原生拖动与清晰背景策略保持原样。
+        val glassWindowMaterial = LocalAppThemeConfig.current.liquidGlassEnabled && blurBehind &&
+            android.os.Build.VERSION.SDK_INT >= 33
+        val windowColor = if (glassWindowMaterial) {
+            resolvedColor.copy(alpha = resolvedColor.alpha * if (isAppInDarkTheme()) 0.84f else 0.88f)
+        } else resolvedColor
+
+        // 播放器显式选择横屏侧栏；其他调用方的原生弹层尺寸与呈现策略保持不变。
+        if (presentationOverride == AppModalPresentation.SideSheet) {
+            LaunchedEffect(visible) { if (!visible) finishDismiss() }
+            if (!visible) return@popupScene
+            Dialog(
+                onDismissRequest = onDismissRequest,
+                properties = DialogProperties(
+                    dismissOnBackPress = false,
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false,
+                ),
+            ) {
+                AppPopupWindowHost(enableWindowMaterial = LocalAppThemeConfig.current.liquidGlassEnabled) {
+                    AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest) { backModifier ->
+                        val panel: @Composable () -> Unit = {
+                            BoxWithConstraints {
                                 AppPopupSurface(
-                                    type = AppPopupSurfaceType.DIALOG,
-                                    modifier = surfaceModifier,
-                                    shape = shape ?: if (miuix) RoundedCornerShape(28.dp) else MaterialTheme.shapes.extraLarge,
+                                    type = AppPopupSurfaceType.SHEET,
+                                    modifier = modifier
+                                        .widthIn(max = minOf(360.dp, (configuration.screenWidthDp * 0.46f).dp, maxWidth))
+                                        .fillMaxWidth()
+                                        .fillMaxHeight()
+                                        .then(backModifier)
+                                        .pointerInput(Unit) { detectTapGestures { } },
+                                    shape = shape ?: RoundedCornerShape(24.dp),
                                     containerColor = resolvedColor,
                                     contentColor = contentColor,
-                                    tonalElevation = if (miuix) 0.dp else tonalElevation,
-                                    content = surfaceContent,
-                                )
-                            } else {
-                                Surface(
-                                    modifier = surfaceModifier,
-                                    shape = shape ?: MaterialTheme.shapes.extraLarge,
-                                    color = resolvedColor,
-                                    contentColor = contentColor,
                                     tonalElevation = tonalElevation,
-                                    content = surfaceContent,
-                                )
+                                ) {
+                                    Column(Modifier.fillMaxSize().then(sheetSurfaceModifier), content = content)
+                                }
+                            }
+                        }
+                        if (hingeSafeRegions != null) {
+                            HingeSafeOverlayHost(
+                                regionProvider = hingeSafeRegions,
+                                modifier = Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(8.dp),
+                                alignment = Alignment.CenterEnd,
+                                onDismissRequest = onDismissRequest,
+                            ) { panel() }
+                        } else {
+                            Box(
+                                Modifier.fillMaxSize().safeDrawingPadding().imePadding().padding(8.dp),
+                                contentAlignment = Alignment.CenterEnd,
+                            ) {
+                                Box(Modifier.matchParentSize().pointerInput(onDismissRequest) {
+                                    detectTapGestures { onDismissRequest() }
+                                })
+                                panel()
                             }
                         }
                     }
-                    if (hingeSafeRegions != null) {
-                        HingeSafeOverlayHost(
-                            regionProvider = hingeSafeRegions,
-                            modifier = Modifier.fillMaxSize().imePadding(),
-                            onDismissRequest = onDismissRequest,
-                        ) { surface() }
-                    } else {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { surface() }
+                }
+            }
+            return@popupScene
+        }
+
+        // 合集显式选择整面板位移；居中及铰链安全弹窗、其他原生面板不改变过渡。
+        if (useTimedSlideMotion && !centered && hingeSafeRegions == null) {
+            AppTimedSlideSheet(
+                visible = visible,
+                onDismissStarted = { latestDismissStarted() },
+                onDismissFinished = finishDismiss,
+                modifier = modifier,
+                shape = shape ?: if (miuix) RoundedCornerShape(28.dp) else BottomSheetDefaults.ExpandedShape,
+                containerColor = windowColor,
+                contentColor = contentColor,
+                scrimColor = scrimColor,
+                dismissOnBackPress = dismissOnBackPress,
+                dragHandle = dragHandle,
+                windowInsets = windowInsets,
+                sheetSurfaceModifier = sheetSurfaceModifier,
+                content = content,
+            )
+            return@popupScene
+        }
+
+        if (miuix && hingeSafeRegions == null) {
+            var show by remember { mutableStateOf(true) }
+            LaunchedEffect(visible) { show = visible }
+            val body: @Composable () -> Unit = {
+                val blurMotionModifier = rememberSheetBlurMotionModifier(blurBehind, trackPosition = !centered)
+                // Consume back when the caller handles it inside the sheet (e.g. reply navigation).
+                // Drag/outside dismissal remains available independently of this back policy.
+                if (!dismissOnBackPress) {
+                    NavigationBackHandler(
+                        state = rememberNavigationEventState(NavigationEventInfo.None),
+                        onBackCompleted = {},
+                    )
+                }
+                Column(Modifier.fillMaxWidth().then(blurMotionModifier).then(sheetSurfaceModifier), content = content)
+            }
+            if (centered) {
+                WindowDialog(
+                    show = show,
+                    modifier = modifier.heightIn(max = (configuration.screenHeightDp * layoutSpec.maxHeightFraction).dp),
+                    backgroundColor = windowColor,
+                    maxWidth = layoutSpec.maxWidthDp.dp,
+                    largeScreen = true,
+                    insideMargin = DpSize(0.dp, 0.dp),
+                    onDismissRequest = { latestDismissStarted(); show = false },
+                    onDismissFinished = { if (!show) finishDismiss() },
+                    content = body,
+                )
+            } else {
+                WindowBottomSheet(
+                    show = show,
+                    modifier = modifier,
+                    backgroundColor = windowColor,
+                    insideMargin = DpSize(0.dp, 0.dp),
+                    onDismissRequest = { latestDismissStarted(); show = false },
+                    onDismissFinished = { if (!show) finishDismiss() },
+                    content = body,
+                )
+            }
+            return@popupScene
+        }
+        if (hingeSafeRegions != null || centered) {
+            // This branch already uses a plain centered/hinge-safe dialog, not a native sheet.
+            LaunchedEffect(visible) { if (!visible) finishDismiss() }
+            if (!visible) return@popupScene
+            Dialog(
+                onDismissRequest = onDismissRequest,
+                properties = DialogProperties(
+                    dismissOnBackPress = false,
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false,
+                ),
+            ) {
+                ModalWindowBlurBehindEffect(enabled = blurBehind)
+                AppPopupWindowHost(enableWindowMaterial = blurBehind) {
+                    AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest) { backModifier ->
+                        val surface: @Composable () -> Unit = {
+                            BoxWithConstraints {
+                                val surfaceModifier = modifier.then(backModifier).widthIn(max = layoutSpec.maxWidthDp.dp)
+                                    .heightIn(max = minOf(maxHeight, (configuration.screenHeightDp * layoutSpec.maxHeightFraction).dp))
+                                    .fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }
+                                val surfaceContent: @Composable () -> Unit = {
+                                    Column(Modifier.then(sheetSurfaceModifier), content = content)
+                                }
+                                if (miuix || glassWindowMaterial) {
+                                    AppPopupSurface(
+                                        type = AppPopupSurfaceType.DIALOG,
+                                        modifier = surfaceModifier,
+                                        shape = shape ?: if (miuix) RoundedCornerShape(28.dp) else MaterialTheme.shapes.extraLarge,
+                                        containerColor = resolvedColor,
+                                        contentColor = contentColor,
+                                        tonalElevation = if (miuix) 0.dp else tonalElevation,
+                                        content = surfaceContent,
+                                    )
+                                } else {
+                                    Surface(
+                                        modifier = surfaceModifier,
+                                        shape = shape ?: MaterialTheme.shapes.extraLarge,
+                                        color = resolvedColor,
+                                        contentColor = contentColor,
+                                        tonalElevation = tonalElevation,
+                                        content = surfaceContent,
+                                    )
+                                }
+                            }
+                        }
+                        if (hingeSafeRegions != null) {
+                            HingeSafeOverlayHost(
+                                regionProvider = hingeSafeRegions,
+                                modifier = Modifier.fillMaxSize().imePadding(),
+                                onDismissRequest = onDismissRequest,
+                            ) { surface() }
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { surface() }
+                        }
                     }
                 }
             }
+            return@popupScene
         }
-        return
-    }
-    var wasClosing by remember { mutableStateOf(false) }
-    LaunchedEffect(sheetState) {
-        // Covers native scrim, swipe and predictive-back dismissal.
-        snapshotFlow { sheetState.isVisible && sheetState.targetValue == SheetValue.Hidden }
-            .collect { closing -> if (closing) latestDismissStarted() }
-    }
-    LaunchedEffect(visible) {
-        if (!visible) {
-            wasClosing = true
-            sheetState.hide()
-            if (!sheetState.isVisible) finishDismiss()
-        } else if (wasClosing) {
-            wasClosing = false
-            sheetState.show()
+        var wasClosing by remember { mutableStateOf(false) }
+        LaunchedEffect(sheetState) {
+            // Covers native scrim, swipe and predictive-back dismissal.
+            snapshotFlow { sheetState.isVisible && sheetState.targetValue == SheetValue.Hidden }
+                .collect { closing -> if (closing) latestDismissStarted() }
         }
-    }
-    val windowBackState = rememberNavigationEventState(NavigationEventInfo.None)
-    val windowBackModifier = if (useWindowPredictiveBack) {
-        appModalSheetBackModifier(windowBackState.transitionState, dismissOnBackPress)
-    } else Modifier
-    val dismissScope = rememberCoroutineScope()
-    ModalBottomSheet(
-        onDismissRequest = finishDismiss,
-        modifier = modifier.then(windowBackModifier),
-        sheetState = sheetState,
-        // 默认保留 MD3 手势；显式启用窗口导航的入口自行接收进度，仍使用原生 hide。
-        properties = ModalBottomSheetProperties(
-            shouldDismissOnBackPress = dismissOnBackPress && !useWindowPredictiveBack,
-        ),
-        shape = shape ?: BottomSheetDefaults.ExpandedShape,
-        containerColor = windowColor,
-        contentColor = contentColor,
-        tonalElevation = tonalElevation,
-        scrimColor = scrimColor,
-        dragHandle = dragHandle,
-        contentWindowInsets = { windowInsets },
-    ) {
-        if (useWindowPredictiveBack) {
-            // 分享入口将事件绑定到弹窗窗口，避免继承页面 dispatcher 后丢失手势进度。
-            // 完成后仍走原生 hide；取消时只还原面板形变，不关闭分享或下层页面。
-            AppModalSheetWindowNavigationScope {
-                NavigationBackHandler(
-                    state = windowBackState,
-                    isBackEnabled = dismissOnBackPress && sheetState.isVisible,
-                    onBackCompleted = {
-                        dismissScope.launch {
-                            sheetState.hide()
-                            if (!sheetState.isVisible) finishDismiss()
-                        }
-                    },
-                )
+        LaunchedEffect(visible) {
+            if (!visible) {
+                wasClosing = true
+                sheetState.hide()
+                if (!sheetState.isVisible) finishDismiss()
+            } else if (wasClosing) {
+                wasClosing = false
+                sheetState.show()
             }
         }
-        val blurMotionModifier = rememberSheetBlurMotionModifier(blurBehind)
-        Column(Modifier.fillMaxWidth().then(blurMotionModifier).then(sheetSurfaceModifier), content = content)
+        val windowBackState = rememberNavigationEventState(NavigationEventInfo.None)
+        val windowBackModifier = if (useWindowPredictiveBack) {
+            appModalSheetBackModifier(windowBackState.transitionState, dismissOnBackPress)
+        } else Modifier
+        val dismissScope = rememberCoroutineScope()
+        ModalBottomSheet(
+            onDismissRequest = finishDismiss,
+            modifier = modifier.then(windowBackModifier),
+            sheetState = sheetState,
+            // 默认保留 MD3 手势；显式启用窗口导航的入口自行接收进度，仍使用原生 hide。
+            properties = ModalBottomSheetProperties(
+                shouldDismissOnBackPress = dismissOnBackPress && !useWindowPredictiveBack,
+            ),
+            shape = shape ?: BottomSheetDefaults.ExpandedShape,
+            containerColor = windowColor,
+            contentColor = contentColor,
+            tonalElevation = tonalElevation,
+            scrimColor = scrimColor,
+            dragHandle = dragHandle,
+            contentWindowInsets = { windowInsets },
+        ) {
+            if (useWindowPredictiveBack) {
+                // 分享入口将事件绑定到弹窗窗口，避免继承页面 dispatcher 后丢失手势进度。
+                // 完成后仍走原生 hide；取消时只还原面板形变，不关闭分享或下层页面。
+                AppModalSheetWindowNavigationScope {
+                    NavigationBackHandler(
+                        state = windowBackState,
+                        isBackEnabled = dismissOnBackPress && sheetState.isVisible,
+                        onBackCompleted = {
+                            dismissScope.launch {
+                                sheetState.hide()
+                                if (!sheetState.isVisible) finishDismiss()
+                            }
+                        },
+                    )
+                }
+            }
+            val blurMotionModifier = rememberSheetBlurMotionModifier(blurBehind)
+            Column(Modifier.fillMaxWidth().then(blurMotionModifier).then(sheetSurfaceModifier), content = content)
+        }
     }
 }
 

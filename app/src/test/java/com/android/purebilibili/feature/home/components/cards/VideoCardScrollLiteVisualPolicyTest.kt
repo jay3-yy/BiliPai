@@ -115,32 +115,7 @@ class VideoCardScrollLiteVisualPolicyTest {
         )
     }
 
-    @Test
-    fun `elegant video card keeps its surface outside the shared transition layer`() {
-        val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
-            .readText()
 
-        // 上游合流后的壳结构：外层 Box 量尺寸 + 画 surface 底色（只在源布局层），
-        // 内层 Column 才挂 sharedBounds（封面/标题，无 solid fill）。
-        // 若把 cardContainer 画进 sharedBounds，预测返回时会盖住详情壳实时视频。
-        val cardShellBlock = source
-            .substringAfter("val cardShellShape = AppShapes.container(ContainerLevel.Card)")
-            .substringBefore("//  [性能优化] 封面圆角形状缓存")
-        assertTrue(cardShellBlock.contains("Box(modifier = Modifier.fillMaxWidth())"))
-        assertTrue(cardShellBlock.contains(".matchParentSize()"))
-        assertTrue(cardShellBlock.contains(".clip(cardShellShape)"))
-        assertTrue(cardShellBlock.contains(".background(AppSurfaceTokens.cardContainer())"))
-        assertTrue(
-            "surface 底色必须画在 sharedBounds 之外：background 挂外层 Box，sharedBounds 只在内层 Column 上。",
-            cardShellBlock.indexOf(".background(AppSurfaceTokens.cardContainer())") <
-                cardShellBlock.indexOf("videoCardShellSharedBoundsOrEmpty("),
-        )
-
-        val coverShapeBlock = source
-            .substringAfter("val coverShape = remember(cardCornerRadius)")
-            .substringBefore("val coverSharedBoundsEnabled")
-        assertTrue(coverShapeBlock.contains("AppShapes.topRounded(cardCornerRadius)"))
-    }
 
     @Test
     fun `video card keeps the title width while placing overflow action at the bottom end`() {
@@ -159,21 +134,7 @@ class VideoCardScrollLiteVisualPolicyTest {
         assertTrue(source.contains("Modifier.padding(end = AppSpacingTokens.ExtraLarge)"))
     }
 
-    @Test
-    fun `cover stats do not claim separate shared bounds when shell owns morph`() {
-        // CARD_SHELL 容器已接管共享元素；封面上的播放量/弹幕不再挂独立 sharedBounds，
-        // 避免与 shell morph / 冻结景深叠层抢 key。
-        val source = File("src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
-            .readText()
-        val coverStatsBlock = source
-            .substringAfter("if (scrollLitePolicy.showCompactStatsOnCover) {")
-            .substringBefore("//  时长标签")
 
-        assertTrue(coverStatsBlock.contains("BoxWithConstraints("))
-        assertFalse(coverStatsBlock.contains("videoViewsSharedElementKey"))
-        assertFalse(coverStatsBlock.contains("sharedBounds("))
-        assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
-    }
 
     @Test
     fun `return target cover disables crossfade during and after shared return`() {

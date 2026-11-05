@@ -572,7 +572,7 @@ class HomeGlassVisualPolicyTest {
         // 「撤销刷新」「定位上次刷新」必须共用 HomeOverlayPillButton，
         // 避免同屏出现实心 primaryContainer 与毛玻璃两种胶囊。
         listOf(
-            "app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt",
+            "app/src/main/java/com/android/purebilibili/feature/home/HomeRefreshOverlays.kt",
             "app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt",
             "app/src/main/java/com/android/purebilibili/feature/dynamic/DynamicScreen.kt",
         ).forEach { path ->

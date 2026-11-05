@@ -15,8 +15,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.viewModels
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
@@ -51,9 +49,9 @@ import com.android.purebilibili.feature.video.player.buildPipPlaybackRemoteActio
 import com.android.purebilibili.feature.video.screen.isActivityInMultiWindowOrFloatingMode
 import androidx.window.layout.WindowMetricsCalculator
 // Imports for moved classes
-import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.android.purebilibili.navigation3.toLegacyRoute
 
 
 private const val TAG = "BiliPlayerActivity"
@@ -61,7 +59,29 @@ private const val TAG = "BiliPlayerActivity"
 
 class VideoActivity : ComponentActivity() {
 
-    private val viewModel: VideoPlaybackViewModel by viewModels()
+    private var playbackWindowActive by mutableStateOf(true)
+    private var finishingBvid: String? = null
+    private var finishingPlayer: androidx.media3.common.Player? = null
+    private var officialReturnMotionEnabled = true
+    private var officialReturnBlurEnabled = true
+
+    internal fun updateOfficialReturnMotion(enabled: Boolean, realtimeBlurEnabled: Boolean) {
+        if (officialReturnMotionEnabled == enabled && officialReturnBlurEnabled == realtimeBlurEnabled) return
+        officialReturnMotionEnabled = enabled
+        officialReturnBlurEnabled = realtimeBlurEnabled
+        refreshOfficialReturn()
+    }
+
+    private fun refreshOfficialReturn() = OfficialVideoCardTransition.refreshReturn(
+        this, officialReturnMotionEnabled, officialReturnBlurEnabled,
+    )
+
+    internal fun onOpeningVideoChild() {
+        playbackWindowActive = false
+    }
+    internal fun onVideoChildLaunchRejected() {
+        playbackWindowActive = true
+    }
     private var isFullscreen by mutableStateOf(false)
     private var isInPipMode by mutableStateOf(false)
     private var runtimeJankStats: JankStats? = null
@@ -77,6 +97,9 @@ class VideoActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        OfficialVideoCardTransition.initialRealtimeBlurEnabled(
+            intent.getStringExtra(OfficialVideoCardTransition.EXTRA_SESSION),
+        )?.let { officialReturnBlurEnabled = it }
         lifecycleScope.launch {
             applyPreferredDisplayMode(SettingsManager.getScreenDisplayModeId(this@VideoActivity).first())
         }
@@ -110,8 +133,8 @@ class VideoActivity : ComponentActivity() {
         }
         
 
-        val bvid = intent.getStringExtra("bvid")
-        if (bvid.isNullOrBlank()) {
+        val request = intent.extras?.let(VideoOpenRequest::fromBundle)
+        if (request == null) {
             finish()
             return
         }
@@ -119,6 +142,16 @@ class VideoActivity : ComponentActivity() {
         updateStateFromConfig(resources.configuration)
 
         setContent {
+            val themeSettings by remember(this@VideoActivity) {
+                SettingsManager.getAppThemeSettings(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = SettingsManager.getInitialAppThemeSettings(this@VideoActivity))
+            val scheduledDarkTheme = com.android.purebilibili.core.theme.rememberScheduledDarkTheme(themeSettings.darkThemeSchedule)
+            val themePreference = com.android.purebilibili.feature.settings.resolveThemePreferenceState(
+                themeMode = themeSettings.themeMode,
+                darkThemeStyle = themeSettings.darkThemeStyle,
+                systemInDark = androidx.compose.foundation.isSystemInDarkTheme(),
+                scheduledDarkTheme = scheduledDarkTheme.takeIf { themeSettings.darkThemeSchedule.enabled },
+            )
             val configuration = LocalConfiguration.current
             val calculator = remember { WindowMetricsCalculator.getOrCreate() }
             val currentWindowMetrics = remember(
@@ -192,12 +225,19 @@ class VideoActivity : ComponentActivity() {
             val runtimeVisualGuardEnabled by SettingsManager
                 .getRuntimeVisualGuardEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
-            val liquidGlassEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(this@VideoActivity)
+            val liquidGlassMasterEnabled by SettingsManager.getAndroidNativeLiquidGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = true)
+            val liquidGlassScenes by SettingsManager.getLiquidGlassScenes(this@VideoActivity)
+                .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.AppLiquidGlassSettings())
+            val liquidGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(
+                com.android.purebilibili.core.ui.AppLiquidGlassScene.OTHER_COMPONENTS,
+            )
             val liquidSwitchThumbMode by SettingsManager.getLiquidSwitchThumbMode(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.THEME)
             val appThemeConfig = remember(
                 liquidGlassEnabled,
+                liquidGlassMasterEnabled,
+                liquidGlassScenes,
                 liquidSwitchThumbMode,
                 blurIntensity,
                 headerBlurEnabled,
@@ -213,6 +253,9 @@ class VideoActivity : ComponentActivity() {
             ) {
                 AppThemeConfig(
                     liquidGlassEnabled = liquidGlassEnabled,
+                    playerGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.PLAYER_CONTROLS),
+                    popupGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.MENUS_DIALOGS),
+                    nowPlayingGlassEnabled = liquidGlassMasterEnabled && liquidGlassScenes.isEnabled(com.android.purebilibili.core.ui.AppLiquidGlassScene.NOW_PLAYING),
                     liquidSwitchThumbMode = liquidSwitchThumbMode,
                     blurIntensity = blurIntensity,
                     headerBlurEnabled = headerBlurEnabled,
@@ -227,7 +270,28 @@ class VideoActivity : ComponentActivity() {
                     runtimeVisualGuardEnabled = runtimeVisualGuardEnabled,
                 )
             }
-            MaterialTheme {
+            com.android.purebilibili.core.theme.PureBiliBiliTheme(
+                uiStyle = themeSettings.uiStyle,
+                themeMode = themeSettings.themeMode,
+                darkTheme = themePreference.useDarkTheme,
+                amoledDarkTheme = themePreference.useAmoledDarkTheme,
+                themeColorIndex = themeSettings.themeColorIndex,
+                md3ColorSource = themeSettings.md3ColorSource,
+                md3CustomColorHex = themeSettings.md3CustomColorHex,
+                themeRoleOverrides = themeSettings.themeRoleOverrides,
+                wallpaperPaletteOverrides = themeSettings.wallpaperPaletteOverrides,
+                seedPaletteStyle = themeSettings.seedPaletteStyle,
+                colorStyle = themeSettings.colorStyle,
+                colorSpec = themeSettings.colorSpec,
+                colorContrast = themeSettings.colorContrast,
+                fontSizePreset = themeSettings.appFontSizePreset,
+                appFontWeightPreset = themeSettings.appFontWeightPreset,
+                appFontFileName = themeSettings.appFontFileName,
+                appIconStyle = themeSettings.appIconStyle,
+                appListItemStyle = themeSettings.appListItemStyle,
+                liquidGlassEnabled = liquidGlassEnabled,
+                themeTransitionEnabled = uiEntranceAnimationEnabled,
+            ) {
                 // 与 MainActivity 对齐：没有这两个 provider 时，overlay 里的每个
                 // unifiedBlur 会各起一个 DataStore 收集器，且完全读不到运行时视觉守卫。
                 ProvideAppThemeConfig(config = appThemeConfig) {
@@ -235,6 +299,7 @@ class VideoActivity : ComponentActivity() {
                 com.android.purebilibili.core.ui.blur.ProvideUnifiedBlurIntensity {
                 ProvideAppTextSelectionHost {
                 CompositionLocalProvider(
+                    com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
                         startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
@@ -260,12 +325,11 @@ class VideoActivity : ComponentActivity() {
                         cardFrostedGlassEnabled,
                 ) {
                 // VideoDetailScreen handles its own UI state and player initialization
-                var nearbyVideo by remember { mutableStateOf<com.android.purebilibili.feature.nearby.NearbyVideo?>(null) }
                 // 独立播放窗口同样装配同窗玻璃菜单宿主：玻璃态的播放器菜单不再降级到
                 // Miuix 独立窗口弹窗在视频面上空采样 backdrop；关闭玻璃时不提供
                 // presenter，原生 Miuix / MD3 菜单路径保持不变。
                 com.android.purebilibili.core.ui.popup.AppGlassPopupHost(
-                    glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+                    glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled &&
                         com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(
                             android.os.Build.VERSION.SDK_INT,
                         ),
@@ -273,30 +337,30 @@ class VideoActivity : ComponentActivity() {
                 ) {
                 com.android.purebilibili.feature.nearby.NearbyHandoffHost(
                     miniPlayer = MiniPlayerManager.getInstance(this@VideoActivity),
-                    onOpenVideo = { nearbyVideo = it },
+                    onOpenVideo = { nearby ->
+                        lifecycleScope.launch {
+                            VideoActivityLauncher.open(
+                                this@VideoActivity,
+                                VideoOpenRequest(nearby.bvid, nearby.cid, nearby.cover, resumePositionMs = nearby.positionMs),
+                            )
+                        }
+                    },
                 ) {
-                com.android.purebilibili.feature.video.screen.VideoDetailScreen(
-                    bvid = nearbyVideo?.bvid ?: bvid,
-                    cid = nearbyVideo?.cid ?: 0L,
-                    resumePositionMsFromRoute = nearbyVideo?.positionMs ?: 0L,
-                    coverUrl = nearbyVideo?.cover.orEmpty(),
-                    onBack = { onBackPressedDispatcher.onBackPressed() },
-                    onHomeClick = {
-                        startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
-                            addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP or android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE, com.android.purebilibili.navigation.ScreenRoutes.Home.route)
+                com.android.purebilibili.navigation.AppNavigation(
+                    initialVideoRoute = request.toNavigationKey().toLegacyRoute(),
+                    videoActivityPlaybackActive = playbackWindowActive,
+                    onVideoActivityHome = {
+                        intent.removeExtra("video_parent_is_video")
+                        startActivity(Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,
+                                com.android.purebilibili.navigation.ScreenRoutes.Home.route)
                         })
                         finish()
                     },
-                    onNavigateToAudioMode = {
-                        viewModel.setAudioMode(true)
-                    },
-                    onVideoClick = { vid, options ->
-                        VideoActivity.start(this, vid, options)
-                    },
                     miniPlayerManager = MiniPlayerManager.getInstance(this@VideoActivity),
                     isInPipMode = isInPipMode ||
-                        MiniPlayerManager.getInstance(this@VideoActivity).shouldKeepPlaybackForPipTransition()
+                        MiniPlayerManager.getInstance(this@VideoActivity).shouldKeepPlaybackForPipTransition(),
                 )
                 }
                 }
@@ -334,6 +398,9 @@ class VideoActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshOfficialReturn()
+        playbackWindowActive = true
+        resumedVideoWindow = java.lang.ref.WeakReference(this)
         val mini = MiniPlayerManager.getInstance(this)
         mini.clearUserLeaveHint()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode) {
@@ -356,15 +423,50 @@ class VideoActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    override fun finish() {
+        if (!isFinishing) {
+            // 系统返回与页面返回共用此入口；关闭窗口前刷新同一来源实例的落点。
+            refreshOfficialReturn()
+            if (playbackWindowActive) {
+                val manager = MiniPlayerManager.getInstance(this)
+                finishingBvid = manager.currentBvid
+                finishingPlayer = manager.player
+            }
+        }
+        super.finish()
+    }
+
     override fun onStop() {
+        // 关闭窗口的画面先交给系统，再处理自身播放会话，避免返回前先黑屏。
+        finishingBvid?.takeIf {
+            resumedVideoWindow?.get() === this && MiniPlayerManager.getInstance(this).player === finishingPlayer
+        }?.let { bvid ->
+            val manager = MiniPlayerManager.getInstance(this)
+            if (intent.getBooleanExtra("video_parent_is_video", false)) {
+                manager.markLeavingByNavigation(expectedBvid = bvid, forceStop = true)
+            } else if (manager.prepareAudioNowPlayingForNavigationExit(bvid)) {
+                manager.markLeavingByNavigation(expectedBvid = bvid)
+            } else if (manager.shouldShowInAppMiniPlayer()) {
+                manager.enterMiniMode()
+            } else {
+                manager.markLeavingByNavigation(expectedBvid = bvid)
+            }
+            finishingBvid = null
+        }
+        finishingBvid = null
+        finishingPlayer = null
         AppRuntimeVisualGuardTracker.discardActiveWindow(runtimeVisualGuardSession)
         runtimeJankStats?.isTrackingEnabled = false
         super.onStop()
     }
     
     override fun onDestroy() {
+        if (!isChangingConfigurations) {
+            OfficialVideoCardTransition.release(intent.getStringExtra(OfficialVideoCardTransition.EXTRA_SESSION))
+        }
         runtimeJankStats?.isTrackingEnabled = false
         runtimeJankStats = null
+        if (resumedVideoWindow?.get() === this) resumedVideoWindow = null
         super.onDestroy()
     }
 
@@ -372,6 +474,7 @@ class VideoActivity : ComponentActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         updateStateFromConfig(newConfig)
+        refreshOfficialReturn()
     }
 
     private fun updateStateFromConfig(config: Configuration) {
@@ -448,11 +551,22 @@ class VideoActivity : ComponentActivity() {
     }
 
     companion object {
+        // 子窗口关闭后，父窗口的 onResume 可能先于子窗口的 onStop。
+        // 播放所有权已交还时，旧窗口不能再按相同 bvid 停掉父窗口的播放。
+        private var resumedVideoWindow: java.lang.ref.WeakReference<VideoActivity>? = null
+
         fun start(context: Context, bvid: String, options: android.os.Bundle? = null) {
-            val intent = Intent(context, VideoActivity::class.java).apply {
-                putExtra("bvid", bvid)
+            val activity = context as ComponentActivity
+            val request = VideoOpenRequest(
+                bvid = bvid,
+                cid = options?.getLong(com.android.purebilibili.feature.video.screen.VIDEO_NAV_TARGET_CID_KEY) ?: 0L,
+                coverUrl = options?.getString(com.android.purebilibili.feature.video.screen.VIDEO_NAV_COVER_URL_KEY).orEmpty(),
+                fullscreen = com.android.purebilibili.feature.video.screen.resolveVideoNavigationStartInFullscreen(options),
+                initialVertical = com.android.purebilibili.feature.video.screen.resolveVideoNavigationIsVertical(options) == true,
+            )
+            activity.lifecycleScope.launch {
+                VideoActivityLauncher.open(activity, request)
             }
-            context.startActivity(intent, options)
         }
     }
 }

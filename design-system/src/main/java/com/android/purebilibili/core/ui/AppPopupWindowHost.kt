@@ -18,10 +18,18 @@ fun AppPopupWindowHost(
     enableWindowMaterial: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val config = LocalAppThemeConfig.current
     val renderer = LocalAppPopupWindowHostRenderer.current
-    if (LocalAppThemeConfig.current.liquidGlassEnabled && renderer != null) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalAppPopupWindowMaterialEnabled provides enableWindowMaterial) {
+    if (LocalAppThemeConfig.current.popupGlassEnabled && renderer != null) {
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalAppPopupWindowMaterialEnabled provides enableWindowMaterial,
+            LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.popupGlassEnabled),
+        ) {
             renderer.Render(content)
         }
-    } else content()
+    } else {
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.popupGlassEnabled),
+        ) { content() }
+    }
 }

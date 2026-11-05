@@ -94,7 +94,7 @@ val LocalAppGlassPanelDismissAction = compositionLocalOf<((() -> Unit) -> Unit)?
 @Composable
 fun appGlassMenuAvailable(): Boolean {
     val presenter = LocalAppGlassMenuPresenter.current
-    return com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+    return com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled &&
         presenter != null && presenter.ownerView === LocalView.current
 }
 
@@ -123,7 +123,7 @@ fun AppGlassMenu(
     content: @Composable () -> Unit,
 ): Boolean {
     val presenter = LocalAppGlassMenuPresenter.current
-    if (!com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled ||
+    if (!com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled ||
         presenter == null || presenter.ownerView !== LocalView.current) return false
     // 关闭时保留来源身份供退场使用，但不订阅随列表滚动变化的边界。
     val activeSource = source?.takeIf { it.enabled && (!expanded || it.isAvailable) }
@@ -149,6 +149,7 @@ fun AppGlassMenu(
     val scope = rememberCoroutineScope()
     val latestDismiss by rememberUpdatedState(onDismissRequest)
     val latestContent by rememberUpdatedState(content)
+    val popupConfig by rememberUpdatedState(com.android.purebilibili.core.ui.LocalAppThemeConfig.current)
     val locals = currentCompositionLocalContext
     val contentLocals by rememberUpdatedState(locals)
     // 显式锚点和真实触发源无需布局占位，避免横向 dock 为零尺寸节点再分配间距。
@@ -190,6 +191,7 @@ fun AppGlassMenu(
                 content = { scope ->
                     CompositionLocalProvider(contentLocals) {
                         CompositionLocalProvider(
+                            com.android.purebilibili.core.ui.LocalAppThemeConfig provides popupConfig.copy(liquidGlassEnabled = popupConfig.popupGlassEnabled),
                             LocalAppGlassMenuScope provides scope.takeUnless { interactiveContent },
                             LocalAppGlassPanelDismissAction provides if (interactiveContent) {
                                 { action: () -> Unit -> scope.dispatch(action, true) }

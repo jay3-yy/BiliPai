@@ -278,7 +278,7 @@ internal fun SettingsPageScaffold(
 
             // 液态玻璃开启后的单选弹窗宿主：玻璃卡片与页面内容同窗渲染（Backdrop
             // 采样不跨平台窗口），关闭玻璃或设备不支持时不装配，条目回落原生弹窗。
-            val glassPopupAvailable = appThemeConfig.liquidGlassEnabled &&
+            val glassPopupAvailable = appThemeConfig.popupGlassEnabled &&
                 com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(
                     android.os.Build.VERSION.SDK_INT,
                 )

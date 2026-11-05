@@ -910,17 +910,9 @@ fun FluidHomeTopBar(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             AppIcon(
                                 Icons.Outlined.Search,
-                                null,
+                                "搜索",
                                 tint = AppContentColors.secondaryText().copy(0.5f),
                                 modifier = Modifier.size(AppSpacingTokens.Large + AppSpacingTokens.Micro)
-                            )
-                            Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
-                            AppText(
-                                text = "搜索视频、UP主...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontSize = MaterialTheme.typography.labelMedium.fontSize,
-                                color = AppContentColors.secondaryText(),
-                                maxLines = 1
                             )
                         }
                     }

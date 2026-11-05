@@ -74,7 +74,7 @@ internal fun DanmakuSettingsPanelHost(
     val motionEnabled = useDanmakuControlCenterMotion(
         isFullscreen = isFullscreen,
         anchor = layoutPolicy.anchor,
-        liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled,
+        liquidGlassEnabled = LocalAppThemeConfig.current.popupGlassEnabled,
         componentMotionEnabled = LocalComponentMotionEnabled.current,
         reduceMotion = reduceMotion,
     )

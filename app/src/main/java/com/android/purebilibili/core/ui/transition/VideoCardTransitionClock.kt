@@ -20,8 +20,8 @@ import kotlin.math.roundToInt
  * - **0** = 落在列表源卡（景深清晰）
  * - **1** = 落在详情全屏（景深满糊）
  *
- * 元素 scale、背景 blur / scrim、chrome settle、壁纸 depth **只读** [depthProgress]，
- * 不再各自 Animatable 并行。
+ * 背景 blur / scrim 和壁纸 depth 读取 [depthProgress]。卡片位置、尺寸与圆角
+ * 由同一导航 settle 时间采样各属性弹簧，不注册独立帧循环。
  *
  * Miuix 主链路：只跟随 NavDisplay，包含预测 seek/commit/cancel 和真实结束帧。
  * ## 无 Nav 主驱动的兼容路径优先级（高 → 低）

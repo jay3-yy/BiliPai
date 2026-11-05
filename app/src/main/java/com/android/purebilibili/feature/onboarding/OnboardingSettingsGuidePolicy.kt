@@ -131,5 +131,4 @@ suspend fun applyOnboardingSettingsGuidePreset(
     )
     SettingsManager.setCardTransitionEnabled(context, preset.cardTransitionEnabled)
     SettingsManager.setLiveSurfaceCardTransitionEnabled(context, true)
-    SettingsManager.setVideoReturnContentFollowProgressEnabled(context, true)
 }

@@ -1584,6 +1584,7 @@ fun AppSearchEntry(
     containerColor: Color = Color.Unspecified,
     centeredContent: Boolean = false,
     openOnFocus: Boolean = true,
+    showPlaceholder: Boolean = true,
 ) {
     val uiStyle = LocalAppUiStyle.current
     val hintColor = AppContentColors.secondaryText()
@@ -1602,10 +1603,13 @@ fun AppSearchEntry(
         horizontalArrangement = if (centeredContent) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(Icons.Default.Search, contentDescription = null, tint = hintColor, modifier = Modifier.size(22.dp))
-        Spacer(Modifier.width(8.dp))
-        AppText(placeholder, color = hintColor, style = MaterialTheme.typography.bodyMedium,
-            maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        AppIcon(Icons.Default.Search, contentDescription = if (showPlaceholder) null else "搜索",
+            tint = hintColor, modifier = Modifier.size(22.dp))
+        if (showPlaceholder) {
+            Spacer(Modifier.width(8.dp))
+            AppText(placeholder, color = hintColor, style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
     }
 }
 

@@ -68,6 +68,7 @@ class ChromeBackdropSourceUiRegressionTest {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val background = mutableStateOf(Color.Red)
         val content = mutableStateOf(Color.Green)
+        val rasterize = mutableStateOf(false)
         val childDraws = AtomicInteger()
         lateinit var originalSource: ChromeBackdropSource
         lateinit var currentSource: ChromeBackdropSource
@@ -75,6 +76,7 @@ class ChromeBackdropSourceUiRegressionTest {
             val source = rememberChromeBackdropSource(
                 recordingBackground = background.value,
                 isolateContentDrawing = true,
+                rasterizeContent = rasterize.value,
             )
             SideEffect { currentSource = source }
             Box(Modifier.size(80.dp).background(Color.Blue).testTag("isolated-backdrop")) {
@@ -104,12 +106,19 @@ class ChromeBackdropSourceUiRegressionTest {
         }
         assertColors(Color.Red, Color.Green)
         composeRule.runOnIdle { originalSource = currentSource; childDraws.set(0) }
-        for (color in listOf(Color.Yellow, Color.Red)) {
-            composeRule.runOnIdle { background.value = color }
-            assertColors(color, Color.Green)
-            composeRule.runOnIdle {
-                assertSame(originalSource, currentSource)
-                assertEquals("Backdrop-only updates must reuse child drawing", 0, childDraws.get())
+        // Enter, settle, then re-enter the rasterized path without replacing the source.
+        // This verifies live pixels and identity, not GPU cost or frame timing.
+        for (rasterized in listOf(true, false, true)) {
+            composeRule.runOnIdle { rasterize.value = rasterized }
+            assertColors(Color.Red, Color.Green)
+            composeRule.runOnIdle { childDraws.set(0) }
+            for (color in listOf(Color.Yellow, Color.Red)) {
+                composeRule.runOnIdle { background.value = color }
+                assertColors(color, Color.Green)
+                composeRule.runOnIdle {
+                    assertSame(originalSource, currentSource)
+                    assertEquals("Backdrop-only updates must reuse child drawing", 0, childDraws.get())
+                }
             }
         }
         composeRule.runOnIdle { content.value = Color.Yellow }
@@ -496,10 +505,17 @@ class ChromeBackdropSourceUiRegressionTest {
     private fun verifySource(hidden: Boolean = false, nested: Boolean = false) {
         assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         val tint = mutableStateOf(Color.Red)
+        val rasterize = mutableStateOf(false)
         val drawCalls = AtomicInteger()
         composeRule.setContent {
-            val source = rememberChromeBackdropSource()
-            val innerSource = rememberChromeBackdropSource()
+            val source = rememberChromeBackdropSource(
+                isolateContentDrawing = nested,
+                rasterizeContent = rasterize.value,
+            )
+            val innerSource = rememberChromeBackdropSource(
+                isolateContentDrawing = nested,
+                rasterizeContent = rasterize.value,
+            )
             Box(Modifier.size(80.dp).testTag("backdrop-result").background(Color.Blue)) {
                 Box(
                     Modifier.matchParentSize()
@@ -514,6 +530,14 @@ class ChromeBackdropSourceUiRegressionTest {
                                 drawRect(tint.value)
                             }
                     )
+                    // 首页顶栏消费内层 feed，导航底栏再消费包含顶栏的外层画面。
+                    if (nested) {
+                        Box(Modifier.matchParentSize().drawBackdrop(
+                            backdrop = innerSource.backdrop,
+                            shape = { RectangleShape },
+                            effects = {},
+                        ))
+                    }
                 }
                 // No tint/blur: the consumer must reproduce the source, even when it is hidden.
                 Box(
@@ -537,6 +561,23 @@ class ChromeBackdropSourceUiRegressionTest {
             assertEquals("One child draw after a draw-only invalidation", 1, drawCalls.get())
         }
         assertCenterColor(Color.Green)
+        if (nested) {
+            // 开合、落位、再次开合都必须保留当前像素；记录次数不代表 GPU 帧时间。
+            for ((enabled, color) in listOf(true to Color.Red, false to Color.Green, true to Color.Red)) {
+                composeRule.runOnIdle { rasterize.value = enabled }
+                composeRule.waitForIdle()
+                assertCenterColor(tint.value)
+                composeRule.runOnIdle {
+                    drawCalls.set(0)
+                    tint.value = color
+                }
+                composeRule.waitForIdle()
+                assertCenterColor(color)
+                composeRule.runOnIdle {
+                    assertEquals("Nested sources must retain live child updates", 1, drawCalls.get())
+                }
+            }
+        }
     }
 
     private fun assertCenterColor(expected: Color) {

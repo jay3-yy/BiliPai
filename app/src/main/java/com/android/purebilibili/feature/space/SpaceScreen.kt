@@ -253,7 +253,7 @@ import com.android.purebilibili.core.ui.transition.videoCoverSharedElementKey
 import com.android.purebilibili.core.ui.transition.videoSharedElementBoundsTransformSpec
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
 import com.android.purebilibili.core.ui.transition.shouldUseVideoCardShellSharedBounds
-import com.android.purebilibili.core.ui.transition.videoCardShellSharedBoundsOrEmpty
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
@@ -1501,16 +1501,11 @@ private fun SpaceContent(
         },
         prepareNeighbors = { sourcePage ->
             val source = pageGridStates.getValue(displayedMainTabs[sourcePage].tab)
-            // All pages share the hero and primary rail. Match their vertical anchor before
-            // exposing a neighbor; content history is kept when the hero is already collapsed.
+            // 资料头或标签仍在视口时，覆盖目标页的旧正文位置并保留标签局部偏移。
+            // 两页均进入正文后才保留各自的内容历史，避免切到投稿时主标签突然消失。
             displayedMainTabs.forEachIndexed { index, tab ->
                 if (index != sourcePage) {
-                    val target = pageGridStates.getValue(tab.tab)
-                    if (source.firstVisibleItemIndex == 0) {
-                        target.requestScrollToItem(0, source.firstVisibleItemScrollOffset)
-                    } else if (target.firstVisibleItemIndex == 0) {
-                        target.requestScrollToItem(1)
-                    }
+                    alignSpacePageHeader(source, pageGridStates.getValue(tab.tab))
                 }
             }
         },
@@ -1941,12 +1936,7 @@ private fun SpaceContent(
                     },
                     onContributionTabSelected = { id ->
                         if (id != state.selectedContributionTabId) {
-                            val target = contributionGridStateFor(id)
-                            if (gridState.firstVisibleItemIndex == 0) {
-                                target.requestScrollToItem(0, gridState.firstVisibleItemScrollOffset)
-                            } else if (target.firstVisibleItemIndex == 0) {
-                                target.requestScrollToItem(1)
-                            }
+                            alignSpacePageHeader(gridState, contributionGridStateFor(id))
                         }
                         onContributionTabSelected(id)
                     },
@@ -4073,7 +4063,7 @@ private fun SpaceSecondarySwitchRow(
     // Contribution categories keep the same content-sized Miuix buttons with
     // either glass preference. Scope the override to this row only.
     val tabThemeConfig = if (uiStyle == AppUiStyle.MIUIX) {
-        themeConfig.copy(liquidGlassEnabled = false)
+        themeConfig.copy(liquidGlassEnabled = false, popupGlassEnabled = false, playerGlassEnabled = false)
     } else {
         themeConfig
     }
@@ -4493,15 +4483,7 @@ private fun SpaceHomeVideoCard(
 
     Column(
         modifier = modifier
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = sharedTransitionKey.orEmpty(),
-                sourceRoute = sourceRoute,
-                motionSpec = cardSharedTransitionMotionSpec,
-                clipShape = coverShape
-            )
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape)
             .border(width = 3.dp, color = locateHighlightColor, shape = coverShape)
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
@@ -4722,6 +4704,7 @@ private fun SpaceAggregateMediaCard(
     Column(
         modifier = modifier
             .padding(horizontal = 8.dp)
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), coverShape)
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
             .onGloballyPositioned { coordinates ->
@@ -5078,16 +5061,7 @@ private fun SpaceArchiveListItemRow(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
-            .videoCardShellSharedBoundsOrEmpty(
-                enabled = useCardShellSharedBounds,
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope,
-                bvid = sharedTransitionKey.orEmpty(),
-                sourceRoute = sourceRoute,
-                motionSpec = cardSharedTransitionMotionSpec,
-                clipShape = cardShellShape,
-                crossfadeSourceContent = true,
-            )
+            .videoCardSourceAnchor(sharedTransitionKey.orEmpty(), cardShellShape)
             .then(nativeCardSnapshot.modifier)
             .clip(cardShellShape)
             .background(AppSurfaceTokens.cardContainer())

@@ -142,8 +142,8 @@ android {
         targetSdk = 37
         // 版本名按发行计划确定；versionCode 每次发布单调 +1
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 551
-        versionName = "0.7.8"
+        versionCode = 553
+        versionName = "0.7.9-beta.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -416,6 +416,7 @@ composeCompiler {
 }
 
 dependencies {
+    implementation("gsai.sdk:sharedview-kit:1.0.0.5")
     lintChecks(project(":ci-lint"))
     implementation(project(":brand-motion"))
     val material3Version = "1.5.0-alpha29"

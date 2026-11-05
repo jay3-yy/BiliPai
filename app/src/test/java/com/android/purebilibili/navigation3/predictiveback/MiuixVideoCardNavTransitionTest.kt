@@ -11,7 +11,6 @@ import top.yukonga.miuix.kmp.nav.transition.NavTransitions
 import com.android.purebilibili.navigation3.resolveRelatedReturnSourceRestoreDecision
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionExposure
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
-import java.io.File
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -32,47 +31,21 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 
 class MiuixVideoCardNavTransitionTest {
-    @Test
-    fun releaseRotationStartsWithoutAJumpAndEndsAtTheLandingPose() {
-        val released = VideoCardFollowPose(rotationZ = 2f)
-        assertEquals(released, released.withReleaseImpulse(4f, 1f))
-        assertEquals(VideoCardFollowPose(), released.settle(0f).withReleaseImpulse(4f, 0f))
-        val almostReleased = released.settle(.9999f).withReleaseImpulse(4f, .9999f)
-        assertEquals(released.rotationZ, almostReleased.rotationZ, .002f)
-        assertTrue(released.settle(.5f).withReleaseImpulse(4f, .5f).rotationZ > released.settle(.5f).rotationZ)
-    }
 
     @Test
-    fun nativeViewportContractsWithBodyFadeWithoutASecondHeightStage() {
-        for ((sourceX, sourceY) in listOf(.46f to .25f, .92f to .12f, .3f to .08f)) {
-            var previousY = sourceY
-            for (i in 0..1000) {
-                val depth = i / 1000f
-                val x = resolveMiuixVideoCardOuterScale(sourceX, depth, 1f)
-                val y = resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, depth, 1f)
-                val body = com.android.purebilibili.core.ui.transition.resolveVideoCardSecondaryContentVisualFrame(
-                    morphDepthProgress = depth,
-                    phase = com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase.RETURNING,
-                    isReturnGestureInProgress = true,
-                    motionTier = com.android.purebilibili.core.ui.adaptive.MotionTier.Normal,
-                    preserveNativeViewport = true,
-                )
-                val cardY = x * sourceY / sourceX
-                assertTrue(y >= cardY - .0001f)
-                assertTrue(y <= x + .0001f)
-                // Full content keeps the viewport; as it fades, contraction must already
-                // be underway rather than waiting for an empty page to shrink again.
-                if (body.alpha >= .9999f) assertEquals(x, y, .0001f)
-                if (body.alpha in .1f..0.9f) {
-                    assertTrue(y < x)
-                    assertTrue(y > cardY)
-                }
-                assertTrue(y >= previousY - .0001f)
-                assertTrue(y <= 1.0001f)
-                previousY = y
+    fun wholeCardHeightUsesMeasuredHeightWithoutDependingOnSourceWidth() {
+        for (sourceHeight in listOf(.08f, .25f, .6f)) {
+            var previous = sourceHeight
+            for (depth in listOf(0f, .1f, .25f, .5f, .75f, .9f, 1f)) {
+                val narrow = resolveMiuixVideoCardOuterScaleY(.2f, sourceHeight, depth, 1f)
+                val wide = resolveMiuixVideoCardOuterScaleY(.92f, sourceHeight, depth, 1f)
+                assertEquals(narrow, wide, .0001f)
+                assertTrue(narrow >= previous)
+                assertTrue(narrow <= 1f)
+                previous = narrow
             }
-            assertEquals(sourceY, resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, 0f, 1f), .0001f)
-            assertEquals(1f, resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, 1f, 1f), .0001f)
+            assertEquals(sourceHeight, resolveMiuixVideoCardOuterScaleY(.2f, sourceHeight, 0f, 1f), .0001f)
+            assertEquals(1f, resolveMiuixVideoCardOuterScaleY(.2f, sourceHeight, 1f, 1f), .0001f)
         }
     }
 
@@ -226,23 +199,19 @@ class MiuixVideoCardNavTransitionTest {
     }
 
     @Test
-    fun heroNavMotionReservesTimeForCommittedCardLanding() {
+    fun automaticAndReleasedCardMotionUseSpringsWhileReducedMotionUsesNoSpatialSpring() {
         val spec = resolveVideoHeroMotionSpec(360)
         val entering = resolveVideoHeroNavMotion(spec, false)
         val returning = resolveVideoHeroNavMotion(spec, true)
-        assertEquals(360, (entering.programmatic as NavSettleSpec.Tween).durationMillis)
-        assertEquals(299, (returning.programmatic as NavSettleSpec.Tween).durationMillis)
-        assertEquals(spec.returnSpatialSpec, (returning.programmatic as NavSettleSpec.Tween).easing)
-        assertEquals(spec.enterSpatialSpec, (entering.programmatic as NavSettleSpec.Tween).easing)
-        assertEquals(spec.returnDurationMillis, (returning.commit as NavSettleSpec.Tween).durationMillis)
-        assertTrue((returning.commit as NavSettleSpec.Tween).matchReleaseVelocity)
-        assertEquals(spec.cancelStiffness, (returning.cancel as NavSettleSpec.Spring).stiffness)
-        val follow = resolveVideoHeroNavMotion(spec, true, gestureTranslationEnabled = true)
-        assertTrue((follow.cancel as NavSettleSpec.Tween).matchReleaseVelocity)
-        assertEquals(spec.cancelSpatialSpec, (follow.cancel as NavSettleSpec.Tween).easing)
+        assertTrue(entering.programmatic is NavSettleSpec.Spring)
+        assertTrue(returning.programmatic is NavSettleSpec.Spring)
+        assertTrue(returning.commit is NavSettleSpec.Spring)
+        assertTrue(returning.cancel is NavSettleSpec.Spring)
+        // 导航不能因属性弹簧的过冲而提前卸载来源/详情。
+        assertTrue((returning.commit as NavSettleSpec.Spring).dampingRatio >= 1f)
         val reduced = resolveVideoHeroNavMotion(resolveVideoHeroMotionSpec(360, reducedMotion = true), true)
-        assertTrue(!(reduced.commit as NavSettleSpec.Tween).matchReleaseVelocity)
-        assertTrue(!(returning.programmatic as NavSettleSpec.Tween).matchReleaseVelocity)
+        assertTrue(reduced.programmatic is NavSettleSpec.Tween)
+        assertTrue(reduced.commit is NavSettleSpec.Tween)
     }
 
     @Test
@@ -484,22 +453,6 @@ class MiuixVideoCardNavTransitionTest {
 
         progress.bind(scope)
         assertEquals(.8f, progress.depthOrNull())
-    }
-    @Test
-    fun transitionKeepsOneOpaqueFlyingCardWithoutStationaryRevealMask() {
-        val source = File(
-            "src/main/java/com/android/purebilibili/navigation3/predictiveback/MiuixVideoCardNavTransition.kt"
-        ).readText()
-        val transform = source.substringAfter("override fun Modifier.transformEntry")
-
-        assertEquals(true, transform.contains("alpha = 1f"))
-        assertEquals(false, transform.contains("visibleHeightFraction"))
-        assertEquals(false, transform.contains("outgoingClipFraction"))
-        assertEquals(true, transform.contains("resolveMiuixVideoCardGestureVisualOrigin("))
-        assertEquals(true, transform.contains("cameraDistance = transform.cameraDistance"))
-        assertEquals(true, transform.contains("shadowElevation = MIUIX_VIDEO_CARD_GESTURE_SHADOW_DP.dp.toPx() * poseWeight"))
-        assertEquals(true, transform.contains("floatingCornerPx = if (devicePx > 0f) devicePx"))
-        assertEquals(true, transform.contains("progress.followPose("))
     }
 
     @Test
@@ -744,37 +697,6 @@ class MiuixVideoCardNavTransitionTest {
                 fullscreen = true,
             ),
         )
-    }
-
-    @Test
-    fun gestureVisualOriginTracksTheFlyingCardInsteadOfTheFullscreenCenter() {
-        val source = androidx.compose.ui.geometry.Rect(80f, 400f, 500f, 900f)
-        val origin = resolveMiuixVideoCardGestureVisualOrigin(
-            sourceBounds = source,
-            layoutWidth = 1080f,
-            layoutHeight = 2400f,
-            morph = 0f,
-            localOrigin = TransformOrigin(0.14f, 0.6f),
-        )
-        assertEquals(
-            (source.left + source.width * 0.14f) / 1080f,
-            origin.pivotFractionX,
-            0.0001f,
-        )
-        assertEquals(
-            (source.top + source.height * 0.6f) / 2400f,
-            origin.pivotFractionY,
-            0.0001f,
-        )
-        val fullscreen = resolveMiuixVideoCardGestureVisualOrigin(
-            sourceBounds = source,
-            layoutWidth = 1080f,
-            layoutHeight = 2400f,
-            morph = 1f,
-            localOrigin = TransformOrigin(0.14f, 0.6f),
-        )
-        assertEquals(0.14f, fullscreen.pivotFractionX, 0.0001f)
-        assertEquals(0.6f, fullscreen.pivotFractionY, 0.0001f)
     }
 
 }

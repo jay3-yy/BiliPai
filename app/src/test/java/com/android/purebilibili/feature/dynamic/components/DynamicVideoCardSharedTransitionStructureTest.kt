@@ -7,18 +7,7 @@ import kotlin.test.assertTrue
 
 class DynamicVideoCardSharedTransitionStructureTest {
 
-    @Test
-    fun dynamicVideoCard_usesWholeCardShellSharedBounds() {
-        val source = File("src/main/java/com/android/purebilibili/feature/dynamic/components/VideoCards.kt")
-            .readText()
 
-        assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertTrue(source.contains("sourceRoute = sourceRoute"))
-        assertTrue(source.contains("VideoCardLargeCover("))
-        assertTrue(source.contains("crossfadeSourceContent = true"))
-        assertTrue(source.contains("videoCardShellReturnCoverAlpha("))
-        assertFalse(source.contains("videoTitleSharedElementKey("))
-    }
 
     @Test
     fun dynamicVideoCard_recordsCoverBoundsForReturnTarget() {

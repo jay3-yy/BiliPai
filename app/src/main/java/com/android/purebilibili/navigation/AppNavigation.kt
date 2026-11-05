@@ -437,8 +437,10 @@ fun AppNavigation(
     mainHazeState: dev.chrisbanes.haze.HazeState? = null, //  全局 Haze 状态
     onBrandFeedbackBottomInsetChanged: (androidx.compose.ui.unit.Dp) -> Unit = {},
     entryDialogsBlocked: Boolean = false,
+    initialVideoRoute: String? = null,
+    videoActivityPlaybackActive: Boolean = true,
+    onVideoActivityHome: (() -> Unit)? = null,
 ) {
-    val homeViewModel: HomeViewModel = viewModel()
     val coroutineScope = rememberCoroutineScope()
     val videoDetailViewModelOwners = remember {
         mutableMapOf<BiliPaiNavKey.VideoDetail, ViewModelStoreOwner>()
@@ -446,6 +448,18 @@ fun AppNavigation(
     
     // 单一首页视觉配置源：减少根导航层多路 DataStore 收集导致的全局重组。
     val context = androidx.compose.ui.platform.LocalContext.current
+    val hostActivity = context.findActivity() as androidx.activity.ComponentActivity
+    var officialVideoChildActive by rememberSaveable { mutableStateOf(false) }
+    val hostWindowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(hostWindowFocused) {
+        if (hostWindowFocused) officialVideoChildActive = false
+    }
+    val homeViewModel by remember(hostActivity) {
+        lazy { androidx.lifecycle.ViewModelProvider(hostActivity)[HomeViewModel::class.java] }
+    }
+    val videoActivityWindowVisible = if (initialVideoRoute != null) {
+        com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    } else true
     val windowConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
     val windowDensity = androidx.compose.ui.platform.LocalDensity.current
     androidx.compose.runtime.SideEffect {
@@ -508,9 +522,9 @@ fun AppNavigation(
         )
     }
     val cardTransitionEnabled = appearance.cardTransitionEnabled
-    val videoTransitionRealtimeBlurEnabled by SettingsManager
-        .getVideoTransitionRealtimeBlurEnabled(context)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val videoTransitionRealtimeBlurEnabled by remember(context) {
+        SettingsManager.getVideoTransitionRealtimeBlurEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = false)
     val isBottomBarBlurEnabled = appearance.bottomBarBlurEnabled
     val bottomBarLabelMode = appearance.bottomBarLabelMode
     val isBottomBarFloating = appearance.bottomBarFloating
@@ -591,15 +605,7 @@ fun AppNavigation(
     // 缓存缺失时等待 DataStore 首值；先用 false 建栈会让恢复备份后的本次启动进错首页。
     val launchToPortraitFeedOnStartupAtInit = resolvedPortraitStartupRoute ?: return
 
-    val videoSharedTransitionSpeedSettings = remember(
-        homeSettings.videoSharedTransitionSpeed,
-        homeSettings.videoSharedTransitionCustomDurationMillis,
-    ) {
-        VideoSharedTransitionSpeedSettings(
-            speed = homeSettings.videoSharedTransitionSpeed,
-            customDurationMillis = homeSettings.videoSharedTransitionCustomDurationMillis,
-        )
-    }
+    val videoSharedTransitionSpeedSettings = remember { VideoSharedTransitionSpeedSettings() }
     val windowSizeClass = LocalWindowSizeClass.current
     val appWindowAdaptiveInfo = LocalAppWindowAdaptiveInfo.current
     val videoTransitionAdaptiveInfo = remember(windowSizeClass, appWindowAdaptiveInfo) {
@@ -613,7 +619,13 @@ fun AppNavigation(
     }
     val videoCardTransitionClock = rememberVideoCardTransitionClock()
     val systemReduceMotion = rememberSystemReduceMotion()
+    // 卡片开关共同约束官方与应用内路径；官方不可用时保留同宿主的连续形变。
     val sharedVideoCardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion
+    androidx.compose.runtime.SideEffect {
+        (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)
+            ?.updateOfficialReturnMotion(sharedVideoCardTransitionEnabled, videoTransitionRealtimeBlurEnabled)
+    }
+    val videoCardSourceTrackingEnabled = sharedVideoCardTransitionEnabled
     val effectiveVideoCardTransitionDurationMillis = if (systemReduceMotion) {
         VideoCardTransitionVisualTimeline.REDUCED_MOTION_DURATION_MILLIS
     } else {
@@ -633,8 +645,10 @@ fun AppNavigation(
         val initialNavigationBackStack = remember(
             startDestination,
             launchToPortraitFeedOnStartupAtInit,
+            initialVideoRoute,
         ) {
-                resolveInitialBiliPaiBackStack(
+            if (initialVideoRoute != null) listOf(legacyRouteToBiliPaiNavKey(initialVideoRoute))
+            else resolveInitialBiliPaiBackStack(
                     firstRoute = startDestination,
                     onboardingRequired = agreementRequired,
                     openPortraitFeedOnStartup = launchToPortraitFeedOnStartupAtInit
@@ -942,8 +956,11 @@ fun AppNavigation(
         val systemBackAction = remember(
             isAtMainHostRoot,
             currentBottomNavItem,
+            initialVideoRoute,
+            navigation3BackStack.size,
         ) {
-            resolveAppSystemBackAction(
+            if (initialVideoRoute != null && navigation3BackStack.size == 1) AppSystemBackAction.FINISH_ACTIVITY
+            else resolveAppSystemBackAction(
                 isAtMainHostRoot = isAtMainHostRoot,
                 currentBottomItem = currentBottomNavItem,
                 homeItem = BottomNavItem.HOME
@@ -972,6 +989,12 @@ fun AppNavigation(
                 ?: com.android.purebilibili.core.ui.transition.VideoCardSourceLayout.COVER_ONLY,
             sourceChromeSnapshot = navigation3ReturnSession.transitionSession?.sourceChromeSnapshot,
         )
+        fun refreshVideoCardReturnGeometry() {
+            navigation3ReturnSession = navigation3ReturnSession.copy(
+                transitionSession = navigation3ReturnSession.transitionSession?.refreshedForReturn()
+                    ?.copy(hostOriginInRoot = navigationHostOriginInRoot),
+            )
+        }
         fun captureCardSourceDirectionForSession(): BiliPaiNavCardSourceDirection {
             return resolveBiliPaiNavCardSourceDirection(
                 clickedBoundsRecorded = CardPositionManager.lastClickedCardBounds != null,
@@ -985,24 +1008,30 @@ fun AppNavigation(
             source: BiliPaiVideoSource,
             coverIdentity: String?,
             useRecordedCardSource: Boolean = true,
-        ) = VideoCardTransitionSession.create(
-            bvid = bvid,
-            source = source,
-            recordedSourceKey = CardPositionManager.lastClickedVideoSourceKey
-                .takeIf { useRecordedCardSource },
-            cardBounds = CardPositionManager.lastClickedCardBounds,
-            coverBounds = CardPositionManager.lastClickedCoverBounds,
-            infoBounds = CardPositionManager.lastClickedInfoBounds,
-            sourceCornerDp = CardPositionManager.lastClickedVideoSourceCornerDp,
-            cardSourceDirection = captureCardSourceDirectionForSession(),
-            coverIdentity = coverIdentity,
-            cardFullyVisible = CardPositionManager.isCardFullyVisible,
-            isSingleColumnCard = CardPositionManager.isSingleColumnCard,
-            sourceLayout = CardPositionManager.lastClickedVideoSourceLayout,
-            sourceChromeSnapshot = CardPositionManager.lastClickedVideoSourceChromeSnapshot,
-            hostOriginInRoot = navigationHostOriginInRoot,
-            sourcePixelOwner = CardPositionManager.videoCardPixelOwnerFor(source.key),
-        )
+        ): VideoCardTransitionSession {
+            val anchor = if (useRecordedCardSource) {
+                com.android.purebilibili.core.ui.transition.VideoCardSourceInstances.takeAnchor(bvid)
+            } else null
+            return VideoCardTransitionSession.create(
+                bvid = bvid,
+                source = source,
+                recordedSourceKey = CardPositionManager.lastClickedVideoSourceKey
+                    .takeIf { useRecordedCardSource },
+                cardBounds = CardPositionManager.lastClickedCardBounds.takeIf { anchor != null },
+                coverBounds = CardPositionManager.lastClickedCoverBounds,
+                infoBounds = CardPositionManager.lastClickedInfoBounds,
+                sourceCornerDp = CardPositionManager.lastClickedVideoSourceCornerDp,
+                cardSourceDirection = captureCardSourceDirectionForSession(),
+                coverIdentity = coverIdentity,
+                cardFullyVisible = anchor != null && CardPositionManager.isCardFullyVisible,
+                isSingleColumnCard = CardPositionManager.isSingleColumnCard,
+                sourceLayout = CardPositionManager.lastClickedVideoSourceLayout,
+                sourceChromeSnapshot = CardPositionManager.lastClickedVideoSourceChromeSnapshot,
+                hostOriginInRoot = navigationHostOriginInRoot,
+                sourcePixelOwner = CardPositionManager.videoCardPixelOwnerFor(source.key),
+                sourceAnchor = anchor,
+            )
+        }
         // Freeze the source before direction/offline lookups can suspend. A related click
         // replaces the previous home-card globals, which may be invalidated while those
         // lookups are pending; late capture then loses the first nested card morph.
@@ -1154,6 +1183,10 @@ fun AppNavigation(
             }
         }
         fun replaceNavigation3TopWithKey(key: BiliPaiNavKey) {
+            if (initialVideoRoute != null && navigation3BackStack.size == 1) {
+                replaceNavigation3BackStack(listOf(com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key)))
+                return
+            }
             replaceNavigation3BackStack(pushBiliPaiNavKey(
                 currentStack = popBiliPaiNavKey(navigation3BackStack),
                 key = com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key),
@@ -1216,7 +1249,8 @@ fun AppNavigation(
         }
         fun navigateToPortraitStoryInNavigation3(
             seed: PortraitStoryNavigationSeed,
-            sourceRoute: String? = null
+            sourceRoute: String? = null,
+            pendingTransitionSession: VideoCardTransitionSession? = null,
         ) {
             if (!canNavigate(false)) return
             isBottomBarVisible = false
@@ -1233,7 +1267,7 @@ fun AppNavigation(
                 previousSourceRoute = navigation3ReturnSession.lastVideoSourceRoute
             )
             if (source.route != null) {
-                val transitionSession = captureVideoCardTransitionSession(
+                val transitionSession = pendingTransitionSession ?: captureVideoCardTransitionSession(
                     bvid = seed.bvid,
                     source = source,
                     coverIdentity = seed.coverUrl,
@@ -1287,7 +1321,7 @@ fun AppNavigation(
                     coverUrl = videoKey?.coverUrl.orEmpty(),
                     cardTransitionEnabled = cardTransitionEnabled,
                 )?.let { seed ->
-                    navigateToPortraitStoryInNavigation3(seed, sourceRoute = sourceRoute)
+                    navigateToPortraitStoryInNavigation3(seed, sourceRoute = sourceRoute, pendingTransitionSession = transitionSession)
                     return
                 }
                 if (
@@ -1326,7 +1360,8 @@ fun AppNavigation(
                                         cid = videoKey.cid,
                                         coverUrl = videoKey.coverUrl
                                     ),
-                                    sourceRoute = sourceRoute
+                                    sourceRoute = sourceRoute,
+                                    pendingTransitionSession = transitionSession,
                                 )
                             }
                         } else {
@@ -1345,22 +1380,6 @@ fun AppNavigation(
             // Resolve redirects first. Reserving the debounce slot before delegating to
             // Story (or a cached direction lookup) makes that same click reject itself.
             if (!canNavigate(false)) return
-            val videoBvid = videoKey?.bvid.orEmpty()
-            navigation3ReturnSession = navigation3ReturnSession
-                .recordTransitionSession(
-                    session = transitionSession,
-                    preserveCurrentSession = navigation3BackStack.any {
-                        it is BiliPaiNavKey.VideoDetail
-                    },
-                )
-                .markDetailEntered(SystemClock.uptimeMillis())
-            prearmVideoCardOpening(transitionSession)
-            miniPlayerManager?.isNavigatingToVideo = true
-            // 合集列表 / 详情压详情：进新片前立刻挂起上一级仍在响的 player，避免只听见旧声音。
-            if (videoBvid.isNotBlank()) {
-                miniPlayerManager?.haltForeignPlaybackForIncomingVideo(videoBvid)
-            }
-            miniPlayerManager?.exitMiniMode(animate = false)
             val key = when (parsedKey) {
                 is BiliPaiNavKey.VideoDetail -> {
                     val morphDirectPortrait = resolveDirectPortraitDetailMorphEntry(
@@ -1379,7 +1398,52 @@ fun AppNavigation(
                 }
                 else -> parsedKey
             }
-            pushNavigation3Key(key)
+            fun commitInAppVideoNavigation() {
+                val videoBvid = videoKey?.bvid.orEmpty()
+                navigation3ReturnSession = navigation3ReturnSession
+                    .recordTransitionSession(
+                        session = transitionSession,
+                        preserveCurrentSession = navigation3BackStack.any {
+                            it is BiliPaiNavKey.VideoDetail
+                        },
+                    )
+                    .markDetailEntered(SystemClock.uptimeMillis())
+                prearmVideoCardOpening(transitionSession)
+                miniPlayerManager?.isNavigatingToVideo = true
+                // 合集列表 / 详情压详情：进新片前立刻挂起上一级仍在响的 player，避免只听见旧声音。
+                if (videoBvid.isNotBlank()) {
+                    miniPlayerManager?.haltForeignPlaybackForIncomingVideo(videoBvid)
+                }
+                miniPlayerManager?.exitMiniMode(animate = false)
+                pushNavigation3Key(key)
+            }
+            if (key is BiliPaiNavKey.VideoDetail &&
+                com.android.purebilibili.feature.video.OfficialVideoCardTransition.canAttempt(
+                    sharedVideoCardTransitionEnabled, transitionSession,
+                )
+            ) {
+                coroutineScope.launch {
+                    val isCurrent = {
+                        videoNavigationRequests.isCurrent(
+                            navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
+                        )
+                    }
+                    val opened = com.android.purebilibili.feature.video.OfficialVideoCardTransition.tryOpen(
+                        activity = hostActivity,
+                        request = com.android.purebilibili.feature.video.VideoOpenRequest.fromKey(key),
+                        source = transitionSession,
+                        realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
+                        isCurrent = isCurrent,
+                    )
+                    if (opened) {
+                        officialVideoChildActive = true
+                    } else if (isCurrent() && hostActivity.window.decorView.hasWindowFocus()) {
+                        commitInAppVideoNavigation()
+                    }
+                }
+            } else {
+                commitInAppVideoNavigation()
+            }
         }
         fun navigateToVideoInNavigation3(
             bvid: String,
@@ -1428,7 +1492,7 @@ fun AppNavigation(
                     coverUrl = coverUrl,
                     cardTransitionEnabled = cardTransitionEnabled,
                 )?.let { seed ->
-                    navigateToPortraitStoryInNavigation3(seed, sourceRoute = sourceRoute)
+                    navigateToPortraitStoryInNavigation3(seed, sourceRoute = sourceRoute, pendingTransitionSession = transitionSession)
                     return
                 }
             }
@@ -1524,7 +1588,8 @@ fun AppNavigation(
                                     cid = cid,
                                     coverUrl = coverUrl
                                 ),
-                                sourceRoute = sourceRoute
+                                sourceRoute = sourceRoute,
+                                pendingTransitionSession = transitionSession,
                             )
                         }
                     } else {
@@ -2185,38 +2250,49 @@ fun AppNavigation(
         // 仅玻璃开启时绕过网页采集，关闭后的原生模糊和背景录制保持原有行为。
         // 网页有独立渲染树；页面关闭采集后，祖先也不能再次把它录入背景层。
         // 检查整个栈，覆盖网页上方的详情页及返回网页过程，避免来回切换录制状态。
-        val navigationBackdropCaptureEnabled = !homeSettings.androidNativeLiquidGlassEnabled ||
+        val navigationGlassEnabled = homeSettings.bottomDockGlassEnabled || homeSettings.nowPlayingGlassEnabled
+        val navigationBackdropCaptureEnabled = !navigationGlassEnabled ||
             navigation3BackStack.none {
                 it is BiliPaiNavKey.Web &&
                     !com.android.purebilibili.feature.web.shouldOpenWebUrlExternally(it.url)
             }
         val floatingBackdropDemand = remember { com.android.purebilibili.core.ui.blur.FloatingChromeBackdropDemand() }
         val shouldCaptureBottomBarBackdrop = navigationBackdropCaptureEnabled &&
-            (homeSettings.androidNativeLiquidGlassEnabled || isBottomBarBlurEnabled)
-        val bottomBarBackdropSource = if (shouldCaptureBottomBarBackdrop) {
-            // Bind the shared recording to every frame of the app theme palette,
-            // rather than waiting for navigation/layout to invalidate a static page.
-            rememberChromeBackdropSource(
-                recordingBackground = backgroundColor,
-                isolateContentDrawing = true,
-            )
-        } else {
-            null
-        }
-        val bottomBarBackdrop = bottomBarBackdropSource?.backdrop
+            (navigationGlassEnabled || isBottomBarBlurEnabled)
         // 玻璃仅为实际挂载或正在进出的控件录制；保留源身份，恢复时重新挂回录制。
         // 原生模糊仍沿用原有背景源。退出动画结束前不能只看 finalBottomBarVisible。
         val hasBottomBarBackdropConsumer = bottomBarCanMount &&
             (bottomBarVisibilityState.currentState || bottomBarVisibilityState.targetState ||
                 !bottomBarVisibilityState.isIdle)
         val recordBottomBarBackdrop = com.android.purebilibili.core.ui.transition.shouldRecordVideoCardFloatingBackdrop(
-            liquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled,
+            liquidGlassEnabled = navigationGlassEnabled,
             isVideoDetailDestination = isVideoDetailDestination,
             exposure = videoCardChromeExposure,
             hasBottomBarConsumer = hasBottomBarBackdropConsumer,
             hasAudioBarConsumer = !bottomBarCanMount && showAudioNowPlayingIndependent,
             hasFloatingConsumer = floatingBackdropDemand.isRequired,
         )
+        // 只有玻璃卡片转场复用导航视口的合成纹理；关闭玻璃后的 MD3、Miuix
+        // 仍共享绘制指令，不增加离屏纹理。无消费者、落位或取消恢复结束后归还 Auto。
+        val rasterizeNavigationBackdrop =
+            com.android.purebilibili.core.ui.transition.shouldRasterizeVideoCardChromeBackdrop(
+                liquidGlassEnabled = navigationGlassEnabled,
+                cardTransitionEnabled = cardTransitionEnabled,
+                reduceMotion = systemReduceMotion,
+                recordingAllowed = recordBottomBarBackdrop,
+                exposure = videoCardChromeExposure,
+            )
+        val bottomBarBackdropSource = if (shouldCaptureBottomBarBackdrop) {
+            rememberChromeBackdropSource(
+                recordingBackground = backgroundColor,
+                isolateContentDrawing = true,
+                recordingEnabled = recordBottomBarBackdrop,
+                rasterizeContent = rasterizeNavigationBackdrop,
+            )
+        } else {
+            null
+        }
+        val bottomBarBackdrop = bottomBarBackdropSource?.backdrop
         val componentMotionEnabled = com.android.purebilibili.core.ui.resolveComponentMotionEnabled(
             entranceEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled,
             cardEntranceEnabled = homeSettings.cardAnimationEnabled,
@@ -2236,6 +2312,8 @@ fun AppNavigation(
             com.android.purebilibili.core.ui.components.LocalAppTopBarIconDecorator provides
                 com.android.purebilibili.core.ui.components.BiliPaiTopBarIconDecorator,
             com.android.purebilibili.core.ui.LocalSystemReduceMotion provides systemReduceMotion,
+            com.android.purebilibili.core.ui.transition.LocalVideoCardSourceTrackingEnabled provides
+                videoCardSourceTrackingEnabled,
             com.android.purebilibili.core.ui.LocalAppPopupSurfaceRenderer provides
                 com.android.purebilibili.core.ui.components.BiliPaiPopupSurfaceRenderer,
             com.android.purebilibili.core.ui.blur.LocalFloatingChromeBackdrop provides
@@ -2280,6 +2358,7 @@ fun AppNavigation(
                 val fromRoute = navigation3BackStack.lastOrNull()?.toLegacyRoute()
                 val targetRoute = targetKey?.toLegacyRoute()
                 if (isVideoDetailRoute(fromRoute) && isVideoCardReturnTargetRoute(targetRoute)) {
+                    refreshVideoCardReturnGeometry()
                     markVideoReturnSession()
                 }
             }
@@ -2387,7 +2466,7 @@ fun AppNavigation(
                 }
             }
             com.android.purebilibili.core.ui.popup.AppGlassPopupHost(
-                glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+                glassAvailable = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.popupGlassEnabled &&
                     com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass(android.os.Build.VERSION.SDK_INT),
                 tuning = liquidGlassRenderConfig.tuning,
             ) {
@@ -3761,10 +3840,11 @@ fun AppNavigation(
                         },
                         miniPlayerManager = miniPlayerManager,
                         isInPipMode = isInPipMode,
-                        isVisible = videoDetailPlaybackSessionActive &&
+                        isVisible = videoDetailPlaybackSessionActive && videoActivityWindowVisible && !officialVideoChildActive &&
                             navigation3BackStack.lastOrNull() !is BiliPaiNavKey.AudioMode,
-                        isPlaybackSessionActive = videoDetailPlaybackSessionActive,
-                        isOrientationOwner = navigation3BackStack.lastOrNull() == videoKey,
+                        isPlaybackSessionActive = videoDetailPlaybackSessionActive && videoActivityPlaybackActive &&
+                            !officialVideoChildActive,
+                        isOrientationOwner = videoActivityWindowVisible && navigation3BackStack.lastOrNull() == videoKey,
                         startInFullscreen = videoKey.fullscreen,
                         startAudioFromRoute = videoKey.startAudio,
                         autoEnterPortraitFromRoute = videoKey.autoPortrait,
@@ -3799,7 +3879,8 @@ fun AppNavigation(
                             }
                         },
                         onHomeClick = {
-                            popVideoDetailWithSharedReturnState(
+                            if (onVideoActivityHome != null) onVideoActivityHome()
+                            else popVideoDetailWithSharedReturnState(
                                 videoKey = videoKey,
                                 targetKey = BiliPaiNavKey.MainHost
                             ) {
@@ -5518,7 +5599,9 @@ fun AppNavigation(
                     backStack = navigation3BackStack,
                     onOpenCardContainer = { pushNavigation3Key(it) },
                     activeMainHostRoute = activeBottomTabRoute,
-                    cardTransitionEnabled = sharedVideoCardTransitionEnabled,
+                    // 直播、文章等应用内容器保留原有开关，普通视频不再进入该形变链。
+                    cardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion,
+                    videoCardTransitionEnabled = sharedVideoCardTransitionEnabled,
                     videoTransitionRealtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
                     isLightBackground = isLightBackground,
                     reduceMotion = systemReduceMotion,
@@ -5531,21 +5614,16 @@ fun AppNavigation(
                         appNavigationSettings.miuixTransitionBlurEnabled,
                     miuixPredictiveBackMaxProgressPercent =
                         appNavigationSettings.miuixPredictiveBackMaxProgressPercent,
-                    videoSharedReturnGestureFollowEnabled =
-                        appNavigationSettings.videoSharedReturnGestureFollowEnabled,
-                    videoSharedReturnGestureTranslationEnabled =
-                        appNavigationSettings.videoSharedReturnGestureTranslationEnabled,
                     sourceMetadata = navigation3SourceMetadata,
                     programmaticBackDispatcher = navigation3ProgrammaticBackDispatcher,
                     // List cover waits for the live handoff window; list info is native throughout return.
-                    videoReturnContentFollowProgressEnabled =
-                        appNavigationSettings.videoReturnContentFollowProgressEnabled,
                     settingsContainerMorphEnabled =
                         appNavigationSettings.settingsContainerMorphEnabled,
                     settingsContainerRealtimeBlurEnabled =
                         appNavigationSettings.settingsContainerRealtimeBlurEnabled,
                     preferWholeCardReturn = false,
                     onBack = { performSystemBackAction() },
+                    onPrepareVideoCardGesture = { refreshVideoCardReturnGeometry() },
                     onPrepareVideoCardSharedReturn = {
                         // 普通返回(顶部按钮/系统手势提交)兜底预热。
                         maybePrefetchHomeCoversForVideoReturn()
@@ -5716,7 +5794,7 @@ fun AppNavigation(
                                         } else {
                                             "视频详情页"
                                         },
-                                        glassEnabled = effectiveHomeSettings.androidNativeLiquidGlassEnabled,
+                                        glassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
                                         blurEnabled = isBottomBarBlurEnabled,
                                         hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
                                         miuixBackdrop = bottomBarBackdrop,
@@ -5939,7 +6017,7 @@ fun AppNavigation(
                         }
                     } else {
                     // 独立横条退场仍需要玻璃；到本体退出组合才释放背景采样。
-                    if (effectiveHomeSettings.androidNativeLiquidGlassEnabled && bottomBarBackdrop != null) {
+                    if (effectiveHomeSettings.nowPlayingGlassEnabled && bottomBarBackdrop != null) {
                         DisposableEffect(floatingBackdropDemand) {
                             val token = Any()
                             floatingBackdropDemand.acquire(token)
@@ -5999,7 +6077,7 @@ fun AppNavigation(
                     } else {
                         "视频详情页"
                     },
-                    glassEnabled = effectiveHomeSettings.androidNativeLiquidGlassEnabled,
+                    glassEnabled = effectiveHomeSettings.nowPlayingGlassEnabled,
                     blurEnabled = isBottomBarBlurEnabled,
                     hazeState = if (isBottomBarBlurEnabled) mainHazeState else null,
                     miuixBackdrop = bottomBarBackdrop,

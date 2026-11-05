@@ -150,12 +150,17 @@ class InboxViewModel : ViewModel() {
         _uiState.update { it.copy(isLoading = it.sessions.isEmpty(), isRefreshing = refresh, isLoadingMore = false, error = null, loadMoreError = null) }
         listJob = requests.launch {
             coroutineScope {
-                val feed = async { MessageRepository.getFeedUnread() }
+                val center = async { MessageRepository.getMessageCenterUnread() }
                 val sessions = async { MessageImRepository.sessions(pageType) }
                 val result = sessions.await()
-                val feedResult = feed.await()
+                val centerResult = center.await()
                 if (version != generation || !requests.isCurrent()) return@coroutineScope
-                _uiState.update { it.copy(feedUnreadData = feedResult.getOrNull() ?: it.feedUnreadData) }
+                // 四项优先用官方 GetTotalUnread；失败回退 REST。
+                val centerFeed = centerResult.getOrNull()?.let {
+                    MessageFeedUnreadData(reply = it.reply, at = it.at, like = it.like, sysMsg = it.sysMsg)
+                }
+                val feedData = centerFeed ?: MessageRepository.getFeedUnread().getOrNull()
+                feedData?.let { data -> _uiState.update { it.copy(feedUnreadData = data) } }
                 result.fold(onSuccess = { data ->
                     pagination = data.pagination
                     val entries = data.sessions.distinctBy { it.key }.map(::retainReadAck)

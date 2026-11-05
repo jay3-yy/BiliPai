@@ -343,6 +343,7 @@ private fun NavDisplayLayout(
     transition: NavTransition,
     effects: NavDisplayEffects,
     backCompletionPolicy: NavBackCompletionPolicy?,
+    onBackStarted: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val presentation = rememberNavPresentation(backStack.lastIndex)
@@ -352,6 +353,7 @@ private fun NavDisplayLayout(
     val topIndex = backStack.lastIndex
     val backScope = rememberCoroutineScope()
     val currentOnBack = rememberUpdatedState(onBack)
+    val currentOnBackStarted = rememberUpdatedState(onBackStarted)
     val currentBackCompletionPolicy = rememberUpdatedState(backCompletionPolicy)
     val focusManager = LocalFocusManager.current
 
@@ -514,6 +516,7 @@ private fun NavDisplayLayout(
         enabled = backStack.size > 1,
         drainEventsOnCancel = backCompletionPolicy != null,
         onProgress = { sessionId, events ->
+            currentOnBackStarted.value()
             val session = PredictiveBackSession(
                 completionPolicy = currentBackCompletionPolicy.value,
                 ownershipLease = predictiveBackOwnership.acquire(),
@@ -679,7 +682,10 @@ private fun NavDisplayLayout(
                 externalGestureOwnership = { predictiveBackOwnership.generation },
                 onCommit = currentOnBack.value,
                 onCancel = {},
-                onGesture = { presentation.gesture = it },
+                onGesture = {
+                    if (it != null && presentation.gesture == null) currentOnBackStarted.value()
+                    presentation.gesture = it
+                },
             ),
     ) {
         // Backdrop behind every entry (reference shell behavior): a solid layer in the page
@@ -1037,6 +1043,7 @@ fun NavDisplay(
     transition: NavTransition = NavTransitions.MiuixDefault,
     effects: NavDisplayEffects = NavDisplayEffects(),
     backCompletionPolicy: NavBackCompletionPolicy? = null,
+    onBackStarted: () -> Unit = {},
     content: NavEntryBuilder.() -> Unit,
 ) {
     val provider = remember(content) { entryProvider(content) }
@@ -1048,6 +1055,7 @@ fun NavDisplay(
         transition = transition,
         effects = effects,
         backCompletionPolicy = backCompletionPolicy,
+        onBackStarted = onBackStarted,
     )
 }
 
@@ -1070,6 +1078,7 @@ fun NavDisplay(
     transition: NavTransition = NavTransitions.MiuixDefault,
     effects: NavDisplayEffects = NavDisplayEffects(),
     backCompletionPolicy: NavBackCompletionPolicy? = null,
+    onBackStarted: () -> Unit = {},
     content: NavEntryBuilder.() -> Unit,
 ) {
     NavDisplay(
@@ -1079,6 +1088,7 @@ fun NavDisplay(
         transition = transition,
         effects = effects,
         backCompletionPolicy = backCompletionPolicy,
+        onBackStarted = onBackStarted,
         content = content,
     )
 }
@@ -1105,6 +1115,7 @@ internal fun NavDisplay(
     transition: NavTransition = NavTransitions.MiuixDefault,
     effects: NavDisplayEffects = NavDisplayEffects(),
     backCompletionPolicy: NavBackCompletionPolicy? = null,
+    onBackStarted: () -> Unit = {},
 ) {
     require(backStack.isNotEmpty()) { "NavDisplay back stack cannot be empty" }
     NavDisplayLayout(
@@ -1114,6 +1125,7 @@ internal fun NavDisplay(
         transition = transition,
         effects = effects,
         backCompletionPolicy = backCompletionPolicy,
+        onBackStarted = onBackStarted,
         modifier = modifier,
     )
 }

@@ -28,9 +28,10 @@ fun AppGlassContainerContent(
     enabled: Boolean,
     backdrop: Backdrop?,
     ownsDeformation: Boolean,
+    materialEnabled: Boolean = LocalAppThemeConfig.current.liquidGlassEnabled,
     content: @Composable () -> Unit,
 ) {
-    if (!enabled || !LocalAppThemeConfig.current.liquidGlassEnabled) {
+    if (!enabled || !materialEnabled) {
         content()
         return
     }

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.LayoutDirection
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
@@ -32,7 +33,8 @@ internal val SizePageNavTransition: NavTransition = object : NavTransition {
         val progress = if (scope.relativeDepth <= 0f) topProgress(scope.relativeDepth) else 1f
         val inset = size.height * (1f - progress) / 2f
         clipRect(top = inset, bottom = size.height - inset) { this@drawWithContent.drawContent() }
-    }
+    // 与圆形揭示一致，动态裁剪和页面内容分层，内容自身更新仍正常重绘。
+    }.graphicsLayer()
 }
 
 internal fun sharedAxisMovement(progress: Float): Float =

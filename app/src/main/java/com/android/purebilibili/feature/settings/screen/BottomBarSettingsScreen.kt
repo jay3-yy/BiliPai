@@ -146,7 +146,7 @@ fun BottomBarSettingsScreen(
     onBack: () -> Unit,
     viewModel: SettingsViewModel = viewModel(),
 ) {
-    val androidLiquidGlassEnabled = rememberSettingsHomeConfiguration().androidNativeLiquidGlassEnabled
+    val androidLiquidGlassEnabled = rememberSettingsHomeConfiguration().bottomDockGlassEnabled
     val screenTitle = stringResource(R.string.bottom_bar_management_title)
     val backLabel = stringResource(R.string.common_back)
     val bottomContentPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()

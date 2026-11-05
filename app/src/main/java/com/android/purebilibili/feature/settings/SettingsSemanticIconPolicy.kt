@@ -113,8 +113,6 @@ internal enum class SettingsIconRole {
     DRAG_FEEDBACK,
     LIQUID_INDICATOR_WOBBLE,
     LIQUID_INDICATOR_DYNAMIC_LENGTH,
-    RETURN_CONTENT_FOLLOW,
-    RETURN_GESTURE_TRANSLATION,
     SKELETON_BREATHING,
     PROGRESSIVE_TOP_BLUR,
     PROGRESSIVE_BLUR_RENDERER,
@@ -232,7 +230,6 @@ internal enum class SettingsIconRole {
     BACK_TO_TOP,
     HOME_HEADER_COLLAPSE,
     PGC_TIMELINE,
-    RETURN_GESTURE_POSE,
     AUTO_SKIP_OP_ED,
     BLUR_INTENSITY,
     HAPTIC_FEEDBACK,
@@ -373,8 +370,6 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.DRAG_FEEDBACK -> R.drawable.ms_drag_pan_24
     SettingsIconRole.LIQUID_INDICATOR_DYNAMIC_LENGTH -> R.drawable.ic_settings_indicator_dynamic_length_24
     SettingsIconRole.LIQUID_INDICATOR_WOBBLE -> R.drawable.ic_settings_indicator_wobble_24
-    SettingsIconRole.RETURN_CONTENT_FOLLOW -> R.drawable.ms_move_down_24
-    SettingsIconRole.RETURN_GESTURE_TRANSLATION -> R.drawable.ms_drag_indicator_24
     SettingsIconRole.SKELETON_BREATHING -> R.drawable.ic_settings_skeleton_breathing_24
     SettingsIconRole.PROGRESSIVE_TOP_BLUR -> R.drawable.ic_settings_progressive_top_blur_24
     SettingsIconRole.PROGRESSIVE_BLUR_RENDERER -> R.drawable.ic_settings_progressive_blur_renderer_24
@@ -492,7 +487,6 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.BACK_TO_TOP -> R.drawable.ms_keyboard_double_arrow_up_24
     SettingsIconRole.HOME_HEADER_COLLAPSE -> R.drawable.ms_compress_24
     SettingsIconRole.PGC_TIMELINE -> R.drawable.ms_calendar_month_24
-    SettingsIconRole.RETURN_GESTURE_POSE -> R.drawable.ms_rotate90_degrees_ccw_24
     SettingsIconRole.AUTO_SKIP_OP_ED -> R.drawable.ms_skip_next_24
     SettingsIconRole.BLUR_INTENSITY -> R.drawable.ms_flare_24
     SettingsIconRole.HAPTIC_FEEDBACK -> R.drawable.ms_touch_app_fill_24

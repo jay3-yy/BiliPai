@@ -32,6 +32,15 @@ data class MessageSessionControlInfo(
     val isPinned: Boolean? = null,
 )
 
+/** 消息中心总未读 + 四项明细，来自官方消息中心同一条 GetTotalUnread。 */
+data class MessageCenterUnread(
+    val total: Int,
+    val reply: Int,
+    val at: Int,
+    val like: Int,
+    val sysMsg: Int,
+)
+
 object MessageRepository {
     private val api = NetworkModule.messageApi
     private val bilibiliApi = NetworkModule.api
@@ -157,6 +166,21 @@ object MessageRepository {
             if (e is CancellationException) throw e
             android.util.Log.e("MessageRepo", "getFeedUnread exception: ${e.message}", e)
             Result.failure(e)
+        }
+    }
+
+    /** 消息中心总未读 + 四项；disabledLikes 开启时从总数里扣掉赞。 */
+    suspend fun getMessageCenterUnread(): Result<MessageCenterUnread> = withContext(Dispatchers.IO) {
+        MessageImRepository.messageCenterUnread().map { raw ->
+            val disableLikes = MessageCenterPreferences.disabledLikes(PureApplication.instance).first()
+            val like = if (disableLikes) 0 else raw.like
+            MessageCenterUnread(
+                total = (raw.total - (raw.like - like)).coerceAtLeast(0),
+                reply = raw.reply,
+                at = raw.at,
+                like = like,
+                sysMsg = raw.sysMsg,
+            )
         }
     }
 
@@ -396,6 +420,17 @@ object MessageRepository {
             }
             Result.failure(Exception(message, e))
         }
+    }
+
+    /** 会话自身的 max_seqno，用作已读 ack 的边界。 */
+    suspend fun getSessionMaxSeqno(talkerId: Long, sessionType: Int): Long = withContext(Dispatchers.IO) {
+        runCatching {
+            api.getSessionDetail(talkerId = talkerId, sessionType = sessionType)
+                .takeIf { it.code == 0 }
+                ?.data
+                ?.max_seqno
+                ?: 0L
+        }.getOrDefault(0L)
     }
 
     suspend fun getSessionControlInfo(
@@ -705,18 +740,23 @@ object MessageRepository {
         }
     }
     
-    /**
-     * 标记会话为已读
-     * @param talkerId 聊天对象ID
-     * @param sessionType 会话类型
-     * @param ackSeqno 已读消息的序列号
-     */
+    /** 标记会话已读：官方 ImInterface/UpdateAck 优先，失败回退 Web update_ack。 */
     suspend fun markAsRead(
         talkerId: Long,
         sessionType: Int,
         ackSeqno: Long
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            val grpc = MessageImRepository.updateAck(sessionType, talkerId, ackSeqno)
+            if (grpc.isSuccess) {
+                notifyReadStateChanged(MessageReadEvent.PrivateSession(talkerId, sessionType, ackSeqno))
+                return@withContext Result.success(Unit)
+            }
+            com.android.purebilibili.core.util.Logger.w(
+                "MessageRead",
+                "gRPC UpdateAck failed: ${grpc.exceptionOrNull()?.message}, fallback REST",
+            )
+
             val csrf = TokenManager.csrfCache
             if (csrf.isNullOrEmpty()) {
                 return@withContext Result.failure(Exception("请先登录"))

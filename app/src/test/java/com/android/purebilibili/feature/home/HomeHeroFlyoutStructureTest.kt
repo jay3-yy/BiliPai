@@ -17,32 +17,13 @@ class HomeHeroFlyoutStructureTest {
         assertFalse(source.contains("pendingHeroFlyoutRequest"))
         assertFalse(source.contains("shouldRunHomeHeroFlyoutBeforeNavigation(request)"))
         assertFalse(source.contains("resolveHomeHeroFlyoutNavigationDelayMillis()"))
-        assertTrue(clickWrapperSource.contains("hideTopTabsForForwardDetailNav = false"))
         assertFalse(clickWrapperSource.contains("setBottomBarVisible(false)"))
-        assertTrue(clickWrapperSource.contains("isVideoNavigating = true"))
         assertTrue(source.contains("BottomBarMatchedDockVisibility("))
         assertTrue(source.contains("edge = BottomBarMatchedDockEdge.TOP"))
         assertTrue(source.contains("shouldShowHomeOverlayChromeDuringVideoCardTransition("))
         assertTrue(source.contains("shouldHomeFeedOwnVideoCardTransitionSnapshot("))
         assertTrue(source.contains("videoCardTransitionBackgroundEffect("))
         assertTrue(clickWrapperSource.contains("onVideoClick(request)"))
-    }
-
-    @Test
-    fun homeTopTabsReturnRecoveryFollowsNavigationStateInsteadOfLifecycleStart() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        val navigationReturnEffect = source
-            .substringAfter("Navigation 返回不一定触发首页 Lifecycle.ON_START")
-            .substringBefore("从详情页返回时延后清理")
-        val lifecycleObserverSource = source
-            .substringAfter("DisposableEffect(lifecycleOwner, useSideNavigation)")
-            .substringBefore("lifecycleOwner.lifecycle.addObserver(observer)")
-
-        assertTrue(navigationReturnEffect.contains("LaunchedEffect(isReturningFromVideoDetail"))
-        assertTrue(navigationReturnEffect.contains("hideTopTabsForForwardDetailNav = false"))
-        assertTrue(navigationReturnEffect.contains("resolveHomeTopTabsRevealDelayMs("))
-        assertFalse(lifecycleObserverSource.contains("val returningFromDetail = isReturningFromVideoDetail"))
-        assertFalse(lifecycleObserverSource.contains("resolveHomeTopTabsRevealDelayMs("))
     }
 
     @Test
@@ -56,31 +37,9 @@ class HomeHeroFlyoutStructureTest {
         assertFalse(cardSource.contains("resolveHomeHeroFlyoutFrame("))
     }
 
-    @Test
-    fun ordinaryHomeVideoCardUsesCoverFirstSharedTransitionPolicy() {
-        val cardSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/cards/VideoCard.kt")
 
-        assertTrue(cardSource.contains("resolveVideoCardSharedTransitionMotionSpec("))
-        assertTrue(cardSource.contains("resolveVideoSharedTransitionVisualSpec("))
-        assertTrue(cardSource.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertTrue(cardSource.contains("sharedElementSourceRoute"))
-        assertFalse(cardSource.contains("使用 renderInSharedTransitionScopeOverlayOption 控制可见性"))
-    }
 
-    @Test
-    fun homeHeroCarouselUsesWholeCardShellSharedTransition() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/components/HomeHeroCarousel.kt")
 
-        assertTrue(source.contains("videoCardShellSharedBoundsOrEmpty("))
-        assertTrue(source.contains("resolveVideoCardSharedTransitionMotionSpec("))
-        assertTrue(source.contains("memoryCacheKey(normalizedCoverUrl)"))
-        assertTrue(source.contains("LocalSharedTransitionEnabled.current"))
-        assertTrue(source.contains("sourceCornerDp = cardCornerDp.value.roundToInt()"))
-        assertFalse(source.contains("videoCoverSharedElementKey("))
-        assertFalse(source.contains("videoViewsSharedElementKey("))
-        assertFalse(source.contains("videoDanmakuSharedElementKey("))
-        assertFalse(source.contains("videoDurationSharedElementKey("))
-    }
 
     @Test
     fun homeHeroCarouselStatsTextUsesValidChineseUnits() {

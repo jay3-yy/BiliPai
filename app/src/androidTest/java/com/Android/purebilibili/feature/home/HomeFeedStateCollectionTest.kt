@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.foundation.layout.Column
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.junit.Assert.assertEquals
@@ -16,6 +17,56 @@ import org.junit.Test
 class HomeFeedStateCollectionTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun switchingRetainedPagesStopsHiddenSubscriptionsAndResumesOnlyLatestContent() {
+        val recommend = MutableStateFlow("recommend cached")
+        val following = MutableStateFlow("following cached")
+        var selectedPage by mutableStateOf(0)
+        var unobscured by mutableStateOf(true)
+        composeRule.setContent {
+            Column {
+                listOf(recommend, following).forEachIndexed { index, source ->
+                    val work = resolveHomePagerPageWork(
+                        visible = selectedPage == index,
+                        currentPage = selectedPage == index,
+                        pagerScrolling = false,
+                        updatesAllowed = true,
+                        workAllowed = true,
+                        visualWorkActive = true,
+                        unobscured = unobscured,
+                    )
+                    val displayed by source.collectAsHomeFeedState(work.collectUpdates)
+                    BasicText(displayed)
+                }
+            }
+        }
+        composeRule.runOnIdle {
+            assertEquals(1, recommend.subscriptionCount.value)
+            assertEquals(0, following.subscriptionCount.value)
+            following.value = "following latest"
+        }
+        composeRule.onNodeWithText("following cached").assertTextEquals("following cached")
+        composeRule.runOnIdle { selectedPage = 1 }
+        composeRule.onNodeWithText("following latest").assertTextEquals("following latest")
+        composeRule.runOnIdle {
+            assertEquals(0, recommend.subscriptionCount.value)
+            assertEquals(1, following.subscriptionCount.value)
+            unobscured = false
+        }
+        composeRule.runOnIdle {
+            assertEquals(0, following.subscriptionCount.value)
+            following.value = "following after overlay"
+            recommend.value = "recommend after return"
+        }
+        composeRule.onNodeWithText("following latest").assertTextEquals("following latest")
+        composeRule.runOnIdle { unobscured = true; selectedPage = 0 }
+        composeRule.onNodeWithText("recommend after return").assertTextEquals("recommend after return")
+        composeRule.runOnIdle {
+            assertEquals(1, recommend.subscriptionCount.value)
+            assertEquals(0, following.subscriptionCount.value)
+        }
+    }
 
     @Test
     fun pausedFeedKeepsDisplayedDataAndResumesFromLatestValue() {

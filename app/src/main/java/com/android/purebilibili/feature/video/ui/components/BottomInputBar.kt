@@ -190,7 +190,7 @@ fun BottomInputBar(
             }
     }
     val floatingLiquidGlass = shouldUseFloatingLiquidBottomInputBar(
-        androidNativeLiquidGlassEnabled = homeSettings.androidNativeLiquidGlassEnabled
+        androidNativeLiquidGlassEnabled = homeSettings.commentBarGlassEnabled
     )
     val frostedBottomBar = shouldUseFrostedBottomInputBar(
         bottomBarBlurEnabled = homeSettings.isBottomBarBlurEnabled,
@@ -408,6 +408,7 @@ private fun FloatingLiquidBottomInputBar(
                     }),
                     backdrop = backdrop,
                     reuseEnabled = true,
+                    materialEnabled = true,
                     elasticFeedbackEnabled = true,
                     drawShellLens = true,
                     shellLensIntensity = resolveFloatingDockGeometryScale(44f),
@@ -433,6 +434,7 @@ private fun FloatingLiquidBottomInputBar(
                             .height(44.dp),
                         backdrop = backdrop,
                         reuseEnabled = true,
+                        materialEnabled = true,
                         elasticFeedbackEnabled = true,
                         drawShellLens = true,
                         shellLensIntensity = resolveFloatingDockGeometryScale(44f),
