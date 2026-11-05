@@ -21,6 +21,7 @@ import com.android.purebilibili.core.ui.adaptive.MotionTier
  */
 internal class VideoCardTransitionBackgroundFrameCache {
     private var lastProgress = Float.NaN
+    private var lastMaskProgress = Float.NaN
     private var lastPhase: VideoCardTransitionBackgroundPhase? = null
     private var lastMotionTier: MotionTier? = null
     private var lastIsLightBackground: Boolean? = null
@@ -30,6 +31,7 @@ internal class VideoCardTransitionBackgroundFrameCache {
     private var lastScaleReduction = Float.NaN
     private var cached = VideoCardTransitionBackgroundFrame(
         blurRadiusPx = 0f,
+        blurAlpha = 0f,
         scrimAlpha = 0f,
         contentScale = 1f,
     )
@@ -43,9 +45,11 @@ internal class VideoCardTransitionBackgroundFrameCache {
         density: Float,
         deviceCornerRadiusPx: Float,
         scaleReduction: Float,
+        maskProgress: Float = progress,
     ): VideoCardTransitionBackgroundFrame {
         if (
             progress != lastProgress ||
+            maskProgress != lastMaskProgress ||
             phase != lastPhase ||
             motionTier != lastMotionTier ||
             isLightBackground != lastIsLightBackground ||
@@ -55,6 +59,7 @@ internal class VideoCardTransitionBackgroundFrameCache {
             scaleReduction != lastScaleReduction
         ) {
             lastProgress = progress
+            lastMaskProgress = maskProgress
             lastPhase = phase
             lastMotionTier = motionTier
             lastIsLightBackground = isLightBackground
@@ -71,6 +76,7 @@ internal class VideoCardTransitionBackgroundFrameCache {
                 density = density,
                 deviceCornerRadiusPx = deviceCornerRadiusPx,
                 scaleReduction = scaleReduction,
+                maskProgress = maskProgress,
             )
         }
         return cached
@@ -257,6 +263,8 @@ internal fun applyVideoCardTransitionSnapshotFrame(
     sourceBounds: Rect? = null,
     layerAlpha: Float = 1f,
     rasterScale: Float = 1f,
+    /** 恒定半径混合模式：半径不随进度变化，模糊强度经 [layerAlpha] 合成。 */
+    blurRadiusPxOverride: Float? = null,
 ) {
     // Shared with the host renderer: write the owning renderer's final alpha once.
     contentLayer.alpha = layerAlpha
@@ -285,7 +293,7 @@ internal fun applyVideoCardTransitionSnapshotFrame(
     } else if (cornerRadiusPx > 0.01f) {
         contentLayer.shadowElevation = frame.shadowElevationPx * rasterScale
     }
-    val blurRadiusPx = frame.blurRadiusPx * rasterScale
+    val blurRadiusPx = (blurRadiusPxOverride ?: frame.blurRadiusPx) * rasterScale
     if (blurRadiusPx != snapshotState.lastBlurRadiusPx) {
         snapshotState.lastBlurRadiusPx = blurRadiusPx
         contentLayer.renderEffect = snapshotState.blurEffect(blurRadiusPx)

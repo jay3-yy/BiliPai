@@ -2736,6 +2736,7 @@ fun AppNavigation(
                                         if (applyHostOwnedSnapshotOnRoute) {
                                             pinnedModifier.videoCardTransitionBackgroundEffect(
                                                 progressProvider = backgroundState.progressProvider,
+                                                maskProgressProvider = backgroundState.maskProgressProvider,
                                                 phaseProvider = backgroundState.phaseProvider,
                                                 exposureProvider = backgroundState.exposureProvider,
                                                 isGestureRestoreInProgressProvider = backgroundState.isGestureRestoreInProgressProvider,

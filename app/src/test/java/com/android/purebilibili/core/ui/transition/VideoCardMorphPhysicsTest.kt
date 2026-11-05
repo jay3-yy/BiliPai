@@ -12,6 +12,8 @@ class VideoCardMorphPhysicsTest {
         val frame = physics.sample(.4f, opening, 1f, 100_000_000, false, 100_000_000)
         assertTrue(frame.position > frame.size)
         assertTrue(frame.corner > frame.size)
+        // 遮罩弹簧（0.95/0.12）先于模糊弹簧（1.0/0.25）到位：压暗先于模糊。
+        assertTrue(frame.mask > frame.effects)
         assertEquals(VideoCardMorphFrame.at(1f), physics.sample(1f, opening, 1f, 3_000_000_000, false, 3_000_000_000))
     }
 
@@ -63,5 +65,6 @@ class VideoCardMorphPhysicsTest {
         assertEquals(expected.size, actual.size, .00001f)
         assertEquals(expected.corner, actual.corner, .00001f)
         assertEquals(expected.effects, actual.effects, .00001f)
+        assertEquals(expected.mask, actual.mask, .00001f)
     }
 }

@@ -706,6 +706,8 @@ class VideoCardTransitionBackgroundPolicyTest {
         // density=1 时 12dp → 12px；真实机型由 DrawScope.density 换算。
         assertEquals(12f, frame.blurRadiusPx)
         assertEquals(0f, frame.blurRadiusPx % 2f)
+        // 恒定半径混合：模糊强度独立成通道，随景深线性建立。
+        assertEquals(1f, frame.blurAlpha)
         assertEquals(0.14f, frame.scrimAlpha)
         assertFalse(frame.useLightScrimTint)
         assertEquals(1f, frame.contentScale, 0.0001f)

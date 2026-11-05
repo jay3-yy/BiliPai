@@ -39,6 +39,8 @@ internal fun VideoCardTransitionHostDepthLayer(
     realtimeBlurEnabledProvider: () -> Boolean = { false },
     scaleReductionProvider: () -> Float = { VIDEO_CARD_TRANSITION_BACKGROUND_SCALE_REDUCTION },
     sourceBoundsProvider: () -> Rect? = { null },
+    /** 背景遮罩独立深度（引擎 maskAlpha 通道）；缺省跟随 [progressProvider]。 */
+    maskProgressProvider: (() -> Float)? = null,
     modifier: Modifier = Modifier,
 ) {
     val contentLayer = snapshotHandle.contentLayer
@@ -79,6 +81,11 @@ internal fun VideoCardTransitionHostDepthLayer(
                     exposure = exposure,
                     liveProgress = progressProvider(),
                 )
+                // 遮罩走独立弹簧通道（引擎 maskAlpha）：压暗先于模糊到位。
+                val maskProgress = resolveHostOwnedDepthProgress(
+                    exposure = exposure,
+                    liveProgress = maskProgressProvider?.invoke() ?: progress,
+                )
                 val frozenLayerAlpha = resolveVideoCardTransitionFrozenLayerAlpha(
                     exposure = exposure,
                     depthProgress = progress,
@@ -88,7 +95,7 @@ internal fun VideoCardTransitionHostDepthLayer(
                     // updates during preparation; retain the layer for gesture reversal.
                     val isLight = isLightBackgroundProvider()
                     val scrimAlpha = resolveVideoCardTransitionBackgroundScrimAlpha(
-                        depthProgress = resolveVideoCardTransitionDepthProgress(progress, phase),
+                        depthProgress = resolveVideoCardTransitionDepthProgress(maskProgress, phase),
                         phase = phase,
                         motionTier = motionTier,
                         isLightBackground = isLight,
@@ -108,15 +115,25 @@ internal fun VideoCardTransitionHostDepthLayer(
                     density = density,
                     deviceCornerRadiusPx = deviceCornerRadiusPx,
                     scaleReduction = scaleReductionProvider(),
+                    maskProgress = maskProgress,
                 )
+                // 恒定半径 + 合成混合：冻结内容静态，固定半径的模糊只在首帧光栅化一次，
+                // 进度经 layerAlpha 混合锐利内容（引擎 BLUR_ALPHA 通道同语义），
+                // 免除逐帧变半径的 RenderThread 重光栅化。
+                val fixedBlurRadiusPx = if (frame.blurRadiusPx > 0.01f) {
+                    resolveVideoCardTransitionMaxBlurRadiusPx(motionTier, density)
+                } else {
+                    0f
+                }
                 applyVideoCardTransitionSnapshotFrame(
                     contentLayer = contentLayer,
                     snapshotState = snapshotState,
                     frame = frame,
                     canvasSize = size,
                     sourceBounds = sourceBoundsProvider(),
-                    layerAlpha = frozenLayerAlpha,
-                    rasterScale = snapshotHandle.prepareEffectLayer(this, frame.blurRadiusPx),
+                    layerAlpha = frozenLayerAlpha * frame.blurAlpha,
+                    rasterScale = snapshotHandle.prepareEffectLayer(this, fixedBlurRadiusPx),
+                    blurRadiusPxOverride = fixedBlurRadiusPx,
                 )
                 if (shouldDrawVideoCardTransitionScaleGapFill(frame.contentScale)) {
                     drawRect(

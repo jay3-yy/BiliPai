@@ -12,10 +12,13 @@ internal object VideoCardMorphSprings {
     val openSize = spec(1.1f, .268f)
     val openCorner = spec(1f, .18f)
     val openEffects = spec(1f, .25f)
+    // 引擎把背景遮罩与模糊分通道：遮罩更欠阻尼、更快到位（压暗先于模糊）。
+    val openMask = spec(.95f, .12f)
     val closePosition = spec(.95f, .29f)
     val closeSize = spec(.95f, .29f)
     val closeCorner = spec(1f, .2f)
     val closeEffects = spec(1f, .15f)
+    val closeMask = spec(.95f, .18f)
 
     // 导航 entry 的生命周期使用单调且略慢的弹簧，不能在属性弹簧过冲时提前卸载页面。
     val enterLifetime = openSize
@@ -32,9 +35,10 @@ internal data class VideoCardMorphFrame(
     val size: Float,
     val corner: Float,
     val effects: Float,
+    val mask: Float,
 ) {
     companion object {
-        fun at(depth: Float) = VideoCardMorphFrame(depth, depth, depth, depth)
+        fun at(depth: Float) = VideoCardMorphFrame(depth, depth, depth, depth, depth)
     }
 }
 
@@ -72,6 +76,7 @@ internal class VideoCardMorphPhysics {
     private val size = Channel()
     private val corner = Channel()
     private val effects = Channel()
+    private val mask = Channel()
     private var activeSettlement: Any? = null
     private var lastDriver = 0f
     private var lastFrameNanos = 0L
@@ -94,6 +99,7 @@ internal class VideoCardMorphPhysics {
             size.seek(delta, seconds)
             corner.seek(delta, seconds)
             effects.seek(delta, seconds)
+            mask.seek(delta, seconds)
             activeSettlement = null
         } else if (settlement != null) {
             if (activeSettlement !== settlement) {
@@ -103,21 +109,24 @@ internal class VideoCardMorphPhysics {
                 size.retarget(targetDepth, if (opening) VideoCardMorphSprings.openSize else VideoCardMorphSprings.closeSize)
                 corner.retarget(targetDepth, if (opening) VideoCardMorphSprings.openCorner else VideoCardMorphSprings.closeCorner)
                 effects.retarget(targetDepth, if (opening) VideoCardMorphSprings.openEffects else VideoCardMorphSprings.closeEffects)
+                mask.retarget(targetDepth, if (opening) VideoCardMorphSprings.openMask else VideoCardMorphSprings.closeMask)
             }
             position.sample(elapsedNanos)
             size.sample(elapsedNanos)
             corner.sample(elapsedNanos)
             effects.sample(elapsedNanos)
+            mask.sample(elapsedNanos)
         } else {
             // 空闲端点也负责清除上次手势速度，避免下一次点击继承旧会话。
             position.snap(driverDepth)
             size.snap(driverDepth)
             corner.snap(driverDepth)
             effects.snap(driverDepth)
+            mask.snap(driverDepth)
             activeSettlement = null
         }
         lastDriver = driverDepth
         lastFrameNanos = frameNanos
-        return VideoCardMorphFrame(position.value, size.value, corner.value, effects.value)
+        return VideoCardMorphFrame(position.value, size.value, corner.value, effects.value, mask.value)
     }
 }

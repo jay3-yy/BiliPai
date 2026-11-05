@@ -1537,6 +1537,7 @@ fun HomeScreen(
         )
         Modifier.videoCardTransitionBackgroundEffect(
             progressProvider = videoCardTransitionBackgroundState.progressProvider,
+            maskProgressProvider = videoCardTransitionBackgroundState.maskProgressProvider,
             phaseProvider = videoCardTransitionBackgroundState.phaseProvider,
             exposureProvider = videoCardTransitionBackgroundState.exposureProvider,
             isGestureRestoreInProgressProvider =
