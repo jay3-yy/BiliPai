@@ -39,7 +39,7 @@
 
 当前已加入 `gsai.sdk:sharedview-kit:1.0.0.5`，通过 `isViewAnimationSupported() > 0` 探测协议能力，不按品牌或系统版本硬编码判断。
 
-官方路径要求卡片动画开启、未启用减少动态效果、来源实例完整可见且具有对应录制层；设备还需声明支持默认返回、跟随系统返回和无动画返回的控制参数，确保来源消失或设置变化时可以停止卡片收缩。不满足条件时使用现有应用内导航。
+官方路径要求卡片动画开启、未启用减少动态效果、来源实例完整可见且具有对应录制层；设备按 `isViewAnimationSupported()` 声明协议能力即接管打开段，返回动画类型按设备 `EXTRA_BACK_ANIM_TYPE` 声明的可写集合尽力控制（减少动效优先无动画返回，来源消失优先跟随系统，未声明的类型不写入，由设备默认策略兜底），不把仅支持部分类型的设备挡在官方路径之外。不满足条件时使用现有应用内导航。
 
 Compose 卡片通过已有 GraphicsLayer 导出卡片 Bitmap，使用官方 Bitmap 重载生成 ActivityOptions，独立传给 VideoActivity，播放参数继续使用 VideoOpenRequest。读取像素后重新检查请求归属、来源像素身份、窗口焦点和来源位置，坐标系遵循设备 EXTRA_BOUNDS 声明。尺寸不匹配、配置返回 null 或系统以 SecurityException 拒绝启动时，保留应用内路径，不把普通 Activity 动画计作官方动画。
 
