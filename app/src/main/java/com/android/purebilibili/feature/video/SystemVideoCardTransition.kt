@@ -48,6 +48,7 @@ internal object SystemVideoCardTransition {
         val roundedSource: WeakReference<ComponentActivity>?,
         val openingBounds: Rect,
         val openingRadius: Float,
+        val coverCornerDp: Float?,
     ) {
         val requestedAtMs = SystemClock.uptimeMillis()
         @Volatile var openingEvent = "awaiting_start"
@@ -157,6 +158,7 @@ internal object SystemVideoCardTransition {
             roundedSource = if (capability.roundedWindow) WeakReference(activity) else null,
             openingBounds = Rect(bounds),
             openingRadius = radius,
+            coverCornerDp = source.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
         )
         // 启动请求成功不等于系统实际播放；分别记录打开、返回的启动、取消与结束。
         val listener = object : ViewAnimationListener {
@@ -230,7 +232,7 @@ internal object SystemVideoCardTransition {
                 bounds.height() == session.openingBounds.height() &&
                 resolveWindowClipRadiusPx(
                     requireNotNull(session.anchor.radiusPx()),
-                    session.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
+                    session.coverCornerDp,
                     activity.resources.displayMetrics.density,
                 ) == session.openingRadius
             session.roundedSource.get()?.let { source ->
@@ -259,7 +261,7 @@ internal object SystemVideoCardTransition {
                     .setRadius(
                         resolveWindowClipRadiusPx(
                             requireNotNull(session.anchor.radiusPx()),
-                            session.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
+                            session.coverCornerDp,
                             activity.resources.displayMetrics.density,
                         )
                     )
