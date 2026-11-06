@@ -1723,6 +1723,7 @@ fun HomeScreen(
                                             start = AppSpacingTokens.Large,
                                             end = AppSpacingTokens.Large
                                         ),
+                                        sideRailTopPaddingProvider = { embeddedPageTopPadding.value },
                                         onVideoClick = onPartitionVideoClick,
                                         onBangumiClick = onBangumiClick,
                                         onBangumiSeasonClick = onBangumiSeasonClick,

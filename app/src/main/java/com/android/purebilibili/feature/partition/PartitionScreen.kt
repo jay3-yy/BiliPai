@@ -90,6 +90,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -106,6 +107,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -544,6 +547,7 @@ fun PartitionContent(
         start = 16.dp,
         end = 16.dp
     ),
+    sideRailTopPaddingProvider: () -> Dp = { contentPadding.calculateTopPadding() },
     hazeState: HazeState? = null,
     onVideoClick: (VideoItem) -> Unit = {},
     onBangumiClick: (Int) -> Unit = {},
@@ -640,10 +644,20 @@ fun PartitionContent(
                     iconFamily = topChromeIconFamily,
                     modifier = Modifier
                         .width(sideRailWidth)
-                        // 纵向 dock 的外边距仅用于玻璃；关闭时保留原生侧栏的视口和内边距。
+                        // 侧栏按当前顶栏的可见高度测量，收起后释放顶部空间；
+                        // 在测量阶段读取滚动状态，玻璃、MD3、Miuix 共用视口规则。
+                        .layout { measurable, constraints ->
+                            val top = sideRailTopPaddingProvider().roundToPx()
+                                .coerceIn(0, constraints.maxHeight)
+                            val rail = measurable.measure(constraints.offset(vertical = -top))
+                            layout(rail.width, rail.height + top) {
+                                rail.placeRelative(0, top)
+                            }
+                        }
+                        // 横向外边距和底部避让仅用于玻璃；原生侧栏继续使用列表内边距。
                         .then(
                             if (liquidGlassIndicatorEnabled) {
-                                Modifier.padding(start = 4.dp, end = 4.dp, top = topPadding, bottom = bottomPadding)
+                                Modifier.padding(start = 4.dp, end = 4.dp, bottom = bottomPadding)
                             } else Modifier
                         )
                         .zIndex(if (liquidGlassIndicatorEnabled) 1f else 0f),
@@ -658,7 +672,7 @@ fun PartitionContent(
                         )
                     } else PaddingValues(
                         start = if (sideRailOnRight) 4.dp else railOuterPadding,
-                        top = topPadding + 8.dp,
+                        top = 8.dp,
                         bottom = bottomPadding,
                         end = if (sideRailOnRight) railOuterPadding else 4.dp
                     ),
