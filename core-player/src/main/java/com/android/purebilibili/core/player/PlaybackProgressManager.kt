@@ -22,7 +22,6 @@ class PlaybackProgressManager {
         private const val TAG = "PlaybackProgressManager"
         private const val PREFS_NAME = "video_progress"
         private const val MIN_PROGRESS_TO_SAVE = 5000L // 5秒以上才保存
-        private const val MAX_PERCENT_TO_RESTORE = 0.95f // 超过95%不恢复（已看完）
         // 有界化上限：每看一个视频最多写 2 个 key（cid 级 + bvid 级），4096 条覆盖极长的
         // 观看历史；超过后按最旧淘汰，内存与磁盘 XML 都保持有界。
         private const val MAX_CACHED_PROGRESS_ENTRIES = 4096
@@ -70,8 +69,9 @@ class PlaybackProgressManager {
         if (bvid.isEmpty() || positionMs < MIN_PROGRESS_TO_SAVE) return
         val key = buildProgressKey(bvid, cid)
         
-        // 如果已播放超过95%，视为已看完，清除记录
-        if (durationMs > 0 && positionMs.toFloat() / durationMs > MAX_PERCENT_TO_RESTORE) {
+        // 至少 95% 且距片尾不超过 60 秒，才视为已看完并清除记录
+        val completionPositionMs = resolvePlaybackCompletionPositionMs(durationMs)
+        if (durationMs > 0 && positionMs >= completionPositionMs) {
             clearPosition(bvid, cid)
             Logger.d(TAG, "Video $key completed (${positionMs}ms / ${durationMs}ms), cleared progress")
             return

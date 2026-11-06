@@ -3233,6 +3233,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     Logger.d(TAG, "Playback ended")
                     playbackServiceRequested = false
                     clearPlaybackNotificationArtifacts()
+                    // 播完清掉片尾进度，避免下次从最后一帧恢复。
+                    currentBvid?.takeIf { it.isNotBlank() }?.let { bvid ->
+                        com.android.purebilibili.core.player.PlaybackProgressManager
+                            .getInstance(context)
+                            .clearPosition(bvid, currentCid)
+                    }
                 }
             }
         }
