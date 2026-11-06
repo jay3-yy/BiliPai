@@ -140,7 +140,8 @@ internal object SystemVideoCardTransition {
         val windowCoordinates = officialBoundsUseWindowCoordinates(extras?.get(ViewAnimationExtras.EXTRA_BOUNDS))
         val bounds = anchor.bounds(windowCoordinates) ?: return rejected("source_bounds_unavailable")
         val thumbnail = if (layer != null) {
-            layer.toImageBitmap().asAndroidBitmap()
+            // 透明行卡的位图背景透明，先垫来源页面底色，避免引擎放大位图时透出双层内容。
+            compositeOverBackgroundColor(layer.toImageBitmap().asAndroidBitmap(), sourceBackgroundColor)
         } else {
             // 直播、番剧等导航容器卡片没有原生快照层，按来源窗口像素复制卡片矩形。
             captureWindowRegion(activity, bounds) ?: return rejected("source_pixels_unavailable")
@@ -297,6 +298,15 @@ internal object SystemVideoCardTransition {
 
     fun release(token: String?) {
         if (token != null) sessions.remove(token)
+    }
+
+    /** 卡片位图垫上来源页面底色后交给引擎；位图尺寸不变，仅消除透明背景。 */
+    private fun compositeOverBackgroundColor(source: Bitmap, backgroundColor: Int): Bitmap {
+        val backed = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(backed)
+        canvas.drawColor(backgroundColor)
+        canvas.drawBitmap(source, 0f, 0f, null)
+        return backed
     }
 
     /** 无快照层时按窗口坐标复制来源卡片矩形；调用方在主线程等待结果。 */
