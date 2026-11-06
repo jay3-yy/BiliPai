@@ -269,31 +269,12 @@ object CommentRepository {
                 params["web_location"] = "1315875"
                 params.putAll(resolveCommentMainListPaginationParameters(page, paginationOffset, cursorNext))
 
-                val wbiKeys = getWbiKeysOrNull(apiClient)
-                if (wbiKeys != null) {
-                    CoreDataLog.d(
-                        "CommentRepo",
-                        " getComments (WBI): oid=$oid, type=$type, page=$page, mode=$mainListMode"
-                    )
-                    val (imgKey, subKey) = wbiKeys
-                    val signedParams = WbiUtils.sign(params, imgKey, subKey)
-                    val response = runCatching { apiClient.getReplyList(signedParams) }.getOrNull()
-                    if (response != null && (response.code == 0 || !shouldFallbackCommentRead(response.code))) {
-                        response
-                    } else {
-                        CoreDataLog.w(
-                            "CommentRepo",
-                            " getComments (WBI failed, code=${response?.code}), falling back to non-WBI main/legacy (PiliPlus alignment)"
-                        )
-                        fetchNonWbiCommentFallback(apiClient, oid, type, page, ps, mainListMode, params)
-                    }
-                } else {
-                    CoreDataLog.w(
-                        "CommentRepo",
-                        " getComments (WBI keys unavailable), falling back directly to non-WBI main/legacy (PiliPlus alignment)"
-                    )
-                    fetchNonWbiCommentFallback(apiClient, oid, type, page, ps, mainListMode, params)
-                }
+                // REST 兜底保持非 WBI，避免 WBI key 过期拖垮评论。
+                CoreDataLog.d(
+                    "CommentRepo",
+                    " getComments (non-WBI main): oid=$oid, type=$type, page=$page, mode=$mainListMode"
+                )
+                fetchNonWbiCommentFallback(apiClient, oid, type, page, ps, mainListMode, params)
             }
         }
     }

@@ -88,3 +88,26 @@ data class NavStatData(
     val follower: Int = 0,       // 粉丝
     val dynamic_count: Int = 0   // 动态
 )
+
+// 签名 key 刷新响应
+@Serializable
+data class WebTicketResponse(
+    val code: Int = 0,
+    val message: String = "",
+    val data: WebTicketData? = null
+)
+
+@Serializable
+data class WebTicketData(
+    val ticket: String = "",
+    val ttl: Long = 0,
+    @kotlinx.serialization.SerialName("created_at")
+    val createdAt: Long = 0,
+    val nav: WebTicketNav? = null
+)
+
+@Serializable
+data class WebTicketNav(
+    val img: String = "",
+    val sub: String = ""
+)

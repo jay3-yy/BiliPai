@@ -2,8 +2,11 @@
 package com.android.purebilibili.core.network
 
 import android.content.Context
+import com.android.purebilibili.core.store.TokenManager
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * WBI 签名密钥管理器
@@ -18,17 +21,22 @@ object WbiKeyManager {
     private const val SP_KEY_IMG = "wbi_img_key"
     private const val SP_KEY_SUB = "wbi_sub_key"
     private const val SP_KEY_TIMESTAMP = "wbi_timestamp"
+    private const val SP_KEY_EXPIRES = "wbi_expires_at"
     
-    // 缓存有效期：24 小时
+    // key 刷新失败时的兜底有效期：24 小时
     private const val CACHE_DURATION_MS = 24 * 60 * 60 * 1000L
     // 预刷新阈值：剩余时间少于 1 小时时预刷新
     private const val PREFRESH_THRESHOLD_MS = 60 * 60 * 1000L
+    // 到期前 30 分钟刷新
+    private const val REFRESH_MARGIN_MS = 30 * 60 * 1000L
     
     // 内存缓存
     @Volatile
     private var cachedKeys: Pair<String, String>? = null
     @Volatile
     private var cacheTimestamp: Long = 0
+    @Volatile
+    private var cacheExpiresAt: Long = 0
     
     // 刷新互斥锁，防止并发刷新
     private val refreshMutex = Mutex()
@@ -76,43 +84,92 @@ object WbiKeyManager {
      */
     private suspend fun refreshKeysInternal(): Result<Pair<String, String>> {
         com.android.purebilibili.core.network.CoreDataLog.d(TAG, " Refreshing WBI keys from network...")
-        
+
+        // 先刷新签名 key，失败回退 nav。
+        try {
+            val ticketKeys = refreshKeysFromTicket()
+            if (ticketKeys != null) {
+                cachedKeys = ticketKeys
+                persistCache()
+                com.android.purebilibili.core.network.CoreDataLog.d(TAG, " WBI keys refreshed via ticket")
+                return Result.success(ticketKeys)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, " Ticket refresh failed: ${e.message}")
+        }
+
+        cacheExpiresAt = 0
         return try {
             val api = NetworkModule.api
             val navResp = api.getNavInfo()
             val wbiImg = navResp.data?.wbi_img
-            
+
             if (wbiImg != null) {
                 val imgKey = wbiImg.img_url.substringAfterLast("/").substringBefore(".")
                 val subKey = wbiImg.sub_url.substringAfterLast("/").substringBefore(".")
-                
+
                 cachedKeys = Pair(imgKey, subKey)
                 cacheTimestamp = System.currentTimeMillis()
-                
-                //  自动持久化到 storage，下次启动时无需再请求网络
-                try {
-                    val context = NetworkModule.appContext
-                    if (context != null) {
-                        persistToStorage(context)
-                    }
-                } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                    android.util.Log.w(TAG, " Failed to persist WBI keys: ${e.message}")
-                }
-                
-                com.android.purebilibili.core.network.CoreDataLog.d(TAG, " WBI keys refreshed successfully")
+                persistCache()
+
+                com.android.purebilibili.core.network.CoreDataLog.d(TAG, " WBI keys refreshed from nav")
                 Result.success(Pair(imgKey, subKey))
             } else {
                 android.util.Log.e(TAG, " WBI keys not found in response")
                 Result.failure(Exception("WBI keys not found in nav response"))
             }
         } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
+            if (e is kotlinx.coroutines.CancellationException) throw e
             android.util.Log.e(TAG, " Failed to refresh WBI keys: ${e.message}")
             Result.failure(e)
         }
     }
-    
+
+    private suspend fun refreshKeysFromTicket(): Pair<String, String>? {
+        val timestamp = System.currentTimeMillis() / 1000
+        val response = NetworkModule.api.getWebTicket(
+            keyId = "ec02",
+            hexsign = hmacSha256Hex("ts$timestamp", "XgwsnGZ1p"),
+            timestamp = timestamp,
+            csrf = TokenManager.csrfCache.orEmpty(),
+        )
+        if (response.code != 0) return null
+        val data = response.data ?: return null
+        val imgKey = extractWbiKey(data.nav?.img.orEmpty())
+        val subKey = extractWbiKey(data.nav?.sub.orEmpty())
+        if (imgKey.isBlank() || subKey.isBlank()) return null
+
+        cacheTimestamp = System.currentTimeMillis()
+        cacheExpiresAt = if (data.createdAt > 0 && data.ttl > 0) {
+            (data.createdAt + data.ttl) * 1000
+        } else {
+            0
+        }
+        return Pair(imgKey, subKey)
+    }
+
+    private fun extractWbiKey(value: String): String {
+        if (value.isBlank()) return ""
+        return value.substringAfterLast('/').substringBefore('.').ifBlank { value }
+    }
+
+    private fun hmacSha256Hex(data: String, key: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(key.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        return mac.doFinal(data.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+    }
+
+    private fun persistCache() {
+        try {
+            NetworkModule.appContext?.let(::persistToStorage)
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            android.util.Log.w(TAG, " Failed to persist WBI keys: ${e.message}")
+        }
+    }
+
     /**
      * 使缓存失效
      */
@@ -120,21 +177,32 @@ object WbiKeyManager {
         com.android.purebilibili.core.network.CoreDataLog.d(TAG, " Invalidating WBI keys cache")
         cachedKeys = null
         cacheTimestamp = 0
+        cacheExpiresAt = 0
     }
-    
+
     /**
      * 检查缓存是否有效
      */
     private fun isCacheValid(): Boolean {
-        val age = System.currentTimeMillis() - cacheTimestamp
-        return age < CACHE_DURATION_MS
+        if (cachedKeys == null) return false
+        val now = System.currentTimeMillis()
+        return if (cacheExpiresAt > 0) {
+            now + REFRESH_MARGIN_MS < cacheExpiresAt
+        } else {
+            now - cacheTimestamp < CACHE_DURATION_MS
+        }
     }
-    
+
     /**
      * 检查是否需要预刷新（剩余时间 < 1 小时）
      */
     fun shouldPrefresh(): Boolean {
-        val remaining = (cacheTimestamp + CACHE_DURATION_MS) - System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        val remaining = if (cacheExpiresAt > 0) {
+            cacheExpiresAt - now
+        } else {
+            (cacheTimestamp + CACHE_DURATION_MS) - now
+        }
         return remaining < PREFRESH_THRESHOLD_MS
     }
     
@@ -148,6 +216,7 @@ object WbiKeyManager {
             .putString(SP_KEY_IMG, keys.first)
             .putString(SP_KEY_SUB, keys.second)
             .putLong(SP_KEY_TIMESTAMP, cacheTimestamp)
+            .putLong(SP_KEY_EXPIRES, cacheExpiresAt)
             .apply()
         
         com.android.purebilibili.core.network.CoreDataLog.d(TAG, " WBI keys persisted to storage")
@@ -171,10 +240,12 @@ object WbiKeyManager {
         val imgKey = sp.getString(SP_KEY_IMG, null)
         val subKey = sp.getString(SP_KEY_SUB, null)
         val timestamp = sp.getLong(SP_KEY_TIMESTAMP, 0)
+        val expiresAt = sp.getLong(SP_KEY_EXPIRES, 0)
         
         if (imgKey != null && subKey != null && timestamp > 0) {
             cachedKeys = Pair(imgKey, subKey)
             cacheTimestamp = timestamp
+            cacheExpiresAt = expiresAt
             
             if (isCacheValid()) {
                 com.android.purebilibili.core.network.CoreDataLog.d(TAG, " WBI keys restored from storage")
