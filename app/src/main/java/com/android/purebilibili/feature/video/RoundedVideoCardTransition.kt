@@ -43,6 +43,7 @@ internal object RoundedVideoCardTransition {
 
     fun options(
         activity: Activity, bitmap: Bitmap, bounds: Rect, radius: Float,
+        backgroundColor: Int,
         onEvent: (String) -> Unit,
     ): ActivityOptions? {
         val api = protocol ?: return null
@@ -50,7 +51,7 @@ internal object RoundedVideoCardTransition {
         return try {
             api.open.invoke(
                 null, activity.window.decorView, bitmap, bounds.left, bounds.top,
-                radius.toInt(), 0, 1f, Handler(Looper.getMainLooper()),
+                radius.toInt(), backgroundColor, 1f, Handler(Looper.getMainLooper()),
                 callback("open_start"), callback("open_end"),
                 callback("return_start"), callback("return_end"), SCALED_THUMBNAIL,
             ) as? ActivityOptions

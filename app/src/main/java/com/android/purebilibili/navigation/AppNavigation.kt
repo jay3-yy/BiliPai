@@ -55,6 +55,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -1472,6 +1473,7 @@ fun AppNavigation(
                         request = com.android.purebilibili.feature.video.VideoOpenRequest.fromKey(key),
                         source = transitionSession,
                         realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
+                        sourceBackgroundColor = backgroundColor.toArgb(),
                         isCurrent = isCurrent,
                     )
                     if (opened) {

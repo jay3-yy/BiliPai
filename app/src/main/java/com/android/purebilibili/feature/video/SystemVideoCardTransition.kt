@@ -101,6 +101,7 @@ internal object SystemVideoCardTransition {
         request: VideoOpenRequest,
         source: VideoCardTransitionSession,
         realtimeBlurEnabled: Boolean,
+        sourceBackgroundColor: Int,
         isCurrent: () -> Boolean,
     ): Boolean {
         fun rejected(reason: String): Boolean {
@@ -161,7 +162,7 @@ internal object SystemVideoCardTransition {
             "bitmap=${thumbnail.width}x${thumbnail.height} windowCoordinates=$windowCoordinates " +
             "blurRequested=$realtimeBlurEnabled blurSupported=$canConfigureBlur extras=$extras")
         val options = if (capability.roundedWindow) {
-            RoundedVideoCardTransition.options(activity, thumbnail, bounds, radius) { event ->
+            RoundedVideoCardTransition.options(activity, thumbnail, bounds, radius, sourceBackgroundColor) { event ->
                 if (event.startsWith("open_")) session.openingEvent = event
                 Logger.i("SystemVideoCardTransition", "session=$token protocol=rounded event=$event")
             }
