@@ -3146,6 +3146,20 @@ class MiniPlayerManager private constructor(private val context: Context) :
         INSTANCE = null
     }
 
+    /** 主线程采样；独立音频进程有自己的保存入口，不从过期的本地播放器取断点。 */
+    internal fun captureForMemoryTermination(): com.android.purebilibili.core.store.AudioPlaybackCheckpoint? {
+        if (remoteAudio.active || isLiveMode) return null
+        val local = player ?: return null
+        val bvid = currentBvid ?: return null
+        if (currentCid <= 0L || local.currentMediaItem == null || local.playbackState == Player.STATE_IDLE) return null
+        return com.android.purebilibili.core.store.AudioPlaybackCheckpoint(
+            accountMid = NetworkModule.playbackAccount()?.mid ?: TokenManager.midCache ?: 0L,
+            bvid = bvid,
+            cid = currentCid,
+            positionMs = if (local.playbackState == Player.STATE_ENDED) 0L else local.currentPosition.coerceAtLeast(0L),
+        )
+    }
+
     // --- 播放器监听器 ---
     private var libraryCheckpointJob: Job? = null
 
