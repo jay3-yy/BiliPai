@@ -3,7 +3,10 @@ package com.android.purebilibili.feature.video
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
+import android.view.PixelCopy
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.lifecycle.Lifecycle
@@ -18,8 +21,10 @@ import com.itgsa.animation.sharedview.ViewAnimationManager
 import com.itgsa.animation.sharedview.ViewAnimationType
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.lang.ref.WeakReference
 import java.util.UUID
+import kotlin.coroutines.resume
 
 internal data class SystemVideoCardCapability(
     val available: Boolean,
@@ -124,9 +129,7 @@ internal object SystemVideoCardTransition {
         val owner = source.sourcePixelOwner ?: return rejected("pixel_owner_missing")
         if (!CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("pixel_owner_expired")
         val layer = CardPositionManager.nativeVideoCardLayerFor(source.sourceChromeSnapshot)
-            ?: return rejected("source_layer_missing")
-        if (layer.isReleased || layer.size.width <= 1 || layer.size.height <= 1) return rejected("source_layer_unavailable")
-        val thumbnail = layer.toImageBitmap().asAndroidBitmap()
+            ?.takeIf { !it.isReleased && it.size.width > 1 && it.size.height > 1 }
         currentCoroutineContext().ensureActive()
         if (!isCurrent() || !CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("request_expired_after_capture")
         if (!activity.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) ||
@@ -136,6 +139,12 @@ internal object SystemVideoCardTransition {
         val extras = if (capability.roundedWindow) null else ViewAnimationManager.getViewAnimationExtras()
         val windowCoordinates = officialBoundsUseWindowCoordinates(extras?.get(ViewAnimationExtras.EXTRA_BOUNDS))
         val bounds = anchor.bounds(windowCoordinates) ?: return rejected("source_bounds_unavailable")
+        val thumbnail = if (layer != null) {
+            layer.toImageBitmap().asAndroidBitmap()
+        } else {
+            // 直播、番剧等导航容器卡片没有原生快照层，按来源窗口像素复制卡片矩形。
+            captureWindowRegion(activity, bounds) ?: return rejected("source_pixels_unavailable")
+        }
         if (kotlin.math.abs(thumbnail.width - bounds.width()) > 1 ||
             kotlin.math.abs(thumbnail.height - bounds.height()) > 1) return rejected(
                 "source_size_mismatch bitmap=${thumbnail.width}x${thumbnail.height} bounds=$bounds")
@@ -289,6 +298,30 @@ internal object SystemVideoCardTransition {
     fun release(token: String?) {
         if (token != null) sessions.remove(token)
     }
+
+    /** 无快照层时按窗口坐标复制来源卡片矩形；调用方在主线程等待结果。 */
+    private suspend fun captureWindowRegion(activity: ComponentActivity, screenBounds: Rect): Bitmap? =
+        suspendCancellableCoroutine { continuation ->
+            val decor = activity.window.decorView
+            val location = IntArray(2)
+            decor.getLocationOnScreen(location)
+            val windowBounds = Rect(
+                screenBounds.left - location[0], screenBounds.top - location[1],
+                screenBounds.right - location[0], screenBounds.bottom - location[1],
+            )
+            val bitmap = Bitmap.createBitmap(windowBounds.width(), windowBounds.height(), Bitmap.Config.ARGB_8888)
+            try {
+                PixelCopy.request(
+                    activity.window, windowBounds, bitmap, { result ->
+                        continuation.resume(bitmap.takeIf { result == PixelCopy.SUCCESS })
+                    },
+                    Handler(Looper.getMainLooper()),
+                )
+            } catch (error: IllegalArgumentException) {
+                Logger.w("SystemVideoCardTransition", "卡片矩形像素复制失败", error)
+                continuation.resume(null)
+            }
+        }
 
     /** 打开时捕获的卡片像素，供详情首帧在封面就绪前同步垫底。 */
     fun peekThumbnail(token: String?): Bitmap? = token?.let { sessions[it]?.thumbnail }

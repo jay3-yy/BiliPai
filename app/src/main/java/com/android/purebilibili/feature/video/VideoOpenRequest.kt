@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.video
 
 import android.os.Bundle
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.toLegacyRoute
 
 /** 视频入口数据与系统转场 options 分开传递，避免将播放参数当作 ActivityOptions。 */
 internal data class VideoOpenRequest(
@@ -16,6 +17,8 @@ internal data class VideoOpenRequest(
     val commentTargetRpid: Long = 0L,
     val initialVertical: Boolean = false,
     val directPortraitEntry: Boolean = false,
+    /** 直播、番剧等非视频窗口入口的初始路由；bvid 为空时窗口按该路由组装首栈。 */
+    val initialRoute: String = "",
 ) {
     fun toNavigationKey() = BiliPaiNavKey.VideoDetail(
         bvid = bvid, cid = cid, coverUrl = coverUrl, startAudio = startAudio,
@@ -24,6 +27,9 @@ internal data class VideoOpenRequest(
         commentTargetRpid = commentTargetRpid, initialVertical = initialVertical,
         directPortraitEntry = directPortraitEntry,
     )
+
+    /** 窗口首栈路由：视频入口按视频键展开，非视频入口原样携带路由。 */
+    fun toInitialRoute(): String = initialRoute.ifBlank { toNavigationKey().toLegacyRoute() }
 
     fun toBundle() = Bundle().apply {
         putString("bvid", bvid)
@@ -37,6 +43,7 @@ internal data class VideoOpenRequest(
         putLong("commentTargetRpid", commentTargetRpid)
         putBoolean("initialVertical", initialVertical)
         putBoolean("directPortraitEntry", directPortraitEntry)
+        putString("initial_route", initialRoute)
     }
 
     companion object {
@@ -49,13 +56,16 @@ internal data class VideoOpenRequest(
         )
 
         fun fromBundle(bundle: Bundle): VideoOpenRequest? {
-            val bvid = bundle.getString("bvid")?.takeIf { it.isNotBlank() } ?: return null
+            val bvid = bundle.getString("bvid").orEmpty()
+            val initialRoute = bundle.getString("initial_route").orEmpty()
+            if (bvid.isBlank() && initialRoute.isBlank()) return null
             return VideoOpenRequest(
                 bvid = bvid, cid = bundle.getLong("cid"), coverUrl = bundle.getString("cover").orEmpty(),
                 startAudio = bundle.getBoolean("startAudio"), autoPortrait = bundle.getBoolean("autoPortrait"),
                 fullscreen = bundle.getBoolean("fullscreen"), resumePositionMs = bundle.getLong("resumePositionMs"),
                 commentRootRpid = bundle.getLong("commentRootRpid"), commentTargetRpid = bundle.getLong("commentTargetRpid"),
                 initialVertical = bundle.getBoolean("initialVertical"), directPortraitEntry = bundle.getBoolean("directPortraitEntry"),
+                initialRoute = initialRoute,
             )
         }
     }

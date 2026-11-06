@@ -352,7 +352,7 @@ class VideoActivity : ComponentActivity() {
                     },
                 ) {
                 com.android.purebilibili.navigation.AppNavigation(
-                    initialVideoRoute = request.toNavigationKey().toLegacyRoute(),
+                    initialVideoRoute = request.toInitialRoute(),
                     videoActivityPlaybackActive = playbackWindowActive,
                     onVideoActivityHome = {
                         intent.removeExtra("video_parent_is_video")
