@@ -116,8 +116,6 @@ docs/*
 !docs/telegram-thanos-port.md
 !docs/performance/
 docs/performance/*
-!docs/performance/video-card-transition/
-!docs/performance/video-card-transition/*.md
 !docs/video-startup-comparison.md
 !docs/recommendation-and-part-resume-analysis.md
 !docs/TV_ADAPTATION.md

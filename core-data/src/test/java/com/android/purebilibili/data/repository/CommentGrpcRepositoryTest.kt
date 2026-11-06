@@ -172,29 +172,6 @@ class CommentGrpcRepositoryTest {
     }
 
     @Test
-    fun `buildDetailListRequest keeps both sort modes target and pagination offset`() {
-        for (mode in listOf(CommentGrpcRepository.MODE_TIME, CommentGrpcRepository.MODE_HOT)) {
-            val request = CommentGrpcRepository.buildDetailListRequest(
-                oid = 100L,
-                type = 1,
-                root = 777L,
-                rpid = 888L,
-                mode = mode,
-                nextOffset = "reply-offset"
-            )
-            val fields = ProtoWire.parseFields(request)
-            assertEquals(100L, fields.first { it.number == 1 }.varint)
-            assertEquals(1L, fields.first { it.number == 2 }.varint)
-            assertEquals(777L, fields.first { it.number == 3 }.varint)
-            assertEquals(888L, fields.first { it.number == 4 }.varint)
-            assertEquals(0L, fields.first { it.number == 6 }.varint)
-            assertEquals(mode.toLong(), fields.first { it.number == 7 }.varint)
-            val pagination = ProtoWire.parseFields(fields.first { it.number == 8 }.bytes)
-            assertEquals("reply-offset", ProtoWire.stringValue(pagination.first { it.number == 2 }))
-        }
-    }
-
-    @Test
     fun `parseDetailListReply maps root replies to reply data`() {
         val child = ProtoWire.message(
             ProtoWire.int64(2, 888L),

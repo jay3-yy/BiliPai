@@ -21,6 +21,10 @@ import com.android.purebilibili.core.ui.AppThemeConfig
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.feature.video.ui.overlay.BottomControlBar
 import com.android.purebilibili.feature.video.ui.overlay.PlayerProgress
+import com.android.purebilibili.feature.video.screen.ContinuousPlayerOrientationRequest
+import com.android.purebilibili.feature.video.screen.ContinuousPlayerTransitionEvent
+import com.android.purebilibili.feature.video.screen.ContinuousPlayerTransitionPhase
+import com.android.purebilibili.feature.video.screen.reduceContinuousPlayerTransition
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -166,6 +170,62 @@ class BottomControlBarUiRegressionTest {
                         rule.onNodeWithTag("player_previous_episode").assertDoesNotExist()
                     }
                 }
+            }
+        }
+    }
+
+    @Test
+    fun portraitAndLandscapeActionsRemainClickableAcrossRepeatedRoundTrips() {
+        val phase = mutableStateOf(ContinuousPlayerTransitionPhase.Inline)
+        val portrait = mutableStateOf(false)
+        val requestedOrientation = mutableStateOf(ContinuousPlayerOrientationRequest.None)
+        fun dispatch(event: ContinuousPlayerTransitionEvent) {
+            val decision = reduceContinuousPlayerTransition(phase.value, event)
+            phase.value = decision.phase
+            requestedOrientation.value = decision.orientationRequest
+        }
+        rule.setContent {
+            MaterialTheme {
+                BottomControlBar(
+                    progress = PlayerProgress(500, 3000),
+                    isFullscreen = phase.value == ContinuousPlayerTransitionPhase.Fullscreen,
+                    viewportWidthDpOverride = 320,
+                    onSeek = {},
+                    onPortraitFullscreen = {
+                        portrait.value = true
+                        dispatch(ContinuousPlayerTransitionEvent.EnterPortraitFullscreen)
+                    },
+                    onToggleFullscreen = {
+                        if (portrait.value) {
+                            portrait.value = false
+                            dispatch(ContinuousPlayerTransitionEvent.EnterFullscreen)
+                        } else {
+                            dispatch(ContinuousPlayerTransitionEvent.Toggle)
+                        }
+                    },
+                )
+            }
+        }
+        repeat(2) {
+            rule.onNodeWithTag("player_portrait_fullscreen").assertIsDisplayed().performClick()
+            rule.runOnIdle {
+                assertTrue(portrait.value)
+                assertEquals(ContinuousPlayerOrientationRequest.Portrait, requestedOrientation.value)
+            }
+            // Click before portrait Configuration has arrived: this must enter, not toggle
+            // the old landscape exit phase into another portrait request.
+            rule.onNodeWithTag("player_fullscreen_toggle").assertIsDisplayed().performClick()
+            rule.runOnIdle {
+                assertTrue(!portrait.value)
+                assertEquals(ContinuousPlayerOrientationRequest.Landscape, requestedOrientation.value)
+                dispatch(ContinuousPlayerTransitionEvent.OrientationChanged(true))
+            }
+            rule.onNodeWithTag("player_fullscreen_toggle").assertIsDisplayed().performClick()
+            rule.runOnIdle {
+                assertEquals(ContinuousPlayerOrientationRequest.Portrait, requestedOrientation.value)
+                dispatch(ContinuousPlayerTransitionEvent.OrientationChanged(false))
+                dispatch(ContinuousPlayerTransitionEvent.CollapseFinished)
+                assertEquals(ContinuousPlayerTransitionPhase.Inline, phase.value)
             }
         }
     }

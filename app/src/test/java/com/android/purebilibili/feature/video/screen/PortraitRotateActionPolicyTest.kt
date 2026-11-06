@@ -13,7 +13,6 @@ class PortraitRotateActionPolicyTest {
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
             resolvePortraitRotateTargetOrientation(
                 isOrientationDrivenFullscreen = true,
-                manualPortraitHoldActive = false
             )
         )
     }
@@ -23,18 +22,26 @@ class PortraitRotateActionPolicyTest {
         assertNull(
             resolvePortraitRotateTargetOrientation(
                 isOrientationDrivenFullscreen = false,
-                manualPortraitHoldActive = false
             )
         )
     }
 
     @Test
-    fun portraitRotateAction_returnsNullDuringManualPortraitHold() {
-        assertNull(
-            resolvePortraitRotateTargetOrientation(
+    fun explicitPortraitRotateActionRemainsAvailableAfterPortraitEntry() {
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            resolvePhoneVideoRequestedOrientation(
+                autoRotateEnabled = true,
+                fullscreenMode = com.android.purebilibili.core.store.FullscreenMode.AUTO,
+                isCompactDevice = true,
                 isOrientationDrivenFullscreen = true,
-                manualPortraitHoldActive = true
+                isFullscreenMode = false,
+                manualPortraitHoldActive = true,
             )
+        )
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolvePortraitRotateTargetOrientation(isOrientationDrivenFullscreen = true)
         )
     }
 }

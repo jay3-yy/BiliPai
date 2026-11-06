@@ -111,6 +111,8 @@ internal data class VideoCardSourceChromeSnapshot(
     val coverDecodeHeightPx: Int = 0,
     /** Opaque click-time information plate, including the wallpaper behind its tint. */
     val infoContainerColor: Color? = null,
+    /** 信息区在整卡录制图层中的局部像素矩形；不含悬停、落位反馈或页面景深缩放。 */
+    val nativeInfoBounds: Rect? = null,
     /** Compact playback bar uses an early source-chrome handoff on return. */
     val isNowPlayingBar: Boolean = false,
 )

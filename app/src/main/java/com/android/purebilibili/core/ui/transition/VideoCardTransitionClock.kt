@@ -38,6 +38,7 @@ internal class VideoCardTransitionClock {
     val landingFeedback = VideoCardLandingFeedbackState()
 
     private var navigationDepthProvider: (() -> Float?)? = null
+    private var navigationMaskDepthProvider: (() -> Float?)? = null
     private var navigationSettleState: VideoCardTransitionSettleState? by mutableStateOf(null)
     var initialVelocity: Float = 0f
         private set
@@ -53,8 +54,12 @@ internal class VideoCardTransitionClock {
         }
 
     /** Miuix owns position AND lifetime. Do not start a hidden fallback alongside it. */
-    fun bindNavigationDriver(provider: (() -> Float?)?) {
+    fun bindNavigationDriver(
+        provider: (() -> Float?)?,
+        maskProvider: (() -> Float?)? = null,
+    ) {
         navigationDepthProvider = provider
+        navigationMaskDepthProvider = maskProvider
         if (provider == null) navigationSettleState = null
     }
 
@@ -128,6 +133,15 @@ internal class VideoCardTransitionClock {
             gestureRestoreInProgress = gestureRestoreInProgress,
             returnDepthFloor = returnDepthFloor,
         )
+    }
+
+    /**
+     * 背景遮罩深度（独立弹簧通道，压暗先于模糊到位）。
+     * 无导航驱动或回灌路径时退化为 [depthProgress]，与旧单通道行为一致。
+     */
+    fun maskProgress(): Float {
+        navigationMaskDepthProvider?.invoke()?.let { return it.coerceIn(0f, 1f) }
+        return depthProgress()
     }
 
     /**

@@ -74,7 +74,8 @@ internal data class MiuixVideoCardClipRadii(
     val radiusY: Float,
 )
 
-/** Covered-entry treatment, owned by the Miuix navigation boundary, never by page children. */
+/** Covered-entry treatment, owned by the Miuix navigation boundary, never by page children.
+ * 视频开合已对齐联盟引擎（被覆盖页不缩放）；设置容器转场沿用此层次感。 */
 internal fun resolveMiuixVideoCardCoveredScale(depth: Float, reducedMotion: Boolean): Float =
     if (reducedMotion) 1f else 1f - 0.03f * depth.coerceIn(0f, 1f)
 
@@ -399,6 +400,8 @@ internal class MiuixVideoCardTransitionProgress(
 
     fun effectsDepthOrNull(): Float? = topScope?.let { spatialFrame(it).effects }
 
+    fun maskDepthOrNull(): Float? = topScope?.let { spatialFrame(it).mask }
+
     private var settleRawReturn = 0f
     private var settleVisualReturn = 0f
     private var lastVisualReturn = 0f
@@ -670,7 +673,6 @@ internal fun miuixVideoCardNavTransition(
     val corner = sourceCornerDp?.coerceAtLeast(0) ?: 16
     val clipShapeA = MiuixVideoCardClipShape()
     val clipShapeB = MiuixVideoCardClipShape()
-    val coveredShapeCache = MiuixVideoCardCoveredShapeCache()
     var useShapeA = true
 
     return object : NavTransition {
@@ -717,7 +719,13 @@ internal fun miuixVideoCardNavTransition(
                         alpha = 1f
                         val needsClip = morph < 0.999f
                         clip = needsClip
-                        val physicalRadius = (corner.dp.toPx() * (1f - frame.corner))
+                        // 圆角终点是窗口圆角（引擎 leashCorner 同语义）：展开中保持系统圆角的
+                        // 丰润感，不收缩归零；落位帧整页铺满屏幕，硬件圆角接管，无跳变。
+                        val sourceRadiusPx = corner.dp.toPx()
+                        val physicalRadius = (
+                            sourceRadiusPx +
+                                (deviceCornerDp.toPx() - sourceRadiusPx) * frame.corner
+                            )
                             .coerceAtMost(minOf(width * outerScaleX, height * outerScaleY) / 2f)
                         val radX = physicalRadius / outerScaleX.coerceAtLeast(0.01f)
                         val radY = physicalRadius / outerScaleY.coerceAtLeast(0.01f)
@@ -734,24 +742,8 @@ internal fun miuixVideoCardNavTransition(
                         } else {
                             shape = activeShape
                         }
-                    } else {
-                        // Same boundary ownership as Miuix's cross-activity example: transform
-                        // the complete covered entry once, including its page chrome.
-                        val coveredDepth = progress.depthOr(depth)
-                        val coveredScale = resolveMiuixVideoCardCoveredScale(
-                            depth = coveredDepth,
-                            reducedMotion = heroMotionSpec.reducedMotion,
-                        )
-                        scaleX = coveredScale
-                        scaleY = coveredScale
-                        transformOrigin = TransformOrigin.Center
-                        clip = coveredScale < 1f
-                        shape = coveredShapeCache.resolve(resolveMiuixVideoCardCoveredCornerPx(
-                            depth = coveredDepth,
-                            reducedMotion = heroMotionSpec.reducedMotion,
-                            density = scope.density.density,
-                        ))
                     }
+                    // 联盟引擎不动被覆盖页：背景只有遮罩暗化与模糊，无缩放、无覆盖圆角。
                 }.graphicsLayer {
                     val depth = scope.relativeDepth
                     if (depth <= 0f) {

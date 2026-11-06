@@ -132,8 +132,10 @@ class DynamicCommentReplyPolicyTest {
             ReplyItem(rpid = 3L, like = 8, action = 1)
         )
 
-        val liked = applyDynamicCommentLikeInList(comments, rpid = 2L, toLiked = true)
-        val unliked = applyDynamicCommentLikeInList(liked, rpid = 3L, toLiked = false)
+        val child = applyDynamicCommentLike(comments[0].replies.orEmpty().first(), toLiked = true)
+        val liked = comments.map { updateDynamicCommentReaction(it, child.rpid, child.action, child.like) }
+        val sibling = applyDynamicCommentLike(liked[1], toLiked = false)
+        val unliked = liked.map { updateDynamicCommentReaction(it, sibling.rpid, sibling.action, sibling.like) }
 
         assertEquals(1, liked[0].replies?.first()?.action)
         assertEquals(2, liked[0].replies?.first()?.like)

@@ -46,6 +46,18 @@ redistributed under this repository's [GPL-3.0 license](LICENSE).
 The dark radial scrim, text label and theme-tint presentation around the
 asset are BiliPai's own implementation.
 
+## Video-card transition motion references
+
+One-shot window-transition SDK and demonstration:
+[SharedViewKit / SharedViewDemo](https://gitee.com/itgsa_sharedviewkit/SharedViewDemo)
+by the Gold Standard Alliance (ITGSA). Compiled integration uses
+`gsai.sdk:sharedview-kit:1.0.0.5` from the alliance Nexus repository.
+Motion parameter observations were taken from a Xiaomi HyperOS device ROM
+(OS4.0.0.16.XPCCNXM, HyperViewScale engine). The application fallback motion
+controller is authored locally with Compose animation APIs; no decompiled ROM
+implementation is bundled in the application. Full details:
+`app/src/main/assets/licenses/third_party_sources.NOTICE`.
+
 ## Retained third-party motion license
 
 The following MIT notice is retained for previously adapted motion code.

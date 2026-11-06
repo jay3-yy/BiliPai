@@ -1454,6 +1454,7 @@ internal fun VideoDetailScreenStateHolder(
         userRequestedFullscreen = userRequestedFullscreen,
         isInMultiWindowMode = isActivityInMultiWindowMode,
         manualPortraitHoldActive = manualPortraitHoldActive,
+        isPortraitFullscreen = isPortraitFullscreen,
     )
 
     // 「下一集 / 相关视频」的导航 lambda 定义在 isFullscreenMode 之前，用 state 桥接，
@@ -2701,7 +2702,25 @@ internal fun VideoDetailScreenStateHolder(
         continuousPlayerPhase,
         isLandscape,
         isFullscreenMode,
+        isPortraitFullscreen,
     ) {
+        // The portrait pager owns the surface and orientation. Keep the landscape host
+        // collapsed even while Configuration still reports its previous landscape bounds.
+        if (isPortraitFullscreen) {
+            userRequestedFullscreen = false
+            if (isOrientationDrivenFullscreen && orientationRequestsAllowed) {
+                manualPortraitHoldActive = true
+                if (activity?.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) {
+                    activity?.applyPlayerRequestedOrientation(
+                        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                        displayContext = displayContext,
+                    )
+                }
+            }
+            continuousPlayerProgress.snapTo(0f)
+            continuousPlayerPhase = ContinuousPlayerTransitionPhase.AwaitingPortrait
+            return@LaunchedEffect
+        }
         // 关闭 continuous morph 时同步到真实全屏层，避免折叠/展开后继承旧方向相位。
         if (!continuousFullscreenTransitionEnabled) {
             val target = if (isFullscreenMode) 1f else 0f
@@ -2749,8 +2768,8 @@ internal fun VideoDetailScreenStateHolder(
         }
     }
 
-    LaunchedEffect(continuousFullscreenTransitionEnabled, continuousPlayerPhase) {
-        if (!continuousFullscreenTransitionEnabled) return@LaunchedEffect
+    LaunchedEffect(continuousFullscreenTransitionEnabled, continuousPlayerPhase, isPortraitFullscreen) {
+        if (!continuousFullscreenTransitionEnabled || isPortraitFullscreen) return@LaunchedEffect
         when (continuousPlayerPhase) {
             ContinuousPlayerTransitionPhase.Collapsing -> {
                 val remaining = continuousPlayerProgress.value.coerceIn(0f, 1f)
@@ -3053,6 +3072,15 @@ internal fun VideoDetailScreenStateHolder(
             portraitSyncSnapshotCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
             portraitSyncSnapshotPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
             hasPendingPortraitSync = false
+            userRequestedFullscreen = false
+            if (isOrientationDrivenFullscreen) {
+                applyContinuousPlayerDecision(
+                    reduceContinuousPlayerTransition(
+                        phase = continuousPlayerPhase,
+                        event = ContinuousPlayerTransitionEvent.EnterPortraitFullscreen,
+                    )
+                )
+            }
             presentationState.setPortraitFullscreen(true)
         }
     }
@@ -4047,7 +4075,6 @@ internal fun VideoDetailScreenStateHolder(
                                 onPortraitFullscreen = {
                                     if (allowStandalonePortraitExperience) {
                                         if (!isPortraitFullscreen) {
-                                            if (isFullscreenMode) toggleFullscreen()
                                             enterPortraitFullscreen()
                                         } else {
                                             presentationState.setPortraitFullscreen(false)
@@ -4121,7 +4148,6 @@ internal fun VideoDetailScreenStateHolder(
                             onPortraitFullscreen = {
                                 if (allowStandalonePortraitExperience) {
                                     if (!isPortraitFullscreen) {
-                                        if (isFullscreenMode) toggleFullscreen()
                                         enterPortraitFullscreen()
                                     } else {
                                         presentationState.setPortraitFullscreen(false)
@@ -5786,24 +5812,23 @@ internal fun VideoDetailScreenStateHolder(
                 val hostActivity = context.findActivity()
                 val targetOrientation = resolvePortraitRotateTargetOrientation(
                     isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
-                    manualPortraitHoldActive = manualPortraitHoldActive,
                 )
-                if (
-                    hostActivity != null &&
-                    targetOrientation != null &&
-                    !isActivityInMultiWindowOrFloatingMode(
-                        activity = hostActivity,
-                        displayContext = displayContext,
+                // This is an explicit enter action, not a toggle of the old landscape
+                // phase (which may still be waiting for the portrait configuration).
+                userRequestedFullscreen = true
+                manualPortraitHoldActive = false
+                if (continuousFullscreenTransitionEnabled) {
+                    applyContinuousPlayerDecision(
+                        reduceContinuousPlayerTransition(
+                            phase = continuousPlayerPhase,
+                            event = ContinuousPlayerTransitionEvent.EnterFullscreen,
+                        )
                     )
-                ) {
-                    userRequestedFullscreen = true
-                    manualPortraitHoldActive = false
+                } else if (hostActivity != null && targetOrientation != null) {
                     hostActivity.applyPlayerRequestedOrientation(
                         requestedOrientation = targetOrientation,
                         displayContext = displayContext,
                     )
-                } else {
-                    toggleFullscreen()
                 }
             },
         )

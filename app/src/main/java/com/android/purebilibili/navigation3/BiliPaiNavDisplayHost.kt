@@ -85,9 +85,6 @@ import com.android.purebilibili.navigation3.predictiveback.miuixVideoCardNavTran
 import com.android.purebilibili.navigation3.predictiveback.MiuixVideoCardContentScale
 import com.android.purebilibili.navigation3.predictiveback.resolveMiuixVideoCardContentScaleForSourceLayout
 import com.android.purebilibili.navigation3.predictiveback.MiuixVideoCardTransitionProgress
-import com.android.purebilibili.navigation3.predictiveback.MiuixVideoCardCoveredShapeCache
-import com.android.purebilibili.navigation3.predictiveback.resolveMiuixVideoCardCoveredCornerPx
-import com.android.purebilibili.navigation3.predictiveback.resolveMiuixVideoCardCoveredScale
 import com.android.purebilibili.navigation3.predictiveback.resolveMiuixVideoCardBackingColor
 import com.android.purebilibili.navigation3.predictiveback.shouldUseMiuixPredictiveBackProgress
 import kotlinx.coroutines.flow.collect
@@ -374,7 +371,6 @@ internal fun BiliPaiNavDisplayHost(
     )
     val navCornerRadius = rememberDeviceCornerRadius(defaultRadius = 0.dp)
     val effectiveDeviceCornerDp = if (navCornerRadius > 0.dp) navCornerRadius else 32.dp
-    val hostCoveredShapeCache = remember { MiuixVideoCardCoveredShapeCache() }
     val videoCardTransition = remember(
         cardMorphAvailable,
         sourceMetadata.sourceBounds,
@@ -436,6 +432,7 @@ internal fun BiliPaiNavDisplayHost(
     DisposableEffect(cardMorphAvailable, videoCardClock, videoCardTransitionProgress) {
         videoCardClock.bindNavigationDriver(
             if (cardMorphAvailable) ({ videoCardTransitionProgress.effectsDepthOrNull() }) else null,
+            if (cardMorphAvailable) ({ videoCardTransitionProgress.maskDepthOrNull() }) else null,
         )
         onDispose { videoCardClock.bindNavigationDriver(null) }
     }
@@ -675,6 +672,7 @@ internal fun BiliPaiNavDisplayHost(
     ) {
         VideoCardTransitionBackgroundState(
             progressProvider = videoCardProgressProvider,
+            maskProgressProvider = { videoCardClock.maskProgress() },
             sourceRouteProvider = { sourceMetadata.sourceRoute },
             sourceKeyProvider = { sourceMetadata.sourceKey },
             phaseProvider = { videoCardClock.phase },
@@ -858,25 +856,7 @@ internal fun BiliPaiNavDisplayHost(
             isLightBackgroundProvider = { isLightBackground },
             realtimeBlurEnabledProvider = { effectiveVideoCardBlurEnabled },
             sourceBoundsProvider = { sourceMetadata.sourceBounds },
-            // A detached source has no navigation entry to transform. Apply exactly the same
-            // covered-page geometry to this fallback; inner snapshot effects remain unscaled.
-            modifier = Modifier.graphicsLayer {
-                val depth = videoCardProgressProvider()
-                val reducedMotion = transitionMotionTier == MotionTier.Reduced
-                val scale = resolveMiuixVideoCardCoveredScale(
-                    depth = depth,
-                    reducedMotion = reducedMotion,
-                )
-                scaleX = scale
-                scaleY = scale
-                transformOrigin = TransformOrigin.Center
-                clip = scale < 1f
-                shape = hostCoveredShapeCache.resolve(resolveMiuixVideoCardCoveredCornerPx(
-                    depth = depth,
-                    reducedMotion = reducedMotion,
-                    density = density,
-                ))
-            },
+            maskProgressProvider = { videoCardClock.maskProgress() },
         )
         @Suppress("UNCHECKED_CAST")
         NavDisplay(

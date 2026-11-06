@@ -162,6 +162,8 @@ internal fun shouldApplyVideoCardTransitionSnapshotOnRouteShell(
 
 internal data class VideoCardTransitionBackgroundFrame(
     val blurRadiusPx: Float,
+    /** 模糊混合强度（引擎 BLUR_ALPHA 通道语义）：恒定半径下经 layerAlpha 合成渐进模糊。 */
+    val blurAlpha: Float = 1f,
     val scrimAlpha: Float,
     val contentScale: Float,
     val useLightScrimTint: Boolean = false,
@@ -173,6 +175,8 @@ internal data class VideoCardTransitionBackgroundFrame(
 
 internal data class VideoCardTransitionBackgroundState(
     val progressProvider: () -> Float = { 0f },
+    /** 背景遮罩独立深度（引擎 maskAlpha 通道）；null 时跟随 [progressProvider]。 */
+    val maskProgressProvider: (() -> Float)? = null,
     val sourceRouteProvider: () -> String? = { null },
     val sourceKeyProvider: () -> String? = { null },
     val phaseProvider: () -> VideoCardTransitionBackgroundPhase = {
@@ -387,10 +391,16 @@ internal fun resolveVideoCardTransitionBackgroundFrame(
     /** 设备物理屏圆角（px）；0 表示未知，走 24dp 兜底。 */
     deviceCornerRadiusPx: Float = 0f,
     scaleReduction: Float = VIDEO_CARD_TRANSITION_BACKGROUND_SCALE_REDUCTION,
+    /** 背景遮罩独立深度（引擎 maskAlpha 通道）；缺省跟随 progress。 */
+    maskProgress: Float = progress,
 ): VideoCardTransitionBackgroundFrame {
     val clamped = progress.coerceIn(0f, 1f)
     val depthProgress = resolveVideoCardTransitionDepthProgress(
         progress = clamped,
+        phase = phase,
+    )
+    val maskDepthProgress = resolveVideoCardTransitionDepthProgress(
+        progress = maskProgress.coerceIn(0f, 1f),
         phase = phase,
     )
     val blurStrength = resolveVideoCardTransitionBlurStrength(depthProgress)
@@ -435,8 +445,9 @@ internal fun resolveVideoCardTransitionBackgroundFrame(
             maxRadiusPx = maxBlurRadiusPx,
             quantumPx = blurQuantumPx,
         ),
+        blurAlpha = blurStrength,
         scrimAlpha = resolveVideoCardTransitionBackgroundScrimAlpha(
-            depthProgress = depthProgress,
+            depthProgress = maskDepthProgress,
             phase = phase,
             motionTier = motionTier,
             isLightBackground = isLightBackground,
@@ -914,6 +925,7 @@ internal fun shouldLiveRecordVideoCardTransitionSnapshot(
 @Composable
 internal fun Modifier.videoCardTransitionBackgroundEffect(
     progressProvider: () -> Float,
+    maskProgressProvider: (() -> Float)? = null,
     phaseProvider: () -> VideoCardTransitionBackgroundPhase,
     exposureProvider: () -> VideoCardTransitionExposure,
     isGestureRestoreInProgressProvider: () -> Boolean = { false },
@@ -1108,6 +1120,8 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
             return@drawWithContent
         }
         val activeProgress = progressProvider()
+        // 遮罩走独立弹簧通道（引擎 maskAlpha）：压暗先于模糊到位。
+        val activeMaskProgress = maskProgressProvider?.invoke() ?: activeProgress
         val activeMotionTier = motionTierProvider()
         val snapshotBlurActive = shouldUseVideoCardTransitionSnapshotBlur(
             exposure = activeExposure,
@@ -1146,7 +1160,7 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
             drawContent()
             val isLight = isLightBackgroundProvider()
             val scrimAlpha = resolveVideoCardTransitionBackgroundScrimAlpha(
-                depthProgress = resolveVideoCardTransitionDepthProgress(activeProgress, activePhase),
+                depthProgress = resolveVideoCardTransitionDepthProgress(activeMaskProgress, activePhase),
                 phase = activePhase,
                 motionTier = activeMotionTier,
                 isLightBackground = isLight,
@@ -1167,6 +1181,7 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
             density = density,
             deviceCornerRadiusPx = deviceCornerRadiusPx,
             scaleReduction = scaleReductionProvider(),
+            maskProgress = activeMaskProgress,
         )
 
         // OPENING 首录；预测/返回 DL stale 时重录。
@@ -1239,6 +1254,17 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
             }
         }
 
+        // 恒定半径 + 合成混合，与 Host 层同语义：模糊只光栅化一次，
+        // 锐利原层垫底按混合强度叠合，不依赖 live 内容垫底。
+        val fixedBlurRadiusPx = if (frame.blurRadiusPx > 0.01f) {
+            resolveVideoCardTransitionMaxBlurRadiusPx(activeMotionTier, density)
+        } else {
+            0f
+        }
+        val blendPivot = resolveVideoCardTransitionBackgroundScalePivotOffset(
+            sourceBounds = sourceBoundsProvider(),
+            canvasSize = size,
+        )
         applyVideoCardTransitionSnapshotFrame(
             contentLayer = contentLayer,
             snapshotState = snapshotState,
@@ -1246,7 +1272,8 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
             canvasSize = size,
             sourceBounds = sourceBoundsProvider(),
             layerAlpha = frozenLayerAlpha,
-            rasterScale = effectiveSnapshotHandle.prepareEffectLayer(this, frame.blurRadiusPx),
+            rasterScale = effectiveSnapshotHandle.prepareEffectLayer(this, fixedBlurRadiusPx),
+            blurRadiusPxOverride = fixedBlurRadiusPx,
         )
         if (!liveHandoffActive && shouldDrawVideoCardTransitionScaleGapFill(frame.contentScale)) {
             drawRect(
@@ -1256,6 +1283,12 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
                 )
             )
         }
+        effectiveSnapshotHandle.drawSharpSourceAligned(
+            scope = this,
+            contentScale = frame.contentScale,
+            pivot = blendPivot,
+            alpha = frozenLayerAlpha * (1f - frame.blurAlpha),
+        )
         drawLayer(contentLayer)
         VideoCardTransitionDiagnostics.onSourceLayerDrawn()
 

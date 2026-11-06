@@ -55,7 +55,7 @@ class SpacePageHeaderAlignmentUiTest(private val gridColumns: Int) {
                 List(3) { page ->
                     LazyStaggeredGridState(
                         initialFirstVisibleItemIndex = if (page == 2) targetInitialIndex else 1,
-                        initialFirstVisibleItemScrollOffset = if (page == initialPage) 12 else 0,
+                        initialFirstVisibleItemOffset = if (page == initialPage) 12 else 0,
                     )
                 }
             }

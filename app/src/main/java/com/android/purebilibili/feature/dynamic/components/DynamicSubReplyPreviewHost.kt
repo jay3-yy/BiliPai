@@ -11,6 +11,7 @@ import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.data.model.response.ReplyItem
+import com.android.purebilibili.feature.dynamic.resolveDynamicThreadReactionIds
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
@@ -59,6 +60,13 @@ fun DynamicSubReplyPreviewHost(
         )
     }
 
+    val likedComments = remember(state.rootReply, state.items) {
+        resolveDynamicThreadReactionIds(state, action = 1)
+    }
+    val hatedComments = remember(state.rootReply, state.items) {
+        resolveDynamicThreadReactionIds(state, action = 2)
+    }
+
     SubReplySheet(
         state = state,
         emoteMap = emoteMap,
@@ -69,7 +77,9 @@ fun DynamicSubReplyPreviewHost(
         onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
         onReplyClick = onReplyClick,
         onCommentLike = onCommentLike,
+        likedComments = likedComments,
         onCommentHate = onCommentHate,
+        hatedComments = hatedComments,
         currentMid = currentMid,
         onDeleteComment = onDeleteComment,
         onImagePreview = { images, index, rect, textContent ->

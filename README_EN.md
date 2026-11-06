@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.7.9--beta.2%20%28553%29-007AFF?style=flat-square" alt="Source 0.7.9-beta.2 (553)" />
+<img src="https://img.shields.io/badge/Source-0.7.9--beta.3%20%28554%29-007AFF?style=flat-square" alt="Source 0.7.9-beta.3 (554)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -120,6 +120,8 @@ Share bugs and ideas through [Issues](https://github.com/jay3-yy/BiliPai/issues/
 - [Haze](https://github.com/chrisbanes/haze) — blur effects
 - [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) — overall app interaction reference
 - [Bili Pilot](https://github.com/siwei-yuan/bili-pilot) — CDN routing reference
+- [ITGSA SharedViewKit](https://gitee.com/itgsa_sharedviewkit/SharedViewDemo) — system-level video-card transition SDK and integration reference
+- Xiaomi HyperOS system motion — motion parameter reference
 
 See [third-party notices](THIRD_PARTY_NOTICES.md) for all other dependencies and sources.
 
@@ -131,6 +133,6 @@ This is an unofficial client and is not affiliated with BiliBili. Content belong
 
 <div align="center">
 
-<sub>Source version 0.7.9-beta.2 (553) · Updated 2026-11-05 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>Source version 0.7.9-beta.3 (554) · Updated 2026-11-06 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

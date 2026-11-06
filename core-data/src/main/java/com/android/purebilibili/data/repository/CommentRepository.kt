@@ -8,6 +8,7 @@ import com.android.purebilibili.core.network.BuvidManager
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiUtils
 import com.android.purebilibili.core.network.CoreDataLog
+import com.android.purebilibili.core.network.grpc.BiliGrpcException
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.model.response.*
 import kotlinx.coroutines.CancellationException
@@ -47,6 +48,53 @@ internal fun mergeCommentEmotePackages(
         }
     }
     return packages.values.toList()
+}
+
+/**
+ * A failed full thread does not establish that its requested child is unreadable.
+ * Only a first-page 12006 can recover that exact child; no REST pagination is introduced.
+ */
+internal suspend fun recoverUnavailableSubReplyTarget(
+    oid: Long,
+    type: Int,
+    rootId: Long,
+    paginationOffset: String?,
+    targetReplyId: Long,
+    threadResult: Result<ReplyData>,
+    readTarget: suspend () -> ReplyResponse,
+): Result<ReplyData> {
+    currentCoroutineContext().ensureActive()
+    val failure = threadResult.exceptionOrNull() ?: return threadResult
+    if (failure is CancellationException) throw failure
+    val grpcFailure = failure as? BiliGrpcException ?: return threadResult
+    if (grpcFailure.businessCode != 12006) return threadResult
+    if (!paginationOffset.isNullOrEmpty() || oid <= 0 || type <= 0 ||
+        rootId <= 0 || targetReplyId <= 0 || targetReplyId == rootId
+    ) return Result.failure(CommentReadException(12006).apply { initCause(failure) })
+
+    return try {
+        val response = readTarget()
+        currentCoroutineContext().ensureActive()
+        if (response.code != 0) {
+            Result.failure(CommentReadException(response.code, response.message))
+        } else {
+            val target = response.data?.root
+                ?: return Result.failure(IllegalStateException("目标回复响应缺少数据，请重试"))
+            require(target.rpid == targetReplyId && target.oid == oid &&
+                target.replyType == type && target.root == rootId
+            ) { "目标回复与当前楼层不匹配，请重试" }
+            Result.success(ReplyData(
+                replies = listOf(target),
+                root = null,
+                cursor = ReplyCursor(isEnd = true),
+                isTargetOnly = true,
+            ))
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 }
 
 /**
@@ -741,6 +789,26 @@ object CommentRepository {
         )
     }
 
+    private suspend fun readSortedSubCommentPage(
+        oid: Long,
+        type: Int,
+        rootId: Long,
+        mode: Int,
+        paginationOffset: String?,
+    ): Result<ReplyData> {
+        require(mode == CommentGrpcRepository.MODE_TIME || mode == CommentGrpcRepository.MODE_HOT)
+        BuvidManager.ensureBuvid3()
+        val result = CommentGrpcRepository.getDetailList(
+            oid = oid,
+            type = type,
+            root = rootId,
+            mode = mode,
+            nextOffset = paginationOffset,
+        )
+        currentCoroutineContext().ensureActive()
+        return result
+    }
+
     // PiliPlus uses DetailList mode + cursor for thread sorting. REST pn pages cannot be
     // mixed into this sequence: they do not preserve the selected server ranking.
     suspend fun getSortedSubCommentsForSubject(
@@ -749,21 +817,10 @@ object CommentRepository {
         rootId: Long,
         mode: Int,
         paginationOffset: String? = null,
-        targetReplyId: Long = 0L,
         supplementLocations: Boolean = true,
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
-            require(mode == CommentGrpcRepository.MODE_TIME || mode == CommentGrpcRepository.MODE_HOT)
-            BuvidManager.ensureBuvid3()
-            val result = CommentGrpcRepository.getDetailList(
-                oid = oid,
-                type = type,
-                root = rootId,
-                rpid = targetReplyId,
-                mode = mode,
-                nextOffset = paginationOffset
-            )
-            currentCoroutineContext().ensureActive()
+            val result = readSortedSubCommentPage(oid, type, rootId, mode, paginationOffset)
             val data = result.getOrNull() ?: return@withContext result
             Result.success(if (supplementLocations) supplementSortedSubReplyLocations(oid, type, data) else data)
         } catch (e: CancellationException) {
@@ -773,7 +830,7 @@ object CommentRepository {
         }
     }.map { filterGoodsRepliesIfEnabled(it) }
 
-    /** 手机详情校验分页完整性；TV 沿用原入口及默认行为。 */
+    /** 手机详情从楼层开头读取；targetReplyId 仅供完整楼层不可用时恢复目标回复。 */
     suspend fun getMobileSortedSubCommentsForSubject(
         oid: Long,
         type: Int,
@@ -784,20 +841,40 @@ object CommentRepository {
         supplementLocations: Boolean = true,
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
-            val result = getSortedSubCommentsForSubject(
-                oid, type, rootId, mode, paginationOffset, targetReplyId,
-                supplementLocations = false,
+            val threadResult = readSortedSubCommentPage(
+                oid = oid,
+                type = type,
+                rootId = rootId,
+                mode = mode,
+                paginationOffset = paginationOffset,
+            )
+            val recoveredResult = recoverUnavailableSubReplyTarget(
+                oid = oid,
+                type = type,
+                rootId = rootId,
+                paginationOffset = paginationOffset,
+                targetReplyId = targetReplyId,
+                threadResult = threadResult,
+                readTarget = { api.getReplyDetail(oid = oid, type = type, replyId = targetReplyId) },
             )
             currentCoroutineContext().ensureActive()
-            val data = result.getOrNull() ?: return@withContext result
+            val data = recoveredResult.getOrNull() ?: return@withContext recoveredResult
             requireAdvancingSubReplyCursor(data, paginationOffset)
-            Result.success(if (supplementLocations) supplementSortedSubReplyLocations(oid, type, data) else data)
+            val withLocations = if (supplementLocations && !data.isTargetOnly) {
+                supplementSortedSubReplyLocations(oid, type, data)
+            } else data
+            Result.success(withLocations)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }.map { filterGoodsRepliesIfEnabled(it) }
+    }.map { filterGoodsRepliesIfEnabled(it) }.let { result ->
+        val data = result.getOrNull()
+        if (data?.isTargetOnly == true && data.replies.isNullOrEmpty()) {
+            Result.failure(IllegalStateException("该回复已按过滤设置隐藏"))
+        } else result
+    }
 
     private suspend fun supplementSortedSubReplyLocations(
         oid: Long,

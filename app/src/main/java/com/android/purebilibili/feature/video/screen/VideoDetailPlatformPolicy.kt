@@ -528,7 +528,9 @@ internal fun resolveVideoDetailFullscreenMode(
     userRequestedFullscreen: Boolean,
     isInMultiWindowMode: Boolean,
     manualPortraitHoldActive: Boolean = false,
+    isPortraitFullscreen: Boolean = false,
 ): Boolean {
+    if (isPortraitFullscreen) return false
     if (!isOrientationDrivenFullscreen) return userRequestedFullscreen
     // In freeform/split-screen the user toggle is authoritative while Android applies
     // the requested orientation. Do not let stale landscape config re-enter fullscreen.
@@ -938,9 +940,9 @@ internal fun shouldEnterPortraitFullscreenOnFullscreenToggle(
 
 internal fun resolvePortraitRotateTargetOrientation(
     isOrientationDrivenFullscreen: Boolean,
-    manualPortraitHoldActive: Boolean = false
 ): Int? {
-    return if (isOrientationDrivenFullscreen && !manualPortraitHoldActive) {
+    // An explicit landscape button overrides the hold established by entering portrait.
+    return if (isOrientationDrivenFullscreen) {
         ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     } else {
         null

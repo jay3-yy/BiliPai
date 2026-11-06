@@ -30,7 +30,7 @@ class HomeStateProjectionTest {
         val received = mutableListOf<Pair<String, Int?>>()
         val job = launch { projected.collect { received += it } }
         runCurrent()
-        assertEquals(listOf("second" to 0), received)
+        assertEquals<List<Pair<String, Int?>>>(listOf("second" to 0), received)
         job.cancel()
         runCurrent()
         assertEquals(0, source.subscriptionCount.value)
@@ -67,8 +67,8 @@ class HomeStateProjectionTest {
         runCurrent()
         source.value = Content("account", 2)
         runCurrent()
-        assertEquals(listOf(1), first)
-        assertEquals(listOf(1, 2), second)
+        assertEquals<List<Int?>>(listOf(1), first)
+        assertEquals<List<Int?>>(listOf(1, 2), second)
         assertEquals(1, source.subscriptionCount.value)
         secondJob.cancel()
         runCurrent()
@@ -77,7 +77,7 @@ class HomeStateProjectionTest {
         val resumed = mutableListOf<Int?>()
         val resumedJob = launch { projected.collect { resumed += it } }
         runCurrent()
-        assertEquals(listOf(9), resumed)
+        assertEquals<List<Int?>>(listOf(9), resumed)
         resumedJob.cancel()
     }
 }
