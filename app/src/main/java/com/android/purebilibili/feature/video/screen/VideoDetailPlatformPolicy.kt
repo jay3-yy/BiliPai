@@ -748,11 +748,9 @@ private fun resolveStableOrientationWhenAutoRotateDisabled(
     ) {
         return requestedOrientation
     }
-    // SENSOR_LANDSCAPE still follows gravity and can oscillate between both landscape sides
-    // while the user is lying down. With app auto-rotate disabled, preserve an exact landscape
-    // side if one is already active; otherwise enter the platform's fixed landscape orientation.
+    // 无精确侧时交给传感器选边，避免固定 LANDSCAPE 把方向翻到另一侧。
     return resolveCurrentExactLandscapeOrientation(currentRequestedOrientation)
-        ?: ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        ?: ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 }
 
 internal fun resolvePhoneAutoRotateRequestedOrientation(
