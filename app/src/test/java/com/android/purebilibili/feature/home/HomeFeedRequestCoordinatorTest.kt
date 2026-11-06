@@ -21,6 +21,33 @@ class HomeFeedRequestCoordinatorTest {
     private val following = homeFeedRequestTarget(HomeCategory.FOLLOW, PopularSubCategory.COMPREHENSIVE)
 
     @Test
+    fun memoryRecoveryWaitsForCancelledStartupCleanupBeforePublishingSavedContent() = runTest {
+        val coordinator = HomeFeedRequestCoordinator()
+        val cleanup = CompletableDeferred<Unit>()
+        val events = mutableListOf<String>()
+        coordinator.start(recommend, HomeFeedRequestKind.INITIAL, { block -> launch { block() } }) {
+            try { awaitCancellation() } finally {
+                withContext(NonCancellable) { cleanup.await(); events += "startup cleaned" }
+            }
+        }
+        runCurrent()
+        // 新请求已替换旧请求的登记项，旧请求仍在取消清理中。
+        coordinator.start(recommend, HomeFeedRequestKind.INITIAL, { block -> launch { block() } }) {
+            error("replaced request must be cancelled before recovery")
+        }
+        runCurrent()
+        val recovery = launch {
+            coordinator.cancelAndJoinForMemoryRecovery()
+            events += "saved content published"
+        }
+        runCurrent()
+        assertFalse(recovery.isCompleted)
+        cleanup.complete(Unit)
+        recovery.join()
+        assertEquals(listOf("startup cleaned", "saved content published"), events)
+    }
+
+    @Test
     fun refreshWaitsForInitialCancellationCleanupBeforeSettingItsLoadingState() = runTest {
         val coordinator = HomeFeedRequestCoordinator()
         val cleanup = CompletableDeferred<Unit>()

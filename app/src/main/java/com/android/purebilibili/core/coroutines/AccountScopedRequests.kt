@@ -9,6 +9,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 
@@ -19,6 +22,7 @@ internal class AccountScopedRequests(
 ) {
     var identity: AccountSessionIdentity = identities.value
         private set
+    private val observedIdentity = MutableStateFlow(identity)
 
     private var requests = newScope()
 
@@ -28,6 +32,11 @@ internal class AccountScopedRequests(
 
     fun isCurrent(requestedIdentity: AccountSessionIdentity = identity): Boolean =
         requestedIdentity == identities.value
+
+    /** 等待旧请求与账号重置完成，再允许恢复本地数据。 */
+    suspend fun awaitCurrentIdentity(): AccountSessionIdentity =
+        combine(observedIdentity, identities) { observed, current -> observed to current }
+            .first { (observed, current) -> observed == current }.first
 
     fun launch(
         context: CoroutineContext = EmptyCoroutineContext,
@@ -52,6 +61,7 @@ internal class AccountScopedRequests(
             identity = next
             requests = newScope()
             onAccountChanged()
+            observedIdentity.value = identity
         }
     }
 }

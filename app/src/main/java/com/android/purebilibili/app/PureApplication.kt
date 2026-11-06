@@ -98,6 +98,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
 
     //  保存 ImageLoader 引用以便在 onTrimMemory 中使用
     private var _imageLoader: ImageLoader? = null
+    private var fairMemoryTrimReceiver: android.content.BroadcastReceiver? = null
     private var launcherIconUiModeSnapshot: Int? = null
 
     private val backgroundImageTrimHandler by lazy { Handler(Looper.getMainLooper()) }
@@ -320,6 +321,40 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     }
 
     private fun initializeNormalRuntime() {
+        fairMemoryTrimReceiver?.let { unregisterReceiver(it) }
+        fairMemoryTrimReceiver = com.android.purebilibili.core.lifecycle.registerFairMemoryReceiver(
+            context = this,
+            scope = AppScope.ioScope,
+            trim = {
+                kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+                    _imageLoader?.memoryCache?.clear()
+                }
+                releaseRebuildableMemoryCaches()
+                // 预警只清可重建缓存，不重置播放器、音频会话、画中画或活跃网络连接。
+            },
+            checkpoint = {
+                val (navigation, playback, accountMid) = kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+                    val playback = com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
+                        ?.captureForMemoryTermination()
+                    val episodeId = com.android.purebilibili.feature.video.player.PlaylistManager.getCurrentItem()
+                        ?.takeIf { it.bvid == playback?.bvid && it.cid == playback?.cid }?.epId
+                    Triple(
+                        com.android.purebilibili.core.lifecycle.FairMemoryNavigationRegistry.capture()?.let {
+                            com.android.purebilibili.core.lifecycle.withFairMemoryPlaybackPosition(it, playback, episodeId)
+                        },
+                        playback,
+                        TokenManager.midCache ?: 0L,
+                    )
+                }
+                com.android.purebilibili.feature.video.player.PlaylistManager.checkpointForMemoryTermination()
+                if (playback != null) {
+                    com.android.purebilibili.core.store.AudioPlaybackProgressStore.save(this, playback)
+                }
+                com.android.purebilibili.core.lifecycle.FairMemoryRecoveryStore.save(
+                    this, navigation, accountMid, NetworkModule.playbackAccount()?.mid ?: accountMid,
+                )
+            },
+        )
         AppScope.ioScope.launch {
             com.android.purebilibili.feature.audio.player.SystemMediaPreferences.observe(this@PureApplication)
         }
@@ -605,12 +640,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         // （BACKGROUND / MODERATE / COMPLETE）或前台临界（RUNNING_CRITICAL）时执行。
         // 壁纸调色板与封面代表色表体积可忽略，重建代价却是「解码 + Palette 聚类」，故不清理。
         if (plan.releaseDerivedCaches) {
-            com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
-            com.android.purebilibili.feature.home.components.cards.VideoCardCoverColorStore
-                .trimToSize(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES)
-            com.android.purebilibili.core.cache.PlayUrlCache.clear()
-            com.android.purebilibili.data.repository.VideoRepository.clearVideoDetailCaches()
-            com.android.purebilibili.data.repository.VideoRepository.clearSubtitleCueCache()
+            releaseRebuildableMemoryCaches()
         }
 
         // 释放 OkHttp 空闲连接与 socket 缓冲；没有活跃的后台音频播放时才做。
@@ -624,6 +654,15 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         }
     }
     
+    private fun releaseRebuildableMemoryCaches() {
+        com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
+        com.android.purebilibili.feature.home.components.cards.VideoCardCoverColorStore
+            .trimToSize(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES)
+        com.android.purebilibili.core.cache.PlayUrlCache.clear()
+        com.android.purebilibili.data.repository.VideoRepository.clearVideoDetailCaches()
+        com.android.purebilibili.data.repository.VideoRepository.clearSubtitleCueCache()
+    }
+
     override fun onLowMemory() {
         super.onLowMemory()
         if (com.android.purebilibili.feature.message.notification.isLightweightServiceProcess(this)) return

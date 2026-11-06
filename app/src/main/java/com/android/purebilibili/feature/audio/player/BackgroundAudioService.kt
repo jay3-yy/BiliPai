@@ -63,6 +63,8 @@ import kotlinx.coroutines.withContext
 
 /** Owns only an audio renderer, a bounded transport queue and the system media session. */
 class BackgroundAudioService : MediaLibraryService() {
+    private var fairMemoryTrimReceiver: android.content.BroadcastReceiver? = null
+    private var memoryTerminationCheckpointed = false
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var player: ExoPlayer
     private lateinit var session: MediaLibrarySession
@@ -90,6 +92,20 @@ class BackgroundAudioService : MediaLibraryService() {
 
     override fun onCreate() {
         super.onCreate()
+        fairMemoryTrimReceiver = com.android.purebilibili.core.lifecycle.registerFairMemoryReceiver(
+            context = this,
+            scope = scope,
+            trim = {
+                // 仅清本进程可重建的详情缓存，保持当前曲目、队列和音频缓冲连续。
+                com.android.purebilibili.data.repository.SharedContentRepository.clearDetailCache()
+            },
+            checkpoint = {
+                withContext(Dispatchers.Main.immediate) {
+                    memoryTerminationCheckpointed = true
+                    persist()
+                }
+            },
+        )
         val http = OkHttpDataSource.Factory(NetworkModule.okHttpClient).setDefaultRequestProperties(
             mapOf("Referer" to "https://www.bilibili.com/")
         )
@@ -227,6 +243,7 @@ class BackgroundAudioService : MediaLibraryService() {
         val reportHistory = SystemMediaPreferences.reportHistory(this)
         TokenManager.refreshServiceSession(this)
         check(request.accountMid == TokenManager.midCache && ticket == libraryRequestGeneration && !nativeReleased)
+        memoryTerminationCheckpointed = false
         val queue = request.queue.toMutableList().also { it[request.index] = selected.copy(cid = cid) }
         snapshot = request.copy(queue = queue, audioUrl = "", reportHistory = reportHistory)
         committed = true
@@ -406,6 +423,7 @@ class BackgroundAudioService : MediaLibraryService() {
         if (committed) persist()
         TokenManager.refreshServiceSession(this)
         check(request.accountMid == TokenManager.midCache)
+        memoryTerminationCheckpointed = false
         generation++
         nextLoad?.cancel()
         errorRecovery?.cancel()
@@ -571,6 +589,9 @@ class BackgroundAudioService : MediaLibraryService() {
             if (committed) prefetchNext()
         }
         override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
+                memoryTerminationCheckpointed = false
+            }
             if (committed && playWhenReady && player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) {
                 player.prepare()
             }
@@ -646,7 +667,9 @@ class BackgroundAudioService : MediaLibraryService() {
 
     private suspend fun persist(): Unit = persistenceMutex.withLock {
         if (nativeReleased) return@withLock
-        val state = currentSnapshot() ?: return@withLock
+        val state = currentSnapshot()?.let {
+            if (memoryTerminationCheckpointed) it.copy(playing = false) else it
+        } ?: return@withLock
         if (committed && player.playbackState != Player.STATE_IDLE) {
             state.current?.let { item ->
                 com.android.purebilibili.core.store.AudioPlaybackProgressStore.save(
@@ -659,6 +682,7 @@ class BackgroundAudioService : MediaLibraryService() {
             }
         }
         stateStore.edit {
+            // 终止后的恢复由用户重新进入触发，避免 START_STICKY 自动重播并再次占用资源。
             it[snapshotKey] = backgroundAudioJson.encodeToString(BackgroundAudioSnapshot.serializer(), state.forPersistence())
             if (committed) it[stringPreferencesKey("library_snapshot")] = backgroundAudioJson.encodeToString(
                 BackgroundAudioSnapshot.serializer(), state.forPersistence().copy(playing = false, audioUrl = ""))
@@ -727,6 +751,8 @@ class BackgroundAudioService : MediaLibraryService() {
     }
 
     override fun onDestroy() {
+        fairMemoryTrimReceiver?.let { unregisterReceiver(it) }
+        fairMemoryTrimReceiver = null
         if (!nativeReleased && committed && player.playbackState != Player.STATE_IDLE) {
             val state = currentSnapshot()
             val item = state?.current

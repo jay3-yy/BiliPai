@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.unit.Density
 import com.android.purebilibili.core.ui.rememberHomeStaggeredGridState
 
 /** Each layout retains its own saved viewport; an index is never transferred between layouts. */
@@ -36,6 +37,27 @@ internal class HomeFeedGridState(
         regular.layoutInfo.visibleItemsInfo.any { predicate(it.key) }
     } else {
         waterfall.layoutInfo.visibleItemsInfo.any { predicate(it.key) }
+    }
+
+    val viewportWidthPx: Int
+        get() = if (regularLayout) regular.layoutInfo.viewportSize.width else waterfall.layoutInfo.viewportSize.width
+
+    /** 仅在终止快照采样时调用，不为滚动新增逐帧收集。 */
+    fun captureMemoryAnchor(density: Density, columns: Int): HomeFeedScrollAnchor? {
+        val items = if (regularLayout) {
+            regular.layoutInfo.visibleItemsInfo.map { Triple(it.key, it.offset.y, it.offset.x) }
+        } else waterfall.layoutInfo.visibleItemsInfo.map { Triple(it.key, it.offset.y, it.offset.x) }
+        val first = items.filter { (it.first as? String)?.startsWith("home_video_") == true }
+            .minWithOrNull(compareBy({ it.second }, { it.third })) ?: return null
+        return HomeFeedScrollAnchor(
+            key = first.first as String,
+            scrollOffsetDp = -first.second / density.density,
+            regularLayout = regularLayout,
+            viewportWidthPx = viewportWidthPx,
+            columns = columns,
+            density = density.density,
+            fontScale = density.fontScale,
+        )
     }
 
     suspend fun scrollToItem(index: Int, scrollOffset: Int = 0) {

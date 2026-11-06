@@ -86,6 +86,8 @@ import com.android.purebilibili.feature.common.ListLoadError
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.yield
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import androidx.compose.ui.platform.LocalDensity
 
 internal fun resolveHomeCategoryVideoGridKey(
     video: VideoItem,
@@ -184,6 +186,8 @@ internal fun shouldRequestHomeCategoryLoadMore(
 internal fun HomeCategoryPageContent(
     category: HomeCategory,
     categoryState: CategoryContent,
+    memoryRecovery: HomeFeedMemorySnapshot? = null,
+    onMemoryRecoveryConsumed: (String, Boolean) -> Unit = { _, _ -> },
     isActive: Boolean,
     /** 页面是否在屏幕上。图片加载只看这个，不看数据同步是否就绪。 */
     pageOnScreen: Boolean = isActive,
@@ -437,6 +441,34 @@ internal fun HomeCategoryPageContent(
         else if (oldContentAnchorBvid != null) {
             oldContentAnchorIndex?.takeIf { it > 0 }
         } else oldContentStartIndex?.takeIf { it > 0 && it < visibleGridVideos.size }
+    }
+    val memoryRecoveryDensity = LocalDensity.current
+    val memoryHeaderItemCount =
+        (if (gridState.regularLayout && contentPadding.calculateTopPadding() > cardLayout.verticalItemSpacingDp.dp) 1 else 0) +
+        (if (categoryState.refreshError != null) 1 else 0) +
+        (if (category == HomeCategory.RECOMMEND && showHeroCarousel) 1 else 0) +
+        (if (category == HomeCategory.RECOMMEND && todayWatchEnabled) 1 else 0) +
+        (if (category == HomeCategory.POPULAR) 1 else 0) +
+        (if (category == HomeCategory.POPULAR && popularSubCategory == PopularSubCategory.WEEKLY) 1 else 0)
+    LaunchedEffect(memoryRecovery?.id, videoGridKeys, memoryHeaderItemCount, gridState, pageOnScreen) {
+        val saved = memoryRecovery ?: return@LaunchedEffect
+        if (!pageOnScreen || saved.category != category.name ||
+            (category == HomeCategory.POPULAR && saved.popularSubCategory != popularSubCategory.name)
+        ) return@LaunchedEffect
+        val anchor = saved.anchor
+        var located = false
+        if (anchor != null) {
+            val target = resolveHomeMemoryAnchorIndex(anchor, videoGridKeys, memoryHeaderItemCount, alignedDividerIndex)
+            if (target != null) {
+                snapshotFlow { gridState.totalItemsCount }.first { it > target }
+                val offset = resolveHomeMemoryScrollOffsetPx(
+                    anchor, gridState.regularLayout, gridState.viewportWidthPx, gridColumns, memoryRecoveryDensity,
+                )
+                gridState.scrollToItem(target, offset)
+                located = true
+            } else gridState.scrollToItem(0)
+        }
+        onMemoryRecoveryConsumed(saved.id, located)
     }
     // Both layouts use one lazy item per video; headers never enter this mapping.
     val videoRangesByLazyKey = remember(videoGridKeys) {

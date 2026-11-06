@@ -605,6 +605,14 @@ fun AppNavigation(
     // 缓存缺失时等待 DataStore 首值；先用 false 建栈会让恢复备份后的本次启动进错首页。
     val launchToPortraitFeedOnStartupAtInit = resolvedPortraitStartupRoute ?: return
 
+    val memoryRecovery = com.android.purebilibili.navigation3.rememberFairMemoryNavigationRecovery(
+        context = context,
+        explicitEntry = agreementRequired || pendingVideoId != null || pendingShortcutRoute != null ||
+            pendingNavigationRoute != null || initialSearchKeyword != null,
+        expectedVideoBvid = (initialVideoRoute?.let(::legacyRouteToBiliPaiNavKey) as? BiliPaiNavKey.VideoDetail)?.bvid,
+    ) ?: return
+    val recoveredNavigation = memoryRecovery.snapshot?.navigation
+
     val videoSharedTransitionSpeedSettings = remember { VideoSharedTransitionSpeedSettings() }
     val windowSizeClass = LocalWindowSizeClass.current
     val appWindowAdaptiveInfo = LocalAppWindowAdaptiveInfo.current
@@ -646,8 +654,14 @@ fun AppNavigation(
             startDestination,
             launchToPortraitFeedOnStartupAtInit,
             initialVideoRoute,
+            recoveredNavigation,
         ) {
-            if (initialVideoRoute != null) listOf(legacyRouteToBiliPaiNavKey(initialVideoRoute))
+            if (recoveredNavigation != null) {
+                val savedStack = recoveredNavigation.backStack
+                if (initialVideoRoute == null && savedStack.first() != BiliPaiNavKey.MainHost) {
+                    listOf(BiliPaiNavKey.MainHost) + savedStack
+                } else savedStack
+            } else if (initialVideoRoute != null) listOf(legacyRouteToBiliPaiNavKey(initialVideoRoute))
             else resolveInitialBiliPaiBackStack(
                     firstRoute = startDestination,
                     onboardingRequired = agreementRequired,
@@ -655,10 +669,14 @@ fun AppNavigation(
                 )
         }
         @Suppress("UNCHECKED_CAST")
-        val navigation3BackStack = rememberNavBackStack<BiliPaiNavKey>(
-            *initialNavigationBackStack.toTypedArray()
-        ) as androidx.compose.runtime.snapshots.SnapshotStateList<BiliPaiNavKey>
-        val navigation3SaveableStateHolder = rememberSaveableStateHolder()
+        val navigation3BackStack = key(memoryRecovery.snapshot?.savedAtMs) {
+            rememberNavBackStack<BiliPaiNavKey>(
+                *initialNavigationBackStack.toTypedArray()
+            ) as androidx.compose.runtime.snapshots.SnapshotStateList<BiliPaiNavKey>
+        }
+        val navigation3SaveableStateHolder = key(memoryRecovery.snapshot?.savedAtMs) {
+            rememberSaveableStateHolder()
+        }
         fun replaceNavigation3BackStack(keys: List<BiliPaiNavKey>) {
             val replacementStack = keys.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
             if (navigation3BackStack == replacementStack) return
@@ -806,12 +824,28 @@ fun AppNavigation(
         val visibleBottomBarRoutes = remember(visibleBottomBarItems) {
             visibleBottomBarItems.map { it.route }.toSet()
         }
-        val bottomPagerState = rememberPagerState(
-            pageCount = { visibleBottomBarItems.size.coerceAtLeast(1) }
-        )
+        val bottomPagerState = key(memoryRecovery.snapshot?.savedAtMs) {
+            rememberPagerState(
+                initialPage = visibleBottomBarItems.indexOfFirst { it.route == recoveredNavigation?.bottomRoute }
+                    .coerceAtLeast(0),
+                pageCount = { visibleBottomBarItems.size.coerceAtLeast(1) },
+            )
+        }
+        com.android.purebilibili.navigation3.RegisterFairMemoryNavigationState(
+            activity = hostActivity,
+            backStack = navigation3BackStack,
+            bottomRoute = visibleBottomBarItems.getOrNull(bottomPagerState.settledPage)?.route.orEmpty(),
+        ) {
+            com.android.purebilibili.core.lifecycle.FairMemoryNavigationState(
+                backStack = navigation3BackStack.toList(),
+                bottomRoute = visibleBottomBarItems.getOrNull(bottomPagerState.settledPage)?.route.orEmpty(),
+            )
+        }
         val bottomPagerDragged = bottomPagerState.interactionSource.collectIsDraggedAsState()
         val bottomPagerDraggingProvider = remember(bottomPagerDragged) { { bottomPagerDragged.value } }
-        val bottomPagerSaveableStateHolder = rememberSaveableStateHolder()
+        val bottomPagerSaveableStateHolder = key(memoryRecovery.snapshot?.savedAtMs) {
+            rememberSaveableStateHolder()
+        }
         val mainBottomPagerState = rememberMainBottomPagerState(bottomPagerState)
         // 只在同一进程的 Activity 重建中保留；跨进程恢复时由 Saver 清空预热记录。
         var bottomPagerContentReady by rememberSaveable { mutableStateOf(false) }

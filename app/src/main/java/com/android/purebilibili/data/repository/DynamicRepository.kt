@@ -419,6 +419,9 @@ object DynamicRepository {
         return feedPagination.hasMore(scope, type)
     }
 
+    internal fun snapshotPagination(scope: DynamicFeedScope, type: String = "all"): DynamicPaginationState =
+        feedPagination.snapshot(scope, type)
+
     fun syncPaginationAfterRefresh(
         scope: DynamicFeedScope,
         type: String = "all",

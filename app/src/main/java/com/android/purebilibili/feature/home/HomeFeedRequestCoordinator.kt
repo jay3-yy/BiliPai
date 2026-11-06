@@ -58,6 +58,15 @@ internal class HomeFeedRequestCoordinator {
         initial = null
     }
 
+    /** 恢复已持久化列表前，等待启动请求的取消清理完成，避免 finally 覆盖新列表。 */
+    suspend fun cancelAndJoinForMemoryRecovery() {
+        val jobs = active.values.map { it.job }.distinct()
+        jobs.forEach { it.cancel() }
+        jobs.forEach { it.join() }
+        // 被后续请求替换的旧 Job 已不在 active 中，但仍可能持锁执行取消清理。
+        ownership.values.toList().forEach { mutex -> mutex.withLock { } }
+    }
+
     private class Request(val kind: HomeFeedRequestKind) {
         lateinit var job: Job
     }

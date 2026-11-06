@@ -5,6 +5,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -16,6 +17,33 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AccountScopedRequestsTest {
+    @Test
+    fun `local recovery waits for the new account reset to finish`() = runTest {
+        val identities = MutableStateFlow(AccountSessionIdentity(101L, 1L))
+        val requests = AccountScopedRequests(backgroundScope, identities)
+        val cleanup = CompletableDeferred<Unit>()
+        val events = mutableListOf<String>()
+        requests.observe { events += "account reset" }
+        requests.launch {
+            try { awaitCancellation() } finally {
+                withContext(NonCancellable) { cleanup.await() }
+            }
+        }
+        runCurrent()
+        val next = AccountSessionIdentity(202L, 2L)
+        identities.value = next
+        val recovery = async {
+            val identity = requests.awaitCurrentIdentity()
+            events += "local data restored"
+            identity
+        }
+        runCurrent()
+        assertFalse(recovery.isCompleted)
+        cleanup.complete(Unit)
+        assertEquals(next, recovery.await())
+        assertEquals(listOf("account reset", "local data restored"), events)
+    }
+
     @Test
     fun `switch clears old data after pending request rollback finishes`() = runTest {
         val identities = MutableStateFlow(AccountSessionIdentity(101L, 1L))

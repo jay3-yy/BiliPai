@@ -12,6 +12,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -328,7 +330,11 @@ object PlaylistManager {
 
     // 应用级单例负责串行落盘；合并尚未写入的中间队列，主线程只提交不可变快照。
     private val persistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val persistenceRequests = Channel<PlaylistSnapshot>(Channel.CONFLATED)
+    private data class PersistenceRequest(val generation: Long, val snapshot: PlaylistSnapshot)
+    private val persistenceRequests = Channel<PersistenceRequest>(Channel.CONFLATED)
+    private val persistenceMutex = Mutex()
+    private var persistenceGeneration = 0L
+    private var persistedGeneration = -1L
     private var persistenceJob: Job? = null
 
     fun init(context: Context) {
@@ -337,11 +343,9 @@ object PlaylistManager {
         appContext = applicationContext
         restoreState()
         persistenceJob = persistenceScope.launch {
-            for (snapshot in persistenceRequests) {
+            for (request in persistenceRequests) {
                 try {
-                    val raw = json.encodeToString(snapshot)
-                    applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                        .edit().putString(KEY_SNAPSHOT, raw).apply()
+                    writeSnapshot(applicationContext, request)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -915,7 +919,10 @@ object PlaylistManager {
 
     private fun persistState() {
         if (appContext == null) return
-        persistenceRequests.trySend(PlaylistSnapshot(
+        persistenceRequests.trySend(capturePersistenceRequest())
+    }
+
+    private fun capturePersistenceRequest() = PersistenceRequest(++persistenceGeneration, PlaylistSnapshot(
             playlist = _playlist.value,
             currentIndex = _currentIndex.value,
             playMode = transportPreferences.saved.playMode,
@@ -925,6 +932,21 @@ object PlaylistManager {
             nextOverrideIndex = nextOverrideIndex,
             userEdited = userEdited,
         ))
+
+    private suspend fun writeSnapshot(context: Context, request: PersistenceRequest) = persistenceMutex.withLock {
+        // 终止快照可能先于旧队列请求完成；旧请求不得覆盖已经确认落盘的新状态。
+        if (request.generation <= persistedGeneration) return@withLock
+        val raw = json.encodeToString(request.snapshot)
+        check(context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(KEY_SNAPSHOT, raw).commit()) { "Playlist checkpoint could not be committed" }
+        persistedGeneration = request.generation
+    }
+
+    /** 采样在主线程，写入串行等待；返回后队列已落盘，失败直接交给终止回执处理。 */
+    internal suspend fun checkpointForMemoryTermination() {
+        val context = appContext ?: return
+        val request = withContext(Dispatchers.Main.immediate) { capturePersistenceRequest() }
+        withContext(Dispatchers.IO) { writeSnapshot(context, request) }
     }
 
     private fun restoreState() {

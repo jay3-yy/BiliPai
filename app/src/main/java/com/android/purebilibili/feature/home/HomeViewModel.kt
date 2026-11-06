@@ -112,6 +112,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     )
     val uiState = _uiState.asStateFlow()
+    private val _pendingMemoryRecovery = MutableStateFlow<HomeFeedMemorySnapshot?>(null)
+    internal val pendingMemoryRecovery = _pendingMemoryRecovery.asStateFlow()
     val currentCategory = homeStateFlow { it.currentCategory }
     val displayedTabIndex = homeStateFlow { it.displayedTabIndex }
     val popularSubCategory = homeStateFlow { it.popularSubCategory }
@@ -156,6 +158,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private var refreshIdx = 0
+    private var committedRecommendRefreshIdx = 0
+    private var committedFollowPagination: com.android.purebilibili.data.repository.DynamicPaginationState? = null
     private val feedRequests = HomeFeedRequestCoordinator()
     private val followFeedSource = HomeFollowFeedSource()
     /** 当前网格列数，由 UI 同步过来，用来决定每次请求多少条。 */
@@ -203,6 +207,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isRefreshing.value = false
         _undoSnapshot = null
         refreshIdx = 0
+        committedRecommendRefreshIdx = 0
+        committedFollowPagination = null
+        _pendingMemoryRecovery.value = null
         todayWatchHistory.clear()
         expandedCandidateCache = null
         todayWatchBuildGeneration += 1L
@@ -656,6 +663,90 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } else current.liveSubCategory
         _uiState.value = current.selectHomeCategory(category).copy(liveSubCategory = liveSubCategory)
         startCategoryLoad(category, current.popularSubCategory)
+    }
+
+    /** 只在内存终止通知采样；分页标记始终对应已发布的列表。 */
+    internal fun captureMemorySnapshot(
+        category: HomeCategory,
+        subCategory: PopularSubCategory,
+        anchor: HomeFeedScrollAnchor?,
+        headerOffsetDp: Float,
+        tabsCollapsed: Boolean,
+    ): HomeFeedMemorySnapshot? {
+        if (!supportsHomeFeedMemoryRecovery(category)) return null
+        val content = _uiState.value.homeCategoryContent(category, subCategory)
+        if (content.videos.isEmpty()) return null
+        val follow = committedFollowPagination.takeIf { category == HomeCategory.FOLLOW }
+        if (category == HomeCategory.FOLLOW && follow == null) return null
+        return HomeFeedMemorySnapshot(
+            id = java.util.UUID.randomUUID().toString(),
+            category = category.name,
+            popularSubCategory = subCategory.name,
+            videos = content.videos,
+            pageIndex = content.pageIndex,
+            hasMore = content.hasMore,
+            recommendRequestIndex = committedRecommendRefreshIdx,
+            followOffset = follow?.offset,
+            followBaseline = follow?.updateBaseline,
+            anchor = anchor,
+            headerOffsetDp = headerOffsetDp,
+            tabsCollapsed = tabsCollapsed,
+        )
+    }
+
+    internal suspend fun restoreMemorySnapshot(snapshot: HomeFeedMemorySnapshot) {
+        val category = HomeCategory.entries.firstOrNull { it.name == snapshot.category } ?: return
+        val subCategory = PopularSubCategory.entries.firstOrNull { it.name == snapshot.popularSubCategory } ?: return
+        if (!supportsHomeFeedMemoryRecovery(category) || snapshot.videos.isEmpty()) return
+        if (category == HomeCategory.FOLLOW && snapshot.followOffset == null) return
+        val recoveryAccountMid = TokenManager.midCache ?: 0L
+        val identity = accountRequests.awaitCurrentIdentity()
+        if ((identity.mid ?: 0L) != recoveryAccountMid) return
+        feedRequests.cancelAndJoinForMemoryRecovery()
+        if (!accountRequests.isCurrent(identity)) return
+        var blocked: Set<Long>
+        var videos: kotlinx.collections.immutable.ImmutableList<VideoItem>
+        do {
+            blocked = blockedMids
+            videos = withContext(Dispatchers.Default) {
+                PluginManager.filterFeedItems(
+                    filterHomeFeedbackVideos(snapshot.videos.filter { it.owner.mid !in blocked }),
+                    feedKind = category.toFeedKind(subCategory),
+                ).toImmutableList()
+            }
+            if (!accountRequests.isCurrent(identity)) return
+        } while (blockedMids !== blocked)
+        if (category == HomeCategory.FOLLOW) {
+            com.android.purebilibili.data.repository.DynamicRepository.syncPaginationAfterRefresh(
+                scope = com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW,
+                type = "video",
+                offset = requireNotNull(snapshot.followOffset),
+                updateBaseline = snapshot.followBaseline.orEmpty(),
+                hasMore = snapshot.hasMore,
+            )
+            committedFollowPagination = com.android.purebilibili.data.repository.DynamicRepository.snapshotPagination(
+                com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW, "video",
+            )
+        }
+        refreshIdx = snapshot.recommendRequestIndex
+        committedRecommendRefreshIdx = snapshot.recommendRequestIndex
+        val content = CategoryContent(videos = videos, pageIndex = snapshot.pageIndex, hasMore = snapshot.hasMore)
+        _uiState.update { current ->
+            val updated = if (category == HomeCategory.POPULAR) {
+                current.updateHomePopularContent(subCategory) { content }
+            } else current.updateHomeCategoryContent(category) { content }
+            updated.copy(popularSubCategory = subCategory).selectHomeCategory(category).copy(
+                refreshNewItemsCount = null,
+                recommendOldContentAnchorBvid = null,
+                recommendOldContentStartIndex = null,
+            )
+        }
+        _pendingMemoryRecovery.value = snapshot.copy(videos = emptyList())
+        if (videos.isEmpty()) startCategoryLoad(category, subCategory, force = true)
+    }
+
+    internal fun consumeMemoryRecovery(id: String) {
+        _pendingMemoryRecovery.update { if (it?.id == id) null else it }
     }
 
     //  [新增] 更新显示的标签页索引（用于特殊分类，不改变内容只更新标签高亮）
@@ -1422,6 +1513,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (useIncrementalRecommendRefresh && isManualRefresh) {
                     refreshNewItemsCount = addedCount
                 }
+                if (currentCategory == HomeCategory.RECOMMEND) committedRecommendRefreshIdx = refreshIdx
             } else {
                  //  全被过滤掉了 OR 空列表
                  val updateContent: (CategoryContent) -> CategoryContent = { oldState ->
@@ -1559,6 +1651,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 hasMore = hasMore,
             )
         }
+        committedFollowPagination = com.android.purebilibili.data.repository.DynamicRepository.snapshotPagination(
+            com.android.purebilibili.data.repository.DynamicFeedScope.HOME_FOLLOW, "video",
+        )
         return if (response.forceReplace || (isManualRefresh && !isLoadMore)) {
             resolveHomeFollowRefreshNewItemsCount(
                 usedUpdateBaseline = response.forceReplace || feed.usedUpdateBaseline,

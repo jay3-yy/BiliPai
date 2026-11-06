@@ -261,6 +261,8 @@ fun HomeScreen(
     isQuickReturningFromVideoDetail: Boolean = false,
     onVideoDetailReturnAnimationConsumed: () -> Unit = {}
 ) {
+    if (!rememberHomeMemoryRecoveryReady(viewModel)) return
+    val pendingMemoryRecovery by viewModel.pendingMemoryRecovery.collectAsStateWithLifecycle()
     val feedNavigation = rememberHomeFeedNavigationCallbacks(onVideoClick, onSpaceClick, onLiveClick)
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val currentCategory by viewModel.currentCategory.collectAsStateWithLifecycle()
@@ -332,12 +334,13 @@ fun HomeScreen(
     val latestHomeScrollCategory by rememberUpdatedState(currentCategory)
     val latestHomeScrollPopularSubCategory by rememberUpdatedState(popularSubCategory)
 
-    val homeTopTabSettings by remember(context) {
+    val resolvedHomeTopTabSettings by remember(context) {
         SettingsManager.getHomeTopTabSettings(context)
     }.collectAsStateWithLifecycle(
-        initialValue = com.android.purebilibili.core.store.HomeTopTabSettings(),
+        initialValue = null,
         context = kotlin.coroutines.EmptyCoroutineContext,
     )
+    val homeTopTabSettings = resolvedHomeTopTabSettings ?: return
     // 顶部标签顺序和可见项交给设置页控制；默认仍是六项。
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 HomeHeader
@@ -378,12 +381,23 @@ fun HomeScreen(
         }
     }
     val topTabKeys = remember(topTabEntries) { topTabEntries.map(HomeTopTabEntry::id) }
-    val initialPage = resolveHomeInitialTopTabPage(
+    val initialPage = pendingMemoryRecovery?.let { saved ->
+        topTabEntries.indexOfFirst { it.id == saved.category }.takeIf { it >= 0 }
+    } ?: resolveHomeInitialTopTabPage(
         topTabEntries = topTabEntries,
         currentCategory = currentCategory,
         displayedTabIndex = displayedTabIndexFromState
     )
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(initialPage = initialPage) { topTabEntries.size }
+    LaunchedEffect(pendingMemoryRecovery?.id, topTabKeys) {
+        val saved = pendingMemoryRecovery ?: return@LaunchedEffect
+        val target = topTabEntries.indexOfFirst { it.id == saved.category }
+        if (target < 0) viewModel.consumeMemoryRecovery(saved.id)
+        else {
+            viewModel.updateDisplayedTabIndex(target)
+            pagerState.scrollToPage(target)
+        }
+    }
     // Only native MD3 opts into detail's pager timing; glass and Miuix keep their defaults.
     val nativeMd3TabMotion = com.android.purebilibili.core.theme.LocalAppUiStyle.current ==
         com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3 &&
@@ -1365,6 +1379,13 @@ fun HomeScreen(
     } else {
         0f
     }
+    LaunchedEffect(pendingMemoryRecovery?.id, headerCollapseMode, headerAutoCollapseDistancePx) {
+        val saved = pendingMemoryRecovery ?: return@LaunchedEffect
+        headerScrollState.setOffsetImmediately(
+            (saved.headerOffsetDp * density.density).coerceIn(-headerAutoCollapseDistancePx, 0f),
+        )
+        headerScrollState.tabsCollapsed = saved.tabsCollapsed && collapseTabsOnScroll
+    }
     val embeddedPageTopPadding = rememberHomeEmbeddedPageTopPadding(
         expandedTopPadding = listTopPadding,
         statusBarHeight = statusBarHeight,
@@ -1649,6 +1670,20 @@ fun HomeScreen(
                                 contentWidthDp = maxWidth.value.toInt(),
                                 displayMode = displayMode,
                             )
+                        RegisterHomeMemoryCapture {
+                            val entry = topTabEntries.getOrNull(pagerState.settledPage) as? HomeTopTabEntry.Category
+                            val category = entry?.category
+                            if (category == null || !supportsHomeFeedMemoryRecovery(category)) null
+                            else {
+                                val subCategory = viewModel.uiState.value.popularSubCategory
+                                val grid = if (category == HomeCategory.POPULAR) popularGridStates.getValue(subCategory)
+                                    else gridStates.getValue(category)
+                                viewModel.captureMemorySnapshot(
+                                    category, subCategory, grid.captureMemoryAnchor(density, effectiveGridColumns),
+                                    headerOffsetProvider() / density.density, headerScrollState.tabsCollapsed,
+                                )
+                            }
+                        }
                         HorizontalPager(
                             state = pagerState,
                             beyondViewportPageCount = 0,
@@ -2113,6 +2148,14 @@ fun HomeScreen(
                                      HomeCategoryPageContent(
                                          category = category,
                                          categoryState = pageCategoryState,
+                                         memoryRecovery = pendingMemoryRecovery,
+                                         onMemoryRecoveryConsumed = { id, located ->
+                                             if (!located) {
+                                                 headerScrollState.setOffsetImmediately(0f)
+                                                 headerScrollState.tabsCollapsed = false
+                                             }
+                                             viewModel.consumeMemoryRecovery(id)
+                                         },
                                          isActive = pageWork.runActiveWork,
                                          pageOnScreen = pageOnScreen && pageWork.visible,
                                          visibleDuringNavigation = visibleDuringNavigation && pageWork.visible &&
