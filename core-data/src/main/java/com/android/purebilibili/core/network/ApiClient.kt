@@ -210,6 +210,14 @@ interface BilibiliApi {
     @GET("x/web-interface/nav")
     suspend fun getNavInfo(): NavResponse
 
+    @POST("https://api.bilibili.com/bapis/bilibili.api.ticket.v1.Ticket/GenWebTicket")
+    suspend fun getWebTicket(
+        @Query("key_id") keyId: String,
+        @Query("hexsign") hexsign: String,
+        @Query("context[ts]") timestamp: Long,
+        @Query("csrf") csrf: String,
+    ): WebTicketResponse
+
     @GET("x/web-interface/nav/stat")
     suspend fun getNavStat(): NavStatResponse
 
