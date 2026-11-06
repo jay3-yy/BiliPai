@@ -1074,6 +1074,20 @@ class BackgroundPlaybackPolicyTest {
             )
         )
         assertEquals(
+            MediaControlType.PLAY_PAUSE,
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_HEADSETHOOK,
+                action = android.view.KeyEvent.ACTION_DOWN
+            )
+        )
+        assertEquals(
+            MediaControlType.PAUSE,
+            resolveMediaButtonControlType(
+                keyCode = android.view.KeyEvent.KEYCODE_MEDIA_STOP,
+                action = android.view.KeyEvent.ACTION_DOWN
+            )
+        )
+        assertEquals(
             MediaControlType.NEXT,
             resolveMediaButtonControlType(
                 keyCode = android.view.KeyEvent.KEYCODE_MEDIA_NEXT,

@@ -531,7 +531,10 @@ internal fun resolveMediaButtonControlType(keyCode: Int, action: Int): MediaCont
         KeyEvent.KEYCODE_MEDIA_NEXT -> MediaControlType.NEXT
         KeyEvent.KEYCODE_MEDIA_PLAY -> MediaControlType.PLAY
         KeyEvent.KEYCODE_MEDIA_PAUSE -> MediaControlType.PAUSE
-        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> MediaControlType.PLAY_PAUSE
+        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+        KeyEvent.KEYCODE_HEADSETHOOK -> MediaControlType.PLAY_PAUSE
+        // 车机/耳机可能发 MEDIA_STOP；系统会 stop 到 IDLE，这里按暂停处理。
+        KeyEvent.KEYCODE_MEDIA_STOP -> MediaControlType.PAUSE
         else -> null
     }
 }
@@ -1826,13 +1829,13 @@ class MiniPlayerManager private constructor(private val context: Context) :
             controllerInfo: MediaSession.ControllerInfo,
             intent: Intent
         ): Boolean {
-            Logger.d(TAG, " onMediaButtonEvent: action=${intent.action}")
             val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
             } else {
                 @Suppress("DEPRECATION")
                 intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT) as? KeyEvent
             }
+            Logger.d(TAG, " onMediaButtonEvent: action=${intent.action} keyCode=${keyEvent?.keyCode} keyAction=${keyEvent?.action}")
             val controlType = keyEvent?.let { resolveMediaButtonControlType(it.keyCode, it.action) }
             if (controlType != null) {
                 Logger.d(TAG, "🎮 媒体按键控制: $controlType")
