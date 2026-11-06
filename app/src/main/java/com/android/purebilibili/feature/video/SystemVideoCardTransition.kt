@@ -303,22 +303,17 @@ internal object SystemVideoCardTransition {
     }
 
     /** 卡片位图垫上来源页面底色后交给引擎；位图尺寸不变，仅消除透明背景。 */
-    private suspend fun compositeOverBackgroundColor(source: Bitmap, backgroundColor: Int): Bitmap? {
+    private fun compositeOverBackgroundColor(source: Bitmap, backgroundColor: Int): Bitmap? {
         // 图层位图为硬件位图：先落为软件位图，软件画布才能继续合成底色。
-        val softwareSource = if (source.config == Bitmap.Config.HARDWARE) {
-            val software = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
-            suspendCancellableCoroutine { continuation ->
-                try {
-                    PixelCopy.request(source, software, { result ->
-                        continuation.resume(if (result == PixelCopy.SUCCESS) software else null)
-                    }, Handler(Looper.getMainLooper()))
-                } catch (error: IllegalArgumentException) {
-                    Logger.w("SystemVideoCardTransition", "卡片位图软件化失败", error)
-                    continuation.resume(null)
-                }
-            } ?: return null
-        } else {
-            source
+        val softwareSource = try {
+            if (source.config == Bitmap.Config.HARDWARE) {
+                source.copy(Bitmap.Config.ARGB_8888, false) ?: return null
+            } else {
+                source
+            }
+        } catch (error: IllegalArgumentException) {
+            Logger.w("SystemVideoCardTransition", "卡片位图软件化失败", error)
+            return null
         }
         val backed = Bitmap.createBitmap(softwareSource.width, softwareSource.height, Bitmap.Config.ARGB_8888)
         val canvas = android.graphics.Canvas(backed)
