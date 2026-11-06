@@ -55,6 +55,17 @@ internal object SystemVideoCardTransition {
 
     private val sessions = mutableMapOf<String, Session>()
 
+    /** 透明行卡的整行外框圆角为 0；窗口裁剪改用其封面圆角，避免展开与返回出现直角。 */
+    private fun resolveWindowClipRadiusPx(
+        anchorRadiusPx: Float,
+        coverCornerDp: Float?,
+        density: Float,
+    ): Float = if (anchorRadiusPx > 0f) {
+        anchorRadiusPx
+    } else {
+        coverCornerDp?.takeIf { it > 0f }?.let { it * density } ?: anchorRadiusPx
+    }
+
     fun canAttempt(enabled: Boolean, source: VideoCardTransitionSession): Boolean {
         val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null
         val supported = if (sourceReady) deviceCapability().available else null
@@ -127,7 +138,12 @@ internal object SystemVideoCardTransition {
         if (kotlin.math.abs(thumbnail.width - bounds.width()) > 1 ||
             kotlin.math.abs(thumbnail.height - bounds.height()) > 1) return rejected(
                 "source_size_mismatch bitmap=${thumbnail.width}x${thumbnail.height} bounds=$bounds")
-        val radius = anchor.radiusPx() ?: return rejected("source_radius_unavailable")
+        val anchorRadius = anchor.radiusPx() ?: return rejected("source_radius_unavailable")
+        val radius = resolveWindowClipRadiusPx(
+            anchorRadiusPx = anchorRadius,
+            coverCornerDp = source.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
+            density = activity.resources.displayMetrics.density,
+        )
         val canConfigureBlur = extras?.containsKey(ViewAnimationExtras.EXTRA_BLUR) == true
         val configuration = Bundle().apply {
             if (canConfigureBlur) putBoolean(ViewAnimationExtras.EXTRA_BLUR, realtimeBlurEnabled)
@@ -174,9 +190,9 @@ internal object SystemVideoCardTransition {
         try {
             launched = VideoActivityLauncher.open(activity, request, options.toBundle(), token) {
                 // 等待窗口恢复后再次核对请求和几何，不用旧截图打开已切换的卡片。
-                isCurrent() && activity.window.decorView.hasWindowFocus() &&
-                    CardPositionManager.isActiveVideoCardPixelOwner(owner) &&
-                    anchor.bounds(windowCoordinates) == bounds && anchor.radiusPx() == radius
+                    isCurrent() && activity.window.decorView.hasWindowFocus() &&
+                        CardPositionManager.isActiveVideoCardPixelOwner(owner) &&
+                        anchor.bounds(windowCoordinates) == bounds && anchor.radiusPx() == anchorRadius
             }
             if (!launched) return rejected("request_expired_before_launch")
             Logger.i("SystemVideoCardTransition", "session=$token 系统卡片转场已请求: ${request.bvid}")
@@ -212,7 +228,11 @@ internal object SystemVideoCardTransition {
             val sameShape = bounds != null &&
                 bounds.width() == session.openingBounds.width() &&
                 bounds.height() == session.openingBounds.height() &&
-                session.anchor.radiusPx() == session.openingRadius
+                resolveWindowClipRadiusPx(
+                    requireNotNull(session.anchor.radiusPx()),
+                    session.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
+                    activity.resources.displayMetrics.density,
+                ) == session.openingRadius
             session.roundedSource.get()?.let { source ->
                 Logger.i("SystemVideoCardTransition", "session=$token protocol=rounded prepare_return " +
                     "motion=$motionEnabled sameShape=$sameShape bounds=$bounds")
@@ -236,7 +256,13 @@ internal object SystemVideoCardTransition {
             }
             else -> {
                 config.setBounds(bounds)
-                    .setRadius(requireNotNull(session.anchor.radiusPx()))
+                    .setRadius(
+                        resolveWindowClipRadiusPx(
+                            requireNotNull(session.anchor.radiusPx()),
+                            session.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
+                            activity.resources.displayMetrics.density,
+                        )
+                    )
                 // 一镜到底返回本就是协议默认值，仅在设备声明可写时显式设置。
                 if (supportsOfficialBackType(capability.backAnimMetadata, "VIEW_ANIM_DEFAULT")) {
                     config.setBackAnimType(ViewAnimationType.VIEW_ANIM_DEFAULT)
