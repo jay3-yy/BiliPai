@@ -141,7 +141,9 @@ internal object SystemVideoCardTransition {
         val bounds = anchor.bounds(windowCoordinates) ?: return rejected("source_bounds_unavailable")
         val thumbnail = if (layer != null) {
             // 透明行卡的位图背景透明，先垫来源页面底色，避免引擎放大位图时透出双层内容。
-            compositeOverBackgroundColor(layer.toImageBitmap().asAndroidBitmap(), sourceBackgroundColor)
+            compositeOverBackgroundColor(
+                activity, layer.toImageBitmap().asAndroidBitmap(), sourceBackgroundColor,
+            )
         } else {
             // 直播、番剧等导航容器卡片没有原生快照层，按来源窗口像素复制卡片矩形。
             captureWindowRegion(activity, bounds) ?: return rejected("source_pixels_unavailable")
@@ -301,8 +303,19 @@ internal object SystemVideoCardTransition {
     }
 
     /** 卡片位图垫上来源页面底色后交给引擎；位图尺寸不变，仅消除透明背景。 */
-    private fun compositeOverBackgroundColor(source: Bitmap, backgroundColor: Int): Bitmap {
-        val backed = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+    private fun compositeOverBackgroundColor(
+        activity: ComponentActivity,
+        source: Bitmap,
+        backgroundColor: Int,
+    ): Bitmap {
+        // 图层位图为硬件位图：硬件位图只能绘制进硬件画布，软件画布直接抛异常。
+        val backed = if (source.config == Bitmap.Config.HARDWARE) {
+            Bitmap.createBitmap(
+                activity.resources.displayMetrics, source.width, source.height, Bitmap.Config.HARDWARE,
+            )
+        } else {
+            Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
+        }
         val canvas = android.graphics.Canvas(backed)
         canvas.drawColor(backgroundColor)
         canvas.drawBitmap(source, 0f, 0f, null)
