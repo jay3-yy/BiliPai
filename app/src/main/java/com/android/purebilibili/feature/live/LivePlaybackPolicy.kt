@@ -205,7 +205,9 @@ private fun resolveLiveQualityList(
         return acceptQn.distinct().map { qn ->
             LiveQuality(
                 qn = qn,
-                desc = qualities.firstOrNull { it.qn == qn }?.desc?.takeIf { it.isNotBlank() } ?: qn.toString()
+                desc = qualities.firstOrNull { it.qn == qn }?.desc?.takeIf { it.isNotBlank() }
+                    ?: livePreferredQualityOptions.firstOrNull { it.first == qn }?.second
+                    ?: qn.toString()
             )
         }
     }

@@ -505,13 +505,17 @@ private fun JsonObject.array(name: String): JsonArray? {
 object LiveRepository {
     private val api = NetworkModule.api
 
-    private suspend fun resolveRealRoomId(roomId: Long): Long {
+    private suspend fun resolveRealRoomId(roomId: Long): Long =
+        getRoomInitData(roomId)?.roomId?.takeIf { it > 0L } ?: roomId
+
+    private suspend fun getRoomInitData(roomId: Long): LiveRoomInitData? {
         return try {
             val resp = api.getLiveRoomInit(roomId)
-            resp.data?.roomId?.takeIf { it > 0L } ?: roomId
+            resp.takeIf { it.code == 0 }?.data
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            roomId
+            android.util.Log.w("LiveRepo", "Room identity request failed: ${e.message}")
+            null
         }
     }
 
@@ -565,29 +569,29 @@ object LiveRepository {
     suspend fun getLiveFeedHome(
         page: Int = 1,
         moduleSelect: Boolean = false,
+        onRoomsReady: suspend (LiveFeedHomeSnapshot) -> Unit = {},
     ): Result<LiveFeedHomeSnapshot> = withContext(Dispatchers.IO) {
         try {
             val resp = api.getLiveFeedIndex(buildLiveAppFeedParams(page = page, moduleSelect = moduleSelect))
             val data = resp.data
             if (resp.code != 0 || data == null) {
                 return@withContext if (page == 1) {
-                    fallbackLiveFeedHome()
+                    fallbackLiveFeedHome(onRoomsReady)
                 } else {
                     Result.failure(Exception(resp.message.ifBlank { "直播 feed 加载失败" }))
                 }
             }
             val snapshot = parseLiveFeedHomeSnapshot(data)
             val loggedIn = TokenManager.midCache?.let { it > 0 } == true || !TokenManager.sessDataCache.isNullOrBlank()
-            val resolved = if (page == 1 && loggedIn && needsLiveFollowSupplement(snapshot)) {
-                getAllFollowedLive().fold(
-                    onSuccess = { supplementLiveFollowSnapshot(snapshot, it.items, it.totalCount) },
-                    onFailure = { snapshot.copy(followError = it.message ?: "关注直播加载失败") },
-                )
-            } else snapshot
-            Result.success(resolved)
+            Result.success(completeLiveFeedHome(
+                snapshot = snapshot,
+                supplementFollow = page == 1 && loggedIn,
+                onRoomsReady = onRoomsReady,
+                loadFollowedRooms = { getAllFollowedLive() }
+            ))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            if (page == 1) fallbackLiveFeedHome() else Result.failure(e)
+            if (page == 1) fallbackLiveFeedHome(onRoomsReady) else Result.failure(e)
         }
     }
 
@@ -794,8 +798,11 @@ object LiveRepository {
         return AppSignUtils.signForAndroidApi(params)
     }
 
-    private suspend fun fallbackLiveFeedHome(): Result<LiveFeedHomeSnapshot> {
+    private suspend fun fallbackLiveFeedHome(
+        onRoomsReady: suspend (LiveFeedHomeSnapshot) -> Unit,
+    ): Result<LiveFeedHomeSnapshot> {
         val recommend = getRecommendedLiveRooms().getOrElse { emptyList() }
+        onRoomsReady(LiveFeedHomeSnapshot(rooms = recommend, hasMore = recommend.size >= 20))
         val followedPage = getAllFollowedLive().getOrNull()
         val follow = followedPage?.items.orEmpty()
         val areas = getLiveAreaIndex().getOrElse { emptyList() }
@@ -1020,9 +1027,9 @@ object LiveRepository {
         }
     }
 
-    suspend fun getRoomH5Info(roomId: Long): Result<LiveRoomH5Snapshot> = withContext(Dispatchers.IO) {
+    suspend fun getRoomH5Info(roomId: Long, roomIdResolved: Boolean = false): Result<LiveRoomH5Snapshot> = withContext(Dispatchers.IO) {
         try {
-            val realRoomId = resolveRealRoomId(roomId)
+            val realRoomId = if (roomIdResolved) roomId else resolveRealRoomId(roomId)
             val json = JSONObject(api.getLiveRoomH5Info(realRoomId).string())
             if (json.optInt("code", -1) != 0) {
                 return@withContext Result.failure(Exception(json.optString("message", "获取直播间 H5 信息失败")))
@@ -1068,9 +1075,9 @@ object LiveRepository {
         }
     }
 
-    suspend fun getLiveDanmakuPermission(roomId: Long): Result<LiveDanmakuPermission> = withContext(Dispatchers.IO) {
+    suspend fun getLiveDanmakuPermission(roomId: Long, roomIdResolved: Boolean = false): Result<LiveDanmakuPermission> = withContext(Dispatchers.IO) {
         try {
-            val realRoomId = resolveRealRoomId(roomId)
+            val realRoomId = if (roomIdResolved) roomId else resolveRealRoomId(roomId)
             Result.success(parseLiveDanmakuPermission(api.getLiveDanmakuConfig(realRoomId).string()))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -1151,9 +1158,9 @@ object LiveRepository {
         }
     }
 
-    suspend fun getLiveRedPocketInfo(roomId: Long): Result<LiveRedPocketInfo?> = withContext(Dispatchers.IO) {
+    suspend fun getLiveRedPocketInfo(roomId: Long, roomIdResolved: Boolean = false): Result<LiveRedPocketInfo?> = withContext(Dispatchers.IO) {
         try {
-            val realRoomId = resolveRealRoomId(roomId)
+            val realRoomId = if (roomIdResolved) roomId else resolveRealRoomId(roomId)
             Result.success(parseLiveRedPocketInfo(api.getLiveLotteryInfo(realRoomId).string()))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
@@ -1161,9 +1168,9 @@ object LiveRepository {
         }
     }
 
-    suspend fun getLiveVoteSnapshot(roomId: Long): Result<LiveVoteSnapshot> = withContext(Dispatchers.IO) {
+    suspend fun getLiveVoteSnapshot(roomId: Long, roomIdResolved: Boolean = false): Result<LiveVoteSnapshot> = withContext(Dispatchers.IO) {
         try {
-            val realRoomId = resolveRealRoomId(roomId)
+            val realRoomId = if (roomIdResolved) roomId else resolveRealRoomId(roomId)
             Result.success(
                 LiveVoteSnapshot(
                     current = parseLiveVotePanel(api.getLiveVotePanel(realRoomId).string()),
@@ -1420,7 +1427,8 @@ object LiveRepository {
         onlyAudio: Boolean = false
     ): Result<LivePlayUrlData> = withContext(Dispatchers.IO) {
         try {
-            val realRoomId = resolveRealRoomId(roomId)
+            // 取流接口接受短号，并在响应中返回真实房间身份。
+            val realRoomId = roomId
             com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Fetching live URL with quality for roomId=$roomId(real=$realRoomId), qn=$qn, onlyAudio=$onlyAudio")
 
             com.android.purebilibili.core.util.Logger.d("LiveRepo", "🔴 Using xlive API as primary stream source...")
@@ -1432,35 +1440,32 @@ object LiveRepository {
 
             if (resp.code == 0 && resp.data != null && hasPlayableLiveUrl(requireNotNull(resp.data))) {
                 val checkedRespData = requireNotNull(resp.data)
-                val xliveQualities = checkedRespData.playurl_info?.playurl?.gQnDesc.orEmpty()
-                if (onlyAudio || xliveQualities.isNotEmpty() || !checkedRespData.quality_description.isNullOrEmpty()) {
-                    return@withContext Result.success(checkedRespData)
-                }
-                val legacyResp = try {
-                    api.getLivePlayUrlLegacy(cid = realRoomId, qn = qn)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    android.util.Log.w("LiveRepo", "Legacy API failed: ${e.message}")
-                    null
-                }
-                val mergedData = if (legacyResp?.code == 0 && legacyResp.data != null) {
-                    val checkedLegacyRespData = requireNotNull(legacyResp.data)
-                    checkedRespData.copy(
-                        quality_description = checkedLegacyRespData.quality_description,
-                        current_quality = checkedLegacyRespData.current_quality.takeIf { it > 0 } ?: checkedRespData.current_quality
-                    )
+                // 正常取流响应自带身份；旧 durl 响应缺少身份时仅解析一次。
+                // 画质名称从已有目录补齐，不为描述信息阻塞可播放地址。
+                if (checkedRespData.roomId > 0L) {
+                    Result.success(checkedRespData)
                 } else {
-                    checkedRespData
+                    val roomInit = getRoomInitData(roomId)
+                    Result.success(checkedRespData.copy(
+                        roomId = roomInit?.roomId?.takeIf { it > 0L } ?: roomId,
+                        uid = checkedRespData.uid.takeIf { it > 0L } ?: roomInit?.uid ?: 0L,
+                        liveStatus = checkedRespData.liveStatus ?: roomInit?.liveStatus,
+                        liveTime = checkedRespData.liveTime.takeIf { it > 0L } ?: roomInit?.liveTime ?: 0L,
+                        isPortrait = checkedRespData.isPortrait ?: roomInit?.isPortrait
+                    ))
                 }
-                com.android.purebilibili.core.util.Logger.d("LiveRepo", " Merged data: qualityList=${mergedData.quality_description?.map { it.desc }}")
-                Result.success(mergedData)
             } else {
                 if (onlyAudio) {
                     return@withContext Result.failure(Exception(resp.message.ifBlank { "无法获取直播音频地址" }))
                 }
+                // 旧接口按真实房间号取流；仅主接口无地址时解析一次，并补回身份字段。
+                val roomInit = getRoomInitData(roomId)
+                val legacyRoomId = roomInit?.roomId?.takeIf { it > 0L } ?: roomId
+                if (roomInit != null && roomInit.liveStatus != 1) {
+                    return@withContext Result.failure(Exception("当前直播间未开播"))
+                }
                 val legacyResp = try {
-                    api.getLivePlayUrlLegacy(cid = realRoomId, qn = qn)
+                    api.getLivePlayUrlLegacy(cid = legacyRoomId, qn = qn)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -1474,7 +1479,13 @@ object LiveRepository {
                 ) {
                     val checkedLegacyRespData = requireNotNull(legacyResp.data)
                     com.android.purebilibili.core.util.Logger.w("LiveRepo", "🔴 xlive API unavailable, falling back to legacy durl response")
-                    Result.success(checkedLegacyRespData)
+                    Result.success(checkedLegacyRespData.copy(
+                        roomId = legacyRoomId,
+                        uid = roomInit?.uid ?: 0L,
+                        liveStatus = roomInit?.liveStatus,
+                        liveTime = roomInit?.liveTime ?: 0L,
+                        isPortrait = roomInit?.isPortrait
+                    ))
                 } else {
                     val reason = resp.message.ifBlank { "接口未返回可播放地址" }
                     Result.failure(Exception("获取直播流失败: $reason"))

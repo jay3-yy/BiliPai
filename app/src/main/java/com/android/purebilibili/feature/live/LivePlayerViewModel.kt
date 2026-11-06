@@ -219,6 +219,8 @@ class LivePlayerViewModel : ViewModel() {
     private var danmakuClient: com.android.purebilibili.core.network.socket.LiveDanmakuClient? = null
     private var livePlaybackRequested = true
     private var liveStreamLoadJob: Job? = null
+    private var liveRoomInfoJob: Job? = null
+    private var followingMutationVersion = 0L
     private var danmakuConnectJob: Job? = null
     private var danmakuCollectJob: Job? = null
     private var liveHeartbeatJob: Job? = null
@@ -301,8 +303,10 @@ class LivePlayerViewModel : ViewModel() {
         CrashReporter.markLivePlaybackStage("load_stream_request")
         
         liveStreamLoadJob?.cancel()
+        liveRoomInfoJob?.cancel()
         val audioOnly = currentAudioOnly
         liveStreamLoadJob = viewModelScope.launch {
+            val startedAtMs = android.os.SystemClock.elapsedRealtime()
             if (showLoading) {
                 _uiState.value = LivePlayerState.Loading
                 CrashReporter.markLivePlaybackStage("load_stream_loading")
@@ -322,250 +326,263 @@ class LivePlayerViewModel : ViewModel() {
             }
             currentRequestedQuality = effectiveQn
 
-            // 并行加载直播流、初始化信息和直播间详情
-            val playUrlDeferred = async {
-                LiveRepository.getLivePlayUrlWithQuality(
-                    roomId = roomId,
-                    qn = effectiveQn,
-                    onlyAudio = audioOnly
-                )
-            }
-            val roomInitDeferred = async {
-                try {
-                    NetworkModule.api.getLiveRoomInit(roomId)
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    e.printStackTrace()
-                    null
-                }
-            }
-            val roomDetailDeferred = async { 
-                try { 
-                    NetworkModule.api.getLiveRoomDetail(roomId) 
-                } catch (e: Exception) { 
-                    if (e is CancellationException) throw e
-                    e.printStackTrace()
-                    null 
-                } 
-            }
-            val roomH5Deferred = async {
-                LiveRepository.getRoomH5Info(roomId).getOrNull()
-            }
-            val redPocketDeferred = async {
-                LiveRepository.getLiveRedPocketInfo(roomId).getOrNull()
-            }
-            val danmakuPermissionDeferred = async {
-                LiveRepository.getLiveDanmakuPermission(roomId).getOrNull()
-            }
-            val voteSnapshotDeferred = async {
-                LiveRepository.getLiveVoteSnapshot(roomId).getOrNull()
-            }
-            
-            val playUrlResult = playUrlDeferred.await()
-            val roomInitResponse = roomInitDeferred.await()
-            val roomDetailResponse = roomDetailDeferred.await()
-            val roomH5Snapshot = roomH5Deferred.await()
-            val redPocketInfo = redPocketDeferred.await()
-            val danmakuPermission = danmakuPermissionDeferred.await() ?: LiveDanmakuPermission()
-            voteSnapshotDeferred.await()?.let { _voteSnapshot.value = it }
-            currentCoroutineContext().ensureActive()
-            val roomInitData = roomInitResponse?.takeIf { it.code == 0 }?.data
-            val playData = playUrlResult.getOrNull()
-            val realRoomId = playData?.roomId?.takeIf { it > 0L }
-                ?: roomInitData?.roomId?.takeIf { it > 0L }
-                ?: roomId
-            currentRoomId = realRoomId
-
-            // 进房上报（登录态，写入直播观看历史；每房间一次）
-            if (roomEntryReportedFor != realRoomId && (TokenManager.midCache ?: 0L) > 0L) {
-                roomEntryReportedFor = realRoomId
-                launch { LiveRepository.reportRoomEntry(realRoomId) }
-            }
-            
-            currentUid = playData?.uid?.takeIf { it > 0L } ?: roomInitData?.uid ?: 0L
-            var roomInfo = RoomInfo(
-                roomId = realRoomId,
-                liveStatus = playData?.liveStatus ?: roomInitData?.liveStatus ?: 0,
-                liveStartTime = playData?.liveTime?.takeIf { it > 0L } ?: roomInitData?.liveTime ?: 0L,
-                isPortrait = playData?.isPortrait ?: roomInitData?.isPortrait ?: false
+            // 播放身份由取流响应确认；附属信息不参与首播成功或失败的判定。
+            val playUrlResult = LiveRepository.getLivePlayUrlWithQuality(
+                roomId = roomId,
+                qn = effectiveQn,
+                onlyAudio = audioOnly
             )
-            var anchorInfo = AnchorInfo(uid = currentUid)
-            var isFollowing = false
-
-            val roomData = roomDetailResponse?.data?.roomInfo
-            val anchorData = roomDetailResponse?.data?.anchorInfo
-            
-            // 如果主要 API 失败或缺少主播信息，尝试 Fallback 方案
-            if (roomDetailResponse?.code != 0 || anchorData == null) {
-                com.android.purebilibili.core.util.Logger.w("LivePlayerVM", "🔴 LiveRoomDetail failed or empty. Starting Fallback...")
-                try {
-                    // 1. 获取基础房间信息 (为了拿到 UID 和 在线人数)
-                    val roomInfoResp = NetworkModule.api.getRoomInfo(roomId)
-                    if (roomInfoResp.code == 0 && roomInfoResp.data != null) {
-                        val checkedRoomInfoRespData = requireNotNull(roomInfoResp.data)
-                        val basicInfo = checkedRoomInfoRespData
-                        currentUid = basicInfo.uid
-                        
-                        // 临时构建 RoomInfo
-                        roomInfo = RoomInfo(
-                            roomId = basicInfo.room_id.takeIf { it > 0L } ?: realRoomId,
-                            title = basicInfo.title,
-                            online = basicInfo.online,
-                            liveStatus = roomInitData?.liveStatus ?: basicInfo.liveStatus,
-                            liveStartTime = roomInitData?.liveTime ?: 0,
-                            isPortrait = roomInitData?.isPortrait ?: false,
-                            areaName = basicInfo.areaName
-                        )
-                        
-                        // 2. 根据 UID 获取用户卡片 (为了拿到头像和名字)
-                        if (currentUid > 0) {
-                            val cardResp = NetworkModule.api.getUserCard(currentUid)
-                            val cardData = cardResp.data
-                            val card = cardData?.card
-                            if (cardResp.code == 0 && cardData != null && card != null) {
-                                anchorInfo = AnchorInfo(
-                                    uid = currentUid,
-                                    uname = card.name,
-                                    face = card.face,
-                                    followers = cardData.follower.toLong(),
-                                    officialTitle = card.Official?.title ?: ""
-                                )
-                                com.android.purebilibili.core.util.Logger.d("LivePlayerVM", "🔴 Fallback success: fetched anchor ${card.name}")
-                            }
+            currentCoroutineContext().ensureActive()
+            val playData = playUrlResult.getOrElse { error ->
+                _uiState.value = LivePlayerState.Error(error.message ?: "加载失败")
+                CrashReporter.markLivePlaybackStage("load_stream_failed")
+                CrashReporter.reportLiveError(roomId, "load_stream_failed", error.message ?: "load failed", error)
+                return@launch
+            }
+            val realRoomId = playData.roomId.takeIf { it > 0L } ?: roomId
+            currentRoomId = realRoomId
+            currentUid = playData.uid
+            val initialRoomInfo = RoomInfo(
+                roomId = realRoomId,
+                liveStatus = playData.liveStatus ?: 0,
+                liveStartTime = playData.liveTime,
+                isPortrait = playData.isPortrait ?: false
+            )
+            val previous = _uiState.value as? LivePlayerState.Success
+            val publishedRoomInfo = previous?.roomInfo?.takeIf { it.roomId == realRoomId } ?: initialRoomInfo
+            if (!publishResolvedPlayback(
+                    data = playData,
+                    requestedQn = effectiveQn,
+                    roomInfo = publishedRoomInfo,
+                    anchorInfo = previous?.anchorInfo?.takeIf { it.uid == currentUid } ?: AnchorInfo(uid = currentUid),
+                    isFollowing = previous?.isFollowing ?: false,
+                    redPocketInfo = previous?.redPocketInfo,
+                    danmakuPermission = previous?.danmakuPermission ?: LiveDanmakuPermission()
+                )
+            ) {
+                _uiState.value = LivePlayerState.Error("无法获取直播流地址")
+                CrashReporter.markLivePlaybackStage("stream_url_empty")
+                return@launch
+            }
+            CrashReporter.markLivePlaybackStage("stream_url_ready")
+            com.android.purebilibili.core.util.Logger.d(
+                "LiveStartup", "room=$realRoomId stage=stream_ready elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAtMs}"
+            )
+            if (reconnectDanmaku) startLiveDanmaku(realRoomId)
+            val followingVersion = followingMutationVersion
+            // 房间资料任务独立于切画质取流，避免首播后马上切画质永久丢失详情。
+            liveRoomInfoJob = viewModelScope.launch {
+                if (refreshEmoticons) {
+                    launch(Dispatchers.IO) {
+                        LiveRepository.getLiveEmoticonPackages(realRoomId).onSuccess { packages ->
+                            currentCoroutineContext().ensureActive()
+                            _emoticonPackages.value = packages
+                            com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper.update(
+                                packages.flatMap { it.items }
+                                    .filter { it.emoji.isNotBlank() && it.url.isNotBlank() }
+                                    .associate { it.emoji to it.url }
+                            )
                         }
                     }
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    e.printStackTrace()
-                }
-            }
-            
-            // 如果主要 API 成功，或者 Fallback 失败但至少有部分数据
-            if (anchorData != null || anchorInfo.uid > 0 || roomData != null) {
-                 // 优先使用 LiveRoomDetail 的数据（如果不为空）
-                 if (roomDetailResponse?.code == 0 && roomDetailResponse.data != null) {
-                     val checkedRoomDetailResponseData = requireNotNull(roomDetailResponse.data)
-                     val data = checkedRoomDetailResponseData
-                     currentUid = data.roomInfo?.uid?.takeIf { it > 0L } ?: currentUid
-                     
-                     roomInfo = RoomInfo(
-                        roomId = data.roomInfo?.roomId?.takeIf { it > 0L } ?: realRoomId,
-                        title = data.roomInfo?.title ?: roomInfo.title,
-                        cover = data.roomInfo?.cover ?: roomH5Snapshot?.cover ?: roomInfo.cover,
-                        areaName = data.roomInfo?.areaName ?: roomInfo.areaName,
-                        parentAreaName = data.roomInfo?.parentAreaName ?: "",
-                        online = data.watchedShow?.num ?: data.roomInfo?.online ?: roomH5Snapshot?.online ?: roomInfo.online,
-                        liveStatus = playData?.liveStatus ?: roomInitData?.liveStatus ?: data.roomInfo?.liveStatus ?: roomInfo.liveStatus,
-                        liveStartTime = playData?.liveTime?.takeIf { it > 0L } ?: roomInitData?.liveTime ?: data.roomInfo?.liveStartTime ?: roomH5Snapshot?.liveStartTime ?: 0,
-                        isPortrait = playData?.isPortrait ?: roomInitData?.isPortrait ?: (data.roomInfo?.liveScreenType == 1),
-                        background = data.roomInfo?.background ?: roomH5Snapshot?.appBackground.orEmpty(),
-                        watchedText = data.watchedShow?.textLarge ?: data.watchedShow?.textSmall ?: roomH5Snapshot?.watchedText.orEmpty(),
-                        description = data.roomInfo?.description ?: "",
-                        tags = data.roomInfo?.tags ?: ""
-                     )
-                     
-                     anchorInfo = AnchorInfo(
-                        uid = currentUid,
-                        uname = data.anchorInfo?.baseInfo?.uname ?: "主播",
-                        face = data.anchorInfo?.baseInfo?.face ?: "",
-                        followers = data.anchorInfo?.relationInfo?.attention ?: 0,
-                        officialTitle = data.anchorInfo?.baseInfo?.officialInfo?.title ?: ""
-                     )
-                 }
-
-                if (roomH5Snapshot != null) {
-                    roomInfo = roomInfo.copy(
-                        roomId = roomInfo.roomId.takeIf { it > 0L } ?: roomH5Snapshot.roomId,
-                        title = roomInfo.title.ifBlank { roomH5Snapshot.title },
-                        cover = roomInfo.cover.ifBlank { roomH5Snapshot.cover },
-                        online = roomInfo.online.takeIf { it > 0 } ?: roomH5Snapshot.online,
-                        liveStartTime = roomInfo.liveStartTime.takeIf { it > 0L } ?: roomH5Snapshot.liveStartTime,
-                        background = roomInfo.background.ifBlank { roomH5Snapshot.appBackground },
-                        appBackground = roomH5Snapshot.appBackground,
-                        watchedText = roomInfo.watchedText.ifBlank { roomH5Snapshot.watchedText }
-                    )
-                    anchorInfo = anchorInfo.copy(
-                        uname = anchorInfo.uname.ifBlank { roomH5Snapshot.anchorName },
-                        face = anchorInfo.face.ifBlank { roomH5Snapshot.anchorFace }
-                    )
                 }
 
-                // 检查关注状态 (通用逻辑)
-                if (currentUid > 0) {
+                val roomDetailDeferred = async {
                     try {
-                        val relationResp = NetworkModule.api.getRelation(currentUid)
-                        if (relationResp.code == 0 && relationResp.data != null) {
-                            val checkedRelationRespData = requireNotNull(relationResp.data)
-                            isFollowing = checkedRelationRespData.isFollowing
+                        NetworkModule.api.getLiveRoomDetail(realRoomId)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        e.printStackTrace()
+                        null
+                    }
+                }
+                val roomH5Deferred = async {
+                    LiveRepository.getRoomH5Info(realRoomId, roomIdResolved = true).getOrNull()
+                }
+                launch {
+                    val info = LiveRepository.getLiveRedPocketInfo(realRoomId, roomIdResolved = true).getOrNull()
+                    currentCoroutineContext().ensureActive()
+                    _uiState.update { current ->
+                        if (current is LivePlayerState.Success && current.roomInfo.roomId == realRoomId) {
+                            current.copy(redPocketInfo = info)
+                        } else current
+                    }
+                }
+                launch {
+                    LiveRepository.getLiveDanmakuPermission(realRoomId, roomIdResolved = true).onSuccess { permission ->
+                        currentCoroutineContext().ensureActive()
+                        _uiState.update { current ->
+                            if (current is LivePlayerState.Success && current.roomInfo.roomId == realRoomId) {
+                                current.copy(danmakuPermission = permission)
+                            } else current
+                        }
+                    }
+                }
+                launch {
+                    LiveRepository.getLiveVoteSnapshot(realRoomId, roomIdResolved = true).onSuccess { vote ->
+                        currentCoroutineContext().ensureActive()
+                        _voteSnapshot.value = vote
+                    }
+                }
+                val roomDetailResponse = roomDetailDeferred.await()
+                val roomH5Snapshot = roomH5Deferred.await()
+                currentCoroutineContext().ensureActive()
+                // 进房上报（登录态，写入直播观看历史；每房间一次）
+                if (roomEntryReportedFor != realRoomId && (TokenManager.midCache ?: 0L) > 0L) {
+                    roomEntryReportedFor = realRoomId
+                    launch { LiveRepository.reportRoomEntry(realRoomId) }
+                }
+
+                var roomInfo = RoomInfo(
+                    roomId = realRoomId,
+                    liveStatus = playData.liveStatus ?: 0,
+                    liveStartTime = playData.liveTime,
+                    isPortrait = playData.isPortrait ?: false
+                )
+                var anchorInfo = AnchorInfo(uid = currentUid)
+                var isFollowing = false
+
+                val roomData = roomDetailResponse?.data?.roomInfo
+                val anchorData = roomDetailResponse?.data?.anchorInfo
+
+                // 如果主要 API 失败或缺少主播信息，尝试 Fallback 方案
+                if (roomDetailResponse?.code != 0 || anchorData == null) {
+                    com.android.purebilibili.core.util.Logger.w("LivePlayerVM", "🔴 LiveRoomDetail failed or empty. Starting Fallback...")
+                    try {
+                        // 1. 获取基础房间信息 (为了拿到 UID 和 在线人数)
+                        val roomInfoResp = NetworkModule.api.getRoomInfo(realRoomId)
+                        if (roomInfoResp.code == 0 && roomInfoResp.data != null) {
+                            val checkedRoomInfoRespData = requireNotNull(roomInfoResp.data)
+                            val basicInfo = checkedRoomInfoRespData
+                            currentUid = basicInfo.uid
+
+                            // 临时构建 RoomInfo
+                            roomInfo = RoomInfo(
+                                roomId = basicInfo.room_id.takeIf { it > 0L } ?: realRoomId,
+                                title = basicInfo.title,
+                                online = basicInfo.online,
+                                liveStatus = playData.liveStatus ?: basicInfo.liveStatus,
+                                liveStartTime = playData.liveTime,
+                                isPortrait = playData.isPortrait ?: false,
+                                areaName = basicInfo.areaName
+                            )
+
+                            // 2. 根据 UID 获取用户卡片 (为了拿到头像和名字)
+                            if (currentUid > 0) {
+                                val cardResp = NetworkModule.api.getUserCard(currentUid)
+                                val cardData = cardResp.data
+                                val card = cardData?.card
+                                if (cardResp.code == 0 && cardData != null && card != null) {
+                                    anchorInfo = AnchorInfo(
+                                        uid = currentUid,
+                                        uname = card.name,
+                                        face = card.face,
+                                        followers = cardData.follower.toLong(),
+                                        officialTitle = card.Official?.title ?: ""
+                                    )
+                                    com.android.purebilibili.core.util.Logger.d("LivePlayerVM", "🔴 Fallback success: fetched anchor ${card.name}")
+                                }
+                            }
                         }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
                         e.printStackTrace()
                     }
                 }
-                
-                com.android.purebilibili.core.util.Logger.d("LivePlayerVM", "🔴 Final State -> Room: ${roomInfo.title}, Anchor: ${anchorInfo.uname}")
-            } else {
-                com.android.purebilibili.core.util.Logger.e("LivePlayerVM", "🔴 All attempts to load room info failed.")
-            }
-            
-            currentCoroutineContext().ensureActive()
-            playUrlResult.onSuccess { data ->
-                if (publishResolvedPlayback(
-                        data = data,
-                        requestedQn = effectiveQn,
-                        roomInfo = roomInfo,
-                        anchorInfo = anchorInfo,
-                        isFollowing = isFollowing,
-                        redPocketInfo = redPocketInfo,
-                        danmakuPermission = danmakuPermission
-                    )
-                ) {
-                    CrashReporter.markLivePlaybackStage("stream_url_ready")
-                } else {
-                    _uiState.value = LivePlayerState.Error("无法获取直播流地址")
-                    CrashReporter.markLivePlaybackStage("stream_url_empty")
-                    CrashReporter.reportLiveError(
-                        roomId = roomId,
-                        errorType = "play_url_empty",
-                        errorMessage = "resolved play url is null"
-                    )
-                }
-            }.onFailure { e ->
-                _uiState.value = LivePlayerState.Error(e.message ?: "加载失败")
-                CrashReporter.markLivePlaybackStage("load_stream_failed")
-                CrashReporter.reportLiveError(
-                    roomId = roomId,
-                    errorType = "load_stream_failed",
-                    errorMessage = e.message ?: "load failed",
-                    exception = e
-                )
-            }
 
-            if (reconnectDanmaku) {
-                startLiveDanmaku(realRoomId)
-            }
-            
-            if (refreshEmoticons) {
-                launch(Dispatchers.IO) {
-                    LiveRepository.getLiveEmoticonPackages(roomId).onSuccess { packages ->
-                        currentCoroutineContext().ensureActive()
-                        _emoticonPackages.value = packages
-                        com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper.update(
-                            packages
-                                .flatMap { it.items }
-                                .filter { it.emoji.isNotBlank() && it.url.isNotBlank() }
-                                .associate { it.emoji to it.url }
+                // 如果主要 API 成功，或者 Fallback 失败但至少有部分数据
+                if (anchorData != null || anchorInfo.uid > 0 || roomData != null) {
+                     // 优先使用 LiveRoomDetail 的数据（如果不为空）
+                     if (roomDetailResponse?.code == 0 && roomDetailResponse.data != null) {
+                         val checkedRoomDetailResponseData = requireNotNull(roomDetailResponse.data)
+                         val data = checkedRoomDetailResponseData
+                         currentUid = data.roomInfo?.uid?.takeIf { it > 0L } ?: currentUid
+
+                         roomInfo = RoomInfo(
+                            roomId = data.roomInfo?.roomId?.takeIf { it > 0L } ?: realRoomId,
+                            title = data.roomInfo?.title ?: roomInfo.title,
+                            cover = data.roomInfo?.cover ?: roomH5Snapshot?.cover ?: roomInfo.cover,
+                            areaName = data.roomInfo?.areaName ?: roomInfo.areaName,
+                            parentAreaName = data.roomInfo?.parentAreaName ?: "",
+                            online = data.watchedShow?.num ?: data.roomInfo?.online ?: roomH5Snapshot?.online ?: roomInfo.online,
+                            liveStatus = playData.liveStatus ?: data.roomInfo?.liveStatus ?: roomInfo.liveStatus,
+                            liveStartTime = playData.liveTime.takeIf { it > 0L } ?: data.roomInfo?.liveStartTime ?: roomH5Snapshot?.liveStartTime ?: 0,
+                            isPortrait = playData.isPortrait ?: (data.roomInfo?.liveScreenType == 1),
+                            background = data.roomInfo?.background ?: roomH5Snapshot?.appBackground.orEmpty(),
+                            watchedText = data.watchedShow?.textLarge ?: data.watchedShow?.textSmall ?: roomH5Snapshot?.watchedText.orEmpty(),
+                            description = data.roomInfo?.description ?: "",
+                            tags = data.roomInfo?.tags ?: ""
+                         )
+
+                         anchorInfo = AnchorInfo(
+                            uid = currentUid,
+                            uname = data.anchorInfo?.baseInfo?.uname ?: "主播",
+                            face = data.anchorInfo?.baseInfo?.face ?: "",
+                            followers = data.anchorInfo?.relationInfo?.attention ?: 0,
+                            officialTitle = data.anchorInfo?.baseInfo?.officialInfo?.title ?: ""
+                         )
+                     }
+
+                    if (roomH5Snapshot != null) {
+                        roomInfo = roomInfo.copy(
+                            roomId = roomInfo.roomId.takeIf { it > 0L } ?: roomH5Snapshot.roomId,
+                            title = roomInfo.title.ifBlank { roomH5Snapshot.title },
+                            cover = roomInfo.cover.ifBlank { roomH5Snapshot.cover },
+                            online = roomInfo.online.takeIf { it > 0 } ?: roomH5Snapshot.online,
+                            liveStartTime = roomInfo.liveStartTime.takeIf { it > 0L } ?: roomH5Snapshot.liveStartTime,
+                            background = roomInfo.background.ifBlank { roomH5Snapshot.appBackground },
+                            appBackground = roomH5Snapshot.appBackground,
+                            watchedText = roomInfo.watchedText.ifBlank { roomH5Snapshot.watchedText }
+                        )
+                        anchorInfo = anchorInfo.copy(
+                            uname = anchorInfo.uname.ifBlank { roomH5Snapshot.anchorName },
+                            face = anchorInfo.face.ifBlank { roomH5Snapshot.anchorFace }
                         )
                     }
+
+                    // 检查关注状态 (通用逻辑)
+                    if (currentUid > 0) {
+                        try {
+                            val relationResp = NetworkModule.api.getRelation(currentUid)
+                            if (relationResp.code == 0 && relationResp.data != null) {
+                                val checkedRelationRespData = requireNotNull(relationResp.data)
+                                isFollowing = checkedRelationRespData.isFollowing
+                            }
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            e.printStackTrace()
+                        }
+                    }
+
+                    com.android.purebilibili.core.util.Logger.d("LivePlayerVM", "🔴 Final State -> Room: ${roomInfo.title}, Anchor: ${anchorInfo.uname}")
+                } else {
+                    com.android.purebilibili.core.util.Logger.e("LivePlayerVM", "🔴 All attempts to load room info failed.")
+                }
+
+                currentCoroutineContext().ensureActive()
+                com.android.purebilibili.core.util.Logger.d(
+                    "LiveStartup", "room=$realRoomId stage=details_ready elapsedMs=${android.os.SystemClock.elapsedRealtime() - startedAtMs}"
+                )
+                // 保留等待期间发生的线路、画质和播放意图变化；补齐详情不触发 prepare。
+                _uiState.update { current ->
+                    if (current is LivePlayerState.Success && current.roomInfo.roomId == realRoomId) {
+                        current.copy(
+                            roomInfo = mergeLiveRoomMetadata(current.roomInfo, publishedRoomInfo, roomInfo),
+                            anchorInfo = if (followingVersion == followingMutationVersion) anchorInfo else anchorInfo.copy(
+                                followers = (anchorInfo.followers + when {
+                                    current.isFollowing == isFollowing -> 0
+                                    current.isFollowing -> 1
+                                    else -> -1
+                                }).coerceAtLeast(0L)
+                            ),
+                            isFollowing = if (followingVersion == followingMutationVersion) isFollowing else current.isFollowing
+                        )
+                    } else current
                 }
             }
         }
     }
 
 
-    
-    
     /**
      * 关注/取关主播
      */
@@ -584,6 +601,7 @@ class LivePlayerViewModel : ViewModel() {
                 
                 if (response.code == 0) {
                     if (currentRoomId != roomId || currentUid != uid) return@launch
+                    followingMutationVersion++
                     _uiState.update { state ->
                         val latest = state as? LivePlayerState.Success ?: return@update state
                         val following = act == 1
@@ -1404,12 +1422,14 @@ class LivePlayerViewModel : ViewModel() {
             is LiveRealtimeAction.RoomUnavailable -> {
                 pauseLiveHeartbeat()
                 liveStreamLoadJob?.cancel()
+                liveRoomInfoJob?.cancel()
                 _uiState.value = LivePlayerState.Error(action.message)
                 CrashReporter.markLivePlaybackStage("live_room_unavailable")
             }
             is LiveRealtimeAction.RoomBlocked -> {
                 pauseLiveHeartbeat()
                 liveStreamLoadJob?.cancel()
+                liveRoomInfoJob?.cancel()
                 _uiState.value = LivePlayerState.Error(action.message)
                 CrashReporter.reportLiveError(
                     roomId = currentRoomId,
@@ -1610,6 +1630,7 @@ class LivePlayerViewModel : ViewModel() {
     override fun onCleared() {
         super.onCleared()
         liveStreamLoadJob?.cancel()
+        liveRoomInfoJob?.cancel()
         danmakuConnectJob?.cancel()
         danmakuCollectJob?.cancel()
         liveHeartbeatJob?.cancel()

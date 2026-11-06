@@ -63,23 +63,7 @@ internal fun LazyGridScope.liveHomeHeaderSkeletonItems(
                 ContentSkeletonBlock(color, Modifier.width(64.dp).height(22.dp))
             }
         }
-        item(key = "live_follow_avatars_skeleton", span = { GridItemSpan(maxLineSpan) }) {
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val count = ceil(maxWidth.value / metrics.followItemExtentDp).toInt()
-                Row(Modifier.clipToBounds()) {
-                    repeat(count) {
-                        Column(
-                            Modifier.width(metrics.followItemExtentDp.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            ContentSkeletonBlock(color, Modifier.size((metrics.followAvatarSizeDp + 4).dp), CircleShape)
-                            Spacer(Modifier.height(6.dp))
-                            ContentSkeletonBlock(color, Modifier.width(44.dp).height(14.dp))
-                        }
-                    }
-                }
-            }
-        }
+        liveFollowAvatarsSkeletonItem(metrics, color)
     }
     item(key = "live_categories_skeleton", span = { GridItemSpan(maxLineSpan) }) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -100,5 +84,29 @@ internal fun LazyGridScope.liveRoomSkeletonItems(
             coverAspectRatio = metrics.coverAspectRatio,
             blockColorProvider = color,
         )
+    }
+}
+
+/** 与头像实物行共用尺寸；推荐已展示时仍为未知的关注内容保留位置。 */
+internal fun LazyGridScope.liveFollowAvatarsSkeletonItem(
+    metrics: LiveBiliPaiHomeMetrics,
+    color: () -> Color,
+) {
+    item(key = "live_follow_avatars_skeleton", span = { GridItemSpan(maxLineSpan) }) {
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val count = ceil(maxWidth.value / metrics.followItemExtentDp).toInt()
+            Row(Modifier.clipToBounds()) {
+                repeat(count) {
+                    Column(
+                        Modifier.width(metrics.followItemExtentDp.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        ContentSkeletonBlock(color, Modifier.size((metrics.followAvatarSizeDp + 4).dp), CircleShape)
+                        Spacer(Modifier.height(6.dp))
+                        ContentSkeletonBlock(color, Modifier.width(44.dp).height(14.dp))
+                    }
+                }
+            }
+        }
     }
 }
