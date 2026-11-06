@@ -4,6 +4,7 @@ import android.content.Context
 import com.android.purebilibili.core.store.BottomBarSearchAutoExpandMode
 import com.android.purebilibili.core.store.HomeTopLayoutOrder
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.SkeletonSettingsStore
 import com.android.purebilibili.core.store.applyOnboardingRecommendedUiStyle
 
 enum class OnboardingSettingsProfile(
@@ -12,11 +13,11 @@ enum class OnboardingSettingsProfile(
 ) {
     RECOMMENDED(
         title = "推荐默认",
-        subtitle = "MD3 跟随系统、原生底栏、五个纯文字顶部标签"
+        subtitle = "MD3 跟随系统、原生底栏、五个纯文字顶部标签，默认轻量动效"
     ),
     PERFORMANCE(
         title = "流畅优先",
-        subtitle = "原生材质与底栏，保留核心视频过渡"
+        subtitle = "原生材质与底栏，关闭卡片展开与加载占位动效"
     ),
     DATA_SAVER(
         title = "省流量",
@@ -54,7 +55,8 @@ fun resolveOnboardingSettingsGuidePreset(
     val sharedSummary = listOf(
         "默认使用 MD3 / Material 3",
         "使用原生材质和底栏，液态玻璃按需开启",
-        "首页顶部标签纯文字显示 5 个"
+        "首页顶部标签纯文字显示 5 个",
+        "关闭卡片展开、直播实时画面过渡和加载占位动效"
     )
     return when (profile) {
         OnboardingSettingsProfile.RECOMMENDED -> OnboardingSettingsGuidePreset(
@@ -69,7 +71,7 @@ fun resolveOnboardingSettingsGuidePreset(
             homeTopLayoutOrder = HomeTopLayoutOrder.SEARCH_THEN_TABS,
             dataSaverMode = SettingsManager.DataSaverMode.MOBILE_ONLY,
             lowQualityHomeCoverInDataSaver = false,
-            cardTransitionEnabled = true,
+            cardTransitionEnabled = false,
             summaryLines = sharedSummary
         )
 
@@ -85,8 +87,8 @@ fun resolveOnboardingSettingsGuidePreset(
             homeTopLayoutOrder = HomeTopLayoutOrder.SEARCH_THEN_TABS,
             dataSaverMode = SettingsManager.DataSaverMode.MOBILE_ONLY,
             lowQualityHomeCoverInDataSaver = false,
-            cardTransitionEnabled = true,
-            summaryLines = sharedSummary + "保留核心视频过渡"
+            cardTransitionEnabled = false,
+            summaryLines = sharedSummary
         )
 
         OnboardingSettingsProfile.DATA_SAVER -> OnboardingSettingsGuidePreset(
@@ -101,7 +103,7 @@ fun resolveOnboardingSettingsGuidePreset(
             homeTopLayoutOrder = HomeTopLayoutOrder.SEARCH_THEN_TABS,
             dataSaverMode = SettingsManager.DataSaverMode.MOBILE_ONLY,
             lowQualityHomeCoverInDataSaver = true,
-            cardTransitionEnabled = true,
+            cardTransitionEnabled = false,
             summaryLines = sharedSummary + "省流量时首页封面使用低清晰度"
         )
     }
@@ -130,5 +132,15 @@ suspend fun applyOnboardingSettingsGuidePreset(
         value = preset.lowQualityHomeCoverInDataSaver
     )
     SettingsManager.setCardTransitionEnabled(context, preset.cardTransitionEnabled)
-    SettingsManager.setLiveSurfaceCardTransitionEnabled(context, true)
+    // 三种首次引导方案共用轻量视觉配置；玻璃开关不改写 MD3 / Miuix 的组件样式。
+    SettingsManager.setLiveSurfaceCardTransitionEnabled(context, false)
+    SkeletonSettingsStore.setBreathingEnabled(context, false)
+    SettingsManager.setHeaderBlurEnabled(context, false)
+    SettingsManager.setBottomBarBlurEnabled(context, false)
+    SettingsManager.setVideoTransitionRealtimeBlurEnabled(context, false)
+    SettingsManager.setMiuixTransitionBlurEnabled(context, false)
+    SettingsManager.setCardAnimationEnabled(context, false)
+    SettingsManager.setUiEntranceAnimationEnabled(context, false)
+    SettingsManager.setHomeHeroCarouselEnabled(context, false)
+    SettingsManager.setHomeHeroCarouselAutoplayEnabled(context, false)
 }

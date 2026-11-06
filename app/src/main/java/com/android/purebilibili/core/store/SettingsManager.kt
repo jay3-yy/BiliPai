@@ -381,7 +381,7 @@ internal fun resolveHomeHeaderBlurModePreference(
 ): HomeHeaderBlurMode {
     return if (rawMode != null) {
         HomeHeaderBlurMode.fromValue(rawMode)
-    } else if (legacyEnabled == false) {
+    } else if (legacyEnabled != true) {
         HomeHeaderBlurMode.ALWAYS_OFF
     } else {
         HomeHeaderBlurMode.FOLLOW_PRESET
@@ -644,9 +644,10 @@ enum class BottomBarLiquidGlassPreset(
     }
 }
 
+// 设置流加载前使用相同的轻量视觉默认值，避免首帧短暂启用模糊或卡片展开。
 data class HomeSettings(
     val displayMode: Int = 0,              // 展示模式 (0=网格, 1=故事卡片)
-    val isBottomBarFloating: Boolean = true,
+    val isBottomBarFloating: Boolean = false,
     val navigationIconCrossScaleEnabled: Boolean = true,
     val bottomBarLabelMode: Int = 0,       // (0=图标+文字, 1=仅图标, 2=仅文字)
     val topTabLabelMode: Int = 2,          // (0=图标+文字, 1=仅图标, 2=仅文字)
@@ -654,8 +655,8 @@ data class HomeSettings(
     val hideTopTabs: Boolean = false,
     val homeTopRightAction: HomeTopRightAction = HomeTopRightAction.SETTINGS,
     val homeTopLayoutOrder: HomeTopLayoutOrder = HomeTopLayoutOrder.SEARCH_THEN_TABS,
-    val isHeaderBlurEnabled: Boolean = true,
-    val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.FOLLOW_PRESET,
+    val isHeaderBlurEnabled: Boolean = false,
+    val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.ALWAYS_OFF,
     val isBottomBarBlurEnabled: Boolean = false,
     val isTopBarLiquidGlassEnabled: Boolean = false,
     val isHomeSearchLiquidGlassEnabled: Boolean = false,
@@ -693,12 +694,12 @@ data class HomeSettings(
     val pinchToChangeGridColumnsEnabled: Boolean = true, // [新增] 双指缩放切换网格列数
     val homeFeedCardWidthPreset: HomeFeedCardWidthPreset = HomeFeedCardWidthPreset.AUTO,
     val homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
-    val homeHeroCarouselEnabled: Boolean = true,
+    val homeHeroCarouselEnabled: Boolean = false,
     val homeHeroCarouselAutoplayEnabled: Boolean = false,
     val homeRefreshTipVisible: Boolean = true, // 推荐流刷新后在旧内容分界处显示提示
     val homeRefreshUndoVisible: Boolean = false, // 刷新后的撤销按钮默认隐藏
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
-    val cardTransitionEnabled: Boolean = true,    //  卡片过渡动画（默认开启）
+    val cardTransitionEnabled: Boolean = false,   // 卡片展开过渡按需开启
     val videoSharedTransitionSpeed: VideoSharedTransitionSpeed = VideoSharedTransitionSpeed.STANDARD,
     val videoSharedTransitionCustomDurationMillis: Int =
         VIDEO_SHARED_TRANSITION_CUSTOM_DEFAULT_MILLIS,
@@ -715,7 +716,7 @@ data class HomeSettings(
     val showHomeInfoGlassBadges: Boolean = false,
     val homeCardBadgeEffectMode: HomeCardBadgeEffectMode = HomeCardBadgeEffectMode.OFF,
     val homeCardInfoGlassMode: HomeCardInfoGlassMode = HomeCardInfoGlassMode.OFF,
-    val homeWallpaperEffectMode: HomeWallpaperEffectMode = HomeWallpaperEffectMode.SOFT_BLUR,
+    val homeWallpaperEffectMode: HomeWallpaperEffectMode = HomeWallpaperEffectMode.OFF,
     val homeWallpaperEffectScope: HomeWallpaperEffectScope = HomeWallpaperEffectScope.HOME_ONLY,
     val showHomeUpBadges: Boolean = false, // 首页和相关推荐 UP 主标识显示(默认关闭,设置后全局生效)
     val showHomeUpAvatars: Boolean = false, // 首页视频卡片 UP 主头像显示(默认关闭,设置后全局生效)
@@ -1844,7 +1845,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         )
         return HomeSettings(
             displayMode = preferences[KEY_DISPLAY_MODE] ?: 0,
-            isBottomBarFloating = preferences[KEY_BOTTOM_BAR_FLOATING] ?: true,
+            isBottomBarFloating = preferences[KEY_BOTTOM_BAR_FLOATING] ?: false,
             navigationIconCrossScaleEnabled =
                 preferences[KEY_NAVIGATION_ICON_CROSS_SCALE_ENABLED] ?: true,
             bottomBarLabelMode = preferences[KEY_BOTTOM_BAR_LABEL_MODE] ?: BottomBarLabelMode.ICON_AND_TEXT,
@@ -1916,7 +1917,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeRefreshTipVisible = preferences[KEY_HOME_REFRESH_TIP_VISIBLE] ?: true,
             homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
-            cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: true,
+            cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: false,
             videoSharedTransitionSpeed = VideoSharedTransitionSpeed.fromValue(
                 preferences[KEY_VIDEO_SHARED_TRANSITION_SPEED]
                     ?: VideoSharedTransitionSpeed.STANDARD.value
@@ -1938,7 +1939,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeCardBadgeEffectMode = HomeCardBadgeEffectMode.OFF,
             homeCardInfoGlassMode = HomeCardInfoGlassMode.OFF,
             homeWallpaperEffectMode = HomeWallpaperEffectMode.fromValue(
-                preferences[KEY_HOME_WALLPAPER_EFFECT_MODE] ?: HomeWallpaperEffectMode.SOFT_BLUR.value
+                preferences[KEY_HOME_WALLPAPER_EFFECT_MODE] ?: HomeWallpaperEffectMode.OFF.value
             ),
             homeWallpaperEffectScope = HomeWallpaperEffectScope.fromValue(
                 preferences[KEY_HOME_WALLPAPER_EFFECT_SCOPE] ?: HomeWallpaperEffectScope.HOME_ONLY.value
@@ -3501,9 +3502,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
     
-    //  [新增] --- 卡片过渡动画开关 ---
+    // 卡片展开过渡默认关闭，已保存的用户选择保持优先。
     fun getCardTransitionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] ?: true }  // 默认开启
+        .map { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] ?: false }
 
     suspend fun setVideoTransitionMode(context: Context, mode: VideoTransitionMode) {
         context.settingsDataStore.edit { it[KEY_VIDEO_TRANSITION_MODE] = mode.storageValue }
@@ -3817,7 +3818,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getHomeWallpaperEffectMode(context: Context): Flow<HomeWallpaperEffectMode> = context.settingsDataStore.data
         .map { preferences ->
             HomeWallpaperEffectMode.fromValue(
-                preferences[KEY_HOME_WALLPAPER_EFFECT_MODE] ?: HomeWallpaperEffectMode.SOFT_BLUR.value
+                preferences[KEY_HOME_WALLPAPER_EFFECT_MODE] ?: HomeWallpaperEffectMode.OFF.value
             )
         }
 
@@ -4158,7 +4159,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     //  [新增] --- 底部栏样式 ---
     fun getBottomBarFloating(context: Context): Flow<Boolean> = context.settingsDataStore.data
-        .map { preferences -> preferences[KEY_BOTTOM_BAR_FLOATING] ?: true }
+        .map { preferences -> preferences[KEY_BOTTOM_BAR_FLOATING] ?: false }
 
     suspend fun setBottomBarFloating(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_BOTTOM_BAR_FLOATING] = value }
@@ -8738,6 +8739,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_HOME_HERO_CAROUSEL_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_HERO_CAROUSEL_AUTOPLAY_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_CARD_ANIMATION_ENABLED, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(SkeletonSettingsStore.breathingKey, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_MAID_LOTTIE_ANIMATION_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_UI_ENTRANCE_ANIMATION_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_GLOBAL_DRAG_FEEDBACK_ENABLED, SettingsShareSection.APPEARANCE),

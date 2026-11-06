@@ -28,12 +28,13 @@ class OnboardingSettingsGuidePolicyTest {
     }
 
     @Test
-    fun performanceProfileKeepsCoreVideoTransition() {
-        val preset = resolveOnboardingSettingsGuidePreset(OnboardingSettingsProfile.PERFORMANCE)
-
-        assertTrue(preset.cardTransitionEnabled)
-        assertFalse(preset.lowQualityHomeCoverInDataSaver)
-        assertTrue(preset.summaryLines.contains("保留核心视频过渡"))
+    fun allProfilesKeepExpensiveTransitionsOptIn() {
+        OnboardingSettingsProfile.entries.forEach { profile ->
+            val preset = resolveOnboardingSettingsGuidePreset(profile)
+            assertFalse(preset.cardTransitionEnabled, profile.name)
+            assertFalse(preset.androidNativeLiquidGlassEnabled, profile.name)
+            assertFalse(preset.bottomBarLiquidGlassEnabled, profile.name)
+        }
     }
 
     @Test
@@ -42,6 +43,5 @@ class OnboardingSettingsGuidePolicyTest {
 
         assertEquals(SettingsManager.DataSaverMode.MOBILE_ONLY, preset.dataSaverMode)
         assertTrue(preset.lowQualityHomeCoverInDataSaver)
-        assertTrue(preset.cardTransitionEnabled)
     }
 }

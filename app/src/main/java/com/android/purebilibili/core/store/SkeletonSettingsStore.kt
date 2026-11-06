@@ -6,10 +6,10 @@ import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.flow.map
 
 object SkeletonSettingsStore {
-    private val breathingKey = booleanPreferencesKey("skeleton_breathing_enabled")
+    internal val breathingKey = booleanPreferencesKey("skeleton_breathing_enabled")
 
     fun breathingEnabled(context: Context) = context.settingsDataStore.data.map {
-        it[breathingKey] ?: true
+        it[breathingKey] ?: false
     }
 
     suspend fun setBreathingEnabled(context: Context, enabled: Boolean) {

@@ -24,15 +24,15 @@ class HomeSettingsMappingPolicyTest {
         val result = mapHomeSettingsFromPreferences(prefs)
 
         assertEquals(0, result.displayMode)
-        assertTrue(result.isBottomBarFloating)
+        assertFalse(result.isBottomBarFloating)
         assertEquals(0, result.bottomBarLabelMode)
         assertEquals(SettingsManager.TopTabLabelMode.TEXT_ONLY, result.topTabLabelMode)
         assertFalse(result.partitionSideRailOnRight)
         assertFalse(result.hideTopTabs)
         assertEquals(HomeTopRightAction.SETTINGS, result.homeTopRightAction)
         assertEquals(HomeTopLayoutOrder.SEARCH_THEN_TABS, result.homeTopLayoutOrder)
-        assertTrue(result.isHeaderBlurEnabled)
-        assertEquals(HomeHeaderBlurMode.FOLLOW_PRESET, result.headerBlurMode)
+        assertFalse(result.isHeaderBlurEnabled)
+        assertEquals(HomeHeaderBlurMode.ALWAYS_OFF, result.headerBlurMode)
         assertEquals(HomeHeaderCollapseMode.BOTH, result.homeHeaderCollapseMode)
         assertEquals(HomeBarHideType.SYNC, result.homeBarHideType)
         assertEquals(
@@ -49,8 +49,8 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.listScopedSearchEnabled)
         assertEquals(BottomBarSearchAutoExpandMode.EXPAND_AT_HOME_TOP, result.bottomBarSearchAutoExpandMode)
         assertEquals(BottomBarSearchLayoutMode.FULL_DOCK, result.bottomBarSearchLayoutMode)
-        assertTrue(result.androidNativeLiquidGlassEnabled)
-        assertTrue(result.isLiquidGlassEnabled)
+        assertFalse(result.androidNativeLiquidGlassEnabled)
+        assertFalse(result.isLiquidGlassEnabled)
         assertEquals(LiquidGlassStyle.SUKISU, result.liquidGlassStyle)
         assertEquals(LiquidGlassMode.BALANCED, result.liquidGlassMode)
         assertEquals(0.52f, result.liquidGlassStrength)
@@ -64,7 +64,7 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.pinchToChangeGridColumnsEnabled)
         assertEquals(HomeFeedCardWidthPreset.AUTO, result.homeFeedCardWidthPreset)
         assertFalse(result.cardAnimationEnabled)
-        assertTrue(result.cardTransitionEnabled)
+        assertFalse(result.cardTransitionEnabled)
         assertEquals(VideoSharedTransitionSpeed.STANDARD, result.videoSharedTransitionSpeed)
         assertEquals(
             VIDEO_SHARED_TRANSITION_CUSTOM_DEFAULT_MILLIS,
@@ -74,7 +74,7 @@ class HomeSettingsMappingPolicyTest {
         assertFalse(result.compactVideoStatsOnCover)
         assertEquals(HomeFeedCardStyle.BILIPAI, result.homeFeedCardStyle)
         assertEquals(HomeDurationStyle.OUTSIDE_COVER, result.homeDurationStyle)
-        assertEquals(HomeWallpaperEffectMode.SOFT_BLUR, result.homeWallpaperEffectMode)
+        assertEquals(HomeWallpaperEffectMode.OFF, result.homeWallpaperEffectMode)
         assertEquals(HomeWallpaperEffectScope.HOME_ONLY, result.homeWallpaperEffectScope)
         assertFalse(result.lowQualityHomeCoverInDataSaver)
         assertFalse(result.showHomeUpBadges)
@@ -82,6 +82,25 @@ class HomeSettingsMappingPolicyTest {
         assertTrue(result.showHomePublishTime)
         assertFalse(result.easterEggEnabled)
         assertFalse(result.crashTrackingConsentShown)
+    }
+
+    @Test
+    fun savedVisualEffectsRemainOptIn() {
+        val result = mapHomeSettingsFromPreferences(
+            mutablePreferencesOf(
+                booleanPreferencesKey("bottom_bar_floating") to true,
+                booleanPreferencesKey("header_blur_enabled") to true,
+                booleanPreferencesKey("card_transition_enabled") to true,
+                booleanPreferencesKey("android_native_liquid_glass_enabled") to true,
+                booleanPreferencesKey("home_hero_carousel_enabled") to true,
+            )
+        )
+
+        assertTrue(result.isBottomBarFloating)
+        assertTrue(result.isHeaderBlurEnabled)
+        assertTrue(result.cardTransitionEnabled)
+        assertTrue(result.androidNativeLiquidGlassEnabled)
+        assertTrue(result.homeHeroCarouselEnabled)
     }
 
     @Test
