@@ -2057,9 +2057,8 @@ internal fun VideoDetailScreenStateHolder(
                 onClearReturningFromDetail()
             }
 
-            // ⚡ [性能优化] Phase 2: 延迟执行 — 非视觉的系统调用推迟到下一帧
-            // 通知清理、Service 停止、屏幕方向恢复等操作不影响退出动画
-            // 将它们 post 到主线程 Handler，在导航转场动画完成后再执行
+            // 通知清理、Service 停止与方向恢复退出当前 dispose 调用栈后执行。
+            // Handler.post 不保证下一帧已经绘制，也不保证导航转场已经结束。
             val deferredActivity = activity
             val deferredContext = context
             val deferredShouldHandleAsNavExit = shouldHandleAsNavigationExit
@@ -2670,7 +2669,24 @@ internal fun VideoDetailScreenStateHolder(
     val isContinuousPlayerMorphing = continuousFullscreenTransitionEnabled &&
         continuousPlayerPhase == ContinuousPlayerTransitionPhase.Collapsing
 
+    val fullscreenDiagnosticState = remember { object { var last: String? = null } }
+    SideEffect {
+        if (com.android.purebilibili.core.util.Logger.areVerboseRuntimeLogsEnabled()) {
+            val detail = "phase=$continuousPlayerPhase landscape=$isLandscape fullscreen=$isFullscreenMode " +
+                "continuous=$continuousFullscreenTransitionEnabled"
+            if (detail != fullscreenDiagnosticState.last) {
+                fullscreenDiagnosticState.last = detail
+                com.android.purebilibili.core.util.Logger.d("VideoReturnWork",
+                    "monotonic_ns=${System.nanoTime()} stage=fullscreen_state $detail")
+            }
+        }
+    }
+
     fun applyContinuousPlayerDecision(decision: ContinuousPlayerTransitionDecision) {
+        com.android.purebilibili.core.util.Logger.d("VideoReturnWork") {
+            "monotonic_ns=${System.nanoTime()} stage=fullscreen_request from=$continuousPlayerPhase " +
+                "to=${decision.phase} orientation=${decision.orientationRequest} allowed=$orientationRequestsAllowed"
+        }
         continuousPlayerPhase = decision.phase
         if (!orientationRequestsAllowed) return
         when (decision.orientationRequest) {

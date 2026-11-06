@@ -3,10 +3,30 @@ package com.android.purebilibili.core.ui.transition
 import android.os.Trace
 import android.os.Build
 import android.util.Log
+import com.android.purebilibili.core.util.Logger
 import java.util.concurrent.atomic.AtomicLong
 
 /** Perfetto counters are cumulative, so a SettledHidden interval must have a zero delta. */
 internal object VideoCardTransitionDiagnostics {
+    /** 仅记录实际发生的同步工作；没有帧循环，耗时不包含异步 GPU 完成时间。 */
+    fun <T> measureWork(stage: String, detail: () -> String = { "" }, block: () -> T): T {
+        val logging = Logger.areVerboseRuntimeLogsEnabled()
+        val tracing = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()
+        if (!logging && !tracing) return block()
+        val startedNs = System.nanoTime()
+        if (tracing) Trace.beginSection("video.transition.$stage")
+        try {
+            return block()
+        } finally {
+            if (tracing) Trace.endSection()
+            if (logging) {
+                val elapsedUs = (System.nanoTime() - startedNs) / 1_000L
+                Logger.d("VideoReturnWork", "monotonic_ns=$startedNs stage=$stage elapsed_us=$elapsedUs " +
+                    "thread=${Thread.currentThread().name} ${detail()}")
+            }
+        }
+    }
+
     private val snapshotRecords = AtomicLong()
     private val blurEffectUpdates = AtomicLong()
     private val sourceLayerDraws = AtomicLong()
@@ -18,13 +38,15 @@ internal object VideoCardTransitionDiagnostics {
 
     /** 只在点击解析失败时记录一次，区分未测量与来源身份失配；不进入逐帧路径。 */
     fun onSourceGeometryRejected(sourceKey: String?, recordedSourceKey: String?, hasRecordedBounds: Boolean) {
-        if (!Log.isLoggable(TAG, Log.DEBUG)) return
+        if (!Log.isLoggable(TAG, Log.DEBUG) && !Logger.areVerboseRuntimeLogsEnabled()) return
         val reason = when {
             !hasRecordedBounds -> "missing_bounds"
             sourceKey != recordedSourceKey -> "source_identity_mismatch"
             else -> "unusable_bounds"
         }
-        Log.d(TAG, "phase=SOURCE_FALLBACK reason=$reason source_key=$sourceKey recorded_key=$recordedSourceKey")
+        val message = "phase=SOURCE_FALLBACK reason=$reason source_key=$sourceKey recorded_key=$recordedSourceKey"
+        if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, message)
+        Logger.d(TAG, message)
     }
 
     fun onOwnershipChanged(value: VideoCardReturnCoverOwnership, liveSurface: Boolean) {
@@ -49,17 +71,19 @@ internal object VideoCardTransitionDiagnostics {
         }
         lastState = state
         setCounter("bili.video_card.phase", state.ordinal.toLong())
-        if (!Log.isLoggable(TAG, Log.DEBUG)) return
+        if (!Log.isLoggable(TAG, Log.DEBUG) && !Logger.areVerboseRuntimeLogsEnabled()) return
         val duration = if (state == VideoCardTransitionSettleState.AutoEnter) {
             spec.enterDurationMillis
         } else if (state == VideoCardTransitionSettleState.CancelRestore) {
             spec.cancelDurationMillis
         } else spec.returnDurationMillis
-        Log.d(TAG, "monotonic_ns=${System.nanoTime()} phase=$phase " +
+        val message = "monotonic_ns=${System.nanoTime()} phase=$phase " +
             "curve_id=hero_v1 resolved_duration=$duration source_layout=${sourceLayout.name} " +
             "ownership=$ownership live_surface=$liveSurfaceEnabled $configuration " +
             "blur_effect_updates=${blurEffectUpdates.get()} " +
-            "snapshot_records=${snapshotRecords.get()} nav_backdrop_draws=${navBackdropDraws.get()}")
+            "snapshot_records=${snapshotRecords.get()} nav_backdrop_draws=${navBackdropDraws.get()}"
+        if (Log.isLoggable(TAG, Log.DEBUG)) Log.d(TAG, message)
+        Logger.d(TAG, message)
     }
 
     fun onSnapshotRecorded() = increment("bili.video_card.snapshot_records", snapshotRecords)

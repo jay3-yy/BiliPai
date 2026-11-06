@@ -43,6 +43,59 @@ class HomeCardTransitionDrawCacheUiTest {
     @get:Rule val rule = createComposeRule()
 
     @Test
+    fun interruptedOpeningKeepsTheWholeSourceOpaqueDuringReturn() {
+        assumeTrue(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+        val progress = mutableFloatStateOf(0f)
+        val exposure = mutableStateOf(VideoCardTransitionExposure.Idle)
+        val blurEnabled = mutableStateOf(true)
+        rule.setContent {
+            Box(Modifier.size(160.dp).background(Color.White)) {
+                Box(Modifier.size(160.dp)
+                    .videoCardTransitionBackgroundEffect(
+                        progressProvider = { progress.floatValue },
+                        phaseProvider = {
+                            when (exposure.value) {
+                                VideoCardTransitionExposure.Opening -> VideoCardTransitionBackgroundPhase.OPENING
+                                VideoCardTransitionExposure.Returning -> VideoCardTransitionBackgroundPhase.RETURNING
+                                else -> VideoCardTransitionBackgroundPhase.IDLE
+                            }
+                        },
+                        exposureProvider = { exposure.value },
+                        isLightBackgroundProvider = { true },
+                        realtimeBlurEnabledProvider = { blurEnabled.value },
+                    )
+                    .background(Color.Blue)
+                    .testTag("interrupted-home"))
+            }
+        }
+        fun assertSourceVisible() {
+            val pixels = rule.onNodeWithTag("interrupted-home").captureToImage().toPixelMap()
+            // 白底同样有很高的 blue 分量，必须同时检查 red，才能发现底图变透明。
+            for (y in listOf(pixels.height / 4, pixels.height * 3 / 4)) {
+                val pixel = pixels[pixels.width / 2, y]
+                assertTrue("Header and feed regions must not expose the white backing", pixel.red < 0.15f && pixel.blue > 0.7f)
+            }
+        }
+        for (blur in listOf(true, false)) {
+            rule.runOnIdle {
+                blurEnabled.value = blur
+                exposure.value = VideoCardTransitionExposure.Opening
+                progress.floatValue = 0.65f
+            }
+            assertSourceVisible()
+            for (depth in listOf(0.65f, 0.5f, 0.3f, 0.1f, 0f)) {
+                rule.runOnIdle {
+                    exposure.value = VideoCardTransitionExposure.Returning
+                    progress.floatValue = depth
+                }
+                assertSourceVisible()
+            }
+            rule.runOnIdle { exposure.value = VideoCardTransitionExposure.Idle }
+            assertSourceVisible()
+        }
+    }
+
+    @Test
     fun clickCaptureFreezesPixelsUntilAnotherSourceTakesOwnership() {
         val color = mutableStateOf(Color.Blue)
         lateinit var source: VideoCardCaptureState

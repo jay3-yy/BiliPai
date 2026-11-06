@@ -289,7 +289,7 @@ internal fun BiliPaiNavDisplayHost(
         {
             val leavingKey = backStack.lastOrNull()
             if (leavingKey is BiliPaiNavKey.VideoDetail) {
-                latestPrepareReturn()
+                VideoCardTransitionDiagnostics.measureWork("return_prepare") { latestPrepareReturn() }
                 if (cardMorphAvailable) {
                     videoCardClock.beginReturning(sourceMetadata.sourceRoute, videoCardClock.depthProgress())
                 }

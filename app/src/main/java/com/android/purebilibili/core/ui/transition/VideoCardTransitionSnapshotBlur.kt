@@ -16,6 +16,7 @@ internal fun Modifier.videoCardTransitionSnapshotBlur(
     val snapshot = VideoCardTransitionSnapshotHandle(
         contentLayer = obtainGraphicsLayer(),
         sourceLayer = obtainGraphicsLayer(),
+        sharpLayer = obtainGraphicsLayer(),
         state = VideoCardTransitionSnapshotLayerState(),
     )
     var recorded = false

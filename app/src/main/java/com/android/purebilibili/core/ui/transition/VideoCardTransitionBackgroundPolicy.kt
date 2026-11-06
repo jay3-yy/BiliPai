@@ -1287,7 +1287,7 @@ internal fun Modifier.videoCardTransitionBackgroundEffect(
             scope = this,
             contentScale = frame.contentScale,
             pivot = blendPivot,
-            alpha = frozenLayerAlpha * (1f - frame.blurAlpha),
+            alpha = resolveVideoCardSharpSnapshotAlpha(frozenLayerAlpha, frame.blurAlpha),
         )
         drawLayer(contentLayer)
         VideoCardTransitionDiagnostics.onSourceLayerDrawn()

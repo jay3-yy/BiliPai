@@ -1241,14 +1241,15 @@ fun rememberVideoPlayerState(
                 // 仅当引用匹配时才清理，避免误清理新页面正在使用的 player
                 miniPlayerManager.clearExternalPlayerIfMatches(player)
                 
-                // ⚡ [性能优化] 将重量级的 player.release() 和通知清理延迟到下一帧
-                // ExoPlayer 要求 release() 在主线程调用，所以用 Handler.post 而非后台线程
-                // 这样不阻塞当前 onDispose 栈，让导航转场动画先完成
+                // 释放仍在播放器所属主线程执行；post 只退出当前 dispose 调用栈，
+                // 不代表下一帧或导航动画已经完成。
                 val playerToRelease = player
                 val appContext = context.applicationContext
                 android.os.Handler(android.os.Looper.getMainLooper()).post {
                     com.android.purebilibili.core.util.Logger.d("VideoPlayerState", "⚡ 延迟释放播放器资源")
-                    playerToRelease.release()
+                    com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork(
+                        "player_release",
+                    ) { playerToRelease.release() }
                     val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                     notificationManager.cancel(NOTIFICATION_ID)
                 }

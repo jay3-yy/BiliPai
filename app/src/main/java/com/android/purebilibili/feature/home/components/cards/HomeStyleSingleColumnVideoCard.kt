@@ -40,11 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -149,8 +148,9 @@ internal fun HomeStyleSingleColumnVideoCard(
             adaptiveInfo = transitionAdaptiveInfo,
         )
     }
-    val cardBounds = remember { object { var value: Rect? = null } }
-    val coverBounds = remember { object { var value: Rect? = null } }
+    // 只保存坐标引用，滚动时不计算全局矩形；点击时读取当前布局，适用于所有材质。
+    val cardCoordinates = remember { object { var value: LayoutCoordinates? = null } }
+    val coverCoordinates = remember { object { var value: LayoutCoordinates? = null } }
     val infoCoordinates = remember { object { var value: LayoutCoordinates? = null } }
     val nativeCardSnapshot = rememberNativeVideoCardSnapshotController(
         video.bvid, enabled = sharedTransitionEnabled,
@@ -190,8 +190,10 @@ internal fun HomeStyleSingleColumnVideoCard(
             // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
             return@appActionWithFeedback
         }
-        cardBounds.value?.let { bounds ->
-            val sourceCoverBounds = coverBounds.value
+        cardCoordinates.value?.takeIf { it.isAttached }?.let { coordinates ->
+            val bounds = coordinates.videoCardSourceBoundsInRoot()
+            val sourceCoverBounds = coverCoordinates.value
+                ?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
             CardPositionManager.recordVideoCardPosition(
                 bvid = video.bvid,
                 sourceRoute = sourceRoute,
@@ -254,8 +256,8 @@ internal fun HomeStyleSingleColumnVideoCard(
                 cardVisibleInWindow = it
             }
             .adaptiveCardHoverEffect(shape = cardShape)
-            .onGloballyPositioned { coordinates ->
-                cardBounds.value = coordinates.videoCardSourceBoundsInRoot()
+            .onPlaced { coordinates ->
+                cardCoordinates.value = coordinates
             }
             .videoCardSourceAnchor(video.bvid, cardShape)
             .then(nativeCardSnapshot.modifier)
@@ -272,10 +274,10 @@ internal fun HomeStyleSingleColumnVideoCard(
                 onClick = triggerClick,
                 onLongClick = if (isLongPressEnabled) onLongClick else null,
             ),
-        coverModifier = Modifier.onGloballyPositioned { coordinates ->
-            coverBounds.value = coordinates.videoCardSourceBoundsInRoot()
+        coverModifier = Modifier.onPlaced { coordinates ->
+            coverCoordinates.value = coordinates
         },
-        infoModifier = Modifier.onGloballyPositioned { coordinates ->
+        infoModifier = Modifier.onPlaced { coordinates ->
             infoCoordinates.value = coordinates
         },
         coverOverlayModifier = nativeCardSnapshot.coverOverlayModifier,

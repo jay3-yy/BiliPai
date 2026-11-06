@@ -63,7 +63,8 @@ import com.android.purebilibili.core.ui.animation.EntranceGroup
 import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.animation.rememberEffectiveEntranceMotionSpec
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
-import com.android.purebilibili.feature.video.OfficialVideoCardTransition
+import com.android.purebilibili.core.store.VideoTransitionMode
+import com.android.purebilibili.feature.video.SystemVideoCardTransition
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.os.Build
@@ -243,20 +244,22 @@ fun AnimationSettingsContent(
     }
     val videoTransitionRealtimeBlurEnabled by remember(context) { SettingsManager.getVideoTransitionRealtimeBlurEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
+    val useSystemVideoTransition = appNavigationSettings.videoTransitionMode == VideoTransitionMode.SYSTEM_PREFERRED
     val videoTransitionCapability = remember(state.cardTransitionEnabled) {
-        OfficialVideoCardTransition.deviceCapability()
+        SystemVideoCardTransition.deviceCapability()
     }
     val systemReduceMotion = rememberSystemReduceMotion()
     val cardTransitionSourceDescription = stringResource(
         when {
             systemReduceMotion -> R.string.animation_card_transition_source_reduced_motion
+            !useSystemVideoTransition -> R.string.animation_card_transition_source_app_selected
             videoTransitionCapability.available -> R.string.animation_card_transition_source_official
             else -> R.string.animation_card_transition_source_app
         },
     )
     val transitionBlurDescription = stringResource(
         when {
-            !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
+            !useSystemVideoTransition || !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
             videoTransitionCapability.configurableBlur -> R.string.animation_transition_blur_official_supported
             else -> R.string.animation_transition_blur_official_system
         },
@@ -652,8 +655,7 @@ fun AnimationSettingsContent(
                             AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_TRANSITION_ANIMATION),
                                 title = localizedAnimationSettingTitle("animation.card_transition_enabled"),
-                                subtitle = if (state.cardTransitionEnabled) cardTransitionSourceDescription
-                                    else stringResource(R.string.animation_card_transition_summary),
+                                subtitle = stringResource(R.string.animation_card_transition_summary),
                                 checked = state.cardTransitionEnabled,
                                 onCheckedChange = { enabled ->
                                     viewModel.toggleCardTransition(enabled)
@@ -662,6 +664,22 @@ fun AnimationSettingsContent(
                                     }
                                 },
                                 iconTint = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppPreferenceDivider()
+
+                        SettingsItemAnchor("animation.video_transition_mode") {
+                            SettingsSingleChoicePreference(
+                                title = stringResource(R.string.animation_transition_mode_title),
+                                subtitle = cardTransitionSourceDescription,
+                                options = listOf(
+                                    AppSegmentOption(VideoTransitionMode.SYSTEM_PREFERRED, stringResource(R.string.animation_transition_mode_system)),
+                                    AppSegmentOption(VideoTransitionMode.APP, stringResource(R.string.animation_transition_mode_app)),
+                                ),
+                                selectedValue = appNavigationSettings.videoTransitionMode,
+                                onSelectionChange = { mode ->
+                                    scope.launch { SettingsManager.setVideoTransitionMode(context, mode) }
+                                },
                             )
                         }
                         AppPreferenceDivider()

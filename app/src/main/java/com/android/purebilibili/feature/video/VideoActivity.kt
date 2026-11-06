@@ -69,12 +69,13 @@ class VideoActivity : ComponentActivity() {
         if (officialReturnMotionEnabled == enabled && officialReturnBlurEnabled == realtimeBlurEnabled) return
         officialReturnMotionEnabled = enabled
         officialReturnBlurEnabled = realtimeBlurEnabled
-        refreshOfficialReturn()
+        refreshOfficialReturn("settings_changed")
     }
 
-    private fun refreshOfficialReturn() = OfficialVideoCardTransition.refreshReturn(
-        this, officialReturnMotionEnabled, officialReturnBlurEnabled,
-    )
+    private fun refreshOfficialReturn(reason: String, preparingToFinish: Boolean = false) =
+        SystemVideoCardTransition.refreshReturn(
+            this, officialReturnMotionEnabled, officialReturnBlurEnabled, reason, preparingToFinish,
+        )
 
     internal fun onOpeningVideoChild() {
         playbackWindowActive = false
@@ -97,8 +98,8 @@ class VideoActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        OfficialVideoCardTransition.initialRealtimeBlurEnabled(
-            intent.getStringExtra(OfficialVideoCardTransition.EXTRA_SESSION),
+        SystemVideoCardTransition.initialRealtimeBlurEnabled(
+            intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
         )?.let { officialReturnBlurEnabled = it }
         lifecycleScope.launch {
             applyPreferredDisplayMode(SettingsManager.getScreenDisplayModeId(this@VideoActivity).first())
@@ -300,8 +301,8 @@ class VideoActivity : ComponentActivity() {
                 ProvideAppTextSelectionHost {
                 CompositionLocalProvider(
                     // 窗口转场打开时，首帧在封面就绪前同步显示打开时捕获的卡片像素。
-                    LocalVideoDetailOpeningSeed provides OfficialVideoCardTransition.peekThumbnail(
-                        intent.getStringExtra(OfficialVideoCardTransition.EXTRA_SESSION),
+                    LocalVideoDetailOpeningSeed provides SystemVideoCardTransition.peekThumbnail(
+                        intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
                     ),
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
@@ -402,7 +403,7 @@ class VideoActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshOfficialReturn()
+        refreshOfficialReturn("on_resume")
         playbackWindowActive = true
         resumedVideoWindow = java.lang.ref.WeakReference(this)
         val mini = MiniPlayerManager.getInstance(this)
@@ -430,7 +431,7 @@ class VideoActivity : ComponentActivity() {
     override fun finish() {
         if (!isFinishing) {
             // 系统返回与页面返回共用此入口；关闭窗口前刷新同一来源实例的落点。
-            refreshOfficialReturn()
+            refreshOfficialReturn("before_finish", preparingToFinish = true)
             if (playbackWindowActive) {
                 val manager = MiniPlayerManager.getInstance(this)
                 finishingBvid = manager.currentBvid
@@ -446,14 +447,16 @@ class VideoActivity : ComponentActivity() {
             resumedVideoWindow?.get() === this && MiniPlayerManager.getInstance(this).player === finishingPlayer
         }?.let { bvid ->
             val manager = MiniPlayerManager.getInstance(this)
-            if (intent.getBooleanExtra("video_parent_is_video", false)) {
-                manager.markLeavingByNavigation(expectedBvid = bvid, forceStop = true)
-            } else if (manager.prepareAudioNowPlayingForNavigationExit(bvid)) {
-                manager.markLeavingByNavigation(expectedBvid = bvid)
-            } else if (manager.shouldShowInAppMiniPlayer()) {
-                manager.enterMiniMode()
-            } else {
-                manager.markLeavingByNavigation(expectedBvid = bvid)
+            com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork("playback_exit_cleanup") {
+                if (intent.getBooleanExtra("video_parent_is_video", false)) {
+                    manager.markLeavingByNavigation(expectedBvid = bvid, forceStop = true)
+                } else if (manager.prepareAudioNowPlayingForNavigationExit(bvid)) {
+                    manager.markLeavingByNavigation(expectedBvid = bvid)
+                } else if (manager.shouldShowInAppMiniPlayer()) {
+                    manager.enterMiniMode()
+                } else {
+                    manager.markLeavingByNavigation(expectedBvid = bvid)
+                }
             }
             finishingBvid = null
         }
@@ -466,7 +469,7 @@ class VideoActivity : ComponentActivity() {
     
     override fun onDestroy() {
         if (!isChangingConfigurations) {
-            OfficialVideoCardTransition.release(intent.getStringExtra(OfficialVideoCardTransition.EXTRA_SESSION))
+            SystemVideoCardTransition.release(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))
         }
         runtimeJankStats?.isTrackingEnabled = false
         runtimeJankStats = null
@@ -478,7 +481,7 @@ class VideoActivity : ComponentActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         updateStateFromConfig(newConfig)
-        refreshOfficialReturn()
+        refreshOfficialReturn("configuration_changed")
     }
 
     private fun updateStateFromConfig(config: Configuration) {

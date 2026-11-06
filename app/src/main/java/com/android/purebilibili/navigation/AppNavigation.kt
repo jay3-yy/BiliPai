@@ -1029,10 +1029,10 @@ fun AppNavigation(
                     ?.copy(hostOriginInRoot = navigationHostOriginInRoot),
             )
         }
-        fun captureCardSourceDirectionForSession(): BiliPaiNavCardSourceDirection {
+        fun captureCardSourceDirectionForSession(cardFullyVisible: Boolean): BiliPaiNavCardSourceDirection {
             return resolveBiliPaiNavCardSourceDirection(
                 clickedBoundsRecorded = CardPositionManager.lastClickedCardBounds != null,
-                cardFullyVisible = CardPositionManager.isCardFullyVisible,
+                cardFullyVisible = cardFullyVisible,
                 isSingleColumnCard = CardPositionManager.isSingleColumnCard,
                 normalizedCenterX = CardPositionManager.lastClickedCardCenter?.x
             )
@@ -1046,18 +1046,22 @@ fun AppNavigation(
             val anchor = if (useRecordedCardSource) {
                 com.android.purebilibili.core.ui.transition.VideoCardSourceInstances.takeAnchor(bvid)
             } else null
+            // 各来源使用自身实际视口裁剪，不套用首页固定顶栏高度。
+            // boundsInRoot 同时核对实例存活、窗口附着与整卡是否被裁切。
+            val measuredSourceBounds = anchor?.boundsInRoot()
+            val cardFullyVisible = measuredSourceBounds != null
             return VideoCardTransitionSession.create(
                 bvid = bvid,
                 source = source,
                 recordedSourceKey = CardPositionManager.lastClickedVideoSourceKey
                     .takeIf { useRecordedCardSource },
-                cardBounds = CardPositionManager.lastClickedCardBounds.takeIf { anchor != null },
+                cardBounds = measuredSourceBounds,
                 coverBounds = CardPositionManager.lastClickedCoverBounds,
                 infoBounds = CardPositionManager.lastClickedInfoBounds,
                 sourceCornerDp = CardPositionManager.lastClickedVideoSourceCornerDp,
-                cardSourceDirection = captureCardSourceDirectionForSession(),
+                cardSourceDirection = captureCardSourceDirectionForSession(cardFullyVisible),
                 coverIdentity = coverIdentity,
-                cardFullyVisible = anchor != null && CardPositionManager.isCardFullyVisible,
+                cardFullyVisible = cardFullyVisible,
                 isSingleColumnCard = CardPositionManager.isSingleColumnCard,
                 sourceLayout = CardPositionManager.lastClickedVideoSourceLayout,
                 sourceChromeSnapshot = CardPositionManager.lastClickedVideoSourceChromeSnapshot,
@@ -1452,7 +1456,8 @@ fun AppNavigation(
                 pushNavigation3Key(key)
             }
             if (key is BiliPaiNavKey.VideoDetail &&
-                com.android.purebilibili.feature.video.OfficialVideoCardTransition.canAttempt(
+                appNavigationSettings.videoTransitionMode == com.android.purebilibili.core.store.VideoTransitionMode.SYSTEM_PREFERRED &&
+                com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
                     sharedVideoCardTransitionEnabled, transitionSession,
                 )
             ) {
@@ -1462,7 +1467,7 @@ fun AppNavigation(
                             navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
                         )
                     }
-                    val opened = com.android.purebilibili.feature.video.OfficialVideoCardTransition.tryOpen(
+                    val opened = com.android.purebilibili.feature.video.SystemVideoCardTransition.tryOpen(
                         activity = hostActivity,
                         request = com.android.purebilibili.feature.video.VideoOpenRequest.fromKey(key),
                         source = transitionSession,

@@ -1070,6 +1070,7 @@ data class AppNavigationSettings(
     val predictiveBackExitDirection: String = "always_right",
     val miuixTransitionBlurEnabled: Boolean = true,
     val miuixPredictiveBackMaxProgressPercent: Int = 100,
+    val videoTransitionMode: VideoTransitionMode = VideoTransitionMode.SYSTEM_PREFERRED,
     val settingsContainerMorphEnabled: Boolean = true,
     val settingsContainerRealtimeBlurEnabled: Boolean = false,
     val liquidIndicatorWobbleEnabled: Boolean = true,
@@ -1646,6 +1647,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("maid_lottie_animation_enabled")
     //  [新增] 卡片过渡动画开关
     private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
+    private val KEY_VIDEO_TRANSITION_MODE = stringPreferencesKey("video_transition_mode")
     // 实时画面转场：SDR 用 TextureView 一镜到底；HDR 仍 SurfaceView（不降画质），morph 走封面
     private val KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED =
         booleanPreferencesKey("live_surface_card_transition_enabled")
@@ -3502,6 +3504,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     //  [新增] --- 卡片过渡动画开关 ---
     fun getCardTransitionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] ?: true }  // 默认开启
+
+    suspend fun setVideoTransitionMode(context: Context, mode: VideoTransitionMode) {
+        context.settingsDataStore.edit { it[KEY_VIDEO_TRANSITION_MODE] = mode.storageValue }
+    }
 
     suspend fun setCardTransitionEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] = value }
@@ -8321,6 +8327,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             miuixPredictiveBackMaxProgressPercent =
                 (preferences[miuixPredictiveBackMaxProgressPercentPreferencesKey] ?: 100)
                     .coerceIn(0, 100),
+            videoTransitionMode = VideoTransitionMode.fromStorageValue(
+                preferences[KEY_VIDEO_TRANSITION_MODE]
+            ),
             settingsContainerMorphEnabled =
                 preferences[booleanPreferencesKey("settings_container_morph_enabled")] ?: true,
             settingsContainerRealtimeBlurEnabled =
@@ -8741,6 +8750,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.APPEARANCE,
             ),
             BooleanShareablePreferenceDefinition(KEY_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),
+            StringShareablePreferenceDefinition(KEY_VIDEO_TRANSITION_MODE, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),
 
             BooleanShareablePreferenceDefinition(
                 booleanPreferencesKey("settings_container_realtime_blur_enabled"),

@@ -6,6 +6,7 @@ import androidx.lifecycle.withResumed
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.util.WeakHashMap
 
 /** 独立窗口入口；官方转场的启动配置与播放参数分别传递。 */
@@ -17,14 +18,17 @@ internal object VideoActivityLauncher {
         request: VideoOpenRequest,
         transitionOptions: android.os.Bundle? = null,
         officialTransitionToken: String? = null,
-    ) {
+        canLaunch: () -> Boolean = { true },
+    ): Boolean {
         val job = requireNotNull(currentCoroutineContext()[Job])
         val previous = openingJobs.put(activity, job)
         if (previous !== job) previous?.cancel()
         try {
             activity.lifecycle.withResumed { }
+            currentCoroutineContext().ensureActive()
+            if (!canLaunch()) return false
             val intent = Intent(activity, VideoActivity::class.java).putExtras(request.toBundle())
-            officialTransitionToken?.let { intent.putExtra(OfficialVideoCardTransition.EXTRA_SESSION, it) }
+            officialTransitionToken?.let { intent.putExtra(SystemVideoCardTransition.EXTRA_SESSION, it) }
             val manager = MiniPlayerManager.getInstance(activity)
             manager.isNavigatingToVideo = true
             manager.haltForeignPlaybackForIncomingVideo(request.bvid)
@@ -40,6 +44,7 @@ internal object VideoActivityLauncher {
                 manager.isNavigatingToVideo = false
                 throw error
             }
+            return true
         } finally {
             if (openingJobs[activity] === job) openingJobs.remove(activity)
         }

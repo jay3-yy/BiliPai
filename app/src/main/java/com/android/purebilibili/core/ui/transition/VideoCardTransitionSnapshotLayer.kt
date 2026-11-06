@@ -179,20 +179,28 @@ internal fun isVideoCardTransitionSnapshotDrawable(
 internal class VideoCardTransitionSnapshotHandle(
     val contentLayer: androidx.compose.ui.graphics.layer.GraphicsLayer,
     private val sourceLayer: androidx.compose.ui.graphics.layer.GraphicsLayer,
+    private val sharpLayer: androidx.compose.ui.graphics.layer.GraphicsLayer,
     val state: VideoCardTransitionSnapshotLayerState,
 ) {
     private var effectRasterScale = Float.NaN
     /**
      * 来源内容与动态景深分层。内层只在快照刷新时录制，使用独立离屏缓存承载复杂页面；
      * 外层仅引用内层，模糊、透明度与圆角更新不会同时改动内层的图层属性。
-     * 两层均由会话持有，不借用实时页面的 graphicsLayer，来源卸载后仍按原规则刷新。
+     * 清晰与模糊各有独立效果壳，共享不变的来源层；来源卸载后仍按原规则刷新。
      */
     fun recordSource(scope: DrawScope, drawBlock: DrawScope.() -> Unit) {
-        sourceLayer.compositingStrategy = CompositingStrategy.Offscreen
-        with(scope) {
-            sourceLayer.record(block = drawBlock)
+        VideoCardTransitionDiagnostics.measureWork("source_snapshot_record", detail = { "size=${sourceLayer.size}" }) {
+            sourceLayer.compositingStrategy = CompositingStrategy.Offscreen
+            with(scope) {
+                sourceLayer.record(block = drawBlock)
+            }
+            sharpLayer.record(
+                density = scope,
+                layoutDirection = scope.layoutDirection,
+                size = sourceLayer.size,
+            ) { drawLayer(sourceLayer) }
+            effectRasterScale = Float.NaN
         }
-        effectRasterScale = Float.NaN
     }
 
     /** 仅供刚完成录制的同一帧复用清晰底图，不再次执行来源页面的绘制。 */
@@ -203,7 +211,7 @@ internal class VideoCardTransitionSnapshotHandle(
     /**
      * 恒定半径混合：按内容缩放对齐绘制锐利原层，画在模糊层下方。
      * 与模糊层合成等价于渐进模糊，且不依赖 live 内容垫底——来源页策略
-     * 不先 drawContent 时不会透出窗口底色。alpha 为锐利层可见度（1-混合强度）。
+     * 不先 drawContent 时不会透出窗口底色。alpha 由冻结页覆盖率与模糊混合强度共同确定。
      */
     fun drawSharpSourceAligned(
         scope: DrawScope,
@@ -212,11 +220,12 @@ internal class VideoCardTransitionSnapshotHandle(
         alpha: Float,
     ) {
         if (alpha <= 0.001f) return
-        sourceLayer.alpha = alpha
-        sourceLayer.scaleX = contentScale
-        sourceLayer.scaleY = contentScale
-        sourceLayer.pivotOffset = pivot
-        with(scope) { drawLayer(sourceLayer) }
+        // 原始来源同时被模糊层引用，必须保持不透明、无变换；清晰分支只改自己的壳。
+        sharpLayer.alpha = alpha
+        sharpLayer.scaleX = contentScale
+        sharpLayer.scaleY = contentScale
+        sharpLayer.pivotOffset = pivot
+        with(scope) { drawLayer(sharpLayer) }
     }
 
     /** 只重录效果壳的单条图层引用，不重新执行首页的绘制或改变原始来源缓存。 */
@@ -227,18 +236,20 @@ internal class VideoCardTransitionSnapshotHandle(
             rasterScale,
         )
         if (effectRasterScale != rasterScale || contentLayer.size != rasterSize) {
-            contentLayer.record(
-                density = scope,
-                layoutDirection = scope.layoutDirection,
-                size = rasterSize,
-            ) {
-                scale(rasterScale, rasterScale, pivot = Offset.Zero) {
-                    drawLayer(sourceLayer)
+            VideoCardTransitionDiagnostics.measureWork("effect_layer_record", detail = { "size=$rasterSize rasterScale=$rasterScale" }) {
+                contentLayer.record(
+                    density = scope,
+                    layoutDirection = scope.layoutDirection,
+                    size = rasterSize,
+                ) {
+                    scale(rasterScale, rasterScale, pivot = Offset.Zero) {
+                        drawLayer(sourceLayer)
+                    }
                 }
+                effectRasterScale = rasterScale
+                // Outline 的默认尺寸取当前纹理尺寸，切换分辨率后必须同步重建。
+                state.lastCornerRadiusPx = Float.NaN
             }
-            effectRasterScale = rasterScale
-            // Outline 的默认尺寸取当前纹理尺寸，切换分辨率后必须同步重建。
-            state.lastCornerRadiusPx = Float.NaN
         }
         return rasterScale
     }
@@ -256,6 +267,11 @@ internal class VideoCardTransitionSnapshotHandle(
         // 标记失效不会清除 GraphicsLayer 的绘制闭包和子层引用。
         // 会话结束后录入空内容，归还旧列表的封面与离屏图层。
         contentLayer.record(
+            density = androidx.compose.ui.unit.Density(1f),
+            layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
+            size = androidx.compose.ui.unit.IntSize(1, 1),
+        ) {}
+        sharpLayer.record(
             density = androidx.compose.ui.unit.Density(1f),
             layoutDirection = androidx.compose.ui.unit.LayoutDirection.Ltr,
             size = androidx.compose.ui.unit.IntSize(1, 1),
@@ -285,8 +301,8 @@ internal fun applyVideoCardTransitionSnapshotFrame(
     /** 恒定半径混合模式：半径不随进度变化，模糊强度经 [layerAlpha] 合成。 */
     blurRadiusPxOverride: Float? = null,
 ) {
-    // Shared with the host renderer: write the owning renderer's final alpha once.
-    contentLayer.alpha = layerAlpha
+    // 固定半径由透明度控制模糊强度；可变半径路径直接使用整层覆盖率。
+    contentLayer.alpha = if (blurRadiusPxOverride != null) layerAlpha * frame.blurAlpha else layerAlpha
     val pivot = resolveVideoCardTransitionBackgroundScalePivotOffset(
         sourceBounds = sourceBounds,
         canvasSize = canvasSize,
@@ -324,11 +340,20 @@ internal fun applyVideoCardTransitionSnapshotFrame(
 internal fun rememberVideoCardTransitionSnapshotHandle(): VideoCardTransitionSnapshotHandle {
     val layer = rememberGraphicsLayer()
     val sourceLayer = rememberGraphicsLayer()
-    return remember(layer, sourceLayer) {
+    val sharpLayer = rememberGraphicsLayer()
+    return remember(layer, sourceLayer, sharpLayer) {
         VideoCardTransitionSnapshotHandle(
             contentLayer = layer,
             sourceLayer = sourceLayer,
+            sharpLayer = sharpLayer,
             state = VideoCardTransitionSnapshotLayerState(),
         )
     }
+}
+
+/** 清晰底与模糊层按 SrcOver 合成后，总覆盖率仍为冻结页的覆盖率，避免透出窗口底色。 */
+internal fun resolveVideoCardSharpSnapshotAlpha(frozenAlpha: Float, blurAlpha: Float): Float {
+    val blurredCoverage = frozenAlpha * blurAlpha
+    return if (blurredCoverage == 1f) 0f else
+        (frozenAlpha - blurredCoverage) / (1f - blurredCoverage)
 }

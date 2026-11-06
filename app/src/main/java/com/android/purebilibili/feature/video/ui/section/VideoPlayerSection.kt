@@ -4106,10 +4106,15 @@ private fun VideoPlayerSectionContent(
                         ) {
                             val ratio = minOf(1f, 1280f / maxOf(texture.width, texture.height))
                             outputHandoffFrame = try {
-                                texture.getBitmap(
-                                    (texture.width * ratio).roundToInt().coerceAtLeast(1),
-                                    (texture.height * ratio).roundToInt().coerceAtLeast(1),
-                                )?.asImageBitmap()
+                                com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork(
+                                    "output_handoff_readback",
+                                    detail = { "texture=${texture.width}x${texture.height} ratio=$ratio fullscreen=$isFullscreen" },
+                                ) {
+                                    texture.getBitmap(
+                                        (texture.width * ratio).roundToInt().coerceAtLeast(1),
+                                        (texture.height * ratio).roundToInt().coerceAtLeast(1),
+                                    )?.asImageBitmap()
+                                }
                             } catch (_: IllegalStateException) {
                                 null
                             }

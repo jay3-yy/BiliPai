@@ -10,7 +10,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "animation.app_navigation_settings.miuix_transition_blur_enabled" to "滑动返回时，模糊后方页面；返回时不模糊后方页面",
     "animation.bottom_bar_blur_enabled" to "模糊底栏背后的内容，不含折射和光效",
     "animation.card_animation_enabled" to "打开首页时卡片依次淡入",
-    "animation.card_transition_enabled" to "封面和标题平滑过渡到详情页",
+    "animation.card_transition_enabled" to "一镜到底展开与返回，支持系统优先和自研动画",
     "animation.full_screen_swipe_back_enabled" to "列表和设置页可从屏幕中间右滑返回；使用屏幕边缘的系统返回手势",
     "animation.global_drag_feedback_enabled" to "统一控制按钮与胶囊的拖动形变，关闭后保留按压反馈",
     "animation.global_text_tap_copy_enabled" to "点按正文文字即可复制",
