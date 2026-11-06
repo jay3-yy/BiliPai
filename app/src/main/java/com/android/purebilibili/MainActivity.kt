@@ -585,6 +585,12 @@ internal fun resolveSplashIconResIdForComponentClassName(className: String?): In
         "MainActivityAliasBlueSnowMaidFrontDark",
         "MainActivityAliasBlueSnowMaidFrontDarkNoIcon" -> R.mipmap.ic_launcher_blue_snow_maid_front_dark
         "MainActivitySplashBlueSnowMaidFrontDark" -> R.drawable.splash_icon_blue_snow_maid_front_dark
+        "MainActivityAlias3DLight",
+        "MainActivityAlias3DLightNoIcon",
+        "MainActivitySplashIcon3DLight" -> R.mipmap.ic_launcher_3d_light
+        "MainActivityAlias3DDark",
+        "MainActivityAlias3DDarkNoIcon",
+        "MainActivitySplashIcon3DDark" -> R.mipmap.ic_launcher_3d_dark
         "MainActivityAlias3DLauncher",
         "MainActivityAlias3D",
         "MainActivityAlias3DNoIcon",

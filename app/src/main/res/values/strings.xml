@@ -276,8 +276,8 @@
     <string name="icon_blue_snow_maid_announcement_description">居中扩音器主题</string>
     <string name="icon_blue_snow_maid_front">蓝雪女仆·正面</string>
     <string name="icon_blue_snow_maid_front_description">正面微笑主题</string>
-    <string name="icon_3d">3D立体</string>
-    <string name="icon_3d_description">全新3D设计</string>
+    <string name="icon_3d">弹幕播放窗</string>
+    <string name="icon_3d_description">暖白墨灰弹幕窗，适配桌面形状与主题配色</string>
     <string name="icon_bilipai">BiliPai</string>
     <string name="icon_bilipai_description">全新品牌图标</string>
     <string name="icon_bilipai_pink">BiliPai 粉</string>
@@ -288,7 +288,7 @@
     <string name="icon_bilipai_monet_description">Android 12 及以上随系统配色，旧版本使用蓝色</string>
     <string name="icon_settings_apply_notice">图标切换可能需要几秒钟生效，系统可能会短暂卡顿。</string>
     <string name="icon_appearance_title">女仆图标外观</string>
-    <string name="icon_appearance_summary">可跟随系统，或在任意系统主题下固定明亮、暗黑外壳</string>
+    <string name="icon_appearance_summary">女仆系列与弹幕播放窗共用此入口，可跟随系统或固定浅色、深色</string>
     <string name="icon_appearance_follow_system">跟随系统</string>
     <string name="icon_appearance_light">明亮</string>
     <string name="icon_appearance_dark">暗黑</string>
@@ -732,7 +732,7 @@
     <string name="appearance_icon_yuki">比心少女</string>
     <string name="appearance_icon_anime">蓝发电视</string>
     <string name="appearance_icon_headphone">耳机少女</string>
-    <string name="appearance_icon_3d">3D立体</string>
+    <string name="appearance_icon_3d">弹幕播放窗</string>
     <string name="appearance_icon_flat">扁平现代</string>
     <string name="appearance_icon_telegram_blue">纸飞机蓝</string>
     <string name="appearance_icon_telegram_dark">暗夜蓝</string>

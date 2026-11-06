@@ -23,6 +23,8 @@ internal fun resolveSplashThemeResIdForActivityClassName(className: String?): In
         "com.android.purebilibili.MainActivitySplashBlueSnowMaidFrontLight" -> R.style.Theme_PureBiliBili_Splash_BlueSnowMaidFrontLight
         "com.android.purebilibili.MainActivitySplashBlueSnowMaidFrontDark" -> R.style.Theme_PureBiliBili_Splash_BlueSnowMaidFrontDark
         "com.android.purebilibili.MainActivitySplashIcon3D" -> R.style.Theme_PureBiliBili_Splash_Icon3D
+        "com.android.purebilibili.MainActivitySplashIcon3DLight" -> R.style.Theme_PureBiliBili_Splash_Icon3DLight
+        "com.android.purebilibili.MainActivitySplashIcon3DDark" -> R.style.Theme_PureBiliBili_Splash_Icon3DDark
         "com.android.purebilibili.MainActivitySplashBiliPai" -> R.style.Theme_PureBiliBili_Splash_BiliPai
         "com.android.purebilibili.MainActivitySplashBiliPaiPink" -> R.style.Theme_PureBiliBili_Splash_BiliPaiPink
         "com.android.purebilibili.MainActivitySplashBiliPaiWhite" -> R.style.Theme_PureBiliBili_Splash_BiliPaiWhite
@@ -77,6 +79,8 @@ class MainActivitySplashBlueSnowMaidDark : MainActivityLauncherEntry()
 class MainActivitySplashBlueSnowMaidFrontLight : MainActivityLauncherEntry()
 class MainActivitySplashBlueSnowMaidFrontDark : MainActivityLauncherEntry()
 class MainActivitySplashIcon3D : MainActivityLauncherEntry()
+class MainActivitySplashIcon3DLight : MainActivityLauncherEntry()
+class MainActivitySplashIcon3DDark : MainActivityLauncherEntry()
 class MainActivitySplashBiliPai : MainActivityLauncherEntry()
 class MainActivitySplashBiliPaiPink : MainActivityLauncherEntry()
 class MainActivitySplashBiliPaiWhite : MainActivityLauncherEntry()

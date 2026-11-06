@@ -88,4 +88,12 @@
 
     <!-- 兼容旧主题名 -->
     <style name="Theme.Purebilibili" parent="Theme.PureBiliBili" />
+    <style name="Theme.PureBiliBili.Splash.Icon3DLight" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_3d_light</item>
+    </style>
+
+    <style name="Theme.PureBiliBili.Splash.Icon3DDark" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_3d_dark</item>
+    </style>
+
 </resources>

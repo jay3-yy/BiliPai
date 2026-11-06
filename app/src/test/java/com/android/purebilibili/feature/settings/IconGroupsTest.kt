@@ -28,7 +28,7 @@ class IconGroupsTest {
     }
 
     @Test
-    fun resolveIconOptionPreviewRes_usesFixedMaidAppearanceResources() {
+    fun resolveIconOptionPreviewRes_usesUnifiedAppearanceForMaidAndPlayWindow() {
         assertEquals(
             R.mipmap.ic_launcher_blue_snow_maid_dark_round,
             resolveIconOptionPreviewRes("icon_blue_snow_maid", AppIconAppearance.DARK)
@@ -40,6 +40,14 @@ class IconGroupsTest {
         assertEquals(
             R.mipmap.ic_launcher_blue_snow_maid_announcement_dark_round,
             resolveIconOptionPreviewRes("icon_blue_snow_maid_announcement", AppIconAppearance.DARK)
+        )
+        assertEquals(
+            R.mipmap.ic_launcher_3d_light_round,
+            resolveIconOptionPreviewRes("icon_3d", AppIconAppearance.LIGHT)
+        )
+        assertEquals(
+            R.mipmap.ic_launcher_3d_dark_round,
+            resolveIconOptionPreviewRes("icon_3d", AppIconAppearance.DARK)
         )
         assertEquals(
             R.mipmap.ic_launcher_bilipai_round,

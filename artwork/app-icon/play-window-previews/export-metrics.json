@@ -1,0 +1,33 @@
+{
+  "canvasDp": 108,
+  "safeZoneDiameterDp": 66,
+  "foregroundRadiusDp": 32.5,
+  "scale": 0.057557699948587816,
+  "sourceCenter": [
+    624.5,
+    629.5
+  ],
+  "palette": {
+    "lightBackground": "#F3EEE6",
+    "darkBackground": "#242321",
+    "glyph": "#252525"
+  },
+  "illustrativeMaskClippedPixels": {
+    "Light/circle": 0,
+    "Light/rounded-square": 0,
+    "Light/squircle": 0,
+    "Light/teardrop": 0,
+    "Dark/circle": 0,
+    "Dark/rounded-square": 0,
+    "Dark/squircle": 0,
+    "Dark/teardrop": 0,
+    "Themed light/circle": 0,
+    "Themed light/rounded-square": 0,
+    "Themed light/squircle": 0,
+    "Themed light/teardrop": 0,
+    "Themed dark/circle": 0,
+    "Themed dark/rounded-square": 0,
+    "Themed dark/squircle": 0,
+    "Themed dark/teardrop": 0
+  }
+}

@@ -323,6 +323,26 @@
             android:supportsPictureInPicture="true" />
 
         <activity
+            android:name=".MainActivitySplashIcon3DLight"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_3d_light"
+            android:roundIcon="@mipmap/ic_launcher_3d_light_round"
+            android:theme="@style/Theme.PureBiliBili.Splash.Icon3DLight"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
+            android:name=".MainActivitySplashIcon3DDark"
+            android:exported="false"
+            android:enabled="true"
+            android:icon="@mipmap/ic_launcher_3d_dark"
+            android:roundIcon="@mipmap/ic_launcher_3d_dark_round"
+            android:theme="@style/Theme.PureBiliBili.Splash.Icon3DDark"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:supportsPictureInPicture="true" />
+
+        <activity
             android:name=".MainActivitySplashBiliPai"
             android:exported="false"
             android:enabled="true"
@@ -570,6 +590,42 @@
             android:roundIcon="@mipmap/ic_launcher_3d_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivitySplashIcon3D">
+        <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- 🚀 App Shortcuts -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAlias3DLight"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_3d_light"
+            android:roundIcon="@mipmap/ic_launcher_3d_light_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashIcon3DLight">
+        <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- 🚀 App Shortcuts -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAlias3DDark"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_3d_dark"
+            android:roundIcon="@mipmap/ic_launcher_3d_dark_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashIcon3DDark">
         <intent-filter android:priority="1">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -844,6 +900,40 @@
             android:exported="true"
             android:icon="@mipmap/ic_launcher_3d"
             android:roundIcon="@mipmap/ic_launcher_3d_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAlias3DLightNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_3d_light"
+            android:roundIcon="@mipmap/ic_launcher_3d_light_round"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivitySplashNoIcon">
+            <intent-filter android:priority="1">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".MainActivityAlias3DDarkNoIcon"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_3d_dark"
+            android:roundIcon="@mipmap/ic_launcher_3d_dark_round"
             android:label="@string/app_name"
             android:targetActivity=".MainActivitySplashNoIcon">
             <intent-filter android:priority="1">

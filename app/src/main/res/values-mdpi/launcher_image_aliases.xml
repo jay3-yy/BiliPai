@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <item type="mipmap" name="ic_launcher_3d">@mipmap/ic_launcher_shared_da90a7123bfbd1fa</item>
-    <item type="mipmap" name="ic_launcher_3d_round">@mipmap/ic_launcher_shared_da90a7123bfbd1fa</item>
+    <item type="mipmap" name="ic_launcher_3d">@mipmap/ic_launcher_play_window_legacy</item>
+    <item type="mipmap" name="ic_launcher_3d_round">@mipmap/ic_launcher_play_window_round_legacy</item>
     <item type="mipmap" name="ic_launcher_bilipai">@mipmap/ic_launcher_shared_8e3c20393d70f2fc</item>
     <item type="mipmap" name="ic_launcher_bilipai_pink">@mipmap/ic_launcher_shared_334900a82240eea2</item>
     <item type="mipmap" name="ic_launcher_bilipai_pink_round">@mipmap/ic_launcher_shared_334900a82240eea2</item>
     <item type="mipmap" name="ic_launcher_bilipai_round">@mipmap/ic_launcher_shared_8e3c20393d70f2fc</item>
-    <item type="mipmap" name="ic_launcher_blue_snow_maid">@mipmap/ic_launcher_shared_787decba5a0abefc</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid">@mipmap/ic_launcher_frameless_tilt_light_legacy</item>
     <item type="mipmap" name="ic_launcher_blue_snow_maid_announcement">@mipmap/ic_launcher_shared_6d071c129849764a</item>
     <item type="mipmap" name="ic_launcher_blue_snow_maid_announcement_dark">@mipmap/ic_launcher_shared_06cea4238b0bff83</item>
     <item type="mipmap" name="ic_launcher_blue_snow_maid_announcement_dark_foreground">@mipmap/ic_launcher_shared_e2eca53821ac3133</item>
@@ -16,9 +16,9 @@
     <item type="mipmap" name="ic_launcher_blue_snow_maid_announcement_light_foreground">@mipmap/ic_launcher_shared_1c9fbf399b8f419c</item>
     <item type="mipmap" name="ic_launcher_blue_snow_maid_announcement_light_round">@mipmap/ic_launcher_shared_6d071c129849764a</item>
     <item type="mipmap" name="ic_launcher_blue_snow_maid_announcement_round">@mipmap/ic_launcher_shared_6d071c129849764a</item>
-    <item type="mipmap" name="ic_launcher_blue_snow_maid_front">@mipmap/ic_launcher_shared_74460aa0c4ce03d5</item>
-    <item type="mipmap" name="ic_launcher_blue_snow_maid_front_round">@mipmap/ic_launcher_shared_74460aa0c4ce03d5</item>
-    <item type="mipmap" name="ic_launcher_blue_snow_maid_round">@mipmap/ic_launcher_shared_787decba5a0abefc</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid_front">@mipmap/ic_launcher_frameless_front_light_legacy</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid_front_round">@mipmap/ic_launcher_frameless_front_light_round</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid_round">@mipmap/ic_launcher_frameless_tilt_light_round</item>
     <item type="mipmap" name="ic_launcher_foreground">@mipmap/ic_launcher_shared_f005f2e0dcb7cfa0</item>
     <item type="mipmap" name="ic_launcher_retro">@mipmap/ic_launcher_shared_c8039288a25659d5</item>
     <item type="mipmap" name="ic_launcher_retro_round">@mipmap/ic_launcher_shared_c8039288a25659d5</item>

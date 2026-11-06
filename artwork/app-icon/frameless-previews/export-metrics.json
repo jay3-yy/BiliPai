@@ -1,0 +1,115 @@
+{
+  "canvasDp": 108,
+  "safeZoneDiameterDp": 66,
+  "geometry": {
+    "tilt/foreground": {
+      "source": "blue_snow_maid_frameless_foreground.png",
+      "criticalRadiusDp": 29.677074838051553,
+      "widthDp": 71.97052005958453,
+      "heightDp": 67.16437374960381,
+      "scale": 0.060837295063046935,
+      "center": [
+        625,
+        530
+      ],
+      "verticalOffsetDp": -2.0,
+      "scaleMultiplier": 0.88,
+      "composition": "original-close-portrait"
+    },
+    "tilt/monochrome": {
+      "source": "blue_snow_maid_monochrome_4096.png",
+      "criticalRadiusDp": 32.5,
+      "widthDp": 50.014075095599914,
+      "heightDp": 55.42604590818349,
+      "scale": 0.023327460399067124,
+      "center": [
+        2047.0,
+        2048.0
+      ],
+      "verticalOffsetDp": 0,
+      "scaleMultiplier": 1,
+      "composition": "monochrome-safe-zone"
+    },
+    "front/foreground": {
+      "source": "blue_snow_maid_front_frameless_foreground.png",
+      "criticalRadiusDp": 30.169031007568705,
+      "widthDp": 67.29494961106079,
+      "heightDp": 68.40968722449597,
+      "scale": 0.0586704007071149,
+      "center": [
+        656,
+        480
+      ],
+      "verticalOffsetDp": -2.0,
+      "scaleMultiplier": 0.88,
+      "composition": "original-close-portrait"
+    },
+    "front/monochrome": {
+      "source": "blue_snow_maid_front_monochrome_4096.png",
+      "criticalRadiusDp": 32.5,
+      "widthDp": 50.014075095599914,
+      "heightDp": 55.42604590818349,
+      "scale": 0.023327460399067124,
+      "center": [
+        2047.0,
+        2048.0
+      ],
+      "verticalOffsetDp": 0,
+      "scaleMultiplier": 1,
+      "composition": "monochrome-safe-zone"
+    }
+  },
+  "updatedResourceConfigurations": 82,
+  "criticalMaskClippedPixels": {
+    "tilt/light/circle": 0,
+    "tilt/light/rounded-square": 0,
+    "tilt/light/squircle": 0,
+    "tilt/light/teardrop": 0,
+    "tilt/dark/circle": 0,
+    "tilt/dark/rounded-square": 0,
+    "tilt/dark/squircle": 0,
+    "tilt/dark/teardrop": 0,
+    "front/light/circle": 0,
+    "front/light/rounded-square": 0,
+    "front/light/squircle": 0,
+    "front/light/teardrop": 0,
+    "front/dark/circle": 0,
+    "front/dark/rounded-square": 0,
+    "front/dark/squircle": 0,
+    "front/dark/teardrop": 0,
+    "tilt/themed-light/circle": 0,
+    "tilt/themed-light/rounded-square": 0,
+    "tilt/themed-light/squircle": 0,
+    "tilt/themed-light/teardrop": 0,
+    "tilt/themed-dark/circle": 0,
+    "tilt/themed-dark/rounded-square": 0,
+    "tilt/themed-dark/squircle": 0,
+    "tilt/themed-dark/teardrop": 0,
+    "front/themed-light/circle": 0,
+    "front/themed-light/rounded-square": 0,
+    "front/themed-light/squircle": 0,
+    "front/themed-light/teardrop": 0,
+    "front/themed-dark/circle": 0,
+    "front/themed-dark/rounded-square": 0,
+    "front/themed-dark/squircle": 0,
+    "front/themed-dark/teardrop": 0
+  },
+  "decorativeMaskClippedPixels": {
+    "tilt/light/circle": 2775,
+    "tilt/light/rounded-square": 596,
+    "tilt/light/squircle": 1033,
+    "tilt/light/teardrop": 1591,
+    "tilt/dark/circle": 2775,
+    "tilt/dark/rounded-square": 596,
+    "tilt/dark/squircle": 1033,
+    "tilt/dark/teardrop": 1591,
+    "front/light/circle": 2454,
+    "front/light/rounded-square": 435,
+    "front/light/squircle": 836,
+    "front/light/teardrop": 1202,
+    "front/dark/circle": 2454,
+    "front/dark/rounded-square": 435,
+    "front/dark/squircle": 836,
+    "front/dark/teardrop": 1202
+  }
+}

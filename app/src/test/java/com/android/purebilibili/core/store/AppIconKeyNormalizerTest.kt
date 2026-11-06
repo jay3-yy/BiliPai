@@ -57,10 +57,11 @@ class AppIconKeyNormalizerTest {
     }
 
     @Test
-    fun supportsAppIconAppearance_onlyForMaidArtwork() {
+    fun supportsAppIconAppearance_forMaidAndPlayWindowArtwork() {
         assertEquals(true, supportsAppIconAppearance("icon_blue_snow_maid"))
         assertEquals(true, supportsAppIconAppearance("icon_blue_snow_maid_announcement"))
         assertEquals(true, supportsAppIconAppearance("icon_blue_snow_maid_front"))
+        assertEquals(true, supportsAppIconAppearance("icon_3d"))
         assertEquals(false, supportsAppIconAppearance("icon_bilipai"))
     }
 }

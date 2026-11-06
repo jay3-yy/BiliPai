@@ -126,7 +126,24 @@ class AppIconAliasMappingTest {
     }
 
     @Test
-    fun resolveAppIconLauncherAlias_ignoresAppearanceForNonMaidIcons() {
+    fun playWindowAppearanceSelectsItsLauncherWithAndWithoutSplashIcon() {
+        val packageName = "com.android.purebilibili"
+        val entries = listOf(
+            Triple(AppIconAppearance.FOLLOW_SYSTEM, "MainActivityAlias3DLauncher", "MainActivityAlias3DNoIcon"),
+            Triple(AppIconAppearance.LIGHT, "MainActivityAlias3DLight", "MainActivityAlias3DLightNoIcon"),
+            Triple(AppIconAppearance.DARK, "MainActivityAlias3DDark", "MainActivityAlias3DDarkNoIcon"),
+        )
+        val managed = allManagedAppIconLauncherAliases(packageName)
+        for ((appearance, withSplash, withoutSplash) in entries) {
+            assertEquals("$packageName.$withSplash", resolveAppIconLauncherAlias(packageName, "icon_3d", appearance = appearance))
+            assertEquals("$packageName.$withoutSplash", resolveAppIconLauncherAlias(packageName, "icon_3d", splashIconVisible = false, appearance = appearance))
+            assertTrue("$packageName.$withSplash" in managed)
+            assertTrue("$packageName.$withoutSplash" in managed)
+        }
+    }
+
+    @Test
+    fun resolveAppIconLauncherAlias_ignoresAppearanceForFixedPaletteIcons() {
         assertEquals(
             "com.android.purebilibili.MainActivityAliasBiliPai",
             resolveAppIconLauncherAlias(

@@ -82,7 +82,7 @@ fun getIconGroups(): List<IconGroup> {
                 IconOption(R.string.icon_blue_snow_maid, "icon_blue_snow_maid", R.string.icon_blue_snow_maid_description, R.mipmap.ic_launcher_blue_snow_maid_round),
                 IconOption(R.string.icon_blue_snow_maid_announcement, "icon_blue_snow_maid_announcement", R.string.icon_blue_snow_maid_announcement_description, R.mipmap.ic_launcher_blue_snow_maid_announcement_round),
                 IconOption(R.string.icon_blue_snow_maid_front, "icon_blue_snow_maid_front", R.string.icon_blue_snow_maid_front_description, R.mipmap.ic_launcher_blue_snow_maid_front_round),
-                IconOption(R.string.icon_3d, "icon_3d", R.string.icon_3d_description, R.mipmap.ic_launcher_3d_foreground),
+                IconOption(R.string.icon_3d, "icon_3d", R.string.icon_3d_description, R.mipmap.ic_launcher_3d_round),
                 IconOption(R.string.icon_bilipai, "icon_bilipai", R.string.icon_bilipai_description, R.mipmap.ic_launcher_bilipai_round),
                 IconOption(R.string.icon_bilipai_pink, "icon_bilipai_pink", R.string.icon_bilipai_pink_description, R.mipmap.ic_launcher_bilipai_pink_round),
                 IconOption(R.string.icon_bilipai_white, "icon_bilipai_white", R.string.icon_bilipai_white_description, R.mipmap.ic_launcher_bilipai_white_round),
@@ -97,6 +97,8 @@ internal fun resolveIconOptionPreviewRes(
     appearance: AppIconAppearance
 ): Int {
     return when (iconKey to appearance) {
+        "icon_3d" to AppIconAppearance.LIGHT -> R.mipmap.ic_launcher_3d_light_round
+        "icon_3d" to AppIconAppearance.DARK -> R.mipmap.ic_launcher_3d_dark_round
         "icon_blue_snow_maid" to AppIconAppearance.LIGHT ->
             R.mipmap.ic_launcher_blue_snow_maid_light_round
         "icon_blue_snow_maid" to AppIconAppearance.DARK ->

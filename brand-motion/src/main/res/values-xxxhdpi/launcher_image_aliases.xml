@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <item type="mipmap" name="ic_launcher_blue_snow_maid_foreground">@mipmap/ic_launcher_shared_c8781ef56903abbb</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid_foreground">@mipmap/ic_launcher_frameless_tilt_foreground</item>
 </resources>

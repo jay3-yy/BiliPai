@@ -5,10 +5,11 @@ const val APP_ICON_COMPAT_ALIAS_CLASS_NAME = "$APP_ICON_COMPONENT_PACKAGE_NAME.M
 
 const val DEFAULT_APP_ICON_KEY = "icon_blue_snow_maid"
 
-private val MAID_APP_ICON_KEYS = setOf(
+private val APPEARANCE_APP_ICON_KEYS = setOf(
     "icon_blue_snow_maid",
     "icon_blue_snow_maid_announcement",
-    "icon_blue_snow_maid_front"
+    "icon_blue_snow_maid_front",
+    "icon_3d"
 )
 
 enum class AppIconAppearance(val storedValue: Int) {
@@ -55,7 +56,9 @@ private val NO_ICON_LAUNCHER_ALIAS_SUFFIX_BY_KEY = mapOf(
     "icon_bilipai_monet" to "MainActivityAliasBiliPaiMonetNoIcon"
 )
 
-private val FIXED_MAID_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE = mapOf(
+private val FIXED_APPEARANCE_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE = mapOf(
+    ("icon_3d" to AppIconAppearance.LIGHT) to "MainActivityAlias3DLight",
+    ("icon_3d" to AppIconAppearance.DARK) to "MainActivityAlias3DDark",
     ("icon_blue_snow_maid" to AppIconAppearance.LIGHT) to "MainActivityAliasBlueSnowMaidLight",
     ("icon_blue_snow_maid" to AppIconAppearance.DARK) to "MainActivityAliasBlueSnowMaidDark",
     ("icon_blue_snow_maid_announcement" to AppIconAppearance.LIGHT) to "MainActivityAliasBlueSnowMaidAnnouncementLight",
@@ -64,7 +67,9 @@ private val FIXED_MAID_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE = mapOf(
     ("icon_blue_snow_maid_front" to AppIconAppearance.DARK) to "MainActivityAliasBlueSnowMaidFrontDark"
 )
 
-private val FIXED_MAID_NO_ICON_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE = mapOf(
+private val FIXED_APPEARANCE_NO_ICON_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE = mapOf(
+    ("icon_3d" to AppIconAppearance.LIGHT) to "MainActivityAlias3DLightNoIcon",
+    ("icon_3d" to AppIconAppearance.DARK) to "MainActivityAlias3DDarkNoIcon",
     ("icon_blue_snow_maid" to AppIconAppearance.LIGHT) to "MainActivityAliasBlueSnowMaidLightNoIcon",
     ("icon_blue_snow_maid" to AppIconAppearance.DARK) to "MainActivityAliasBlueSnowMaidDarkNoIcon",
     ("icon_blue_snow_maid_announcement" to AppIconAppearance.LIGHT) to "MainActivityAliasBlueSnowMaidAnnouncementLightNoIcon",
@@ -106,7 +111,7 @@ fun normalizeAppIconKey(rawKey: String?): String {
 }
 
 fun supportsAppIconAppearance(rawKey: String?): Boolean {
-    return rawKey?.trim() in MAID_APP_ICON_KEYS
+    return rawKey?.trim() in APPEARANCE_APP_ICON_KEYS
 }
 
 fun resolveAppIconLauncherAlias(
@@ -121,12 +126,12 @@ fun resolveAppIconLauncherAlias(
     } else {
         NO_ICON_LAUNCHER_ALIAS_SUFFIX_BY_KEY
     }
-    val fixedMaidAliasMap = if (splashIconVisible) {
-        FIXED_MAID_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE
+    val fixedAppearanceAliasMap = if (splashIconVisible) {
+        FIXED_APPEARANCE_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE
     } else {
-        FIXED_MAID_NO_ICON_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE
+        FIXED_APPEARANCE_NO_ICON_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE
     }
-    val aliasSuffix = fixedMaidAliasMap[normalizedKey to appearance]
+    val aliasSuffix = fixedAppearanceAliasMap[normalizedKey to appearance]
         ?: aliasMap[normalizedKey]
         ?: aliasMap.getValue(DEFAULT_APP_ICON_KEY)
     return "$APP_ICON_COMPONENT_PACKAGE_NAME.$aliasSuffix"
@@ -136,8 +141,8 @@ fun allManagedAppIconLauncherAliases(packageName: String): Set<String> {
     return (
         LAUNCHER_ALIAS_SUFFIX_BY_KEY.values +
             NO_ICON_LAUNCHER_ALIAS_SUFFIX_BY_KEY.values +
-            FIXED_MAID_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE.values +
-            FIXED_MAID_NO_ICON_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE.values +
+            FIXED_APPEARANCE_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE.values +
+            FIXED_APPEARANCE_NO_ICON_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE.values +
             RETIRED_APP_ICON_ALIAS_SUFFIXES
         )
         .map { aliasSuffix -> "$APP_ICON_COMPONENT_PACKAGE_NAME.$aliasSuffix" }

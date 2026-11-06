@@ -274,8 +274,8 @@
     <string name="icon_blue_snow_maid_announcement_description">Centered megaphone theme</string>
     <string name="icon_blue_snow_maid_front">Blue Snow Maid · Front</string>
     <string name="icon_blue_snow_maid_front_description">Front-facing smile theme</string>
-    <string name="icon_3d">3D</string>
-    <string name="icon_3d_description">New 3D design</string>
+    <string name="icon_3d">Play window</string>
+    <string name="icon_3d_description">A warm white and charcoal play window that adapts to launcher shapes and theme colors</string>
     <string name="icon_bilipai">BiliPai</string>
     <string name="icon_bilipai_description">New brand icon</string>
     <string name="icon_bilipai_pink">BiliPai Pink</string>
@@ -286,7 +286,7 @@
     <string name="icon_bilipai_monet_description">Follows system colors on Android 12 and later; blue on older versions</string>
     <string name="icon_settings_apply_notice">Changing the icon may take a few seconds. The system may briefly become unresponsive.</string>
     <string name="icon_appearance_title">Maid icon appearance</string>
-    <string name="icon_appearance_summary">Follow the system theme or keep the icon light or dark in any system theme</string>
+    <string name="icon_appearance_summary">Maid icons and Play window share this control: follow the system, light, or dark</string>
     <string name="icon_appearance_follow_system">Follow system</string>
     <string name="icon_appearance_light">Light</string>
     <string name="icon_appearance_dark">Dark</string>
@@ -730,7 +730,7 @@
     <string name="appearance_icon_yuki">Heart pose</string>
     <string name="appearance_icon_anime">Blue-haired TV</string>
     <string name="appearance_icon_headphone">Headphone girl</string>
-    <string name="appearance_icon_3d">3D</string>
+    <string name="appearance_icon_3d">Play window</string>
     <string name="appearance_icon_flat">Flat</string>
     <string name="appearance_icon_telegram_blue">Telegram Blue</string>
     <string name="appearance_icon_telegram_dark">Dark blue</string>
