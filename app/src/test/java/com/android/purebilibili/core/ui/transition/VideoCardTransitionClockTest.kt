@@ -11,7 +11,7 @@ class VideoCardTransitionClockTest {
         val clock = VideoCardTransitionClock()
         clock.beginOpening("home")
         var depth = .6f
-        clock.bindNavigationDriver { depth }
+        clock.bindNavigationDriver(provider = { depth })
         clock.followNavigationDriver(VideoCardTransitionSettleState.AutoEnter)
         clock.reportSharedMorphProgress(1f, false)
         clock.markHeld()
@@ -31,7 +31,7 @@ class VideoCardTransitionClockTest {
     @Test
     fun predictiveCancelRestoresFromCurrentPositionWithoutOpeningReset() {
         val clock = VideoCardTransitionClock()
-        clock.bindNavigationDriver { .4f }
+        clock.bindNavigationDriver(provider = { .4f })
         clock.followNavigationDriver(VideoCardTransitionSettleState.InteractiveSeek)
         clock.followNavigationDriver(VideoCardTransitionSettleState.CancelRestore, 1f)
         assertEquals(.4f, clock.depthProgress())
