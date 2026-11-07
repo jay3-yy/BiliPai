@@ -9855,7 +9855,18 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     private fun fallbackFromCdnRewrite(reason: String) {
         val state = playbackCdnFallbackState
-        if (!shouldFallbackFromCdnRewrite(state, playbackReady = false)) return
+        if (!shouldFallbackFromCdnRewrite(state, playbackReady = false)) {
+            if (reason == "player_error") {
+                val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
+                attemptedPlaybackStallRecoveryCdnIndexes += current.currentCdnIndex
+                val next = current.allVideoUrls.indices.firstOrNull {
+                    it !in attemptedPlaybackStallRecoveryCdnIndexes
+                } ?: return
+                attemptedPlaybackStallRecoveryCdnIndexes += next
+                switchCdnTo(next)
+            }
+            return
+        }
         val event = if (reason == "first_frame_timeout") {
             CdnHealthEvent.FIRST_FRAME_TIMEOUT
         } else {
