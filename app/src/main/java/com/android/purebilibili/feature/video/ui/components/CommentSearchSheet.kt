@@ -128,7 +128,7 @@ fun CommentSearchSheet(
     onLoadAllComments: () -> Unit = {},
     upMid: Long = 0L,
     onCommentClick: (ReplyItem) -> Unit,
-    onSubReplyClick: (ReplyItem) -> Unit = {},
+    onSubReplyClick: (ReplyItem, Long) -> Unit = { _, _ -> },
     onDismiss: () -> Unit,
     miuixBackdrop: Backdrop? = null,
     modifier: Modifier = Modifier,
@@ -457,7 +457,7 @@ fun CommentSearchSheet(
                                     onClick = {
                                         onDismiss()
                                         if (entry.isSubReply && entry.rootReply != null) {
-                                            onSubReplyClick(entry.rootReply)
+                                            onSubReplyClick(entry.rootReply, entry.reply.rpid)
                                         } else {
                                             onCommentClick(entry.reply)
                                         }

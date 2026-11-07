@@ -82,7 +82,7 @@ internal fun buildMessageFeedCommentNavigationLink(
     val queryTargetId = listOf("comment_secondary_id", "comment_id", "reply_id", "rpid", "target_id", "anchor", "source_id")
         .firstNotNullOfOrNull { key -> queryParams[key]?.toLongOrNull()?.takeIf { it > 0L } } ?: 0L
 
-    val resolvedRootId = listOf(rootId, queryRootId, sourceId, targetId, queryTargetId)
+    val resolvedRootId = listOf(rootId, queryRootId)
         .firstOrNull { it > 0L } ?: 0L
     val resolvedTargetId = listOf(targetId, queryTargetId, sourceId)
         .firstOrNull { it > 0L && it != resolvedRootId } ?: 0L
@@ -103,8 +103,8 @@ internal fun buildMessageFeedCommentNavigationLink(
         else -> 0
     }
 
-    // If we have businessId, subjectId and rootReplyId, build the canonical comment deep link
-    if (resolvedBusinessId > 0 && subjectId > 0L && resolvedRootId > 0L) {
+    // Preserve an unresolved child as the target; the detail reader resolves its true root.
+    if (resolvedBusinessId > 0 && subjectId > 0L && (resolvedRootId > 0L || resolvedTargetId > 0L)) {
         val targetQuery = if (resolvedTargetId > 0L) "?comment_id=$resolvedTargetId" else ""
         val enterCandidate = when {
             trimmedNative.contains("://") -> trimmedNative
@@ -131,7 +131,7 @@ internal fun buildMessageFeedCommentNavigationLink(
         trimmedUri.contains("://") -> trimmedUri
         else -> null
     }
-    if (baseCandidate != null && resolvedRootId > 0L) {
+    if (baseCandidate != null && (resolvedRootId > 0L || resolvedTargetId > 0L)) {
         val sep = if (baseCandidate.contains("?")) "&" else "?"
         val commentParams = buildString {
             append("${sep}comment_root_id=$resolvedRootId")

@@ -811,7 +811,7 @@ object CommentRepository {
         }
     }.map { filterGoodsRepliesIfEnabled(it) }
 
-    /** 手机详情从楼层开头读取；targetReplyId 仅供完整楼层不可用时恢复目标回复。 */
+    /** Resolve routed reply identities before reading a complete, sorted thread. */
     suspend fun getMobileSortedSubCommentsForSubject(
         oid: Long,
         type: Int,
@@ -822,21 +822,23 @@ object CommentRepository {
         supplementLocations: Boolean = true,
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
-            val threadResult = readSortedSubCommentPage(
-                oid = oid,
-                type = type,
-                rootId = rootId,
-                mode = mode,
+            val account = com.android.purebilibili.core.store.TokenManager.accountIdentity.value
+            fun requireAccount() {
+                if (account != com.android.purebilibili.core.store.TokenManager.accountIdentity.value) {
+                    throw CancellationException("Comment account changed")
+                }
+            }
+            val recoveredResult = readLocatedSubReplyPage(
+                oid = oid, type = type, rootId = rootId, targetReplyId = targetReplyId,
                 paginationOffset = paginationOffset,
-            )
-            val recoveredResult = recoverUnavailableSubReplyTarget(
-                oid = oid,
-                type = type,
-                rootId = rootId,
-                paginationOffset = paginationOffset,
-                targetReplyId = targetReplyId,
-                threadResult = threadResult,
-                readTarget = { api.getReplyDetail(oid = oid, type = type, replyId = targetReplyId) },
+                readReply = { id ->
+                    requireAccount()
+                    api.getReplyDetail(oid = oid, type = type, replyId = id).also { requireAccount() }
+                },
+                readThread = { id ->
+                    requireAccount()
+                    readSortedSubCommentPage(oid, type, id, mode, paginationOffset).also { requireAccount() }
+                },
             )
             currentCoroutineContext().ensureActive()
             val data = recoveredResult.getOrNull() ?: return@withContext recoveredResult
@@ -844,6 +846,8 @@ object CommentRepository {
             val withLocations = if (supplementLocations && !data.isTargetOnly) {
                 supplementSortedSubReplyLocations(oid, type, data)
             } else data
+            currentCoroutineContext().ensureActive()
+            requireAccount()
             Result.success(withLocations)
         } catch (e: CancellationException) {
             throw e

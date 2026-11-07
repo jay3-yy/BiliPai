@@ -440,11 +440,9 @@ class DynamicCommentSendViewModelTest {
     @Test
     fun `dynamic root targeted empty route normalizes target and rejects a wrong server root until retry`() = runTest(dispatcher) {
         var correctRoot = false
-        val targets = mutableListOf<Long>()
         coEvery {
             CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
         } coAnswers {
-            targets += arg<Long>(5)
             Result.success(threadPage(emptyList(), "").copy(root = root.copy(
                 rpid = if (correctRoot) 90L else 10L, count = 0, rcount = 0,
             )))
@@ -460,7 +458,7 @@ class DynamicCommentSendViewModelTest {
             correctRoot = true
             owner.loadMoreSubReplies()
             runCurrent()
-            assertEquals(listOf(0L, 0L), targets)
+            assertEquals(0L, owner.subReplyState.value.targetReplyId)
             assertEquals(90L, owner.subReplyState.value.rootReply?.rpid)
             assertTrue(owner.subReplyState.value.items.isEmpty())
             assertNull(owner.subReplyState.value.error)
@@ -629,6 +627,55 @@ class DynamicCommentSendViewModelTest {
             assertEquals("main offline", owner.commentUiState.value.refreshError)
             assertEquals(90L, owner.commentUiState.value.pinnedReply?.rpid)
             assertFalse(owner.subReplyState.value.visible)
+        }
+    }
+
+    @Test
+    fun `resolved pin replaces a wrong cached root while retaining the selected child`() = runTest(dispatcher) {
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(
+            root = ReplyItem(rpid = 90L), resolvedRootId = 90L, resolvedTargetReplyId = 91L,
+        ))
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.openCommentSheet(subject, rootReplyId = 10L, targetReplyId = 91L, pinRootReply = true)
+            runCurrent()
+            assertEquals(90L, owner.commentUiState.value.pinnedRootReplyId)
+            assertEquals(91L, owner.commentUiState.value.pinnedTargetReplyId)
+            assertEquals(listOf(90L, 10L), resolveDynamicDetailDisplayComments(owner.commentUiState.value).map { it.rpid })
+            assertFalse(owner.subReplyState.value.visible)
+        }
+    }
+
+    @Test
+    fun `unavailable pinned root opens the already recovered child even if another request would fail`() = runTest(dispatcher) {
+        val recovered = ReplyData(
+            replies = listOf(ReplyItem(rpid = 91L, root = 90L)),
+            isTargetOnly = true, resolvedRootId = 90L, resolvedTargetReplyId = 91L,
+            cursor = ReplyCursor(isEnd = true),
+        )
+        var available = true
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            if (available) {
+                available = false
+                Result.success(recovered)
+            } else Result.failure(IllegalStateException("offline"))
+        }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject, rootReplyId = 0L, targetReplyId = 91L, pinRootReply = true)
+            runCurrent()
+            assertTrue(owner.subReplyState.value.visible)
+            assertTrue(owner.subReplyState.value.isTargetOnly)
+            assertNull(owner.subReplyState.value.rootReply)
+            assertEquals(90L, owner.subReplyState.value.threadRootId)
+            assertEquals(91L, owner.subReplyState.value.targetReplyId)
+            assertEquals(listOf(91L), owner.subReplyState.value.items.map { it.rpid })
+            assertEquals(0, owner.subReplyState.value.totalCount)
+            assertNull(owner.subReplyState.value.error)
         }
     }
 

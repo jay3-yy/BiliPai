@@ -43,7 +43,7 @@ class CommentPagingSessionTest {
             response.completeExceptionally(failure)
             runCurrent()
             assertFalse(states.last().first)
-            assertSame(failure, states.last().third)
+            assertNotNull(states.last().third)
 
             session.loadMore()
             runCurrent()

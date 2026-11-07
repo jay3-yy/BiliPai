@@ -125,13 +125,21 @@ object SearchRepository {
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, response.message))
             }
+            requireSearchPayload(response.data != null, response.data?.v_voucher)
             val categories = response.data?.result.orEmpty()
             val videos = categories.firstOrNull { it.result_type == "video" }
                 ?.data.orEmpty()
                 .mapNotNull { runCatching { searchJson.decodeFromJsonElement<SearchVideoItem>(it).toVideoItem() }.getOrNull() }
-            val ups = categories.firstOrNull { it.result_type == "bili_user" }
-                ?.data.orEmpty()
-                .mapNotNull { runCatching { searchJson.decodeFromJsonElement<SearchUpItem>(it).cleanupFields() }.getOrNull() }
+            val featuredUps = categories.filter { it.result_type == "bili_user" }
+                .flatMap { it.data.orEmpty() }
+                .map { searchJson.decodeFromJsonElement<SearchUpItem>(it).cleanupFields() }
+            val ups = resolveSearchAllUpPreview(
+                page = page,
+                userResultCount = response.data?.pageinfo?.get("bili_user")?.numResults ?: 0,
+                featuredUsers = featuredUps
+            ) {
+                searchUp(keyword = keyword).getOrThrow().first
+            }
             val bangumi = categories.filter { it.result_type == "media_bangumi" || it.result_type == "media_ft" }
                 .flatMap { it.data.orEmpty() }
                 .mapNotNull { runCatching { searchJson.decodeFromJsonElement<com.android.purebilibili.data.model.response.BangumiSearchItem>(it) }.getOrNull() }
@@ -334,6 +342,7 @@ object SearchRepository {
             if (response.code != 0) {
                 return@withContext Result.failure(createSearchError(response.code, response.message))
             }
+            requireSearchPayload(response.data != null, response.data?.v_voucher)
             
             val upList = response.data?.result
                 ?.map { it.cleanupFields() }

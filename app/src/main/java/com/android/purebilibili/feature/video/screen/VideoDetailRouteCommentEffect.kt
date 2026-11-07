@@ -23,7 +23,7 @@ internal fun VideoDetailRouteCommentEffect(
     onOpenReplyFromRoute: (Long, Long) -> Boolean,
     onHandled: () -> Unit,
 ) {
-    if (rootReplyId <= 0L || handled) return
+    if ((rootReplyId <= 0L && targetReplyId <= 0L) || handled) return
     val comments by commentState
     val threadVisible by remember(subReplyState) {
         derivedStateOf { subReplyState.value.visible }

@@ -72,13 +72,13 @@ class MessageLinkNavigationPolicyTest {
     }
 
     @Test
-    fun targetOnlyLinksOpenSubjectWithoutPretendingTargetIsRoot() {
+    fun targetOnlyLinksOpenResolvableDetailWithoutPretendingTargetIsRoot() {
         assertEquals(
-            MessageLinkNavigationAction.VideoComment("av123", 0L, 789L),
+            MessageLinkNavigationAction.CommentDetail(123L, 0L, 789L, 1, "bilibili://video/123"),
             resolveMessageLinkNavigationAction("bilibili://comment/detail/1/123/0?comment_id=789"),
         )
         assertEquals(
-            MessageLinkNavigationAction.DynamicComment("123", 0L, 789L),
+            MessageLinkNavigationAction.CommentDetail(123L, 0L, 789L, 17, "bilibili://following/detail/123"),
             resolveMessageLinkNavigationAction("https://www.bilibili.com/h5/comment/sub?oid=123&pageType=17&reply_id=789"),
         )
     }
@@ -357,6 +357,17 @@ class MessageLinkNavigationPolicyTest {
         assertEquals(
             "bilibili://comment/detail/17/832703053858603029/238686570016?comment_id=238686628816&enterUri=https%3A%2F%2Ft.bilibili.com%2F832703053858603029",
             link
+        )
+    }
+    @Test
+    fun messageWithoutRootKeepsSourceReplyAsUnresolvedTarget() {
+        val link = com.android.purebilibili.feature.message.feed.buildMessageFeedCommentNavigationLink(
+            nativeUri = null, uri = null, businessId = 1, subjectId = 123L,
+            rootId = 0L, sourceId = 789L, targetId = 0L,
+        )
+        assertEquals(
+            "bilibili://comment/detail/1/123/0?comment_id=789&enterUri=bilibili%3A%2F%2Fvideo%2F123",
+            link,
         )
     }
 }

@@ -71,7 +71,10 @@ data class ReplyData(
     // 手机主评论的分页来源与游标；楼中楼继续使用 grpcNextOffset。
     val mainListContinuation: CommentMainListContinuation? = null,
     // 仅目标子评论可读，不代表完整楼层或其总数已经加载。
-    @Transient val isTargetOnly: Boolean = false
+    @Transient val isTargetOnly: Boolean = false,
+    // Resolved server identity, independent of a route's (possibly child) root hint.
+    @Transient val resolvedRootId: Long = 0L,
+    @Transient val resolvedTargetReplyId: Long = 0L,
 ) {
     //  统一获取总评论数
     fun getAllCount(): Int = when {

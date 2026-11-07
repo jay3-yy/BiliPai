@@ -44,17 +44,17 @@ class MainActivityLinkNavigationPolicyTest {
     }
 
     @Test
-    fun targetOnlyDynamicIntentDoesNotCreateAnIndependentThreadWithAFakeRoot() {
+    fun targetOnlyDynamicIntentPreservesUnresolvedIdentityForDetailLookup() {
         val target = BilibiliNavigationTargetParser.parse(
             "bilibili://comment/detail/17/123/0?comment_id=789"
         )!!
         val navigation = resolveMainActivityLinkNavigation(target)!!
-        val key = assertIs<BiliPaiNavKey.DynamicDetail>(
+        val key = assertIs<BiliPaiNavKey.CommentDetail>(
             legacyRouteToBiliPaiNavKey(navigation.pendingNavigationRoute)
         )
-        assertEquals("123", key.dynamicId)
-        assertEquals(0L, key.commentRootRpid)
-        assertEquals(789L, key.commentTargetRpid)
+        assertEquals(123L, key.oid)
+        assertEquals(0L, key.rootId)
+        assertEquals(789L, key.targetId)
     }
 
     @Test

@@ -717,9 +717,9 @@ class VideoCommentViewModel : ViewModel() {
     }
 
     fun openSubReplyFromRoute(rootReplyId: Long, targetReplyId: Long = 0L): Boolean {
-        if (!shouldStartRoutedSubReplyOpen(rootReplyId, currentAid)) return false
+        if (!shouldStartRoutedSubReplyOpen(rootReplyId.takeIf { it > 0L } ?: targetReplyId, currentAid)) return false
         if (commentAccount != TokenManager.accountIdentity.value) return false
-        if (sentReplies.isRootRemoved(rootReplyId)) return false
+        if (targetReplyId <= 0L && sentReplies.isRootRemoved(rootReplyId)) return false
 
         (resolveRoutedCommentRootReply(
             loadedReplies = allReplies.ifEmpty { _commentState.value.replies },
@@ -744,7 +744,7 @@ class VideoCommentViewModel : ViewModel() {
             baseItems = localSubReplies.values.toImmutableList(),
             upMid = _commentState.value.upMid,
             isLoading = true,
-            targetReplyId = targetReplyId.takeIf { it != rootReplyId } ?: 0L
+            targetReplyId = targetReplyId
         )
         loadSubReplies(currentSubject, rootReplyId, page = 1, paginationOffset = null)
         return true
@@ -955,7 +955,7 @@ class VideoCommentViewModel : ViewModel() {
         page: Int,
         paginationOffset: String? = _subReplyState.value.grpcNextOffset
     ) {
-        if (!subject.isValid || rootId <= 0L) return
+        if (!subject.isValid || (rootId <= 0L && _subReplyState.value.targetReplyId <= 0L)) return
         if (page > 1 && subReplyPagingSession != null) {
             subReplyPagingSession?.appendOrRetry()
             return
@@ -971,6 +971,7 @@ class VideoCommentViewModel : ViewModel() {
         subReplyLoadJob?.cancel()
         val initialRemoteItems = if (page > 1) remoteSubReplies else emptyList()
         var appliedPages = 0
+        var threadRootId = rootId
         lateinit var session: ForwardPagingSession<SubReplyPageRequest, SubReplyPageChunk>
         session = ForwardPagingSession(
             config = PagingConfig(pageSize = 1, initialLoadSize = 1, prefetchDistance = 1, enablePlaceholders = false),
@@ -978,12 +979,13 @@ class VideoCommentViewModel : ViewModel() {
                 var resolvedRoot = seedRoot
                 subReplyPagingSource(initialRequest = SubReplyPageRequest(page, paginationOffset)) { request ->
                     val data = CommentRepository.getMobileSortedSubCommentsForSubject(
-                        oid = subject.oid, type = subject.type, rootId = rootId, mode = sortMode.apiMode,
+                        oid = subject.oid, type = subject.type, rootId = threadRootId, mode = sortMode.apiMode,
                         targetReplyId = targetReplyId.takeIf { request.page == 1 } ?: 0L,
                         paginationOffset = request.offset
                     ).getOrThrow()
-                    check(data.root?.let { it.rpid == rootId } != false) { "回复楼层不匹配，请重试" }
-                    resolvedRoot = resolveRoutedCommentRootReply(emptyList(), data, rootId) ?: resolvedRoot
+                    if (data.resolvedRootId > 0L) threadRootId = data.resolvedRootId
+                    check(data.root?.let { it.rpid == threadRootId } != false) { "回复楼层不匹配，请重试" }
+                    resolvedRoot = resolveRoutedCommentRootReply(emptyList(), data, threadRootId) ?: resolvedRoot
                     check(resolvedRoot != null || data.isTargetOnly) { "回复可能已被删除或不可见" }
                     data
                 }
@@ -992,34 +994,40 @@ class VideoCommentViewModel : ViewModel() {
                 val current = _subReplyState.value
                 if (subReplyPagingSession === session && states != null &&
                     subReplySession == threadSession && TokenManager.accountIdentity.value == account &&
-                    current.visible && shouldApplySubReplyResult(
-                        expectedSubject = subject, expectedRootId = rootId, currentSubject = currentSubject,
-                        activeRootId = activeSubReplyRootId, conversationActive = current.conversationAnchor != null
-                    )
+                    current.visible && shouldApplyCommentSubjectResult(subject, currentSubject) &&
+                    (activeSubReplyRootId == rootId || activeSubReplyRootId == threadRootId) &&
+                    current.conversationAnchor == null
                 ) {
                     val ready = states.refresh is LoadState.NotLoading && pages.size > appliedPages
                     val failure = (states.refresh as? LoadState.Error)?.error ?: (states.append as? LoadState.Error)?.error
                     var next = current
                     if (ready) {
                         val last = pages.last()
-                        val root = resolveRoutedCommentRootReply(emptyList(), last.data, rootId)
-                            ?: current.rootReply ?: seedRoot
-                        if (store.isRootRemoved(rootId)) {
+                        activeSubReplyRootId = threadRootId
+                        val root = resolveRoutedCommentRootReply(emptyList(), last.data, threadRootId)
+                            ?: current.rootReply?.takeIf { it.rpid == threadRootId } ?: seedRoot?.takeIf { it.rpid == threadRootId }
+                        if (store.isRootRemoved(threadRootId)) {
                             closeSubReply()
                             return@changed
+                        }
+                        if (threadRootId != rootId) {
+                            localSubReplies.clear()
+                            store.repliesFor(threadRootId).forEach { localSubReplies[it.rpid] = it }
                         }
                         remoteSubReplies = initialRemoteItems + pages.flatMap { it.data.replies.orEmpty() }
                         val items = mergeSentSubReplies(remoteSubReplies, localSubReplies.values)
                             .filterNot { it.rpid in removedSubReplyIds || sentReplies.isReplyRemoved(it.rpid) }
-                        val mergedRoot = root?.let { store.merge(listOf(it)).firstOrNull { reply -> reply.rpid == rootId } }
+                        val mergedRoot = root?.let { store.merge(listOf(it)).firstOrNull { reply -> reply.rpid == threadRootId } }
                         next = current.copy(
                             rootReply = mergedRoot,
+                            targetReplyId = pages.first().data.resolvedTargetReplyId.takeIf { it > 0L }
+                                ?: current.targetReplyId.takeIf { it != threadRootId } ?: 0L,
                             isTargetOnly = last.data.isTargetOnly,
                             items = items.toImmutableList(), baseItems = items.toImmutableList(),
                             totalCount = if (last.data.isTargetOnly) 0 else resolveSubReplyLoadedTotalCount(
                                 rootReply = mergedRoot, loadedReplyCount = items.size,
                                 remoteReplyCount = resolveSubReplyRemoteTotalCount(last.data, mergedRoot),
-                                previousTotalCount = if (current.isTargetOnly) 0 else current.totalCount
+                                previousTotalCount = if (current.isTargetOnly || current.threadRootId != threadRootId) 0 else current.totalCount
                             ),
                             page = last.request.page, basePage = last.request.page,
                             grpcNextOffset = last.data.grpcNextOffset, baseGrpcNextOffset = last.data.grpcNextOffset,

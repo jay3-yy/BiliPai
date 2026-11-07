@@ -102,82 +102,27 @@ class SearchScreenPolicyTest {
         assertEquals("仅UP主", resolveSearchUpUserTypeFilterLabel(SearchUserType.UP))
     }
 
-    @Test
-    fun searchFilterTabs_followBiliPaiPrimaryOrder() {
-        assertEquals(
-            listOf(
-                SearchType.VIDEO,
-                SearchType.BANGUMI,
-                SearchType.MEDIA_FT,
-                SearchType.LIVE,
-                SearchType.LIVE_USER,
-                SearchType.UP,
-                SearchType.ARTICLE,
-                SearchType.TOPIC,
-                SearchType.PHOTO
-            ),
-            resolveSearchFilterTabs()
-        )
-    }
 
     @Test
-    fun searchFilterTabs_exposeEverySupportedApiType() {
-        val visibleTabs = resolveSearchFilterTabs()
-
-        assertEquals(SearchType.entries.toSet(), visibleTabs.toSet())
-    }
-
-    @Test
-    fun searchFilterTabs_applyCustomSavedOrder() {
+    fun searchFilterTabs_preserveExplicitUserOrder() {
         val reordered = resolveSearchFilterTabs(
-            listOf(
-                SearchType.VIDEO.value,
-                SearchType.UP.value,
-                SearchType.LIVE.value,
-            )
+            listOf(SearchType.UP.value, SearchType.ALL.value, SearchType.LIVE.value)
         )
 
-        assertEquals(
-            listOf(
-                SearchType.VIDEO,
-                SearchType.UP,
-                SearchType.LIVE,
-                SearchType.BANGUMI,
-                SearchType.MEDIA_FT,
-                SearchType.LIVE_USER,
-                SearchType.ARTICLE,
-                SearchType.TOPIC,
-                SearchType.PHOTO,
-            ),
-            reordered
-        )
+        assertEquals(listOf(SearchType.UP, SearchType.ALL, SearchType.LIVE), reordered.take(3))
+        assertEquals(reordered.size, reordered.distinct().size)
     }
 
     @Test
-    fun searchFilterTabs_ignoreUnknownAndDuplicateSavedValues() {
+    fun searchFilterTabs_migrateSavedTabsWithoutLosingUserSearch() {
         val reordered = resolveSearchFilterTabs(
-            listOf(
-                "unknown",
-                SearchType.UP.value,
-                SearchType.UP.value,
-                SearchType.VIDEO.value,
-            )
+            listOf("unknown", SearchType.UP.value, SearchType.UP.value, SearchType.VIDEO.value)
         )
 
-        assertEquals(
-            listOf(
-                SearchType.UP,
-                SearchType.VIDEO,
-                SearchType.BANGUMI,
-                SearchType.MEDIA_FT,
-                SearchType.LIVE,
-                SearchType.LIVE_USER,
-                SearchType.ARTICLE,
-                SearchType.TOPIC,
-                SearchType.PHOTO,
-            ),
-            reordered
-        )
+        assertEquals(SearchType.ALL, reordered.first())
+        assertEquals(1, reordered.count { it == SearchType.UP })
+        assertEquals(SearchType.UP, reordered[1])
+        assertFalse(SearchType.VIDEO in reordered)
     }
 
     @Test

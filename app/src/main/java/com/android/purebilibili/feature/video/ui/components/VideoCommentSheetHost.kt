@@ -1128,9 +1128,7 @@ internal fun VideoCommentMainList(
             onCommentClick = { reply ->
                 onReplyClick(reply)
             },
-            onSubReplyClick = { rootReply ->
-                viewModel.openSubReply(rootReply)
-            },
+            onSubReplyClick = viewModel::openSubReply,
             onDismiss = { showCommentSearchSheet = false },
             miuixBackdrop = commentChromeBackdrop,
         )

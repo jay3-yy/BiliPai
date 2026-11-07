@@ -99,7 +99,7 @@ class CommentLinkNavigationTest {
     }
 
     @Test
-    fun targetOnlyDynamicLinkPreservesTargetOnContentPageWithoutCreatingThreadRoute() {
+    fun targetOnlyDynamicLinkPreservesTargetForThreadResolution() {
         val keys = mutableListOf<BiliPaiNavKey>()
         dispatchMessageLinkNavigation(
             rawLink = "bilibili://comment/detail/17/123/0?comment_id=789",
@@ -109,6 +109,6 @@ class CommentLinkNavigationTest {
             onKey = { keys += it },
             onRoute = { error("Unexpected legacy route") },
         )
-        assertEquals(BiliPaiNavKey.DynamicDetail("123", commentRootRpid = 0L, commentTargetRpid = 789L), keys.single())
+        assertEquals(BiliPaiNavKey.CommentDetail(123L, 0L, 789L, 17, "bilibili://following/detail/123"), keys.single())
     }
 }
