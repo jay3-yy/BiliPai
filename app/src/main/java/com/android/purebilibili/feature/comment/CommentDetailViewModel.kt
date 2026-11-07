@@ -122,7 +122,7 @@ class CommentDetailViewModel : ViewModel() {
                     close()
                     currentAccount = account
                     _subReplyState.value = SubReplyUiState()
-                    if (wasVisible && oid > 0L && rootId > 0L) loadInitial(oid, rootId, type, target)
+                    if (wasVisible && oid > 0L && (rootId > 0L || target > 0L)) loadInitial(oid, rootId, type, target)
                 }
             }
         }
@@ -150,7 +150,11 @@ class CommentDetailViewModel : ViewModel() {
         type: Int = 1,
         targetReplyId: Long = 0L
     ) {
-        if (oid <= 0L || rootId <= 0L) return
+        if (oid <= 0L || (rootId <= 0L && targetReplyId <= 0L)) {
+            close()
+            _subReplyState.value = SubReplyUiState(visible = true, error = "评论定位参数无效", isEnd = true)
+            return
+        }
         if (currentAccount == accountIdentity.value &&
             currentOid == oid && currentRootId == rootId && currentType == type &&
             currentTargetReplyId == targetReplyId &&
@@ -174,7 +178,7 @@ class CommentDetailViewModel : ViewModel() {
         currentTargetReplyId = targetReplyId
         val store = SentCommentReplyStores.forSubject(oid, type)
         sentReplyStore = store
-        if (store.isRootRemoved(rootId)) {
+        if (targetReplyId <= 0L && store.isRootRemoved(rootId)) {
             _subReplyState.value = SubReplyUiState(visible = true, error = "评论已删除", isEnd = true)
             return
         }
@@ -189,7 +193,7 @@ class CommentDetailViewModel : ViewModel() {
             totalCount = maxOf(_subReplyState.value.totalCount, localRoot?.count ?: 0, localRoot?.rcount ?: 0, localItems.size),
             isLoading = true,
             error = null,
-            targetReplyId = targetReplyId.takeIf { it != rootId } ?: 0L
+            targetReplyId = targetReplyId
         )
 
         startSubReplyPaging()
@@ -226,6 +230,7 @@ class CommentDetailViewModel : ViewModel() {
         val target = _subReplyState.value.targetReplyId
         val oid = currentOid
         val rootId = currentRootId
+        var threadRootId = rootId
         val type = currentType
         val seedRoot = _subReplyState.value.rootReply
         val account = currentAccount
@@ -240,20 +245,21 @@ class CommentDetailViewModel : ViewModel() {
                 var resolvedRoot = seedRoot
                 subReplyPagingSource { request ->
                     val data = CommentRepository.getMobileSortedSubCommentsForSubject(
-                        oid = oid, type = type, rootId = rootId, mode = sortMode.apiMode,
+                        oid = oid, type = type, rootId = threadRootId, mode = sortMode.apiMode,
                         paginationOffset = request.offset,
                         targetReplyId = store.remoteTargetReplyId(rootId, target).takeIf { request.page == 1 } ?: 0L
                     ).getOrThrow()
-                    check(data.root?.let { it.rpid == rootId } != false) { "回复楼层不匹配，请重试" }
                     currentCoroutineContext().ensureActive()
-                    resolvedRoot = resolveRoutedCommentRootReply(emptyList(), data, rootId) ?: resolvedRoot
+                    if (data.resolvedRootId > 0) threadRootId = data.resolvedRootId
+                    check(data.root?.let { it.rpid == threadRootId } != false) { "回复楼层不匹配，请重试" }
+                    resolvedRoot = resolveRoutedCommentRootReply(emptyList(), data, threadRootId) ?: resolvedRoot
                     check(resolvedRoot != null || data.isTargetOnly) { "评论可能已被删除或不可见" }
                     data
                 }
             },
             onChanged = { pages, states ->
                 if (pagingSession === session && threadSession == sessionId && accountIdentity.value == account &&
-                    currentOid == oid && currentRootId == rootId && currentType == type && states != null
+                    currentOid == oid && (currentRootId == rootId || currentRootId == threadRootId) && currentType == type && states != null
                 ) {
                     val failure = (states.refresh as? LoadState.Error)?.error ?: (states.append as? LoadState.Error)?.error
                     val ready = states.refresh is LoadState.NotLoading && pages.size > appliedPages
@@ -261,23 +267,28 @@ class CommentDetailViewModel : ViewModel() {
                         var next = current
                         if (ready) {
                             val last = pages.last()
-                            val remoteRoot = resolveRoutedCommentRootReply(emptyList(), last.data, rootId)
-                                ?: current.rootReply ?: seedRoot
-                            val root = remoteRoot?.let { store.merge(listOf(it)).firstOrNull { reply -> reply.rpid == rootId } }
+                            currentRootId = threadRootId
+                            currentTargetReplyId = pages.first().data.resolvedTargetReplyId.takeIf { it > 0L }
+                                ?: target.takeIf { it != threadRootId } ?: 0L
+                            val remoteRoot = resolveRoutedCommentRootReply(emptyList(), last.data, threadRootId)
+                                ?: current.rootReply?.takeIf { it.rpid == threadRootId } ?: seedRoot?.takeIf { it.rpid == threadRootId }
+                            val root = remoteRoot?.let { store.merge(listOf(it)).firstOrNull { reply -> reply.rpid == threadRootId } }
                             if (root != null || last.data.isTargetOnly) {
                                 // Rebuild from server pages, never from items carrying a local overlay.
                                 val remoteItems = pages.flatMap { it.data.replies.orEmpty() }
                                     .filterNot { store.isReplyRemoved(it.rpid) }
                                 val items = mergeSentSubReplies(
                                     remoteItems,
-                                    store.repliesFor(rootId).filterNot { store.isReplyRemoved(it.rpid) }
+                                    store.repliesFor(threadRootId).filterNot { store.isReplyRemoved(it.rpid) }
                                 )
-                                val total = if (last.data.isTargetOnly) current.totalCount else resolveSubReplyLoadedTotalCount(
+                                val total = if (last.data.isTargetOnly) 0 else resolveSubReplyLoadedTotalCount(
                                     rootReply = root, loadedReplyCount = items.size,
-                                    remoteReplyCount = resolveSubReplyRemoteTotalCount(last.data, root), previousTotalCount = current.totalCount
+                                    remoteReplyCount = resolveSubReplyRemoteTotalCount(last.data, root),
+                                    previousTotalCount = if (current.isTargetOnly || current.threadRootId != threadRootId) 0 else current.totalCount
                                 )
                                 next = current.copy(
                                     visible = true, rootReply = root,
+                                    targetReplyId = pages.first().data.resolvedTargetReplyId.takeIf { it > 0L } ?: target.takeIf { it != threadRootId } ?: 0L,
                                     items = items.toImmutableList(), baseItems = items.toImmutableList(),
                                     isTargetOnly = last.data.isTargetOnly,
                                     totalCount = total, page = last.request.page, basePage = last.request.page,

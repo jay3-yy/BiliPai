@@ -10,21 +10,45 @@ import com.android.purebilibili.feature.comment.subReplyPagingSource
 import com.android.purebilibili.feature.video.viewmodel.SubReplyPageRequest
 import io.mockk.coEvery
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.unmockkObject
 import kotlinx.coroutines.test.runTest
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Protocol
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class CommentThreadCompletenessTest {
     @Test
     fun `opening a late child retains replies before its server seek window`() = runTest {
-        mockkObject(BiliGrpcClient, BuvidManager, NetworkModule)
+        val client = NetworkModule.okHttpClient
+        mockkObject(BiliGrpcClient, BuvidManager, NetworkModule, client)
         try {
             coEvery { BuvidManager.ensureBuvid3(any()) } returns Unit
             every { NetworkModule.appContext } returns null
+            every { client.newCall(any()) } answers {
+                val request = firstArg<Request>()
+                check(request.url.encodedPath == "/x/v2/reply/detail") { "Unexpected HTTP request: ${request.url}" }
+                val call = mockk<Call>(relaxed = true)
+                every { call.request() } returns request
+                every { call.enqueue(any()) } answers {
+                    firstArg<Callback>().onResponse(call, Response.Builder()
+                        .request(request).protocol(Protocol.HTTP_1_1).code(200).message("OK")
+                        .body("""{"code":0,"data":{"root":{"rpid":25,"oid":100,"type":1,"root":777,"parent":24}}}"""
+                            .toResponseBody("application/json".toMediaType()))
+                        .build())
+                }
+                call
+            }
             every { BiliGrpcClient.request(any(), any(), any(), any()) } answers {
                 val fields = ProtoWire.parseFields(secondArg())
                 val anchor = fields.firstOrNull { it.number == 4 }?.varint ?: 0L
@@ -48,10 +72,12 @@ class CommentThreadCompletenessTest {
                     supplementLocations = false,
                 ).getOrThrow()
             }
-            val first = source.load(PagingSource.LoadParams.Refresh(null, 1, false))
-                as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
-            val second = source.load(PagingSource.LoadParams.Append(requireNotNull(first.nextKey), 1, false))
-                as PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>
+            val initial = source.load(PagingSource.LoadParams.Refresh(null, 1, false))
+            if (initial is PagingSource.LoadResult.Error) throw initial.throwable
+            val first = assertIs<PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>>(initial)
+            val second = assertIs<PagingSource.LoadResult.Page<SubReplyPageRequest, SubReplyPageChunk>>(
+                source.load(PagingSource.LoadParams.Append(requireNotNull(first.nextKey), 1, false)),
+            )
             val pages = first.data + second.data
             assertEquals((1L..26L).toList(), pages.flatMap { it.data.replies.orEmpty() }.map { it.rpid })
             assertEquals(777L, pages.last().data.root?.rpid)
@@ -59,7 +85,7 @@ class CommentThreadCompletenessTest {
             assertFalse(pages.any { it.data.isTargetOnly })
             assertNull(second.nextKey)
         } finally {
-            unmockkObject(BiliGrpcClient, BuvidManager, NetworkModule)
+            unmockkObject(BiliGrpcClient, BuvidManager, NetworkModule, client)
         }
     }
 

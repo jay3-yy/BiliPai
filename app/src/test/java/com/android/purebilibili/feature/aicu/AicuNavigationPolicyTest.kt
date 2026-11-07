@@ -37,19 +37,26 @@ class AicuNavigationPolicyTest {
         assertEquals("av456", target.bvid)
     }
 
-    @Test fun `child comment without root opens content without an unsafe anchor`() {
-        val target = aicuNativeTarget(
-            AicuCategory.COMMENT,
-            AicuRecord("123", "reply", 1L, "456", 1, rank = 2),
-        ) as BiliPaiNavKey.VideoDetail
-        assertEquals(0L, target.commentRootRpid)
-        assertEquals(0L, target.commentTargetRpid)
+    @Test fun `child comment without root preserves its target for server resolution`() {
+        val comment = AicuRecord("123", "reply", 1L, "456", 1, rank = 2)
+        assertEquals(
+            BiliPaiNavKey.VideoDetail("av456", commentTargetRpid = 123L),
+            aicuNativeTarget(AicuCategory.COMMENT, comment),
+        )
+        assertEquals(
+            BiliPaiNavKey.DynamicDetail("456", commentTargetRpid = 123L),
+            aicuNativeTarget(AicuCategory.COMMENT, comment.copy(objectType = 17)),
+        )
+        assertEquals(
+            BiliPaiNavKey.ArticleDetail(456L, commentTargetRpid = 123L),
+            aicuNativeTarget(AicuCategory.COMMENT, comment.copy(objectType = 12)),
+        )
     }
 
     @Test fun `live and articles use native destinations while unsupported records never open a web page`() {
         assertEquals(BiliPaiNavKey.Live(roomId = "42", title = "room", uname = "up"),
             aicuNativeTarget(AicuCategory.LIVE_DANMAKU, AicuRecord("", "dm", 1, roomId = "42", roomName = "room", upName = "up")))
-        assertEquals(BiliPaiNavKey.ArticleDetail(10), aicuNativeTarget(AicuCategory.COMMENT, AicuRecord("1", "text", 1, "10", 12)))
+        assertEquals(BiliPaiNavKey.ArticleDetail(10, commentTargetRpid = 1L), aicuNativeTarget(AicuCategory.COMMENT, AicuRecord("1", "text", 1, "10", 12)))
         assertNull(aicuNativeTarget(AicuCategory.COMMENT, AicuRecord("1", "text", 1, "10", 11)))
         assertNull(aicuNativeTarget(AicuCategory.COMMENT, AicuRecord("1", "text", 1, "https://example.com", 1)))
         assertNull(aicuNativeTarget(AicuCategory.LIVE_DANMAKU, AicuRecord("1", "text", 1, roomId = "0")))

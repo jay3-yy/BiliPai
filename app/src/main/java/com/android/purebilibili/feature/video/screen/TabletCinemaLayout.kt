@@ -1617,9 +1617,7 @@ private fun CinemaCommentsPane(
                     onCommentClick = { reply ->
                         playbackActions.replyTo(reply)
                     },
-                    onSubReplyClick = { rootReply ->
-                        commentActions.openSubReply(rootReply, 0L)
-                    },
+                    onSubReplyClick = commentActions.openSubReply,
                     onDismiss = { showCommentSearchSheet = false },
                     miuixBackdrop = commentChromeBackdrop,
                 )

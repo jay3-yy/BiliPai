@@ -341,13 +341,8 @@ object BilibiliNavigationTargetParser {
         val pathRoot = if (native && !nativeMain) segments.getOrNull(3)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L else 0L
         val pathTarget = if (native && !nativeMain) segments.getOrNull(4)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L else 0L
         val location = resolveCommentLocation(uri, query, pathRoot, pathTarget) ?: return null
-        // A reply ID alone is not a root ID. Only subject pages can carry an unresolved target.
+        // Standalone detail resolves any readable rpid before loading its actual thread.
         if (type == 12) return BilibiliNavigationTarget.Article(oid, location.root, location.target)
-        if (location.root == 0L) return when (type) {
-            1 -> BilibiliNavigationTarget.Video("av$oid", 0L, location.target)
-            17 -> BilibiliNavigationTarget.Dynamic(oid.toString(), 0L, location.target)
-            else -> null
-        }
         val enterUri = query["enterUri"]?.trim().orEmpty().ifBlank {
             when (type) {
                 1 -> "bilibili://video/$oid"

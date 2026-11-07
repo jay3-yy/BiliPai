@@ -485,17 +485,15 @@ class MainCommentReplyVisibilityTest {
     }
 
     @Test
-    fun `root targeted route opens an empty thread without requesting the root as a child`() = runTest(dispatcher) {
-        var requestedTarget = -1L
+    fun `root targeted route opens an empty thread with no selected child`() = runTest(dispatcher) {
         coEvery {
             CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
         } coAnswers {
-            requestedTarget = arg(5)
             Result.success(ReplyData(root = root.copy(rpid = 90L, count = 0, rcount = 0), cursor = ReplyCursor(isEnd = true)))
         }
         assertTrue(model.openSubReplyFromRoute(90L, 90L))
         runCurrent()
-        assertEquals(0L, requestedTarget)
+        assertEquals(0L, model.subReplyState.value.targetReplyId)
         assertTrue(model.subReplyState.value.visible)
         assertEquals(90L, model.subReplyState.value.rootReply?.rpid)
         assertTrue(model.subReplyState.value.items.isEmpty())

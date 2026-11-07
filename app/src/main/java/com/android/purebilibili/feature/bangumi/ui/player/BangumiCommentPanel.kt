@@ -295,7 +295,7 @@ internal fun BangumiCommentPanel(
             onLoadAllComments = viewModel::loadAllCommentsForSearch,
             upMid = state.upMid,
             onCommentClick = onReplyClick,
-            onSubReplyClick = { viewModel.openSubReply(it) },
+            onSubReplyClick = viewModel::openSubReply,
             onDismiss = { showSearch = false },
             miuixBackdrop = backdrop,
         )

@@ -101,7 +101,7 @@ class BilibiliNavigationTargetParserTest {
             BilibiliNavigationTargetParser.parse("bilibili://following/detail/123?rp_id=456&sub_rp_id=789"),
         )
         assertEquals(
-            BilibiliNavigationTarget.Video("av123", 0L, 789L),
+            BilibiliNavigationTarget.CommentDetail(123L, 0L, 789L, 1, "bilibili://video/123"),
             BilibiliNavigationTargetParser.parse("bilibili://comment3/main/123/1?rp_id=0&sub_rp_id=789"),
         )
         assertEquals(
@@ -117,7 +117,6 @@ class BilibiliNavigationTargetParserTest {
             "bilibili://comment3/main/123/0?rp_id=456",
             "bilibili://comment3/main/123/11?rp_id=-1&sub_rp_id=0",
             "bilibili://comment3/main/123/11?rp_id=9223372036854775808",
-            "bilibili://comment3/main/123/11?sub_rp_id=789",
         ).forEach { assertNull(BilibiliNavigationTargetParser.parse(it), it) }
     }
 
@@ -138,6 +137,10 @@ class BilibiliNavigationTargetParserTest {
                 type.toString(),
             )
         }
+        assertEquals(
+            BilibiliNavigationTarget.CommentDetail(123L, 0L, 789L, 11),
+            BilibiliNavigationTargetParser.parse("bilibili://comment3/main/123/11?sub_rp_id=789"),
+        )
     }
 
     @Test

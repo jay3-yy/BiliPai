@@ -2454,7 +2454,7 @@ internal fun VideoDetailScreenStateHolder(
     val suppressOverlayControlsForReturn =
         shouldSuppressOverlayControlsForReturnBudget(returnVisualBudget)
     val routedCommentInteractionActive =
-        openCommentRootRpidFromRoute > 0L &&
+        (openCommentRootRpidFromRoute > 0L || openCommentTargetRpidFromRoute > 0L) &&
             (subReplyVisible || subReplyLoading)
     val commentInteractionActive =
         routedCommentInteractionActive || subReplyVisible || showCommentInput
@@ -2475,12 +2475,13 @@ internal fun VideoDetailScreenStateHolder(
     }
     LaunchedEffect(
         openCommentRootRpidFromRoute,
+        openCommentTargetRpidFromRoute,
         videoSharedPlaybackIntent,
         isVideoPlaying,
         hasAutoPausedForRoutedComment
     ) {
         val shouldAutoPause =
-            openCommentRootRpidFromRoute > 0L &&
+            (openCommentRootRpidFromRoute > 0L || openCommentTargetRpidFromRoute > 0L) &&
                 videoSharedPlaybackIntent == VideoSharedTransitionPlaybackIntent.ImmediatePlayback &&
                 isVideoPlaying &&
                 !hasAutoPausedForRoutedComment
@@ -3393,7 +3394,7 @@ internal fun VideoDetailScreenStateHolder(
             preferredSortMode = preferredCommentSortMode,
             expectedReplyCount = info.stat.reply
         )
-        if (openCommentRootRpidFromRoute > 0L) {
+        if (openCommentRootRpidFromRoute > 0L || openCommentTargetRpidFromRoute > 0L) {
             selectedVideoContentTabIndex = 1
             if (!hasHandledCommentRootFromRoute) {
                 hasHandledCommentRootFromRoute = commentViewModel.openSubReplyFromRoute(
@@ -5914,7 +5915,7 @@ internal fun VideoDetailScreenStateHolder(
             commentState = commentState,
             commentViewModel = commentViewModel,
             forceInitialize = shouldForceInitializeDetachedCommentThreadHostForRoute(
-                routeCommentRootRpid = openCommentRootRpidFromRoute,
+                routeCommentRootRpid = openCommentRootRpidFromRoute.takeIf { it > 0L } ?: openCommentTargetRpidFromRoute,
                 aid = successState?.info?.aid ?: 0L,
                 hasHandledRouteComment = hasHandledCommentRootFromRoute
             ),

@@ -646,11 +646,9 @@ class CommentDetailReplyVisibilityTest {
     @Test
     fun `wrong server root is an error and retry can open a root only thread without children`() = runTest(dispatcher) {
         var correctRoot = false
-        val targets = mutableListOf<Long>()
         coEvery {
             CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
         } coAnswers {
-            targets += arg<Long>(5)
             Result.success(page(emptyList(), root = root.copy(
                 rpid = if (correctRoot) 90L else 10L, count = 0, rcount = 0,
             )))
@@ -662,7 +660,7 @@ class CommentDetailReplyVisibilityTest {
         correctRoot = true
         model.loadMore()
         runCurrent()
-        assertEquals(listOf(0L, 0L), targets)
+        assertEquals(0L, model.subReplyState.value.targetReplyId)
         assertEquals(90L, model.subReplyState.value.rootReply?.rpid)
         assertTrue(ids().isEmpty())
         assertNull(model.subReplyState.value.error)

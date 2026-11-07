@@ -18,13 +18,10 @@ internal fun aicuNativeTarget(category: AicuCategory, record: AicuRecord): BiliP
     val oid = record.objectId.positiveId() ?: return null
     val target = if (category == AicuCategory.COMMENT) record.id.positiveId() ?: 0L else 0L
     val root = if (record.rank == 1) target else record.rootId.positiveId() ?: 0L
-    // A child reply cannot be safely addressed without its root reply. Opening the
-    // parent content is preferable to passing a misleading child anchor downstream.
-    val safeTarget = if (category == AicuCategory.COMMENT && record.rank == 2 && root == 0L) 0L else target
     return when (record.objectType) {
-        1 -> BiliPaiNavKey.VideoDetail(bvid = "av$oid", commentRootRpid = root, commentTargetRpid = safeTarget)
-        17 -> BiliPaiNavKey.DynamicDetail(oid.toString(), commentRootRpid = root, commentTargetRpid = safeTarget)
-        12 -> BiliPaiNavKey.ArticleDetail(oid)
+        1 -> BiliPaiNavKey.VideoDetail(bvid = "av$oid", commentRootRpid = root, commentTargetRpid = target)
+        17 -> BiliPaiNavKey.DynamicDetail(oid.toString(), commentRootRpid = root, commentTargetRpid = target)
+        12 -> BiliPaiNavKey.ArticleDetail(oid, commentRootRpid = root, commentTargetRpid = target)
         else -> null // Legacy picture/article comment IDs cannot safely be treated as dynamic IDs.
     }
 }

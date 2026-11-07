@@ -132,7 +132,16 @@ data class SearchAllData(
     val pagesize: Int = 20,
     val numResults: Int = 0,
     val numPages: Int = 0,
-    val result: List<SearchAllResultCategory>? = null
+    val result: List<SearchAllResultCategory>? = null,
+    val pageinfo: Map<String, SearchCategoryPageInfo> = emptyMap(),
+    val v_voucher: String? = null
+)
+
+@Serializable
+data class SearchCategoryPageInfo(
+    val numResults: Int = 0,
+    val total: Int = 0,
+    val pages: Int = 0
 )
 
 @Serializable
@@ -441,7 +450,8 @@ data class SearchUpData(
     val pagesize: Int = 20,
     val numResults: Int = 0,
     val numPages: Int = 0,
-    val result: List<SearchUpItem>? = null  // 直接返回 UP 主列表
+    val result: List<SearchUpItem>? = null,
+    val v_voucher: String? = null
 )
 
 // --- 3.  UP主 搜索结果模型 ---

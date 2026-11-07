@@ -1,7 +1,31 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.data.model.response.SearchType
+import com.android.purebilibili.data.model.response.SearchUpItem
 import com.android.purebilibili.data.model.response.VideoItem
+
+/** all/v2 的用户卡是精选结果；没有卡片不代表用户分类没有匹配项。 */
+internal suspend fun resolveSearchAllUpPreview(
+    page: Int,
+    userResultCount: Int,
+    featuredUsers: List<SearchUpItem>,
+    loadUsers: suspend () -> List<SearchUpItem>
+): List<SearchUpItem> {
+    if (page != 1 || featuredUsers.isNotEmpty() || userResultCount <= 0) return featuredUsers
+    // 综合页只预览相关性排序前三项，完整结果、排序和分页仍由 UP 分类承载。
+    return buildList(3) {
+        for (user in loadUsers()) {
+            if (none { it.mid == user.mid }) add(user)
+            if (size == 3) break
+        }
+    }
+}
+
+/** 风控也可能以 code=0 返回，不能把验证码响应展示成“没有搜索结果”。 */
+internal fun requireSearchPayload(hasData: Boolean, riskVoucher: String?) {
+    check(riskVoucher.isNullOrBlank()) { "搜索请求需要验证，请在哔哩哔哩网页完成验证后重试" }
+    check(hasData) { "搜索接口未返回结果数据，请重试" }
+}
 
 fun resolveVideoSearchPageInfo(
     requestedPage: Int,

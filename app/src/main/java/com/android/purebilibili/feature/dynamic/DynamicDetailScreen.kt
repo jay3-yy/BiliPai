@@ -344,8 +344,8 @@ fun DynamicDetailScreen(
                                 val headerIndex = if (useSplitLayout) 0 else 1
                                 snapshotFlow {
                                     val current = commentUiState
-                                    val pinReady = openCommentRootRpid <= 0L ||
-                                        current.pinnedReply?.rpid == openCommentRootRpid ||
+                                    val pinReady = (openCommentRootRpid <= 0L && openCommentTargetRpid <= 0L) ||
+                                        current.pinnedReply?.rpid == current.pinnedRootReplyId ||
                                         current.pinnedReplyError != null
                                     current.dynamicId == state.item.id_str && !current.isLoading && pinReady &&
                                         listState.layoutInfo.totalItemsCount > headerIndex
