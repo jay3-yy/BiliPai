@@ -24,6 +24,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
 import com.android.purebilibili.feature.video.LocalVideoDetailOpeningSeed
+import androidx.compose.ui.graphics.painter.BitmapPainter
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.danmaku.DanmakuCloudSyncUiState
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
@@ -4615,13 +4616,19 @@ private fun VideoPlayerSectionContent(
                         playFromManualStartCover()
                     }
             ) {
-                // 窗口转场打开的首个播放身份：封面异步就绪前，用打开时捕获的卡片像素
-                // 同步垫住容器底色，避免系统转场读到首帧黑底。种子始终在封面之下。
+                // 封面异步就绪前只读取来源封面区域，不能将整行标题和统计放大进播放器。
+                // 窗口开合仍持有完整截图；此占位始终位于正常封面之下。
                 val openingSeed = LocalVideoDetailOpeningSeed.current
                 val openingSeedIdentity = remember { currentPlaybackIdentity }
                 if (openingSeed != null && currentPlaybackIdentity == openingSeedIdentity) {
                     androidx.compose.foundation.Image(
-                        bitmap = openingSeed.asImageBitmap(),
+                        painter = remember(openingSeed) {
+                            BitmapPainter(
+                                openingSeed.bitmap.asImageBitmap(),
+                                srcOffset = IntOffset(openingSeed.coverPixels.left, openingSeed.coverPixels.top),
+                                srcSize = IntSize(openingSeed.coverPixels.width, openingSeed.coverPixels.height),
+                            )
+                        },
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         alignment = Alignment.TopCenter,
