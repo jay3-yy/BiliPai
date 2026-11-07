@@ -72,6 +72,7 @@ internal class SettingsContainerTransition(
         scaleReduction = 0f, // 整页只在导航图层缩放一次。
     )
     override val handlesOwnClipping = true
+    override val preparesEnterFrame = !videoCardMotionEnabled
     override val retainsSpringOvershoot = !videoCardMotionEnabled
     private val enterMotion = NavMotion(
         programmatic = NavSettleSpec.Tween(durationMillis, LinearEasing),

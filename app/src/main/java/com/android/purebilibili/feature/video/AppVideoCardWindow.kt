@@ -22,6 +22,7 @@ internal object AppVideoCardWindow {
         val sourceContent: WeakReference<android.view.View>,
         val backgroundColor: Int,
         val clipRadius: Float,
+        val openingSeed: VideoDetailOpeningSeed?,
     )
     private val sessions = mutableMapOf<String, Session>()
 
@@ -58,6 +59,7 @@ internal object AppVideoCardWindow {
                 radius, source.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
                 activity.resources.displayMetrics.density,
             ),
+            videoDetailOpeningSeed(pixels, source),
         )
         var opened = false
         try {

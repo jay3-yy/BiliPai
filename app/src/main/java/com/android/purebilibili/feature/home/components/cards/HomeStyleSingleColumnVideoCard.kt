@@ -81,6 +81,7 @@ import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.feature.home.resolveHomeCoverRequestSpec
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MoreVert
@@ -110,6 +111,7 @@ internal fun HomeStyleSingleColumnVideoCard(
     compactPartition: Boolean = false,
 ) {
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(video.bvid)
     var cardVisibleInWindow by remember(video.bvid, video.aid) { mutableStateOf(false) }
     val publishTimeText = rememberVideoCardPublishTimeText(video, showPublishTime, cardVisibleInWindow)
     val isLongPressEnabled = com.android.purebilibili.core.ui.LocalVideoCardLongPressEnabled.current
@@ -294,7 +296,7 @@ internal fun HomeStyleSingleColumnVideoCard(
         },
         coverOverlayContent = {
             VideoStatusBadges(
-                labels = video.statusLabels,
+                labels = video.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.ExtraSmall),
             )
             if (durationStyle == com.android.purebilibili.core.store.HomeDurationStyle.HIDDEN) {

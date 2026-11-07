@@ -299,6 +299,7 @@ fun ForwardedContent(
             val bangumiTarget = resolveArchiveBangumiTarget(pgc)
             VideoCardLarge(
                 archive = pgc,
+                sourceIdentity = bangumiTarget?.let { "bangumi_${it.seasonId}" } ?: pgc.bvid,
                 publishTs = author?.pub_ts ?: 0L,
                 cornerBadgeText = "番剧",
                 onClick = { bangumiTarget?.let { onBangumiClick(it.seasonId, it.epId) } }

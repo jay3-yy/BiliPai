@@ -45,6 +45,7 @@ internal class SystemWindowCardSource internal constructor(
 
 /** 窗口可承接的容器目标键；其余键返回 null，调用方保持原窗口内导航。 */
 internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = when (target) {
+    is BiliPaiNavKey.AudioMode -> target.sourceBvid.takeIf(String::isNotBlank)
     is BiliPaiNavKey.Live -> "live_${target.roomId}"
     is BiliPaiNavKey.BangumiPlayer -> "bangumi_${target.seasonId}"
     is BiliPaiNavKey.BangumiDetail -> "bangumi_${target.seasonId}"

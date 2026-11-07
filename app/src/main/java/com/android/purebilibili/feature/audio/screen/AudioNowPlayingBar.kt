@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SkipNext
@@ -399,6 +400,7 @@ internal fun AudioNowPlayingBar(
                         else -> 8.dp
                     }
                 )
+                .videoCardSourceAnchor(state.bvid, shape, enabled = captureCardSourceOnExpand)
                 .onGloballyPositioned { coordinates ->
                     barCoordsRef[0] = coordinates
                 }

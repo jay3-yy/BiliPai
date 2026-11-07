@@ -583,10 +583,11 @@ internal fun RelatedVideoGridRow(
                             })
                         }
                         AppDropdownMenuItem(text = { AppText(if (privacyEnabled) "退出无痕模式" else "进入无痕模式") }, leadingIcon = { AppIcon(if (privacyEnabled) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, null) }, onClick = {
+                            val nextPrivacyEnabled = !privacyEnabled
                             menuVideo = null
                             scope.launch {
-                                SettingsManager.setPrivacyModeEnabled(context, !privacyEnabled)
-                                Toast.makeText(context, if (privacyEnabled) "已退出无痕模式" else "已进入无痕模式", Toast.LENGTH_SHORT).show()
+                                SettingsManager.setPrivacyModeEnabled(context, nextPrivacyEnabled)
+                                Toast.makeText(context, if (nextPrivacyEnabled) "已进入无痕模式" else "已退出无痕模式", Toast.LENGTH_SHORT).show()
                             }
                         })
                     }

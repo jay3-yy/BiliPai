@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 //  Material Icons
 import androidx.compose.material3.*
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.feature.live.rememberLiveCardContainerTransition
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -71,10 +73,17 @@ fun LiveCard(
         val roomId = liveInfo.live_play_info?.room_id ?: 0L
         val title = liveInfo.live_play_info?.title ?: ""
 
+        val transition = rememberLiveCardContainerTransition(
+            roomId = roomId, title = title, hostName = "",
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            cornerRadius = AppShapes.resolveContainerCornerDp(ContainerLevel.Card, LocalAppUiStyle.current),
+            onClick = { onLiveClick(roomId, title, "") },
+        )
         AppCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .appActionClickable { onLiveClick(roomId, title, "") },  //  点击跳转直播
+                .then(transition.modifier)
+                .appActionClickable(onClick = transition.onClick),
             shape = AppCardShape.Semantic(ContainerLevel.Card),
             colors = AppCardDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -194,10 +203,17 @@ fun LiveMajorCard(
     if (roomId <= 0L) return
     val title = live.title.ifBlank { "直播间" }
     val context = LocalContext.current
+    val transition = rememberLiveCardContainerTransition(
+        roomId = roomId, title = title, hostName = "",
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        cornerRadius = AppShapes.resolveContainerCornerDp(ContainerLevel.Card, LocalAppUiStyle.current),
+        onClick = { onLiveClick(roomId, title, "") },
+    )
     AppCard(
         modifier = Modifier
             .fillMaxWidth()
-            .appActionClickable { onLiveClick(roomId, title, "") },
+            .then(transition.modifier)
+            .appActionClickable(onClick = transition.onClick),
         shape = AppCardShape.Semantic(ContainerLevel.Card),
         colors = AppCardDefaults.colors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)

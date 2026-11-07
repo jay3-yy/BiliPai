@@ -54,6 +54,7 @@ import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.HapticType
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -141,6 +142,7 @@ internal fun StoryVideoCard(
     modifier: Modifier = Modifier,
     onClick: (String, Long) -> Unit
 ) {
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(video.bvid)
     val contentTypography = feedContentTypography(
         titleHierarchy = if (compactMetadata) {
             FeedTitleHierarchy.Compact
@@ -487,7 +489,8 @@ internal fun StoryVideoCard(
                     ),
             ) {
             com.android.purebilibili.core.ui.components.VideoStatusBadges(
-                labels = video.statusLabels.ifEmpty { listOfNotNull(premiumBadgeLabel) },
+                labels = (video.statusLabels + listOfNotNull(sponsorStatusLabel))
+                    .ifEmpty { listOfNotNull(premiumBadgeLabel) },
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.Small),
             )
             //  时长标签 (保留在封面上)

@@ -640,10 +640,16 @@ private fun FavoritePgcCard(
     onStatusSelected: (FavoritePgcStatus) -> Unit,
     onRemove: () -> Unit,
 ) {
+    val container = if (!batchMode) {
+        com.android.purebilibili.core.ui.rememberNativeCardContainerTransition(
+            com.android.purebilibili.navigation3.BiliPaiNavKey.BangumiDetail(seasonId = item.id), onClick,
+        )
+    } else null
     AppSurface(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = onLongClick),
+            .then(container?.modifier ?: Modifier)
+            .combinedClickable(onClick = appActionWithFeedback(container?.onClick ?: onClick), onLongClick = onLongClick),
         shape = AppShapes.container(ContainerLevel.Card),
         color = AppSurfaceTokens.cardContainer(),
     ) {

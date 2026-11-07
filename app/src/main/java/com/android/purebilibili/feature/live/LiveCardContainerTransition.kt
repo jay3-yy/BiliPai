@@ -93,10 +93,12 @@ internal fun rememberLiveCardContainerTransition(
         val disabledRadiusPx = with(LocalDensity.current) { cornerRadius.toPx() }
         // 容器形变关闭时仍登记系统窗口来源，系统一镜到底不受直播容器开关影响。
         return LiveCardContainerTransition(
-            modifier = Modifier.videoCardSourceAnchor(
-                disabledSystemSource.identity,
-                androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius),
-            ),
+            modifier = Modifier
+                .onGloballyPositioned { disabledSystemSource.coordinates = it }
+                .videoCardSourceAnchor(
+                    disabledSystemSource.identity,
+                    androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius),
+                ),
             onClick = {
                 disabledSystemSource.record(disabledRadiusPx)
                 onClick()
@@ -130,7 +132,10 @@ internal fun rememberLiveCardContainerTransition(
     }
     return LiveCardContainerTransition(
         modifier = Modifier
-            .onGloballyPositioned(anchor::update)
+            .onGloballyPositioned {
+                anchor.update(it)
+                systemWindowSource?.coordinates = it
+            }
             .then(
                 if (systemWindowSource != null) {
                     Modifier.videoCardSourceAnchor(

@@ -72,6 +72,9 @@ fun interface NavTransition {
     /** A container transition supplies its own moving clip instead of the host corner clip. */
     val handlesOwnClipping: Boolean get() = false
 
+    /** Compose and lay out the incoming entry at its source frame before starting a push. */
+    val preparesEnterFrame: Boolean get() = false
+
     /** Keep a removing entry across an opted-in spring's first endpoint crossing until it settles. */
     val retainsSpringOvershoot: Boolean get() = false
 

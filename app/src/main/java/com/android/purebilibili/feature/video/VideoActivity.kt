@@ -64,6 +64,16 @@ open class VideoActivity : ComponentActivity() {
     private var finishingPlayer: androidx.media3.common.Player? = null
     private var officialReturnMotionEnabled = true
     private var officialReturnBlurEnabled = true
+    private var officialRootPredictiveBack = false
+
+    internal fun updateOfficialRootPredictiveBack(atRoot: Boolean) {
+        // 仅标准系统转场尝试跨 Activity 预测返回；自研窗口与旧圆角协议沿用各自返回。
+        val enabled = atRoot && Build.VERSION.SDK_INT >= 35 &&
+            intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)?.startsWith("sdk:") == true
+        if (officialRootPredictiveBack == enabled) return
+        officialRootPredictiveBack = enabled
+        refreshOfficialReturn("root_predictive_back_changed")
+    }
 
     internal open fun updateOfficialReturnMotion(enabled: Boolean, realtimeBlurEnabled: Boolean) {
         if (officialReturnMotionEnabled == enabled && officialReturnBlurEnabled == realtimeBlurEnabled) return
@@ -75,6 +85,7 @@ open class VideoActivity : ComponentActivity() {
     private fun refreshOfficialReturn(reason: String, preparingToFinish: Boolean = false) =
         SystemVideoCardTransition.refreshReturn(
             this, officialReturnMotionEnabled, officialReturnBlurEnabled, reason, preparingToFinish,
+            preferSystemPredictiveBack = officialRootPredictiveBack,
         )
 
     internal fun onOpeningVideoChild() {
@@ -300,13 +311,13 @@ open class VideoActivity : ComponentActivity() {
                 com.android.purebilibili.core.ui.blur.ProvideUnifiedBlurIntensity {
                 ProvideAppTextSelectionHost {
                 CompositionLocalProvider(
-                    // 窗口转场打开时，首帧在封面就绪前同步显示打开时捕获的卡片像素。
-                    LocalVideoDetailOpeningSeed provides SystemVideoCardTransition.peekThumbnail(
+                    // 整卡留给窗口开合；播放器首帧只使用实测封面区域。
+                    LocalVideoDetailOpeningSeed provides SystemVideoCardTransition.peekOpeningSeed(
                         intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
                     ).let { officialSeed ->
                         officialSeed ?: AppVideoCardWindow.session(
                             intent.getStringExtra(AppVideoCardWindow.EXTRA_SESSION),
-                        )?.pixels
+                        )?.openingSeed
                     },
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,

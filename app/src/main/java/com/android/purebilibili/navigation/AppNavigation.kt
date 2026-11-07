@@ -681,6 +681,10 @@ fun AppNavigation(
         val navigation3SaveableStateHolder = key(memoryRecovery.snapshot?.savedAtMs) {
             rememberSaveableStateHolder()
         }
+        androidx.compose.runtime.SideEffect {
+            (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)
+                ?.updateOfficialRootPredictiveBack(initialVideoRoute != null && navigation3BackStack.size == 1)
+        }
         fun replaceNavigation3BackStack(keys: List<BiliPaiNavKey>) {
             val replacementStack = keys.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
             if (navigation3BackStack == replacementStack) return
@@ -1055,9 +1059,12 @@ fun AppNavigation(
                 com.android.purebilibili.core.ui.transition.VideoCardSourceInstances.takeAnchor(bvid)
             } else null
             // 各来源使用自身实际视口裁剪，不套用首页固定顶栏高度。
-            // boundsInRoot 同时核对实例存活、窗口附着与整卡是否被裁切。
-            val measuredSourceBounds = anchor?.boundsInRoot()
-            val cardFullyVisible = measuredSourceBounds != null
+            // 完整录制层可还原被视口裁切的整卡；窗口截图来源仍要求完整可见。
+            val sourceLayer = CardPositionManager.nativeVideoCardLayerFor(CardPositionManager.lastClickedVideoSourceChromeSnapshot)
+            val hasCompleteSourcePixels = sourceLayer != null && !sourceLayer.isReleased &&
+                sourceLayer.size.width > 1 && sourceLayer.size.height > 1
+            val cardFullyVisible = anchor?.boundsInRoot() != null
+            val measuredSourceBounds = anchor?.boundsInRoot(allowPartial = hasCompleteSourcePixels)
             return VideoCardTransitionSession.create(
                 bvid = bvid,
                 source = source,
@@ -1076,6 +1083,7 @@ fun AppNavigation(
                 hostOriginInRoot = navigationHostOriginInRoot,
                 sourcePixelOwner = CardPositionManager.videoCardPixelOwnerFor(source.key),
                 sourceAnchor = anchor,
+                hasCompleteSourcePixels = hasCompleteSourcePixels,
             )
         }
         // Freeze the source before direction/offline lookups can suspend. A related click
@@ -1230,10 +1238,11 @@ fun AppNavigation(
         }
         /** 直播、番剧等窗口可承接目标：系统一镜到底优先，未启动窗口时保持原窗口内导航。 */
         fun navigateToSystemCardWindowOrPush(key: BiliPaiNavKey) {
+            val resolvedKey = com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key)
             fun commitInApp() {
-                pushNavigation3Key(key)
+                pushNavigation3Key(resolvedKey)
             }
-            val identity = com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(key)
+            val identity = com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(resolvedKey)
                 ?: return commitInApp()
             val session = captureVideoCardNavigationSession(
                 bvid = identity,
@@ -1253,8 +1262,8 @@ fun AppNavigation(
                 val opened = com.android.purebilibili.feature.video.SystemVideoCardTransition.tryOpen(
                     activity = hostActivity,
                     request = com.android.purebilibili.feature.video.VideoOpenRequest(
-                        bvid = "",
-                        initialRoute = key.toLegacyRoute(),
+                        bvid = (resolvedKey as? BiliPaiNavKey.AudioMode)?.sourceBvid.orEmpty(),
+                        initialRoute = resolvedKey.toLegacyRoute(),
                     ),
                     source = session,
                     realtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,
@@ -2927,7 +2936,7 @@ fun AppNavigation(
                             onBack = onBack,
                             onVideoClick = { bvid -> navigateToVideoInNavigation3(bvid, 0L, "") },
                             onBangumiClick = { seasonId, epId ->
-                                pushNavigation3Key(
+                                navigateToSystemCardWindowOrPush(
                                     BiliPaiNavKey.BangumiDetail(seasonId = seasonId, epId = epId)
                                 )
                             },
@@ -2949,7 +2958,7 @@ fun AppNavigation(
                                 )
                             },
                             onLiveClick = { roomId, title, uname ->
-                                pushNavigation3Key(
+                                navigateToSystemCardWindowOrPush(
                                     BiliPaiNavKey.Live(roomId = roomId.toString(), title = title, uname = uname)
                                 )
                             },
@@ -3053,7 +3062,7 @@ fun AppNavigation(
                         },
                         onLiveClick = { roomId, title, uname ->
                             if (roomId > 0L) {
-                                pushNavigation3Key(
+                                navigateToSystemCardWindowOrPush(
                                     BiliPaiNavKey.Live(
                                         roomId = roomId.toString(),
                                         title = title,
@@ -3172,7 +3181,7 @@ fun AppNavigation(
                         mediaId = bangumiKey.mediaId,
                         onBack = onBack,
                         onEpisodeClick = { actionSeasonId, episode ->
-                            pushNavigation3Key(
+                            navigateToSystemCardWindowOrPush(
                                 BiliPaiNavKey.BangumiPlayer(
                                     seasonId = actionSeasonId,
                                     epId = episode.id,
@@ -3254,7 +3263,7 @@ fun AppNavigation(
                             )
                         },
                         onLiveClick = { roomId, title, uname ->
-                            pushNavigation3Route(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                            navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.Live.createRoute(roomId, title, uname)))
                         },
                         onBangumiClick = { initialType ->
                             pushNavigation3Route(ScreenRoutes.Bangumi.createRoute(initialType))
@@ -3285,7 +3294,7 @@ fun AppNavigation(
                             navigateToSystemCardWindowOrPush(BiliPaiNavKey.BangumiPlayer(seasonId = seasonId, epId = 0L))
                         },
                         onBangumiEpisodeClick = { seasonId, epId ->
-                            pushNavigation3Key(
+                            navigateToSystemCardWindowOrPush(
                                 BiliPaiNavKey.BangumiDetail(seasonId = seasonId, epId = epId)
                             )
                         },
@@ -3406,9 +3415,9 @@ fun AppNavigation(
                             when (resolveHistoryNavigationKind(historyItem)) {
                                 HistoryNavigationKind.PGC -> {
                                     if (historyItem != null && historyItem.epid > 0 && historyItem.seasonId > 0) {
-                                        pushNavigation3Route(ScreenRoutes.BangumiPlayer.createRoute(historyItem.seasonId, historyItem.epid))
+                                        navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.BangumiPlayer.createRoute(historyItem.seasonId, historyItem.epid)))
                                     } else if (historyItem != null && (historyItem.seasonId > 0 || historyItem.epid > 0)) {
-                                        pushNavigation3Route(ScreenRoutes.BangumiDetail.createRoute(historyItem.seasonId, historyItem.epid))
+                                        navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.BangumiDetail.createRoute(historyItem.seasonId, historyItem.epid)))
                                     } else {
                                         navigateToVideoInNavigation3(
                                             lookupKey,
@@ -3502,14 +3511,14 @@ fun AppNavigation(
                             if (seasonId > 0L || epId > 0L) {
                                 if (epId > 0L) {
                                     // 动态里的番剧卡带集数信息，直接播放该集
-                                    pushNavigation3Key(
+                                    navigateToSystemCardWindowOrPush(
                                         BiliPaiNavKey.BangumiPlayer(
                                             seasonId = seasonId,
                                             epId = epId
                                         )
                                     )
                                 } else {
-                                    pushNavigation3Route(ScreenRoutes.BangumiDetail.createRoute(seasonId, epId))
+                                    navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.BangumiDetail.createRoute(seasonId, epId)))
                                 }
                             }
                         },
@@ -3529,7 +3538,7 @@ fun AppNavigation(
                             pushSearchRouteInNavigation3(keyword)
                         },
                         onLiveClick = { roomId, title, uname ->
-                            pushNavigation3Route(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                            navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.Live.createRoute(roomId, title, uname)))
                         },
                         onMusicClick = { musicId ->
                             if (musicId > 0L) pushNavigation3Key(BiliPaiNavKey.MusicDetail(musicId))
@@ -3618,7 +3627,7 @@ fun AppNavigation(
                                 onUpClick = { mid -> pushNavigation3Route(ScreenRoutes.Space.createRoute(mid)) },
                                 onBangumiClick = { seasonId ->
                                     if (seasonId > 0L) {
-                                        pushNavigation3Route(ScreenRoutes.BangumiDetail.createRoute(seasonId))
+                                        navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.BangumiDetail.createRoute(seasonId)))
                                     }
                                 },
                                 onUpResultClick = openUpResult,
@@ -3634,7 +3643,7 @@ fun AppNavigation(
                                     )
                                 },
                                 onLiveClick = { roomId, title, uname ->
-                                    pushNavigation3Route(ScreenRoutes.Live.createRoute(roomId, title, uname))
+                                    navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.Live.createRoute(roomId, title, uname)))
                                 },
                                 onTopicClick = { topicId ->
                                     if (topicId > 0L) {
@@ -3718,14 +3727,14 @@ fun AppNavigation(
                             if (seasonId > 0L || epId > 0L) {
                                 if (epId > 0L) {
                                     // 动态里的番剧卡带集数信息，直接播放该集
-                                    pushNavigation3Key(
+                                    navigateToSystemCardWindowOrPush(
                                         BiliPaiNavKey.BangumiPlayer(
                                             seasonId = seasonId,
                                             epId = epId
                                         )
                                     )
                                 } else {
-                                    pushNavigation3Key(
+                                    navigateToSystemCardWindowOrPush(
                                         BiliPaiNavKey.BangumiDetail(seasonId = seasonId, epId = epId)
                                     )
                                 }
@@ -3840,14 +3849,14 @@ fun AppNavigation(
                             if (seasonId > 0L || epId > 0L) {
                                 if (epId > 0L) {
                                     // 动态里的番剧卡带集数信息，直接播放该集
-                                    pushNavigation3Key(
+                                    navigateToSystemCardWindowOrPush(
                                         BiliPaiNavKey.BangumiPlayer(
                                             seasonId = seasonId,
                                             epId = epId
                                         )
                                     )
                                 } else {
-                                    pushNavigation3Key(
+                                    navigateToSystemCardWindowOrPush(
                                         BiliPaiNavKey.BangumiDetail(seasonId = seasonId, epId = epId)
                                     )
                                 }
@@ -4976,7 +4985,7 @@ fun AppNavigation(
                             )
                         },
                         onBangumiSeasonClick = { seasonId ->
-                            pushNavigation3Route(ScreenRoutes.BangumiDetail.createRoute(seasonId))
+                            navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(ScreenRoutes.BangumiDetail.createRoute(seasonId)))
                         },
                         onBangumiClick = { initialType ->
                             pushNavigation3Route(ScreenRoutes.Bangumi.createRoute(initialType))
@@ -5083,7 +5092,7 @@ fun AppNavigation(
                             navigateToSystemCardWindowOrPush(BiliPaiNavKey.BangumiPlayer(seasonId = seasonId, epId = 0L))
                         },
                         onBangumiEpisodeClick = { seasonId, epId ->
-                            pushNavigation3Key(
+                            navigateToSystemCardWindowOrPush(
                                 BiliPaiNavKey.BangumiDetail(
                                     seasonId = seasonId,
                                     epId = epId
@@ -5091,7 +5100,7 @@ fun AppNavigation(
                             )
                         },
                         onPlayEpisode = { seasonId, episode ->
-                            pushNavigation3Key(
+                            navigateToSystemCardWindowOrPush(
                                 BiliPaiNavKey.BangumiPlayer(
                                     seasonId = seasonId,
                                     epId = episode.id,
@@ -5867,7 +5876,7 @@ fun AppNavigation(
                                         onCompactClick = compactClick,
                                         isLayoutStable = layoutStable && !driveBottomBarByProgress,
                                         pauseArtworkRotation = pauseNowPlayingArtworkRotation,
-                                        captureCardSourceOnExpand = !audioNowPlayingBarOpensAudioMode,
+                                        captureCardSourceOnExpand = true,
                                         sourceRoute = currentRoute ?: ScreenRoutes.Home.route,
                                         handoff = audioNowPlayingHandoff,
                                         onExpand = {
@@ -5878,7 +5887,7 @@ fun AppNavigation(
                                                 coverUrl = audioNowPlayingItem.cover,
                                             )
                                             if (audioNowPlayingBarOpensAudioMode) {
-                                                pushNavigation3Route(expandRoute)
+                                                navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(expandRoute))
                                             } else {
                                                 navigateToVideoRouteInNavigation3(
                                                     route = expandRoute,
@@ -6150,7 +6159,7 @@ fun AppNavigation(
                     ),
                     isLayoutStable = !driveBottomBarByProgress,
                     pauseArtworkRotation = pauseNowPlayingArtworkRotation,
-                    captureCardSourceOnExpand = !audioNowPlayingBarOpensAudioMode,
+                    captureCardSourceOnExpand = true,
                     sourceRoute = currentRoute ?: ScreenRoutes.Home.route,
                     handoff = audioNowPlayingHandoff,
                     onExpand = {
@@ -6161,7 +6170,7 @@ fun AppNavigation(
                             coverUrl = audioNowPlayingItem.cover,
                         )
                         if (audioNowPlayingBarOpensAudioMode) {
-                            pushNavigation3Route(expandRoute)
+                            navigateToSystemCardWindowOrPush(legacyRouteToBiliPaiNavKey(expandRoute))
                         } else {
                             navigateToVideoRouteInNavigation3(
                                 route = expandRoute,

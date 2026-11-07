@@ -36,12 +36,13 @@ internal data class VideoCardTransitionSession(
     val hostOriginInRoot: Offset = Offset.Zero,
     val sourcePixelOwner: VideoCardPixelOwner? = null,
     val sourceAnchor: com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor? = null,
+    val hasCompleteSourcePixels: Boolean = false,
 ) {
     val sourceInstanceId: Long?
         get() = sourcePixelOwner?.sourceInstanceId
 
     val hasUsableSourceGeometry: Boolean
-        get() = cardBounds != null && cardFullyVisible
+        get() = cardBounds != null && (cardFullyVisible || hasCompleteSourcePixels)
 
     fun refreshedForReturn(): VideoCardTransitionSession =
         if (sourceAnchor == null) this else withReturnBounds(sourceAnchor.boundsInRoot()).copy(
@@ -82,6 +83,7 @@ internal data class VideoCardTransitionSession(
             hostOriginInRoot: Offset = Offset.Zero,
             sourcePixelOwner: VideoCardPixelOwner? = null,
             sourceAnchor: com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor? = null,
+            hasCompleteSourcePixels: Boolean = false,
         ): VideoCardTransitionSession {
             val normalizedBvid = bvid.trim()
             val sourceBvid = source.key
@@ -93,6 +95,7 @@ internal data class VideoCardTransitionSession(
             return VideoCardTransitionSession(
                 bvid = normalizedBvid,
                 sourceAnchor = sourceAnchor,
+                hasCompleteSourcePixels = ownsRecordedGeometry && hasCompleteSourcePixels,
                 sourceRoute = normalizeBiliPaiVideoSourceRoute(source.route),
                 sourceKey = source.key?.trim()?.takeIf(String::isNotEmpty),
                 cardBounds = cardBounds?.takeIf { ownsRecordedGeometry }?.let {
