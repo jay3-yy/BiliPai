@@ -5719,7 +5719,7 @@ internal fun VideoDetailScreenStateHolder(
             sharedPlayer = if (useSharedPortraitPlayer) playerState.player else null,
             useTextureSurfaceForNavigation = useTextureSurfaceForNavigation,
             isPlayerSurfaceReady = isPlayerSurfaceReady,
-            onBack = handlePlayerBack,
+            onExitFullscreen = { presentationState.setPortraitFullscreen(false) },
             onHomeClick = {
                 presentationState.setPortraitFullscreen(false)
                 handleTopBarAction(resolveVideoDetailTopBarAction(isHomeButton = true))
@@ -5822,30 +5822,6 @@ internal fun VideoDetailScreenStateHolder(
                     presentationState.setPortraitFullscreen(false)
                 }
                 navigateToUserSpaceFromVideo(mid)
-            },
-            onRotateToLandscape = {
-                presentationState.setPortraitFullscreen(false)
-                val hostActivity = context.findActivity()
-                val targetOrientation = resolvePortraitRotateTargetOrientation(
-                    isOrientationDrivenFullscreen = isOrientationDrivenFullscreen,
-                )
-                // This is an explicit enter action, not a toggle of the old landscape
-                // phase (which may still be waiting for the portrait configuration).
-                userRequestedFullscreen = true
-                manualPortraitHoldActive = false
-                if (continuousFullscreenTransitionEnabled) {
-                    applyContinuousPlayerDecision(
-                        reduceContinuousPlayerTransition(
-                            phase = continuousPlayerPhase,
-                            event = ContinuousPlayerTransitionEvent.EnterFullscreen,
-                        )
-                    )
-                } else if (hostActivity != null && targetOrientation != null) {
-                    hostActivity.applyPlayerRequestedOrientation(
-                        requestedOrientation = targetOrientation,
-                        displayContext = displayContext,
-                    )
-                }
             },
         )
 

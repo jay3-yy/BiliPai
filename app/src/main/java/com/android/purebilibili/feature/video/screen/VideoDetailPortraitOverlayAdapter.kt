@@ -55,7 +55,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
     sharedPlayer: ExoPlayer?,
     useTextureSurfaceForNavigation: Boolean,
     isPlayerSurfaceReady: Boolean = true,
-    onBack: () -> Unit,
+    onExitFullscreen: () -> Unit,
     onHomeClick: () -> Unit,
     onVideoChange: (String) -> Unit,
     onPlaybackIdentityChange: (String, Long, String) -> Unit,
@@ -63,7 +63,6 @@ internal fun VideoDetailPortraitOverlayAdapter(
     onExitSnapshot: (String, Long, Long, String) -> Unit,
     onSearchClick: () -> Unit,
     onUserClick: (Long) -> Unit,
-    onRotateToLandscape: () -> Unit,
 ) {
     val context = LocalContext.current
     val showPortraitFullscreen = shouldShowStandalonePortraitPager(
@@ -159,7 +158,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
                 recommendations = portraitRecommendations,
                 onlyVerticalRecommendations = portraitOnlyVerticalRecommendations,
                 isInPipMode = isInPipMode,
-                onBack = onBack,
+                onBack = onExitFullscreen,
                 onHomeClick = onHomeClick,
                 onVideoChange = onVideoChange,
                 onPlaybackIdentityChange = onPlaybackIdentityChange,
@@ -173,7 +172,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
                 onExitSnapshot = onExitSnapshot,
                 onSearchClick = onSearchClick,
                 onUserClick = onUserClick,
-                onRotateToLandscape = onRotateToLandscape,
+                onExitFullscreen = onExitFullscreen,
             )
         }
     }

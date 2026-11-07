@@ -321,7 +321,7 @@ fun PortraitVideoPager(
     onExitSnapshot: (String, Long, Long, String) -> Unit = { _, _, _, _ -> },
     onSearchClick: () -> Unit = {},
     onUserClick: (Long) -> Unit,
-    onRotateToLandscape: () -> Unit,
+    onExitFullscreen: () -> Unit,
     menuActions: com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions =
         com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions(),
 ) {
@@ -1982,7 +1982,7 @@ fun PortraitVideoPager(
                 onExitSnapshot = onExitSnapshot,
                 onSearchClick = onSearchClick,
                 onUserClick = handleUserClick,
-                onRotateToLandscape = onRotateToLandscape,
+                onExitFullscreen = onExitFullscreen,
                 onProgressUpdate = onProgressUpdate,
                 watchLaterVideos = watchLaterVideos,
                 recommendationVideos = recommendationItems,
@@ -2218,7 +2218,7 @@ private fun VideoPageItem(
     onExitSnapshot: (String, Long, Long, String) -> Unit,
     onSearchClick: () -> Unit,
     onUserClick: (Long) -> Unit,
-    onRotateToLandscape: () -> Unit,
+    onExitFullscreen: () -> Unit,
     onProgressUpdate: (String, Long, Long, String) -> Unit,
     watchLaterVideos: List<RelatedVideo>,
     recommendationVideos: List<RelatedVideo>,
@@ -4230,11 +4230,11 @@ private fun VideoPageItem(
                 },
                 onToggleFullscreen = {
                     onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid, cover)
-                    onRotateToLandscape()
+                    onExitFullscreen()
                 },
                 onPortraitFullscreen = {
                     onExitSnapshot(bvid, exoPlayer.currentPosition, snapshotCid, cover)
-                    onRotateToLandscape()
+                    onExitFullscreen()
                 },
                 onLandscapeCommentClick = { showCommentSheet = true },
                 onDanmakuToggle = toggleDanmaku,
