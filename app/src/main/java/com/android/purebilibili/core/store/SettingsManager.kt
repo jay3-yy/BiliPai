@@ -142,11 +142,21 @@ enum class LiquidGlassMode(val value: Int, val label: String) {
     }
 }
 
+internal const val CLASSIC_FROSTED_GLASS_PROGRESS = 0.85f
+
+// 「清晰」预设锁定的材质进度：通透端玻璃，选中预设时随参数一并提交。
+internal const val READABLE_GLASS_PRESET_PROGRESS = 0.17561252f
+
+// 「均衡」预设锁定的材质进度：中点材质对应迁移前底栏玻璃的原始配方
+// （blur 4dp、底色 alpha 0.4、vibrancy 1.5、lens 24/24、色散 0.56、形变 1x）。
+internal const val BALANCED_GLASS_PRESET_PROGRESS = 0.5f
+
 enum class LiquidGlassAdvancedPreset(val value: Int, val label: String) {
     READABLE(0, "清晰"),
     BALANCED(1, "均衡"),
     PRISM(2, "棱镜"),
-    CUSTOM(3, "自定");
+    CUSTOM(3, "自定"),
+    CLASSIC_FROSTED(4, "经典磨砂");
 
     companion object {
         fun fromValue(value: Int): LiquidGlassAdvancedPreset =
@@ -172,12 +182,13 @@ internal fun resolveLiquidGlassAdvancedPreset(
 ): LiquidGlassAdvancedSettings = when (preset) {
     LiquidGlassAdvancedPreset.READABLE -> LiquidGlassAdvancedSettings(
         preset = preset,
-        progressiveBlurRadius = 0.25f,
-        progressiveBlurExtent = 0.6f,
-        progressiveBlurCurve = 0.4f,
-        contentReadability = 1f,
-        chromaticAberration = 0.08f,
-        contentDistortion = 0f,
+        // 采用用户确认的通透玻璃配置：通透端材质叠加均衡系高级参数。
+        progressiveBlurRadius = 0.40173537f,
+        progressiveBlurExtent = 0.99956614f,
+        progressiveBlurCurve = 0.5504339f,
+        contentReadability = 0.62043387f,
+        chromaticAberration = 0.56173533f,
+        contentDistortion = 0.4523861f,
     )
     LiquidGlassAdvancedPreset.BALANCED -> LiquidGlassAdvancedSettings(
         preset = preset,
@@ -196,6 +207,15 @@ internal fun resolveLiquidGlassAdvancedPreset(
         contentReadability = 0.72f,
         chromaticAberration = 0.96f,
         contentDistortion = 1f,
+    )
+    LiquidGlassAdvancedPreset.CLASSIC_FROSTED -> LiquidGlassAdvancedSettings(
+        preset = preset,
+        progressiveBlurRadius = 0.55f,
+        progressiveBlurExtent = 1f,
+        progressiveBlurCurve = 0.5f,
+        contentReadability = 0.65f,
+        chromaticAberration = 0f,
+        contentDistortion = 0f,
     )
     LiquidGlassAdvancedPreset.CUSTOM -> LiquidGlassAdvancedSettings(preset = preset)
 }
@@ -4930,8 +4950,23 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setLiquidGlassAdvancedSettings(
         context: Context,
         settings: LiquidGlassAdvancedSettings,
+        presetProgress: Float? = null,
     ) {
         context.settingsDataStore.edit { preferences ->
+            // 一键预设同时提交材质与高级参数，避免出现半套配方。
+            presetProgress?.let { progress ->
+                val normalized = normalizeLiquidGlassProgress(progress)
+                preferences[KEY_LIQUID_GLASS_PROGRESS] = normalized
+                preferences[KEY_LIQUID_GLASS_MODE] = resolveLiquidGlassModeFromProgress(normalized).value
+                preferences[KEY_LIQUID_GLASS_STRENGTH] = resolveLiquidGlassStrengthFromProgress(normalized)
+                preferences[KEY_LIQUID_GLASS_STYLE] = resolveLegacyLiquidGlassStyleFromProgress(normalized).value
+                if (settings.preset == LiquidGlassAdvancedPreset.CLASSIC_FROSTED) {
+                    preferences[com.android.purebilibili.core.store.home.glassDockMotionStylePreferencesKey] =
+                        com.android.purebilibili.core.store.home.GlassMotionStyle.STANDARD.value
+                    preferences[com.android.purebilibili.core.store.home.glassPopupMotionStylePreferencesKey] =
+                        com.android.purebilibili.core.store.home.GlassMotionStyle.STANDARD.value
+                }
+            }
             preferences[KEY_LIQUID_GLASS_ADVANCED_PRESET] = settings.preset.value
             preferences[KEY_LIQUID_GLASS_PROGRESSIVE_BLUR_RADIUS] =
                 normalizeLiquidGlassAdvancedValue(settings.progressiveBlurRadius, 0.5f)

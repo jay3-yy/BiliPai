@@ -1142,7 +1142,8 @@ private fun AppGlassChoicePopupCard(
         mediaBackdrop = request.menu?.backdrop != null,
         tuning = tuning,
     )
-    val effects = remember(blurRadiusPx, refractionHeightPx, refractionAmountPx,
+    val materialBlur = com.android.purebilibili.feature.home.components.rememberMaterialBackdropBlur(tuning)
+    val effects = remember(materialBlur, blurRadiusPx, refractionHeightPx, refractionAmountPx,
         shouldDrawLens, isDark, interactivePanel, themeFrosted, morph, cornerRadiusPx, densityScale) {
         val block: BackdropEffectScope.() -> Unit = {
             val frame = morph.frame(cornerRadiusPx, densityScale)
@@ -1154,7 +1155,7 @@ private fun AppGlassChoicePopupCard(
                 padding = maxOf(padding, lensAmount)
             }
             val frost = blurRadiusPx * (0.21f + 0.79f * frame.materialProgress)
-            blur(frost, frost)
+            materialBlur(frost)
             colorControls(brightness = 0f,
                 saturation = if (interactivePanel && !themeFrosted) 1f else if (isDark) 1.75f else 2f)
             if (shouldDrawLens && !morph.card.isEmpty) popupSurfaceLens(

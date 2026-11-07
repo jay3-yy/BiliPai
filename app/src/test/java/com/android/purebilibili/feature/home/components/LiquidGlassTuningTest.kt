@@ -14,6 +14,63 @@ import org.junit.Test
 class LiquidGlassTuningTest {
 
     @Test
+    fun `classic frosted slider varies background blur without adding optical distortion`() {
+        val settings = resolveLiquidGlassAdvancedPreset(LiquidGlassAdvancedPreset.CLASSIC_FROSTED)
+        val clearEnd = resolveLiquidGlassTuning(0f, settings)
+        val middle = resolveLiquidGlassTuning(0.5f, settings)
+        val frostedEnd = resolveLiquidGlassTuning(1f, settings)
+        assertTrue(clearEnd.backdropBlurRadius < middle.backdropBlurRadius)
+        assertTrue(middle.backdropBlurRadius < frostedEnd.backdropBlurRadius)
+        assertTrue(clearEnd.surfaceAlpha < frostedEnd.surfaceAlpha)
+        for (progress in listOf(0f, 0.5f, 1f)) {
+            val frosted = resolveLiquidGlassTuning(progress, settings)
+            val glass = resolveLiquidGlassTuning(progress)
+            assertTrue(frosted.fixedResolutionBlur)
+            assertTrue(!glass.fixedResolutionBlur)
+            assertTrue(frosted.backdropBlurRadius > glass.backdropBlurRadius)
+            assertTrue(frosted.surfaceAlpha < glass.surfaceAlpha)
+            assertEquals(0f, frosted.refractionAmount, 0.0001f)
+            assertEquals(0f, frosted.refractionHeight, 0.0001f)
+            assertEquals(0f, frosted.scrollCoupledRefractionAmount, 0.0001f)
+        }
+    }
+
+    @Test
+    fun `classic frosted keeps blur while removing shell and indicator lenses across materials`() {
+        val settings = resolveLiquidGlassAdvancedPreset(LiquidGlassAdvancedPreset.CLASSIC_FROSTED)
+        assertEquals(
+            settings,
+            com.android.purebilibili.core.store.resolveLiquidGlassAdvancedSettings(
+                presetValue = settings.preset.value,
+                contentReadability = null, chromaticAberration = null, contentDistortion = null,
+            ),
+        )
+        val tuning = resolveLiquidGlassTuning(
+            com.android.purebilibili.core.store.CLASSIC_FROSTED_GLASS_PROGRESS, settings,
+        )
+        assertTrue(tuning.backdropBlurRadius > resolveLiquidGlassTuning(0.5f).backdropBlurRadius)
+        assertTrue(tuning.contentReadabilityScrimAlpha > 0f)
+        assertEquals(0f, tuning.contentDistortionScale, 0.0001f)
+        assertEquals(0f, resolveLiquidGlassIndicatorChromaticAberration(tuning), 0.0001f)
+        for (preset in com.android.purebilibili.core.store.BottomBarLiquidGlassPreset.entries) {
+            for (dark in listOf(false, true)) {
+                val material = resolveBottomBarGlassMaterialSpec(
+                    preset = preset, isDarkTheme = dark, isScrolling = true,
+                    glassEnabled = true, motionProgress = 1f, pressProgress = 1f, liquidGlassTuning = tuning,
+                )
+                assertEquals(tuning.backdropBlurRadius, requireNotNull(material.blurRadiusDp), 0.0001f)
+                assertEquals(0f, material.shellRefractionAmountDp, 0.0001f)
+                assertEquals(0f, material.shellChromaticAberration, 0.0001f)
+                val native = resolveBottomBarGlassMaterialSpec(
+                    preset = preset, isDarkTheme = dark, isScrolling = false,
+                    glassEnabled = false, motionProgress = 0f, pressProgress = 0f, liquidGlassTuning = tuning,
+                )
+                assertEquals(null, native.blurRadiusDp)
+            }
+        }
+    }
+
+    @Test
     fun `readability can be disabled without changing material slider`() {
         val settings = LiquidGlassAdvancedSettings(contentReadability = 0f)
         val clear = resolveLiquidGlassTuning(progress = 0f, advancedSettings = settings)
@@ -129,18 +186,19 @@ class LiquidGlassTuningTest {
 
     @Test
     fun `readability protection stays active across the full material slider`() {
-        val readablePreset = resolveLiquidGlassAdvancedPreset(LiquidGlassAdvancedPreset.READABLE)
+        // 清晰预设已改用通透端配方（readability≈0.62），保护曲线用满档可读性验证。
+        val fullReadability = LiquidGlassAdvancedSettings(contentReadability = 1f)
         val clear = resolveLiquidGlassTuning(
             progress = 0f,
-            advancedSettings = readablePreset,
+            advancedSettings = fullReadability,
         )
         val balanced = resolveLiquidGlassTuning(
             progress = 0.5f,
-            advancedSettings = readablePreset,
+            advancedSettings = fullReadability,
         )
         val frosted = resolveLiquidGlassTuning(
             progress = 1f,
-            advancedSettings = readablePreset,
+            advancedSettings = fullReadability,
         )
 
         assertEquals(1f, clear.contentReadabilityBoost, 0.0001f)
@@ -171,7 +229,7 @@ class LiquidGlassTuningTest {
             prism.shellChromaticAberrationAmount > readable.shellChromaticAberrationAmount
         )
         assertTrue(prism.contentDistortionScale > readable.contentDistortionScale)
-        assertEquals(0f, readable.contentDistortionScale, 0.0001f)
+        assertTrue(readable.contentDistortionScale > 0f)
         assertTrue(prism.contentReadabilityBoost > 0f)
     }
 

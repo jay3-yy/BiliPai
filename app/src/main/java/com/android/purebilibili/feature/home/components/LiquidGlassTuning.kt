@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.home.components
 
 import com.android.purebilibili.core.store.LiquidGlassAdvancedSettings
+import com.android.purebilibili.core.store.LiquidGlassAdvancedPreset
 import com.android.purebilibili.core.store.LiquidGlassMode
 import com.android.purebilibili.core.store.LiquidGlassReadabilityMode
 import com.android.purebilibili.core.store.LiquidGlassStyle
@@ -35,6 +36,7 @@ data class LiquidGlassTuning(
     val shellChromaticAberrationAmount: Float,
     val indicatorChromaticAberrationAmount: Float,
     val scrollCoupledRefractionAmount: Float,
+    val fixedResolutionBlur: Boolean = false,
 )
 
 private const val UPSTREAM_BALANCED_CHROMATIC_CONTROL = 0.56f
@@ -50,6 +52,7 @@ internal fun resolveLiquidGlassTuning(
     readabilityMode: LiquidGlassReadabilityMode = LiquidGlassReadabilityMode.STABLE,
 ): LiquidGlassTuning {
     val normalizedProgress = normalizeLiquidGlassProgress(progress)
+    val classicFrosted = advancedSettings.preset == LiquidGlassAdvancedPreset.CLASSIC_FROSTED
     val mode = when {
         normalizedProgress < 0.34f -> LiquidGlassMode.CLEAR
         normalizedProgress < 0.68f -> LiquidGlassMode.BALANCED
@@ -99,7 +102,9 @@ internal fun resolveLiquidGlassTuning(
         // BiliPai material. Frosted stays stronger, but is capped so typical densities stay
         // in a single Miuix 4× blur pass instead of the 8×/16× cross-fade band (σ≈20 / σ≈44)
         // that renders two full cascades per capsule and hitches the live slider.
-        backdropBlurRadius = midpointLerp(
+        // 经典磨砂对齐 iOS 18 毛玻璃：均匀重模糊让背景只剩色块，配合较厚的
+        // 底色染色形成奶感，并对背景轻微提饱和保留 vibrancy；其他预设仍走原有配方。
+        backdropBlurRadius = if (classicFrosted) midpointLerp(20f, 30f, 40f, normalizedProgress) else midpointLerp(
             0f,
             LIQUID_GLASS_BALANCED_BACKDROP_BLUR_RADIUS_DP,
             LIQUID_GLASS_FROSTED_BACKDROP_BLUR_RADIUS_DP,
@@ -111,11 +116,12 @@ internal fun resolveLiquidGlassTuning(
             advancedSettings.progressiveBlurExtent.coerceIn(0f, 1f) * 0.75f,
         progressiveBlurCurve = 0.35f +
             advancedSettings.progressiveBlurCurve.coerceIn(0f, 1f) * 1.65f,
-        surfaceAlpha = midpointLerp(0.40f, 0.40f, 0.54f, normalizedProgress),
-        whiteOverlayAlpha = midpointLerp(0.04f, 0.04f, 0.14f, normalizedProgress),
-        saturation = midpointLerp(1.5f, 1.5f, 1.24f, normalizedProgress),
-        refractionAmount = midpointLerp(24f, 24f, 8f, normalizedProgress),
-        refractionHeight = midpointLerp(24f, 24f, 8f, normalizedProgress),
+        surfaceAlpha = if (classicFrosted) midpointLerp(0.32f, 0.38f, 0.50f, normalizedProgress)
+            else midpointLerp(0.40f, 0.40f, 0.54f, normalizedProgress),
+        whiteOverlayAlpha = if (classicFrosted) 0f else midpointLerp(0.04f, 0.04f, 0.14f, normalizedProgress),
+        saturation = if (classicFrosted) 1.15f else midpointLerp(1.5f, 1.5f, 1.24f, normalizedProgress),
+        refractionAmount = if (classicFrosted) 0f else midpointLerp(24f, 24f, 8f, normalizedProgress),
+        refractionHeight = if (classicFrosted) 0f else midpointLerp(24f, 24f, 8f, normalizedProgress),
         indicatorTintAlpha = midpointLerp(0.20f, 0.28f, 0.38f, normalizedProgress),
         // 照搬 HyperIsland LiquidGlassNavigationBar 的指示器 lens：
         // refractionHeight = 10dp、refractionAmount = 14dp（按壳高比例换算），
@@ -129,7 +135,8 @@ internal fun resolveLiquidGlassTuning(
         contentDistortionScale = contentDistortionScale,
         shellChromaticAberrationAmount = shellChromaticAmount,
         indicatorChromaticAberrationAmount = indicatorChromaticAmount,
-        scrollCoupledRefractionAmount = scrollCouplingAmount,
+        scrollCoupledRefractionAmount = if (classicFrosted) 0f else scrollCouplingAmount,
+        fixedResolutionBlur = classicFrosted,
     )
 }
 

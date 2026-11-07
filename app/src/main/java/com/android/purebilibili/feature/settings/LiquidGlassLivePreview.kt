@@ -106,6 +106,7 @@ internal fun LiquidGlassAdjustmentPanel(
     onProgressCommitted: (Float) -> Unit,
     onPreviewImageChanged: (String?) -> Unit,
     onAdvancedSettingsCommitted: (LiquidGlassAdvancedSettings) -> Unit,
+    onPresetCommitted: (LiquidGlassAdvancedPreset) -> Unit,
     onReadabilityModeChanged: (LiquidGlassReadabilityMode) -> Unit,
     onImportSettings: () -> Unit,
     onShareSettings: () -> Unit,
@@ -148,6 +149,7 @@ internal fun LiquidGlassAdjustmentPanel(
     val previewArtworkPagerState = rememberPagerState(
         pageCount = { LiquidGlassPreviewArtwork.entries.size },
     )
+    var presetMenuExpanded by rememberSaveable { mutableStateOf(false) }
     var advancedSettingsExpanded by rememberSaveable { mutableStateOf(false) }
     val tuning = remember(previewProgress, advancedSettings, readabilityMode) {
         resolveLiquidGlassTuning(previewProgress, advancedSettings, readabilityMode)
@@ -357,64 +359,90 @@ internal fun LiquidGlassAdjustmentPanel(
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Medium,
             )
-            AppText(
-                text = if (advancedSettings.preset == LiquidGlassAdvancedPreset.CUSTOM) {
-                    "自定 · ${(presetSliderValue * 100f).roundToInt()}%"
-                } else {
-                    advancedSettings.preset.label
-                },
-                style = MaterialTheme.typography.labelMedium,
-                color = AppContentColors.link(),
-            )
-        }
-        AppSlider(
-            value = presetSliderValue,
-            onValueChange = { value ->
-                presetSliderValue = value.coerceIn(0f, 1f)
-                advancedSettings = resolveLiquidGlassPresetSliderSettings(value)
-            },
-            onValueChangeFinished = {
-                onAdvancedSettingsCommitted(advancedSettings)
-            },
-            valueRange = 0f..1f,
-            modifier = Modifier
-                .fillMaxWidth()
-                .semantics {
-                    contentDescription = "液态玻璃效果预设"
-                    stateDescription = if (
-                        advancedSettings.preset == LiquidGlassAdvancedPreset.CUSTOM
-                    ) {
-                        "自定 ${(presetSliderValue * 100f).roundToInt()}%"
-                    } else {
-                        advancedSettings.preset.label
+            // 锚点玻璃弹窗：触发按钮录制进来源图层，弹窗右缘对齐并向上覆盖按钮；
+            // 弹窗玻璃关闭或无同窗宿主时 AppDropdownMenu 自动回退原生路径。
+            com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(
+                onOpen = { presetMenuExpanded = true },
+            ) {
+                AppTextButton(onClick = { presetMenuExpanded = true }) {
+                    AppText(if (advancedSettings.preset == LiquidGlassAdvancedPreset.CUSTOM) {
+                        "自定 · ${(presetSliderValue * 100f).roundToInt()}% ▾"
+                    } else "${advancedSettings.preset.label} ▾")
+                }
+                com.android.purebilibili.core.ui.components.AppDropdownMenu(
+                    expanded = presetMenuExpanded,
+                    onDismissRequest = { presetMenuExpanded = false },
+                ) {
+                    LiquidGlassAdvancedPreset.entries.filter { it != LiquidGlassAdvancedPreset.CUSTOM }.forEach { preset ->
+                        com.android.purebilibili.core.ui.components.AppDropdownMenuItem(
+                            text = { AppText(preset.label) },
+                            onClick = {
+                                advancedSettings = resolveLiquidGlassAdvancedPreset(preset)
+                                presetSliderValue = liquidGlassPresetSliderValue(advancedSettings)
+                                if (preset == LiquidGlassAdvancedPreset.CLASSIC_FROSTED) {
+                                    previewProgress = com.android.purebilibili.core.store.CLASSIC_FROSTED_GLASS_PROGRESS
+                                }
+                                presetMenuExpanded = false
+                                onPresetCommitted(preset)
+                            },
+                        )
                     }
+                }
+            }
+        }
+
+        // 经典磨砂是独立配方，不伪装成清晰到棱镜插值轴上的某个百分比。
+        if (advancedSettings.preset != LiquidGlassAdvancedPreset.CLASSIC_FROSTED) {
+            AppSlider(
+                value = presetSliderValue,
+                onValueChange = { value ->
+                    presetSliderValue = value.coerceIn(0f, 1f)
+                    advancedSettings = resolveLiquidGlassPresetSliderSettings(value)
                 },
-        )
-        Row(modifier = Modifier.fillMaxWidth()) {
-            LIQUID_GLASS_PRESET_SLIDER_ANCHORS.forEach { preset ->
-                AppText(
-                    text = preset.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = if (preset == advancedSettings.preset) {
-                        FontWeight.SemiBold
-                    } else {
-                        FontWeight.Normal
+                onValueChangeFinished = {
+                    onAdvancedSettingsCommitted(advancedSettings)
+                },
+                valueRange = 0f..1f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "液态玻璃效果预设"
+                        stateDescription = if (
+                            advancedSettings.preset == LiquidGlassAdvancedPreset.CUSTOM
+                        ) {
+                            "自定 ${(presetSliderValue * 100f).roundToInt()}%"
+                        } else {
+                            advancedSettings.preset.label
+                        }
                     },
-                    color = if (preset == advancedSettings.preset) {
-                        AppContentColors.accent()
-                    } else {
-                        AppContentColors.secondaryText()
-                    },
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                )
+            )
+            Row(modifier = Modifier.fillMaxWidth()) {
+                LIQUID_GLASS_PRESET_SLIDER_ANCHORS.forEach { preset ->
+                    AppText(
+                        text = preset.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = if (preset == advancedSettings.preset) {
+                            FontWeight.SemiBold
+                        } else {
+                            FontWeight.Normal
+                        },
+                        color = if (preset == advancedSettings.preset) {
+                            AppContentColors.accent()
+                        } else {
+                            AppContentColors.secondaryText()
+                        },
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
         AppText(
             text = when (advancedSettings.preset) {
-                LiquidGlassAdvancedPreset.READABLE -> "清晰：弱化折射和彩光，优先保证文字和图标清楚"
-                LiquidGlassAdvancedPreset.BALANCED -> "均衡：兼顾通透感、可读性和运行性能，适合日常使用"
+                LiquidGlassAdvancedPreset.READABLE -> "清晰：通透玻璃质感并保留折射和彩光，选中时同时切换到通透端材质"
+                LiquidGlassAdvancedPreset.BALANCED -> "均衡：兼顾通透感、可读性和运行性能，选中时同时回到中点推荐材质"
                 LiquidGlassAdvancedPreset.PRISM -> "棱镜：加强边缘彩光和折射，效果更醒目"
+                LiquidGlassAdvancedPreset.CLASSIC_FROSTED -> "经典磨砂：均匀重模糊背景并加厚奶感底色，无折射和彩光；下方滑块调节模糊强度"
                 LiquidGlassAdvancedPreset.CUSTOM -> "自定：已使用下方的高级参数"
             },
             style = MaterialTheme.typography.bodySmall,
@@ -709,6 +737,7 @@ internal fun resolveLiquidGlassPresetSliderSettings(
 
 internal fun liquidGlassPresetSliderValue(settings: LiquidGlassAdvancedSettings): Float =
     when (settings.preset) {
+        LiquidGlassAdvancedPreset.CLASSIC_FROSTED -> 0f
         LiquidGlassAdvancedPreset.READABLE -> 0f
         LiquidGlassAdvancedPreset.BALANCED -> LIQUID_GLASS_PRESET_BALANCED_POSITION
         LiquidGlassAdvancedPreset.PRISM -> 1f

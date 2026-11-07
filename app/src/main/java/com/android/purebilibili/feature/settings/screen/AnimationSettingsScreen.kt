@@ -369,6 +369,7 @@ fun AnimationSettingsContent(
                         AppPreferenceDivider()
                         SettingsItemAnchor("appearance.liquid_controls_use_theme_color") {
                             AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LIQUID_CONTROLS_THEME_COLOR),
                                 title = context.getString(R.string.appearance_liquid_controls_theme_title),
                                 subtitle = context.getString(R.string.appearance_liquid_controls_theme_summary),
                                 checked = liquidControlsUseThemeColor,
@@ -381,6 +382,7 @@ fun AnimationSettingsContent(
                         AppPreferenceDivider()
                         SettingsItemAnchor("appearance.switch_thumb_mode") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SWITCH_THUMB_MODE),
                                 title = settingItemTitle("appearance.switch_thumb_mode"),
                                 subtitle = "选择开关滑块的颜色",
                                 options = com.android.purebilibili.core.ui.LiquidSwitchThumbMode.entries.map {
@@ -437,6 +439,7 @@ fun AnimationSettingsContent(
                                 bottomBarItems = previewBottomBarItems,
                                 bottomBarSearchEnabled = state.bottomBarSearchEnabled,
                                 onProgressCommitted = viewModel::setLiquidGlassProgress,
+                                onPresetCommitted = viewModel::applyLiquidGlassPreset,
                                 onPreviewImageChanged = viewModel::setLiquidGlassPreviewImageUri,
                                 onAdvancedSettingsCommitted =
                                     viewModel::setLiquidGlassAdvancedSettings,
@@ -670,6 +673,7 @@ fun AnimationSettingsContent(
 
                         SettingsItemAnchor("animation.video_transition_mode") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.TRANSITION_MODE),
                                 title = stringResource(R.string.animation_transition_mode_title),
                                 subtitle = cardTransitionSourceDescription,
                                 options = listOf(
@@ -781,6 +785,7 @@ fun AnimationSettingsContent(
                         if (predictiveBackStyle == BiliPaiPredictiveBackAnimationStyle.SCALE) {
                             AppPreferenceDivider()
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.EXIT_DIRECTION),
                                 title = stringResource(R.string.animation_exit_direction_title),
                                 subtitle = stringResource(R.string.animation_exit_direction_summary),
                                 options = predictiveBackExitDirectionOptions,

@@ -1237,6 +1237,24 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun applyLiquidGlassPreset(preset: com.android.purebilibili.core.store.LiquidGlassAdvancedPreset) {
+        viewModelScope.launch {
+            SettingsManager.setLiquidGlassAdvancedSettings(
+                context,
+                com.android.purebilibili.core.store.resolveLiquidGlassAdvancedPreset(preset),
+                presetProgress = when (preset) {
+                    com.android.purebilibili.core.store.LiquidGlassAdvancedPreset.READABLE ->
+                        com.android.purebilibili.core.store.READABLE_GLASS_PRESET_PROGRESS
+                    com.android.purebilibili.core.store.LiquidGlassAdvancedPreset.BALANCED ->
+                        com.android.purebilibili.core.store.BALANCED_GLASS_PRESET_PROGRESS
+                    com.android.purebilibili.core.store.LiquidGlassAdvancedPreset.CLASSIC_FROSTED ->
+                        com.android.purebilibili.core.store.CLASSIC_FROSTED_GLASS_PROGRESS
+                    else -> null
+                },
+            )
+        }
+    }
+
     fun setLiquidGlassAdvancedSettings(settings: LiquidGlassAdvancedSettings) {
         viewModelScope.launch {
             SettingsManager.setLiquidGlassAdvancedSettings(context, settings)

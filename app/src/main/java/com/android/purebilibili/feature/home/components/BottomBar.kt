@@ -1048,6 +1048,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     // The global liquid-glass switch owns primary navigation chrome. Runtime jank
     // downgrades may trim secondary effects, but must not silently turn this surface solid.
     val effectiveForceLowBlurBudget = forceLowBlurBudget
+    val materialBlur = rememberMaterialBackdropBlur(liquidGlassTuning)
     val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val renderGlassEffects = shouldRenderBottomBarLiquidGlassEffects(
         glassEnabled = glassEnabled,
@@ -1094,7 +1095,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
     // recomposes chrome. Each callback is keyed only by the inputs it draws.
     val backdropShape = remember(shape) { { shape } }
     val backdropEffects = remember(
-        renderGlassEffects, blurEnabled, blurRadius, drawShellLens, inheritShellOptics,
+        materialBlur, renderGlassEffects, blurEnabled, blurRadius, drawShellLens, inheritShellOptics,
         effectiveShellLensIntensity, materialSpec.vibrancy, materialSpec.blurRadiusDp,
         materialSpec.shellRefractionHeightDp, materialSpec.shellRefractionAmountDp,
         materialSpec.shellChromaticAberration, liquidGlassTuning.saturation,
@@ -1120,7 +1121,7 @@ internal fun Modifier.biliPaiMiuixFloatingDockSurface(
                 if (!inheritShellOptics) {
                     val resolvedBlurRadius =
                         materialSpec.blurRadiusDp?.dp ?: AppSpacingTokens.ExtraSmall
-                    miuixBlur(resolvedBlurRadius.toPx(), resolvedBlurRadius.toPx())
+                    materialBlur(resolvedBlurRadius.toPx())
                 }
                 if (
                     drawShellLens &&
