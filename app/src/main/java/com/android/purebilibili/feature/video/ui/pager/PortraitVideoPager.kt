@@ -3429,45 +3429,18 @@ private fun VideoPageItem(
         )
         
         if (showCover) {
-            Box(
-                modifier = mediaLayerModifier.background(Color.Black)
-            ) {
-                if (shouldUseViewportBoundPortraitCover(
-                        isCurrentPage = isCurrentPage,
-                        isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
-                        hasRenderedFirstFrame = hasRenderedFirstFrame
-                    )
-                ) {
-                    PortraitVideoViewportContainer(
-                        currentVideoAspect = resolvePortraitCoverViewportAspect(
-                            currentVideoAspect = currentVideoAspect,
-                            hasRenderedFirstFrame = hasRenderedFirstFrame || knownVideoAspectRatio != null
-                        ),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        AsyncImage(
-                            model = FormatUtils.fixImageUrl(cover),
-                            contentDescription = null,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = resolvePortraitCoverContentScale(isVerticalVideo = currentVideoAspect < 1f)
-                        )
-                    }
-                } else {
-                    AsyncImage(
-                        model = FormatUtils.fixImageUrl(cover),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = resolvePortraitCoverContentScale(isVerticalVideo = currentVideoAspect < 1f)
-                    )
-                }
-
-                if (isLoading && isCurrentPage && !portraitOverlayVisible) {
-                    com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(
-                        modifier = Modifier.align(Alignment.Center),
-                        tint = AppContentColors.accent(),
-                    )
-                }
-            }
+            PortraitVideoCoverLayer(
+                cover = cover,
+                currentVideoAspect = currentVideoAspect,
+                useViewportBoundCover = shouldUseViewportBoundPortraitCover(
+                    isCurrentPage = isCurrentPage,
+                    isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
+                    hasRenderedFirstFrame = hasRenderedFirstFrame,
+                ),
+                hasKnownVideoAspect = hasRenderedFirstFrame || knownVideoAspectRatio != null,
+                showBuffering = isLoading && isCurrentPage && !portraitOverlayVisible,
+                modifier = mediaLayerModifier,
+            )
         }
 
         } // media backdrop source

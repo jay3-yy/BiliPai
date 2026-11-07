@@ -10,7 +10,7 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.AlertDialog
+import com.android.purebilibili.core.ui.AppAlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.ui.window.Popup
 import com.android.purebilibili.core.ui.AppShapes
@@ -137,7 +137,17 @@ fun PlayerSelectionPopup(
         .heightIn(max = height)
         .semantics { paneTitle = title }
 
-    if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
+    // 居中列表交给主题原生对话框：MD3 AlertDialog / Miuix WindowDialog。
+    // 玻璃已由上方入口处理；原生路径不再用菜单表面模拟居中对话框。
+    if (placement == PlayerListPopupPlacement.CENTER) {
+        AppAlertDialog(
+            onDismissRequest = onDismissRequest,
+            title = if (showTitle) { { Text(title) } } else null,
+            text = {
+                Column(modifier = menuModifier.verticalScroll(scrollState)) { content() }
+            },
+        )
+    } else if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
         // 和倍速 / 画面比例菜单一致的行为：点菜单外收起菜单，且这一下点击被遮罩吃掉、
         // 不穿透给下层按钮（否则会出现"关闭又被同一个点击重新打开"的闪烁）。
         // 做法：Popup 内容铺满全屏 —— 一层透明遮罩负责消费点击并关闭，菜单本身叠在其上。
@@ -251,15 +261,6 @@ fun PlayerSelectionPopup(
                 }
             }
         }
-    } else if (placement == PlayerListPopupPlacement.CENTER) {
-        AlertDialog(
-            onDismissRequest = onDismissRequest,
-            confirmButton = {},
-            title = if (showTitle) { { Text(title) } } else null,
-            text = {
-                Column(modifier = menuModifier.verticalScroll(scrollState)) { content() }
-            },
-        )
     } else {
         // 原生菜单从实际按钮边界定位；窗口坐标只在布局阶段换算，避免覆盖层偏移。
         val target = popupAnchorBounds ?: when (placement) {

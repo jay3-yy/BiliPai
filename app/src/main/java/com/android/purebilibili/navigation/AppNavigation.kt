@@ -459,7 +459,11 @@ fun AppNavigation(
         lazy { androidx.lifecycle.ViewModelProvider(hostActivity)[HomeViewModel::class.java] }
     }
     val videoActivityWindowVisible = if (initialVideoRoute != null) {
-        com.android.purebilibili.core.ui.rememberVisualWorkActive()
+        val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+        // 原生 Dialog 会接管窗口焦点，但宿主页面仍可见，不能因此撤掉菜单。
+        // 动画和逐帧工作继续在各自的 rememberVisualWorkActive 门控中检查焦点。
+        com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current &&
+            lifecycle.isAtLeast(Lifecycle.State.RESUMED)
     } else true
     val windowConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
     val windowDensity = androidx.compose.ui.platform.LocalDensity.current
