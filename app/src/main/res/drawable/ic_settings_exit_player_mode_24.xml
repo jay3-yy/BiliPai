@@ -1,0 +1,10 @@
+<!-- App-authored: player window with an exit arrow, for what happens after leaving the player. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M7,4.5h5A2.5,2.5 0 0 1 14.5,7v2A2.5,2.5 0 0 1 12,11.5H7A2.5,2.5 0 0 1 4.5,9V7A2.5,2.5 0 0 1 7,4.5z M17,8h4.5 M21.5,8l-1.9,-1.9 M21.5,8l-1.9,1.9" />
+</vector>

@@ -37,6 +37,7 @@ internal fun DarkThemeSchedulePreference(
     // Search anchors use a Box: keep these three rows in one vertically measured child.
     Column(modifier = modifier) {
         AppSwitchPreference(
+            icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.SCHEDULED_DARK_MODE),
             title = "定时深色模式",
             subtitle = "开启后按设定时段切换，优先于上方模式；支持跨午夜",
             checked = schedule.enabled,
@@ -45,12 +46,14 @@ internal fun DarkThemeSchedulePreference(
         if (schedule.enabled) {
             AppPreferenceDivider()
             AppPreference(
+                icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.SCHEDULED_DARK_TIME),
                 title = "开始时间",
                 subtitle = formatThemeScheduleTime(schedule.startMinute),
                 onClick = { editingStart = true },
             )
             AppPreferenceDivider()
             AppPreference(
+                icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.SCHEDULED_DARK_TIME),
                 title = "结束时间",
                 subtitle = formatThemeScheduleTime(schedule.endMinute),
                 onClick = { editingStart = false },

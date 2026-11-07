@@ -33,6 +33,7 @@ internal fun PlaybackSpeedOptionsMenuPreference(
     var editorVisible by rememberSaveable { mutableStateOf(false) }
     Box(modifier = modifier) {
         AppPreference(
+            icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.PLAYBACK_SPEED),
             title = "播放器倍速列表",
             subtitle = "管理播放器菜单、双指调速和默认速度的可选倍速",
             value = "${options.size} 项",

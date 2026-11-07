@@ -1,0 +1,10 @@
+<!-- App-authored: wide panel split into columns, for wide-screen default column count. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M5,7h14a2,2 0 0 1 2,2v6a2,2 0 0 1 -2,2H5a2,2 0 0 1 -2,-2V9a2,2 0 0 1 2,-2z M9.33,7v10 M14.66,7v10" />
+</vector>

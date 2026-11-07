@@ -491,6 +491,7 @@ fun VideoSettingsPanel(
             if (onChapterDisplayModeChange != null) {
                 groups.item {
                     SettingsSingleChoicePreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.CHAPTER_DISPLAY),
                         title = playbackSettingTitle("playback.chapter_display_mode"),
                         subtitle = chapterDisplayMode.description,
                         options = ChapterDisplayMode.entries.map { AppSegmentOption(it, it.label) },

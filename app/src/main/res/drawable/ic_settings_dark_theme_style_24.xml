@@ -1,0 +1,12 @@
+<!-- App-authored: optically centered crescent with a sparkle, for dark theme style. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M16.49,13.09 A6.5,6.5 0 1 1 9.73,7.01 A5,5 0 0 0 16.49,13.09z" />
+    <path android:fillColor="@android:color/white"
+        android:pathData="M16.3,4.4C16.5,5.6 17,6.1 18.2,6.3C17,6.5 16.5,7 16.3,8.2C16.1,7 15.6,6.5 14.4,6.3C15.6,6.1 16.1,5.6 16.3,4.4Z" />
+</vector>

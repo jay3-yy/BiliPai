@@ -1070,7 +1070,7 @@ fun FeedApiSection(
     val visibilityIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_TAB_VISIBILITY)
     val previewTextIcon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_PREVIEW_TEXT)
     val imageLayoutIcon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_COLUMNS)
-    val topBarCollapseIcon = rememberSettingsSemanticIcon(SettingsIconRole.NAVIGATION)
+    val topBarCollapseIcon = rememberSettingsSemanticIcon(SettingsIconRole.HEADER_COLLAPSE)
     val commentPreviewIcon = rememberSettingsSemanticIcon(SettingsIconRole.INTERACTION_COMMENT)
     SettingsCardGroup {
         SettingsSingleChoicePreference(

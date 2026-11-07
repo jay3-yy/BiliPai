@@ -1,0 +1,10 @@
+<!-- App-authored: two fingers pinching over a column row, for pinch-to-change grid columns. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M8.25,3.5v4.5 M15.75,3.5v4.5 M4,13h4.25v4.25H4z M9.875,13h4.25v4.25H9.875z M15.75,13h4.25v4.25H15.75z" />
+</vector>

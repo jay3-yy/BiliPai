@@ -1,0 +1,10 @@
+<!-- App-authored: small card expanding through a chevron into a large panel, for transition mode. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M3.5,8.5h5.5v7H3.5z M11.25,8l4,4l-4,4 M15.5,5H18a2.5,2.5 0 0 1 2.5,2.5v9A2.5,2.5 0 0 1 18,19h-2.5" />
+</vector>

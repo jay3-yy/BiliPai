@@ -1,0 +1,10 @@
+<!-- App-authored: two column grids linked by an arrow, for sharing grid columns across pages. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M3.5,5.5h4.5v4.5H3.5z M3.5,13h4.5v4.5H3.5z M16,5.5h4.5v4.5H16z M16,13h4.5v4.5H16z M10,11.5h4 M14,11.5l-1.5,-1.5 M14,11.5l-1.5,1.5" />
+</vector>

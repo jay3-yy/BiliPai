@@ -248,6 +248,65 @@ internal enum class SettingsIconRole {
     NOTIFICATION_SCOPE_SYSTEM,
     NOTIFICATION_SCOPE_DYNAMIC_UP,
     NOTIFICATION_SCOPE_LIVE,
+    VIDEO_CODEC,
+    FALLBACK_VIDEO_CODEC,
+    AUDIO_LYRICS,
+    WIFI_PLAYBACK_QUALITY,
+    MOBILE_PLAYBACK_QUALITY,
+    AUDIO_QUALITY,
+    DATA_SAVER_MODE,
+    PLAYBACK_COMPLETION,
+    SUBTITLE_TRACK,
+    COMMENT_REPLY_PREVIEW,
+    SEEK_FORWARD,
+    SEEK_BACKWARD,
+    PORTRAIT_COLLAPSE_MODE,
+    TABLET_COMMENT_PANEL_WIDTH,
+    TABLET_SECONDARY_TAB,
+    LANDSCAPE_HOLD,
+    SWIPE_SEEK,
+    SCREENSHOT_GESTURE,
+    APP_SCREENSHOT,
+    CHAPTER_DISPLAY,
+    BOTTOM_PROGRESS,
+    EXIT_PLAYER_MODE,
+    AMBIENT_STRENGTH,
+    AMBIENT_POWER_SAVING,
+    EXIT_DIRECTION,
+    TRANSITION_MODE,
+    UI_STYLE,
+    LIST_ITEM_STYLE,
+    ICON_STYLE,
+    CHOICE_MENU_STYLE,
+    THEME_MODE,
+    DARK_THEME_STYLE,
+    MD3_COLOR_SOURCE,
+    SCREEN_REFRESH_RATE,
+    FONT_SIZE,
+    FONT_WEIGHT,
+    DISPLAY_SCALE_LARGE,
+    SPLASH_ANIMATION_STYLE,
+    GRID_SHARE_COLUMNS,
+    COMPACT_GRID_COLUMNS,
+    WIDE_GRID_COLUMNS,
+    PINCH_GRID_COLUMNS,
+    CARD_COVER_RATIO,
+    VIDEO_TAG_SIZE,
+    WALLPAPER_SCOPE,
+    LIQUID_CONTROLS_THEME_COLOR,
+    SWITCH_THUMB_MODE,
+    HAPTIC_SCENE_SWITCH,
+    GLASS_SCENE_SWITCH,
+    SCHEDULED_DARK_MODE,
+    SCHEDULED_DARK_TIME,
+    MAID_ICON_APPEARANCE,
+    ACCOUNT_LOGIN,
+    REMEMBER_FILTER_STATE,
+    FSR_SHARPNESS,
+    FILTER_EXEMPT_FOLLOWED,
+    FILTER_HOT_VIDEOS,
+    FILTER_RANKING,
+    SPONSOR_MARKER,
 }
 
 @Composable
@@ -505,6 +564,65 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.NOTIFICATION_SCOPE_SYSTEM -> R.drawable.ms_campaign_24
     SettingsIconRole.NOTIFICATION_SCOPE_DYNAMIC_UP -> R.drawable.ms_person_24
     SettingsIconRole.NOTIFICATION_SCOPE_LIVE -> R.drawable.ms_live_tv_24
+    SettingsIconRole.VIDEO_CODEC -> R.drawable.ms_video_settings_24
+    SettingsIconRole.FALLBACK_VIDEO_CODEC -> R.drawable.ms_video_camera_back_24
+    SettingsIconRole.AUDIO_LYRICS -> R.drawable.ms_lyrics_24
+    SettingsIconRole.WIFI_PLAYBACK_QUALITY -> R.drawable.ms_network_wifi_24
+    SettingsIconRole.MOBILE_PLAYBACK_QUALITY -> R.drawable.ms_signal_cellular_alt_24
+    SettingsIconRole.AUDIO_QUALITY -> R.drawable.ms_speaker_24
+    SettingsIconRole.DATA_SAVER_MODE -> R.drawable.ms_data_saver_on_24
+    SettingsIconRole.PLAYBACK_COMPLETION -> R.drawable.ms_next_plan_24
+    SettingsIconRole.SUBTITLE_TRACK -> R.drawable.ms_closed_caption_24
+    SettingsIconRole.COMMENT_REPLY_PREVIEW -> R.drawable.ms_comment_24
+    SettingsIconRole.SEEK_FORWARD -> R.drawable.ms_forward_10_24
+    SettingsIconRole.SEEK_BACKWARD -> R.drawable.ms_replay_10_24
+    SettingsIconRole.PORTRAIT_COLLAPSE_MODE -> R.drawable.ms_collapse_content_24
+    SettingsIconRole.TABLET_COMMENT_PANEL_WIDTH -> R.drawable.ms_width_normal_24
+    SettingsIconRole.TABLET_SECONDARY_TAB -> R.drawable.ms_view_column_2_24
+    SettingsIconRole.LANDSCAPE_HOLD -> R.drawable.ms_screen_rotation_alt_24
+    SettingsIconRole.SWIPE_SEEK -> R.drawable.ic_settings_swipe_seek_24
+    SettingsIconRole.SCREENSHOT_GESTURE -> R.drawable.ic_settings_screenshot_gesture_24
+    SettingsIconRole.APP_SCREENSHOT -> R.drawable.ms_screenshot_region_24
+    SettingsIconRole.CHAPTER_DISPLAY -> R.drawable.ic_settings_chapter_display_24
+    SettingsIconRole.BOTTOM_PROGRESS -> R.drawable.ic_settings_bottom_progress_24
+    SettingsIconRole.EXIT_PLAYER_MODE -> R.drawable.ic_settings_exit_player_mode_24
+    SettingsIconRole.AMBIENT_STRENGTH -> R.drawable.ic_settings_ambient_strength_24
+    SettingsIconRole.AMBIENT_POWER_SAVING -> R.drawable.ic_settings_ambient_power_saving_24
+    SettingsIconRole.EXIT_DIRECTION -> R.drawable.ic_settings_exit_direction_24
+    SettingsIconRole.TRANSITION_MODE -> R.drawable.ic_settings_transition_mode_24
+    SettingsIconRole.UI_STYLE -> R.drawable.ms_view_carousel_24
+    SettingsIconRole.LIST_ITEM_STYLE -> R.drawable.ms_view_stream_24
+    SettingsIconRole.ICON_STYLE -> R.drawable.ms_apps_24
+    SettingsIconRole.CHOICE_MENU_STYLE -> R.drawable.ms_dialogs_24
+    SettingsIconRole.THEME_MODE -> R.drawable.ms_light_mode_24
+    SettingsIconRole.DARK_THEME_STYLE -> R.drawable.ic_settings_dark_theme_style_24
+    SettingsIconRole.MD3_COLOR_SOURCE -> R.drawable.ms_colorize_24
+    SettingsIconRole.SCREEN_REFRESH_RATE -> R.drawable.ms_monitor_24
+    SettingsIconRole.FONT_SIZE -> R.drawable.ms_format_size_24
+    SettingsIconRole.FONT_WEIGHT -> R.drawable.ms_text_format_24
+    SettingsIconRole.DISPLAY_SCALE_LARGE -> R.drawable.ic_settings_display_scale_large_24
+    SettingsIconRole.SPLASH_ANIMATION_STYLE -> R.drawable.ic_settings_splash_animation_24
+    SettingsIconRole.GRID_SHARE_COLUMNS -> R.drawable.ic_settings_grid_share_24
+    SettingsIconRole.COMPACT_GRID_COLUMNS -> R.drawable.ic_settings_grid_compact_24
+    SettingsIconRole.WIDE_GRID_COLUMNS -> R.drawable.ic_settings_grid_wide_24
+    SettingsIconRole.PINCH_GRID_COLUMNS -> R.drawable.ic_settings_pinch_grid_24
+    SettingsIconRole.CARD_COVER_RATIO -> R.drawable.ms_aspect_ratio_24
+    SettingsIconRole.VIDEO_TAG_SIZE -> R.drawable.ms_format_size_24
+    SettingsIconRole.WALLPAPER_SCOPE -> R.drawable.ic_settings_wallpaper_scope_24
+    SettingsIconRole.LIQUID_CONTROLS_THEME_COLOR -> R.drawable.ms_color_lens_24
+    SettingsIconRole.SWITCH_THUMB_MODE -> R.drawable.ms_toggle_on_24
+    SettingsIconRole.HAPTIC_SCENE_SWITCH -> R.drawable.ms_vibration_24
+    SettingsIconRole.GLASS_SCENE_SWITCH -> R.drawable.ms_opacity_24
+    SettingsIconRole.SCHEDULED_DARK_MODE -> R.drawable.ic_settings_scheduled_dark_mode_24
+    SettingsIconRole.SCHEDULED_DARK_TIME -> R.drawable.ms_access_time_24
+    SettingsIconRole.MAID_ICON_APPEARANCE -> R.drawable.ic_settings_maid_icon_24
+    SettingsIconRole.ACCOUNT_LOGIN -> R.drawable.ms_account_circle_24
+    SettingsIconRole.REMEMBER_FILTER_STATE -> R.drawable.ms_history_fill_24
+    SettingsIconRole.FSR_SHARPNESS -> R.drawable.ms_deblur_24
+    SettingsIconRole.FILTER_EXEMPT_FOLLOWED -> R.drawable.ms_person_check_24
+    SettingsIconRole.FILTER_HOT_VIDEOS -> R.drawable.ms_local_fire_department_24
+    SettingsIconRole.FILTER_RANKING -> R.drawable.ms_leaderboard_24
+    SettingsIconRole.SPONSOR_MARKER -> R.drawable.ic_settings_sponsor_marker_24
 }
 
 @Composable

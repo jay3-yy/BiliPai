@@ -223,6 +223,7 @@ fun IconSettingsContent(
                         .background(AppSurfaceTokens.cardContainer())
                 ) {
                     SettingsSingleChoicePreference(
+                        icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.MAID_ICON_APPEARANCE),
                         title = stringResource(R.string.icon_appearance_title),
                         subtitle = stringResource(R.string.icon_appearance_summary),
                         options = listOf(

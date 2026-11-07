@@ -1,0 +1,10 @@
+<!-- App-authored: shrinking square with four outward arrows, for exit zoom direction. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M9.5,9.5h5v5h-5z M12,7.5v-4 M12,3.5l-1.8,1.8 M12,3.5l1.8,1.8 M12,16.5v4 M12,20.5l-1.8,-1.8 M12,20.5l1.8,-1.8 M7.5,12h-4 M3.5,12l1.8,-1.8 M3.5,12l1.8,1.8 M16.5,12h4 M20.5,12l-1.8,-1.8 M20.5,12l-1.8,1.8" />
+</vector>

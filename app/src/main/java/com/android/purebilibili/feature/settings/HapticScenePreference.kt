@@ -72,6 +72,7 @@ internal fun HapticScenePreference(enabled: Boolean) {
     val countLabel = "${AppHapticScene.entries.count(settings::isEnabled)}/${AppHapticScene.entries.size}"
     SettingsItemAnchor(HAPTIC_SCENES_SETTING_ID) {
         AppPreference(
+            icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.HAPTIC_FEEDBACK),
             title = HAPTIC_SCENES_TITLE,
             subtitle = "分别控制不同操作的振动，关闭总开关后保留选择",
             value = countLabel.takeUnless { glassAvailable },
@@ -175,6 +176,7 @@ private fun HapticSceneList(
         AppHapticScene.entries.forEachIndexed { index, scene ->
             SettingsItemAnchor(scene.settingId) {
                 AppSwitchPreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.HAPTIC_SCENE_SWITCH),
                     title = scene.title,
                     subtitle = scene.description,
                     checked = settings.isEnabled(scene),

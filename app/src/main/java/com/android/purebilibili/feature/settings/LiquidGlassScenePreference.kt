@@ -72,6 +72,7 @@ internal fun LiquidGlassScenePreference(enabled: Boolean) {
     val countLabel = "${AppLiquidGlassScene.entries.count(settings::isEnabled)}/${AppLiquidGlassScene.entries.size}"
     SettingsItemAnchor(LIQUID_GLASS_SCENES_SETTING_ID) {
         AppPreference(
+            icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.ANDROID_LIQUID_GLASS),
             title = LIQUID_GLASS_SCENES_TITLE,
             subtitle = if (enabled) "按使用场景选择玻璃效果，横竖屏共用选择" else "总开关已关闭，可预先选择需要开启的场景",
             value = countLabel.takeUnless { glassAvailable },
@@ -175,6 +176,7 @@ private fun LiquidGlassSceneList(
         AppLiquidGlassScene.entries.forEachIndexed { index, scene ->
             SettingsItemAnchor(scene.settingId) {
                 AppSwitchPreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.GLASS_SCENE_SWITCH),
                     title = scene.title,
                     subtitle = scene.description,
                     checked = settings.isEnabled(scene),

@@ -42,6 +42,7 @@ fun FullscreenActionCountPreference(modifier: Modifier = Modifier) {
                 Column(Modifier.verticalScroll(rememberScrollState())) {
                     FullscreenActionCount.entries.forEach { count ->
                         AppSwitchPreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYER_ACTION_COUNTS),
                             title = count.title,
                             checked = visible?.contains(count) == true,
                             enabled = visible != null,

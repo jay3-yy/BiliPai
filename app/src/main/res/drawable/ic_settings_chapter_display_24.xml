@@ -1,0 +1,10 @@
+<!-- App-authored: progress track with chapter ticks and a knob, for chapter display mode. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M3,12h18 M8,9.25v5.5 M16,9.25v5.5 M12,10.1a1.9,1.9 0 1 1 0,3.8a1.9,1.9 0 1 1 0,-3.8z" />
+</vector>

@@ -615,6 +615,7 @@ fun AppearanceSettingsContent(
                 AppPreferenceGroup {
                     Column {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.UI_STYLE),
                             title = "${uiPresetTitle}：$selectedUiStyleLabel",
                             subtitle = uiPresetSubtitle,
                             options = uiStyleOptions,
@@ -628,6 +629,7 @@ fun AppearanceSettingsContent(
                         Column {
                             AppPreferenceDivider()
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SCREEN_REFRESH_RATE),
                                 title = context.getString(R.string.appearance_refresh_rate_title, selectedScreenDisplayModeLabel),
                                 subtitle = context.getString(R.string.appearance_refresh_rate_summary),
                                 options = screenDisplayModeOptions,
@@ -647,6 +649,7 @@ fun AppearanceSettingsContent(
 
                         SettingsItemAnchor("appearance.app_list_item_style") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LIST_ITEM_STYLE),
                                 title = context.getString(R.string.appearance_list_item_style_title),
                                 subtitle = context.getString(R.string.appearance_list_item_style_summary),
                                 options = appListItemStyleOptions,
@@ -668,6 +671,7 @@ fun AppearanceSettingsContent(
 
                         SettingsItemAnchor("appearance.app_icon_style") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ICON_STYLE),
                                 title = context.getString(R.string.appearance_icon_style_title),
                                 subtitle = context.getString(R.string.appearance_icon_style_summary),
                                 options = appIconStyleOptions,
@@ -691,6 +695,7 @@ fun AppearanceSettingsContent(
 
                         SettingsItemAnchor("appearance.single_choice_presentation") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.CHOICE_MENU_STYLE),
                                 title = context.getString(R.string.appearance_single_choice_title),
                                 subtitle = context.getString(R.string.appearance_single_choice_summary),
                                 options = singleChoicePresentationOptions,
@@ -715,6 +720,7 @@ fun AppearanceSettingsContent(
                             first = false,
                         ) { open ->
                             AppPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.ANIMATION),
                                 title = context.getString(R.string.appearance_animation_glass_title),
                                 onClick = open,
                             )
@@ -735,6 +741,7 @@ fun AppearanceSettingsContent(
                 AppPreferenceGroup {
                     Column {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.THEME_MODE),
                             title = "${themeModeTitle}：$selectedThemeModeLabel",
                             subtitle = themeModeSubtitle,
                             options = themeModeOptions,
@@ -772,6 +779,7 @@ fun AppearanceSettingsContent(
                             Column {
                                 AppPreferenceDivider()
                                 SettingsSingleChoicePreference(
+                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.DARK_THEME_STYLE),
                                     title = "${darkThemeStyleTitle}：$selectedDarkThemeStyleLabel",
                                     subtitle = darkThemeStyleSubtitle,
                                     options = darkThemeStyleOptions,
@@ -798,6 +806,7 @@ fun AppearanceSettingsContent(
 
                         SettingsItemAnchor("appearance.md3_color_source") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.MD3_COLOR_SOURCE),
                                 title = settingItemTitle("appearance.md3_color_source"),
                                 subtitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     context.getString(R.string.appearance_md3_color_source_wallpaper_summary)
@@ -1246,6 +1255,7 @@ fun AppearanceSettingsContent(
                     Column {
                         SettingsItemAnchor("appearance.app_font_size_preset") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.FONT_SIZE),
                                 title = context.getString(R.string.appearance_setting_font_size_title),
                                 subtitle = context.getString(R.string.appearance_font_size_summary),
                                 options = resolveAppFontSizeSegmentOptions().map { it.copy(label = context.getString(when (it.value) {
@@ -1268,6 +1278,7 @@ fun AppearanceSettingsContent(
 
                         SettingsItemAnchor("appearance.app_font_weight_preset") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.FONT_WEIGHT),
                                 title = context.getString(R.string.appearance_setting_font_weight_title),
                                 subtitle = context.getString(R.string.appearance_font_weight_summary),
                                 options = resolveAppFontWeightSegmentOptions().map { it.copy(label = context.getString(when (it.value) {
@@ -1326,6 +1337,7 @@ fun AppearanceSettingsContent(
 
                         SettingsItemAnchor("appearance.app_ui_scale_preset") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.DISPLAY_SCALE),
                                 title = context.getString(R.string.appearance_setting_ui_scale_title),
                                 subtitle = context.getString(R.string.appearance_ui_scale_summary),
                                 options = resolveAppUiScaleSegmentOptions().map { it.copy(label = context.getString(when (it.value) {
@@ -1369,6 +1381,7 @@ fun AppearanceSettingsContent(
                         ) {
                             Column(modifier = Modifier.padding(top = 16.dp)) {
                                 SettingsSingleChoicePreference(
+                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.DISPLAY_SCALE_LARGE),
                                     title = context.getString(R.string.appearance_display_scale_title_percent, resolveDisplayedAppDpiPercent(state.appDpiOverridePercent)),
                                     subtitle = context.getString(R.string.appearance_display_scale_summary),
                                     options = resolveAppDpiOverrideSegmentOptions(),
@@ -1546,6 +1559,7 @@ fun AppearanceSettingsContent(
 
                     SettingsItemAnchor("appearance.startup_animation_style") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.SPLASH_ANIMATION_STYLE),
                             title = context.getString(R.string.appearance_startup_animation_style_title),
                             subtitle = context.getString(R.string.appearance_startup_animation_style_summary),
                             options = com.android.purebilibili.core.store.StartupAnimationStyle.entries.map {
@@ -1719,6 +1733,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_CUSTOMIZATION_SETTING_ID) {
                             AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_COLUMNS),
                                 title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_CUSTOMIZATION_SETTING_ID, context),
                                 subtitle = context.getString(R.string.home_settings_grid_customization_summary),
                                 checked = homeConfiguration.gridColumnCustomizationEnabled,
@@ -1728,6 +1743,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.pinch_to_change_grid_columns_enabled") {
                             AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.PINCH_GRID_COLUMNS),
                                 title = com.android.purebilibili.feature.settings.settingItemTitle("appearance.pinch_to_change_grid_columns_enabled", context),
                                 subtitle = context.getString(R.string.home_settings_pinch_columns_summary),
                                 checked = pinchToChangeGridColumnsEnabled,
@@ -1738,6 +1754,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_SHARE_SETTING_ID) {
                             AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.GRID_SHARE_COLUMNS),
                                 title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_SHARE_SETTING_ID, context),
                                 subtitle = context.getString(R.string.home_settings_grid_share_summary),
                                 checked = homeConfiguration.gridColumnsSharedAcrossPages,
@@ -1748,6 +1765,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_COMPACT_SETTING_ID) {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.COMPACT_GRID_COLUMNS),
                                 title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_COMPACT_SETTING_ID, context),
                                 subtitle = context.getString(R.string.home_settings_grid_default_summary),
                                 enabled = homeConfiguration.gridColumnCustomizationEnabled,
@@ -1766,6 +1784,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.grid_column_count") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WIDE_GRID_COLUMNS),
                                 title = com.android.purebilibili.feature.settings.settingItemTitle("appearance.grid_column_count", context),
                                 subtitle = context.getString(R.string.home_settings_grid_default_summary),
                                 enabled = homeConfiguration.gridColumnCustomizationEnabled,
@@ -1785,6 +1804,7 @@ fun AppearanceSettingsContent(
                             AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                             SettingsItemAnchor("appearance.home_feed_card_width_preset") {
                                 SettingsSingleChoicePreference(
+                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_WIDTH),
                                     title = context.getString(R.string.home_settings_card_width_title),
                                     subtitle = if (homeConfiguration.gridColumnCustomizationEnabled && homeConfiguration.gridColumnCount > 0) {
                                         context.getString(R.string.home_settings_card_width_current, homeConfiguration.gridColumnCount)
@@ -1828,6 +1848,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_feed_card_style") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_COVER_RATIO),
                                 title = context.getString(R.string.home_settings_card_ratio_title),
                                 subtitle = context.getString(when (homeFeedCardStyle) {
                                     HomeFeedCardStyle.CURRENT -> R.string.home_settings_card_ratio_current
@@ -1873,6 +1894,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_duration_style") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_DURATION_BADGES),
                                 title = settingItemTitle("appearance.home_duration_style"),
                                 subtitle = context.getString(R.string.appearance_home_duration_subtitle),
                                 options = HomeDurationStyle.entries.map {
@@ -2150,6 +2172,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_wallpaper_effect_mode") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WALLPAPER_EFFECT),
                                 title = settingItemTitle("appearance.home_wallpaper_effect_mode"),
                                 subtitle = when (homeWallpaperEffectMode) {
                                     HomeWallpaperEffectMode.OFF -> context.getString(R.string.appearance_wallpaper_effect_off_summary)
@@ -2176,6 +2199,7 @@ fun AppearanceSettingsContent(
                                 AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                                 SettingsItemAnchor("appearance.home_wallpaper_effect_scope") {
                                     SettingsSingleChoicePreference(
+                                        icon = rememberSettingsSemanticIcon(SettingsIconRole.WALLPAPER_SCOPE),
                                         title = settingItemTitle("appearance.home_wallpaper_effect_scope"),
                                         subtitle = when (homeWallpaperEffectScope) {
                                             HomeWallpaperEffectScope.HOME_ONLY -> context.getString(R.string.appearance_wallpaper_scope_home_summary)
@@ -2319,6 +2343,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.common_list_header_collapse_mode") {
                             SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HEADER_COLLAPSE),
                                 title = settingItemTitle("appearance.common_list_header_collapse_mode"),
                                 subtitle = when (commonListHeaderCollapseMode) {
                                     CommonListHeaderCollapseMode.ALWAYS_VISIBLE ->

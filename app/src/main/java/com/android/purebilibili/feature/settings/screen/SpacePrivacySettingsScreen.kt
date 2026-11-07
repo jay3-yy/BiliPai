@@ -92,6 +92,7 @@ internal fun SpacePrivacySettingsContent(
                                 if (index > 0) AppPreferenceDivider()
                                 val checked = option.checked(state.draft[option.field])
                                 AppSwitchPreference(
+                                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.SPACE_PRIVACY),
                                     title = option.title,
                                     subtitle = if (checked == null) "当前账号暂不提供此选项" else null,
                                     checked = checked == true,

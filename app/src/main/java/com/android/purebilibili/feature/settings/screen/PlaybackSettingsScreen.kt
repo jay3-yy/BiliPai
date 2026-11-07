@@ -363,6 +363,7 @@ fun PlaybackSettingsContent(
                         AppPreferenceDivider()
 SettingsItemAnchor("playback.video_codec_preference") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_CODEC),
                             title = settingItemTitle("playback.video_codec_preference"),
                             subtitle = codecDescription(videoCodecPreference),
                             options = codecOptions,
@@ -378,6 +379,7 @@ SettingsItemAnchor("playback.video_codec_preference") {
                         AppPreferenceDivider()
 SettingsItemAnchor("playback.video_second_codec_preference") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.FALLBACK_VIDEO_CODEC),
                             title = settingItemTitle("playback.video_second_codec_preference"),
                             subtitle = codecDescription(videoSecondCodecPreference),
                             options = codecOptions,
@@ -693,6 +695,7 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                         AppPreferenceDivider()
 SettingsItemAnchor("playback.mini_player_mode") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.EXIT_PLAYER_MODE),
                             title = settingItemTitle("playback.mini_player_mode"),
                             subtitle = if (stopPlaybackOnExit) {
                                 "请先关闭“离开播放页后停止”"
@@ -848,6 +851,7 @@ SettingsItemAnchor("playback.mini_player_mode") {
                         AppPreferenceDivider()
 SettingsItemAnchor("playback.music_lyrics_ui_style") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_LYRICS),
                             title = settingItemTitle("playback.music_lyrics_ui_style"),
                             subtitle = when (musicLyricsUiStyle) {
                                 SettingsManager.MusicLyricsUiStyle.CLASSIC ->
@@ -1109,6 +1113,7 @@ SettingsSingleChoicePreference(
 
 SettingsItemAnchor("playback.wifi_quality") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.WIFI_PLAYBACK_QUALITY),
                             title = settingItemTitle("playback.wifi_quality"),
                             subtitle = if (autoHighestQualityEnabled) {
                                 "关闭“自动最高画质”后生效"
@@ -1145,6 +1150,7 @@ SettingsItemAnchor("playback.wifi_quality") {
 
 SettingsItemAnchor("playback.mobile_quality") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.MOBILE_PLAYBACK_QUALITY),
                             title = settingItemTitle("playback.mobile_quality"),
                             subtitle = when {
                                 autoHighestQualityEnabled ->
@@ -1174,6 +1180,7 @@ SettingsItemAnchor("playback.mobile_quality") {
 
                         SettingsItemAnchor("playback.default_audio_quality") {
 SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_QUALITY),
                             title = settingItemTitle("playback.default_audio_quality"),
                             subtitle = if (
                                 normalizedDefaultAudioQuality ==
@@ -1235,6 +1242,7 @@ SettingsSingleChoicePreference(
                     AppPreferenceGroup {
 SettingsItemAnchor("playback.data_saver_mode") {
                         SettingsSingleChoicePreference(
+                            icon = rememberSettingsSemanticIcon(SettingsIconRole.DATA_SAVER_MODE),
                             title = settingItemTitle("playback.data_saver_mode"),
                             subtitle = dataSaverMode.description,
                             options = dataSaverModeOptions,
@@ -1508,6 +1516,7 @@ private fun PlaybackInteractionSettingsSection(
         )
         SettingsItemAnchor("playback.playback_completion_behavior") {
             SettingsSingleChoicePreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYBACK_COMPLETION),
                 title = settingItemTitle("playback.playback_completion_behavior"),
                 subtitle = "分 P 与视频合集分别处理；外部列表内先续播当前视频分 P，再按列表切视频。“自动”受下方两个连播开关控制",
                 options = playbackOrderOptions,
@@ -1556,6 +1565,7 @@ private fun PlaybackInteractionSettingsSection(
             AppPreferenceDivider()
             SettingsItemAnchor("playback.subtitle_appearance") {
                 com.android.purebilibili.core.ui.components.AppPreference(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.SUBTITLE),
                     title = settingItemTitle("playback.subtitle_appearance"),
                     subtitle = "字号、颜色、描边与独立字体导入",
                     onClick = { showSubtitleAppearance = true },
@@ -1564,6 +1574,7 @@ private fun PlaybackInteractionSettingsSection(
             AppPreferenceDivider()
 SettingsItemAnchor("playback.subtitle_auto_preference") {
             SettingsSingleChoicePreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.SUBTITLE_TRACK),
                 title = settingItemTitle("playback.subtitle_auto_preference"),
                 subtitle = subtitlePreferenceDescription,
                 options = listOf(
@@ -1738,6 +1749,7 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
             )
 SettingsItemAnchor("playback.video_tag_size_preset") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.VIDEO_TAG_SIZE),
             title = settingItemTitle("playback.video_tag_size_preset"),
             subtitle = "调整视频简介区标签的字号与间距",
             options = resolveVideoTagSizeSegmentOptions(),
@@ -1855,6 +1867,7 @@ SettingsItemAnchor("playback.video_tag_size_preset") {
 
 SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_REPLY_PREVIEW),
             title = settingItemTitle("playback.comment_collapsed_reply_preview_limit"),
             subtitle = "评论回复收起时，仍显示的条数",
             options = listOf(
@@ -2170,6 +2183,7 @@ private fun PlaybackFullscreenGestureSettingsSection(
                 AppPreferenceDivider()
 SettingsItemAnchor("playback.seek_forward_seconds") {
                 SettingsSingleChoicePreference(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.SEEK_FORWARD),
                     title = settingItemTitle("playback.seek_forward_seconds"),
                     subtitle = "调整右侧双击快进幅度",
                     options = doubleTapSeekOptions,
@@ -2185,6 +2199,7 @@ SettingsItemAnchor("playback.seek_forward_seconds") {
                 AppPreferenceDivider()
 SettingsItemAnchor("playback.seek_backward_seconds") {
                 SettingsSingleChoicePreference(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.SEEK_BACKWARD),
                     title = settingItemTitle("playback.seek_backward_seconds"),
                     subtitle = "调整左侧双击后退幅度",
                     options = doubleTapSeekOptions,
@@ -2202,6 +2217,7 @@ SettingsItemAnchor("playback.seek_backward_seconds") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.portrait_player_collapse_mode") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.PORTRAIT_COLLAPSE_MODE),
             title = settingItemTitle("playback.portrait_player_collapse_mode"),
             subtitle = portraitPlayerCollapseMode.description,
             options = resolvePortraitPlayerCollapseModeSegmentOptions(),
@@ -2424,6 +2440,7 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
         AppPreferenceDivider()
         SettingsItemAnchor("playback.fullscreen_swipe_seek_enabled") {
             AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.SWIPE_SEEK),
                 title = playbackSettingTitle("playback.fullscreen_swipe_seek_enabled"),
                 subtitle = if (fullscreenSwipeSeekEnabled) {
                     "已开启，满屏宽度对应的跳转秒数由视频时长自动决定"
@@ -2519,6 +2536,7 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
         AppPreferenceDivider()
             SettingsItemAnchor("playback.landscape_hold_enabled") {
                 AppSwitchPreference(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.LANDSCAPE_HOLD),
                     title = playbackSettingTitle("playback.landscape_hold_enabled"),
                     subtitle = "躺卧场景：自动进入横屏后不再因倾斜回正退出全屏，需手动退出",
                     checked = landscapeHoldEnabled,
@@ -2601,6 +2619,7 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.tablet_comment_panel_width_preset") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.TABLET_COMMENT_PANEL_WIDTH),
             title = settingItemTitle("playback.tablet_comment_panel_width_preset"),
             subtitle = if (horizontalAdaptationEnabled) {
                 "调整横屏适配下右侧评论/推荐栏宽度"
@@ -2620,6 +2639,7 @@ SettingsItemAnchor("playback.tablet_comment_panel_width_preset") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.tablet_secondary_default_tab") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.TABLET_SECONDARY_TAB),
             title = settingItemTitle("playback.tablet_secondary_default_tab"),
             subtitle = "选择首次打开时，右栏显示推荐还是评论",
             options = resolveTabletSecondaryDefaultTabOptions(),
@@ -2635,6 +2655,7 @@ SettingsItemAnchor("playback.tablet_secondary_default_tab") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.fullscreen_mode") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_ORIENTATION),
             title = settingItemTitle("playback.fullscreen_mode"),
             subtitle = fullscreenModeSubtitle,
             options = resolveFullscreenModeSegmentOptions(),
@@ -2650,6 +2671,7 @@ SettingsItemAnchor("playback.fullscreen_mode") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.fullscreen_aspect_ratio") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.HORIZONTAL_ADAPTATION),
             title = settingItemTitle("playback.fullscreen_aspect_ratio"),
             subtitle = fullscreenAspectRatio.description,
             options = resolveFullscreenAspectRatioSegmentOptions(),
@@ -2704,6 +2726,7 @@ SettingsItemAnchor("playback.fullscreen_aspect_ratio") {
             AppPreferenceDivider()
 SettingsItemAnchor("playback.video_ambient_settings.strength") {
             SettingsSingleChoicePreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.AMBIENT_STRENGTH),
                 title = settingItemTitle("playback.video_ambient_settings.strength"),
                 subtitle = "共用横屏和竖屏留白的光晕亮度，不改变视频画面",
                 options = listOf(
@@ -2718,6 +2741,7 @@ SettingsItemAnchor("playback.video_ambient_settings.strength") {
             AppPreferenceDivider()
 SettingsItemAnchor("playback.video_ambient_settings.power_saving") {
             SettingsSingleChoicePreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.AMBIENT_POWER_SAVING),
                 title = settingItemTitle("playback.video_ambient_settings.power_saving"),
                 subtitle = "自动调节流畅度；省电模式减少刷新",
                 options = listOf(
@@ -2817,6 +2841,7 @@ SettingsItemAnchor("playback.video_ambient_settings.power_saving") {
         ) {
             AppPreferenceDivider()
             SettingsSingleChoicePreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.AUTO_EXIT_FULLSCREEN),
                 title = "退出时机：${autoExitFullscreenMode.label}",
                 subtitle = autoExitFullscreenMode.subtitle,
                 options = listOf(
@@ -2888,6 +2913,7 @@ SettingsItemAnchor("playback.video_ambient_settings.power_saving") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.app_screenshot_gesture_mode") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.SCREENSHOT_GESTURE),
             title = settingItemTitle("playback.app_screenshot_gesture_mode"),
             subtitle = appScreenshotGestureMode.description,
             options = resolveAppScreenshotGestureModeSegmentOptions(),
@@ -2902,6 +2928,7 @@ SettingsItemAnchor("playback.app_screenshot_gesture_mode") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.app_screenshot_capture_mode") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.APP_SCREENSHOT),
             title = settingItemTitle("playback.app_screenshot_capture_mode"),
             subtitle = appScreenshotCaptureMode.description,
             options = resolveAppScreenshotCaptureModeSegmentOptions(),
@@ -2986,6 +3013,7 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
 
         SettingsItemAnchor("playback.chapter_display_mode") {
             SettingsSingleChoicePreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.CHAPTER_DISPLAY),
                 title = playbackSettingTitle("playback.chapter_display_mode"),
                 subtitle = chapterDisplayMode.description,
                 options = ChapterDisplayMode.entries.map { AppSegmentOption(it, it.label) },
@@ -2998,6 +3026,7 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
         AppPreferenceDivider()
 SettingsItemAnchor("playback.bottom_progress_behavior") {
         SettingsSingleChoicePreference(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.BOTTOM_PROGRESS),
             title = settingItemTitle("playback.bottom_progress_behavior"),
             subtitle = bottomProgressBehavior.description,
             options = listOf(

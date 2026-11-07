@@ -1,0 +1,10 @@
+<!-- App-authored: progress track with a bracketed segment and a jump arrow, for sponsor markers. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M3,15.75h5.5 M15.5,15.75H21 M8.5,13.25h7v5H8.5z M9.5,6.5h5 M14.5,6.5L13,5 M14.5,6.5L13,8" />
+</vector>

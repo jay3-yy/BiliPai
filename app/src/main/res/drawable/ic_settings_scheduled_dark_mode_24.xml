@@ -1,0 +1,10 @@
+<!-- App-authored: optically centered crescent with a small corner clock, for scheduled dark mode. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M15,14.58 A5.5,5.5 0 1 1 8.94,9.32 A4.2,4.2 0 0 0 15,14.58z M17.5,3.3a3,3 0 1 1 0,6a3,3 0 1 1 0,-6z M17.5,6.3V4.9 M17.5,6.3h1.4" />
+</vector>

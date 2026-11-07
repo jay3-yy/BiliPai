@@ -1,0 +1,10 @@
+<!-- App-authored: three-finger swipe down, the in-app screenshot gesture. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M6.75,4.5v5 M12,4.5v5 M17.25,4.5v5 M12,13.5v6 M12,19.5l-2.3,-2.3 M12,19.5l2.3,-2.3" />
+</vector>
