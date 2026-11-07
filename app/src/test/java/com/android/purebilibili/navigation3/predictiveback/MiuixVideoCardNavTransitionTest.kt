@@ -33,19 +33,20 @@ import androidx.compose.ui.unit.LayoutDirection
 class MiuixVideoCardNavTransitionTest {
 
     @Test
-    fun wholeCardHeightUsesMeasuredHeightWithoutDependingOnSourceWidth() {
-        for (sourceHeight in listOf(.08f, .25f, .6f)) {
-            var previous = sourceHeight
-            for (depth in listOf(0f, .1f, .25f, .5f, .75f, .9f, 1f)) {
-                val narrow = resolveMiuixVideoCardOuterScaleY(.2f, sourceHeight, depth, 1f)
-                val wide = resolveMiuixVideoCardOuterScaleY(.92f, sourceHeight, depth, 1f)
-                assertEquals(narrow, wide, .0001f)
-                assertTrue(narrow >= previous)
-                assertTrue(narrow <= 1f)
-                previous = narrow
+    fun wholeCardScalesPreserveSourceEndpointsAcrossNarrowAndWideCards() {
+        for ((sourceX, sourceY) in listOf(.01f to .01f, .2f to .6f, .92f to .12f, .3f to 1.2f)) {
+            val start = resolveMiuixVideoCardOuterScales(sourceX, sourceY, 0f, 1f)
+            val end = resolveMiuixVideoCardOuterScales(sourceX, sourceY, 1f, 1f)
+            assertEquals(sourceX, start.x, .0001f)
+            assertEquals(sourceY, start.y, .0001f)
+            assertEquals(1f, end.x, .0001f)
+            assertEquals(1f, end.y, .0001f)
+            for (step in 0..100) {
+                val scale = resolveMiuixVideoCardOuterScales(sourceX, sourceY, step / 100f, 1f)
+                assertTrue(scale.x in minOf(sourceX, 1f)..maxOf(sourceX, 1f))
+                assertTrue(scale.y >= minOf(sourceY, 1f) - .0001f)
+                assertTrue(scale.y <= maxOf(sourceY, 1f) + .0001f)
             }
-            assertEquals(sourceHeight, resolveMiuixVideoCardOuterScaleY(.2f, sourceHeight, 0f, 1f), .0001f)
-            assertEquals(1f, resolveMiuixVideoCardOuterScaleY(.2f, sourceHeight, 1f, 1f), .0001f)
         }
     }
 
@@ -330,8 +331,9 @@ class MiuixVideoCardNavTransitionTest {
                     val depth = step / 100f
                     val landing = com.android.purebilibili.core.ui.transition
                         .resolveVideoHeroLandingScale(depth, autoReturning)
-                    val x = resolveMiuixVideoCardOuterScale(sourceX, depth, landing)
-                    val y = resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, depth, landing)
+                    val outer = resolveMiuixVideoCardOuterScales(sourceX, sourceY, depth, landing)
+                    val x = outer.x
+                    val y = outer.y
                     val compensation = resolveMiuixVideoCardContentCompensation(
                         outerScaleX = x,
                         outerScaleY = y,
@@ -345,9 +347,8 @@ class MiuixVideoCardNavTransitionTest {
                     // Compose the actual nested layers: equal screen-space scaling
                     // preserves text glyphs and cover aspect ratio throughout the return.
                     assertEquals(pixelX, pixelY, .0001f)
-                    if (depth <= .18f) {
-                        // Once source chrome appears, its full card height fills the clip.
-                        // No residual detail-page height may remain as a blank band.
+                    if (depth == 0f) {
+                        // At landing the source pixels fill the complete card clip.
                         assertEquals(y, sourceY * pixelY, .0001f)
                     }
                 }

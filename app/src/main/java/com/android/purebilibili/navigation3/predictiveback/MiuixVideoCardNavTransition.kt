@@ -21,6 +21,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.structuralEqualityPolicy
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
+import com.android.purebilibili.core.ui.transition.VideoCardMorphScale
+import com.android.purebilibili.core.ui.transition.resolveVideoCardMorphScale
+import com.android.purebilibili.core.ui.transition.resolveVideoCardMorphCornerPx
+import com.android.purebilibili.core.ui.transition.resolveVideoCardSourceClipRadiusPx
 import com.android.purebilibili.core.ui.transition.VideoHeroMotionSpec
 import com.android.purebilibili.core.ui.transition.VideoHeroMotionTokens
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionSettleState
@@ -183,15 +187,24 @@ internal fun resolveMiuixVideoCardOuterScale(sourceScale: Float, depth: Float, l
     return source + (1f - source) * depth.coerceIn(0f, 1f) - source * (1f - landingScale)
 }
 
-/** 整卡窗口的高度连续展开，不等待正文淡入后再切换第二段高度。 */
-@Suppress("UNUSED_PARAMETER")
-internal fun resolveMiuixVideoCardOuterScaleY(
+/** 形变与内容补偿必须读取同一组宽高，避免高度改变后仍按旧宽度重建来源像素。 */
+internal fun resolveMiuixVideoCardOuterScales(
     sourceScaleX: Float,
     sourceScaleY: Float,
     depth: Float,
     landingScale: Float,
-): Float = resolveMiuixVideoCardOuterScale(sourceScaleY, depth, landingScale)
-
+    contentScale: MiuixVideoCardContentScale = MiuixVideoCardContentScale.FillWidthTop,
+): VideoCardMorphScale {
+    if (contentScale == MiuixVideoCardContentScale.CropCenter) return VideoCardMorphScale(
+        resolveMiuixVideoCardOuterScale(sourceScaleX, depth, landingScale),
+        resolveMiuixVideoCardOuterScale(sourceScaleY, depth, landingScale),
+    )
+    val scale = resolveVideoCardMorphScale(sourceScaleX, sourceScaleY, depth)
+    return VideoCardMorphScale(
+        scale.x - sourceScaleX * (1f - landingScale),
+        scale.y - sourceScaleY * (1f - landingScale),
+    )
+}
 
 internal data class MiuixVideoCardInverseScale(
     val scaleX: Float,
@@ -230,10 +243,11 @@ internal fun resolveMiuixVideoCardInverseScaleForDepth(
 ): MiuixVideoCardInverseScale {
     val morph = depth.coerceIn(0f, 1f)
     val landingScale = resolveVideoHeroLandingScale(morph, autoReturning)
+    val scale = resolveMiuixVideoCardOuterScales(sourceScaleX, sourceScaleY, morph, landingScale)
     return resolveMiuixVideoCardInverseScale(
         sourceScaleX = sourceScaleX,
-        outerScaleX = resolveMiuixVideoCardOuterScale(sourceScaleX, morph, landingScale),
-        outerScaleY = resolveMiuixVideoCardOuterScaleY(sourceScaleX, sourceScaleY, morph, landingScale),
+        outerScaleX = scale.x,
+        outerScaleY = scale.y,
     )
 }
 
@@ -661,6 +675,7 @@ internal fun miuixVideoCardNavTransition(
     returningProvider: () -> Boolean = { false },
     deviceCornerDp: Dp = 32.dp,
     sourceLayout: VideoCardSourceLayout = VideoCardSourceLayout.COVER_ONLY,
+    sourceCoverCornerDp: Float? = null,
 ): NavTransition {
     val bounds = sourceBounds?.takeIf { it.width > 1f && it.height > 1f }
         ?: return fallback
@@ -677,6 +692,8 @@ internal fun miuixVideoCardNavTransition(
 
     return object : NavTransition {
         override val opaqueDepth: Float = fallback.opaqueDepth
+        // 飞卡已按屏幕坐标计算圆角，宿主不得再套一层普通页面的裁剪。
+        override val handlesOwnClipping: Boolean = true
         override val motion: NavMotion get() = if (returningProvider()) returnMotion else enterMotion
 
         // Source-page scrim and blur are rendered by the existing depth layer from this same
@@ -694,18 +711,19 @@ internal fun miuixVideoCardNavTransition(
                         // 帧内记忆：同一帧多层 graphicsLayer 只推进一次状态机。
                         val frame = progress.spatialFrame(scope)
                         val morph = frame.size
-                        val sourceScaleX = (bounds.width / width).coerceIn(0.05f, 1f)
-                        val sourceScaleY = (bounds.height / height).coerceIn(0.05f, 1f)
+                        val sourceScaleX = bounds.width / width
+                        val sourceScaleY = bounds.height / height
                         val landingScale = resolveVideoHeroLandingScale(
                             depth = morph,
                             autoReturning = !heroMotionSpec.reducedMotion &&
                                 scope.settle != null && scope.settle?.phase != NavSettlePhase.Cancel &&
                                 scope.role == NavRole.Outgoing,
                         )
-                        val outerScaleX = resolveMiuixVideoCardOuterScale(sourceScaleX, morph, landingScale)
-                        val outerScaleY = if (contentScale == MiuixVideoCardContentScale.FillWidthTop) {
-                            resolveMiuixVideoCardOuterScaleY(sourceScaleX, sourceScaleY, morph, landingScale)
-                        } else resolveMiuixVideoCardOuterScale(sourceScaleY, morph, landingScale)
+                        val outer = resolveMiuixVideoCardOuterScales(
+                            sourceScaleX, sourceScaleY, morph, landingScale, contentScale,
+                        )
+                        val outerScaleX = outer.x
+                        val outerScaleY = outer.y
                         scaleX = outerScaleX
                         scaleY = outerScaleY
                         transformOrigin = TransformOrigin(0f, 0f)
@@ -721,12 +739,13 @@ internal fun miuixVideoCardNavTransition(
                         clip = needsClip
                         // 圆角终点是窗口圆角（引擎 leashCorner 同语义）：展开中保持系统圆角的
                         // 丰润感，不收缩归零；落位帧整页铺满屏幕，硬件圆角接管，无跳变。
-                        val sourceRadiusPx = corner.dp.toPx()
-                        val physicalRadius = (
-                            sourceRadiusPx +
-                                (deviceCornerDp.toPx() - sourceRadiusPx) * frame.corner
-                            )
-                            .coerceAtMost(minOf(width * outerScaleX, height * outerScaleY) / 2f)
+                        val sourceRadiusPx = resolveVideoCardSourceClipRadiusPx(
+                            corner.dp.toPx(), sourceCoverCornerDp, density,
+                        )
+                        val physicalRadius = resolveVideoCardMorphCornerPx(
+                            sourceRadiusPx, deviceCornerDp.toPx(), frame.corner,
+                            width * outerScaleX, height * outerScaleY,
+                        )
                         val radX = physicalRadius / outerScaleX.coerceAtLeast(0.01f)
                         val radY = physicalRadius / outerScaleY.coerceAtLeast(0.01f)
                         val activeShape = if (useShapeA) clipShapeA else clipShapeB
@@ -758,10 +777,11 @@ internal fun miuixVideoCardNavTransition(
                                 scope.settle != null && scope.settle?.phase != NavSettlePhase.Cancel &&
                                 scope.role == NavRole.Outgoing,
                         )
-                        val outerScaleX = resolveMiuixVideoCardOuterScale(bounds.width / width, morph, landingScale)
-                        val outerScaleY = if (contentScale == MiuixVideoCardContentScale.FillWidthTop) {
-                            resolveMiuixVideoCardOuterScaleY(bounds.width / width, bounds.height / height, morph, landingScale)
-                        } else resolveMiuixVideoCardOuterScale(bounds.height / height, morph, landingScale)
+                        val outer = resolveMiuixVideoCardOuterScales(
+                            bounds.width / width, bounds.height / height, morph, landingScale, contentScale,
+                        )
+                        val outerScaleX = outer.x
+                        val outerScaleY = outer.y
                         val safeOuterScaleX = outerScaleX.coerceAtLeast(0.01f)
                         val safeOuterScaleY = outerScaleY.coerceAtLeast(0.01f)
                         val uniformScale = when (contentScale) {

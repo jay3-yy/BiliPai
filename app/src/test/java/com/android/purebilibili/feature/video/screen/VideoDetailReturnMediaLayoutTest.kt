@@ -69,10 +69,10 @@ class VideoDetailReturnMediaLayoutTest {
                     landingLayout = layout,
                     handoffProgress = handoff,
                 )
-                val x = com.android.purebilibili.navigation3.predictiveback
-                    .resolveMiuixVideoCardOuterScale(sourceX, depth, 1f)
-                val y = com.android.purebilibili.navigation3.predictiveback
-                    .resolveMiuixVideoCardOuterScaleY(sourceX, sourceY, depth, 1f)
+                val outer = com.android.purebilibili.navigation3.predictiveback
+                    .resolveMiuixVideoCardOuterScales(sourceX, sourceY, depth, 1f)
+                val x = outer.x
+                val y = outer.y
                 val visibleCoverBottom = (frame.offsetYPx + frame.heightPx) * x
                 assertTrue(
                     visibleCoverBottom <= hostHeight * y + 1f,

@@ -18,6 +18,7 @@ internal object VideoActivityLauncher {
         request: VideoOpenRequest,
         transitionOptions: android.os.Bundle? = null,
         officialTransitionToken: String? = null,
+        appTransitionToken: String? = null,
         canLaunch: () -> Boolean = { true },
     ): Boolean {
         val job = requireNotNull(currentCoroutineContext()[Job])
@@ -27,7 +28,9 @@ internal object VideoActivityLauncher {
             activity.lifecycle.withResumed { }
             currentCoroutineContext().ensureActive()
             if (!canLaunch()) return false
-            val intent = Intent(activity, VideoActivity::class.java).putExtras(request.toBundle())
+            val target = if (appTransitionToken != null) AppVideoActivity::class.java else VideoActivity::class.java
+            val intent = Intent(activity, target).putExtras(request.toBundle())
+            appTransitionToken?.let { intent.putExtra(AppVideoCardWindow.EXTRA_SESSION, it) }
             officialTransitionToken?.let { intent.putExtra(SystemVideoCardTransition.EXTRA_SESSION, it) }
             val manager = MiniPlayerManager.getInstance(activity)
             manager.isNavigatingToVideo = true
@@ -38,7 +41,10 @@ internal object VideoActivityLauncher {
                 activity.onOpeningVideoChild()
             }
             try {
-                activity.startActivity(intent, transitionOptions)
+                val options = if (appTransitionToken != null) {
+                    android.app.ActivityOptions.makeCustomAnimation(activity, 0, 0).toBundle()
+                } else transitionOptions
+                activity.startActivity(intent, options)
             } catch (error: SecurityException) {
                 if (activity is VideoActivity) activity.onVideoChildLaunchRejected()
                 manager.isNavigatingToVideo = false

@@ -60,6 +60,7 @@ internal class VideoCardMorphPhysics {
             value = active.getValueFromNanos(nanos).coerceIn(0f, 1f)
             velocity = active.getVelocityVectorFromNanos(nanos).value
         }
+        fun isFinished(nanos: Long): Boolean = animation?.isFinishedFromNanos(nanos) ?: true
         fun seek(delta: Float, seconds: Float) {
             value = (value + delta).coerceIn(0f, 1f)
             velocity = if (seconds > 0f) delta / seconds else 0f
@@ -80,6 +81,12 @@ internal class VideoCardMorphPhysics {
     private var activeSettlement: Any? = null
     private var lastDriver = 0f
     private var lastFrameNanos = 0L
+
+    /** 属性弹簧继承手势速度，不能用无初速度的导航时钟提前截断它们。 */
+    fun isFinished(elapsedNanos: Long): Boolean =
+        position.isFinished(elapsedNanos) && size.isFinished(elapsedNanos) &&
+            corner.isFinished(elapsedNanos) && effects.isFinished(elapsedNanos) &&
+            mask.isFinished(elapsedNanos)
 
     fun sample(
         driverDepth: Float,

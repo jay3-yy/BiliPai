@@ -1,10 +1,32 @@
 package com.android.purebilibili.core.ui.transition
 
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VideoCardMorphPhysicsTest {
+    @Test
+    fun fastGestureCancellationWaitsForPropertySpringsAfterDriverEnds() {
+        val physics = VideoCardMorphPhysics()
+        physics.sample(1f, null, 1f, 0, false, 1_000_000_000)
+        physics.sample(1f, null, 0f, 0, true, 1_016_000_000)
+        physics.sample(.2f, null, 0f, 0, true, 1_032_000_000)
+        val cancel = Any()
+        physics.sample(.2f, cancel, 1f, 0, false, 1_032_000_000)
+        val driver = TargetBasedAnimation(
+            VideoCardMorphSprings.enterLifetime, Float.VectorConverter, .2f, 1f,
+        )
+        val driverEnd = driver.durationNanos
+        physics.sample(1f, cancel, 1f, driverEnd, false, 1_032_000_000 + driverEnd)
+        assertFalse(physics.isFinished(driverEnd))
+        val settled = physics.sample(1f, cancel, 1f, 3_000_000_000, false, 4_032_000_000)
+        assertTrue(physics.isFinished(3_000_000_000))
+        assertFrameEquals(VideoCardMorphFrame.at(1f), settled)
+    }
+
     @Test
     fun openingMovesPositionBeforeSizeAndSettlesExactly() {
         val physics = VideoCardMorphPhysics()

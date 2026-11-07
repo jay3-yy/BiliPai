@@ -370,7 +370,9 @@ internal fun BiliPaiNavDisplayHost(
         fullscreen = false,
     )
     val navCornerRadius = rememberDeviceCornerRadius(defaultRadius = 0.dp)
-    val effectiveDeviceCornerDp = if (navCornerRadius > 0.dp) navCornerRadius else 32.dp
+    // 设备未上报圆角时保留方角，与透明窗口及系统窗口的实际边界一致。
+    val effectiveDeviceCornerDp = navCornerRadius
+    val sourceCoverCornerDp = sourceMetadata.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp
     val videoCardTransition = remember(
         cardMorphAvailable,
         sourceMetadata.sourceBounds,
@@ -382,6 +384,7 @@ internal fun BiliPaiNavDisplayHost(
         observedVideoFallbackTransition,
         videoCardContentScale,
         effectiveDeviceCornerDp,
+        sourceCoverCornerDp,
     ) {
         if (cardMorphAvailable) {
             miuixVideoCardNavTransition(
@@ -395,6 +398,7 @@ internal fun BiliPaiNavDisplayHost(
                 returningProvider = returningProvider,
                 deviceCornerDp = effectiveDeviceCornerDp,
                 sourceLayout = sourceMetadata.sourceLayout,
+                sourceCoverCornerDp = sourceCoverCornerDp,
             )
         } else {
             observedVideoFallbackTransition
@@ -410,6 +414,7 @@ internal fun BiliPaiNavDisplayHost(
         videoCardTransitionProgress,
         observedVideoFallbackTransition,
         effectiveDeviceCornerDp,
+        sourceCoverCornerDp,
     ) {
         if (cardMorphAvailable) {
             miuixVideoCardNavTransition(
@@ -423,6 +428,7 @@ internal fun BiliPaiNavDisplayHost(
                 returningProvider = returningProvider,
                 deviceCornerDp = effectiveDeviceCornerDp,
                 sourceLayout = sourceMetadata.sourceLayout,
+                sourceCoverCornerDp = sourceCoverCornerDp,
             )
         } else {
             observedVideoFallbackTransition

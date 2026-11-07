@@ -1096,6 +1096,15 @@
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.PureBiliBili.Main" />
 
+        <activity
+            android:name=".feature.video.AppVideoActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden|uiMode"
+            android:supportsPictureInPicture="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.PureBiliBili.AppVideoWindow" />
+
         <service
             android:name=".feature.video.player.PlaybackService"
             android:exported="true"

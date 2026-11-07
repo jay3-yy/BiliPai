@@ -11,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.lifecycle.Lifecycle
 import com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor
+import com.android.purebilibili.core.ui.transition.resolveVideoCardSourceClipRadiusPx
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.navigation3.VideoCardTransitionSession
@@ -60,17 +61,6 @@ internal object SystemVideoCardTransition {
     }
 
     private val sessions = mutableMapOf<String, Session>()
-
-    /** 透明行卡的整行外框圆角为 0；窗口裁剪改用其封面圆角，避免展开与返回出现直角。 */
-    private fun resolveWindowClipRadiusPx(
-        anchorRadiusPx: Float,
-        coverCornerDp: Float?,
-        density: Float,
-    ): Float = if (anchorRadiusPx > 0f) {
-        anchorRadiusPx
-    } else {
-        coverCornerDp?.takeIf { it > 0f }?.let { it * density } ?: anchorRadiusPx
-    }
 
     fun canAttempt(enabled: Boolean, source: VideoCardTransitionSession): Boolean {
         val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null
@@ -152,7 +142,7 @@ internal object SystemVideoCardTransition {
             kotlin.math.abs(thumbnail.height - bounds.height()) > 1) return rejected(
                 "source_size_mismatch bitmap=${thumbnail.width}x${thumbnail.height} bounds=$bounds")
         val anchorRadius = anchor.radiusPx() ?: return rejected("source_radius_unavailable")
-        val radius = resolveWindowClipRadiusPx(
+        val radius = resolveVideoCardSourceClipRadiusPx(
             anchorRadiusPx = anchorRadius,
             coverCornerDp = source.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
             density = activity.resources.displayMetrics.density,
@@ -242,7 +232,7 @@ internal object SystemVideoCardTransition {
             val sameShape = bounds != null &&
                 bounds.width() == session.openingBounds.width() &&
                 bounds.height() == session.openingBounds.height() &&
-                resolveWindowClipRadiusPx(
+                resolveVideoCardSourceClipRadiusPx(
                     requireNotNull(session.anchor.radiusPx()),
                     session.coverCornerDp,
                     activity.resources.displayMetrics.density,
@@ -271,7 +261,7 @@ internal object SystemVideoCardTransition {
             else -> {
                 config.setBounds(bounds)
                     .setRadius(
-                        resolveWindowClipRadiusPx(
+                        resolveVideoCardSourceClipRadiusPx(
                             requireNotNull(session.anchor.radiusPx()),
                             session.coverCornerDp,
                             activity.resources.displayMetrics.density,

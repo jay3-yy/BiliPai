@@ -705,6 +705,10 @@ fun AppNavigation(
         var predictiveBackCancelRecoveryGeneration by remember { mutableIntStateOf(0) }
         var accountSessionRefreshGeneration by remember { mutableIntStateOf(0) }
         val currentNavigation3Key = navigation3BackStack.lastOrNull()
+        androidx.compose.runtime.SideEffect {
+            (hostActivity as? com.android.purebilibili.feature.video.AppVideoActivity)
+                ?.updateRootState(navigation3BackStack.size == 1)
+        }
         val currentRoute = currentNavigation3Key?.toLegacyRoute()
         var previousOrientationDestination by remember { mutableStateOf(currentNavigation3Key) }
         LaunchedEffect(currentNavigation3Key) {
@@ -1504,7 +1508,27 @@ fun AppNavigation(
                 miniPlayerManager?.exitMiniMode(animate = false)
                 pushNavigation3Key(key)
             }
-            if (key is BiliPaiNavKey.VideoDetail &&
+            if (key is BiliPaiNavKey.VideoDetail && sharedVideoCardTransitionEnabled &&
+                videoTransitionRealtimeBlurEnabled &&
+                appNavigationSettings.videoTransitionMode == com.android.purebilibili.core.store.VideoTransitionMode.APP
+            ) {
+                coroutineScope.launch {
+                    val isCurrent = {
+                        videoNavigationRequests.isCurrent(
+                            navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
+                        )
+                    }
+                    val opened = com.android.purebilibili.feature.video.AppVideoCardWindow.tryOpen(
+                        activity = hostActivity,
+                        request = com.android.purebilibili.feature.video.VideoOpenRequest.fromKey(key),
+                        source = transitionSession,
+                        backgroundColor = backgroundColor.toArgb(),
+                        isCurrent = isCurrent,
+                    )
+                    if (opened) officialVideoChildActive = true
+                    else if (isCurrent() && hostActivity.window.decorView.hasWindowFocus()) commitInAppVideoNavigation()
+                }
+            } else if (key is BiliPaiNavKey.VideoDetail &&
                 appNavigationSettings.videoTransitionMode == com.android.purebilibili.core.store.VideoTransitionMode.SYSTEM_PREFERRED &&
                 com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
                     sharedVideoCardTransitionEnabled, transitionSession,

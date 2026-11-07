@@ -57,7 +57,7 @@ import com.android.purebilibili.navigation3.toLegacyRoute
 private const val TAG = "BiliPlayerActivity"
 
 
-class VideoActivity : ComponentActivity() {
+open class VideoActivity : ComponentActivity() {
 
     private var playbackWindowActive by mutableStateOf(true)
     private var finishingBvid: String? = null
@@ -65,7 +65,7 @@ class VideoActivity : ComponentActivity() {
     private var officialReturnMotionEnabled = true
     private var officialReturnBlurEnabled = true
 
-    internal fun updateOfficialReturnMotion(enabled: Boolean, realtimeBlurEnabled: Boolean) {
+    internal open fun updateOfficialReturnMotion(enabled: Boolean, realtimeBlurEnabled: Boolean) {
         if (officialReturnMotionEnabled == enabled && officialReturnBlurEnabled == realtimeBlurEnabled) return
         officialReturnMotionEnabled = enabled
         officialReturnBlurEnabled = realtimeBlurEnabled
@@ -83,8 +83,8 @@ class VideoActivity : ComponentActivity() {
     internal fun onVideoChildLaunchRejected() {
         playbackWindowActive = true
     }
-    private var isFullscreen by mutableStateOf(false)
-    private var isInPipMode by mutableStateOf(false)
+    protected var isFullscreen by mutableStateOf(false)
+    protected var isInPipMode by mutableStateOf(false)
     private var runtimeJankStats: JankStats? = null
     private val runtimeVisualGuardSession = Any()
     
@@ -303,7 +303,11 @@ class VideoActivity : ComponentActivity() {
                     // 窗口转场打开时，首帧在封面就绪前同步显示打开时捕获的卡片像素。
                     LocalVideoDetailOpeningSeed provides SystemVideoCardTransition.peekThumbnail(
                         intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
-                    ),
+                    ).let { officialSeed ->
+                        officialSeed ?: AppVideoCardWindow.session(
+                            intent.getStringExtra(AppVideoCardWindow.EXTRA_SESSION),
+                        )?.pixels
+                    },
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
