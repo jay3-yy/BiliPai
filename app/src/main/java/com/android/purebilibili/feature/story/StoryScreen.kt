@@ -175,7 +175,7 @@ fun StoryScreen(
                             },
                             onSearchClick = onSearchClick,
                             onUserClick = onUserClick,
-                            onRotateToLandscape = {
+                            onExitFullscreen = {
                                 val snapshot = latestExitSnapshot
                                 if (snapshot != null) {
                                     // 带上当前页封面，避免横屏详情首帧闪成 Story 入口种子封面

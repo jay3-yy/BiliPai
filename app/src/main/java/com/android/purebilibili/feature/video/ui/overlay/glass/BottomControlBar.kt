@@ -610,10 +610,6 @@ fun BottomControlBar(
             widthDp = uiLayoutWidthDp
         )
     }
-    val fullscreenToggleTouchTargetDp = remember(layoutPolicy.fullscreenIconSizeDp, isFullscreen) {
-        if (isFullscreen) PlayerChromeLayout.CircularButtonSizeDp
-        else resolveFullscreenToggleTouchTargetDp(iconSizeDp = layoutPolicy.fullscreenIconSizeDp)
-    }
     val showEpisodeButton = remember(isFullscreen, hasEpisodeEntry, uiLayoutWidthDp) {
         shouldShowEpisodeButtonInControlBar(
             isFullscreen = isFullscreen,
@@ -1963,22 +1959,23 @@ fun BottomControlBar(
                     }
                 }
             }
-            Spacer(modifier = Modifier.width(if (isFullscreen) 8.dp else layoutPolicy.rightActionSpacingDp.dp))
-            // Fullscreen
-            PlayerControlGlassDock(enabled = true, shape = androidx.compose.foundation.shape.CircleShape) {
-                Box(
-                    modifier = Modifier
-                        .size(fullscreenToggleTouchTargetDp.dp)
-                        .testTag("player_fullscreen_toggle")
-                        .consumeTap(onToggleFullscreen),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AppIcon(
-                        imageVector = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
-                        contentDescription = if (isFullscreen) "退出横屏" else "横屏",
-                        tint = Color.White,
-                        modifier = Modifier.size(layoutPolicy.fullscreenIconSizeDp.dp)
-                    )
+            if (!isFullscreen) {
+                Spacer(modifier = Modifier.width(layoutPolicy.rightActionSpacingDp.dp))
+                PlayerControlGlassDock(enabled = true, shape = androidx.compose.foundation.shape.CircleShape) {
+                    Box(
+                        modifier = Modifier
+                            .size(resolveFullscreenToggleTouchTargetDp(layoutPolicy.fullscreenIconSizeDp).dp)
+                            .testTag("player_fullscreen_toggle")
+                            .consumeTap(onToggleFullscreen),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppIcon(
+                            imageVector = Icons.Outlined.Fullscreen,
+                            contentDescription = "横屏",
+                            tint = Color.White,
+                            modifier = Modifier.size(layoutPolicy.fullscreenIconSizeDp.dp)
+                        )
+                    }
                 }
             }
         }

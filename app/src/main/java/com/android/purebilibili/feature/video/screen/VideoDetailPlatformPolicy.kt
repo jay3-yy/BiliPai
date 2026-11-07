@@ -936,17 +936,6 @@ internal fun shouldEnterPortraitFullscreenOnFullscreenToggle(
     return portraitExperienceEnabled && targetOrientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 }
 
-internal fun resolvePortraitRotateTargetOrientation(
-    isOrientationDrivenFullscreen: Boolean,
-): Int? {
-    // An explicit landscape button overrides the hold established by entering portrait.
-    return if (isOrientationDrivenFullscreen) {
-        ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-    } else {
-        null
-    }
-}
-
 internal fun resolveEffectivePhoneAutoRotateEnabled(
     autoRotateEnabled: Boolean,
     manualPortraitHoldActive: Boolean
