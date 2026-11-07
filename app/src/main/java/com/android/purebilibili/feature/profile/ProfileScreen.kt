@@ -196,6 +196,7 @@ import com.android.purebilibili.data.model.response.SpaceDynamicItem
 import com.android.purebilibili.data.model.response.SpaceVideoItem
 import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
 import com.android.purebilibili.feature.space.resolveSpaceAggregateVideoId
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.core.ui.common.contentTabPagerGestures
 import com.android.purebilibili.core.ui.common.rememberContentTabPager
 import com.android.purebilibili.core.ui.common.stationaryPagerHeader
@@ -3146,6 +3147,7 @@ private fun ProfileVideoList(
                 ) {
                     videos.forEach { video ->
                         key(video.bvid, video.aid) {
+                            val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(video.bvid)
                             Box(modifier = Modifier.videoListBoundsAnimation(
                                 scope = this@LookaheadScope,
                                 targetModifier = Modifier.width(cardWidth),
@@ -3177,7 +3179,7 @@ private fun ProfileVideoList(
                                         },
                                         coverOverlayContent = {
                                             com.android.purebilibili.core.ui.components.VideoStatusBadges(
-                                                labels = video.statusLabels,
+                                                labels = video.statusLabels + listOfNotNull(sponsorStatusLabel),
                                                 modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
                                             )
                                             com.android.purebilibili.feature.home.components.cards.VideoCardCoverDurationText(
@@ -5216,6 +5218,7 @@ fun ServicesSection(
                         textColor = contentColor
                     )
                     AppPreference(
+                        icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.ACCOUNT_LOGIN),
                         title = if (isLogin) "退出登录" else "立即登录",
                         onClick = onLogout,
                         textColor = if (isLogin) AppContentColors.error() else AppContentColors.accent(),

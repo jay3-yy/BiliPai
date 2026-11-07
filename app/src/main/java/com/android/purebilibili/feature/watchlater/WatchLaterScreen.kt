@@ -141,6 +141,7 @@ import com.android.purebilibili.feature.personal.PersonalMediaCardSkeleton
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
 import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
 import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import kotlinx.coroutines.Dispatchers
@@ -1766,6 +1767,7 @@ private fun WatchLaterVideoCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(item.bvid)
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = remember(configuration.screenWidthDp, density) {
@@ -1953,7 +1955,7 @@ private fun WatchLaterVideoCard(
         },
         coverOverlayContent = {
             VideoStatusBadges(
-                labels = item.statusLabels,
+                labels = item.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.ExtraSmall),
             )
             val progressState = com.android.purebilibili.data.model.resolveWatchLaterDisplayProgressState(item)

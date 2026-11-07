@@ -79,6 +79,7 @@ import com.android.purebilibili.data.model.response.HistoryBusiness
 import com.android.purebilibili.data.model.response.HistoryItem
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCoverOverlayTextShadow
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.feature.personal.PersonalCardSelectMask
 
 internal fun resolveHistoryKindLabel(business: HistoryBusiness): String = when (business) {
@@ -168,6 +169,7 @@ internal fun HistoryPersonalCard(
 ) {
     val video = item.videoItem
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(video.bvid)
     val coverShape = AppShapes.mediaCover()
     val containerTarget = if (batchMode) null else resolveHistoryCardContainerTarget(item)
     val usesVideoTransition = !batchMode && containerTarget == null && item.business != HistoryBusiness.ARTICLE
@@ -321,7 +323,7 @@ internal fun HistoryPersonalCard(
             },
             coverOverlayContent = {
                 VideoStatusBadges(
-                    labels = video.statusLabels,
+                    labels = video.statusLabels + listOfNotNull(sponsorStatusLabel),
                     modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.ExtraSmall),
                 )
                 AppText(
@@ -371,7 +373,7 @@ internal fun HistoryPersonalCard(
         },
         coverOverlayContent = {
             VideoStatusBadges(
-                labels = video.statusLabels,
+                labels = video.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.ExtraSmall),
             )
             AppText(

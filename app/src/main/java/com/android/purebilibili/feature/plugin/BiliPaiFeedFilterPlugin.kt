@@ -200,6 +200,7 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
                     onSelect = { persist(cfg.copy(minLikeRatioForRecommend = it)) }
                 )
                 AppSwitchPreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.FILTER_EXEMPT_FOLLOWED),
                     title = "已关注 UP 主豁免",
                     subtitle = "推荐流中已关注的 UP 主不受过滤影响",
                     checked = cfg.exemptFilterForFollowed,
@@ -243,16 +244,19 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
             FilterSection("应用于其他信息流") {
                 AppSwitchPreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.FILTER_HOT_VIDEOS),
                     title = "过滤器也应用于热门视频",
                     checked = cfg.applyToHotVideos,
                     onCheckedChange = { persist(cfg.copy(applyToHotVideos = it)) }
                 )
                 AppSwitchPreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.FILTER_RANKING),
                     title = "过滤器也应用于排行榜",
                     checked = cfg.applyToRankVideos,
                     onCheckedChange = { persist(cfg.copy(applyToRankVideos = it)) }
                 )
                 AppSwitchPreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.SEARCH_DISCOVER_SECTION),
                     title = "过滤器也应用于搜索结果",
                     checked = cfg.applyToSearch,
                     onCheckedChange = { persist(cfg.copy(applyToSearch = it)) }

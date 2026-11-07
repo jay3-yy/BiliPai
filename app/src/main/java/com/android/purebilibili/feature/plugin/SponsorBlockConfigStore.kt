@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.plugin
 import android.content.Context
 import com.android.purebilibili.core.plugin.BuiltinPluginIds
 import com.android.purebilibili.core.plugin.PluginStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
@@ -32,3 +35,9 @@ internal suspend fun loadSponsorBlockConfig(
     }
     normalized
 }
+
+/** Reactive read of the feed badge toggle so card badges respond to settings changes immediately. */
+internal fun sponsorBlockFeedBadgeEnabledFlow(context: Context): Flow<Boolean> =
+    PluginStore.getConfigJsonFlow(context, BuiltinPluginIds.SPONSOR_BLOCK).map { raw ->
+        raw?.let { SponsorBlockConfigJson.decodeFromString<SponsorBlockConfig>(it).feedBadgeEnabled } ?: true
+    }.distinctUntilChanged()

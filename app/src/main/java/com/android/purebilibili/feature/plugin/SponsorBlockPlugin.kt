@@ -239,6 +239,7 @@ class SponsorBlockPlugin : BuiltinPlugin, PlayerPluginApi {
         var communityTrackingEnabled by remember { mutableStateOf(config.communityTrackingEnabled) }
         var communityContributionEnabled by remember { mutableStateOf(config.communityContributionEnabled) }
         var skipToastEnabled by remember { mutableStateOf(config.skipToastEnabled) }
+        var feedBadgeEnabled by remember { mutableStateOf(config.feedBadgeEnabled) }
         var serverStatus by remember { mutableStateOf<SponsorBlockRepository.ServerStatus?>(null) }
         var communityUserInfo by remember { mutableStateOf<SponsorBlockRepository.CommunityUserInfo?>(null) }
         var showServerDialog by remember { mutableStateOf(false) }
@@ -299,6 +300,7 @@ class SponsorBlockPlugin : BuiltinPlugin, PlayerPluginApi {
             communityTrackingEnabled = config.communityTrackingEnabled
             communityContributionEnabled = config.communityContributionEnabled
             skipToastEnabled = config.skipToastEnabled
+            feedBadgeEnabled = config.feedBadgeEnabled
             userIdDraft = config.userId
             serverDraft = config.serverBaseUrl
             durationDraft = config.minimumSegmentDurationSeconds.toString()
@@ -355,6 +357,7 @@ class SponsorBlockPlugin : BuiltinPlugin, PlayerPluginApi {
 
             SponsorBlockSettingsSection(title = "进度条") {
                 SettingsSingleChoicePreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.SPONSOR_MARKER),
                     title = "进度条提示：${markerMode.label}",
                     subtitle = "关闭、仅提示恰饭，或显示全部可跳过片段",
                     options = markerOptions,
@@ -407,6 +410,20 @@ class SponsorBlockPlugin : BuiltinPlugin, PlayerPluginApi {
                     title = "发送测试通知",
                     subtitle = "确认通知权限和展示效果，不写入跳过记录",
                     onClick = { notificationPermission.launchWithPermission { sendTestNotification() } },
+                    iconTint = if (neutralMiuix) preferenceIconColor else AppContentColors.accent(),
+                )
+            }
+
+            SponsorBlockSettingsSection(title = "列表标记") {
+                AppSwitchPreference(
+                    icon = Icons.Outlined.Sell,
+                    title = "列表恰饭角标",
+                    subtitle = "动态、UP 主页、首页推荐、稍后再看等列表中，为社区数据标记了恰饭片段的视频显示角标",
+                    checked = feedBadgeEnabled,
+                    onCheckedChange = { enabled ->
+                        feedBadgeEnabled = enabled
+                        persistConfig(config.copy(feedBadgeEnabled = enabled))
+                    },
                     iconTint = if (neutralMiuix) preferenceIconColor else AppContentColors.accent(),
                 )
             }
@@ -1383,6 +1400,7 @@ data class SponsorBlockConfig(
     val categoryColorHex: Map<String, String> = emptyMap(),
     val minimumSegmentDurationSeconds: Float = 0f,
     val skipToastEnabled: Boolean = true,
+    val feedBadgeEnabled: Boolean = true,
     val serverBaseUrl: String = SponsorBlockRepository.DEFAULT_BASE_URL,
     val userId: String = "",
     val communityTrackingEnabled: Boolean = false,

@@ -201,6 +201,7 @@ class Anime4KPlugin : BuiltinPlugin, VideoEnhancementPluginApi {
                 }
             } else {
                 AppSliderPreference(
+                    icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.FSR_SHARPNESS),
                     title = "FSR 锐化强度",
                     subtitle = "默认值来自公开 FSR 1.0 视频实现；过高可能产生锐化边缘。",
                     value = configSnapshot.fsrSharpness,
@@ -212,6 +213,7 @@ class Anime4KPlugin : BuiltinPlugin, VideoEnhancementPluginApi {
             }
 
             AppSwitchPreference(
+                icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.REMEMBER_FILTER_STATE),
                 title = "跨视频记忆开启状态",
                 subtitle = if (configSnapshot.rememberAcrossVideos) {
                     "后续视频沿用开关，请留意较高分辨率内容"

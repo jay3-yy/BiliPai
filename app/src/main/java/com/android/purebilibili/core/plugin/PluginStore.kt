@@ -85,6 +85,16 @@ object PluginStore {
             prefs[key]
         }.first()
     }
+
+    /**
+     * 获取插件配置 (JSON 字符串, Flow)
+     */
+    fun getConfigJsonFlow(context: Context, pluginId: String): Flow<String?> {
+        val key = stringPreferencesKey("plugin_config_$pluginId")
+        return context.pluginDataStore.data.map { prefs ->
+            prefs[key]
+        }
+    }
     
     /**
      * 设置插件配置 (JSON 字符串)

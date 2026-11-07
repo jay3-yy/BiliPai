@@ -86,6 +86,7 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceCoverPresentat
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.data.model.resolveVideoCardStatsTexts
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.store.HomeCardBadgeEffectMode
@@ -582,6 +583,7 @@ internal fun ElegantVideoCard(
     val isLongPressEnabled = com.android.purebilibili.core.ui.LocalVideoCardLongPressEnabled.current
     // 单列窗口菜单与网格下拉菜单共用操作及对话框。
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(video.bvid)
     val cardActionScope = rememberCoroutineScope()
     var showBlockDialog by remember(video.bvid) { mutableStateOf(false) }
     var aiSummaryState by remember(video.bvid, video.cid) { mutableStateOf<VideoCardAiSummaryState?>(null) }
@@ -1568,7 +1570,7 @@ internal fun ElegantVideoCard(
                     ),
             ) {
             VideoStatusBadges(
-                labels = video.statusLabels,
+                labels = video.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(AppSpacingTokens.Small),
             )
 

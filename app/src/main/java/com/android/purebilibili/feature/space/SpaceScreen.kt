@@ -285,6 +285,7 @@ import com.android.purebilibili.data.model.response.VideoSortOrder
 import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
 import com.android.purebilibili.feature.dynamic.DynamicViewModel
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
+import com.android.purebilibili.feature.plugin.rememberSponsorFeedBadgeLabel
 import com.android.purebilibili.feature.dynamic.components.DynamicCardActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardInteractionActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardNavigationActions
@@ -2656,7 +2657,8 @@ private fun SpaceContent(
                                                 localPositionMs = localProgressMs,
                                                 syncedProgress = state.watchProgressByBvid[video.bvid]
                                             ),
-                                            statusLabels = video.statusLabels,
+                                            statusLabels = video.statusLabels +
+                                                listOfNotNull(rememberSponsorFeedBadgeLabel(video.bvid)),
                                             isLocateHighlight = highlightedLocateBvid == video.bvid &&
                                                 isLocateHighlightVisible,
                                             modifier = boundedListModifier,
@@ -4405,6 +4407,7 @@ private fun SpaceHomeVideoCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(video.bvid)
     val locateHighlightColor by animateColorAsState(
         targetValue = if (isLocateHighlight) {
             AppContentColors.accent()
@@ -4551,7 +4554,7 @@ private fun SpaceHomeVideoCard(
                     .then(nativeCardSnapshot.coverOverlayModifier),
             ) {
             VideoStatusBadges(
-                labels = video.statusLabels,
+                labels = video.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
             if (!badgeLabel.isNullOrBlank()) {
@@ -4666,6 +4669,7 @@ private fun SpaceAggregateMediaCard(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val context = LocalContext.current
+    val sponsorStatusLabel = rememberSponsorFeedBadgeLabel(item.bvid)
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthPx = remember(configuration.screenWidthDp, density) {
@@ -4765,7 +4769,7 @@ private fun SpaceAggregateMediaCard(
             )
 
             VideoStatusBadges(
-                labels = item.statusLabels,
+                labels = item.statusLabels + listOfNotNull(sponsorStatusLabel),
                 modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
             )
             if (item.length.isNotBlank()) {
@@ -4854,6 +4858,7 @@ private fun SpaceTopVideoCard(
         publishTime = video.reason.ifBlank { FormatUtils.formatPublishTime(video.pubdate) },
         play = video.stat.view,
         secondaryCount = video.stat.danmaku,
+        statusLabels = listOfNotNull(rememberSponsorFeedBadgeLabel(video.bvid)),
         badgeLabel = "置顶",
         showTrailingMore = false,
         onClick = onClick,
@@ -4935,7 +4940,8 @@ private fun SpaceContributionArchiveVideoItem(
                 title = video.title,
                 cover = video.pic,
                 duration = video.length,
-                statusLabels = video.statusLabels,
+                statusLabels = video.statusLabels +
+                    listOfNotNull(rememberSponsorFeedBadgeLabel(video.bvid)),
                 publishTime = FormatUtils.formatPublishTime(video.created),
                 play = video.play.toLong(),
                 secondaryCount = video.comment.toLong(),
