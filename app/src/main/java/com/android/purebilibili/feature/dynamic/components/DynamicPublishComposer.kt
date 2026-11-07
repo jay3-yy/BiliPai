@@ -11,6 +11,25 @@ import com.android.purebilibili.core.ui.AppContentColors
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.material.icons.outlined.Mood
+import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.AlternateEmail
+import androidx.compose.material.icons.outlined.Poll
+import androidx.compose.material.icons.outlined.AddCircleOutline
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +48,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -45,15 +63,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
@@ -63,14 +79,11 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppDeleteIcon
-import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
-import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
-import com.android.purebilibili.core.ui.components.AppTextField
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -79,15 +92,13 @@ import com.android.purebilibili.data.model.response.DynamicCreatedReserve
 import com.android.purebilibili.data.model.response.DynamicCreatedVote
 import com.android.purebilibili.data.model.response.DynamicReplyOption
 import com.android.purebilibili.data.model.response.DynamicPublishDraft
-import com.android.purebilibili.data.model.response.DynamicPublishMention
-import com.android.purebilibili.data.model.response.DynamicPublishTopic
 import com.android.purebilibili.data.model.response.DynamicPublishToken
 import com.android.purebilibili.data.model.response.DynamicRichTextIssue
 import com.android.purebilibili.data.model.response.DynamicUnlocatedRichText
 
 private const val MAX_DYNAMIC_IMAGES = 18
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DynamicPublishComposer(
     initialDraft: DynamicPublishDraft,
@@ -174,8 +185,39 @@ fun DynamicPublishComposer(
     var showVoteDialog by remember { mutableStateOf(false) }
     var showReserveDialog by remember { mutableStateOf(false) }
     var showMentionDialog by remember { mutableStateOf(false) }
+    var mentionTrigger by remember { mutableStateOf<Int?>(null) }
     var showTopicDialog by remember { mutableStateOf(false) }
-    var showEmoteDialog by remember { mutableStateOf(false) }
+    var showEmotePanel by remember { mutableStateOf(false) }
+    var showMorePanel by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    val bodyFocus = remember { FocusRequester() }
+    val density = LocalDensity.current
+    val keyboardHeight = with(density) { WindowInsets.ime.getBottom(this).toDp() }
+    var lastKeyboardHeight by remember { mutableStateOf(0.dp) }
+    LaunchedEffect(keyboardHeight) {
+        if (keyboardHeight > 0.dp) lastKeyboardHeight = keyboardHeight
+    }
+    val customPanelVisible = showEmotePanel || showMorePanel
+    var restoreKeyboard by remember { mutableStateOf(false) }
+    fun togglePanel(emote: Boolean) {
+        val closing = if (emote) showEmotePanel else showMorePanel
+        showEmotePanel = !closing && emote
+        showMorePanel = !closing && !emote
+        restoreKeyboard = closing
+        if (!closing) {
+            focusManager.clearFocus()
+            keyboard?.hide()
+        }
+    }
+    LaunchedEffect(customPanelVisible, restoreKeyboard) {
+        if (customPanelVisible) keyboard?.hide()
+        else if (restoreKeyboard) {
+            bodyFocus.requestFocus()
+            keyboard?.show()
+            restoreKeyboard = false
+        }
+    }
     var showVisibilityMenu by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(
         PickMultipleGalleryVisualMedia(maxItems = MAX_DYNAMIC_IMAGES)
@@ -217,6 +259,11 @@ fun DynamicPublishComposer(
 
     fun requestDismiss() {
         if (submitting || savingDraft) return
+        if (customPanelVisible) {
+            showEmotePanel = false
+            showMorePanel = false
+            return
+        }
         val changed = text != initialDraft.text || title != initialDraft.title ||
             imageUris != initialDraft.imageUris || vote?.voteId != initialDraft.voteId.takeIf { it > 0L } ||
             reserve?.reserveId != initialDraft.reserveId.takeIf { it > 0L } ||
@@ -243,48 +290,46 @@ fun DynamicPublishComposer(
                     .then(backModifier)
                     .fillMaxWidth()
                     .fillMaxHeight()
-                    .imePadding(),
+                    .then(if (customPanelVisible) Modifier else Modifier.imePadding()),
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 64.dp)
-                        .padding(horizontal = AppSpacingTokens.Medium),
-                    verticalAlignment = Alignment.CenterVertically,
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp)
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    AppIconButton(
-                        onClick = ::requestDismiss,
-                        enabled = !submitting && !savingDraft,
-                        modifier = Modifier.size(AppChromeSizeTokens.MinimumTouchTarget),
-                    ) {
-                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
-                    }
                     AppText(
                         if (isEditing) "编辑动态" else "发布动态",
-                        modifier = Modifier.weight(1f),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 88.dp),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                        ),
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
+                    AppIconButton(
+                        onClick = ::requestDismiss,
+                        enabled = !submitting && !savingDraft,
+                        modifier = Modifier.align(Alignment.CenterStart).size(48.dp),
+                    ) {
+                        AppSurface(
+                            modifier = Modifier.size(34.dp),
+                            shape = AppShapes.container(ContainerLevel.Pill),
+                            color = AppSurfaceTokens.secondaryContainer(),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                AppIcon(rememberAppBackIcon(), contentDescription = "返回", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
                     AppButton(
                         onClick = ::submitDraft,
                         enabled = canPublish && !savingDraft,
-                        modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
+                        modifier = Modifier.align(Alignment.CenterEnd),
                         shape = AppShapes.container(ContainerLevel.Pill),
                     ) {
-                        AppText(
-                            when {
-                                submitting -> if (isEditing) "保存中…" else "发布中…"
-                                isEditing -> "保存"
-                                publishAtSeconds != null -> "定时发布"
-                                else -> "发布"
-                            },
-                            maxLines = 1,
-                        )
+                        AppText(if (submitting) "发布中…" else if (publishAtSeconds != null) "定时发布" else "发布", maxLines = 1)
                     }
                 }
-                AppHorizontalDivider()
 
                 Box(
                     modifier = Modifier
@@ -297,8 +342,8 @@ fun DynamicPublishComposer(
                             .widthIn(max = 720.dp)
                             .fillMaxWidth()
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Medium),
-                        verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                            .padding(horizontal = 16.dp, vertical = 5.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             AppTextButton(onClick = { showTopicDialog = true }, enabled = !submitting, modifier = Modifier.weight(1f, fill = false)) {
@@ -310,12 +355,31 @@ fun DynamicPublishComposer(
                                 }
                             }
                         }
-                        AppTextField(
+                        androidx.compose.foundation.text.BasicTextField(
                             value = title,
-                            onValueChange = { if (!submitting && it.length <= 20) title = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = "标题，选填 20 字",
+                            onValueChange = { if (!submitting) title = it.take(20) },
+                            modifier = Modifier.fillMaxWidth().onFocusChanged {
+                                if (it.isFocused) { showEmotePanel = false; showMorePanel = false }
+                            },
+                            enabled = !submitting,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                color = AppContentColors.primaryText(),
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                            ),
+                            cursorBrush = androidx.compose.ui.graphics.SolidColor(AppContentColors.accent()),
                             singleLine = true,
+                            decorationBox = { field ->
+                                Box {
+                                    if (title.isEmpty()) AppText(
+                                        "标题，选填20字",
+                                        color = AppContentColors.secondaryText(),
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                        ),
+                                    )
+                                    field()
+                                }
+                            },
                         )
                         CommentEmoteTextField(
                             value = textValue,
@@ -323,18 +387,24 @@ fun DynamicPublishComposer(
                                 if (!submitting) {
                                     richTokens = updateDynamicComposerTokens(textValue.text, next.text, richTokens)
                                     richTextIssues = updateDynamicRichTextIssues(textValue.text, next.text, richTextIssues)
+                                    val caret = next.selection.start
+                                    if (next.text.length == textValue.text.length + 1 &&
+                                        next.selection.collapsed && caret > 0 && next.text[caret - 1] == '@') {
+                                        mentionTrigger = caret - 1
+                                        showMentionDialog = true
+                                    }
                                     textValue = next
                                 }
                             },
                             emoteUrls = DynamicEmoteCatalog.snapshot(),
                             enabled = !submitting,
-                            readOnly = submitting,
+                            readOnly = submitting || customPanelVisible,
                             hint = "说点什么吧",
-                            textStyle = MaterialTheme.typography.bodyLarge,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = AppContentColors.primaryText()),
                             hintColor = AppContentColors.secondaryText(),
                             cursorColor = AppContentColors.accent(),
-                            onBeginEditing = {},
-                            modifier = Modifier.fillMaxWidth().heightIn(min = 144.dp),
+                            onBeginEditing = { showEmotePanel = false; showMorePanel = false },
+                            modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp).focusRequester(bodyFocus),
                         )
                         if (hasUnresolvedRichText) {
                             val examples = richTextIssues.mapNotNull { issue ->
@@ -367,60 +437,67 @@ fun DynamicPublishComposer(
                                 enabled = !submitting,
                             )
                         }
-                        com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showVisibilityMenu = true }, enabled = !submitting) {
-                            AppTextButton(
-                                onClick = { showVisibilityMenu = true },
-                                enabled = !submitting,
-                            ) {
-                                AppIcon(
-                                    if (privatePublish) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                                    contentDescription = null,
-                                )
-                                AppText(if (privatePublish) "仅自己可见" else "所有人可见")
-                            }
-                            AppDropdownMenu(
-                                expanded = showVisibilityMenu,
-                                onDismissRequest = { showVisibilityMenu = false },
-                            ) {
-                                AppDropdownMenuItem(
-                                    text = { AppText("所有人可见") },
-                                    onClick = { privatePublish = false; showVisibilityMenu = false },
-                                )
-                                AppDropdownMenuItem(
-                                    text = { AppText("仅自己可见") },
-                                    onClick = { privatePublish = true; showVisibilityMenu = false },
-                                    enabled = publishAtSeconds == null,
-                                )
-                            }
-                        }
-                        com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showReplyMenu = true }, enabled = !submitting) {
-                            AppTextButton(onClick = { showReplyMenu = true }, enabled = !submitting) {
-                                AppText(when (replyOption ?: loadedReplyOption) {
-                                    DynamicReplyOption.ALLOW -> "允许评论"
-                                    DynamicReplyOption.CLOSED -> "关闭评论"
-                                    DynamicReplyOption.SELECTED -> "精选评论"
-                                    null -> "评论设置（保持原样）"
-                                })
-                            }
-                            AppDropdownMenu(expanded = showReplyMenu, onDismissRequest = { showReplyMenu = false }) {
-                                listOf(DynamicReplyOption.ALLOW to "允许评论", DynamicReplyOption.CLOSED to "关闭评论", DynamicReplyOption.SELECTED to "精选评论").forEach { (option, label) ->
-                                    AppDropdownMenuItem(text = { AppText(label) }, onClick = { replyOption = option; showReplyMenu = false })
-                                }
-                            }
-                        }
-                        if (!isEditing) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                AppTextButton(onClick = { showSchedulePicker = true }, enabled = !submitting && !privatePublish, modifier = Modifier.weight(1f, fill = false)) {
+                        Spacer(Modifier.height(11.dp))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                AppTextButton(
+                                    onClick = { if (publishAtSeconds != null) { publishAtSeconds = null; scheduleError = null } else showSchedulePicker = true },
+                                    enabled = !submitting && !isEditing && !privatePublish,
+                                ) {
                                     AppText(publishAtSeconds?.let {
-                                        "定时：" + java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it * 1000))
+                                        java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it * 1000)) + " ×"
                                     } ?: "定时发布", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                 }
-                                if (publishAtSeconds != null) {
-                                    AppTextButton(onClick = { publishAtSeconds = null; scheduleError = null }, enabled = !submitting) { AppText("取消定时") }
+                            }
+                            Column(horizontalAlignment = Alignment.Start) {
+                                com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showReplyMenu = true }, enabled = !submitting) {
+                                    AppTextButton(onClick = { showReplyMenu = true }, enabled = !submitting) {
+                                        AppIcon(Icons.Outlined.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(19.dp))
+                                        AppText(when (replyOption ?: loadedReplyOption) {
+                                            DynamicReplyOption.ALLOW -> "允许评论"
+                                            DynamicReplyOption.CLOSED -> "关闭评论"
+                                            DynamicReplyOption.SELECTED -> "精选评论"
+                                            null -> "评论设置"
+                                        })
+                                        AppIcon(Icons.Outlined.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    }
+                                    AppDropdownMenu(expanded = showReplyMenu, onDismissRequest = { showReplyMenu = false }) {
+                                        listOf(DynamicReplyOption.ALLOW to "允许评论", DynamicReplyOption.CLOSED to "关闭评论", DynamicReplyOption.SELECTED to "精选评论").forEach { (option, label) ->
+                                            AppDropdownMenuItem(text = { AppText(label) }, onClick = { replyOption = option; showReplyMenu = false })
+                                        }
+                                    }
+                                }
+                                com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showVisibilityMenu = true }, enabled = !submitting) {
+                                    AppTextButton(
+                                        onClick = { showVisibilityMenu = true },
+                                        enabled = !submitting,
+                                    ) {
+                                        AppIcon(
+                                            if (privatePublish) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                                            contentDescription = null,
+                                        )
+                                        AppText(if (privatePublish) "仅自己可见" else "所有人可见")
+                                        AppIcon(Icons.Outlined.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
+                                    }
+                                    AppDropdownMenu(
+                                        expanded = showVisibilityMenu,
+                                        onDismissRequest = { showVisibilityMenu = false },
+                                    ) {
+                                        AppDropdownMenuItem(
+                                            text = { AppText("所有人可见") },
+                                            onClick = { privatePublish = false; showVisibilityMenu = false },
+                                        )
+                                        AppDropdownMenuItem(
+                                            text = { AppText("仅自己可见") },
+                                            onClick = { privatePublish = true; showVisibilityMenu = false },
+                                            enabled = publishAtSeconds == null,
+                                        )
+                                    }
                                 }
                             }
-                            scheduleError?.let { AppText(it, color = AppContentColors.error()) }
                         }
+                        scheduleError?.let { AppText(it, color = AppContentColors.error()) }
+                        Spacer(Modifier.height(5.dp))
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
                         ) {
@@ -432,7 +509,12 @@ fun DynamicPublishComposer(
                                         modifier = Modifier
                                             .size(100.dp)
                                             .clip(AppShapes.container(ContainerLevel.Chip))
-                                            .appActionClickable { previewImage = uri },
+                                            .combinedClickable(
+                                                enabled = !submitting,
+                                                onClick = { previewImage = uri },
+                                                onLongClickLabel = "移除图片",
+                                                onLongClick = { imageUris = imageUris - uri },
+                                            ),
                                         contentScale = ContentScale.Crop,
                                     )
                                     AppIconButton(
@@ -480,46 +562,49 @@ fun DynamicPublishComposer(
                     }
                 }
 
-                AppHorizontalDivider()
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = AppSpacingTokens.Medium, vertical = AppSpacingTokens.Small),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    item {
-                        AppTextButton(onClick = { showEmoteDialog = true }, enabled = !submitting) {
-                            AppText("表情")
-                        }
+                    AppIconButton(onClick = { togglePanel(true) }, enabled = !submitting) {
+                        AppIcon(if (showEmotePanel) Icons.Outlined.Keyboard else Icons.Outlined.Mood,
+                            contentDescription = if (showEmotePanel) "输入" else "表情",
+                            tint = if (showEmotePanel) AppContentColors.accent() else AppContentColors.secondaryText())
                     }
-                    item {
-                        AppTextButton(onClick = { showMentionDialog = true }, enabled = !submitting) {
-                            AppText("@用户")
-                        }
+                    AppIconButton(onClick = { mentionTrigger = null; showMentionDialog = true }, enabled = !submitting) {
+                        AppIcon(Icons.Outlined.AlternateEmail, contentDescription = "@ 用户")
                     }
-                    item {
-                        AppTextButton(
-                            onClick = {
-                                picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                            },
-                            enabled = !submitting && imageUris.size < MAX_DYNAMIC_IMAGES,
-                        ) {
-                            AppIcon(Icons.Outlined.Image, contentDescription = null)
-                            AppText("图片 ${imageUris.size}/$MAX_DYNAMIC_IMAGES")
+                    if (!isEditing) {
+                        AppIconButton(onClick = { showVoteDialog = true }, enabled = !submitting) {
+                            AppIcon(Icons.Outlined.Poll, contentDescription = "投票")
                         }
-                    }
-                    item {
-                        AppTextButton(onClick = { showVoteDialog = true }, enabled = !submitting) {
-                            AppText("投票")
-                        }
-                    }
-                    item {
-                        AppTextButton(onClick = { showReserveDialog = true }, enabled = !submitting) {
-                            AppText("预约")
+                        AppIconButton(onClick = { togglePanel(false) }, enabled = !submitting) {
+                            AppIcon(if (showMorePanel) Icons.Outlined.Keyboard else Icons.Outlined.AddCircleOutline,
+                                contentDescription = if (showMorePanel) "输入" else "更多")
                         }
                     }
                 }
+                if (customPanelVisible) {
+                    BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val panelHeight = maxOf(lastKeyboardHeight, if (maxWidth >= 600.dp) 300.dp else 170.dp)
+                        if (showEmotePanel) {
+                            DynamicEmotePanel(Modifier.fillMaxWidth().height(panelHeight), enabled = !submitting) { emote ->
+                                emotes = (emotes + emote).distinct()
+                                val start = textValue.selection.min
+                                richTextIssues = replaceDynamicRichTextIssues(richTextIssues, start, textValue.selection.max, emote.length)
+                                richTokens = replaceDynamicComposerTokens(richTokens, start, textValue.selection.max, emote.length) +
+                                    DynamicPublishToken(start, start + emote.length, 9, "", emote)
+                                textValue = insertDynamicComposerToken(textValue, emote)
+                            }
+                        } else {
+                            Column(Modifier.fillMaxWidth().height(panelHeight).padding(12.dp)) {
+                                AppTextButton(onClick = { showReserveDialog = true }, enabled = !submitting) { AppText("直播预约") }
+                            }
+                        }
+                    }
+                }
+
             }
         }
     }
@@ -677,10 +762,11 @@ fun DynamicPublishComposer(
     }
     if (showMentionDialog) {
         DynamicMentionPickerDialog(
-            onDismiss = { showMentionDialog = false },
+            onDismiss = { mentionTrigger = null; showMentionDialog = false },
             onSelected = { selected ->
                 mentions = (mentions + selected).distinctBy { it.uid }
-                val start = textValue.selection.min
+                val start = mentionTrigger ?: textValue.selection.min
+                val mentionValue = textValue.copy(selection = TextRange(start, textValue.selection.max))
                 val replacement = selected.joinToString(separator = "", transform = { "@${it.name} " })
                 val shifted = replaceDynamicComposerTokens(richTokens, start, textValue.selection.max, replacement.length)
                 richTextIssues = replaceDynamicRichTextIssues(richTextIssues, start, textValue.selection.max, replacement.length)
@@ -689,7 +775,8 @@ fun DynamicPublishComposer(
                     val token = "@${mention.name}"
                     DynamicPublishToken(offset, offset + token.length, 2, mention.uid.toString(), token).also { offset += token.length + 1 }
                 }
-                textValue = insertDynamicComposerToken(textValue, replacement)
+                textValue = insertDynamicComposerToken(mentionValue, replacement)
+                mentionTrigger = null
                 richTokens = shifted + inserted
                 showMentionDialog = false
             },
@@ -704,21 +791,7 @@ fun DynamicPublishComposer(
             },
         )
     }
-    if (showEmoteDialog) {
-        DynamicEmotePickerDialog(
-            onDismiss = { showEmoteDialog = false },
-            onSelected = { emote ->
-                emotes = (emotes + emote).distinct()
-                val start = textValue.selection.min
-                val next = insertDynamicComposerToken(textValue, emote)
-                richTextIssues = replaceDynamicRichTextIssues(richTextIssues, start, textValue.selection.max, emote.length)
-                richTokens = replaceDynamicComposerTokens(richTokens, start, textValue.selection.max, emote.length) +
-                    DynamicPublishToken(start, start + emote.length, 9, "", emote)
-                textValue = next
-                showEmoteDialog = false
-            },
-        )
-    }
+
 }
 
 @Composable

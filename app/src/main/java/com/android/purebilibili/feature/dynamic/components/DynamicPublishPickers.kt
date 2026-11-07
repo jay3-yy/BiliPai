@@ -2,9 +2,12 @@ package com.android.purebilibili.feature.dynamic.components
 
 import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
@@ -12,21 +15,19 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
-import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.AppShapes
@@ -80,15 +81,18 @@ internal fun DynamicMentionPickerDialog(
             loading = false
         }
     }
-    LaunchedEffect(Unit) { search() }
-    AppAlertDialog(
+    LaunchedEffect(query) {
+        if (query.isNotEmpty()) kotlinx.coroutines.delay(300)
+        search()
+    }
+    PublishPickerSheet(
         onDismissRequest = ::dismiss,
         title = { AppText("@ 用户") },
         text = {
             PublishPickerContent(
                 query = query,
                 onQueryChange = { query = it; searchJob?.cancel(); loading = false; users = emptyList(); message = null },
-                placeholder = "搜索昵称",
+                placeholder = "输入你想@的人",
                 actionLabel = if (loading) "搜索中…" else "搜索",
                 onSearch = ::search,
                 message = message,
@@ -107,13 +111,15 @@ internal fun DynamicMentionPickerDialog(
                                 contentScale = ContentScale.Crop,
                             )
                         },
-                        trailingContent = { AppCheckbox(checked = selected.any { it.uid == user.uid }, onCheckedChange = null) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .appActionClickable {
-                                selected = if (selected.any { it.uid == user.uid }) selected.filterNot { it.uid == user.uid }
-                                else selected + DynamicPublishMention(user.uid, user.name)
-                            },
+                        trailingContent = {
+                            AppCheckbox(checked = selected.any { it.uid == user.uid }, onCheckedChange = { checked ->
+                                selected = if (checked) selected + DynamicPublishMention(user.uid, user.name)
+                                else selected.filterNot { it.uid == user.uid }
+                            })
+                        },
+                        modifier = Modifier.fillMaxWidth().appActionClickable {
+                            onSelected(listOf(DynamicPublishMention(user.uid, user.name)))
+                        },
                     )
                 }
             }
@@ -136,13 +142,14 @@ internal fun DynamicTopicPickerDialog(
     var hasMore by remember { mutableStateOf(false) }
     var activeQuery by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    var searchJob by remember { mutableStateOf<Job?>(null) }
     fun search(loadMore: Boolean = false) {
         if (loading) return
         loading = true
         message = null
         val requestedQuery = if (loadMore) activeQuery else query
         val requestedPage = if (loadMore) page + 1 else 1
-        scope.launch {
+        searchJob = scope.launch {
             DynamicCreateRepository.searchPublishTopics(requestedQuery, requestedPage).fold(
                 onSuccess = { result ->
                     if (query == requestedQuery) {
@@ -158,14 +165,17 @@ internal fun DynamicTopicPickerDialog(
             loading = false
         }
     }
-    LaunchedEffect(Unit) { search(false) }
-    AppAlertDialog(
+    LaunchedEffect(query) {
+        if (query.isNotEmpty()) kotlinx.coroutines.delay(300)
+        search(false)
+    }
+    PublishPickerSheet(
         onDismissRequest = onDismiss,
         title = { AppText("选择话题") },
         text = {
             PublishPickerContent(
                 query = query,
-                onQueryChange = { query = it; topics = emptyList(); hasMore = false; message = null },
+                onQueryChange = { searchJob?.cancel(); loading = false; query = it; topics = emptyList(); hasMore = false; message = null },
                 placeholder = "搜索话题",
                 actionLabel = if (loading) "搜索中…" else "搜索",
                 onSearch = { search(false) },
@@ -191,50 +201,57 @@ internal fun DynamicTopicPickerDialog(
 }
 
 @Composable
-internal fun DynamicEmotePickerDialog(
-    onDismiss: () -> Unit,
+internal fun DynamicEmotePanel(
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     onSelected: (String) -> Unit,
 ) {
     var emotes by remember { mutableStateOf(DynamicEmoteCatalog.snapshot()) }
+    var packages by remember { mutableStateOf(DynamicEmoteCatalog.snapshotPackages()) }
+    var selectedPackageId by remember { mutableStateOf(packages.firstOrNull()?.id) }
     var loading by remember { mutableStateOf(emotes.isEmpty()) }
-    val emoteCatalogSessionKey = DynamicEmoteCatalog.currentSessionKey()
-    LaunchedEffect(emoteCatalogSessionKey) {
+    val sessionKey = DynamicEmoteCatalog.currentSessionKey()
+    LaunchedEffect(sessionKey) {
         loading = true
         emotes = DynamicEmoteCatalog.ensureLoaded()
+        packages = DynamicEmoteCatalog.snapshotPackages()
+        if (packages.none { it.id == selectedPackageId }) selectedPackageId = packages.firstOrNull()?.id
         loading = false
     }
-    AppAlertDialog(
-        onDismissRequest = onDismiss,
-        title = { AppText("选择表情") },
-        text = {
-            if (emotes.isEmpty()) {
-                AppText(if (loading) "正在加载表情…" else "暂无表情")
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 72.dp),
-                    modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
-                    horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
-                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
-                ) {
-                    items(emotes.entries.toList(), key = { it.key }) { (text, url) ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 72.dp)
-                                .appActionClickable { onSelected(text) }
-                                .padding(AppSpacingTokens.ExtraSmall),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            AsyncImage(model = url, contentDescription = null, modifier = Modifier.size(AppSpacingTokens.TripleExtraLarge), contentScale = ContentScale.Fit)
-                            AppText(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+    if (emotes.isEmpty()) {
+        androidx.compose.foundation.layout.Box(modifier, contentAlignment = Alignment.Center) {
+            AppText(if (loading) "正在加载表情…" else "暂无表情")
+        }
+    } else {
+        Column(modifier) {
+            val displayedEmotes = packages.firstOrNull { it.id == selectedPackageId }?.emote
+                ?.associate { it.text to it.url } ?: emotes
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 48.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(displayedEmotes.entries.toList(), key = { it.key }) { (text, url) ->
+                    androidx.compose.foundation.layout.Box(
+                        Modifier.size(48.dp).appActionClickable(enabled = enabled) { onSelected(text) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AsyncImage(model = emotes[text] ?: url, contentDescription = text, modifier = Modifier.size(32.dp), contentScale = ContentScale.Fit)
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = { AppDialogAction(onClick = onDismiss) { AppText("取消") } },
-    )
+            androidx.compose.foundation.lazy.LazyRow(Modifier.fillMaxWidth()) {
+                items(packages.size, key = { packages[it].id }) { index ->
+                    val pkg = packages[index]
+                    AppTextButton(onClick = { selectedPackageId = pkg.id }) {
+                        AppText(pkg.text, color = if (selectedPackageId == pkg.id) AppContentColors.accent() else AppContentColors.secondaryText())
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -247,7 +264,7 @@ private fun PublishPickerContent(
     message: String?,
     content: @Composable () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)) {
         AppTextField(
             value = query,
             onValueChange = onQueryChange,
@@ -257,8 +274,34 @@ private fun PublishPickerContent(
         AppTextButton(onClick = onSearch) { AppText(actionLabel) }
         message?.let { AppText(it, color = AppContentColors.secondaryText()) }
         Column(
-            modifier = Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             content = { content() },
         )
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PublishPickerSheet(
+    onDismissRequest: () -> Unit,
+    title: @Composable () -> Unit,
+    text: @Composable () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: @Composable () -> Unit,
+) {
+    com.android.purebilibili.core.ui.AppModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = com.android.purebilibili.core.ui.AppSurfaceTokens.background(),
+        dragHandle = null,
+    ) {
+        Column(Modifier.fillMaxWidth().fillMaxHeight(0.65f).imePadding().padding(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                dismissButton()
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { title() }
+                confirmButton()
+            }
+            Box(Modifier.fillMaxWidth().weight(1f)) { text() }
+        }
     }
 }
