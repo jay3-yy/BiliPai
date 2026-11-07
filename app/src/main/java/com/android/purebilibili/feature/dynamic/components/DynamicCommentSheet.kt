@@ -842,6 +842,7 @@ fun LazyListScope.dynamicInlineCommentItems(
     onToggleTop: (ReplyItem) -> Unit = {},
     onReport: (ReplyItem, Int) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit,
+    onUrlClick: ((String) -> Unit)? = null,
     onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
     avatarListState: LazyListState? = null,
     skeletonSlotCount: Int = DYNAMIC_COMMENT_SKELETON_MIN_SLOTS,
@@ -890,6 +891,7 @@ fun LazyListScope.dynamicInlineCommentItems(
                 onReportClick = { reason -> onReport(reply, reason) },
                 canToggleTop = actionCapabilities.canToggleTop,
                 onToggleTopClick = { onToggleTop(reply) },
+                onUrlClick = onUrlClick,
                 onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
                 onImagePreview = onImagePreview,
             )

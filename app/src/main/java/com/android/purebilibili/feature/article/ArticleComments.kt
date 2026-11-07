@@ -20,6 +20,7 @@ internal fun rememberArticleCommentContent(
     article: ArticleDetailUiModel,
     viewModel: DynamicViewModel,
     onUserClick: (Long) -> Unit,
+    onLinkClick: ((String) -> Unit)?,
     onImagePreview: (List<String>, Int) -> Unit,
 ): LazyListScope.() -> Unit {
     val context = LocalContext.current
@@ -73,6 +74,7 @@ internal fun rememberArticleCommentContent(
                 onToggleTop = { viewModel.toggleDynamicCommentTop(it) { _, message -> notify(message) } },
                 onReport = { reply, reason -> viewModel.reportDynamicComment(reply.rpid, reason) { _, message -> notify(message) } },
                 onUserClick = onUserClick,
+                onUrlClick = onLinkClick,
                 onImagePreview = { images, index, _, _ -> onImagePreview(images, index) },
             )
         }
@@ -85,7 +87,7 @@ internal fun rememberArticleCommentContent(
 }
 
 @Composable
-internal fun ArticleCommentOverlays(viewModel: DynamicViewModel, article: ArticleDetailUiModel, onUserClick: (Long) -> Unit) {
+internal fun ArticleCommentOverlays(viewModel: DynamicViewModel, article: ArticleDetailUiModel, onUserClick: (Long) -> Unit, onLinkClick: ((String) -> Unit)?) {
     val context = LocalContext.current
     val subReplies by viewModel.subReplyState.collectAsStateWithLifecycle()
     fun notify(message: String) = Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -97,6 +99,7 @@ internal fun ArticleCommentOverlays(viewModel: DynamicViewModel, article: Articl
             onRefresh = viewModel::refreshSubReplies,
             onSortModeChange = viewModel::setSubReplySortMode,
             onUserClick = onUserClick,
+            onUrlClick = onLinkClick,
             onReplyClick = viewModel::startCommentReply,
             onCommentLike = { viewModel.likeComment(it) },
             onCommentHate = { viewModel.hateComment(it) { _, message -> notify(message) } },

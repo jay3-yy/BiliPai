@@ -42,6 +42,7 @@ internal fun ArticleInteractionBar(
     comments: DynamicViewModel,
     onCommentClick: () -> Unit,
     onUserClick: (Long) -> Unit,
+    onLinkClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     openCommentRootRpid: Long = 0L,
     openCommentTargetRpid: Long = 0L,
@@ -52,7 +53,7 @@ internal fun ArticleInteractionBar(
     val account by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     // 操作协程与状态同时绑定文章、账号，切换后不接收旧文章的异步结果。
     key(article.articleId, account) {
-        ArticleInteractionSession(article, comments, onCommentClick, onUserClick, modifier, openCommentRootRpid, openCommentTargetRpid, visible, backdrop, hazeState)
+        ArticleInteractionSession(article, comments, onCommentClick, onUserClick, onLinkClick, modifier, openCommentRootRpid, openCommentTargetRpid, visible, backdrop, hazeState)
     }
 }
 
@@ -62,6 +63,7 @@ private fun ArticleInteractionSession(
     comments: DynamicViewModel,
     onCommentClick: () -> Unit,
     onUserClick: (Long) -> Unit,
+    onLinkClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     openCommentRootRpid: Long = 0L,
     openCommentTargetRpid: Long = 0L,
@@ -194,7 +196,7 @@ private fun ArticleInteractionSession(
         hazeState = hazeState,
         modifier = modifier,
     )
-    ArticleCommentOverlays(comments, article, onUserClick)
+    ArticleCommentOverlays(comments, article, onUserClick, onLinkClick)
     if (showRepost) {
         RepostDialog(onDismiss = { showRepost = false }, contentKey = "article:${article.articleId}") { text, alsoComment, richContents, topic, done ->
             // 显式按专栏评论目标同步，不能按动态 ID 推断专栏的评论区。

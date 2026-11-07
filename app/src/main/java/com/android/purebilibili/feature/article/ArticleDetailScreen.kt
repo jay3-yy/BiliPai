@@ -213,6 +213,7 @@ fun ArticleDetailScreen(
             (uiState as? ArticleDetailUiState.Success)?.article?.let { article ->
                 ArticleInteractionBar(
                     article = article, comments = comments,
+                    onLinkClick = onLinkClick,
                     onCommentClick = { commentJumpToken++ }, onUserClick = onUserClick,
                     openCommentRootRpid = openCommentRootRpid,
                     openCommentTargetRpid = openCommentTargetRpid,
@@ -519,7 +520,7 @@ private fun ArticleDetailContent(
         onSharedReturnReadyChange(sharedReturnReady)
     }
 
-    val commentContent = rememberArticleCommentContent(article, comments, onUserClick) { images, index ->
+    val commentContent = rememberArticleCommentContent(article, comments, onUserClick, onLinkClick) { images, index ->
         imagePreviewRequest = ArticleImagePreviewRequest(images, index, null, emptyMap(), 0f)
     }
     val commentListState = rememberLazyListState()

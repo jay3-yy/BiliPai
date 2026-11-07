@@ -29,6 +29,7 @@ fun DynamicSubReplyPreviewHost(
     onCommentHate: ((Long) -> Unit)? = null,
     currentMid: Long = 0L,
     onDeleteComment: ((Long) -> Unit)? = null,
+    onUrlClick: ((String) -> Unit)? = null,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
 ) {
     val emoteCatalogSessionKey = DynamicEmoteCatalog.currentSessionKey()
@@ -76,6 +77,7 @@ fun DynamicSubReplyPreviewHost(
         onSortModeChange = onSortModeChange,
         onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
         onReplyClick = onReplyClick,
+        onUrlClick = onUrlClick,
         onCommentLike = onCommentLike,
         likedComments = likedComments,
         onCommentHate = onCommentHate,
