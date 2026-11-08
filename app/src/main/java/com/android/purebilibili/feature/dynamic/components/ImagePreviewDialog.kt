@@ -243,6 +243,7 @@ private object ImagePreviewOverlayController {
     private val _request = MutableStateFlow<ImagePreviewOverlayRequest?>(null)
     private val _activeSourceRect = MutableStateFlow<androidx.compose.ui.geometry.Rect?>(null)
     private val _preparedSourceRect = MutableStateFlow<androidx.compose.ui.geometry.Rect?>(null)
+    private var preparedSourceKey: String? = null
     private val _activeSourceKey = MutableStateFlow<String?>(null)
     private val _sourceImages = MutableStateFlow<Map<String, Image>>(emptyMap())
     val request = _request.asStateFlow()
@@ -268,17 +269,18 @@ private object ImagePreviewOverlayController {
         // the preview request is committed, avoiding a blank frame between the click and
         // the first Dialog composition.
         _preparedSourceRect.value = sourceRect
-        _activeSourceKey.value = sourceKey
+        preparedSourceKey = sourceKey
     }
 
     fun show(request: ImagePreviewOverlayRequest) {
         _sourceImages.value = emptyMap()
+        _activeSourceRect.value = null
+        _activeSourceKey.value = null
         val activeSourceRect = request.activeSourceRect ?: _preparedSourceRect.value
-        _request.value = request.copy(activeSourceRect = activeSourceRect)
-        // 不在这里发布 activeSourceRect：Dialog 窗口要晚 1-2 帧才画出第一帧，
-        // 若提交时立刻隐藏源缩略图，窗口出现前会露出一个"洞"（感知为顿挫）。
-        // 发布动作延迟到 overlay 首次组合的 SideEffect（同帧绘制，无缝衔接）。
+        _request.value = request.copy(activeSourceRect = activeSourceRect, sourceKey = request.sourceKey ?: preparedSourceKey)
+        // 来源身份和矩形在预览图片绘出后一起激活；窗口首次组合不等于图片已有首帧。
         _preparedSourceRect.value = null
+        preparedSourceKey = null
     }
 
     fun updateActiveSourceRect(
@@ -306,6 +308,7 @@ private object ImagePreviewOverlayController {
             _request.value = null
             _activeSourceRect.value = null
             _preparedSourceRect.value = null
+            preparedSourceKey = null
             _activeSourceKey.value = null
             _sourceImages.value = emptyMap()
         }
@@ -341,7 +344,7 @@ fun ImagePreviewDialog(
     onDismiss: () -> Unit
 ) {
     val latestOnDismiss by rememberUpdatedState(onDismiss)
-    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceCornerRadiusDp, livePhotoVideos, publicContent) { System.nanoTime() }
+    val requestToken = remember(images, initialIndex, sourceRect, sourceRects, sourceKey, sourceCornerRadiusDp, livePhotoVideos, publicContent) { System.nanoTime() }
 
     DisposableEffect(requestToken) {
         ImagePreviewOverlayController.show(
@@ -494,6 +497,8 @@ private fun ImagePreviewOverlayContent(
     // 0f = 关闭/初始状态 (at sourceRect), 1f = 打开状态 (Fullscreen)
     val animateTrigger = remember { androidx.compose.animation.core.Animatable(0f) }
     val backEventState = rememberNavigationEventState(NavigationEventInfo.None)
+    val reducePreviewMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current ||
+        !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
     val predictiveBackGestureEnabled = LocalPredictiveBackGestureEnabled.current
     val backProgress = if (predictiveBackGestureEnabled) {
         (backEventState.transitionState as? NavigationEventTransitionState.InProgress)
@@ -564,24 +569,43 @@ private fun ImagePreviewOverlayContent(
     //  GIF 图片加载器
     val gifImageLoader = if (publicContent) com.android.purebilibili.core.plugin.feed.PublicContentImageLoader.get(context) else context.imageLoader
 
+    val contentImageSettings = com.android.purebilibili.core.ui.components.LocalContentImageSettings.current
+    val sourceDataSaver by remember(context) { com.android.purebilibili.core.store.DataSaverState.get(context).active }
+    val initialPlaceholder = remember(images, initialIndex, sourceKey, gifImageLoader, sourceDataSaver, contentImageSettings.listQuality) {
+        resolveImagePreviewPlaceholder(
+            context, gifImageLoader, sourceKey ?: images.getOrNull(initialIndex).orEmpty(),
+            sourceDataSaver, contentImageSettings.listQuality,
+        )
+    }
+    var openingHasDrawable by remember { mutableStateOf(initialPlaceholder.image != null) }
+    var openingStarted by remember { mutableStateOf(false) }
+    val drawnPages = remember { kotlinx.coroutines.channels.Channel<Any>(kotlinx.coroutines.channels.Channel.CONFLATED) }
+    val reportedDrawnPage = remember { arrayOfNulls<Any>(1) }
+    DisposableEffect(drawnPages) {
+        onDispose { drawnPages.close() }
+    }
+
     //  使用 HorizontalPager 实现滑动切换
     val pagerState = rememberPagerState(
         initialPage = initialIndex,
         pageCount = { images.size }
     )
 
+    var previewLoadFailed by remember(pagerState.currentPage) { mutableStateOf(false) }
+
     fun sourceRectForPage(page: Int): androidx.compose.ui.geometry.Rect? =
         sourceRect.takeIf { page == initialIndex } ?: sourceRects[page]
 
-    SideEffect {
-        // dismiss 期间源缩略图隐藏区即将被 revealSourceBeforeRemoval 交接,
-        // 不再跟翻页更新,避免隐藏区错位。
-        if (isDismissing) return@SideEffect
-        ImagePreviewOverlayController.updateActiveSourceRect(
+    val pageDrawIdentity = remember(pagerState.currentPage) { Any() }
+    LaunchedEffect(pageDrawIdentity, requestToken) {
+        val page = pagerState.currentPage
+        while (drawnPages.receive() !== pageDrawIdentity) { /* 只接受当前页本次展示的绘制。 */ }
+        // draw 后再跨一个帧边界，让来源图先留在原窗口承接预览首帧。
+        withFrameNanos { }
+        if (!isDismissing) ImagePreviewOverlayController.updateActiveSourceRect(
             token = requestToken,
-            sourceRect = sourceRectForPage(pagerState.currentPage),
-            // 身份键仅在起始页有效；翻到无锚点的页回退几何判定。
-            sourceKey = sourceKey?.takeIf { pagerState.currentPage == initialIndex }
+            sourceRect = sourceRectForPage(page),
+            sourceKey = sourceKey?.takeIf { page == initialIndex },
         )
     }
 
@@ -754,6 +778,14 @@ private fun ImagePreviewOverlayContent(
                 )
             }
 
+            val openingSeedRect = initialPlaceholder.image?.let { image ->
+                resolveZoomableImageLocalDisplayRect(
+                    androidx.compose.ui.unit.IntSize(image.width, image.height),
+                    androidx.compose.ui.unit.IntSize(fullWidthPx.toInt(), fullHeightPx.toInt()),
+                    1f, 0f, 0f,
+                )
+            }?.takeIf { pagerState.currentPage == initialIndex }
+
             fun currentFlightRect(progress: Float): androidx.compose.ui.geometry.Rect? {
                 if (!shouldUseRectAnim && !isDismissing) return null
                 // dismiss 起飞时已冻结源 rect,动画中途不再跟读(防切页改道)。
@@ -777,12 +809,21 @@ private fun ImagePreviewOverlayContent(
                 }
             }
 
-            LaunchedEffect(Unit) {
-                animateTrigger.snapTo(0f)
+            // 展开只等待像素/尺寸就绪，不等待受起始裁剪约束的 draw 回调。
+            // 会话内只启动一次，来源隐藏、加载状态和重组不能取消正在运行的展开。
+            val latestReducePreviewMotion by rememberUpdatedState(reducePreviewMotion)
+            LaunchedEffect(requestToken) {
+                snapshotFlow { openingHasDrawable || previewLoadFailed }.first { it }
+                if (isDismissing) return@LaunchedEffect
+                openingStarted = true
                 animateTrigger.animateTo(
                     targetValue = 1f,
-                    animationSpec = imagePreviewOpenTween()
+                    animationSpec = if (latestReducePreviewMotion) androidx.compose.animation.core.tween(0)
+                        else imagePreviewOpenTween()
                 )
+            }
+            LaunchedEffect(reducePreviewMotion, openingStarted) {
+                if (reducePreviewMotion && openingStarted && !isDismissing) animateTrigger.snapTo(1f)
             }
 
             fun beginDismiss(
@@ -979,6 +1020,16 @@ private fun ImagePreviewOverlayContent(
                     }
             )
 
+            if (!openingStarted && initialPlaceholder.image == null) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    com.android.purebilibili.core.ui.components.AppText("图片加载中…")
+                }
+            } else if (previewLoadFailed) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    com.android.purebilibili.core.ui.components.AppText("图片加载失败，点击关闭")
+                }
+            }
+
             // 2. 内容层 (缩放位移)
             // Keep the page measured at viewport size. The outer layer animates the clipping
             // rect, while the pager layer counters non-uniform rect scaling so image pixels
@@ -988,7 +1039,10 @@ private fun ImagePreviewOverlayContent(
                 .graphicsLayer {
                     val progress = currentTransitionProgress().coerceIn(0f, 1f)
                     val flightRect = currentFlightRect(progress)
-                    alpha = resolveImagePreviewDismissContentAlpha(
+                    alpha = if (!openingStarted && openingSeedRect == null && currentImageDisplayRect == null) {
+                        // 冷加载先建立真实 Fit 几何，再允许图片绘出；避免尺寸未知的第一帧用错缩放。
+                        0f
+                    } else resolveImagePreviewDismissContentAlpha(
                         hasRectFlight = flightRect != null,
                         isDismissing = isDismissing,
                         visualProgress = if (isDismissing) dismissRemainingProgress() else progress
@@ -1059,7 +1113,7 @@ private fun ImagePreviewOverlayContent(
                                 val baseScaleY = (flightRect.height / size.height).coerceAtLeast(0.01f)
                                 val sourceFillScale = currentSourceRect
                                     ?.let { source ->
-                                        currentImageDisplayRect
+                                        (currentImageDisplayRect ?: openingSeedRect)
                                             ?.takeIf { it.width > 0f && it.height > 0f }
                                             ?.let { displayed ->
                                                 maxOf(
@@ -1080,7 +1134,7 @@ private fun ImagePreviewOverlayContent(
                                 val imageRect = if (isDismissing) {
                                     dismissImageContentRect
                                 } else {
-                                    currentImageDisplayRect
+                                    currentImageDisplayRect ?: openingSeedRect
                                 }
                                 if (imageRect != null) {
                                     val remainingFlight = 1f - currentTransitionProgress().coerceIn(0f, 1f)
@@ -1166,9 +1220,14 @@ private fun ImagePreviewOverlayContent(
                         // 缩略图与预览图的 URL 不同（预览剥离 @尺寸后缀），内存缓存键对不上，
                         // 原图下载前内容层只剩黑底。把网格已加载的缩略图 URL 设为
                         // placeholderMemoryCacheKey，morph 期间立即垫图，杜绝「先黑后图」。
-                        val placeholderCacheKey = remember(images.getOrNull(page)) {
-                            resolveImagePreviewPlaceholderCacheKey(images.getOrNull(page).orEmpty())
-                        }
+                        val sourcePlaceholder = if (page == initialIndex) initialPlaceholder else
+                            remember(images.getOrNull(page), gifImageLoader, sourceDataSaver, contentImageSettings.listQuality) {
+                                resolveImagePreviewPlaceholder(
+                                    context, gifImageLoader, images.getOrNull(page).orEmpty(),
+                                    sourceDataSaver, contentImageSettings.listQuality,
+                                )
+                            }
+                        val placeholderCacheKey = sourcePlaceholder.cacheKey
                         val decodeSize = remember(page, imageUrl, page in originalQualityPages) {
                             resolveImageDecodeSize(
                                 if (page in originalQualityPages) {
@@ -1204,7 +1263,7 @@ private fun ImagePreviewOverlayContent(
                                         if (placeholderCacheKey != null) {
                                             ImagePreviewOverlayController.recordSourceImage(
                                                 requestToken,
-                                                placeholderCacheKey,
+                                                placeholderCacheKey.key,
                                                 result.image,
                                             )
                                         }
@@ -1215,6 +1274,19 @@ private fun ImagePreviewOverlayContent(
 
                         ZoomableImage(
                             model = previewRequest,
+                            initialImage = sourcePlaceholder.image,
+                            onImageDrawn = {
+                                if (!isDismissing && page == pagerState.currentPage &&
+                                    (currentImageDisplayRect != null || sourcePlaceholder.image != null) &&
+                                    reportedDrawnPage[0] !== pageDrawIdentity
+                                ) {
+                                    reportedDrawnPage[0] = pageDrawIdentity
+                                    drawnPages.trySend(pageDrawIdentity)
+                                }
+                            },
+                            onImageError = {
+                                if (page == pagerState.currentPage && sourcePlaceholder.image == null) previewLoadFailed = true
+                            },
                             originalImageUrl = imageUrl,
                             originalQuality = page in originalQualityPages,
                             publicContent = publicContent,
@@ -1230,6 +1302,10 @@ private fun ImagePreviewOverlayContent(
                             onDisplayRectChange = { rect ->
                                 if (!isDismissing && page == pagerState.currentPage) {
                                     currentImageDisplayRect = rect
+                                    if (rect != null) {
+                                        openingHasDrawable = true
+                                        previewLoadFailed = false
+                                    }
                                 }
                             },
                             onVerticalDismissDragStart = {

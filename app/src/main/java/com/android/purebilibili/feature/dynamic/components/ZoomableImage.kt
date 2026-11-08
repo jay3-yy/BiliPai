@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -30,10 +31,12 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.IntSize
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
+import coil3.compose.asPainter
 import kotlin.math.abs
 import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import kotlinx.coroutines.Job
@@ -70,6 +73,9 @@ fun ZoomableImage(
     originalImageUrl: String? = null,
     originalQuality: Boolean = false,
     publicContent: Boolean = false,
+    initialImage: coil3.Image? = null,
+    onImageDrawn: () -> Unit = {},
+    onImageError: () -> Unit = {},
 ) {
     // Gesture coroutines outlive recomposition; always use the current host callbacks.
     val latestOnZoomChange by rememberUpdatedState(onZoomChange)
@@ -85,7 +91,11 @@ fun ZoomableImage(
     var offsetY by remember { mutableFloatStateOf(0f) }
     
     // 图片原始尺寸
-    var imageSize by remember { mutableStateOf(IntSize.Zero) }
+    var imageSize by remember { mutableStateOf(initialImage?.let { IntSize(it.width, it.height) } ?: IntSize.Zero) }
+    val imageContext = LocalContext.current
+    val initialPainter = remember(initialImage, imageContext) { initialImage?.asPainter(imageContext) }
+    val latestOnImageDrawn by rememberUpdatedState(onImageDrawn)
+    var drawableReady by remember { mutableStateOf(false) }
     // 容器尺寸
     var containerSize by remember { mutableStateOf(IntSize.Zero) }
     // The preview surface moves/scales while dragging. Keep dismiss deltas in the root frame,
@@ -413,17 +423,25 @@ fun ZoomableImage(
             model = model,
             contentDescription = contentDescription,
             imageLoader = imageLoader,
+            placeholder = initialPainter,
+            error = initialPainter,
             modifier = Modifier
                 .fillMaxSize()
                 .align(Alignment.Center)
                 .testTag(ZOOMABLE_IMAGE_TAG)
+                .drawWithContent {
+                    drawContent()
+                    if (drawableReady && imageSize.width > 0 && imageSize.height > 0) latestOnImageDrawn()
+                }
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
                     translationX = offsetX
                     translationY = offsetY
             },
+            onLoading = { drawableReady = it.painter != null },
             onSuccess = { state ->
+                drawableReady = true
                 val originalSize = state.painter.intrinsicSize
                 if (originalSize.width > 0 && originalSize.height > 0) {
                     imageSize = IntSize(originalSize.width.toInt(), originalSize.height.toInt())
@@ -433,6 +451,7 @@ fun ZoomableImage(
                     }
                 }
             },
+            onError = { drawableReady = initialPainter != null; onImageError() },
             // 使用 Fit 模式确保初始完整显示
             contentScale = ContentScale.Fit
         )

@@ -32,12 +32,95 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.foundation.background
+import coil3.asImage
+import coil3.imageLoader
 
 @RunWith(AndroidJUnit4::class)
 class ImagePreviewDialogUiRegressionTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun cachedThumbnailExpandsToFullscreenWithoutWaitingForDrawHandoff() {
+        assertPreviewExpands(seedThumbnail = true)
+    }
+
+    @Test
+    fun coldDecodedImageExpandsAfterItsDimensionsAreReported() {
+        assertPreviewExpands(seedThumbnail = false)
+    }
+
+    private fun assertPreviewExpands(seedThumbnail: Boolean) {
+        val context = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext
+        val bitmap = android.graphics.Bitmap.createBitmap(160, 90, android.graphics.Bitmap.Config.ARGB_8888)
+            .apply { eraseColor(android.graphics.Color.BLUE) }
+        val file = java.io.File.createTempFile("preview-expand-", ".png", context.cacheDir)
+        file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        val source = android.net.Uri.fromFile(file).toString()
+        val cacheKey = coil3.memory.MemoryCache.Key(source)
+        if (seedThumbnail) context.imageLoader.memoryCache?.set(cacheKey, coil3.memory.MemoryCache.Value(bitmap.asImage()))
+        val sourceRect = Rect(24f, 80f, 124f, 180f)
+        try {
+            composeTestRule.setContent {
+                MaterialTheme {
+                    Box(Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color.Magenta)) {
+                        ImagePreviewDialog(
+                            images = listOf(source), initialIndex = 0,
+                            sourceRect = sourceRect, sourceKey = source, onDismiss = {},
+                        )
+                        ImagePreviewOverlayHost()
+                    }
+                }
+            }
+            composeTestRule.waitUntil(5_000L) {
+                composeTestRule.onAllNodesWithTag(
+                    com.android.purebilibili.feature.dynamic.components.ZOOMABLE_IMAGE_TAG,
+                ).fetchSemanticsNodes().firstOrNull()?.boundsInRoot?.width?.let { it > sourceRect.width * 2f } == true
+            }
+            composeTestRule.mainClock.advanceTimeBy(600L)
+            composeTestRule.waitForIdle()
+            val backdrop = composeTestRule.onNodeWithTag(
+                com.android.purebilibili.feature.dynamic.components.IMAGE_PREVIEW_BACKDROP_TAG,
+            ).captureToImage().toPixelMap()
+            // 展开确实跑到终点；不能仅靠子层的反向缩放令语义尺寸看似变大。
+            org.junit.Assert.assertTrue(backdrop[0, 0].alpha > 0.99f)
+        } finally {
+            context.imageLoader.memoryCache?.remove(cacheKey)
+            file.delete()
+        }
+    }
+
+    @Test
+    fun preparingAndRegisteringPreviewDoesNotHideTheSourceBeforeItDraws() {
+        val open = mutableStateOf(false)
+        val source = "https://example.com/first-frame.jpg"
+        val bounds = Rect(20f, 40f, 180f, 200f)
+        composeTestRule.setContent {
+            MaterialTheme {
+                androidx.compose.material3.Text(
+                    if (com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceHidden(bounds, source))
+                        "来源已隐藏" else "来源仍可见",
+                )
+                if (open.value) ImagePreviewDialog(
+                    images = listOf(source), initialIndex = 0, sourceRect = bounds, sourceKey = source,
+                    onDismiss = { open.value = false },
+                )
+                // 此用例尚未创建预览窗口，验证准备和登记本身不会抢先隐藏来源。
+            }
+        }
+        composeTestRule.runOnIdle {
+            com.android.purebilibili.feature.dynamic.components.prepareImagePreviewSourceTransition(bounds, source)
+        }
+        composeTestRule.onNodeWithText("来源仍可见").assertIsDisplayed()
+        composeTestRule.runOnIdle { open.value = true }
+        composeTestRule.onNodeWithText("来源仍可见").assertIsDisplayed()
+        composeTestRule.runOnIdle { open.value = false }
+        composeTestRule.onNodeWithText("来源仍可见").assertIsDisplayed()
+    }
 
     @Test
     fun swipeUpWithElasticFeedbackAncestor_dismissesPreviewOnce() {

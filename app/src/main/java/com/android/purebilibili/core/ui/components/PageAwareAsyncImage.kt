@@ -4,6 +4,7 @@ import android.graphics.drawable.Animatable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -13,6 +14,7 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -60,8 +62,8 @@ internal fun PageAwareAsyncImage(
     }
     // 请求和暂停时的缓存回放使用同一质量身份，避免返回列表时丢失封面占位。
     val dataSaver by remember(context) { DataSaverState.get(context).active }
-    // 首页封面、头像直接显示。只按是否属于首页选择策略，不把滚动/加载许可作为请求 key，
-    // 避免滚动启停重建请求；其他列表继续使用各自的淡入配置。
+    // 首页淡入由实际网络结果与可见性控制，不把滚动/动画许可作为请求 key。
+    // 关闭 Coil 淡入，避免缓存回放重播；其他列表继续使用各自的淡入配置。
     val homeFeedImage = LocalHomeCardCoverLoadingAllowed.current != null
     val request = remember(model, dataSaver, imageSettings.listQuality, homeFeedImage, context) {
         val source = model as? ImageRequest
@@ -71,6 +73,21 @@ internal fun PageAwareAsyncImage(
         }
     }
     val imageKey = request?.data ?: model
+    val reveal = if (homeFeedImage) {
+        remember(imageKey, request?.memoryCacheKey, request?.memoryCacheKeyExtras, resolvedImageLoader) {
+            HomeImageRevealState()
+        }
+    } else null
+    val revealGate = if (homeFeedImage) com.android.purebilibili.core.ui.rememberDecorativeAnimationGate() else null
+    val revealAllowed = loadingAllowed && revealGate?.active == true
+    if (reveal != null) {
+        LaunchedEffect(reveal, reveal.pending, revealAllowed) {
+            reveal.finish(revealAllowed)
+        }
+    }
+    val revealModifier = if (reveal != null && revealGate != null) {
+        revealGate.modifier.graphicsLayer { alpha = reveal.alpha }
+    } else Modifier
     var retainedImage by remember(imageKey, request?.memoryCacheKey, request?.memoryCacheKeyExtras, resolvedImageLoader) {
         mutableStateOf<coil3.Image?>(null)
     }
@@ -91,7 +108,7 @@ internal fun PageAwareAsyncImage(
     val retainedPainter = remember(replayImage, context) {
         replayImage?.asPainter(context, FilterQuality.Low)
     }
-    // 首页静态位图已成功加载且关闭淡入，不再有加载或动画工作。保留同一个
+    // 首页静态位图已成功加载后保留同一个
     // AsyncImage，避免开合详情时把所有封面/头像拆成 Image 再重新挂载请求。
     // 未完成的请求仍立即取消；动图仍走静态回放，不能保活其逐帧回调。
     val keepDecodedHomeImageMounted = homeFeedImage && retainedImage is BitmapImage
@@ -100,12 +117,13 @@ internal fun PageAwareAsyncImage(
             model = request ?: model,
             imageLoader = resolvedImageLoader,
             contentDescription = contentDescription,
-            modifier = modifier,
+            modifier = modifier.then(revealModifier),
             placeholder = retainedPainter,
             contentScale = contentScale,
             colorFilter = imageFilter,
             alignment = alignment,
             onSuccess = {
+                reveal?.onSuccess(it.result.dataSource, revealAllowed)
                 retainedImage = it.result.image
                 onSuccess?.invoke(it)
             },

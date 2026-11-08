@@ -26,12 +26,62 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import coil3.asImage
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.toPixelMap
 
 @RunWith(AndroidJUnit4::class)
 class ZoomableImageUiRegressionTest {
 
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun decodedSourceProvidesPixelsAndFitGeometryWhileTheLargeImageIsStillLoading() {
+        val pending = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val drawn = java.util.concurrent.atomic.AtomicInteger()
+        var viewport = IntSize.Zero
+        var reported: Rect? = null
+        composeTestRule.setContent {
+            val context = LocalContext.current
+            val thumbnail = androidx.compose.runtime.remember {
+                android.graphics.Bitmap.createBitmap(160, 90, android.graphics.Bitmap.Config.ARGB_8888)
+                    .apply { eraseColor(android.graphics.Color.RED) }.asImage()
+            }
+            val loader = androidx.compose.runtime.remember {
+                ImageLoader.Builder(context).components {
+                    add(object : coil3.intercept.Interceptor {
+                        override suspend fun intercept(chain: coil3.intercept.Interceptor.Chain): coil3.request.ImageResult {
+                            pending.await()
+                            return chain.proceed()
+                        }
+                    })
+                }.build()
+            }
+            androidx.compose.runtime.DisposableEffect(loader) {
+                onDispose { loader.shutdown() }
+            }
+            MaterialTheme {
+                Box(Modifier.size(300.dp).onSizeChanged { viewport = it }) {
+                    ZoomableImage(
+                        model = android.R.drawable.ic_menu_gallery,
+                        imageLoader = loader,
+                        initialImage = thumbnail,
+                        onDisplayRectChange = { reported = it },
+                        onImageDrawn = { drawn.incrementAndGet() },
+                    )
+                }
+            }
+        }
+        composeTestRule.waitUntil(5_000L) { reported != null && drawn.get() > 0 }
+        composeTestRule.runOnIdle {
+            assertEquals(false, pending.isCompleted)
+            assertEquals(viewport.width.toFloat(), reported!!.width, 0.01f)
+            assertEquals(viewport.width * 90f / 160f, reported!!.height, 0.01f)
+        }
+        val pixels = composeTestRule.onNodeWithTag(ZOOMABLE_IMAGE_TAG).captureToImage().toPixelMap()
+        assertEquals(androidx.compose.ui.graphics.Color.Red, pixels[pixels.width / 2, pixels.height / 2])
+    }
 
     @Test
     fun parentHeroTransform_doesNotChangeReportedImageGeometry() {
