@@ -247,18 +247,6 @@ class DanmakuPlaybackSyncPolicyTest {
     }
 
     @Test
-    fun `playback speed update changes timing without refreshing timeline data`() {
-        val calls = mutableListOf<String>()
-
-        executeDanmakuPlaybackSpeedUpdate(
-            applyTiming = { calls += "applyTiming" },
-            invalidate = { calls += "invalidate" }
-        )
-
-        assertEquals(listOf("applyTiming", "invalidate"), calls)
-    }
-
-    @Test
     fun `explicit seek scrub start should pause before clearing stale danmaku`() {
         val calls = mutableListOf<String>()
 

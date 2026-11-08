@@ -2,6 +2,7 @@ package com.android.purebilibili.danmaku.engine
 
 import android.graphics.PointF
 import android.graphics.RectF
+import java.util.function.LongSupplier
 
 interface DanmakuEngine : AutoCloseable {
     val playbackState: DanmakuPlaybackState
@@ -43,6 +44,9 @@ interface DanmakuEngine : AutoCloseable {
 
     /** Reanchors the playback clock without clearing currently visible danmaku. */
     fun synchronizeTo(positionMs: Long)
+
+    /** Reads media milliseconds on the UI thread; null restores the standalone clock. */
+    fun setPlaybackPositionProvider(provider: LongSupplier?)
 
     fun start(positionMs: Long = 0L)
 

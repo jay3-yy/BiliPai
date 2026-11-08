@@ -24,10 +24,8 @@ import com.android.purebilibili.core.ui.components.AppSwitch
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -58,18 +56,18 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.subtitle.SUBTITLE_GAP_HOLD_MS
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleTrackOption
 import com.android.purebilibili.feature.video.subtitle.buildSubtitleTrackOptions
 import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
 import com.android.purebilibili.feature.video.subtitle.normalizeSubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.normalizeSubtitleVerticalOffsetFraction
-import com.android.purebilibili.feature.video.subtitle.resolveStickySubtitleText
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleControlAvailability
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModeByAutoPreference
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayOptions
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitlePositionPollingIdentity
-import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTextAt
+import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayTextAt
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTextSizeSpec
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTrackDisplayLabel
 import com.android.purebilibili.feature.video.subtitle.shouldKeepSubtitleOverlayMounted
@@ -232,6 +230,7 @@ fun PortraitSubtitleHost(
     val subtitleTimeline = remember(success.subtitlePrimaryCues, success.subtitleSecondaryCues, subtitleSession.timeOffsetMs) {
         com.android.purebilibili.feature.video.subtitle.subtitlePositionTimeline(
             success.subtitlePrimaryCues, success.subtitleSecondaryCues, subtitleSession.timeOffsetMs,
+            endHoldMs = SUBTITLE_GAP_HOLD_MS,
         )
     }
     val positionMs by com.android.purebilibili.core.player.rememberPlaybackPosition(
@@ -242,51 +241,15 @@ fun PortraitSubtitleHost(
         timeline = subtitleTimeline,
     )
 
-    val primaryRaw = if (shouldRenderPrimarySubtitle(displayMode)) {
-        resolveSubtitleTextAt(success.subtitlePrimaryCues, subtitlePositionForOffset(positionMs, subtitleSession.timeOffsetMs))
+    val primaryText = if (shouldRenderPrimarySubtitle(displayMode)) {
+        resolveSubtitleDisplayTextAt(success.subtitlePrimaryCues, subtitlePositionForOffset(positionMs, subtitleSession.timeOffsetMs))
     } else {
         null
     }
-    val secondaryRaw = if (shouldRenderSecondarySubtitle(displayMode)) {
-        resolveSubtitleTextAt(success.subtitleSecondaryCues, subtitlePositionForOffset(positionMs, subtitleSession.timeOffsetMs))
+    val secondaryText = if (shouldRenderSecondarySubtitle(displayMode)) {
+        resolveSubtitleDisplayTextAt(success.subtitleSecondaryCues, subtitlePositionForOffset(positionMs, subtitleSession.timeOffsetMs))
     } else {
         null
-    }
-    var stickyPrimary by remember(pollingIdentity, subtitleSession.timeOffsetMs) { mutableStateOf<String?>(null) }
-    var stickySecondary by remember(pollingIdentity, subtitleSession.timeOffsetMs) { mutableStateOf<String?>(null) }
-    var primaryBlankSince by remember(pollingIdentity, subtitleSession.timeOffsetMs) { mutableLongStateOf(-1L) }
-    var secondaryBlankSince by remember(pollingIdentity, subtitleSession.timeOffsetMs) { mutableLongStateOf(-1L) }
-    val primaryText = resolveStickySubtitleText(
-        currentText = primaryRaw,
-        previousText = stickyPrimary,
-        blankGapMs = if (primaryRaw.isNullOrBlank() && primaryBlankSince >= 0L) {
-            (positionMs - primaryBlankSince).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-    )
-    val secondaryText = resolveStickySubtitleText(
-        currentText = secondaryRaw,
-        previousText = stickySecondary,
-        blankGapMs = if (secondaryRaw.isNullOrBlank() && secondaryBlankSince >= 0L) {
-            (positionMs - secondaryBlankSince).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-    )
-    SideEffect {
-        if (!primaryRaw.isNullOrBlank()) {
-            stickyPrimary = primaryRaw
-            primaryBlankSince = -1L
-        } else if (primaryBlankSince < 0L) {
-            primaryBlankSince = positionMs
-        }
-        if (!secondaryRaw.isNullOrBlank()) {
-            stickySecondary = secondaryRaw
-            secondaryBlankSince = -1L
-        } else if (secondaryBlankSince < 0L) {
-            secondaryBlankSince = positionMs
-        }
     }
 
     val keepMounted = shouldKeepSubtitleOverlayMounted(

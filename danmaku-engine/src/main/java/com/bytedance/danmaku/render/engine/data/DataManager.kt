@@ -24,6 +24,7 @@ import com.bytedance.danmaku.render.engine.control.DanmakuController
 import com.bytedance.danmaku.render.engine.render.cache.LayerBuffer
 import kotlin.math.max
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_MASK
+import java.util.function.LongSupplier
 
 /**
  * Created by dss886 on 2018/11/6.
@@ -56,6 +57,18 @@ class DataManager(
     private var mStartPlayTime = 0L
     private var mStartTimestamp = 0L
     private var mCurrentPlayTime = 0L
+    private var mPlaySpeed = mConfig.common.playSpeed
+    private var mPositionProvider: LongSupplier? = null
+
+    @UiThread
+    fun setPlaybackPositionProvider(provider: LongSupplier?) {
+        if (mPositionProvider === provider) return
+        // Preserve the last authoritative position when an owner detaches.
+        queryPlayTime()
+        mPositionProvider = provider
+        mStartPlayTime = mCurrentPlayTime
+        mStartTimestamp = clockMs()
+    }
 
     @UiThread
     fun setData(dataList: List<DanmakuData>) {
@@ -168,8 +181,16 @@ class DataManager(
 
     @UiThread
     fun onPlaySpeedChanged() {
+        val now = clockMs()
+        // Config already contains the new speed. Settle the unsampled interval using
+        // the previous speed, even when the blank renderer has not drawn for seconds.
+        if (mIsPlaying) {
+            val provider = mPositionProvider
+            mCurrentPlayTime = if (provider != null) provider.asLong.coerceAtLeast(0L) else playTimeAt(now)
+        }
         mStartPlayTime = mCurrentPlayTime
-        mStartTimestamp = clockMs()
+        mStartTimestamp = now
+        mPlaySpeed = mConfig.common.playSpeed
     }
 
     @UiThread
@@ -177,11 +198,17 @@ class DataManager(
         if (!mIsPlaying) {
             return mCurrentPlayTime
         }
-        val now = clockMs()
-        val playTime = ((now - mStartTimestamp) * mConfig.common.playSpeed / 100f + mStartPlayTime).toLong()
-        mCurrentPlayTime = playTime
+        val provider = mPositionProvider
+        mCurrentPlayTime = if (provider != null) {
+            provider.asLong.coerceAtLeast(0L)
+        } else {
+            playTimeAt(clockMs())
+        }
         return mCurrentPlayTime
     }
+
+    private fun playTimeAt(now: Long): Long =
+        mStartPlayTime + ((now - mStartTimestamp) * mPlaySpeed / 100.0).toLong()
 
     @UiThread
     fun queryDanmaku(): List<DanmakuData> {
@@ -234,6 +261,7 @@ class DataManager(
 
     @UiThread
     fun onPause() {
+        queryPlayTime()
         mIsPlaying = false
     }
 

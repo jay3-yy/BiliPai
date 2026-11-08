@@ -144,6 +144,7 @@ class DanmakuManager private constructor(
     private var pendingTimelineResync: Boolean = false
     private var isSeekScrubbing = false
     private var player: ExoPlayer? = null
+    private val playbackPositionProvider = java.util.function.LongSupplier { player?.currentPosition ?: 0L }
     private var playerListener: Player.Listener? = null
     private var playerAttachmentCount: Int = 0
     private var loadJob: Job? = null
@@ -1386,9 +1387,11 @@ class DanmakuManager private constructor(
         val previousController = controller
         if (danmakuView !== view) {
             previousController?.pause()
+            previousController?.setPlaybackPositionProvider(null)
         }
         danmakuView = view
         controller = view.engine
+        controller?.setPlaybackPositionProvider(if (player != null) playbackPositionProvider else null)
         controller?.upOwnerUserHash = pendingUpOwnerUserHash
         controller?.setHiddenDanmaku(hotDanmakuIds, hotDanmakuTexts)
         if (!isRenderingEnabled) {
@@ -1609,6 +1612,7 @@ class DanmakuManager private constructor(
         playerAttachmentCount = 1
         currentVideoSpeed = normalizeDanmakuPlaybackSpeed(exoPlayer.playbackParameters.speed)
         controller?.let { ctrl ->
+            ctrl.setPlaybackPositionProvider(playbackPositionProvider)
             applyPlaybackSpeedToController(ctrl)
         }
         
@@ -1778,8 +1782,7 @@ class DanmakuManager private constructor(
                 }
             }
             
-            //  [新增] 视频倍速变化时同步弹幕速度
-            //  [问题10修复] 优化长按加速视频时的弹幕同步
+            // Reanchor immediately without clearing visible items or reloading their data.
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
                 val videoSpeed = normalizeDanmakuPlaybackSpeed(playbackParameters.speed)
                 Log.w(TAG, "⏩ onPlaybackParametersChanged: videoSpeed=$videoSpeed, previous=$currentVideoSpeed")
@@ -1789,10 +1792,10 @@ class DanmakuManager private constructor(
                     currentVideoSpeed = videoSpeed
                     
                     controller?.let { ctrl ->
-                        executeDanmakuPlaybackSpeedUpdate(
-                            applyTiming = { applyPlaybackSpeedToController(ctrl) },
-                            invalidate = { ctrl.invalidate() }
-                        )
+                        applyPlaybackSpeedToController(ctrl)
+                        if (!isSeekScrubbing) {
+                            ctrl.synchronizeTo(exoPlayer.currentPosition.coerceAtLeast(0L))
+                        }
                         val applied = resolvePlaybackAdjustedRenderConfig()
                         Log.w(
                             TAG,
@@ -1802,6 +1805,8 @@ class DanmakuManager private constructor(
                                 "video=${videoSpeed}x"
                         )
                     }
+                    // Replace an outstanding normal-speed wait with the new cadence.
+                    if (exoPlayer.isPlaying) startDriftSync()
                 }
             }
         }
@@ -1838,6 +1843,7 @@ class DanmakuManager private constructor(
         if (playerAttachmentCount > 0) return
 
         playerListener?.let(exoPlayer::removeListener)
+        controller?.setPlaybackPositionProvider(null)
         playerListener = null
         player = null
         playerAttachmentCount = 0

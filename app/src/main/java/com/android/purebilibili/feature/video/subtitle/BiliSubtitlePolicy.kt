@@ -127,9 +127,5 @@ fun shouldKeepSubtitleOverlayMounted(
     suppressOverlay: Boolean,
 ): Boolean = com.android.purebilibili.core.subtitle.shouldKeepSubtitleOverlayMounted(overlayEnabled = overlayEnabled, isInPipMode = isInPipMode, isAudioOnly = isAudioOnly, suppressOverlay = suppressOverlay)
 
-fun resolveStickySubtitleText(
-    currentText: String?,
-    previousText: String?,
-    blankGapMs: Long,
-    maxHoldMs: Long = 280L,
-): String? = com.android.purebilibili.core.subtitle.resolveStickySubtitleText(currentText = currentText, previousText = previousText, blankGapMs = blankGapMs, maxHoldMs = maxHoldMs)
+fun resolveSubtitleDisplayTextAt(cues: List<SubtitleCue>, positionMs: Long): String? =
+    com.android.purebilibili.core.subtitle.resolveSubtitleDisplayTextAt(cues, positionMs)

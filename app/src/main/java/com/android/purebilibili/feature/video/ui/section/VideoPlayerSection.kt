@@ -233,6 +233,7 @@ import com.android.purebilibili.feature.anime4k.resolveAnime4KOutputDecision
 import com.android.purebilibili.feature.anime4k.shouldFallbackAnime4KBeforeFirstFrame
 import com.android.purebilibili.feature.anime4k.gl.Anime4KGLSurfaceView
 import com.android.purebilibili.plugin.sdk.VideoEnhancementPluginApi
+import com.android.purebilibili.core.subtitle.SUBTITLE_GAP_HOLD_MS
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.buildSubtitleTrackOptions
@@ -241,7 +242,7 @@ import com.android.purebilibili.feature.video.subtitle.normalizeSubtitleDisplayM
 import com.android.purebilibili.feature.video.subtitle.normalizeSubtitleVerticalOffsetFraction
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleControlAvailability
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayModeByAutoPreference
-import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTextAt
+import com.android.purebilibili.feature.video.subtitle.resolveSubtitleDisplayTextAt
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitleTrackDisplayLabel
 import com.android.purebilibili.feature.video.subtitle.shouldRenderPrimarySubtitle
 import com.android.purebilibili.feature.video.subtitle.shouldRenderSecondarySubtitle
@@ -488,6 +489,7 @@ private fun BoxScope.VideoSubtitleOverlayHost(
     ) {
         com.android.purebilibili.feature.video.subtitle.subtitlePositionTimeline(
             subtitleOwner.subtitlePrimaryCues, subtitleOwner.subtitleSecondaryCues, timingOffsetMs,
+            endHoldMs = SUBTITLE_GAP_HOLD_MS,
         )
     }
     val subtitlePositionMs by com.android.purebilibili.core.player.rememberPlaybackPosition(
@@ -497,7 +499,7 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             (subtitleOwner.subtitlePrimaryCues.isNotEmpty() || subtitleOwner.subtitleSecondaryCues.isNotEmpty()),
         timeline = subtitleTimeline,
     )
-    val subtitlePrimaryRawText = remember(
+    val subtitlePrimaryText = remember(
         uiState,
         subtitleFeatureEnabled,
         subtitlePositionMs,
@@ -510,10 +512,10 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             return@remember null
         }
         if (!shouldRenderPrimarySubtitle(subtitleDisplayMode)) return@remember null
-        resolveSubtitleTextAt(success.subtitlePrimaryCues,
+        resolveSubtitleDisplayTextAt(success.subtitlePrimaryCues,
             com.android.purebilibili.feature.video.subtitle.subtitlePositionForOffset(subtitlePositionMs, timingOffsetMs))
     }
-    val subtitleSecondaryRawText = remember(
+    val subtitleSecondaryText = remember(
         uiState,
         subtitleFeatureEnabled,
         subtitlePositionMs,
@@ -526,62 +528,8 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             return@remember null
         }
         if (!shouldRenderSecondarySubtitle(subtitleDisplayMode)) return@remember null
-        resolveSubtitleTextAt(success.subtitleSecondaryCues,
+        resolveSubtitleDisplayTextAt(success.subtitleSecondaryCues,
             com.android.purebilibili.feature.video.subtitle.subtitlePositionForOffset(subtitlePositionMs, timingOffsetMs))
-    }
-
-    var stickyPrimaryText by remember(subtitlePollingIdentity, timingOffsetMs) { mutableStateOf<String?>(null) }
-    var stickySecondaryText by remember(subtitlePollingIdentity, timingOffsetMs) { mutableStateOf<String?>(null) }
-    var primaryBlankSinceMs by remember(subtitlePollingIdentity, timingOffsetMs) { mutableLongStateOf(-1L) }
-    var secondaryBlankSinceMs by remember(subtitlePollingIdentity, timingOffsetMs) { mutableLongStateOf(-1L) }
-    val nowForSticky = subtitlePositionMs
-    val subtitlePrimaryText = remember(
-        subtitlePrimaryRawText,
-        stickyPrimaryText,
-        primaryBlankSinceMs,
-        nowForSticky
-    ) {
-        val blankGap = if (subtitlePrimaryRawText.isNullOrBlank() && primaryBlankSinceMs >= 0L) {
-            (nowForSticky - primaryBlankSinceMs).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-        com.android.purebilibili.feature.video.subtitle.resolveStickySubtitleText(
-            currentText = subtitlePrimaryRawText,
-            previousText = stickyPrimaryText,
-            blankGapMs = blankGap,
-        )
-    }
-    val subtitleSecondaryText = remember(
-        subtitleSecondaryRawText,
-        stickySecondaryText,
-        secondaryBlankSinceMs,
-        nowForSticky
-    ) {
-        val blankGap = if (subtitleSecondaryRawText.isNullOrBlank() && secondaryBlankSinceMs >= 0L) {
-            (nowForSticky - secondaryBlankSinceMs).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-        com.android.purebilibili.feature.video.subtitle.resolveStickySubtitleText(
-            currentText = subtitleSecondaryRawText,
-            previousText = stickySecondaryText,
-            blankGapMs = blankGap,
-        )
-    }
-    SideEffect {
-        if (!subtitlePrimaryRawText.isNullOrBlank()) {
-            stickyPrimaryText = subtitlePrimaryRawText
-            primaryBlankSinceMs = -1L
-        } else if (primaryBlankSinceMs < 0L) {
-            primaryBlankSinceMs = nowForSticky
-        }
-        if (!subtitleSecondaryRawText.isNullOrBlank()) {
-            stickySecondaryText = subtitleSecondaryRawText
-            secondaryBlankSinceMs = -1L
-        } else if (secondaryBlankSinceMs < 0L) {
-            secondaryBlankSinceMs = nowForSticky
-        }
     }
 
     var subtitleVerticalOffsetFraction by rememberSaveable(bvid) {

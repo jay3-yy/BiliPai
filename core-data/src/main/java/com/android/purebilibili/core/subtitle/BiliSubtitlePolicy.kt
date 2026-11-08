@@ -561,22 +561,36 @@ fun shouldRenderSecondarySubtitle(mode: SubtitleDisplayMode): Boolean {
     return mode == SubtitleDisplayMode.SECONDARY_ONLY || mode == SubtitleDisplayMode.BILINGUAL
 }
 
-fun resolveSubtitleTextAt(cues: List<SubtitleCue>, positionMs: Long): String? {
+fun resolveSubtitleTextAt(cues: List<SubtitleCue>, positionMs: Long): String? =
+    findSubtitleText(cues, positionMs, endHoldMs = 0L)
+
+const val SUBTITLE_GAP_HOLD_MS = 280L
+
+/** A short gap may retain its preceding cue, never text remembered from another playback position. */
+fun resolveSubtitleDisplayTextAt(cues: List<SubtitleCue>, positionMs: Long): String? =
+    findSubtitleText(cues, positionMs, endHoldMs = SUBTITLE_GAP_HOLD_MS)?.takeIf { it.isNotBlank() }
+
+private fun findSubtitleText(cues: List<SubtitleCue>, positionMs: Long, endHoldMs: Long): String? {
     if (cues.isEmpty()) return null
     if (positionMs < 0L) return null
 
     var low = 0
     var high = cues.lastIndex
+    var precedingCue: SubtitleCue? = null
     while (low <= high) {
         val mid = (low + high) ushr 1
         val cue = cues[mid]
         when {
             positionMs < cue.startMs -> high = mid - 1
-            positionMs > cue.endMs -> low = mid + 1
+            positionMs > cue.endMs -> {
+                precedingCue = cue
+                low = mid + 1
+            }
             else -> return cue.content
         }
     }
-    return null
+    val preceding = precedingCue ?: return null
+    return preceding.content.takeIf { positionMs - preceding.endMs <= endHoldMs }
 }
 
 /**
@@ -607,23 +621,6 @@ fun shouldKeepSubtitleOverlayMounted(
     suppressOverlay: Boolean,
 ): Boolean {
     return overlayEnabled && !isInPipMode && !isAudioOnly && !suppressOverlay
-}
-
-/**
- * 句间短空窗是否沿用上一句，避免 120ms 轮询在边界 null/有字来回切。
- * [blankGapMs] 内仍显示 [previousText]。
- */
-fun resolveStickySubtitleText(
-    currentText: String?,
-    previousText: String?,
-    blankGapMs: Long,
-    maxHoldMs: Long = 280L,
-): String? {
-    val current = currentText?.takeIf { it.isNotBlank() }
-    if (current != null) return current
-    val previous = previousText?.takeIf { it.isNotBlank() } ?: return null
-    if (blankGapMs < 0L || blankGapMs > maxHoldMs) return null
-    return previous
 }
 
 private fun JsonElement?.asJsonObjectOrNull(): JsonObject? {
