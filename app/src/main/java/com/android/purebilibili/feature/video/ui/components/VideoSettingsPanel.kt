@@ -444,6 +444,12 @@ fun VideoSettingsPanel(
         isFullscreen = isFullscreen,
         playerBounds = playerBounds,
     ) {
+        val dispatchAfterDismiss = com.android.purebilibili.core.ui.components.LocalAppGlassPanelDismissAction.current
+        fun dismissWithAction(action: () -> Unit) {
+            val finish = { onDismiss(); action() }
+            // 下一层弹窗必须等共用玻璃宿主释放；原生面板保留原来的执行顺序。
+            if (dispatchAfterDismiss != null) dispatchAfterDismiss(finish) else finish()
+        }
         LazyColumn(
             // 同窗玻璃菜单由覆盖层避让系统栏，列表只保留紧凑留白；原生面板沿用原参数。
             modifier = Modifier.fillMaxWidth().then(
@@ -462,16 +468,15 @@ fun VideoSettingsPanel(
                         "main" -> {
                             nearbyHandoff?.takeIf { com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED }?.let { controller ->
                                 PlayerSettingsRow(com.android.purebilibili.feature.nearby.NEARBY_TITLE) {
-                                    onDismiss()
-                                    controller.openDevices()
+                                    dismissWithAction { controller.openDevices() }
                                 }
                             }
-                            onWatchLater?.let { action -> PlayerSettingsRow("稍后再看（添加 / 移出）") { onDismiss(); action() } }
-                            onShowNotes?.let { action -> PlayerSettingsRow("查看笔记") { onDismiss(); action() } }
-                            onDownloadVideo?.let { action -> PlayerSettingsRow("离线缓存") { onDismiss(); action() } }
-                            PlayerSettingsRow("保存封面") { onDismiss(); onSaveCover() }
+                            onWatchLater?.let { action -> PlayerSettingsRow("稍后再看（添加 / 移出）") { dismissWithAction(action) } }
+                            onShowNotes?.let { action -> PlayerSettingsRow("查看笔记") { dismissWithAction(action) } }
+                            onDownloadVideo?.let { action -> PlayerSettingsRow("离线缓存") { dismissWithAction(action) } }
+                            PlayerSettingsRow("保存封面") { dismissWithAction(onSaveCover) }
                             PlayerSettingsRow("定时关闭", sleepTimerMinutes?.let { "剩余 $it 分钟" }) { page = "sleep" }
-                            onEditPlayUrl?.let { action -> PlayerSettingsRow("播放地址") { onDismiss(); action() } }
+                            onEditPlayUrl?.let { action -> PlayerSettingsRow("播放地址") { dismissWithAction(action) } }
                             onChapterDisplayModeChange?.let { onModeChange ->
                                 PlayerSettingsPopupRow(
                                     title = playbackSettingTitle("playback.chapter_display_mode"),
@@ -479,7 +484,7 @@ fun VideoSettingsPanel(
                                     options = ChapterDisplayMode.entries.map { it.label },
                                 ) { index -> onModeChange(ChapterDisplayMode.entries[index]) }
                             }
-                            PlayerSettingsRow("重载视频") { onDismiss(); onReload() }
+                            PlayerSettingsRow("重载视频") { dismissWithAction(onReload) }
                             PlayerSettingsRow(
                                 "画质增强",
                                 resolveAnime4KSettingsSubtitle(anime4kEnabled, anime4kAvailable, anime4kBypassReason),
@@ -501,12 +506,12 @@ fun VideoSettingsPanel(
                             if (availableAudioQualities.isNotEmpty()) PlayerSettingsRow("选择音质", availableAudioQualities.firstOrNull { it.preferenceId == selectedAudioQuality }?.label?.let { "当前音质 $it" } ?: "当前音质未知") { page = "audio" }
                             PlayerSettingsRow("首选编码格式", "首选 ${piliCodecLabel(currentCodec)}，当前播放 ${piliCodecLabel(playingVideoCodec)}") { page = "codec" }
                             onPlaybackOrderChange?.let { change -> PlayerSettingsPopupRow("播完后行为", playbackOrderLabel, playbackOrderOptions, onSelected = change) }
-                            onShowDanmakuPool?.let { action -> PlayerSettingsRow("弹幕列表") { onDismiss(); action() } }
-                            PlayerSettingsRow("弹幕设置") { onDismiss(); onDanmakuSettingsClick() }
-                            onSubtitleSettings?.let { action -> PlayerSettingsRow("字幕设置") { onDismiss(); action() } }
-                            onLoadSubtitle?.let { action -> PlayerSettingsRow("加载字幕") { onDismiss(); action() } }
-                            onSaveSubtitle?.let { action -> PlayerSettingsRow("保存字幕") { onDismiss(); action() } }
-                            onShowPlaybackInfo?.let { action -> PlayerSettingsRow("播放信息") { onDismiss(); action() } }
+                            onShowDanmakuPool?.let { action -> PlayerSettingsRow("弹幕列表") { dismissWithAction(action) } }
+                            PlayerSettingsRow("弹幕设置") { dismissWithAction(onDanmakuSettingsClick) }
+                            onSubtitleSettings?.let { action -> PlayerSettingsRow("字幕设置") { dismissWithAction(action) } }
+                            onLoadSubtitle?.let { action -> PlayerSettingsRow("加载字幕") { dismissWithAction(action) } }
+                            onSaveSubtitle?.let { action -> PlayerSettingsRow("保存字幕") { dismissWithAction(action) } }
+                            onShowPlaybackInfo?.let { action -> PlayerSettingsRow("播放信息") { dismissWithAction(action) } }
                             onPlayerDiagnosticsChange?.let { change ->
                                 PlayerSettingsToggleRow(
                                     title = "播放器诊断",
@@ -514,7 +519,7 @@ fun VideoSettingsPanel(
                                     onCheckedChange = change,
                                 )
                             }
-                            onReport?.let { action -> PlayerSettingsRow("举报") { onDismiss(); action() } }
+                            onReport?.let { action -> PlayerSettingsRow("举报") { dismissWithAction(action) } }
                             if (isFullscreen) {
                                 PlayerSettingsRow(FullscreenActionCountSettings.TITLE) { page = "actionCounts" }
                             }
@@ -623,9 +628,9 @@ fun VideoSettingsPanel(
             } else {
                 item { PlayerSettingsRow("返回") { page = "main" } }
                 item {
-                    onCast?.let { action -> PlayerSettingsRow("投屏") { onDismiss(); action() } }
-                    onEnterPip?.let { action -> PlayerSettingsRow("画中画") { onDismiss(); action() } }
-                    onShare?.let { action -> PlayerSettingsRow("分享") { onDismiss(); action() } }
+                    onCast?.let { action -> PlayerSettingsRow("投屏") { dismissWithAction(action) } }
+                    onEnterPip?.let { action -> PlayerSettingsRow("画中画") { dismissWithAction(action) } }
+                    onShare?.let { action -> PlayerSettingsRow("分享") { dismissWithAction(action) } }
                 }
             val groups = VideoControlCenterGroups(this, controlCenterMotion)
 
@@ -665,19 +670,13 @@ fun VideoSettingsPanel(
                         SettingsActionPill(
                             icon = Icons.Filled.PhotoCamera,
                             label = "视频截图",
-                            onClick = {
-                                onCaptureScreenshot()
-                                onDismiss()
-                            },
+                            onClick = { dismissWithAction(onCaptureScreenshot) },
                             policy = actionPolicy
                         )
                         SettingsActionPill(
                             icon = musicIcon,
                             label = "下载音频",
-                            onClick = {
-                                onDownloadAudio()
-                                onDismiss()
-                            },
+                            onClick = { dismissWithAction(onDownloadAudio) },
                             policy = actionPolicy
                         )
                     }
