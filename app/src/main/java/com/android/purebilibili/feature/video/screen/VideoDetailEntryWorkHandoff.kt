@@ -9,7 +9,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import com.android.purebilibili.core.ui.transition.normalizeSharedElementSourceRoute
 import com.android.purebilibili.core.util.CardPositionManager
-import kotlinx.coroutines.flow.first
 
 internal enum class VideoDetailEntryWorkPhase {
     Content,
@@ -18,13 +17,12 @@ internal enum class VideoDetailEntryWorkPhase {
     Related,
 }
 
-/** Give each entry phase a frame before starting media, comments and recommendation cards. */
+/** 转场后按帧错峰放行；评论与推荐不等待视频首帧或缓冲完成。 */
 internal suspend fun runVideoDetailEntryWorkHandoff(
     onPlaybackReady: () -> Unit,
     onCommentsReady: () -> Unit,
     onRelatedReady: () -> Unit,
     startPhase: VideoDetailEntryWorkPhase = VideoDetailEntryWorkPhase.Content,
-    awaitPlayback: suspend () -> Unit = {},
 ) {
     // A frame callback runs before composition/draw. Two boundaries give the preceding
     // phase a frame to render; a single boundary can batch both phases into one frame.
@@ -33,7 +31,6 @@ internal suspend fun runVideoDetailEntryWorkHandoff(
         onPlaybackReady()
     }
     if (startPhase < VideoDetailEntryWorkPhase.Comments) {
-        awaitPlayback()
         repeat(2) { withFrameNanos { } }
         onCommentsReady()
     }
@@ -48,7 +45,6 @@ internal fun rememberVideoDetailEntryWorkPhase(
     staggerWork: Boolean,
     contentReady: Boolean,
     isVisible: Boolean,
-    playbackSettled: kotlinx.coroutines.flow.StateFlow<Boolean>,
 ): VideoDetailEntryWorkPhase {
     // Entry lifetime, not BVID lifetime: changing episode or returning from a child must
     // not close an already-open playback gate or replay the initial handoff.
@@ -72,11 +68,6 @@ internal fun rememberVideoDetailEntryWorkPhase(
             },
             onRelatedReady = { phase = VideoDetailEntryWorkPhase.Related },
             startPhase = phase,
-            awaitPlayback = {
-                kotlinx.coroutines.withTimeoutOrNull(4_000L) {
-                    playbackSettled.first { it }
-                }
-            },
         )
     }
     return phase

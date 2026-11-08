@@ -143,6 +143,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         is BiliPaiNavKey.NativeMusic -> ScreenRoutes.NativeMusic.createRoute(title, bvid, cid)
         is BiliPaiNavKey.VideoDetail -> VideoRoute.createRoute(
             bvid = bvid,
+            title = title,
             cid = cid,
             coverUrl = coverUrl,
             startAudio = startAudio,
@@ -368,6 +369,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         segments.firstOrNull() == VideoRoute.base && segments.size >= 2 -> {
             BiliPaiNavKey.VideoDetail(
                 bvid = decodeRouteValue(segments[1]),
+                title = query["title"].orEmpty(),
                 cid = query["cid"]?.toLongOrNull() ?: 0L,
                 coverUrl = query["cover"].orEmpty(),
                 startAudio = query["startAudio"]?.toBooleanStrictOrNull() ?: false,
@@ -386,6 +388,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         segments.firstOrNull() == "video_player" && segments.size >= 2 -> {
             BiliPaiNavKey.VideoDetail(
                 bvid = decodeRouteValue(segments[1]),
+                title = query["title"].orEmpty(),
                 cid = query["cid"]?.toLongOrNull() ?: 0L,
                 coverUrl = query["cover"].orEmpty(),
                 commentRootRpid = query["commentRootRpid"]?.toLongOrNull() ?: 0L,

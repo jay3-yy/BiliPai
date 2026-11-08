@@ -65,6 +65,7 @@ internal fun HomeVideoPreviewHost(
                             bvid = item.bvid,
                             cid = item.cid,
                             coverUrl = item.pic,
+                            title = item.title,
                             isVerticalVideo = item.resolveIsVerticalForNavigation(),
                             source = HomeVideoClickSource.PREVIEW,
                             sourceRoute = resolveHomeCategoryVideoSourceRoute(currentCategory),

@@ -19,9 +19,23 @@ internal data class VideoOpenRequest(
     val directPortraitEntry: Boolean = false,
     /** 直播、番剧等非视频窗口入口的初始路由；bvid 为空时窗口按该路由组装首栈。 */
     val initialRoute: String = "",
+    val title: String = "",
 ) {
+    /** 系统窗口已识别竖屏视频时，从首帧直接进入竖屏全屏；指定评论仍打开详情。 */
+    fun forSystemCardTransition(isVerticalVideo: Boolean = initialVertical): VideoOpenRequest {
+        if (!isVerticalVideo || startAudio || initialRoute.isNotBlank() ||
+            commentRootRpid > 0L || commentTargetRpid > 0L
+        ) return this
+        return copy(
+            initialVertical = true,
+            autoPortrait = true,
+            directPortraitEntry = true,
+            fullscreen = false,
+        )
+    }
+
     fun toNavigationKey() = BiliPaiNavKey.VideoDetail(
-        bvid = bvid, cid = cid, coverUrl = coverUrl, startAudio = startAudio,
+        bvid = bvid, cid = cid, coverUrl = coverUrl, startAudio = startAudio, title = title,
         autoPortrait = autoPortrait, fullscreen = fullscreen,
         resumePositionMs = resumePositionMs, commentRootRpid = commentRootRpid,
         commentTargetRpid = commentTargetRpid, initialVertical = initialVertical,
@@ -35,6 +49,7 @@ internal data class VideoOpenRequest(
         putString("bvid", bvid)
         putLong("cid", cid)
         putString("cover", coverUrl)
+        putString("title", title)
         putBoolean("startAudio", startAudio)
         putBoolean("autoPortrait", autoPortrait)
         putBoolean("fullscreen", fullscreen)
@@ -48,7 +63,7 @@ internal data class VideoOpenRequest(
 
     companion object {
         fun fromKey(key: BiliPaiNavKey.VideoDetail) = VideoOpenRequest(
-            bvid = key.bvid, cid = key.cid, coverUrl = key.coverUrl,
+            bvid = key.bvid, cid = key.cid, coverUrl = key.coverUrl, title = key.title,
             startAudio = key.startAudio, autoPortrait = key.autoPortrait,
             fullscreen = key.fullscreen, resumePositionMs = key.resumePositionMs,
             commentRootRpid = key.commentRootRpid, commentTargetRpid = key.commentTargetRpid,
@@ -61,6 +76,7 @@ internal data class VideoOpenRequest(
             if (bvid.isBlank() && initialRoute.isBlank()) return null
             return VideoOpenRequest(
                 bvid = bvid, cid = bundle.getLong("cid"), coverUrl = bundle.getString("cover").orEmpty(),
+                title = bundle.getString("title").orEmpty(),
                 startAudio = bundle.getBoolean("startAudio"), autoPortrait = bundle.getBoolean("autoPortrait"),
                 fullscreen = bundle.getBoolean("fullscreen"), resumePositionMs = bundle.getLong("resumePositionMs"),
                 commentRootRpid = bundle.getLong("commentRootRpid"), commentTargetRpid = bundle.getLong("commentTargetRpid"),

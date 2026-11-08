@@ -2047,6 +2047,10 @@ private fun VideoPlayerSectionContent(
                         if (!newState) {
                             danmakuManager.clear()
                         }
+                        // 弹幕开关由横竖屏共用；快捷键与按钮一样保存，换片后继续沿用。
+                        settingsScope.launch {
+                            SettingsManager.setDanmakuEnabled(context, newState)
+                        }
                         Toast.makeText(context, if (newState) "弹幕已开启" else "弹幕已关闭", Toast.LENGTH_SHORT).show()
                         true
                     }

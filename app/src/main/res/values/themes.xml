@@ -80,15 +80,6 @@
         <item name="windowSplashScreenAnimationDuration">0</item>
     </style>
     
-    <!-- 视频自研窗口需要透明外部区域，页面自身仍使用当前材质表面。 -->
-    <style name="Theme.PureBiliBili.AppVideoWindow" parent="Theme.PureBiliBili.Main">
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowDisablePreview">true</item>
-        <item name="android:backgroundDimEnabled">false</item>
-        <item name="android:windowAnimationStyle">@null</item>
-    </style>
-
     <!-- 主应用主题 (浅色模式) -->
     <style name="Theme.PureBiliBili.Main" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>

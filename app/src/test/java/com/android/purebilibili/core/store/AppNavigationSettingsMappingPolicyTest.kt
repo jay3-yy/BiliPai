@@ -12,23 +12,6 @@ import kotlin.test.assertTrue
 class AppNavigationSettingsMappingPolicyTest {
 
     @Test
-    fun oneTakeModePreservesSavedChoiceIndependentlyOfMasterSwitch() {
-        assertEquals(VideoTransitionMode.SYSTEM_PREFERRED,
-            mapAppNavigationSettingsFromPreferences(mutablePreferencesOf()).videoTransitionMode)
-        for (mode in VideoTransitionMode.entries) {
-            for (enabled in listOf(false, true)) {
-                val preferences = mutablePreferencesOf(
-                    stringPreferencesKey("video_transition_mode") to mode.storageValue,
-                    booleanPreferencesKey("card_transition_enabled") to enabled,
-                )
-                assertEquals(mode, mapAppNavigationSettingsFromPreferences(preferences).videoTransitionMode)
-                assertEquals(enabled, mapHomeSettingsFromPreferences(preferences).cardTransitionEnabled)
-            }
-        }
-    }
-
-
-    @Test
     fun containerRealtimeBlurDefaultsOffAndPreservesIndependentChoice() {
         val key = booleanPreferencesKey("settings_container_realtime_blur_enabled")
         assertFalse(AppNavigationSettings().settingsContainerRealtimeBlurEnabled)

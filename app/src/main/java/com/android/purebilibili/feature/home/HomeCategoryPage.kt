@@ -270,6 +270,7 @@ internal fun HomeCategoryPageContent(
                 bvid = video.bvid,
                 cid = video.cid,
                 coverUrl = video.pic,
+                title = video.title,
                 isVerticalVideo = video.resolveIsVerticalForNavigation(),
                 source = HomeVideoClickSource.TODAY_WATCH,
                 sourceRoute = resolveHomeCategoryVideoSourceRoute(HomeCategory.RECOMMEND)
@@ -613,6 +614,7 @@ internal fun HomeCategoryPageContent(
                                     episodeId = video.episodeId,
                                     cid = cid,
                                     coverUrl = video.pic,
+                                    title = video.title,
                                     isVerticalVideo = video.resolveIsVerticalForNavigation(),
                                     source = HomeVideoClickSource.GRID,
                                     sourceRoute = sourceRoute
@@ -669,6 +671,7 @@ internal fun HomeCategoryPageContent(
                                     episodeId = video.episodeId,
                                     cid = cid,
                                     coverUrl = video.pic,
+                                    title = video.title,
                                     isVerticalVideo = video.resolveIsVerticalForNavigation(),
                                     source = HomeVideoClickSource.GRID,
                                     sourceRoute = sourceRoute
@@ -790,6 +793,7 @@ internal fun HomeCategoryPageContent(
                                                 episodeId = video.episodeId,
                                                 cid = video.cid,
                                                 coverUrl = video.pic,
+                                                title = video.title,
                                                 isVerticalVideo = video.resolveIsVerticalForNavigation(),
                                                 source = HomeVideoClickSource.GRID,
                                                 sourceRoute = sourceRoute
@@ -813,6 +817,7 @@ internal fun HomeCategoryPageContent(
                                                 episodeId = video.episodeId,
                                                 cid = video.cid,
                                                 coverUrl = video.pic,
+                                                title = video.title,
                                                 isVerticalVideo = video.resolveIsVerticalForNavigation(),
                                                 source = HomeVideoClickSource.GRID,
                                                 sourceRoute = sourceRoute

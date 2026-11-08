@@ -67,7 +67,7 @@ open class VideoActivity : ComponentActivity() {
     private var officialRootPredictiveBack = false
 
     internal fun updateOfficialRootPredictiveBack(atRoot: Boolean) {
-        // 仅标准系统转场尝试跨 Activity 预测返回；自研窗口与旧圆角协议沿用各自返回。
+        // 仅标准系统转场尝试跨 Activity 预测返回；旧圆角协议沿用自身返回。
         val enabled = atRoot && Build.VERSION.SDK_INT >= 35 &&
             intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)?.startsWith("sdk:") == true
         if (officialRootPredictiveBack == enabled) return
@@ -314,11 +314,7 @@ open class VideoActivity : ComponentActivity() {
                     // 整卡留给窗口开合；播放器首帧只使用实测封面区域。
                     LocalVideoDetailOpeningSeed provides SystemVideoCardTransition.peekOpeningSeed(
                         intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
-                    ).let { officialSeed ->
-                        officialSeed ?: AppVideoCardWindow.session(
-                            intent.getStringExtra(AppVideoCardWindow.EXTRA_SESSION),
-                        )?.openingSeed
-                    },
+                    ),
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->

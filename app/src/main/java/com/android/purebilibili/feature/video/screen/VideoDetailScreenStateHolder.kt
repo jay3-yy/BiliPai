@@ -449,6 +449,7 @@ internal fun VideoDetailScreenStateHolder(
     bvid: String,
     cid: Long = 0L,
     coverUrl: String = "",
+    title: String = "",
     startInFullscreen: Boolean = false,
     startAudioFromRoute: Boolean = false,
     autoEnterPortraitFromRoute: Boolean = false,
@@ -1243,7 +1244,6 @@ internal fun VideoDetailScreenStateHolder(
 
     // 普通导航与整卡导航共用落位后的工作错峰；不借卡片开关改变玻璃或原生布局。
     // 已有播放器复用入口不延后；entry 内阶段单向锁存，返回预览不重新关闭许可。
-    val entryPlaybackSettled = remember { kotlinx.coroutines.flow.MutableStateFlow(false) }
     val entryWorkPhase = rememberVideoDetailEntryWorkPhase(
         staggerWork = shouldStaggerVideoDetailEntryWork(
             deferEntryLoad = deferVideoDetailEntryLoad,
@@ -1251,7 +1251,6 @@ internal fun VideoDetailScreenStateHolder(
         ),
         contentReady = isTransitionFinished,
         isVisible = isVisible,
-        playbackSettled = entryPlaybackSettled,
     )
     val entryPlaybackReady = entryTransitionFinished && entryWorkPhase != VideoDetailEntryWorkPhase.Content
     val entryRelatedReady = entryWorkPhase == VideoDetailEntryWorkPhase.Related
@@ -2192,30 +2191,6 @@ internal fun VideoDetailScreenStateHolder(
             (entryRelatedReady || uiState is VideoPlaybackUiState.Error),
         playbackSessionActive = playbackSessionActiveForMorph,
     )
-    DisposableEffect(playerState.player) {
-        val player = playerState.player
-        val listener = object : Player.Listener {
-            override fun onRenderedFirstFrame() { entryPlaybackSettled.value = true }
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED ||
-                    (playbackState == Player.STATE_READY && !player.playWhenReady)
-                ) entryPlaybackSettled.value = true
-            }
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!playWhenReady && player.playbackState == Player.STATE_READY) {
-                    entryPlaybackSettled.value = true
-                }
-            }
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                entryPlaybackSettled.value = true
-            }
-        }
-        player.addListener(listener)
-        onDispose { player.removeListener(listener) }
-    }
-    LaunchedEffect(uiState is VideoPlaybackUiState.Error) {
-        if (uiState is VideoPlaybackUiState.Error) entryPlaybackSettled.value = true
-    }
     LaunchedEffect(isFullscreenMode) {
         val restorePositionMs = pendingFullscreenPositionRestoreMs
         if (restorePositionMs <= 0L) return@LaunchedEffect
@@ -5952,6 +5927,8 @@ internal fun VideoDetailScreenStateHolder(
     }
     androidx.compose.runtime.CompositionLocalProvider(
         LocalPlaybackResumeFeedback provides playbackEventState,
+        com.android.purebilibili.feature.video.ui.components.LocalVideoDetailLoadingTitle provides
+            title.takeIf { currentBvid == bvid }.orEmpty(),
         com.android.purebilibili.feature.video.ui.components.LocalRelatedVideoCardLayout provides relatedVideoCardLayout,
         com.android.purebilibili.feature.video.ui.section.LocalUseTabletDanmakuStyle provides useTabletLayout,
     ) {

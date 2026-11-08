@@ -472,6 +472,7 @@ internal sealed interface BiliPaiNavKey : NavKey {
         val sourceRoute: String? = null,
         /** 每次进入详情时刷新，避免同一视频复用已退出会话的 SaveableState。 */
         val openId: Long = 0L,
+        val title: String = "",
     ) : BiliPaiNavKey {
         override val routeBase: String = "video"
     }

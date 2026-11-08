@@ -6,16 +6,16 @@ import kotlin.test.assertNull
 
 class VideoLoadTimelineTest {
     @Test
-    fun recommendationSchedulingStagesAreOptionalAndOnlyRecordedOnce() {
+    fun recommendationRequestAndResultStagesAreOnlyRecordedOnce() {
         var nowMs = 0L
         val timeline = VideoLoadTimeline { nowMs }
         timeline.start(1L)
         nowMs = 100L
-        assertEquals(100L, timeline.mark(VideoLoadStage.RELATED_DEFERRED, 1L))
-        assertNull(timeline.mark(VideoLoadStage.RELATED_DEFERRED, 1L))
-        nowMs = 300L
-        assertEquals(300L, timeline.mark(VideoLoadStage.RELATED_REQUEST_STARTED, 1L))
+        assertEquals(100L, timeline.mark(VideoLoadStage.RELATED_REQUEST_STARTED, 1L))
         assertNull(timeline.mark(VideoLoadStage.RELATED_REQUEST_STARTED, 1L))
+        nowMs = 300L
+        assertEquals(300L, timeline.mark(VideoLoadStage.RELATED_RESULT, 1L))
+        assertNull(timeline.mark(VideoLoadStage.RELATED_RESULT, 1L))
         timeline.start(2L)
         assertEquals(0L, timeline.mark(VideoLoadStage.RELATED_REQUEST_STARTED, 2L))
     }

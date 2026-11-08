@@ -33,6 +33,8 @@ import com.android.purebilibili.core.ui.ContainerLevel
  *  骨架屏组件 - iOS 风格加载占位
  */
 
+internal val LocalVideoDetailLoadingTitle = staticCompositionLocalOf { "" }
+
 private val LocalVideoSkeletonPulse = staticCompositionLocalOf<androidx.compose.runtime.State<Float>?> { null }
 private val LocalVideoSkeletonAnimationAllowed = staticCompositionLocalOf { true }
 
@@ -216,11 +218,23 @@ private fun VideoDetailTitleInfoSkeleton() {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            SkeletonBox(
-                modifier = Modifier.weight(1f),
-                height = 18.dp,
-                cornerRadius = 9.dp
-            )
+            val loadingTitle = LocalVideoDetailLoadingTitle.current
+            if (loadingTitle.isNotBlank()) {
+                com.android.purebilibili.core.ui.components.AppText(
+                    text = loadingTitle,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = AppContentColors.primaryText(),
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            } else {
+                SkeletonBox(
+                    modifier = Modifier.weight(1f),
+                    height = 18.dp,
+                    cornerRadius = 9.dp
+                )
+            }
             Spacer(Modifier.width(8.dp))
             SkeletonBox(
                 modifier = Modifier.size(20.dp),

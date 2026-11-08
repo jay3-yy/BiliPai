@@ -262,7 +262,6 @@ import com.android.purebilibili.navigation3.shouldBindVideoDetailBackPreviewPlay
 import com.android.purebilibili.navigation3.shouldActivateVideoDetailPlaybackSession
 import com.android.purebilibili.navigation3.shouldRecoverVideoPlayerAfterBackCancellation
 import com.android.purebilibili.navigation3.resolveBiliPaiVideoSource
-import com.android.purebilibili.navigation3.shouldUseMiuixVideoCardMorph
 import com.android.purebilibili.navigation3.predictiveback.BiliPaiPredictiveBackAnimationStyle
 import com.android.purebilibili.navigation3.predictiveback.BiliPaiPredictiveBackExitDirection
 import com.android.purebilibili.navigation3.resolveInitialBiliPaiBackStack
@@ -296,7 +295,7 @@ import java.nio.charset.StandardCharsets
 // 定义路由参数结构
 object VideoRoute {
     const val base = "video"
-    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}&fullscreen={fullscreen}&resumePositionMs={resumePositionMs}&commentRootRpid={commentRootRpid}&commentTargetRpid={commentTargetRpid}&initialVertical={initialVertical}&directPortraitEntry={directPortraitEntry}"
+    const val route = "$base/{bvid}?cid={cid}&cover={cover}&startAudio={startAudio}&autoPortrait={autoPortrait}&fullscreen={fullscreen}&resumePositionMs={resumePositionMs}&commentRootRpid={commentRootRpid}&commentTargetRpid={commentTargetRpid}&initialVertical={initialVertical}&directPortraitEntry={directPortraitEntry}&title={title}"
 
     internal fun resolveVideoRoutePath(
         bvid: String,
@@ -310,10 +309,12 @@ object VideoRoute {
         commentTargetRpid: Long = 0L,
         initialVertical: Boolean = false,
         directPortraitEntry: Boolean = false,
+        title: String = "",
     ): String {
         val initialVerticalQuery = if (initialVertical) "&initialVertical=true" else ""
         val directPortraitQuery = if (directPortraitEntry) "&directPortraitEntry=true" else ""
-        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait&fullscreen=$fullscreen&resumePositionMs=${resumePositionMs.coerceAtLeast(0L)}&commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}&commentTargetRpid=${commentTargetRpid.coerceAtLeast(0L)}$initialVerticalQuery$directPortraitQuery"
+        val titleQuery = if (title.isNotBlank()) "&title=${Uri.encode(title)}" else ""
+        return "$base/$bvid?cid=$cid&cover=$encodedCover&startAudio=$startAudio&autoPortrait=$autoPortrait&fullscreen=$fullscreen&resumePositionMs=${resumePositionMs.coerceAtLeast(0L)}&commentRootRpid=${commentRootRpid.coerceAtLeast(0L)}&commentTargetRpid=${commentTargetRpid.coerceAtLeast(0L)}$initialVerticalQuery$directPortraitQuery$titleQuery"
     }
 
     // 构建 helper
@@ -329,6 +330,7 @@ object VideoRoute {
         commentTargetRpid: Long = 0L,
         initialVertical: Boolean = false,
         directPortraitEntry: Boolean = false,
+        title: String = "",
     ): String {
         val encodedCover = Uri.encode(coverUrl)
         return resolveVideoRoutePath(
@@ -343,6 +345,7 @@ object VideoRoute {
             commentTargetRpid = commentTargetRpid,
             initialVertical = initialVertical,
             directPortraitEntry = directPortraitEntry,
+            title = title,
         )
     }
 }
@@ -375,6 +378,7 @@ internal fun resolveStandardVideoRoute(
     commentTargetRpid: Long = 0L,
     initialVertical: Boolean = false,
     directPortraitEntry: Boolean = false,
+    title: String = "",
 ): String {
     val encodedCover = URLEncoder.encode(coverUrl, StandardCharsets.UTF_8.toString())
     return VideoRoute.resolveVideoRoutePath(
@@ -389,6 +393,7 @@ internal fun resolveStandardVideoRoute(
         commentTargetRpid = commentTargetRpid,
         initialVertical = initialVertical,
         directPortraitEntry = directPortraitEntry,
+        title = title,
     )
 }
 
@@ -526,7 +531,8 @@ fun AppNavigation(
             homeSettings = homeSettings,
         )
     }
-    val cardTransitionEnabled = appearance.cardTransitionEnabled
+    // 一镜到底仅由系统窗口承接；应用内导航统一使用普通页面转场。
+    val cardTransitionEnabled = false
     val videoTransitionRealtimeBlurEnabled by remember(context) {
         SettingsManager.getVideoTransitionRealtimeBlurEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = false)
@@ -635,13 +641,13 @@ fun AppNavigation(
     }
     val videoCardTransitionClock = rememberVideoCardTransitionClock()
     val systemReduceMotion = rememberSystemReduceMotion()
-    // 卡片开关共同约束官方与应用内路径；官方不可用时保留同宿主的连续形变。
+    val systemCardTransitionEnabled = appearance.cardTransitionEnabled && !systemReduceMotion
     val sharedVideoCardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion
     androidx.compose.runtime.SideEffect {
         (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)
-            ?.updateOfficialReturnMotion(sharedVideoCardTransitionEnabled, videoTransitionRealtimeBlurEnabled)
+            ?.updateOfficialReturnMotion(systemCardTransitionEnabled, videoTransitionRealtimeBlurEnabled)
     }
-    val videoCardSourceTrackingEnabled = sharedVideoCardTransitionEnabled
+    val videoCardSourceTrackingEnabled = systemCardTransitionEnabled
     val effectiveVideoCardTransitionDurationMillis = if (systemReduceMotion) {
         VideoCardTransitionVisualTimeline.REDUCED_MOTION_DURATION_MILLIS
     } else {
@@ -713,10 +719,6 @@ fun AppNavigation(
         var predictiveBackCancelRecoveryGeneration by remember { mutableIntStateOf(0) }
         var accountSessionRefreshGeneration by remember { mutableIntStateOf(0) }
         val currentNavigation3Key = navigation3BackStack.lastOrNull()
-        androidx.compose.runtime.SideEffect {
-            (hostActivity as? com.android.purebilibili.feature.video.AppVideoActivity)
-                ?.updateRootState(navigation3BackStack.size == 1)
-        }
         val currentRoute = currentNavigation3Key?.toLegacyRoute()
         var previousOrientationDestination by remember { mutableStateOf(currentNavigation3Key) }
         LaunchedEffect(currentNavigation3Key) {
@@ -1113,29 +1115,6 @@ fun AppNavigation(
             )
             return captureVideoCardTransitionSession(bvid, source, coverUrl, useRecordedCardSource)
         }
-        fun prearmVideoCardOpening(session: VideoCardTransitionSession) {
-            val hasUsableSourceBounds = session.cardBounds
-                ?.let { it.width > 1f && it.height > 1f } == true
-            if (sharedVideoCardTransitionEnabled && !systemReduceMotion && !hasUsableSourceBounds) {
-                com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.onSourceGeometryRejected(
-                    sourceKey = session.sourceKey,
-                    recordedSourceKey = CardPositionManager.lastClickedVideoSourceKey,
-                    hasRecordedBounds = CardPositionManager.lastClickedCardBounds != null,
-                )
-            }
-            if (
-                shouldUseMiuixVideoCardMorph(
-                    cardTransitionEnabled = sharedVideoCardTransitionEnabled,
-                    reduceMotion = systemReduceMotion,
-                    sourceRoute = session.sourceRoute,
-                    hasUsableSourceBounds = hasUsableSourceBounds,
-                )
-            ) {
-                // Activate the source-cover session before NavDisplay mounts the destination.
-                // Waiting for its stack-observer effect exposes the black player Surface for one frame.
-                videoCardTransitionClock.beginOpeningIfNeeded(session.sourceRoute)
-            }
-        }
         var lastVideoDetailOpenId by remember { mutableLongStateOf(0L) }
         var lastLiveAreaDetailOpenId by remember { mutableLongStateOf(0L) }
         var lastSearchOpenId by remember { mutableLongStateOf(0L) }
@@ -1254,10 +1233,8 @@ fun AppNavigation(
                 coverUrl = null,
                 useRecordedCardSource = true,
             )
-            if (appNavigationSettings.videoTransitionMode !=
-                com.android.purebilibili.core.store.VideoTransitionMode.SYSTEM_PREFERRED ||
-                !com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
-                    sharedVideoCardTransitionEnabled, session,
+            if (!com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
+                    systemCardTransitionEnabled, session,
                 )
             ) {
                 return commitInApp()
@@ -1384,7 +1361,6 @@ fun AppNavigation(
                         },
                     )
                     .markDetailEntered(SystemClock.uptimeMillis())
-                prearmVideoCardOpening(transitionSession)
             }
             pushNavigation3Key(
                 BiliPaiNavKey.Story(
@@ -1423,7 +1399,7 @@ fun AppNavigation(
                     bvid = videoKey?.bvid.orEmpty(),
                     cid = videoKey?.cid ?: 0L,
                     coverUrl = videoKey?.coverUrl.orEmpty(),
-                    cardTransitionEnabled = cardTransitionEnabled,
+                    cardTransitionEnabled = appearance.cardTransitionEnabled,
                 )?.let { seed ->
                     navigateToPortraitStoryInNavigation3(seed, sourceRoute = sourceRoute, pendingTransitionSession = transitionSession)
                     return
@@ -1445,7 +1421,7 @@ fun AppNavigation(
                             )
                         ) return@launch
                         if (isVertical) {
-                            if (cardTransitionEnabled) {
+                            if (appearance.cardTransitionEnabled) {
                                 navigateToVideoRouteInNavigation3(
                                     route = videoKey.copy(
                                         autoPortrait = true,
@@ -1488,12 +1464,14 @@ fun AppNavigation(
                 is BiliPaiNavKey.VideoDetail -> {
                     val morphDirectPortrait = resolveDirectPortraitDetailMorphEntry(
                         directPortraitStoryEntry = playerInteractionSettings.directPortraitStoryEntry,
-                        cardTransitionEnabled = cardTransitionEnabled,
+                        cardTransitionEnabled = appearance.cardTransitionEnabled,
                         isVerticalVideo = parsedKey.initialVertical || parsedKey.directPortraitEntry,
                         coverUrl = parsedKey.coverUrl,
                         startAudio = parsedKey.startAudio,
                     ) || parsedKey.directPortraitEntry
                     parsedKey.copy(
+                        // 点击会话已校验来源身份；首帧标题与动画是否启用无关。
+                        title = parsedKey.title.ifBlank { transitionSession.sourceChromeSnapshot?.title.orEmpty() },
                         sourceRoute = transitionSession.sourceRoute,
                         autoPortrait = parsedKey.autoPortrait || morphDirectPortrait,
                         initialVertical = parsedKey.initialVertical || morphDirectPortrait,
@@ -1512,7 +1490,6 @@ fun AppNavigation(
                         },
                     )
                     .markDetailEntered(SystemClock.uptimeMillis())
-                prearmVideoCardOpening(transitionSession)
                 miniPlayerManager?.isNavigatingToVideo = true
                 // 合集列表 / 详情压详情：进新片前立刻挂起上一级仍在响的 player，避免只听见旧声音。
                 if (videoBvid.isNotBlank()) {
@@ -1521,30 +1498,9 @@ fun AppNavigation(
                 miniPlayerManager?.exitMiniMode(animate = false)
                 pushNavigation3Key(key)
             }
-            if (key is BiliPaiNavKey.VideoDetail && sharedVideoCardTransitionEnabled &&
-                videoTransitionRealtimeBlurEnabled &&
-                appNavigationSettings.videoTransitionMode == com.android.purebilibili.core.store.VideoTransitionMode.APP
-            ) {
-                coroutineScope.launch {
-                    val isCurrent = {
-                        videoNavigationRequests.isCurrent(
-                            navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
-                        )
-                    }
-                    val opened = com.android.purebilibili.feature.video.AppVideoCardWindow.tryOpen(
-                        activity = hostActivity,
-                        request = com.android.purebilibili.feature.video.VideoOpenRequest.fromKey(key),
-                        source = transitionSession,
-                        backgroundColor = backgroundColor.toArgb(),
-                        isCurrent = isCurrent,
-                    )
-                    if (opened) officialVideoChildActive = true
-                    else if (isCurrent() && hostActivity.window.decorView.hasWindowFocus()) commitInAppVideoNavigation()
-                }
-            } else if (key is BiliPaiNavKey.VideoDetail &&
-                appNavigationSettings.videoTransitionMode == com.android.purebilibili.core.store.VideoTransitionMode.SYSTEM_PREFERRED &&
+            if (key is BiliPaiNavKey.VideoDetail &&
                 com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
-                    sharedVideoCardTransitionEnabled, transitionSession,
+                    systemCardTransitionEnabled, transitionSession,
                 )
             ) {
                 coroutineScope.launch {
@@ -1586,6 +1542,7 @@ fun AppNavigation(
             skipPortraitStoryResolution: Boolean = false,
             useRecordedCardSource: Boolean = true,
             pendingTransitionSession: VideoCardTransitionSession? = null,
+            title: String = "",
         ) {
             val navigationRequest = videoNavigationRequests.begin(
                 navigation3BackStack, navigation3ReturnSession.sourceGeneration,
@@ -1603,7 +1560,7 @@ fun AppNavigation(
             )
             val morphDirectPortrait = resolveDirectPortraitDetailMorphEntry(
                 directPortraitStoryEntry = playerInteractionSettings.directPortraitStoryEntry,
-                cardTransitionEnabled = cardTransitionEnabled,
+                cardTransitionEnabled = appearance.cardTransitionEnabled,
                 isVerticalVideo = initialVertical || directPortraitEntry,
                 coverUrl = coverUrl,
                 startAudio = startAudio,
@@ -1616,7 +1573,7 @@ fun AppNavigation(
                     bvid = bvid,
                     cid = cid,
                     coverUrl = coverUrl,
-                    cardTransitionEnabled = cardTransitionEnabled,
+                    cardTransitionEnabled = appearance.cardTransitionEnabled,
                 )?.let { seed ->
                     navigateToPortraitStoryInNavigation3(seed, sourceRoute = sourceRoute, pendingTransitionSession = transitionSession)
                     return
@@ -1644,6 +1601,7 @@ fun AppNavigation(
                         skipPortraitStoryResolution = skipPortraitStoryResolution,
                         useRecordedCardSource = useRecordedCardSource,
                         pendingTransitionSession = transitionSession,
+                        title = title,
                     )
                 }
                 return
@@ -1673,6 +1631,7 @@ fun AppNavigation(
                 resumePositionMs = resumePositionMs,
                 initialVertical = navigationVertical || morphDirectPortrait,
                 directPortraitEntry = morphDirectPortrait,
+                title = title,
             )
             if (
                 !skipPortraitStoryResolution &&
@@ -1706,6 +1665,7 @@ fun AppNavigation(
                                 skipPortraitStoryResolution = true,
                                 useRecordedCardSource = useRecordedCardSource,
                                 pendingTransitionSession = transitionSession,
+                                title = title,
                             )
                         } else {
                             navigateToPortraitStoryInNavigation3(
@@ -1748,6 +1708,7 @@ fun AppNavigation(
                                 bvid = intent.bvid,
                                 cid = intent.cid,
                                 coverUrl = intent.coverUrl,
+                                title = request.title,
                                 autoPortrait = true,
                                 initialVertical = intent.isVerticalVideo,
                                 sourceRoute = intent.sourceRoute ?: ScreenRoutes.Home.route
@@ -3960,6 +3921,7 @@ fun AppNavigation(
                     VideoDetailScreen(
                         bvid = videoKey.bvid,
                         coverUrl = videoKey.coverUrl,
+                        title = videoKey.title,
                         cid = videoKey.cid,
                         onUpClick = { mid -> pushNavigation3Route(ScreenRoutes.Space.createRoute(mid)) },
                         onUpClickWithVideo = { mid, targetBvid ->
@@ -5726,7 +5688,7 @@ fun AppNavigation(
                     backStack = navigation3BackStack,
                     onOpenCardContainer = { navigateToSystemCardWindowOrPush(it) },
                     activeMainHostRoute = activeBottomTabRoute,
-                    // 直播、文章等应用内容器保留原有开关，普通视频不再进入该形变链。
+                    // 系统转场未启动时，视频、直播及文章等均回退普通页面转场。
                     cardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion,
                     videoCardTransitionEnabled = sharedVideoCardTransitionEnabled,
                     videoTransitionRealtimeBlurEnabled = videoTransitionRealtimeBlurEnabled,

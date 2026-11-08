@@ -34,7 +34,7 @@ internal data class SystemVideoCardCapability(
     val roundedWindow: Boolean = false,
 )
 
-/** 系统窗口转场调度：标准协议优先，其次圆角窗口协议；自研形变由导航独立承接。
+/** 系统窗口转场调度：标准协议优先，其次圆角窗口协议；不可用时回退普通页面转场。
  * 只保存本次来源的弱锚点与卡片像素，不以 bvid 查找替代实例。主线程访问。
  */
 internal object SystemVideoCardTransition {
@@ -186,7 +186,11 @@ internal object SystemVideoCardTransition {
         sessions[token] = session
         var launched = false
         try {
-            launched = VideoActivityLauncher.open(activity, request, options.toBundle(), token) {
+            val windowRequest = request.forSystemCardTransition(
+                isVerticalVideo = request.initialVertical ||
+                    com.android.purebilibili.data.repository.VideoRepository.getCachedVerticalFlag(request.bvid) == true,
+            )
+            launched = VideoActivityLauncher.open(activity, windowRequest, options.toBundle(), token) {
                 // 等待窗口恢复后再次核对请求和几何，不用旧截图打开已切换的卡片。
                     isCurrent() && activity.window.decorView.hasWindowFocus() &&
                         CardPositionManager.isActiveVideoCardPixelOwner(owner) &&
@@ -197,7 +201,7 @@ internal object SystemVideoCardTransition {
             return true
         } catch (error: SecurityException) {
             // 系统服务拒绝本应用的转场准入时，窗口未启动，仍可回到应用内导航。
-            Logger.w("SystemVideoCardTransition", "系统拒绝窗口转场，改用应用内动画", error)
+            Logger.w("SystemVideoCardTransition", "系统拒绝窗口转场，改用普通页面转场", error)
             return false
         } finally {
             if (!launched) {
