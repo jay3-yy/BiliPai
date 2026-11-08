@@ -80,7 +80,7 @@ class SystemWindowCardSourceUiTest {
     fun partiallyClippedCardKeepsFullGeometryOnlyWhenExplicitlyAllowed() {
         rule.setContent {
             CompositionLocalProvider(LocalVideoCardSharedElementSourceRoute provides "source") {
-                val source = requireNotNull(rememberSystemWindowCardSource(BiliPaiNavKey.Live("42")))
+                val source = requireNotNull(rememberSystemWindowCardSource(BiliPaiNavKey.Live(roomId = "42")))
                 Box(Modifier.size(80.dp).clipToBounds()) {
                     Box(
                         Modifier.requiredSize(120.dp)
