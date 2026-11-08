@@ -10,10 +10,16 @@ dependencies {
     compileOnly("com.android.tools.build:gradle-api:${libs.versions.agp.get()}")
     implementation("org.ow2.asm:asm:9.8")
     implementation("org.ow2.asm:asm-commons:9.8")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("com.android.tools.build:gradle-api:${libs.versions.agp.get()}")
 }
 
 gradlePlugin {
     plugins {
+        create("composeClipboardReadGuard") {
+            id = "com.android.bilipai.compose-clipboard-read-guard"
+            implementationClass = "com.android.purebilibili.build.ComposeClipboardReadGuardPlugin"
+        }
         create("composePopupWindowGuard") {
             id = "com.android.bilipai.compose-popup-window-guard"
             implementationClass = "com.android.purebilibili.build.ComposePopupWindowGuardPlugin"

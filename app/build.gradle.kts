@@ -11,6 +11,8 @@ plugins {
     id("com.android.bilipai.compose-detached-owner-guard")
     // 弹窗退出后可能仍收到锚点布局回调，不再更新已移除的窗口。
     id("com.android.bilipai.compose-popup-window-guard")
+    // 剪贴板权限拒绝时，输入框的无障碍粘贴可用性查询返回不可用。
+    id("com.android.bilipai.compose-clipboard-read-guard")
     // Foundation 拖拽兼容补丁：在进入拖拽状态前过滤不受支持的输入类型。
     id("com.android.bilipai.compose-drag-start-guard")
     // 导航分发器被父级级联释放后，容忍子页面重复清理及延后的启用状态更新。
