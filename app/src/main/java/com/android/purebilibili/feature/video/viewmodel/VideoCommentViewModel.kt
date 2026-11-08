@@ -854,15 +854,17 @@ class VideoCommentViewModel : ViewModel() {
         dialogPagingSession = null
         subReplyPagingSession = null
         subReplyLoadJob?.cancel()
+        // A partial conversation is a fallback, not a permanent replacement for the floor.
+        val anchor = state.conversationAnchor.takeUnless { state.isTargetOnly }
         _subReplyState.update { current ->
             current.copy(
                 isLoading = true,
                 isRefreshing = true,
                 error = null,
+                conversationAnchor = anchor,
                 targetReplyId = if (current.isTargetOnly) current.targetReplyId else 0L,
             )
         }
-        val anchor = state.conversationAnchor
         if (anchor != null) {
             loadConversationReplies(anchor, page = 1, paginationOffset = null)
         } else {
@@ -933,6 +935,10 @@ class VideoCommentViewModel : ViewModel() {
     fun closeSubReplyConversation() {
         val current = _subReplyState.value
         if (current.conversationAnchor == null) return
+        if (current.isTargetOnly) {
+            closeSubReply()
+            return
+        }
         dialogPagingSession = null
         subReplyPagingSession = null
         subReplyLoadJob?.cancel()
@@ -1045,6 +1051,10 @@ class VideoCommentViewModel : ViewModel() {
                         isEnd = states.append.endOfPaginationReached, baseIsEnd = states.append.endOfPaginationReached,
                         error = failure?.let { it.message ?: "回复加载失败" }
                     )
+                    if (ready && page == 1 && next.isTargetOnly) {
+                        next.items.firstOrNull { it.rpid == next.targetReplyId }
+                            ?.let(::openSubReplyConversation)
+                    }
                 }
             }
         )
@@ -1100,8 +1110,14 @@ class VideoCommentViewModel : ViewModel() {
                 remoteItems = if (page == 1) newItems else remoteItems + newItems
                 val updatedItems = mergeSentSubReplies(
                     remoteItems,
-                    localSubReplies.values.filter {
-                        it.dialog == dialogId || it.parent == anchorReply.rpid || it.rpid == anchorReply.rpid
+                    buildList {
+                        // DialogList can omit the known target from its first page.
+                        if (current.isTargetOnly) add(anchorReply)
+                        localSubReplies.values.forEach {
+                            if (it.dialog == dialogId || it.parent == anchorReply.rpid || it.rpid == anchorReply.rpid) {
+                                add(it)
+                            }
+                        }
                     }
                 ).filterNot { it.rpid in removedSubReplyIds || sentReplies.isReplyRemoved(it.rpid) }
                 _subReplyState.value = current.copy(

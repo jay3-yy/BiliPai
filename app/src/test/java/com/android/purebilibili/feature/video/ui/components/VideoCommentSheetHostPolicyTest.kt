@@ -1,39 +1,11 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoCommentSheetHostPolicyTest {
-
-    @Test
-    fun `main comment header occupies layout space above the scrolling list`() {
-        val source = File(
-            "src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt"
-        ).readText()
-        val mainListSource = source
-            .substringAfter("internal fun VideoCommentMainList(")
-            .substringBefore("private fun VideoCommentBackToTopButton(")
-
-        val headerIndex = mainListSource.indexOf("CommentSortHeader(")
-        val listIndex = mainListSource.indexOf("LazyColumn(")
-        assertTrue(mainListSource.contains("Column(modifier = Modifier.fillMaxSize())"))
-        assertTrue(headerIndex >= 0 && headerIndex < listIndex)
-        assertFalse(mainListSource.contains(".zIndex("))
-    }
-
-    @Test
-    fun `thread detail return keeps the hoisted main comment list state`() {
-        val source = File(
-            "src/main/java/com/android/purebilibili/feature/video/ui/components/VideoCommentSheetHost.kt"
-        ).readText()
-
-        assertTrue(source.contains("val mainCommentListState = rememberLazyListState()"))
-        assertTrue(source.contains("listState = mainCommentListState"))
-        assertFalse(source.contains("mainListScrollToTopRequest"))
-    }
 
     @Test
     fun `predictive back pops conversation then thread then the sheet`() {

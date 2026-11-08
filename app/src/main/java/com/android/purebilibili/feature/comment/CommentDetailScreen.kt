@@ -120,7 +120,7 @@ fun CommentDetailScreen(
     }
 
     BackHandler(enabled = true) {
-        if (subReplyState.conversationAnchor != null) {
+        if (subReplyState.conversationAnchor != null && !subReplyState.isTargetOnly) {
             viewModel.closeConversation()
         } else {
             onBack()

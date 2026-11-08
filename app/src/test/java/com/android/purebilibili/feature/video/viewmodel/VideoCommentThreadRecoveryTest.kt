@@ -67,7 +67,7 @@ class VideoCommentThreadRecoveryTest {
         } returns Result.success(recovered)
         coEvery {
             CommentRepository.getDialogCommentsForSubject(any(), any(), any(), any(), any(), any())
-        } returns Result.failure(IllegalStateException("dialog offline"))
+        } returns Result.success(ReplyData(cursor = ReplyCursor(isEnd = true)))
         coEvery { CommentRepository.checkCommentStatus(any(), any(), any(), any(), any(), any()) } returns
             Result.failure(IllegalStateException("Detection disabled in this fixture"))
         model = VideoCommentViewModel()
@@ -118,19 +118,17 @@ class VideoCommentThreadRecoveryTest {
     }
 
     @Test
-    fun `returning from dialog discards a late response and keeps the original recovered target`() = runTest(dispatcher) {
-        model.openSubReplyFromRoute(root.rpid, target.rpid)
-        runCurrent()
+    fun `leaving fallback dialog dismisses the thread and ignores a late response`() = runTest(dispatcher) {
         val late = CompletableDeferred<Result<ReplyData>>()
         coEvery {
             CommentRepository.getDialogCommentsForSubject(any(), any(), any(), any(), any(), any())
         } coAnswers { withContext(NonCancellable) { late.await() } }
-        model.openSubReplyConversation(target)
+        model.openSubReplyFromRoute(root.rpid, target.rpid)
         runCurrent()
         model.closeSubReplyConversation()
         late.complete(Result.success(ReplyData(replies = listOf(target.copy(rpid = 99L)))))
         runCurrent()
-        assertTrue(model.subReplyState.value.isTargetOnly)
+        assertFalse(model.subReplyState.value.visible)
         assertNull(model.subReplyState.value.conversationAnchor)
         assertEquals(listOf(target), model.subReplyState.value.items)
     }
@@ -159,6 +157,7 @@ class VideoCommentThreadRecoveryTest {
         assertTrue(partial.visible)
         assertTrue(partial.isTargetOnly)
         assertNull(partial.rootReply)
+        assertEquals(target, partial.conversationAnchor)
         assertEquals(listOf(target), partial.items)
         assertEquals(root.rpid, partial.threadRootId)
         assertEquals(target.rpid, partial.targetReplyId)
@@ -245,13 +244,14 @@ class VideoCommentThreadRecoveryTest {
         model.loadMoreSubReplies()
         runCurrent()
         assertFalse(model.subReplyState.value.isTargetOnly)
+        assertNull(model.subReplyState.value.conversationAnchor)
         assertEquals(listOf(target), model.subReplyState.value.items)
         assertEquals("append offline", model.subReplyState.value.error)
         assertFalse(model.subReplyState.value.isLoading)
     }
 
     @Test
-    fun `rootless recovery loads structured dialog and returns to the original target after failure`() = runTest(dispatcher) {
+    fun `fallback dialog keeps loaded context on append failure until dismissed`() = runTest(dispatcher) {
         model.openSubReplyFromRoute(root.rpid, target.rpid)
         runCurrent()
         val partial = model.subReplyState.value
@@ -276,21 +276,29 @@ class VideoCommentThreadRecoveryTest {
         assertEquals("dialog append offline", model.subReplyState.value.error)
         model.closeSubReplyConversation()
         assertNull(model.subReplyState.value.conversationAnchor)
-        assertTrue(model.subReplyState.value.isTargetOnly)
-        assertEquals(listOf(target), model.subReplyState.value.items)
-        assertEquals(target.rpid, model.subReplyState.value.targetReplyId)
+        assertFalse(model.subReplyState.value.visible)
+        assertEquals(listOf(dialogReply, target), model.subReplyState.value.items)
     }
 
     @Test
-    fun `failed first dialog request keeps the readable anchor`() = runTest(dispatcher) {
+    fun `failed automatic dialog request keeps the target and retries the conversation`() = runTest(dispatcher) {
+        coEvery {
+            CommentRepository.getDialogCommentsForSubject(any(), any(), any(), any(), any(), any())
+        } returns Result.failure(IllegalStateException("dialog offline"))
         model.openSubReplyFromRoute(root.rpid, target.rpid)
-        runCurrent()
-        model.openSubReplyConversation(target)
         runCurrent()
         assertEquals(listOf(target), model.subReplyState.value.items)
         assertEquals("dialog offline", model.subReplyState.value.error)
+        val parent = target.copy(rpid = target.parent, parent = target.dialog)
+        coEvery {
+            CommentRepository.getDialogCommentsForSubject(1001L, 1, target.root, target.dialog, 1, null)
+        } returns Result.success(ReplyData(replies = listOf(parent, target), cursor = ReplyCursor(isEnd = true)))
+        model.loadMoreSubReplies()
+        runCurrent()
+        assertEquals(listOf(parent, target), model.subReplyState.value.items)
+        assertNull(model.subReplyState.value.error)
         model.closeSubReplyConversation()
-        assertEquals(listOf(target), model.subReplyState.value.items)
+        assertFalse(model.subReplyState.value.visible)
         assertNull(model.subReplyState.value.error)
     }
 
@@ -312,13 +320,11 @@ class VideoCommentThreadRecoveryTest {
 
     @Test
     fun `account switch drops old recovery and dialog responses`() = runTest(dispatcher) {
-        model.openSubReplyFromRoute(root.rpid, target.rpid)
-        runCurrent()
         val late = CompletableDeferred<Result<ReplyData>>()
         coEvery {
             CommentRepository.getDialogCommentsForSubject(any(), any(), any(), any(), any(), any())
         } coAnswers { withContext(NonCancellable) { late.await() } }
-        model.openSubReplyConversation(target)
+        model.openSubReplyFromRoute(root.rpid, target.rpid)
         runCurrent()
         identities.value = AccountSessionIdentity(mid = 99L)
         runCurrent()
@@ -344,5 +350,87 @@ class VideoCommentThreadRecoveryTest {
         assertFalse(model.subReplyState.value.visible)
         assertTrue(model.subReplyState.value.items.isEmpty())
         assertFalse(model.subReplyState.value.isTargetOnly)
+    }
+
+    @Test
+    fun `unavailable floor automatically reads and paginates the dialog without losing the target`() = runTest(dispatcher) {
+        val parent = target.copy(rpid = target.parent, parent = target.dialog)
+        val remoteTarget = target.copy(content = ReplyContent(message = "updated target"))
+        val later = target.copy(rpid = 60L, parent = target.rpid)
+        coEvery {
+            CommentRepository.getDialogCommentsForSubject(1001L, 1, target.root, target.dialog, 1, null)
+        } returns Result.success(ReplyData(
+            replies = listOf(parent), grpcNextOffset = "dialog-next",
+            cursor = ReplyCursor(isEnd = false),
+        ))
+        coEvery {
+            CommentRepository.getDialogCommentsForSubject(1001L, 1, target.root, target.dialog, 2, "dialog-next")
+        } returns Result.success(ReplyData(
+            replies = listOf(remoteTarget, later), cursor = ReplyCursor(isEnd = true),
+        ))
+        model.openSubReplyFromRoute(root.rpid, target.rpid)
+        runCurrent()
+        val first = model.subReplyState.value
+        assertNull(first.rootReply)
+        assertTrue(first.isTargetOnly)
+        assertEquals(target, first.conversationAnchor)
+        assertEquals(listOf(parent, target), first.items)
+        assertFalse(first.isEnd)
+        assertEquals(0, first.totalCount)
+        model.loadMoreSubReplies()
+        runCurrent()
+        val complete = model.subReplyState.value
+        assertEquals(listOf(parent, remoteTarget, later), complete.items)
+        assertTrue(complete.isEnd)
+        assertTrue(complete.isTargetOnly)
+        assertNull(complete.error)
+        model.closeSubReplyConversation()
+        val returned = model.subReplyState.value
+        assertFalse(returned.visible)
+        assertNull(returned.conversationAnchor)
+        model.loadMoreSubReplies()
+        runCurrent()
+        assertEquals(returned, model.subReplyState.value)
+    }
+
+    @Test
+    fun `target without a viewable dialog remains readable without opening a conversation`() = runTest(dispatcher) {
+        for (reply in listOf(target.copy(dialog = 0L), target.copy(parent = root.rpid))) {
+            coEvery {
+                CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+            } returns Result.success(recovered.copy(replies = listOf(reply)))
+            model.openSubReplyFromRoute(root.rpid, target.rpid)
+            runCurrent()
+            val partial = model.subReplyState.value
+            assertEquals(listOf(reply), partial.items)
+            assertNull(partial.conversationAnchor)
+            assertNull(partial.error)
+            assertTrue(partial.isTargetOnly)
+            assertTrue(partial.isEnd)
+            model.closeSubReply()
+        }
+    }
+
+    @Test
+    fun `leaving a normal conversation restores the complete thread`() = runTest(dispatcher) {
+        val parent = target.copy(rpid = target.parent, parent = target.dialog)
+        val unrelated = target.copy(rpid = 60L, parent = root.rpid, dialog = 60L)
+        val all = listOf(parent, target, unrelated)
+        coEvery {
+            CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(root = root, replies = all, cursor = ReplyCursor(isEnd = true)))
+        coEvery {
+            CommentRepository.getDialogCommentsForSubject(any(), any(), any(), any(), any(), any())
+        } returns Result.success(ReplyData(replies = listOf(parent, target), cursor = ReplyCursor(isEnd = true)))
+        model.openSubReplyFromRoute(root.rpid, target.rpid)
+        runCurrent()
+        model.openSubReplyConversation(target)
+        runCurrent()
+        assertEquals(listOf(parent, target), model.subReplyState.value.items)
+        model.closeSubReplyConversation()
+        assertTrue(model.subReplyState.value.visible)
+        assertFalse(model.subReplyState.value.isTargetOnly)
+        assertNull(model.subReplyState.value.conversationAnchor)
+        assertEquals(all, model.subReplyState.value.items)
     }
 }

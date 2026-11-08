@@ -43,6 +43,8 @@ fun SubReplySheet(
     onTimestampClick: ((Long) -> Unit)? = null,
     onImagePreview: ((List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit)? = null,
     onReplyClick: ((ReplyItem) -> Unit)? = null,
+    onConversationClick: ((ReplyItem) -> Unit)? = null,
+    onConversationBack: (() -> Unit)? = null,
     // [新增] 删除评论相关
     currentMid: Long = 0,
     onDissolveStart: ((Long) -> Unit)? = null,
@@ -138,6 +140,10 @@ fun SubReplySheet(
                     showUpFlag = showUpFlag,
                     onImagePreview = onImagePreview,
                     onReplyClick = onReplyClick,
+                    onConversationClick = onConversationClick,
+                    onConversationBack = onConversationBack,
+                    isConversationMode = state.conversationAnchor != null,
+                    conversationAnchorId = state.conversationAnchor?.rpid ?: 0L,
                     // [新增] 消散动画相关
                     dissolvingIds = state.dissolvingIds,
                     currentMid = currentMid,

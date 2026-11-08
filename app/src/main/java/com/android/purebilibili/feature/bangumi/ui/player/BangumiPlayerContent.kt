@@ -1051,6 +1051,8 @@ fun BangumiPlayerContent(
         currentMid = commentState.currentMid,
         showUpFlag = commentState.showUpFlag,
         onReplyClick = ::openReplyComposer,
+        onConversationClick = commentViewModel::openSubReplyConversation,
+        onConversationBack = commentViewModel::closeSubReplyConversation,
         onRootCommentClick = ::openRootCommentComposer,
         onUrlClick = { url -> onCommentUrlClick?.invoke(url) },
         onTimestampClick = onTimestampClick,

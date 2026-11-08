@@ -25,4 +25,15 @@ class SubtitlePositionTimelineTest {
         assertEquals(500L, advanced.nextBoundaryAfter(0L))
         assertEquals("字幕", resolveSubtitleTextAt(cues, subtitlePositionForOffset(500L, -500L)))
     }
+
+    @Test fun heldCueExpiryUsesMediaTimeAtAnyPlaybackSpeedAndOffset() {
+        val hold = com.android.purebilibili.core.subtitle.SUBTITLE_GAP_HOLD_MS
+        val cues = listOf(SubtitleCue(1000L, 2000L, "字幕"))
+        val timeline = subtitlePositionTimeline(cues, offsetMs = 500L, endHoldMs = hold)
+        val expiry = 2000L + 500L + hold + 1L
+        assertEquals(expiry, timeline.nextBoundaryAfter(2500L))
+        assertEquals(15L, timeline.updateDelayMs(expiry - 30L, 2f))
+        assertEquals(60L, timeline.updateDelayMs(expiry - 30L, 0.5f))
+        assertEquals(null, timeline.nextBoundaryAfter(expiry))
+    }
 }

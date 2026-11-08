@@ -354,30 +354,35 @@ class BiliSubtitlePolicyTest {
     }
 
     @Test
-    fun stickySubtitle_holdsPreviousTextAcrossShortBlankGaps() {
-        assertEquals(
-            "你好",
-            resolveStickySubtitleText(
-                currentText = null,
-                previousText = "你好",
-                blankGapMs = 120L,
-            ),
+    fun displayedSubtitleHoldUsesCueEndAndNeverDelaysTheNextCue() {
+        val cues = listOf(
+            SubtitleCue(1_000L, 2_000L, "第一句"),
+            SubtitleCue(2_200L, 2_300L, "下一句")
         )
-        assertNull(
-            resolveStickySubtitleText(
-                currentText = null,
-                previousText = "你好",
-                blankGapMs = 500L,
-            ),
+        val hold = com.android.purebilibili.core.subtitle.SUBTITLE_GAP_HOLD_MS
+        assertNull(resolveSubtitleDisplayTextAt(cues, 999L))
+        assertEquals("第一句", resolveSubtitleDisplayTextAt(cues, 2_100L))
+        assertNull(resolveSubtitleTextAt(cues, 2_100L))
+        assertEquals("下一句", resolveSubtitleDisplayTextAt(cues, 2_200L))
+        assertEquals("下一句", resolveSubtitleDisplayTextAt(cues, 2_300L + hold))
+        assertNull(resolveSubtitleDisplayTextAt(cues, 2_301L + hold))
+    }
+
+    @Test
+    fun displayedSubtitleFollowsSeekTargetInsteadOfPreviouslyDisplayedText() {
+        val cues = listOf(
+            SubtitleCue(1_000L, 2_000L, "早期字幕"),
+            SubtitleCue(10_000L, 11_000L, "后期字幕"),
+            SubtitleCue(14_000L, 15_000L, "后续字幕")
         )
-        assertEquals(
-            "新句",
-            resolveStickySubtitleText(
-                currentText = "新句",
-                previousText = "你好",
-                blankGapMs = 0L,
-            ),
-        )
+        assertEquals("后期字幕", resolveSubtitleDisplayTextAt(cues, 10_500L))
+        assertNull(resolveSubtitleDisplayTextAt(cues, 12_000L))
+        assertNull(resolveSubtitleDisplayTextAt(cues, 5_000L))
+        assertEquals("早期字幕", resolveSubtitleDisplayTextAt(cues, 1_500L))
+        assertNull(resolveSubtitleDisplayTextAt(cues, 2_500L))
+        assertEquals("后续字幕", resolveSubtitleDisplayTextAt(cues, 14_500L))
+        assertNull(resolveSubtitleDisplayTextAt(cues, 0L))
+        assertNull(resolveSubtitleDisplayTextAt(cues, 4_111_000L))
     }
 
     @Test
