@@ -216,6 +216,68 @@ class PlayerParityEmulatorTest {
     }
 
     @Test
+    fun inlineSubtitlesRemainReachableAcrossOrientationsAndMaterials() {
+        for (style in AppUiStyle.entries) {
+            scenario.onActivity { it.uiStyle = style; it.fullscreen = false }
+            for (landscape in listOf(false, true)) {
+                scenario.onActivity { it.rotateToLandscape(landscape) }
+                awaitPlayer { (it.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) == landscape }
+                for (glass in listOf(false, true)) {
+                    scenario.onActivity { it.glass = glass }
+                    rule.onNodeWithTag("player_subtitle_action").assertIsDisplayed().performClick()
+                    rule.onNodeWithText("关闭字幕").performScrollTo().performClick()
+                    awaitPlayer { C.TRACK_TYPE_TEXT in it.player.trackSelectionParameters.disabledTrackTypes }
+                    rule.onNodeWithTag("player_subtitle_action").performClick()
+                    rule.onNodeWithText("Local English subtitles").performScrollTo().performClick()
+                    awaitPlayer { it.subtitleSelected && it.subtitleCue.contains("Local subtitle fixture") }
+                    scenario.onActivity { assertFalse(it.fullscreen) }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun fullscreenMoreSettingsOpensSubpagesAndStandaloneDialogs() {
+        for (style in AppUiStyle.entries) {
+            scenario.onActivity { it.uiStyle = style; it.fullscreen = true }
+            for (landscape in listOf(false, true)) {
+                scenario.onActivity { it.rotateToLandscape(landscape) }
+                awaitPlayer { (it.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) == landscape }
+                for (glass in listOf(false, true)) {
+                    scenario.onActivity { it.glass = glass }
+                    fun openSettings() {
+                        rule.onNode(hasContentDescription("更多", substring = true)).performClick()
+                        if (!landscape) rule.onNodeWithText("播放器设置").performScrollTo().performClick()
+                    }
+                    openSettings()
+                    rule.onNodeWithText("画面变换").performScrollTo().performClick()
+                    rule.onNodeWithText("左右翻转").assertIsDisplayed()
+                    rule.onNodeWithText("返回").performClick()
+                    rule.onNodeWithText("首选编码格式").performScrollTo().performClick()
+                    rule.onNodeWithText("AVC", substring = true).assertIsDisplayed()
+                    rule.onNodeWithText("返回").performClick()
+                    rule.onNodeWithText("定时关闭").performScrollTo().performClick()
+                    rule.onNodeWithText("返回").assertIsDisplayed().performClick()
+                    rule.onNodeWithText("字幕设置").performScrollTo().performClick()
+                    rule.onNodeWithText("字幕样式").assertIsDisplayed()
+                    assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(
+                        android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK,
+                    ))
+                    rule.waitUntil(5_000) { rule.onAllNodesWithText("字幕样式").fetchSemanticsNodes().isEmpty() }
+                    openSettings()
+                    rule.onNodeWithText("播放地址").performScrollTo().performClick()
+                    rule.onNodeWithText("编辑播放地址").assertIsDisplayed()
+                    rule.onNodeWithText("取消").performClick()
+                    openSettings()
+                    rule.onNodeWithText("播放信息").performScrollTo().performClick()
+                    rule.onNodeWithText("播放信息").assertIsDisplayed()
+                    rule.onNodeWithText("确定").performClick()
+                }
+            }
+        }
+    }
+
+    @Test
     fun inlineEpisodeSelectionChangesMediaIdentityWithoutEnteringFullscreen() {
         scenario.onActivity { it.rotateToLandscape(false); it.fullscreen = false }
         awaitPlayer { it.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT }

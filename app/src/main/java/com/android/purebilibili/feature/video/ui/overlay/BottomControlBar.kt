@@ -391,7 +391,7 @@ fun BottomControlBar(
                             modifier = anchor(PlayerControlAnchor.TRANSLATION, "player_translation_action"),
                         )
                     }
-                    if (!simplifiedPortrait && subtitleControlState.trackAvailable) {
+                    if ((!simplifiedPortrait || !isFullscreen) && subtitleControlState.trackAvailable) {
                         PlayerControlIconAction(
                             icon = if (subtitleControlState.enabled) Icons.Filled.ClosedCaption else Icons.Outlined.ClosedCaptionOff,
                             description = "字幕", width = slotWidth, height = 30.dp,

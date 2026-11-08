@@ -31,6 +31,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
@@ -50,6 +51,16 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppWindowAction
 import com.android.purebilibili.core.ui.components.AppWindowActionMenu
+import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.popup.AppGlassPopupHost
+import com.android.purebilibili.feature.home.components.resolveLiquidGlassTuning
+import com.android.purebilibili.feature.video.subtitle.rememberPiliSubtitleTools
+import com.android.purebilibili.feature.video.ui.components.DanmakuSettingsPanel
+import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
+import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlCallbacks
+import com.android.purebilibili.feature.video.ui.overlay.SubtitleControlUiState
+import android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK
+import androidx.test.platform.app.InstrumentationRegistry
 import com.android.purebilibili.feature.video.ui.components.QualitySelectionMenu
 import com.android.purebilibili.feature.video.ui.components.PlayerSelectionPopup
 import com.android.purebilibili.feature.video.ui.components.PlayerSelectionItem
@@ -360,6 +371,72 @@ class PlayerCompactMenuUiTest {
             }
         }
         composeTestRule.onNodeWithText("不应显示").assertDoesNotExist()
+    }
+
+    @Test
+    fun playerSettingsHandsOffToSubtitleAndDanmakuPanelsBeforeReopening() {
+        val style = mutableStateOf(AppUiStyle.MATERIAL3)
+        val glass = mutableStateOf(false)
+        val settingsVisible = mutableStateOf(false)
+        val danmakuVisible = mutableStateOf(false)
+        composeTestRule.setContent {
+            MenuTheme(style.value, glass.value) {
+                AppGlassPopupHost(
+                    glassAvailable = glass.value,
+                    tuning = resolveLiquidGlassTuning(0.5f),
+                ) {
+                    val subtitles = rememberPiliSubtitleTools(
+                        bvid = "local-menu", cid = 1L, player = null,
+                        nativeControls = SubtitleControlUiState(),
+                        nativeCallbacks = SubtitleControlCallbacks(),
+                        isFullscreen = true,
+                    )
+                    AppTextButton(
+                        onClick = { settingsVisible.value = true },
+                    ) { AppText("打开播放器设置") }
+                    if (settingsVisible.value) {
+                        VideoSettingsPanel(
+                            sleepTimerMinutes = null, onSleepTimerChange = {},
+                            isFullscreen = true, onReload = {}, currentQualityLabel = "",
+                            onSubtitleSettings = subtitles.onSubtitleSettings,
+                            onSaveSubtitle = subtitles.onSaveSubtitle,
+                            onDanmakuSettingsClick = { danmakuVisible.value = true },
+                            onDismiss = { settingsVisible.value = false },
+                        )
+                    }
+                    if (danmakuVisible.value) {
+                        DanmakuSettingsPanel(
+                            opacity = 1f, fontScale = 1f, speed = 1f,
+                            onOpacityChange = {}, onFontScaleChange = {}, onSpeedChange = {},
+                            onDismiss = { danmakuVisible.value = false },
+                        )
+                    }
+                }
+            }
+        }
+        for (uiStyle in AppUiStyle.entries) {
+            for (useGlass in listOf(false, true)) {
+                composeTestRule.runOnIdle { style.value = uiStyle; glass.value = useGlass }
+                composeTestRule.onNodeWithText("打开播放器设置").performClick()
+                composeTestRule.onNodeWithText("字幕设置").performScrollTo().performClick()
+                composeTestRule.onNodeWithText("字幕样式").assertIsDisplayed()
+                assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(GLOBAL_ACTION_BACK))
+                composeTestRule.waitUntil(5_000) {
+                    composeTestRule.onAllNodesWithText("字幕样式").fetchSemanticsNodes().isEmpty()
+                }
+                composeTestRule.onNodeWithText("打开播放器设置").performClick()
+                composeTestRule.onNodeWithText("保存字幕").performScrollTo().performClick()
+                composeTestRule.onNodeWithText("当前视频没有可导出的字幕，请先加载字幕。").assertIsDisplayed()
+                composeTestRule.onNodeWithText("关闭").performClick()
+                composeTestRule.onNodeWithText("打开播放器设置").performClick()
+                composeTestRule.onNodeWithText("弹幕设置").performScrollTo().performClick()
+                composeTestRule.onNodeWithText("屏蔽规则").assertIsDisplayed()
+                assertTrue(InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(GLOBAL_ACTION_BACK))
+                composeTestRule.waitUntil(5_000) {
+                    composeTestRule.onAllNodesWithText("屏蔽规则").fetchSemanticsNodes().isEmpty()
+                }
+            }
+        }
     }
 
     @Composable
