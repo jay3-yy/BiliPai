@@ -417,10 +417,42 @@ object JsonPluginManager {
         }
 
         validatePlugin(plugin)?.let { error ->
-            return Result.failure(Exception(error))
+            return Result.failure(error)
         }
 
         return Result.success(plugin)
+    }
+
+    /** 本地编写沿用导入校验，不发起网络请求。 */
+    fun parsePluginSource(source: String): JsonRulePlugin {
+        // 流式对象解码可能接受属性间缺逗号；先检查完整 JSON 结构，再保留类型解码的原文位置。
+        json.parseToJsonElement(source)
+        val plugin = json.decodeFromString<JsonRulePlugin>(source)
+        validatePlugin(plugin)?.let { throw it }
+        validateEditableJsonRules(plugin)
+        return plugin
+    }
+
+    suspend fun installFromSource(source: String, editingId: String? = null): JsonRulePlugin {
+        val plugin = withContext(Dispatchers.Default) { parsePluginSource(source) }
+        return withStore {
+            check(isInitialized) { "规则管理器尚未初始化" }
+            require(editingId == null || editingId == plugin.id) { "编辑已有插件时不能修改 ID" }
+            val existing = _plugins.value.find { it.plugin.id == plugin.id }
+            require(editingId != null || existing == null) { "该 ID 已存在，请从已安装列表编辑，或修改 ID" }
+            check(editingId == null || existing != null) { "插件已被移除，请返回后重新创建" }
+            savePlugin(plugin)
+            val enabled = existing?.enabled ?: true
+            _plugins.value = _plugins.value.filter { it.plugin.id != plugin.id } +
+                LoadedJsonPlugin(plugin, enabled, sourceUrl = null)
+            persistEnabledState(plugin.id, enabled)
+            _filterStats.value = _filterStats.value - plugin.id
+            saveFilterStats()
+            if (plugin.type == "danmaku" || existing?.plugin?.type == "danmaku") {
+                PluginManager.notifyDanmakuPluginsUpdated()
+            }
+            plugin
+        }
     }
 
     private fun validateImportUrl(url: String): Result<Unit> {
@@ -436,18 +468,19 @@ object JsonPluginManager {
         return Result.success(Unit)
     }
 
-    private fun validatePlugin(plugin: JsonRulePlugin): String? {
-        if (plugin.id.isBlank()) return "插件 ID 不能为空"
+    private fun validatePlugin(plugin: JsonRulePlugin): JsonRuleSourceException? {
+        if (plugin.id.isBlank()) return JsonRuleSourceException("插件 ID 不能为空", "$.id")
         if (!PLUGIN_ID_REGEX.matches(plugin.id)) {
-            return "插件 ID 格式无效，仅支持字母数字/._-"
+            return JsonRuleSourceException("插件 ID 格式无效，仅支持字母数字/._-", "$.id")
         }
-        if (plugin.name.isBlank()) return "插件名称不能为空"
+        if (plugin.name.isBlank()) return JsonRuleSourceException("插件名称不能为空", "$.name")
         if (plugin.type !in setOf("feed", "danmaku")) {
-            return "不支持的插件类型: ${plugin.type}"
+            return JsonRuleSourceException("不支持的插件类型: ${plugin.type}", "$.type")
         }
-        if (plugin.rules.isEmpty()) return "规则不能为空"
-        if (plugin.rules.any { it.toCondition() == null }) {
-            return "存在无效规则（缺少 condition 或 field/op/value）"
+        if (plugin.rules.isEmpty()) return JsonRuleSourceException("规则不能为空", "$.rules")
+        val invalidRule = plugin.rules.indexOfFirst { it.toCondition() == null }
+        if (invalidRule >= 0) {
+            return JsonRuleSourceException("存在无效规则（缺少 condition 或 field/op/value）", "$.rules[$invalidRule]")
         }
         RuleEngine.prepare(plugin.rules)
         return null
@@ -479,7 +512,7 @@ object JsonPluginManager {
         check(isInitialized) { "规则管理器尚未初始化" }
         val imported = files.map { (name, content) ->
             val plugin = json.decodeFromString<JsonRulePlugin>(content)
-            validatePlugin(plugin)?.let { error(it) }
+            validatePlugin(plugin)?.let { throw it }
             require(name == "${plugin.id}.json" && !plugin.id.contains("..")) { "规则文件名无效：$name" }
             plugin
         }
