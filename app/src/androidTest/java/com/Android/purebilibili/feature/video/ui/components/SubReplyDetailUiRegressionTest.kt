@@ -99,8 +99,6 @@ class SubReplyDetailUiRegressionTest {
         composeTestRule.onNodeWithTag("$SUB_REPLY_DETAIL_CONVERSATION_TAG_PREFIX${target.rpid}").performClick()
         composeTestRule.onNodeWithText("对话详情").assertIsDisplayed()
         assertPartialIndicatorBesideTitle("对话详情")
-        composeTestRule.onNodeWithText("返回目标回复").performClick()
-        composeTestRule.onNodeWithText("readable target without a directed prefix").assertIsDisplayed()
     }
 
     private fun assertPartialIndicatorBesideTitle(title: String) {
@@ -600,6 +598,48 @@ class SubReplyDetailUiRegressionTest {
         }
         composeTestRule.onNodeWithText("root comment with picture").assertIsDisplayed()
         composeTestRule.onNodeWithText("需要定位的回复").assertIsNotDisplayed()
+    }
+
+    @Test
+    fun fallbackConversation_waitsForContextThenLocatesTargetWithoutReplayingTheJump() {
+        val target = buildSubReplyState().items.last().copy(
+            content = ReplyContent(message = "对话组中的目标回复"),
+        )
+        val earlier = (1L..20L).map { id ->
+            target.copy(rpid = 1000L + id, content = ReplyContent(message = "对话上文 $id"))
+        }
+        val state = mutableStateOf(SubReplyUiState(
+            visible = true, isTargetOnly = true, isLoading = true,
+            items = listOf(target).toImmutableList(),
+            baseItems = listOf(target).toImmutableList(),
+            targetReplyId = target.rpid, conversationAnchor = target,
+        ))
+        composeTestRule.setContent {
+            MaterialTheme {
+                SubReplySheet(
+                    state = state.value, emoteMap = emptyMap(),
+                    onDismiss = {}, onSortModeChange = {}, onRefresh = {}, onLoadMore = {},
+                )
+            }
+        }
+        composeTestRule.runOnIdle {
+            state.value = state.value.copy(
+                items = (earlier + target).toImmutableList(), isLoading = false, isEnd = true,
+            )
+        }
+        composeTestRule.onNodeWithText("对话组中的目标回复").assertIsDisplayed()
+        composeTestRule.onNode(
+            hasScrollToIndexAction() and hasAnyAncestor(hasTestTag(SUB_REPLY_DETAIL_LIST_TAG))
+        ).performScrollToIndex(0)
+        composeTestRule.onNodeWithText("对话上文 1").assertIsDisplayed()
+        composeTestRule.runOnIdle {
+            state.value = state.value.copy(isLoading = true, isRefreshing = true)
+        }
+        composeTestRule.runOnIdle {
+            state.value = state.value.copy(isLoading = false, isRefreshing = false)
+        }
+        composeTestRule.onNodeWithText("对话上文 1").assertIsDisplayed()
+        composeTestRule.onNodeWithText("对话组中的目标回复").assertIsNotDisplayed()
     }
 
     @Test

@@ -657,14 +657,18 @@ internal fun SubReplyDetailContent(
         previousConversationMode = currentMode
         previousSortMode = sortMode.apiMode
     }
-    LaunchedEffect(threadRootId, targetReplyId, visibleReplies, isLoading, isEnd, effectiveConversationMode, error, paginationPage) {
+    LaunchedEffect(threadRootId, targetReplyId, visibleReplies, isLoading, isEnd, effectiveConversationMode, activeConversationId, isTargetOnly, error, paginationPage) {
         if (targetReplyId <= 0L) {
             highlightedTargetId = 0L
             return@LaunchedEffect
         }
         // This is an entry-time navigation request, not a persistent scroll anchor.
         // Loading/refreshing changes the effect keys but must not replay the jump.
-        if (targetReplyHandled || effectiveConversationMode) return@LaunchedEffect
+        val locateFallbackTarget = isTargetOnly && isConversationMode && activeConversationId == targetReplyId
+        if (targetReplyHandled || (effectiveConversationMode && !locateFallbackTarget)) return@LaunchedEffect
+        // The retained target is already present while DialogList is loading. Wait for its
+        // context before consuming the one-shot jump, otherwise it highlights the placeholder.
+        if (locateFallbackTarget && (isLoading || error != null)) return@LaunchedEffect
         val targetIndex = resolveSubReplyTargetListIndex(
             rootReplyId = threadRootId,
             visibleReplies = visibleReplies,
@@ -732,9 +736,9 @@ internal fun SubReplyDetailContent(
                                 .testTag(SUB_REPLY_DETAIL_PARTIAL_TAG)
                                 .clearAndSetSemantics {
                                     contentDescription = if (effectiveConversationMode) {
-                                        "完整楼层暂不可用，当前显示目标回复的可读取对话"
+                                        "完整楼层暂不可用，当前显示目标回复的可读取对话；下拉刷新可重试完整楼层"
                                     } else {
-                                        "完整楼层暂不可用，当前仅显示可读取的目标回复；下拉刷新可重试完整楼层"
+                                        "完整楼层暂不可用，当前显示可读取的回复；下拉刷新可重试完整楼层"
                                     }
                                 },
                             color = appearance.secondaryTextColor,
@@ -876,9 +880,9 @@ internal fun SubReplyDetailContent(
                                     color = appearance.primaryTextColor
                                 )
                                 Spacer(modifier = Modifier.weight(1f))
-                                if (effectiveConversationMode) {
+                                if (effectiveConversationMode && !isTargetOnly) {
                                     AppText(
-                                        text = if (isTargetOnly) "返回目标回复" else "返回全部回复",
+                                        text = "返回全部回复",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                         color = appearance.sortTint,
                                         modifier = Modifier

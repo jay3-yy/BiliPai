@@ -553,7 +553,7 @@ fun VideoCommentSheetHost(
             when (
                 resolveVideoCommentPredictiveBackTarget(
                     subReplyVisible = subReplyState.visible,
-                    conversationActive = subReplyState.conversationAnchor != null
+                    conversationActive = subReplyState.conversationAnchor != null && !subReplyState.isTargetOnly
                 )
             ) {
                 VideoCommentPredictiveBackTarget.CLOSE_CONVERSATION ->
