@@ -1653,11 +1653,16 @@ private fun PartitionVideoList(
 
 /** 剧集榜单条目展示海报、更新进度、播放量和追剧量，点击进入该剧集详情。 */
 @Composable
-private fun PartitionSeasonRankCard(
+internal fun PartitionSeasonRankCard(
     video: VideoItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // 剧集榜单共用系统窗口来源登记，覆盖番剧、国创、影视与纪录片；不改变卡片材质和布局。
+    val transition = com.android.purebilibili.feature.bangumi.rememberBangumiCardTransition(
+        seasonId = video.id,
+        onClick = onClick,
+    )
     // AppText 按主题读取自身默认样式，不能仅依赖父级 Material ProvideTextStyle。
     // 在入口显式分配标题、更新信息和统计字阶，两种材质及原生主题共用。
     val typography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()
@@ -1665,7 +1670,8 @@ private fun PartitionSeasonRankCard(
         modifier = modifier,
         coverAspectRatio = 3f / 4f,
         allowPortraitCover = true,
-        onClick = onClick,
+        onClick = transition.onClick,
+        nativeSnapshotModifier = transition.modifier,
         headlineContent = {
             AppText(
                 text = video.title,
