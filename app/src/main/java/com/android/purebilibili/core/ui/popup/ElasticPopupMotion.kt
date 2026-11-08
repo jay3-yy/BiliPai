@@ -119,9 +119,13 @@ internal object ElasticPopupMotion {
             value(sourceStart.width, anchor.width), value(sourceStart.height, anchor.height))
         val smoothing = staged(time, 0.07f, start.surfaceBlend, 20f * density, 0f, FastSmoothing, SmoothingRelease).coerceAtLeast(0f)
         val lens = staged(time, 0.07f, start.lensProgress ?: 0f, 1f, 0f, Kick, AbsorbLensOff).coerceIn(0f, 1f)
+        // 从手势当前清晰度继续；正常关闭仍使用原先随正文消退增加的模糊时序。
+        val contentOut = if (start.contentAlpha > 0f) {
+            (1f - base.contentAlpha / start.contentAlpha).coerceIn(0f, 1f)
+        } else 1f
         return base.copy(sourceRect = sourceRect,
             surfaceBlend = min(smoothing, min(base.rect.minDimension, sourceRect.minDimension) * 0.65f),
-            contentBlur = 4f * density * (1f - base.contentAlpha),
+            contentBlur = start.contentBlur + (4f * density - start.contentBlur) * contentOut,
             sourceBlur = 4f * density * (1f - base.sourceAlpha), lensProgress = lens)
     }
 

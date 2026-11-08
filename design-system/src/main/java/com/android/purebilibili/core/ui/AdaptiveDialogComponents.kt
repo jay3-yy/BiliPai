@@ -30,7 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -128,8 +129,19 @@ internal fun AdaptiveAlertDialog(
                             decorFitsSystemWindows = false,
                         ),
                     ) {
-                        AppDialogWindowExitEffect(exit.progress)
-                        ModalWindowBlurBehindEffect(progress = { 1f - exit.progress.value })
+                        val back = remember { AppDialogBackState() }
+                        AppDialogPredictiveBackHandler(
+                            state = back,
+                            enabled = properties.dismissOnBackPress && !exit.isClosing,
+                            animateCompletion = false,
+                            retainPreview = { exit.isClosing },
+                            onBackCompleted = onDismissRequest,
+                        )
+                        val visualProgress = remember(back, exit) {
+                            derivedStateOf { back.progress + (1f - back.progress) * exit.progress.value }
+                        }
+                        AppDialogWindowExitEffect(visualProgress)
+                        ModalWindowBlurBehindEffect(progress = { 1f - visualProgress.value })
                         AppPopupWindowHost {
                             Box(Modifier.fillMaxSize().blockAppDialogExitInput(exit.isClosing)) {
                                 val surface: @Composable () -> Unit = {
@@ -137,12 +149,7 @@ internal fun AdaptiveAlertDialog(
                                         AppPopupSurface(
                                             type = AppPopupSurfaceType.DIALOG,
                                             modifier = modifier
-                                                .graphicsLayer {
-                                                    val fraction = exit.progress.value.coerceIn(0f, 1f)
-                                                    scaleX = 1f - 0.2f * fraction
-                                                    scaleY = scaleX
-                                                    alpha = 1f - fraction
-                                                }
+                                                .appDialogBackMotion { visualProgress.value }
                                                 .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp)
                                                 .heightIn(max = maxHeight)
                                                 .fillMaxWidth()
@@ -185,6 +192,16 @@ internal fun AdaptiveAlertDialog(
             }
             return@popupScene
         }
+        val nativeBack = remember { AppDialogBackState() }
+        val nativeBackModifier = modifier.appDialogBackMotion(state = nativeBack) { nativeBack.progress }
+        val nativeBackHandler: @Composable () -> Unit = {
+            AppDialogPredictiveBackHandler(
+                state = nativeBack,
+                // Miuix 自带返回处理；禁用返回时由本层消费，避免落入其默认关闭逻辑。
+                gesturesEnabled = properties.dismissOnBackPress,
+                onBackCompleted = { if (properties.dismissOnBackPress) onDismissRequest() },
+            )
+        }
         // 半开折叠屏：弹窗整体收进铰链安全侧，避免横跨折缝。
         val hingeSafeRegions = LocalHingeSafeOverlayRegions.current.dialog
         if (hingeSafeRegions != null) {
@@ -198,7 +215,8 @@ internal fun AdaptiveAlertDialog(
                     decorFitsSystemWindows = false,
                 ),
             ) {
-                com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
+                nativeBackHandler()
+                ModalWindowBlurBehindEffect(progress = { 1f - nativeBack.progress })
                 HingeSafeOverlayHost(
                     regionProvider = hingeSafeRegions,
                     modifier = Modifier.fillMaxSize().imePadding(),
@@ -207,7 +225,7 @@ internal fun AdaptiveAlertDialog(
                     BoxWithConstraints {
                         AppPopupSurface(
                             type = AppPopupSurfaceType.DIALOG,
-                            modifier = modifier
+                            modifier = nativeBackModifier
                                 .widthIn(max = contentLayout.maxWidthDp.dp)
                                 .heightIn(max = maxHeight)
                                 .fillMaxWidth()
@@ -236,11 +254,13 @@ internal fun AdaptiveAlertDialog(
                     // 原生窗口负责表面、圆角、边距和动画；自定义材质继续走下方路径。
                     WindowDialog(
                         show = true,
-                        modifier = modifier,
+                        modifier = nativeBackModifier,
                         onDismissRequest = onDismissRequest,
                         maxWidth = contentLayout.maxWidthDp.dp,
                         backgroundColor = containerColor ?: top.yukonga.miuix.kmp.layout.DialogDefaults.backgroundColor(),
                     ) {
+                        nativeBackHandler()
+                        ModalWindowBlurBehindEffect(progress = { 1f - nativeBack.progress })
                         NativeMiuixAlertDialogBody(icon, title, text, confirmButton, dismissButton)
                     }
                     return@popupScene
@@ -275,11 +295,12 @@ internal fun AdaptiveAlertDialog(
                     insideMargin = DpSize(0.dp, 0.dp),
                     cornerRadius = 0.dp,
                 ) {
-                    com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
+                    nativeBackHandler()
+                    ModalWindowBlurBehindEffect(progress = { 1f - nativeBack.progress })
                     BoxWithConstraints {
                         AppPopupSurface(
                             type = AppPopupSurfaceType.DIALOG,
-                            modifier = modifier
+                            modifier = nativeBackModifier
                                 .fillMaxWidth()
                                 .widthIn(min = contentLayout.minWidthDp.dp, max = contentLayout.maxWidthDp.dp)
                                 .heightIn(max = maxHeight),
@@ -296,12 +317,13 @@ internal fun AdaptiveAlertDialog(
             AppAlertDialogRenderer.MATERIAL_ALERT -> {
                 AlertDialog(
                     onDismissRequest = onDismissRequest,
-                    modifier = modifier,
+                    modifier = nativeBackModifier,
                     icon = icon,
                     title = title,
                     text = text,
                     confirmButton = {
-                        ModalWindowBlurBehindEffect()
+                        nativeBackHandler()
+                        ModalWindowBlurBehindEffect(progress = { 1f - nativeBack.progress })
                         ProvideAppActionContentColor(confirmContentColor) {
                             confirmButton?.invoke() ?: Spacer(modifier = Modifier)
                         }

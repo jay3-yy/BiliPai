@@ -30,6 +30,66 @@ class AppGlassPopupInterruptionTest {
     )
 
     @Test
+    fun anchoredPredictivePreviewContinuesFromTheSameFrameInBothMotionStyles() {
+        for (style in com.android.purebilibili.core.store.home.GlassMotionStyle.entries) {
+            val morph = PopupMorphState()
+            morph.beginOpen(sourceControl = true, style = style)
+            morph.card = card
+            morph.anchor = anchor
+            morph.advanceTo(morph.openDuration)
+            morph.predictiveBack.beginGesture()
+            morph.predictiveBack.seek(0.8f)
+            val preview = morph.frame(24f, 1f)
+            morph.beginClose(preview, preview)
+            assertEquals(preview, morph.frame(24f, 1f))
+            assertTrue(morph.hasSourceControl)
+            morph.advanceTo(0.0001f)
+            assertEquals(preview.contentBlur, morph.frame(24f, 1f).contentBlur, 0.02f)
+            morph.advanceTo(0.07f)
+            val returning = morph.frame(24f, 1f)
+            // 既要无跳变地接住预览，也要保留回收中段的源控件交接和连接颈。
+            assertTrue(returning.sourceRect != null)
+            assertTrue(returning.sourceAlpha > preview.sourceAlpha)
+            assertTrue(returning.surfaceBlend > 0f)
+            if (style == com.android.purebilibili.core.store.home.GlassMotionStyle.ELASTIC) {
+                assertTrue((returning.lensProgress ?: 0f) > 0f)
+            }
+            morph.advanceTo(morph.closeDuration)
+            assertTrue(morph.frame(24f, 1f).contentAlpha < preview.contentAlpha)
+        }
+    }
+
+    @Test
+    fun predictiveBackHandsTheVisibleFrameToClosingAndDismissesOnlyOnce() {
+        for (style in com.android.purebilibili.core.store.home.GlassMotionStyle.entries) {
+            var dismissals = 0
+            val controller = controller()
+            controller.preferredMotionStyle = style
+            controller.showMenu(Any(), menu { dismissals++ })
+            val morph = controller.morph
+            morph.card = card
+            morph.anchor = anchor
+            morph.advanceTo(morph.openDuration)
+            val resting = morph.frame(24f, 1f)
+            morph.predictiveBack.beginGesture()
+            morph.predictiveBack.seek(0.7f)
+            val preview = morph.frame(24f, 1f)
+            assertTrue(preview.rect.width < resting.rect.width)
+            assertTrue(preview.contentBlur > resting.contentBlur)
+            assertEquals(0, dismissals)
+
+            controller.requestDismiss()
+            assertEquals(preview, morph.frame(24f, 1f))
+            assertEquals(0f, morph.predictiveBack.progress)
+            assertEquals(0, dismissals)
+            morph.advanceTo(morph.closeDuration)
+            controller.finish()?.invoke()
+            controller.finish()?.invoke()
+            assertEquals(1, dismissals)
+        }
+    }
+
+    @Test
     fun draggingOutsideEitherEndKeepsActualDistanceAfterScrollingCancelsSelection() {
         val targets = mutableListOf<androidx.compose.ui.geometry.Offset>()
         val controller = AppGlassChoicePopupController({ _, _, pull -> targets += pull }, {})

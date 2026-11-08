@@ -298,3 +298,23 @@ internal fun resolveAppGlassPopupPosition(
 
 internal fun resolveGlassMenuInitialScroll(item: Rect, viewportHeight: Int, maxScroll: Int): Int =
     (item.center.y - viewportHeight / 2f).roundToInt().coerceIn(0, maxScroll.coerceAtLeast(0))
+
+/** 手势预览保留来源与卡片身份，确认后将当前帧交给原有回收动画。 */
+internal fun popupPredictiveBackFrame(
+    frame: AppGlassPopupFrame,
+    progress: Float,
+    density: Float,
+): AppGlassPopupFrame {
+    if (progress <= 0f) return frame
+    val scale = 1f - 0.2f * progress
+    val half = frame.rect.size * (scale / 2f)
+    return frame.copy(
+        rect = Rect(frame.rect.center - Offset(half.width, half.height),
+            frame.rect.center + Offset(half.width, half.height)),
+        radius = frame.radius * scale,
+        contentScale = frame.contentScale * scale,
+        contentAlpha = frame.contentAlpha * (1f - progress),
+        contentBlur = frame.contentBlur + 8f * density * progress,
+        surfaceAlpha = frame.surfaceAlpha * (1f - progress),
+    )
+}

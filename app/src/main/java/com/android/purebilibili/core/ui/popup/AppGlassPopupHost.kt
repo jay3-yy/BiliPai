@@ -178,6 +178,7 @@ private const val MenuLensScale = 0.5f
 /** 一次弹窗形变的实时状态：阶段、时钟与几何输入（窗口坐标系，像素）。 */
 @Stable
 internal class PopupMorphState {
+    val predictiveBack = com.android.purebilibili.core.ui.AppDialogBackState()
     var opening by mutableStateOf(true)
         private set
     var seconds by mutableFloatStateOf(0f)
@@ -226,6 +227,7 @@ internal class PopupMorphState {
     }
 
     fun beginOpen(sourceControl: Boolean, style: GlassMotionStyle = GlassMotionStyle.STANDARD) {
+        predictiveBack.reset()
         motionStyle = style
         presentation++
         hasSourceControl = sourceControl
@@ -244,6 +246,7 @@ internal class PopupMorphState {
     fun detachSource() { hasSourceControl = false }
 
     fun closeWithParent(frame: AppGlassPopupFrame, previous: AppGlassPopupFrame) {
+        predictiveBack.reset()
         hasSourceControl = false
         closeStartFrame = frame
         previousFrame = previous
@@ -256,6 +259,7 @@ internal class PopupMorphState {
     }
 
     fun reopen(frame: AppGlassPopupFrame, previous: AppGlassPopupFrame) {
+        predictiveBack.reset()
         openStartFrame = frame
         previousFrame = previous
         sampleSeconds = seconds.coerceIn(0.0001f, 1f / 120f)
@@ -267,9 +271,11 @@ internal class PopupMorphState {
 
     fun beginClose(frame: AppGlassPopupFrame, previous: AppGlassPopupFrame) {
         if (opening) {
+            predictiveBack.reset()
             closeStartFrame = frame
             previousFrame = previous
             sampleSeconds = seconds.coerceIn(0.0001f, 1f / 120f)
+            // 手势模糊不改变回收类型；落定后的关闭仍沿用锚点、连接颈和透镜时序。
             interruptedClose = seconds < openDuration || openStartFrame != null
             closeStartSeconds = seconds
             opening = false
@@ -763,9 +769,13 @@ private fun AppGlassChoicePopupOverlay(
 
     // Menus share the host window; bind above the route's nested comment back stack.
     com.android.purebilibili.core.ui.CommentWindowNavigation {
-        com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) {
-            controller.requestDismiss()
-        }
+        com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler(
+            state = morph.predictiveBack,
+            windowScoped = false,
+            gesturesEnabled = morph.opening,
+            animateCompletion = false,
+            onBackCompleted = { controller.requestDismiss() },
+        )
     }
     val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current ||
         !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
@@ -948,7 +958,7 @@ private fun AppGlassChoicePopupPlacement(
     }
 }
 
-private fun PopupMorphState.frame(radius: Float, density: Float): AppGlassPopupFrame = frameAt(seconds, radius, density)
+internal fun PopupMorphState.frame(radius: Float, density: Float): AppGlassPopupFrame = frameAt(seconds, radius, density)
 
 private fun PopupMorphState.frameAt(time: Float, radius: Float, density: Float): AppGlassPopupFrame {
     val start = openStartFrame?.takeUnless { it.rect.isEmpty }
@@ -969,9 +979,10 @@ private fun PopupMorphState.frameAt(time: Float, radius: Float, density: Float):
             hasSourceControl, density, close, returnToControl = hasSourceControl)
     }
     val valid = base.copy(radius = base.radius.coerceIn(0f, maxOf(0f, base.rect.minDimension / 2f)))
-    return if (opening) fitPopupElasticFrame(
+    val frame = if (opening) fitPopupElasticFrame(
         elastic.frame(valid, density, popupDragBlend(time, openDuration)), safeBounds,
     ) else valid
+    return popupPredictiveBackFrame(frame, predictiveBack.progress, density)
 }
 
 /** 正文与玻璃共用按压和每轴拖拽缩放，光学层保留固定的窗口空间采样。 */

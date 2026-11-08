@@ -214,16 +214,18 @@ internal fun bottomSheetContentExitTransition(
 fun AppModalSheetNavigationHost(
     dismissOnBackPress: Boolean,
     onDismissRequest: () -> Unit,
+    backgroundBlurBehind: Boolean = false,
     content: @Composable (Modifier) -> Unit,
 ) {
-    val backState = rememberNavigationEventState(NavigationEventInfo.None)
+    val back = remember { AppDialogBackState() }
     AppModalSheetWindowNavigationScope {
-        NavigationBackHandler(
-            state = backState,
-            isBackEnabled = dismissOnBackPress,
+        AppDialogPredictiveBackHandler(
+            state = back,
+            enabled = dismissOnBackPress,
             onBackCompleted = onDismissRequest,
         )
-        content(appModalSheetBackModifier(backState.transitionState, dismissOnBackPress))
+        ModalWindowBlurBehindEffect(enabled = backgroundBlurBehind, progress = { 1f - back.progress })
+        content(Modifier.appDialogBackMotion(state = back) { back.progress })
     }
 }
 
@@ -348,7 +350,7 @@ fun AppModalBottomSheet(
                 ),
             ) {
                 AppPopupWindowHost(enableWindowMaterial = LocalAppThemeConfig.current.liquidGlassEnabled) {
-                    AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest) { backModifier ->
+                    AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest, backgroundBlurBehind = blurBehind) { backModifier ->
                         val panel: @Composable () -> Unit = {
                             BoxWithConstraints {
                                 AppPopupSurface(
@@ -415,11 +417,21 @@ fun AppModalBottomSheet(
         if (miuix && hingeSafeRegions == null) {
             var show by remember { mutableStateOf(true) }
             LaunchedEffect(visible) { show = visible }
+            val centeredBack = remember { AppDialogBackState() }
+            val centeredBackModifier = Modifier.appDialogBackMotion(state = centeredBack) { centeredBack.progress }
             val body: @Composable () -> Unit = {
-                val blurMotionModifier = rememberSheetBlurMotionModifier(blurBehind, trackPosition = !centered)
+                val blurMotionModifier = if (centered) {
+                    AppDialogPredictiveBackHandler(
+                        state = centeredBack,
+                        gesturesEnabled = dismissOnBackPress,
+                        onBackCompleted = { latestDismissStarted(); finishDismiss() },
+                    )
+                    ModalWindowBlurBehindEffect(enabled = blurBehind, progress = { 1f - centeredBack.progress })
+                    Modifier
+                } else rememberSheetBlurMotionModifier(blurBehind)
                 // Consume back when the caller handles it inside the sheet (e.g. reply navigation).
                 // Drag/outside dismissal remains available independently of this back policy.
-                if (!dismissOnBackPress) {
+                if (!dismissOnBackPress && !centered) {
                     NavigationBackHandler(
                         state = rememberNavigationEventState(NavigationEventInfo.None),
                         onBackCompleted = {},
@@ -430,7 +442,8 @@ fun AppModalBottomSheet(
             if (centered) {
                 WindowDialog(
                     show = show,
-                    modifier = modifier.heightIn(max = (configuration.screenHeightDp * layoutSpec.maxHeightFraction).dp),
+                    modifier = modifier.then(centeredBackModifier)
+                        .heightIn(max = (configuration.screenHeightDp * layoutSpec.maxHeightFraction).dp),
                     backgroundColor = windowColor,
                     maxWidth = layoutSpec.maxWidthDp.dp,
                     largeScreen = true,
@@ -464,9 +477,8 @@ fun AppModalBottomSheet(
                     decorFitsSystemWindows = false,
                 ),
             ) {
-                ModalWindowBlurBehindEffect(enabled = blurBehind)
                 AppPopupWindowHost(enableWindowMaterial = blurBehind) {
-                    AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest) { backModifier ->
+                    AppModalSheetNavigationHost(dismissOnBackPress, onDismissRequest, backgroundBlurBehind = blurBehind) { backModifier ->
                         val surface: @Composable () -> Unit = {
                             BoxWithConstraints {
                                 val surfaceModifier = modifier.then(backModifier).widthIn(max = layoutSpec.maxWidthDp.dp)

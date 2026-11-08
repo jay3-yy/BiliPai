@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.android.purebilibili.core.ui.appDialogBackMotion
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
@@ -420,10 +421,13 @@ fun <T> AppSingleChoiceDialog(
             usePlatformDefaultWidth = layoutPolicy.usePlatformDefaultWidth,
         ),
     ) {
-        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
+        val back = remember { com.android.purebilibili.core.ui.AppDialogBackState() }
+        com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler(back, onBackCompleted = onDismissRequest)
+        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect(progress = { 1f - back.progress })
         AppPopupSurface(
             type = AppPopupSurfaceType.DIALOG,
             modifier = modifier
+                .appDialogBackMotion(state = back) { back.progress }
                 .appContentDialogWidth(policy = layoutPolicy, wrapHeight = false)
                 .heightIn(max = maxDialogHeight),
             shape = AppShapes.container(ContainerLevel.Dialog),
@@ -566,10 +570,12 @@ fun AppSliderDialog(
             usePlatformDefaultWidth = layoutPolicy.usePlatformDefaultWidth,
         ),
     ) {
-        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
+        val back = remember { com.android.purebilibili.core.ui.AppDialogBackState() }
+        com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler(back, onBackCompleted = onDismissRequest)
+        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect(progress = { 1f - back.progress })
         AppPopupSurface(
             type = AppPopupSurfaceType.DIALOG,
-            modifier = modifier.appContentDialogWidth(
+            modifier = modifier.appDialogBackMotion(state = back) { back.progress }.appContentDialogWidth(
                 policy = resolveAppContentDialogLayoutPolicy(
                     maxWidthDp = layoutPolicy.maxWidthDp,
                     minWidthDp = layoutPolicy.minWidthDp,
