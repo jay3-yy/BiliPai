@@ -1169,6 +1169,14 @@ data class DynamicAdditionalReserve(
 )
 
 @Serializable
+data class DynamicReserveClickRequest(
+    val reserve_id: Long,
+    val cur_btn_status: Int,
+    val dynamic_id_str: String,
+    val reserve_total: Long,
+)
+
+@Serializable
 data class DynamicReserveClickResponse(
     val code: Int = 0,
     val message: String = "",
@@ -1279,12 +1287,13 @@ data class DynamicCardButtonStyle(
 
 /**
  * 动态卡片按钮文案。信息流 additional 与详情 opus link_card 共用同一套取值规则：
- * 已/未选中文案优先，其次回落到跳转文案，避免同一个按钮在两个入口显示两种文字。
+ * 跳转文案优先，否则按预约状态选择文案，避免已开播的跳转按钮仍显示“已预约”。
  */
 fun resolveDynamicCardButtonText(button: DynamicCardButton?): String {
     if (button == null) return ""
+    button.jump_style?.text?.takeIf { it.isNotBlank() }?.let { return it }
     val stateText = if (button.status == button.type) button.check?.text else button.uncheck?.text
-    return stateText.orEmpty().ifBlank { button.jump_style?.text.orEmpty() }
+    return stateText.orEmpty()
 }
 
 @Serializable

@@ -2130,14 +2130,10 @@ interface DynamicApi {
         @retrofit2.http.Field("csrf") csrf: String
     ): DynamicCreateReserveResponse
 
-    @retrofit2.http.FormUrlEncoded
     @retrofit2.http.POST("x/dynamic/feed/reserve/click")
     suspend fun clickDynamicReserve(
         @Query("csrf") csrf: String,
-        @retrofit2.http.Field("reserve_id") reserveId: Long,
-        @retrofit2.http.Field("cur_btn_status") currentButtonStatus: Int,
-        @retrofit2.http.Field("dynamic_id_str") dynamicId: String,
-        @retrofit2.http.Field("reserve_total") reserveTotal: Long,
+        @retrofit2.http.Body body: DynamicReserveClickRequest,
     ): com.android.purebilibili.data.model.response.DynamicReserveClickResponse
 
     //  发布纯文本动态（multipart form，type=4 表示纯文本）

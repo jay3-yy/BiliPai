@@ -54,6 +54,37 @@ class DynamicReserveCardSessionTest {
     }
 
     @Test
+    fun `cancelling submits the status and count returned by the reservation`() {
+        val session = DynamicReserveCardSession(card())
+        session.begin()
+        session.complete(Result.success(DynamicReserveResult("13人预约", 13, 1)))
+        val cancel = resolveDynamicReserveUi(session.shownCard, "dynamic-7")!!.action
+        assertEquals(1, cancel.currentButtonStatus)
+        assertEquals(13L, cancel.reserveTotal)
+        session.begin()
+        session.complete(Result.success(DynamicReserveResult("12人预约", 12, 0)))
+        assertEquals("预约", session.shownCard.badgeText)
+        assertEquals(0, resolveDynamicReserveUi(session.shownCard, "dynamic-7")!!.action.currentButtonStatus)
+    }
+
+    @Test
+    fun `started reservation shows the jump label and keeps its action available`() {
+        val source = card()
+        val reserve = requireNotNull(source.reserve)
+        val jumpCard = source.copy(reserve = reserve.copy(button = requireNotNull(reserve.button).copy(
+            status = 1,
+            jump_url = "https://live.bilibili.com/123",
+            jump_style = DynamicCardButtonStyle(text = "去观看"),
+            uncheck = DynamicCardButtonStyle(text = "预约", disable = 1),
+        )))
+        val shown = applyDynamicReserveResult(jumpCard, DynamicReserveResult("13人预约", 13, 1))
+        assertEquals("去观看", shown.badgeText)
+        val ui = resolveDynamicReserveUi(shown, "dynamic-7")!!
+        assertTrue(ui.actionEnabled)
+        assertEquals("https://live.bilibili.com/123", ui.actionJumpUrl)
+    }
+
+    @Test
     fun `callback after leaving the page cannot update a closed session`() {
         val original = card()
         val session = DynamicReserveCardSession(original)
@@ -78,14 +109,14 @@ class DynamicReserveCardSessionTest {
     }
 
     @Test
-    fun `disabled status follows the current action and allows explicit jump links`() {
+    fun `reservation and cancellation use the action disable flag while jump links stay available`() {
         val source = card()
         val button = source.reserve!!.button!!
         fun withButton(updated: DynamicCardButton) = source.copy(reserve = source.reserve!!.copy(button = updated))
-        val cannotCancel = withButton(button.copy(status = 1, check = button.check!!.copy(disable = 1)))
-        assertFalse(resolveReserveActionEnabled(cannotCancel))
-        val cancelAllowed = withButton(button.copy(status = 1, uncheck = button.uncheck!!.copy(disable = 1)))
+        val cancelAllowed = withButton(button.copy(status = 1, check = button.check!!.copy(disable = 1)))
         assertTrue(resolveReserveActionEnabled(cancelAllowed))
+        val cannotCancel = withButton(button.copy(status = 1, uncheck = button.uncheck!!.copy(disable = 1)))
+        assertFalse(resolveReserveActionEnabled(cannotCancel))
         assertTrue(resolveReserveActionEnabled(cannotCancel.copy(reserve = cannotCancel.reserve!!.copy(
             button = cannotCancel.reserve!!.button!!.copy(jump_url = "https://live.bilibili.com/123"),
         ))))

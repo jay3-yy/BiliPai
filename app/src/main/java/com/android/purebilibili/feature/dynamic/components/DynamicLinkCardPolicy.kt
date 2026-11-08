@@ -133,11 +133,10 @@ internal fun reserveDescription(reserve: DynamicAdditionalReserve): String =
         .filter(String::isNotBlank)
         .joinToString(" · ")
 
-/** 预约按钮是否可用：有跳转链接时永远可点，否则看服务端下发的禁用标记。 */
+/** 预约与取消共用 uncheck 的禁用标记；跳转按钮不受预约操作限制。 */
 internal fun resolveReserveActionEnabled(card: OpusLinkCard): Boolean {
     val button = card.reserve?.button ?: return false
-    val currentStyle = if (button.status == button.type) button.check ?: button.uncheck else button.uncheck
-    return button.jump_url.isNotBlank() || currentStyle?.disable != 1
+    return button.jump_url.isNotBlank() || button.uncheck?.disable != 1
 }
 
 internal data class DynamicReserveUi(

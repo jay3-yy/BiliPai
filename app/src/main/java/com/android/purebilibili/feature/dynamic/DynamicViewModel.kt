@@ -2839,10 +2839,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val response = NetworkModule.dynamicApi.clickDynamicReserve(
                     csrf = csrf,
-                    reserveId = action.reserveId,
-                    currentButtonStatus = action.currentButtonStatus,
-                    dynamicId = action.dynamicId,
-                    reserveTotal = action.reserveTotal,
+                    body = com.android.purebilibili.data.model.response.DynamicReserveClickRequest(
+                        reserve_id = action.reserveId,
+                        cur_btn_status = action.currentButtonStatus,
+                        dynamic_id_str = action.dynamicId,
+                        reserve_total = action.reserveTotal,
+                    ),
                 )
                 if (response.code != 0 || response.data == null) {
                     throw IllegalStateException(response.message.ifBlank { "预约操作失败" })
