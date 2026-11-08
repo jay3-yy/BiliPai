@@ -31,8 +31,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.Visibility
-import androidx.compose.material.icons.outlined.VisibilityOff
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
 import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
@@ -519,8 +517,6 @@ internal fun RelatedVideoGridRow(
     var summaryVideo by remember { mutableStateOf<RelatedVideo?>(null) }
     var summaryLoading by remember { mutableStateOf(false) }
     var summaryText by remember { mutableStateOf("") }
-    val privacyEnabled by remember { SettingsManager.getPrivacyModeEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
     val actionMenuSource = rememberAppGlassMenuSource()
     Row(
         modifier = Modifier
@@ -582,14 +578,6 @@ internal fun RelatedVideoGridRow(
                                 onUpClick(video.owner.mid)
                             })
                         }
-                        AppDropdownMenuItem(text = { AppText(if (privacyEnabled) "退出无痕模式" else "进入无痕模式") }, leadingIcon = { AppIcon(if (privacyEnabled) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff, null) }, onClick = {
-                            val nextPrivacyEnabled = !privacyEnabled
-                            menuVideo = null
-                            scope.launch {
-                                SettingsManager.setPrivacyModeEnabled(context, nextPrivacyEnabled)
-                                Toast.makeText(context, if (nextPrivacyEnabled) "已进入无痕模式" else "已退出无痕模式", Toast.LENGTH_SHORT).show()
-                            }
-                        })
                     }
                 },
             )
