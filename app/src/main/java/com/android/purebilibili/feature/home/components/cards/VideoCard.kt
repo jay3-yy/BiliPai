@@ -561,6 +561,8 @@ internal fun ElegantVideoCard(
     titleMaxLines: Int = 2,
     // Home's regular grid bounds metadata to rows; other lists retain wrapping metadata.
     regularGridMetadata: Boolean = false,
+    // Only equal-height rows should consume spare height; carousels remain content-sized.
+    bottomAlignedMetadata: Boolean = false,
     highlightedTitle: AnnotatedString? = null,
     showOnlineCount: Boolean = false,
     upFollowerCount: Int? = null,
@@ -689,20 +691,6 @@ internal fun ElegantVideoCard(
                     label = "拉黑：${video.owner.name}", onClick = { showBlockDialog = true },
                 ))
             }
-            add(com.android.purebilibili.core.ui.components.AppWindowAction(
-                label = "无痕模式",
-                onClick = {
-                    val next = !com.android.purebilibili.core.store.SettingsManager.isPrivacyModeEnabledSync(context)
-                    cardActionScope.launch {
-                        com.android.purebilibili.core.store.SettingsManager.setPrivacyModeEnabled(context, next)
-                        android.widget.Toast.makeText(
-                            context,
-                            if (next) "已进入无痕模式" else "已退出无痕模式",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                },
-            ))
             onUnfavorite?.let {
                 add(com.android.purebilibili.core.ui.components.AppWindowAction(label = "取消收藏", onClick = it))
             }
@@ -1991,7 +1979,9 @@ internal fun ElegantVideoCard(
         }
 
         Box(
-            modifier = infoContainerModifier.onPlaced {
+            modifier = infoContainerModifier
+                .then(if (bottomAlignedMetadata) Modifier.weight(1f) else Modifier)
+                .onPlaced {
                 infoLayoutCoordinates.value = it
             }.videoCardShellReturnChromeAlpha(
                 enabled = useCardShellSharedBounds,
@@ -2003,7 +1993,9 @@ internal fun ElegantVideoCard(
         ) {
         // Text keeps its inset; the trailing action aligns to the full info surface.
         Column(
-            modifier = Modifier.padding(
+            modifier = Modifier
+                .then(if (bottomAlignedMetadata) Modifier.fillMaxHeight() else Modifier)
+                .padding(
                 start = 6.dp,
                 top = if (useCardEffectSurface) infoBottomPadding else AppSpacingTokens.None,
                 end = 6.dp,
@@ -2066,6 +2058,7 @@ internal fun ElegantVideoCard(
                 }
         )
 
+        if (bottomAlignedMetadata) Spacer(modifier = Modifier.weight(1f))
         Spacer(modifier = Modifier.height(if (compactMetadata) AppSpacingTokens.ExtraSmall else AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro))
 
         Column(
@@ -2233,7 +2226,7 @@ internal fun ElegantVideoCard(
                         offset = DpOffset.Zero,
                         glassSource = overflowMenuSource.takeIf { menu.fromOverflowButton },
                     ) {
-                        // 卡片菜单提供内容号、观看、作者与隐私相关操作。
+                        // 卡片菜单只提供当前视频与作者相关操作。
                         if (video.bvid.isNotBlank()) {
                             AppDropdownMenuItem(
                                 text = { AppText(video.bvid, color = AppContentColors.primaryText()) },
@@ -2334,34 +2327,6 @@ internal fun ElegantVideoCard(
                             )
                         }
 
-                        // 无痕模式开关
-                        val privacyModeEnabled by remember {
-                            com.android.purebilibili.core.store.SettingsManager.getPrivacyModeEnabled(context)
-                        }.collectAsStateWithLifecycle(initialValue = false)
-                        AppDropdownMenuItem(
-                            leadingIcon = {
-                                AppIcon(if (privacyModeEnabled) Icons.Outlined.Visibility else Icons.Outlined.VisibilityOff,
-                                    contentDescription = null, modifier = Modifier.size(20.dp), tint = AppContentColors.primaryText())
-                            },
-                            text = {
-                                AppText(
-                                    if (privacyModeEnabled) "退出无痕模式" else "进入无痕模式",
-                                    color = AppContentColors.primaryText()
-                                )
-                            },
-                            onClick = {
-                                menu.expanded = false
-                                cardActionScope.launch {
-                                    val next = !privacyModeEnabled
-                                    com.android.purebilibili.core.store.SettingsManager.setPrivacyModeEnabled(context, next)
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        if (next) "已进入无痕模式" else "已退出无痕模式",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
-                            }
-                        )
                     }
                 }
             }

@@ -571,6 +571,7 @@ internal fun SearchResultPageContent(
                             modifier = (if (!showFullCardContent && effectiveSearchGridColumns > 1) Modifier.fillMaxHeight() else Modifier)
                                 .then(liveContainerTransition?.modifier ?: Modifier),
                             singleColumn = effectiveSearchGridColumns == 1,
+                            bottomAlignedMetadata = !showFullCardContent && effectiveSearchGridColumns > 1,
                             index = index,
                             animationEnabled = false, // The stable item wrapper owns column-switch motion.
                             motionTier = cardMotionTier,
