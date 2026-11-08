@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -41,11 +43,15 @@ internal fun HorizontalVideoStatRow(
     textStyle: TextStyle = feedContentTypography().statistic,
     singleLine: Boolean = false,
 ) {
+    val textMeasurer = rememberTextMeasurer(cacheSize = 1)
+    val spacing = with(LocalDensity.current) {
+        textMeasurer.measure(" ", style = textStyle, maxLines = 1).size.width.toDp()
+    }
     if (singleLine) {
-        Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_ROW_SPACING_DP.dp)) {
-            HorizontalVideoStatItem(playIcon, playText, Modifier.weight(1f), contentColor, textStyle, constrainText = true)
+        Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(spacing)) {
+            HorizontalVideoStatItem(playIcon, playText, Modifier.weight(1f, fill = false), contentColor, textStyle, constrainText = true)
             if (danmakuText.isNotBlank()) {
-                HorizontalVideoStatItem(danmakuIcon, danmakuText, Modifier.weight(1f), contentColor, textStyle, constrainText = true)
+                HorizontalVideoStatItem(danmakuIcon, danmakuText, Modifier.weight(1f, fill = false), contentColor, textStyle, constrainText = true)
             }
         }
         return
@@ -53,7 +59,7 @@ internal fun HorizontalVideoStatRow(
     FlowRow(
         modifier = modifier,
         itemVerticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_ROW_SPACING_DP.dp),
+        horizontalArrangement = Arrangement.spacedBy(spacing),
         verticalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_WRAP_SPACING_DP.dp),
     ) {
         HorizontalVideoStatItem(
@@ -95,7 +101,7 @@ internal fun HorizontalVideoStatItem(
         )
         AppText(
             text = text,
-            modifier = if (constrainText) Modifier.weight(1f) else Modifier,
+            modifier = if (constrainText) Modifier.weight(1f, fill = false) else Modifier,
             style = textStyle,
             color = contentColor,
             maxLines = 1,
