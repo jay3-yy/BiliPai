@@ -11,6 +11,7 @@ import com.bytedance.danmaku.render.engine.touch.IItemClickListener
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_BOTTOM_CENTER
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_SCROLL
 import com.bytedance.danmaku.render.engine.utils.LAYER_TYPE_TOP_CENTER
+import java.util.function.LongSupplier
 
 internal class ByteDanceDanmakuEngine(
     private val view: DanmakuView
@@ -227,6 +228,10 @@ internal class ByteDanceDanmakuEngine(
         controller.synchronizeTo(currentPositionMs)
     }
 
+    override fun setPlaybackPositionProvider(provider: LongSupplier?) {
+        if (!closed) controller.setPlaybackPositionProvider(provider)
+    }
+
     override fun start(positionMs: Long) {
         if (closed) return
         currentPositionMs = positionMs.coerceAtLeast(0L)
@@ -301,6 +306,7 @@ internal class ByteDanceDanmakuEngine(
         visibility.close()
         controller.itemClickListener = null
         controller.stop()
+        controller.setPlaybackPositionProvider(null)
         currentItems.clear()
         currentWindowItems = null
         currentMaskFrames.clear()

@@ -164,6 +164,11 @@ class DanmakuController(private var mDanmakuView: View): ConfigChangeListener, I
         mDanmakuView.postInvalidateCompat()
     }
 
+    fun setPlaybackPositionProvider(provider: java.util.function.LongSupplier?) {
+        mDataManager.setPlaybackPositionProvider(provider)
+        mDanmakuView.postInvalidateCompat()
+    }
+
     /**
      * Append data to end of the [DataManager].
      * You need to ensure the chronological order of the data by yourself.
