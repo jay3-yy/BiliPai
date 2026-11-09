@@ -5,6 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
@@ -78,14 +79,14 @@ internal fun ContentDynamicShareSheet(payload: ContentSharePayload, onDismiss: (
                     onMention = { user -> text = (text + "@${user.name} ").take(2000); mentions = mentions + (user.name to user.uid) },
                     onTopic = { topic -> text = (text + "#${topic.name}# ").take(2000); selectedTopic = com.android.purebilibili.data.model.response.DynamicCreateTopic(topic.id, topic.name) },
                 )
-                if (payload.replyOid > 0 || payload.bvid.isNotBlank()) Row {
+                if (payload.replyOid > 0 || payload.bvid.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
                     AppCheckbox(checked = alsoComment, onCheckedChange = { if (!posting && !published) alsoComment = it })
                     AppText("同时评论原内容")
                 }
                 error?.let { AppText(it) }
                 AppText("${text.length}/2000")
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 AppTextButton(onClick = onDismiss, enabled = !posting, modifier = Modifier.weight(1f)) { AppText(if (published) "完成" else "取消") }
                 AppButton(enabled = !posting, modifier = Modifier.weight(1f), onClick = {
                     if (posting) return@AppButton
