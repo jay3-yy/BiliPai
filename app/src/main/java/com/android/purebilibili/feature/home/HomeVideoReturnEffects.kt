@@ -33,8 +33,9 @@ internal fun HomeVideoReturnEffects(
     LaunchedEffect(state, sourceVisible) {
         state.onHomeVisibilityChanged(sourceVisible)
     }
-    LaunchedEffect(isReturningFromVideoDetail, returnAnimationSuppressionDurationMs) {
-        if (!isReturningFromVideoDetail) return@LaunchedEffect
+    // 连续打开独立播放窗口时，返回标记可能一直为 true；重新曝光后必须重启完成通知。
+    LaunchedEffect(state, sourceVisible, isReturningFromVideoDetail, returnAnimationSuppressionDurationMs) {
+        if (!sourceVisible || !isReturningFromVideoDetail) return@LaunchedEffect
         val startElapsedMs = SystemClock.elapsedRealtime()
         state.finishVideoReturn(returnAnimationSuppressionDurationMs) {
             val actualDurationMs = (SystemClock.elapsedRealtime() - startElapsedMs).coerceAtLeast(0L)

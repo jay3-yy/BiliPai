@@ -17,15 +17,23 @@ class HomePagerPageWorkTest {
     }
 
     @Test
-    fun preloadedCoveredAndUnfocusedPagesKeepTheirContentWithoutActiveWork() {
-        for (hidden in listOf(work(visible = false), work(unobscured = false), work(visualActive = false))) {
-            assertFalse(hidden.collectUpdates)
-            assertFalse(hidden.runActiveWork)
+    fun visibleFeedKeepsCollectingWhileVisualWorkIsPaused() {
+        for (paused in listOf(work(unobscured = false), work(visualActive = false))) {
+            assertTrue(paused.collectUpdates)
+            assertFalse(paused.runActiveWork)
         }
         // 数据可供锚点恢复，恢复未完成前不能触发预取或加载更多。
         val restoring = work(workAllowed = false)
         assertTrue(restoring.collectUpdates)
         assertFalse(restoring.runActiveWork)
+    }
+
+    @Test
+    fun hiddenPagesAndNavigationSnapshotsDoNotCollectUpdates() {
+        for (paused in listOf(work(visible = false), work(updatesAllowed = false))) {
+            assertFalse(paused.collectUpdates)
+            assertFalse(paused.runActiveWork)
+        }
     }
 
     private fun work(
@@ -35,11 +43,12 @@ class HomePagerPageWorkTest {
         visualActive: Boolean = true,
         unobscured: Boolean = true,
         workAllowed: Boolean = true,
+        updatesAllowed: Boolean = true,
     ) = resolveHomePagerPageWork(
         visible = visible,
         currentPage = current,
         pagerScrolling = scrolling,
-        updatesAllowed = true,
+        updatesAllowed = updatesAllowed,
         workAllowed = workAllowed,
         visualWorkActive = visualActive,
         unobscured = unobscured,

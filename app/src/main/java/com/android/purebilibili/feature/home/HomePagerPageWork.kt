@@ -25,8 +25,9 @@ internal fun resolveHomePagerPageWork(
     val exposed = visible && visualWorkActive && unobscured
     return HomePagerPageWork(
         visible = visible,
-        collectUpdates = exposed && updatesAllowed,
-        runActiveWork = exposed && currentPage && !pagerScrolling && workAllowed,
+        // 可见数据不依赖装饰任务的焦点/遮挡门控；转场冻结仍由 updatesAllowed 控制。
+        collectUpdates = visible && updatesAllowed,
+        runActiveWork = exposed && updatesAllowed && currentPage && !pagerScrolling && workAllowed,
     )
 }
 
