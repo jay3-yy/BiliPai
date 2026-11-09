@@ -321,6 +321,7 @@ internal fun BottomBarMatchedReusableLiquidDock(
     useNeutralLiquidContainer: Boolean = false,
     drawShellLens: Boolean = true,
     shellLensIntensity: Float = 1f,
+    liquidGlassTuningOverride: LiquidGlassTuning? = null,
     isScrollInProgressProvider: () -> Boolean = { false },
     /** 仅含文字、图标的内容无需录制外壳；内部有玻璃采样控件时保留默认值。 */
     captureShellForContent: Boolean = true,
@@ -358,7 +359,11 @@ internal fun BottomBarMatchedReusableLiquidDock(
     // sample both on every optical pass. Each dock still owns its lens/effects.
     val parentGlass = com.android.purebilibili.core.ui.blur.LocalAppGlassContainer.current
         .takeIf { glassEnabled }
-    val suppliedBackdrop = if (parentGlass != null) parentGlass.backdrop else backdrop
+    val wallpaperSource = com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource.current
+    val wallpaperBackdrop = if (glassEnabled &&
+        com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible.current
+    ) wallpaperSource?.takeIf { it.isReady }?.backdrop else null
+    val suppliedBackdrop = if (parentGlass != null) parentGlass.backdrop else backdrop ?: wallpaperBackdrop
     val localBackdrop = if (suppliedBackdrop == null) rememberLayerBackdrop() else null
     val effectiveBackdrop = (suppliedBackdrop ?: localBackdrop)?.let {
         com.android.purebilibili.feature.home.components.liquid.rememberStableBackdrop(it)
@@ -367,18 +372,18 @@ internal fun BottomBarMatchedReusableLiquidDock(
     val shellSource = if (glassEnabled && captureShellForContent) {
         com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource()
     } else null
-    val isDarkTheme = com.android.purebilibili.core.ui.isAppInDarkTheme()
+    val isDarkTheme = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val blurIntensity = currentUnifiedBlurIntensity()
     val tuning = resolveAndroidNativeBottomBarTuning(
         blurEnabled = true,
         darkTheme = isDarkTheme
     )
-    val liquidGlassTuning = renderConfig.tuning
+    val liquidGlassTuning = liquidGlassTuningOverride ?: renderConfig.tuning
     val containerColor = if (useNeutralLiquidContainer && glassEnabled) {
         resolveBiliPaiBottomBarContainerColor(
             darkTheme = isDarkTheme,
             liquidGlassTuning = liquidGlassTuning,
-            surfaceColor = AppSurfaceTokens.surfaceContainer(),
+            surfaceColor = AppSurfaceTokens.cardContainer(),
         )
     } else {
         resolveAndroidNativeFloatingBottomBarContainerColor(

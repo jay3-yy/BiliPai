@@ -10,6 +10,7 @@ import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.R
+import com.android.purebilibili.core.ui.AppScaffold
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppTopBar
@@ -146,66 +148,77 @@ fun SettingsTabletShell(
                 .fillMaxHeight()
                 .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer()),
         ) {
-                val config = LocalAppThemeConfig.current
-                val progressive = shouldUseBiliPaiProgressiveTopBlur(
-                    enabled = config.progressiveTopBlurEnabled && !config.headerBlurEnabled,
-                    hasBackdrop = true,
-                ) && !isLowBlurBudgetForced()
-                val fadeActive = config.progressiveTopFadeEnabled && !config.headerBlurEnabled
-                val tabletChromeSource = if (progressive) rememberChromeBackdropSource(
-                    recordingBackground = AppSurfaceTokens.groupedListContainer(),
-                ) else null
-                val tabletChromeBackdrop = tabletChromeSource?.takeIf { it.isReady }?.backdrop
-                val tabletHazeState = if (
-                    config.headerBlurEnabled && !progressive &&
-                        shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT)
-                ) rememberRecoverableHazeState() else null
-                val tabletHazeReady = tabletHazeState?.let { recoverableBlurEnabled(it) } == true
-                BiliPaiImmersiveTopBar(
-                    // 双栏标题与搜索框上下排列；顶部特效不得外绘到下方独立搜索胶囊。
-                    modifier = if (progressive) Modifier.clipToBounds() else Modifier,
-                    backdrop = tabletChromeBackdrop,
-                    enabled = progressive,
-                    headerBlurActive = tabletHazeReady,
-                    surfaceColor = AppSurfaceTokens.groupedListContainer(),
-                    fadeEnabled = fadeActive,
-                ) {
-                    AppTopBar(
-                        title = stringResource(R.string.settings_title),
-                        modifier = if (tabletHazeReady) {
-                            Modifier
-                                .unifiedBlur(
-                                    hazeState = requireNotNull(tabletHazeState),
-                                    surfaceType = BlurSurfaceType.HEADER,
-                                )
-                                .background(
+            val config = LocalAppThemeConfig.current
+            val progressive = shouldUseBiliPaiProgressiveTopBlur(
+                enabled = config.progressiveTopBlurEnabled && !config.headerBlurEnabled,
+                hasBackdrop = true,
+            ) && !isLowBlurBudgetForced()
+            val fadeActive = config.progressiveTopFadeEnabled && !config.headerBlurEnabled
+            val tabletChromeSource = if (progressive) rememberChromeBackdropSource(
+                recordingBackground = AppSurfaceTokens.groupedListContainer(),
+            ) else null
+            val tabletChromeBackdrop = tabletChromeSource?.takeIf { it.isReady }?.backdrop
+            val tabletHazeState = if (
+                config.headerBlurEnabled && !progressive &&
+                    shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT)
+            ) rememberRecoverableHazeState() else null
+            val tabletHazeReady = tabletHazeState?.let { recoverableBlurEnabled(it) } == true
+            AppScaffold(
+                modifier = Modifier.fillMaxSize(),
+                containerColor = AppSurfaceTokens.groupedListContainer(),
+                contentWindowInsets = WindowInsets(0.dp),
+                contentBackdropEnabled = progressive,
+                topBarIconBackdropSource = tabletChromeSource,
+                topBar = {
+                    BiliPaiImmersiveTopBar(
+                        // 双栏标题与搜索框上下排列；顶部特效不得外绘到下方独立搜索胶囊。
+                        modifier = if (progressive) Modifier.clipToBounds() else Modifier,
+                        backdrop = tabletChromeBackdrop,
+                        enabled = progressive,
+                        headerBlurActive = tabletHazeReady,
+                        surfaceColor = AppSurfaceTokens.groupedListContainer(),
+                        fadeEnabled = fadeActive,
+                    ) {
+                        AppTopBar(
+                            title = stringResource(R.string.settings_title),
+                            modifier = if (tabletHazeReady) {
+                                Modifier
+                                    .unifiedBlur(
+                                        hazeState = requireNotNull(tabletHazeState),
+                                        surfaceType = BlurSurfaceType.HEADER,
+                                    )
+                                    .background(
+                                        AppSurfaceTokens.groupedListContainer()
+                                            .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
+                                    )
+                            } else Modifier,
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = if (progressive || fadeActive || tabletHazeReady) {
+                                    androidx.compose.ui.graphics.Color.Transparent
+                                } else {
                                     AppSurfaceTokens.groupedListContainer()
-                                        .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
-                                )
-                        } else Modifier,
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = if (progressive || fadeActive || tabletHazeReady) {
-                                androidx.compose.ui.graphics.Color.Transparent
-                            } else {
-                                AppSurfaceTokens.groupedListContainer()
+                                },
+                                scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                            ),
+                            navigationIcon = {
+                                AppIconButton(onClick = onBack) {
+                                    AppIcon(
+                                        imageVector = rememberAppBackIcon(),
+                                        contentDescription = stringResource(R.string.common_back),
+                                    )
+                                }
                             },
-                            scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        ),
-                        navigationIcon = {
-                            AppIconButton(onClick = onBack) {
-                                AppIcon(
-                                    imageVector = rememberAppBackIcon(),
-                                    contentDescription = stringResource(R.string.common_back),
-                                )
-                            }
-                        },
-                    )
-                }
+                        )
+                    }
+                },
+            ) { contentPadding ->
+                // 采样覆盖整栏，包含标题后方的背景；标题自身留在源外，避免录制循环。
                 Column(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxSize()
                         .then(tabletChromeSource?.modifier ?: Modifier)
                         .then(if (tabletHazeReady) Modifier.hazeSourceCompat(requireNotNull(tabletHazeState)) else Modifier)
+                        .padding(top = contentPadding.calculateTopPadding())
                         .padding(horizontal = layoutPolicy.masterPanePaddingDp.dp),
                 ) {
                     SettingsHomeSearchEntry(onClick = onSearchOpen)
@@ -268,6 +281,7 @@ fun SettingsTabletShell(
                 }
             }
         }
+    }
     val infoPaneContent: @Composable ThreePaneScaffoldPaneScope.() -> Unit = {
         Column(
             modifier = Modifier

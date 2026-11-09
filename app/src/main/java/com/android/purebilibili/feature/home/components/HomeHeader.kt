@@ -2915,6 +2915,7 @@ fun HomeHeader(
                                     liquidGlassEffectsEnabled =
                                         searchChromeMaterialMode == TopTabMaterialMode.LIQUID_GLASS,
                                     useNeutralLiquidContainer = true,
+                                    liquidGlassTuningOverride = liquidGlassTuning,
                                     drawShellLens = true,
                                     shellLensIntensity = resolveFloatingDockGeometryScale(
                                         resolveHomeTopEdgeControlHeight().value

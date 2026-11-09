@@ -117,10 +117,12 @@ private fun ios26BottomBarGlassMaterial(
         foregroundTint = Color.Transparent,
         highlightWidthScale = 1f,
         shadowAlphaScale = 1f,
-        innerRimGlow = BottomBarInnerRimGlowSpec(
+        innerRimGlow = if (liquidGlassTuning.refractionHeight > 0f &&
+            liquidGlassTuning.refractionAmount > 0f && liquidGlassTuning.contentDistortionScale > 0f
+        ) BottomBarInnerRimGlowSpec(
             radiusDp = 5f,
             alpha = lerp(0.09f, 0.16f, scrollLift)
-        ),
+        ) else null,
         shellShader = null
     )
 }
