@@ -21,6 +21,7 @@ import com.itgsa.animation.sharedview.ViewAnimationListener
 import com.itgsa.animation.sharedview.ViewAnimationManager
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.lang.ref.WeakReference
 import java.util.UUID
@@ -186,9 +187,15 @@ internal object SystemVideoCardTransition {
         sessions[token] = session
         var launched = false
         try {
+            val directPortraitEntryEnabled = runCatching {
+                com.android.purebilibili.core.store.SettingsManager
+                    .getAutoPortraitFullscreen(activity)
+                    .first()
+            }.getOrDefault(false)
             val windowRequest = request.forSystemCardTransition(
                 isVerticalVideo = request.initialVertical ||
                     com.android.purebilibili.data.repository.VideoRepository.getCachedVerticalFlag(request.bvid) == true,
+                directPortraitEntryEnabled = directPortraitEntryEnabled,
             )
             launched = VideoActivityLauncher.open(activity, windowRequest, options.toBundle(), token) {
                 // 等待窗口恢复后再次核对请求和几何，不用旧截图打开已切换的卡片。

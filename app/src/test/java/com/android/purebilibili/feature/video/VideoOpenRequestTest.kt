@@ -42,7 +42,7 @@ class VideoOpenRequestTest {
             bvid = "BV1vertical", cid = 42L, coverUrl = "https://example.com/cover.jpg",
             initialVertical = false, fullscreen = true, resumePositionMs = 12_345L, title = "竖屏视频",
         )
-        val request = source.forSystemCardTransition(isVerticalVideo = true)
+        val request = source.forSystemCardTransition(isVerticalVideo = true, directPortraitEntryEnabled = true)
         val restored = requireNotNull(VideoOpenRequest.fromBundle(request.toBundle()))
         val key = legacyRouteToBiliPaiNavKey(restored.toInitialRoute()) as com.android.purebilibili.navigation3.BiliPaiNavKey.VideoDetail
         assertEquals(source.copy(initialVertical = true, autoPortrait = true, directPortraitEntry = true, fullscreen = false), restored)
@@ -64,6 +64,28 @@ class VideoOpenRequestTest {
                 directPortraitEntry = key.directPortraitEntry,
             ),
         )
+    }
+
+    @Test
+    fun systemVerticalEntryStaysInlineWhenDirectPortraitSettingIsOff() {
+        val source = VideoOpenRequest(
+            bvid = "BV1vertical", cid = 42L, coverUrl = "https://example.com/cover.jpg",
+            fullscreen = true, resumePositionMs = 12_345L, title = "竖屏视频",
+        )
+        val request = source.forSystemCardTransition(
+            isVerticalVideo = true,
+            directPortraitEntryEnabled = false,
+        )
+        assertEquals(source.copy(initialVertical = true, autoPortrait = false, directPortraitEntry = false, fullscreen = false), request)
+        val key = request.toNavigationKey()
+        assertEquals(true, key.initialVertical)
+        assertEquals(false, key.directPortraitEntry)
+        assertEquals(false, com.android.purebilibili.feature.video.screen.shouldStartInPortraitFullscreenFromRouteHint(
+            autoEnterPortraitFromRoute = key.autoPortrait,
+            startAudioFromRoute = key.startAudio,
+            initialVerticalFromRoute = key.initialVertical,
+            directPortraitEntryFromRoute = key.directPortraitEntry,
+        ))
     }
 
     @Test
