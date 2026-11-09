@@ -730,6 +730,10 @@ fun AppNavigation(
         var previousOrientationDestination by remember { mutableStateOf(currentNavigation3Key) }
         LaunchedEffect(currentNavigation3Key) {
             val leavingVideo = previousOrientationDestination is BiliPaiNavKey.VideoDetail
+            val orientationActivity = context.findActivity()
+            val keepLandscape = leavingVideo && orientationActivity?.let {
+                com.android.purebilibili.feature.video.VideoActivityLauncher.consumeLandscapeBack(it)
+            } == true
             previousOrientationDestination = currentNavigation3Key
             val destinationOwnsOrientation = currentNavigation3Key is BiliPaiNavKey.VideoDetail ||
                 currentNavigation3Key is BiliPaiNavKey.BangumiPlayer ||
@@ -737,9 +741,12 @@ fun AppNavigation(
                 currentNavigation3Key is BiliPaiNavKey.OfflineVideoPlayer ||
                 currentNavigation3Key is BiliPaiNavKey.AudioMode
             if (leavingVideo && !destinationOwnsOrientation) {
-                // 小窗只接管播放，不保留详情页的横屏请求；普通页面重新遵循系统旋转设置。
+                // 普通退出恢复系统旋转；显式横屏返回将当前方向交给上一页。
                 // 按导航所有权交接，避免等退场组件销毁时覆盖新播放器的方向。
-                context.findActivity()?.applyPlayerRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+                orientationActivity?.applyPlayerRequestedOrientation(
+                    if (keepLandscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                )
             }
         }
         val homeWallpaperSelection by SettingsManager.getHomeWallpaperSelection(context)

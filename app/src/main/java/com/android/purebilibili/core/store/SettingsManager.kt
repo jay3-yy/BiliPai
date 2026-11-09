@@ -7711,6 +7711,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_DANMAKU_HOT_BAR_ENABLED =
         booleanPreferencesKey("danmaku_hot_bar_enabled")
     private val KEY_HORIZONTAL_ADAPTATION = booleanPreferencesKey("horizontal_adaptation_enabled")
+    private val KEY_LANDSCAPE_BACK_COMMENTS = booleanPreferencesKey("landscape_back_shows_comments")
     private val KEY_FULLSCREEN_MODE = intPreferencesKey("fullscreen_mode")
     private val KEY_FULLSCREEN_ASPECT_RATIO = intPreferencesKey("fullscreen_aspect_ratio")
     const val DEFAULT_COMMENT_COLLAPSED_REPLY_PREVIEW_LIMIT = 3
@@ -8239,6 +8240,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_PROGRESS_PEAK_DANMAKU_ENABLED] = enabled
         }
+    }
+
+    fun getLandscapeBackShowsComments(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { it[KEY_LANDSCAPE_BACK_COMMENTS] ?: false }
+
+    suspend fun setLandscapeBackShowsComments(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[KEY_LANDSCAPE_BACK_COMMENTS] = enabled }
     }
 
     fun getHorizontalAdaptationEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
@@ -8899,6 +8907,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.PLAYBACK,
             ),
             BooleanShareablePreferenceDefinition(KEY_HORIZONTAL_ADAPTATION, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_LANDSCAPE_BACK_COMMENTS, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_HIDE_VIDEO_PAGE_STATUS_BAR, SettingsShareSection.PLAYBACK),
             IntShareablePreferenceDefinition(KEY_TABLET_COMMENT_PANEL_WIDTH_PRESET, SettingsShareSection.PLAYBACK),
             IntShareablePreferenceDefinition(KEY_TABLET_SECONDARY_DEFAULT_TAB, SettingsShareSection.PLAYBACK),

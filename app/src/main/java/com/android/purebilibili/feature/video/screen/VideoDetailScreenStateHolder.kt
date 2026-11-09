@@ -820,6 +820,7 @@ internal fun VideoDetailScreenStateHolder(
     var currentBvid by presentationState.currentBvidState
     var currentBvidCid by presentationState.currentCidState
     var landscapeCommentPanelVisible by rememberSaveable(currentBvid) { mutableStateOf(false) }
+    var preserveLandscapeOnNavigationBack by remember { mutableStateOf(false) }
     var landscapeCommentPanelOnLeft by rememberSaveable(currentBvid) { mutableStateOf(false) }
     val landscapeCommentCloseProgress = remember(currentBvid) { mutableFloatStateOf(1f) }
     // Episode cover captured at collection/playlist in-page switch (survives Loading.Initial).
@@ -1380,6 +1381,9 @@ internal fun VideoDetailScreenStateHolder(
                 .getHideVideoPageStatusBarSync(context),
             lifecycle = lifecycleOwner.lifecycle
         )
+    val landscapeBackShowsComments by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getLandscapeBackShowsComments(context)
+    }.collectAsStateWithLifecycle(initialValue = false, lifecycle = lifecycleOwner.lifecycle)
     val useTabletLayout = appWindowAdaptiveInfo.shouldAvoidHinge || (
         horizontalAdaptationEnabled && shouldUseLargeScreenVideoLayout(
             windowWidthDp = configuration.screenWidthDp.toFloat(),
@@ -2061,9 +2065,8 @@ internal fun VideoDetailScreenStateHolder(
             val deferredActivity = activity
             val deferredContext = context
             val deferredShouldHandleAsNavExit = shouldHandleAsNavigationExit
-            // Playback can survive in the in-app mini player, but its fullscreen orientation
-            // must not survive on Home. Audio/new-detail handoffs own their own orientation.
-            val deferredShouldRestoreOrientation = shouldRestoreVideoDetailOrientationOnDispose(
+            // 普通退出恢复方向；显式横屏返回保留方向，听视频与新详情仍自行接管。
+            val deferredShouldRestoreOrientation = !preserveLandscapeOnNavigationBack && shouldRestoreVideoDetailOrientationOnDispose(
                 isNavigatingToAudioMode = isNavigatingToAudioMode,
                 isChangingConfigurations = activity?.isChangingConfigurations == true,
                 isNavigatingToVideo = resolveIsNavigatingToVideoDuringDispose(
@@ -3528,6 +3531,9 @@ internal fun VideoDetailScreenStateHolder(
         isPortraitFullscreen = isPortraitFullscreen,
         directPortraitEntry = directPortraitEntryFromRoute,
         continuousPlayerPhase = continuousPlayerPhase.takeIf { continuousFullscreenTransitionEnabled },
+        landscapeBackShowsComments = landscapeBackShowsComments,
+        canShowLandscapeComments = canShowLandscapeComments && uiState is VideoPlaybackUiState.Success,
+        landscapeCommentsVisible = landscapeCommentPanelVisible,
     )
     fun consumeLocalBack(): Boolean {
         return when (currentLocalBackTarget()) {
@@ -3540,6 +3546,17 @@ internal fun VideoDetailScreenStateHolder(
                 true
             }
             VideoDetailLocalBackTarget.NAVIGATE_BACK -> false
+            VideoDetailLocalBackTarget.SHOW_LANDSCAPE_COMMENTS -> {
+                landscapeCommentCloseProgress.floatValue = 1f
+                landscapeCommentPanelVisible = true
+                true
+            }
+            VideoDetailLocalBackTarget.NAVIGATE_BACK_KEEP_LANDSCAPE -> {
+                preserveLandscapeOnNavigationBack = true
+                activity?.let(com.android.purebilibili.feature.video.VideoActivityLauncher::keepLandscapeForBack)
+                handleBack()
+                true
+            }
         }
     }
     val handlePlayerBack = {

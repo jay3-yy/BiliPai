@@ -164,6 +164,7 @@ internal enum class SettingsIconRole {
     VIDEO_DESCRIPTION,
     FULLSCREEN_ORIENTATION,
     HORIZONTAL_ADAPTATION,
+    LANDSCAPE_BACK_COMMENTS,
     FULLSCREEN_GESTURE_REVERSE,
     IMMERSIVE_STATUS_BAR,
     AUTO_ENTER_FULLSCREEN,
@@ -480,6 +481,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.VIDEO_DESCRIPTION -> R.drawable.ms_subject_24
     SettingsIconRole.FULLSCREEN_ORIENTATION -> R.drawable.ms_screen_rotation_24
     SettingsIconRole.HORIZONTAL_ADAPTATION -> R.drawable.ms_aspect_ratio_24
+    SettingsIconRole.LANDSCAPE_BACK_COMMENTS -> R.drawable.ic_settings_landscape_back_comments_24
     SettingsIconRole.FULLSCREEN_GESTURE_REVERSE -> R.drawable.ms_swipe_vertical_24
     SettingsIconRole.IMMERSIVE_STATUS_BAR -> R.drawable.ms_fullscreen_24
     SettingsIconRole.AUTO_ENTER_FULLSCREEN -> R.drawable.ms_open_in_full_24

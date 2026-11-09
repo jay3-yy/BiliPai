@@ -526,6 +526,7 @@ open class VideoActivity : ComponentActivity() {
     override fun onDestroy() {
         officialReturnContentBinding = null
         if (!isChangingConfigurations) {
+            VideoActivityLauncher.releaseParent(this)
             SystemVideoCardTransition.release(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))
         }
         runtimeJankStats?.isTrackingEnabled = false

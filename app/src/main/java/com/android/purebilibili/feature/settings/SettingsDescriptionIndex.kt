@@ -167,6 +167,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "playback.startup_auto_play_enabled" to "重新打开应用并进入播放器后，继续上次播放；关闭后需要手动恢复播放",
     "playback.stop_playback_on_exit" to "开启后，返回其他页面时立即停止，也不会进入小窗或后台播放",
     "playback.sub_reply_loaded_count_enabled" to "在回复总数后显示当前已加载的条数",
+    "playback.landscape_back_shows_comments" to "横屏全屏时首次返回打开评论，再次返回上一级并保持横屏；关闭后沿用原有返回方式",
     "playback.tablet_comment_panel_width_preset" to "调整横屏适配下右侧评论/推荐栏宽度；开启横屏适配后生效",
     "playback.tablet_secondary_default_tab" to "选择首次打开时，右栏显示推荐还是评论",
     "playback.video_ai_summary_entry_enabled" to "视频简介区展示 AI 总结按钮，点按后展开内容；关闭后隐藏视频简介区的 AI 总结入口",

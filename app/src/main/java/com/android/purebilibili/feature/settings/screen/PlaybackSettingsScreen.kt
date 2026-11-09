@@ -2495,6 +2495,8 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
         val immersiveVideoPageStatusBar by remember(context) { com.android.purebilibili.core.store.SettingsManager.getHideVideoPageStatusBar(context) }
             .collectAsStateWithLifecycle(initialValue = false)
         val tabletCommentPanelWidthPreset = playerConfiguration.tabletCommentPanelWidthPreset
+        val landscapeBackShowsComments by remember(context) { SettingsManager.getLandscapeBackShowsComments(context) }
+            .collectAsStateWithLifecycle(initialValue = false)
         val tabletSecondaryDefaultTab by remember(context) { com.android.purebilibili.core.store.SettingsManager.getTabletSecondaryDefaultTab(context) }
             .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED)
         val fullscreenMode by remember(context) { com.android.purebilibili.core.store.SettingsManager.getFullscreenMode(context) }
@@ -2565,6 +2567,18 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 iconTint = AppContentColors.secondaryText()
             )
             }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.landscape_back_shows_comments") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.LANDSCAPE_BACK_COMMENTS),
+                title = playbackSettingTitle("playback.landscape_back_shows_comments"),
+                subtitle = "横屏全屏时首次返回打开评论，再次返回上一级并保持横屏",
+                checked = landscapeBackShowsComments,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setLandscapeBackShowsComments(context, enabled) }
+                },
+            )
+        }
         AppPreferenceDivider()
         SettingsItemAnchor("playback.player_control_visibility.show_cast_button") {
             AppSwitchPreference(
