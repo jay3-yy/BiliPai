@@ -694,7 +694,10 @@ fun AppNavigation(
         androidx.compose.runtime.SideEffect {
             (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)?.let { activity ->
                 activity.updateOfficialReturnContent(
-                    (navigation3BackStack.lastOrNull() as? BiliPaiNavKey.VideoDetail)?.bvid,
+                    when (val current = navigation3BackStack.lastOrNull()) {
+                        is BiliPaiNavKey.VideoDetail -> current.bvid
+                        else -> com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(current)
+                    },
                 )
                 activity.updateOfficialRootPredictiveBack(initialVideoRoute != null && navigation3BackStack.size == 1)
             }
@@ -3027,7 +3030,7 @@ fun AppNavigation(
                             })
                         },
                         onWebClick = { url, title ->
-                            pushNavigation3Key(BiliPaiNavKey.Web(url = url, title = title))
+                            navigateToSystemCardWindowOrPush(BiliPaiNavKey.Web(url = url, title = title))
                         },
                         onLiveClick = { roomId, title, uname ->
                             if (roomId > 0L) {
@@ -4564,7 +4567,7 @@ fun AppNavigation(
                 fun RenderLiveAreaEntryContent(key: BiliPaiNavKey) {
                     com.android.purebilibili.feature.live.LiveAreaScreen(
                         onBack = { performSystemBackAction() },
-                        onAreaContainerClick = { target -> pushNavigation3Key(target) },
+                        onAreaContainerClick = { target -> navigateToSystemCardWindowOrPush(target) },
                         onAreaClick = { parentAreaId, areaId, title ->
                             pushNavigation3Key(
                                 BiliPaiNavKey.LiveAreaDetail(

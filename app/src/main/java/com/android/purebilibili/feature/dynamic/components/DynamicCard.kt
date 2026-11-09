@@ -370,11 +370,18 @@ fun DynamicCardV2(
             onLiveClick = onLiveClick,
         )
     }
-    val articleContainer = if (!isDetail && onPrimaryClickOverride == null &&
-        onArticleClick != null && cardClickAction is DynamicCardPrimaryAction.OpenArticle
-    ) {
+    val primaryContainerTarget = when (val action = cardClickAction) {
+        is DynamicCardPrimaryAction.OpenArticle -> if (onArticleClick != null) {
+            com.android.purebilibili.navigation3.BiliPaiNavKey.ArticleDetail(action.articleId, action.title)
+        } else null
+        is DynamicCardPrimaryAction.OpenDynamicDetail -> if (openDynamicDetail != null) {
+            com.android.purebilibili.navigation3.BiliPaiNavKey.DynamicDetail(action.dynamicId)
+        } else null
+        else -> null
+    }
+    val primaryContainer = if (!isDetail && onPrimaryClickOverride == null && primaryContainerTarget != null) {
         com.android.purebilibili.core.ui.rememberNativeCardContainerTransition(
-            com.android.purebilibili.navigation3.BiliPaiNavKey.ArticleDetail(cardClickAction.articleId, cardClickAction.title),
+            primaryContainerTarget,
             openPrimaryArticle,
         )
     } else null
@@ -530,9 +537,14 @@ fun DynamicCardV2(
                     top = if (isDetail) AppSpacingTokens.Medium else AppSpacingTokens.ExtraSmall,
                     bottom = if (isDetail) AppSpacingTokens.None else AppSpacingTokens.ExtraSmall,
                 )
-                .then(articleContainer?.modifier ?: Modifier)
+                .then(primaryContainer?.modifier ?: Modifier)
                 .appActionClickable(enabled = isPrimaryClickEnabled) {
-                    if (articleContainer != null) articleContainer.onClick() else openPrimaryArticle()
+                    if (primaryContainer != null) {
+                        if (primaryContainerTarget is com.android.purebilibili.navigation3.BiliPaiNavKey.DynamicDetail) {
+                            DynamicRepository.rememberDynamicDetailSeed(item)
+                        }
+                        primaryContainer.onClick()
+                    } else openPrimaryArticle()
                 }
         ) {
         val context = LocalContext.current

@@ -13,7 +13,7 @@ import com.android.purebilibili.core.util.CardPositionManager
 import kotlin.math.roundToInt
 
 /**
- * 系统一镜到底窗口来源：直播、番剧等导航容器卡片点击时向视频转场管线登记几何，
+ * 系统一镜到底窗口来源：内容卡片点击时向视频转场管线登记几何，
  * 与视频卡片共用锚点、像素归属与返回落点。identity 不含冒号，与 route:identity 来源键规则兼容。
  */
 internal class SystemWindowCardSource internal constructor(
@@ -49,6 +49,15 @@ internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = 
     is BiliPaiNavKey.Live -> "live_${target.roomId}"
     is BiliPaiNavKey.BangumiPlayer -> "bangumi_${target.seasonId}"
     is BiliPaiNavKey.BangumiDetail -> "bangumi_${target.seasonId}"
+    is BiliPaiNavKey.ArticleDetail -> "article_${target.articleId}"
+    is BiliPaiNavKey.DynamicDetail -> "dynamic_${target.dynamicId}"
+    is BiliPaiNavKey.Space -> "space_${target.mid}"
+    is BiliPaiNavKey.LiveAreaDetail -> "live_area_${target.parentAreaId}_${target.areaId}"
+    is BiliPaiNavKey.Web -> if (com.android.purebilibili.feature.web.shouldOpenWebUrlExternally(target.url)) {
+        null
+    } else {
+        "web_${java.util.UUID.nameUUIDFromBytes(target.url.toByteArray(Charsets.UTF_8))}"
+    }
     else -> null
 }
 

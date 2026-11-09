@@ -187,7 +187,11 @@ open class VideoActivity : ComponentActivity() {
             finish()
             return
         }
-        officialReturnBvid = request.bvid.takeIf { request.initialRoute.isBlank() }
+        officialReturnBvid = if (request.initialRoute.isBlank()) request.bvid else {
+            com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(
+                com.android.purebilibili.navigation3.legacyRouteToBiliPaiNavKey(request.initialRoute),
+            )
+        }
 
         updateStateFromConfig(resources.configuration)
 

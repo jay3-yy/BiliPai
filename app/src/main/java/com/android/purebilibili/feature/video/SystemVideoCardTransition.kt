@@ -199,7 +199,8 @@ internal object SystemVideoCardTransition {
         }
         val token = prefix + UUID.randomUUID()
         val session = Session(
-            openingBvid = request.bvid,
+            // 内容卡使用来源身份；非视频窗口的播放请求没有视频编号。
+            openingBvid = source.bvid,
             sourceActivity = WeakReference(activity),
             sourceWindow = sourceWindow,
             anchor, thumbnail, windowCoordinates,
