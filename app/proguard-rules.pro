@@ -55,3 +55,7 @@
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
+# Loaded by name; the superclass and callback entry points are supplied by the ROM.
+-keep class com.android.purebilibili.feature.video.OplusAnimationCallbackBridge { *; }
+-dontwarn com.oplus.animation.OplusViewSeamless
+-dontwarn com.oplus.animation.OplusViewSeamless$AnimationCallback

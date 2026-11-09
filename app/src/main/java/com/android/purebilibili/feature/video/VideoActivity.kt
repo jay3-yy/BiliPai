@@ -65,6 +65,41 @@ open class VideoActivity : ComponentActivity() {
     private var officialReturnMotionEnabled = true
     private var officialReturnBlurEnabled = true
     private var officialRootPredictiveBack = false
+    private var officialReturnBvid: String? = null
+    private class ReturnContentBinding(
+        val owner: Any,
+        val routeBvid: String,
+        val readBvid: () -> String?,
+        val lastBvid: String?,
+    )
+    private var officialReturnContentBinding: ReturnContentBinding? = null
+
+    /** 仅由当前拥有页面的详情实例登记；finish 时重新读取，避免等待重组后才同步身份。 */
+    internal fun bindOfficialReturnContent(owner: Any, routeBvid: String, readBvid: () -> String?) {
+        val previous = officialReturnContentBinding
+        val current = readBvid()
+        officialReturnContentBinding = ReturnContentBinding(owner, routeBvid, readBvid, current)
+        if (previous == null || previous.owner !== owner || previous.routeBvid != routeBvid || previous.lastBvid != current) {
+            refreshOfficialReturn("playback_content_changed")
+        }
+    }
+
+    internal fun unbindOfficialReturnContent(owner: Any) {
+        if (officialReturnContentBinding?.owner === owner) officialReturnContentBinding = null
+    }
+
+    private fun currentOfficialReturnBvid(): String? {
+        if (!playbackWindowActive) return null
+        val binding = officialReturnContentBinding
+        return if (binding != null && binding.routeBvid == officialReturnBvid) binding.readBvid()
+        else officialReturnBvid
+    }
+
+    internal fun updateOfficialReturnContent(bvid: String?) {
+        if (officialReturnBvid == bvid) return
+        officialReturnBvid = bvid
+        refreshOfficialReturn("content_changed")
+    }
 
     internal fun updateOfficialRootPredictiveBack(atRoot: Boolean) {
         // 仅标准系统转场尝试跨 Activity 预测返回；旧圆角协议沿用自身返回。
@@ -84,7 +119,9 @@ open class VideoActivity : ComponentActivity() {
 
     private fun refreshOfficialReturn(reason: String, preparingToFinish: Boolean = false) =
         SystemVideoCardTransition.refreshReturn(
-            this, officialReturnMotionEnabled, officialReturnBlurEnabled, reason, preparingToFinish,
+            this, officialReturnMotionEnabled, officialReturnBlurEnabled, reason,
+            currentVideoBvid = currentOfficialReturnBvid(),
+            preparingToFinish = preparingToFinish,
             preferSystemPredictiveBack = officialRootPredictiveBack,
         )
 
@@ -150,6 +187,7 @@ open class VideoActivity : ComponentActivity() {
             finish()
             return
         }
+        officialReturnBvid = request.bvid.takeIf { request.initialRoute.isBlank() }
 
         updateStateFromConfig(resources.configuration)
 
@@ -366,6 +404,7 @@ open class VideoActivity : ComponentActivity() {
                     initialVideoRoute = request.toInitialRoute(),
                     videoActivityPlaybackActive = playbackWindowActive,
                     onVideoActivityHome = {
+                        updateOfficialReturnContent(null)
                         intent.removeExtra("video_parent_is_video")
                         startActivity(Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -440,7 +479,8 @@ open class VideoActivity : ComponentActivity() {
     }
 
     override fun finish() {
-        if (!isFinishing) {
+        val preparingToFinish = !isFinishing
+        if (preparingToFinish) {
             // 系统返回与页面返回共用此入口；关闭窗口前刷新同一来源实例的落点。
             refreshOfficialReturn("before_finish", preparingToFinish = true)
             if (playbackWindowActive) {
@@ -450,6 +490,7 @@ open class VideoActivity : ComponentActivity() {
             }
         }
         super.finish()
+        if (preparingToFinish) SystemVideoCardTransition.afterFinish(this)
     }
 
     override fun onStop() {
@@ -479,6 +520,7 @@ open class VideoActivity : ComponentActivity() {
     }
     
     override fun onDestroy() {
+        officialReturnContentBinding = null
         if (!isChangingConfigurations) {
             SystemVideoCardTransition.release(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))
         }

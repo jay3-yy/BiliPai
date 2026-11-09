@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.settings
 
 import com.android.purebilibili.core.ui.AppContentColors
 import android.content.Intent
+import androidx.compose.ui.platform.LocalConfiguration
+import com.android.purebilibili.core.ui.findHostActivity
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -243,8 +245,9 @@ fun AnimationSettingsContent(
     }
     val videoTransitionRealtimeBlurEnabled by remember(context) { SettingsManager.getVideoTransitionRealtimeBlurEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
-    val videoTransitionCapability = remember(state.cardTransitionEnabled) {
-        SystemVideoCardTransition.deviceCapability()
+    val transitionWindowConfiguration = LocalConfiguration.current
+    val videoTransitionCapability = remember(context, transitionWindowConfiguration, state.cardTransitionEnabled) {
+        SystemVideoCardTransition.deviceCapability(context.findHostActivity())
     }
     val systemReduceMotion = rememberSystemReduceMotion()
     val cardTransitionSourceDescription = stringResource(

@@ -276,6 +276,12 @@ Rounded-window protocol adapter: locally authored calls to the ROM-provided
 ActivityOptions.makeScaleUpDown and Activity.updateScaleUpDownData interfaces.
 Investigation and sample hashes: docs/performance/video-card-transition/sharedview-rom-compatibility-2026-11-05.md
 
+Legacy vivo OneShot interface observations:
+https://github.com/el-vertedero/iqoo_canoe_dump/tree/e73f73042dee4591810c3727bb2d7d84b233bd96
+Sample build: PD2505F_EX_A_17.0.6.15.W30.V000L1.
+The adapter and listener proxies are authored locally; only ROM-provided APIs
+execute the window animation. No firmware binary or decompiled implementation is bundled.
+
 Fair running-memory protocol reference:
 Official developer documentation: https://dev.mi.com/xiaomihyperos/documentation/detail?pId=2304
 Protocol field tables and Binder callback contract consulted on 2026-11-06.

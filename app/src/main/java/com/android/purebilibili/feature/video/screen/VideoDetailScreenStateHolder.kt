@@ -2171,6 +2171,22 @@ internal fun VideoDetailScreenStateHolder(
     var hasDeferredPortraitRestoreAfterExternalNavigation by rememberSaveable { mutableStateOf(false) }
     var pendingMainReloadBvidAfterPortrait by rememberSaveable { mutableStateOf<String?>(null) }
     var portraitPendingSelectionBvid by rememberSaveable { mutableStateOf<String?>(null) }
+    val systemReturnContentOwner = remember { Any() }
+    val systemReturnActivity = activity as? com.android.purebilibili.feature.video.VideoActivity
+    androidx.compose.runtime.SideEffect {
+        if (isOrientationOwner) {
+            systemReturnActivity?.bindOfficialReturnContent(systemReturnContentOwner, bvid) {
+                if (isPortraitFullscreen) {
+                    portraitPendingSelectionBvid ?: viewModel.peekWindowReturnBvid() ?: currentBvid
+                } else {
+                    viewModel.peekWindowReturnBvid() ?: currentBvid
+                }
+            }
+        }
+    }
+    DisposableEffect(systemReturnActivity, systemReturnContentOwner, isOrientationOwner) {
+        onDispose { systemReturnActivity?.unbindOfficialReturnContent(systemReturnContentOwner) }
+    }
     // 返回 morph 中栈已 pop 时 isVisible=false，仍须保活 surface，避免壳缩前半段黑掉。
     val playbackSessionActiveForMorph = shouldKeepPlaybackSessionActiveForSharedReturnMorph(
         isVisible = isPlaybackSessionActive,

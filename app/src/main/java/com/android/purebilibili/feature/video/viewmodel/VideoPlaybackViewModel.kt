@@ -1900,6 +1900,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         return inPageInitiatedPlaybackIdentity?.first
     }
 
+    /** 当前详情播放会话的实时身份，包含不更换导航键的选集和自动连播。 */
+    internal fun peekWindowReturnBvid(): String? = currentBvid.takeIf { it.isNotBlank() }
+
     private fun markInPageInitiatedPlayback(bvid: String, cid: Long) {
         inPageInitiatedPlaybackIdentity = bvid to cid
     }

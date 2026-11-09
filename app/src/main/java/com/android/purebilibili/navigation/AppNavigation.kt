@@ -642,7 +642,7 @@ fun AppNavigation(
     val videoCardTransitionClock = rememberVideoCardTransitionClock()
     val systemReduceMotion = rememberSystemReduceMotion()
     val systemCardTransitionEnabled = appearance.cardTransitionEnabled && !systemReduceMotion
-    val sharedVideoCardTransitionEnabled = cardTransitionEnabled && !systemReduceMotion
+    val sharedVideoCardTransitionEnabled = systemCardTransitionEnabled
     androidx.compose.runtime.SideEffect {
         (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)
             ?.updateOfficialReturnMotion(systemCardTransitionEnabled, videoTransitionRealtimeBlurEnabled)
@@ -692,8 +692,12 @@ fun AppNavigation(
             rememberSaveableStateHolder()
         }
         androidx.compose.runtime.SideEffect {
-            (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)
-                ?.updateOfficialRootPredictiveBack(initialVideoRoute != null && navigation3BackStack.size == 1)
+            (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)?.let { activity ->
+                activity.updateOfficialReturnContent(
+                    (navigation3BackStack.lastOrNull() as? BiliPaiNavKey.VideoDetail)?.bvid,
+                )
+                activity.updateOfficialRootPredictiveBack(initialVideoRoute != null && navigation3BackStack.size == 1)
+            }
         }
         fun replaceNavigation3BackStack(keys: List<BiliPaiNavKey>) {
             val replacementStack = keys.ifEmpty { listOf(BiliPaiNavKey.MainHost) }
@@ -1234,7 +1238,7 @@ fun AppNavigation(
                 useRecordedCardSource = true,
             )
             if (!com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
-                    systemCardTransitionEnabled, session,
+                    systemCardTransitionEnabled, session, hostActivity,
                 )
             ) {
                 return commitInApp()
@@ -1500,7 +1504,7 @@ fun AppNavigation(
             }
             if (key is BiliPaiNavKey.VideoDetail &&
                 com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
-                    systemCardTransitionEnabled, transitionSession,
+                    systemCardTransitionEnabled, transitionSession, hostActivity,
                 )
             ) {
                 coroutineScope.launch {

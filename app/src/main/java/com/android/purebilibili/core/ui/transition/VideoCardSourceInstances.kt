@@ -42,7 +42,15 @@ internal class VideoCardSourceInstance(
         val coordinates = coordinates?.takeIf { it.isAttached } ?: return null
         if (!view.isAttachedToWindow) return null
         val origin = coordinates.localToWindow(Offset.Zero)
+        val topRight = coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), 0f))
+        val bottomLeft = coordinates.localToWindow(Offset(0f, coordinates.size.height.toFloat()))
         val bottom = coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat()))
+        // 窗口协议只接收轴对齐的原尺寸截图，不能用对角线包围盒代替旋转或缩放后的卡片。
+        if (!sameVideoCardBounds(
+                Rect(origin, bottom),
+                Rect(origin, origin + Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())),
+            ) || abs(topRight.y - origin.y) > 1f || abs(bottomLeft.x - origin.x) > 1f ||
+            abs(topRight.x - bottom.x) > 1f || abs(bottomLeft.y - bottom.y) > 1f) return null
         val full = Rect(origin, bottom)
         val visible = coordinates.boundsInWindow()
         // 有完整录制像素时可从部分可见的整卡展开；窗口截图仍要求完整可见。
@@ -74,6 +82,9 @@ internal fun sameVideoCardBounds(first: Rect, second: Rect): Boolean =
 /** 返回只测量打开时的实例；同视频的新组合不能接替落点。 */
 internal class VideoCardSourceAnchor(source: VideoCardSourceInstance) {
     private val reference = WeakReference(source)
+    fun belongsToWindow(decor: View): Boolean = reference.get()?.let {
+        VideoCardSourceInstances.isAttached(it) && it.view.rootView === decor.rootView
+    } == true
     fun bounds(windowCoordinates: Boolean, allowPartial: Boolean = false): AndroidRect? = reference.get()
         ?.takeIf { VideoCardSourceInstances.isAttached(it) }?.bounds(windowCoordinates, allowPartial)
 

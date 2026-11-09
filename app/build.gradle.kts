@@ -418,6 +418,8 @@ composeCompiler {
 }
 
 dependencies {
+    // System callback declarations are compile-time types, never APK implementations.
+    compileOnly(project(":system-animation-stubs"))
     implementation("gsai.sdk:sharedview-kit:1.0.0.5")
     lintChecks(project(":ci-lint"))
     implementation(project(":brand-motion"))
