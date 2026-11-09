@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.ClosedCaptionOff
 import androidx.compose.material.icons.outlined.Fullscreen
+import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -420,10 +421,10 @@ fun BottomControlBar(
                             modifier = anchor(PlayerControlAnchor.QUALITY, "player_quality_action"),
                         )
                     }
-                    if (!isFullscreen) {
+                    if (!isFullscreen || viewportIsLandscape) {
                         PlayerControlIconAction(
-                            icon = Icons.Outlined.Fullscreen,
-                            description = "全屏",
+                            icon = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                            description = if (isFullscreen) "退出全屏" else "全屏",
                             width = slotWidth, height = 30.dp, iconSize = 24.dp,
                             onClick = onToggleFullscreen, modifier = Modifier.testTag("player_fullscreen_toggle"),
                         )

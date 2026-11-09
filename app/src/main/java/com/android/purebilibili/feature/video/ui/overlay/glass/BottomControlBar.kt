@@ -1959,7 +1959,7 @@ fun BottomControlBar(
                     }
                 }
             }
-            if (!isFullscreen) {
+            if (!isFullscreen || configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
                 Spacer(modifier = Modifier.width(layoutPolicy.rightActionSpacingDp.dp))
                 PlayerControlGlassDock(enabled = true, shape = androidx.compose.foundation.shape.CircleShape) {
                     Box(
@@ -1970,8 +1970,8 @@ fun BottomControlBar(
                         contentAlignment = Alignment.Center
                     ) {
                         AppIcon(
-                            imageVector = Icons.Outlined.Fullscreen,
-                            contentDescription = "横屏",
+                            imageVector = if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                            contentDescription = if (isFullscreen) "退出全屏" else "横屏",
                             tint = Color.White,
                             modifier = Modifier.size(layoutPolicy.fullscreenIconSizeDp.dp)
                         )
