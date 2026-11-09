@@ -450,8 +450,12 @@ internal fun DrawScope.drawHomeIndicatorSurface(
     darkTheme: Boolean,
     idleColor: Color? = null,
 ) {
-    val baseColor = idleColor ?: if (darkTheme) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.1f)
-    drawRect(color = baseColor)
+    val pressed = progress.coerceIn(0f, 1f)
+    drawRect(
+        color = idleColor ?: if (darkTheme) Color.White.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.1f),
+        alpha = 1f - pressed,
+    )
+    drawRect(Color.Black.copy(alpha = 0.03f * pressed))
 }
 
 /** 横纵 dock 共用同一透镜、色散、表面与阴影。形变和光学遮罩在绘制时读取相同的实时尺寸。 */

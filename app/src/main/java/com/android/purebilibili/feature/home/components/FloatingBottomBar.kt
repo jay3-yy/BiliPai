@@ -1335,6 +1335,10 @@ fun FloatingBottomBar(
             derivedStateOf { dampedDragAnimation.pressProgress > 0.001f }
         }.value
     } else false
+    val baseHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(
+        extraDegrees = -45f,
+        active = enabled && drawShell && parentGlass == null && materialBackdrop != null && gravityGate?.active == true,
+    ) else null
     val pillHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(
         extraDegrees = 90f,
         width = resolveDockPillHighlightWidthDp(
@@ -1398,17 +1402,26 @@ fun FloatingBottomBar(
                     .then(
                         when {
                             isLiquidGlassMode && materialBackdrop != null -> {
-                                Modifier.dockShellBackdrop(
+                                Modifier.drawBackdrop(
                                     backdrop = materialBackdrop,
-                                    shape = pillShape,
-                                    containerColor = containerColor,
-                                    darkTheme = isInDark,
-                                    tuning = liquidGlassTuning,
-                                    refractionHeightPx = shellRefractionHeightPx,
-                                    refractionAmountPx = shellRefractionAmountPx,
-                                    effectPaddingPx = shellEffectPaddingPx,
-                                    inheritOptics = parentGlass != null,
-                                    highlightActive = enabled && gravityGate?.active == true,
+                                    shape = { pillShape },
+                                    effects = {
+                                        padding = maxOf(
+                                            padding,
+                                            shellEffectPaddingPx,
+                                        )
+                                        if (parentGlass == null) {
+                                            vibrancy(liquidGlassTuning.saturation)
+                                            materialBlur(liquidGlassTuning.backdropBlurRadius.dp.toPx())
+                                            lens(
+                                                refractionHeight = shellRefractionHeightPx,
+                                                refractionAmount = shellRefractionAmountPx,
+                                                chromaticAberration =
+                                                    liquidGlassTuning.shellChromaticAberrationAmount,
+                                            )
+                                        }
+                                    },
+                                    highlight = { if (parentGlass == null) baseHighlight?.value?.copy(alpha = 0.75f) else null },
                                     layerBlock = {
                                         if (!inheritDeformation) {
                                             val width = size.width.coerceAtLeast(1f)
@@ -1423,6 +1436,16 @@ fun FloatingBottomBar(
                                                 (dragY / width) * (size.height / width).coerceAtMost(1f) *
                                                 DOCK_SHELL_ELASTIC_GAIN
                                             scaleY = s + extraStretch.coerceAtMost(DOCK_SHELL_MAX_EXTRA_STRETCH)
+                                        }
+                                    },
+                                    onDrawSurface = {
+                                        drawRect(containerColor)
+                                        if (liquidGlassTuning.contentReadabilityScrimAlpha > 0f) {
+                                            drawRect(
+                                                readabilityScrimColor.copy(
+                                                    alpha = liquidGlassTuning.contentReadabilityScrimAlpha
+                                                )
+                                            )
                                         }
                                     },
                                 )
@@ -1450,8 +1473,7 @@ fun FloatingBottomBar(
                         }
                     )
                     .then(
-                        // 玻璃按压只改变轮廓与折射，避免触摸亮光改变外壳和指示器的底色。
-                        if (!isLiquidGlassMode && interactiveHighlight != null) {
+                        if (interactiveHighlight != null) {
                             interactiveHighlight.modifier
                         } else {
                             Modifier
@@ -1602,7 +1624,7 @@ fun FloatingBottomBar(
                     Row(
                         Modifier
                             .fillMaxSize()
-                            // 指示器采样固定材质与标签，不把拖动时的触摸亮光烘入纹理。
+                            .then(interactiveHighlight?.modifier ?: Modifier)
                             .padding(horizontal = horizontalPadding),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

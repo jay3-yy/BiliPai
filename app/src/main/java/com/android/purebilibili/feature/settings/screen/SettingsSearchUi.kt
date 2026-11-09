@@ -108,9 +108,6 @@ internal fun SettingsHomeSearchEntry(
         elasticFeedbackEnabled = true,
         elasticFeedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
         useNeutralLiquidContainer = true,
-        shellLensIntensity = com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale(
-            AppChromeSizeTokens.LiquidSearchFieldHeightDp.toFloat(),
-        ),
         captureShellForContent = false,
     ) {
         // Glass entry is a compact click target, independent of native input-field metrics.
