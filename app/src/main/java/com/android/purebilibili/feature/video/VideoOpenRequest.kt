@@ -21,15 +21,18 @@ internal data class VideoOpenRequest(
     val initialRoute: String = "",
     val title: String = "",
 ) {
-    /** 系统窗口已识别竖屏视频时，从首帧直接进入竖屏全屏；指定评论仍打开详情。 */
-    fun forSystemCardTransition(isVerticalVideo: Boolean = initialVertical): VideoOpenRequest {
+    /** 系统卡片转场只补竖屏方向，是否直达全屏跟「竖屏直达」设置走。 */
+    fun forSystemCardTransition(
+        isVerticalVideo: Boolean = initialVertical,
+        directPortraitEntryEnabled: Boolean = false,
+    ): VideoOpenRequest {
         if (!isVerticalVideo || startAudio || initialRoute.isNotBlank() ||
             commentRootRpid > 0L || commentTargetRpid > 0L
         ) return this
         return copy(
             initialVertical = true,
-            autoPortrait = true,
-            directPortraitEntry = true,
+            autoPortrait = directPortraitEntryEnabled,
+            directPortraitEntry = directPortraitEntryEnabled,
             fullscreen = false,
         )
     }
