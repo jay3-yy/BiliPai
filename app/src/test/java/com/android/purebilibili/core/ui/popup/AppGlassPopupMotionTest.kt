@@ -8,10 +8,28 @@ import com.android.purebilibili.core.ui.components.AppGlassMenuPlacement
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertSame
+import kotlin.test.assertNotSame
 
 class AppGlassPopupMotionTest {
     private val card = Rect(60f, 320f, 360f, 740f)
     private val anchor = Rect(300f, 240f, 360f, 300f)
+
+    @Test
+    fun outlineReusesGeometryAcrossMaterialChangesAndInvalidatesWhenBoundsMove() {
+        val cache = PopupSurfaceOutlineCache()
+        val frame = AppGlassPopupFrame(card, 24f, 1f, 1f, 0f)
+        val outline = cache.outline(frame, Offset.Zero, 1f)
+        val materialChanged = frame.copy(
+            contentAlpha = 0.5f, contentBlur = 4f, materialProgress = 0.6f,
+        )
+        assertSame(outline, cache.outline(materialChanged, Offset.Zero, 1f))
+        val moved = materialChanged.copy(rect = card.translate(Offset(10f, 0f)))
+        val movedOutline = cache.outline(moved, Offset.Zero, 1f)
+        assertNotSame(outline, movedOutline)
+        assertEquals(moved.rect.left, (movedOutline as androidx.compose.ui.graphics.Outline.Rounded).roundRect.left)
+        assertEquals(moved.rect.right, movedOutline.roundRect.right)
+    }
 
     @Test
     fun anchoredOpeningStartsAsACapsuleAtTheControl() {

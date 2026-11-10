@@ -89,6 +89,7 @@ internal fun ImmersiveAppScaffold(
     val blurActive = hazeActive || progressiveActive || fadeActive
     AppScaffold(
         modifier = modifier,
+        topBarBlurHandledExternally = true,
         // 外部源可能仅含壁纸；只复用本框架录制的完整页面内容。
         topBarIconBackdropSource = source.takeIf { chromeBackdropSource == null },
         topBar = {

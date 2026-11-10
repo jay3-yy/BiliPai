@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -39,6 +40,14 @@ fun LikeBurstAnimation(
     onAnimationEnd: () -> Unit = {}
 ) {
     if (!visible) return
+
+    // 点赞反馈入口先服从女仆开关，皮肤提供的替代特效也不能绕过。
+    // 关闭时立即消费本次请求，不加载素材，也不保留等待补播的事件。
+    if (!com.android.purebilibili.core.ui.LocalMaidLottieAnimationEnabled.current) {
+        val finish by rememberUpdatedState(onAnimationEnd)
+        LaunchedEffect(Unit) { finish() }
+        return
+    }
 
     val uiSkinState = LocalUiSkinState.current
     val skinLikeEffectPath = uiSkinState.assetPath(UiSkinSurface.LIKE_EFFECT) {

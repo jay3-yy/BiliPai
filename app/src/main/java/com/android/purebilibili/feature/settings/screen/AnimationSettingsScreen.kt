@@ -204,11 +204,16 @@ fun AnimationSettingsContent(
     }
     val homeConfiguration = rememberSettingsHomeConfiguration()
     val themeConfiguration = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
-    val progressiveBlurRenderer by remember(context) {
-        com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observeProgressiveBlurRenderer(context)
-    }.collectAsStateWithLifecycle(
-        initialValue = com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.MIUIX,
-    )
+    val progressiveBlurRenderer = if (com.android.purebilibili.feature.home.components.isOfficialProgressiveBlurSupported()) {
+        com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer.current
+    } else {
+        val savedRenderer by remember(context) {
+            com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observeProgressiveBlurRenderer(context)
+        }.collectAsStateWithLifecycle(
+            initialValue = com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.MIUIX,
+        )
+        savedRenderer
+    }
     val isLiquidGlassAvailable = shouldAllowHomeChromeLiquidGlass(Build.VERSION.SDK_INT)
     val liquidGlassPreviewImageUri by remember(context) { SettingsManager.getLiquidGlassPreviewImageUri(context) }
         .collectAsStateWithLifecycle(initialValue = null)
@@ -219,7 +224,7 @@ fun AnimationSettingsContent(
     val globalDragFeedbackEnabled by remember(context) { SettingsManager.getGlobalDragFeedbackEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = themeConfiguration.globalDragFeedbackEnabled)
     val maidLottieAnimationEnabled by remember(context) { SettingsManager.getMaidLottieAnimationEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = true)
+        .collectAsStateWithLifecycle(initialValue = false)
     val skeletonBreathingEnabled = com.android.purebilibili.core.ui.skeleton.rememberSkeletonBreathingEnabled()
     val liquidControlsUseThemeColor by remember(context) { SettingsManager.getLiquidControlsUseThemeColor(context) }
         .collectAsStateWithLifecycle(initialValue = false)

@@ -1675,6 +1675,8 @@ class MainActivity : AppCompatActivity() {
                 ProvideAppTextSelectionHost {
                     //  📐 [平板适配] 提供全局 WindowSizeClass
                     CompositionLocalProvider(
+                        com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer provides
+                            com.android.purebilibili.core.ui.blur.rememberWindowProgressiveBlurRenderer(),
                         com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides appThemeSettings,
                         com.android.purebilibili.core.ui.LocalAdaptiveScaffoldHazeFactory provides
                             { userEnabled -> com.android.purebilibili.core.ui.blur.rememberAppScaffoldHazeHandle(userEnabled) },

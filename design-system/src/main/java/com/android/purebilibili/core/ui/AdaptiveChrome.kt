@@ -213,6 +213,8 @@ fun AdaptiveScaffold(
     contentBackdropEnabled: Boolean = true,
     /** 同窗页面已录制的内容源；调用方负责挂载，不能包含消费它的顶栏控件。 */
     topBarIconBackdropSource: ChromeBackdropSource? = null,
+    /** 页面已负责顶栏材质时，跳过脚手架的额外模糊与正文采样；图标采样独立保留。 */
+    topBarBlurHandledExternally: Boolean = false,
     content: @Composable (PaddingValues) -> Unit
 ) {
     val sharedWallpaper = LocalGlobalWallpaperBackdropVisible.current &&
@@ -238,7 +240,8 @@ fun AdaptiveScaffold(
     } else null
     // 顶栏毛玻璃：由统一的「顶部模糊」开关控制；句柄为 null 时 chrome 保持原生容器色。
     val scaffoldHaze = rememberAdaptiveScaffoldHaze(
-        userEnabled = contentBackdropEnabled && LocalAppThemeConfig.current.headerBlurEnabled
+        userEnabled = contentBackdropEnabled && !topBarBlurHandledExternally &&
+            LocalAppThemeConfig.current.headerBlurEnabled
     )
     val decoratedTopBar: @Composable () -> Unit = {
         CompositionLocalProvider(
@@ -637,6 +640,7 @@ fun AppScaffold(
     contentWindowInsets: WindowInsets = WindowInsets.navigationBars,
     contentBackdropEnabled: Boolean = true,
     topBarIconBackdropSource: ChromeBackdropSource? = null,
+    topBarBlurHandledExternally: Boolean = false,
     content: @Composable (PaddingValues) -> Unit,
 ) = AdaptiveScaffold(
     modifier = modifier,
@@ -648,6 +652,7 @@ fun AppScaffold(
     contentWindowInsets = contentWindowInsets,
     contentBackdropEnabled = contentBackdropEnabled,
     topBarIconBackdropSource = topBarIconBackdropSource,
+    topBarBlurHandledExternally = topBarBlurHandledExternally,
     content = content,
 )
 

@@ -43,7 +43,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-val LocalMaidLottieAnimationEnabled = staticCompositionLocalOf { true }
+val LocalMaidLottieAnimationEnabled = staticCompositionLocalOf { false }
 
 enum class MaidAnimation(
     @RawRes val resource: Int,

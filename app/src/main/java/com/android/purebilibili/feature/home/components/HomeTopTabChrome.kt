@@ -207,107 +207,110 @@ internal fun HomeTopTabChrome(
                 .widthIn(max = maxDockWidth)
                 .fillMaxHeight()
 
-            Box(
-                modifier = dockModifier
-                    .then(
-                        if (drawChromeSurface && !hasSkinBackground && effectiveTabShadowElevation > AppSpacingTokens.None) {
-                            Modifier.shadow(
-                                elevation = effectiveTabShadowElevation,
-                                shape = tabShape,
-                                ambientColor = AppContentColors.primaryText().copy(alpha = 0.12f),
-                                spotColor = AppContentColors.primaryText().copy(alpha = 0.12f)
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .then(
-                        if (drawChromeSurface && !hasSkinBackground) {
-                            if (useBottomBarMatchedSurface) {
-                                Modifier.homeTopBottomBarMatchedSurface(
-                                    renderMode = tabChromeRenderMode,
+            // 内容层独立占据同一槽位；无外壳和皮肤时不创建空的装饰层。
+            if (drawChromeSurface || hasSkinBackground) {
+                Box(
+                    modifier = dockModifier
+                        .then(
+                            if (drawChromeSurface && !hasSkinBackground && effectiveTabShadowElevation > AppSpacingTokens.None) {
+                                Modifier.shadow(
+                                    elevation = effectiveTabShadowElevation,
                                     shape = tabShape,
-                                    hazeState = hazeState,
-                                    miuixBackdrop = miuixBackdrop,
-                                    liquidGlassStyle = liquidStyle,
-                                    liquidGlassTuning = liquidGlassTuning,
-                                    liquidGlassPreset = liquidGlassPreset,
-                                    motionTier = motionTier,
-                                    isTransitionRunning = isTransitionRunning,
-                                    forceLowBlurBudget = forceLowBlurBudget,
-                                    drawShellLens = drawMatchedShellLens,
-                                    shellLensIntensity = matchedShellLensIntensity,
-                                    isScrolling = isScrolling
+                                    ambientColor = AppContentColors.primaryText().copy(alpha = 0.12f),
+                                    spotColor = AppContentColors.primaryText().copy(alpha = 0.12f)
                                 )
                             } else {
-                                Modifier.homeTopChromeSurface(
-                                    renderMode = tabChromeRenderMode,
-                                    shape = tabShape,
-                                    surfaceColor = tabSurfaceColor,
-                                    hazeState = hazeState,
-                                    miuixBackdrop = miuixBackdrop,
-                                    liquidStyle = liquidStyle,
-                                    liquidGlassTuning = liquidGlassTuning,
-                                    liquidGlassPreset = liquidGlassPreset,
-                                    motionTier = motionTier,
-                                    isScrolling = isScrolling,
-                                    isTransitionRunning = isTransitionRunning,
-                                    forceLowBlurBudget = forceLowBlurBudget,
-                                    preferFlatGlass = preferFlatGlass
-                                )
+                                Modifier
                             }
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .then(
-                        if (drawChromeSurface && !hasSkinBackground && isTabFloating) {
-                            Modifier.border(
-                                width = AppSpacingTokens.Micro * 0.4f,
-                                color = OpticalContrastPalette.Highlight.copy(alpha = tabBorderAlpha),
-                                shape = tabShape
-                            )
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .graphicsLayer { alpha = tabContentAlphaProvider.value }
-            ) {
-                if (drawChromeSurface && !hasSkinBackground) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(tabContentUnderlayColor, tabShape)
-                    )
-                    if (isTabFloating && tabHighlightColor.alpha > 0f) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(AppSpacingTokens.Large)
-                                .background(
-                                    brush = Brush.verticalGradient(
-                                        colors = listOf(
-                                            tabHighlightColor,
-                                            Color.Transparent
-                                        )
-                                    ),
+                        )
+                        .then(
+                            if (drawChromeSurface && !hasSkinBackground) {
+                                if (useBottomBarMatchedSurface) {
+                                    Modifier.homeTopBottomBarMatchedSurface(
+                                        renderMode = tabChromeRenderMode,
+                                        shape = tabShape,
+                                        hazeState = hazeState,
+                                        miuixBackdrop = miuixBackdrop,
+                                        liquidGlassStyle = liquidStyle,
+                                        liquidGlassTuning = liquidGlassTuning,
+                                        liquidGlassPreset = liquidGlassPreset,
+                                        motionTier = motionTier,
+                                        isTransitionRunning = isTransitionRunning,
+                                        forceLowBlurBudget = forceLowBlurBudget,
+                                        drawShellLens = drawMatchedShellLens,
+                                        shellLensIntensity = matchedShellLensIntensity,
+                                        isScrolling = isScrolling
+                                    )
+                                } else {
+                                    Modifier.homeTopChromeSurface(
+                                        renderMode = tabChromeRenderMode,
+                                        shape = tabShape,
+                                        surfaceColor = tabSurfaceColor,
+                                        hazeState = hazeState,
+                                        miuixBackdrop = miuixBackdrop,
+                                        liquidStyle = liquidStyle,
+                                        liquidGlassTuning = liquidGlassTuning,
+                                        liquidGlassPreset = liquidGlassPreset,
+                                        motionTier = motionTier,
+                                        isScrolling = isScrolling,
+                                        isTransitionRunning = isTransitionRunning,
+                                        forceLowBlurBudget = forceLowBlurBudget,
+                                        preferFlatGlass = preferFlatGlass
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .then(
+                            if (drawChromeSurface && !hasSkinBackground && isTabFloating) {
+                                Modifier.border(
+                                    width = AppSpacingTokens.Micro * 0.4f,
+                                    color = OpticalContrastPalette.Highlight.copy(alpha = tabBorderAlpha),
                                     shape = tabShape
                                 )
+                            } else {
+                                Modifier
+                            }
+                        )
+                        .graphicsLayer { alpha = tabContentAlphaProvider.value }
+                ) {
+                    if (drawChromeSurface && !hasSkinBackground) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(tabContentUnderlayColor, tabShape)
+                        )
+                        if (isTabFloating && tabHighlightColor.alpha > 0f) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(AppSpacingTokens.Large)
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                tabHighlightColor,
+                                                Color.Transparent
+                                            )
+                                        ),
+                                        shape = tabShape
+                                    )
+                            )
+                        }
+                    }
+                    if (!skinBackgroundImagePath.isNullOrBlank()) {
+                        AsyncImage(
+                            model = File(skinBackgroundImagePath),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            alignment = Alignment.Center,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(tabShape)
+                                .alpha(0.94f)
+                                .clearAndSetSemantics {}
                         )
                     }
-                }
-                if (!skinBackgroundImagePath.isNullOrBlank()) {
-                    AsyncImage(
-                        model = File(skinBackgroundImagePath),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
-                        alignment = Alignment.Center,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(tabShape)
-                            .alpha(0.94f)
-                            .clearAndSetSemantics {}
-                    )
                 }
             }
 

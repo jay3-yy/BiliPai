@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.ui.popup
 
+import com.android.purebilibili.core.ui.effect.BackdropRenderEffectCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -56,9 +57,15 @@ internal class PopupSurfaceOutlineCache {
     private var pointX = FloatArray(0)
     private var pointY = FloatArray(0)
     private var visited = BooleanArray(0)
+    private val crossing = IntArray(4)
 
     fun outline(frame: AppGlassPopupFrame, origin: Offset, density: Float): Outline {
-        if (previous == frame && previousOrigin == origin && previousDensity == density) return outline
+        val before = previous
+        // 轮廓只由几何决定；正文、材质及模糊变化不重建采样网格。
+        if (before != null && before.rect == frame.rect && before.radius == frame.radius &&
+            before.sourceRect == frame.sourceRect && before.surfaceBlend == frame.surfaceBlend &&
+            previousOrigin == origin && previousDensity == density
+        ) return outline
         previous = frame
         previousOrigin = origin
         previousDensity = density
@@ -112,7 +119,6 @@ internal class PopupSurfaceOutlineCache {
         for (y in 0..ny) for (x in 0..nx) {
             field[y * stride + x] = popupSurfaceDistance(bounds.left + x * dx, bounds.top + y * dy, frame)
         }
-        val crossing = IntArray(4)
         for (y in 0 until ny) for (x in 0 until nx) {
             val tl = field[y * stride + x]
             val tr = field[y * stride + x + 1]
@@ -162,26 +168,61 @@ internal class PopupSurfaceOutlineCache {
     }
 }
 
+/** 同一弹窗的降采样档独立缓存，避免混合采样时反复替换效果。 */
+internal class PopupSurfaceLensCache {
+    private val levels = mutableMapOf<Int, BackdropRenderEffectCache>()
+    fun forScale(factor: Int): BackdropRenderEffectCache =
+        levels.getOrPut(factor) { BackdropRenderEffectCache(15) }
+}
+
 internal fun BackdropEffectScope.popupSurfaceLens(
     frame: AppGlassPopupFrame,
     origin: Offset,
     height: Float,
     amount: Float,
+    cache: PopupSurfaceLensCache,
 ) {
     if (height <= 0f || amount <= 0f || frame.rect.isEmpty) return
     padding = max(padding, amount)
-    val sf = downscaleFactor.coerceAtLeast(1).toFloat()
+    val factor = downscaleFactor.coerceAtLeast(1)
+    val sf = factor.toFloat()
     val main = frame.rect.translate(-origin)
     val source = (frame.sourceRect ?: frame.rect).translate(-origin)
-    runtimeShaderEffect("SettingsPopupUnionLens", PopupUnionLensShader, "content") {
-        setFloatUniform("offset", -padding / sf, -padding / sf)
-        setFloatUniform("mainRect", main.center.x / sf, main.center.y / sf, main.width / (2f * sf), main.height / (2f * sf))
-        setFloatUniform("sourceRect", source.center.x / sf, source.center.y / sf, source.width / (2f * sf), source.height / (2f * sf))
-        setFloatUniform("radii", frame.radius / sf, source.minDimension / (2f * sf))
-        setFloatUniform("blend", if (frame.sourceRect == null) 0f else frame.surfaceBlend / sf)
-        setFloatUniform("band", height / sf)
-        setFloatUniform("amount", -amount / sf)
+    val effectCache = cache.forScale(factor)
+    effectCache[0] = -padding / sf
+    effectCache[1] = -padding / sf
+    effectCache[2] = main.center.x / sf
+    effectCache[3] = main.center.y / sf
+    effectCache[4] = main.width / (2f * sf)
+    effectCache[5] = main.height / (2f * sf)
+    effectCache[6] = source.center.x / sf
+    effectCache[7] = source.center.y / sf
+    effectCache[8] = source.width / (2f * sf)
+    effectCache[9] = source.height / (2f * sf)
+    effectCache[10] = frame.radius / sf
+    effectCache[11] = source.minDimension / (2f * sf)
+    effectCache[12] = if (frame.sourceRect == null) 0f else frame.surfaceBlend / sf
+    effectCache[13] = height / sf
+    effectCache[14] = -amount / sf
+    if (effectCache.needsUpdate) {
+        val input = renderEffect
+        try {
+            renderEffect = null
+            runtimeShaderEffect("SettingsPopupUnionLens", PopupUnionLensShader, "content") {
+                setFloatUniform("offset", -padding / sf, -padding / sf)
+                setFloatUniform("mainRect", main.center.x / sf, main.center.y / sf, main.width / (2f * sf), main.height / (2f * sf))
+                setFloatUniform("sourceRect", source.center.x / sf, source.center.y / sf, source.width / (2f * sf), source.height / (2f * sf))
+                setFloatUniform("radii", frame.radius / sf, source.minDimension / (2f * sf))
+                setFloatUniform("blend", if (frame.sourceRect == null) 0f else frame.surfaceBlend / sf)
+                setFloatUniform("band", height / sf)
+                setFloatUniform("amount", -amount / sf)
+            }
+            effectCache.store(renderEffect)
+        } finally {
+            renderEffect = input
+        }
     }
+    effectCache.applyTo(this)
 }
 
 private const val PopupUnionLensShader = """

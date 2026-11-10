@@ -17,10 +17,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import top.yukonga.miuix.kmp.blur.ProgressiveBlur
@@ -78,27 +81,33 @@ private fun rememberSupportedOfficialProgressiveTopBlur(
     DisposableEffect(renderer) { onDispose { renderer.release() } }
     return remember(renderer, shape, blurRadiusDp, gradient, scope) {
         Modifier.drawWithCache {
-            val outline = Path().apply {
-                addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache))
-            }
+            val outline = shape.createOutline(size, layoutDirection, this@drawWithCache)
+            // 矩形顶栏直接裁剪边界，圆角与自定义轮廓仍保留原有路径裁剪。
+            val path = if (outline is Outline.Rectangle) null else Path().apply { addOutline(outline) }
             val ready = size.width > 0f && size.height > 0f && renderer.configure(
                 width = ceil(size.width).toInt(),
                 height = ceil(size.height).toInt(),
                 radius = blurRadiusDp * density,
                 gradient = gradient,
             )
+            val drawBackdrop: DrawScope.() -> Unit = {
+                drawIntoCanvas { canvas ->
+                    if ((!ready || !renderer.draw(canvas.nativeCanvas)) && renderer.failOnce()) {
+                        // 绘制结束后再切换方案，不从 draw 阶段回写当前组合。
+                        scope.launch {
+                            yield()
+                            failed = true
+                        }
+                    }
+                }
+            }
             onDrawWithContent {
                 if (size.width > 0f && size.height > 0f) {
-                    clipPath(outline) {
-                        drawIntoCanvas { canvas ->
-                            if ((!ready || !renderer.draw(canvas.nativeCanvas)) && renderer.failOnce()) {
-                                // 绘制结束后再切换方案，不从 draw 阶段回写当前组合。
-                                scope.launch {
-                                    yield()
-                                    failed = true
-                                }
-                            }
-                        }
+                    if (outline is Outline.Rectangle) {
+                        val rect = outline.rect
+                        clipRect(rect.left, rect.top, rect.right, rect.bottom, block = drawBackdrop)
+                    } else {
+                        clipPath(requireNotNull(path), block = drawBackdrop)
                     }
                 }
                 drawContent()
@@ -131,6 +140,7 @@ private class OfficialProgressiveBackdropRenderer {
             configuredRadius == radius && configuredGradient == gradient
         ) return true
         return try {
+            val sizeChanged = configuredWidth != width || configuredHeight != height
             if (blurRadius != radius) {
                 // 模糊半径与窗口尺寸无关；收起顶栏或调整窗口时复用三个模糊档位。
                 for (level in 1..3) {
@@ -145,12 +155,15 @@ private class OfficialProgressiveBackdropRenderer {
                 width.toFloat(), height.toFloat(), gradient, bandShaders, blurEffects,
             )
             if (OfficialBackdropApi.setEffect(node, effect)) {
-                // 透明 SrcOver 保留背景效果；CLEAR 会使背景效果不参与合成。
-                val canvas = node.beginRecording(width, height)
-                try {
-                    canvas.drawColor(android.graphics.Color.TRANSPARENT)
-                } finally {
-                    node.endRecording()
+                // 半径与渐变只更新效果；透明内容指令仅在尺寸变化时重新录制。
+                if (sizeChanged) {
+                    // 透明 SrcOver 保留背景效果；CLEAR 会使背景效果不参与合成。
+                    val canvas = node.beginRecording(width, height)
+                    try {
+                        canvas.drawColor(android.graphics.Color.TRANSPARENT)
+                    } finally {
+                        node.endRecording()
+                    }
                 }
                 configuredWidth = width
                 configuredHeight = height

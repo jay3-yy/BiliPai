@@ -4,12 +4,9 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.Color
@@ -79,7 +76,8 @@ internal fun shouldExtendProgressiveTopBlurBelowTabs(
     tabRowIncludedInBlur: Boolean,
 ): Boolean = progressiveBlurEnabled && !tabRowIncludedInBlur
 
-/** Shared home-style edge blur for immersive floating top chrome. */
+/** 在调用处解析材质并复用绘制节点，避免每个顶栏再创建一层修饰器组合。 */
+@Composable
 internal fun Modifier.biliPaiProgressiveTopBlur(
     backdrop: Backdrop?,
     enabled: Boolean,
@@ -99,53 +97,45 @@ internal fun Modifier.biliPaiProgressiveTopBlur(
         return this
     }
     val source = requireNotNull(backdrop)
-    return composed {
-        if (isLowBlurBudgetForced()) return@composed this
-        // 渲染方案与玻璃开关独立，各主题保留自己的几何、底色和淡出参数。
-        // 自定义调色仍交给原有材质链，避免官方路径丢失扩展混色语义。
-        if (isOfficialProgressiveBlurSupported() && colors == BlurColors()) {
-            val context = LocalContext.current
-            val renderer by remember(context) {
-                com.android.purebilibili.core.store.home.LiquidGlassSettingsStore.observeProgressiveBlurRenderer(context)
-            }.collectAsStateWithLifecycle(
-                initialValue = com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.MIUIX,
-            )
-            if (renderer == com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.ANDROID) {
-                val official = rememberOfficialProgressiveTopBlur(shape, blurRadiusDp, gradient)
-                if (official != null) return@composed this.then(official)
-            }
+    if (isLowBlurBudgetForced()) return this
+    // 渲染方案与玻璃开关独立，各主题保留自己的几何、底色和淡出参数。
+    // 自定义调色仍交给原有材质链，避免官方路径丢失扩展混色语义。
+    if (isOfficialProgressiveBlurSupported() && colors == BlurColors()) {
+        val renderer = com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer.current
+        if (renderer == com.android.purebilibili.core.store.home.ProgressiveBlurRenderer.ANDROID) {
+            val official = rememberOfficialProgressiveTopBlur(shape, blurRadiusDp, gradient)
+            if (official != null) return this.then(official)
         }
-        val continuousSource = com.android.purebilibili.core.ui.blur.rememberContinuousBackdrop(source)
-        // The non-composable factory creates new shape/effect callbacks on each call.
-        // Keep their identity while the material is unchanged, so an unrelated header
-        // recomposition does not rebuild the progressive stack and its sharp-end effect.
-        // Geometry changes and source redraws are still handled by Miuix's draw node.
-        val effect = remember(continuousSource, shape, blurRadiusDp, gradient, colors, progressiveCompositeEnabled) {
-            if (progressiveCompositeEnabled) Modifier.progressiveTextureBlur(
-                backdrop = continuousSource,
-                shape = shape,
-                blurRadius = blurRadiusDp,
-                gradient = gradient,
-                colors = colors,
-            ) else Modifier.drawBackdrop(
-                backdrop = continuousSource,
-                shape = { shape },
-                effects = {
-                    // Omitting progressiveGradient avoids the downscaled multi-level composite.
-                    // The effect itself still varies the blur radius continuously with height.
-                    progressiveTextureBlurEffect(
-                        blurRadiusX = blurRadiusDp,
-                        gradient = gradient,
-                        colors = colors,
-                    )
-                },
-            )
-        }
-        this.then(effect)
     }
+    val continuousSource = com.android.purebilibili.core.ui.blur.rememberContinuousBackdrop(source)
+    // 材质不变时复用形状和效果回调，避免无关重组重建渐进合成与清晰端效果。
+    // 尺寸与背景内容变化仍由绘制节点更新，不缓存画面帧。
+    val effect = remember(continuousSource, shape, blurRadiusDp, gradient, colors, progressiveCompositeEnabled) {
+        if (progressiveCompositeEnabled) Modifier.progressiveTextureBlur(
+            backdrop = continuousSource,
+            shape = shape,
+            blurRadius = blurRadiusDp,
+            gradient = gradient,
+            colors = colors,
+        ) else Modifier.drawBackdrop(
+            backdrop = continuousSource,
+            shape = { shape },
+            effects = {
+                // Omitting progressiveGradient avoids the downscaled multi-level composite.
+                // The effect itself still varies the blur radius continuously with height.
+                progressiveTextureBlurEffect(
+                    blurRadiusX = blurRadiusDp,
+                    gradient = gradient,
+                    colors = colors,
+                )
+            },
+        )
+    }
+    return this.then(effect)
 }
 
 /** Convenience overload that blends [surfaceColor] into the progressive blur shader pass. */
+@Composable
 internal fun Modifier.biliPaiProgressiveTopBlur(
     backdrop: Backdrop?,
     enabled: Boolean,
@@ -154,10 +144,12 @@ internal fun Modifier.biliPaiProgressiveTopBlur(
     blurRadiusDp: Float = BILIPAI_PROGRESSIVE_TOP_BLUR_RADIUS_DP,
     gradient: ProgressiveBlur = BILIPAI_PROGRESSIVE_TOP_BLUR_DEFAULT_GRADIENT,
 ): Modifier {
-    val blurColors = if (surfaceColor.alpha > 0.001f) {
-        BlurColors(blendColors = listOf(BlendColorEntry(color = surfaceColor)))
-    } else {
-        BlurColors()
+    val blurColors = remember(surfaceColor) {
+        if (surfaceColor.alpha > 0.001f) {
+            BlurColors(blendColors = listOf(BlendColorEntry(color = surfaceColor)))
+        } else {
+            BlurColors()
+        }
     }
     return biliPaiProgressiveTopBlur(
         backdrop = backdrop,

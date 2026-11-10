@@ -1079,6 +1079,7 @@ private fun AppGlassChoicePopupCard(
     val cornerRadiusPx = with(density) { PopupCornerRadius.toPx() }
     val densityScale = density.density
     val outlineCache = remember { PopupSurfaceOutlineCache() }
+    val lensCache = remember { PopupSurfaceLensCache() }
     // 源控件与正文独立缓存；半径变化仍逐帧更新，不量化动画或更改采样边界。
     val sourceBlurCache = remember(request) { BlurRenderEffectCache() }
     val contentBlurCache = remember(request) { BlurRenderEffectCache() }
@@ -1155,7 +1156,7 @@ private fun AppGlassChoicePopupCard(
     )
     val materialBlur = com.android.purebilibili.feature.home.components.rememberMaterialBackdropBlur(tuning)
     val effects = remember(materialBlur, blurRadiusPx, refractionHeightPx, refractionAmountPx,
-        shouldDrawLens, isDark, interactivePanel, themeFrosted, morph, cornerRadiusPx, densityScale) {
+        shouldDrawLens, isDark, interactivePanel, themeFrosted, morph, cornerRadiusPx, densityScale, lensCache) {
         val block: BackdropEffectScope.() -> Unit = {
             val frame = morph.frame(cornerRadiusPx, densityScale)
             val lensAmount = refractionAmountPx * (0.25f + 0.75f * (frame.lensProgress ?: frame.materialProgress))
@@ -1174,6 +1175,7 @@ private fun AppGlassChoicePopupCard(
                 origin = glassPopupSurfaceBounds(morph.card, morph.anchor, densityScale).topLeft,
                 height = refractionHeightPx,
                 amount = lensAmount,
+                cache = lensCache,
             )
         }
         block

@@ -1624,7 +1624,8 @@ fun FloatingBottomBar(
                     Row(
                         Modifier
                             .fillMaxSize()
-                            .then(interactiveHighlight?.modifier ?: Modifier)
+                            // 捕获层的触摸高光只照亮背景，不覆盖选中图标和文字。
+                            .then(interactiveHighlight?.backgroundModifier ?: Modifier)
                             .padding(horizontal = horizontalPadding),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

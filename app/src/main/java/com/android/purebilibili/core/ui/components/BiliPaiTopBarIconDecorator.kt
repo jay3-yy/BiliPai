@@ -43,6 +43,8 @@ object BiliPaiTopBarIconDecorator : AppTopBarIconDecorator {
             allowConsumedDrag = { ownsDrag.value },
             useNeutralLiquidContainer = true,
             shellLensIntensity = resolveFloatingDockGeometryScale(visualSize.value),
+            // 内容只含图标，不需要再录制玻璃外壳。
+            captureShellForContent = false,
         ) { glassSurfaceProvided ->
             CompositionLocalProvider(LocalAppIconButtonGlassSurfaceProvided provides glassSurfaceProvided) {
                 Box(Modifier.fillMaxSize()) { content(Modifier.matchParentSize()) }

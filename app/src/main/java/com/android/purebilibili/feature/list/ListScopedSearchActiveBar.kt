@@ -41,6 +41,8 @@ internal fun ListScopedSearchActiveBar(
         elasticFeedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
         useNeutralLiquidContainer = true,
         shellLensIntensity = resolveFloatingDockGeometryScale(44f),
+        // 内容只含文字与图标，不需要再录制玻璃外壳。
+        captureShellForContent = false,
     ) { liquidChromeActive ->
         AppSurface(
             onClick = onClear,

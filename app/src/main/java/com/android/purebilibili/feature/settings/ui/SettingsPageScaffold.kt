@@ -206,6 +206,7 @@ internal fun SettingsPageScaffold(
     ) {
         AppScaffold(
             modifier = modifier.appTopBarNestedScroll(collapseBehavior),
+            topBarBlurHandledExternally = true,
             topBarIconBackdropSource = chromeSource,
             topBar = {
                 BiliPaiImmersiveTopBar(

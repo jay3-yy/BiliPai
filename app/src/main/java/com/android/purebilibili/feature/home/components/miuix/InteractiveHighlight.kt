@@ -10,6 +10,8 @@ import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +61,15 @@ class InteractiveHighlight(
 
     val modifier: Modifier = Modifier.drawWithContent {
         drawContent()
+        drawHighlight()
+    }
+
+    /** 玻璃捕获层先照亮材质，再绘制选中内容，避免加亮混合改变图标与文字的主题色。 */
+    val backgroundModifier: Modifier = Modifier.drawBehind {
+        drawHighlight()
+    }
+
+    private fun DrawScope.drawHighlight() {
         val pill = Path().apply {
             addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(size.minDimension / 2f)))
         }

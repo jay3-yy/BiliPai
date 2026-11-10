@@ -107,6 +107,7 @@ fun SearchTopBar(
         HomeTopChromeRenderMode.PLAIN
     }
     val backElasticState = com.android.purebilibili.core.ui.components.rememberAppElasticPressState()
+    @Composable
     fun Modifier.searchTopChromeGlass(
         shape: androidx.compose.ui.graphics.Shape,
         controlHeightDp: Int,
