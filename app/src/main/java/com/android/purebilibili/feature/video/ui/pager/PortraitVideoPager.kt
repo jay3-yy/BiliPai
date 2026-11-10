@@ -3576,78 +3576,92 @@ private fun VideoPageItem(
         }
 
         // 长按倍速提示（透明背景 + 循环箭头动画，位于视频上方）
+        val longPressFeedbackVisible = shouldShowLongPressSpeedFeedback(
+            isLongPressing = isLongPressing,
+            isPlaybackSurfaceActive = isCurrentPage,
+            hintDismissed = longPressSpeedHintDismissed,
+            hintHidden = longPressSpeedHintHidden,
+        )
+        val longPressMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
+            !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
         AnimatedVisibility(
-            visible = shouldShowLongPressSpeedFeedback(
-                isLongPressing = isLongPressing,
-                isPlaybackSurfaceActive = isCurrentPage,
-                hintDismissed = longPressSpeedHintDismissed,
-                hintHidden = longPressSpeedHintHidden,
-            ),
+            visible = longPressFeedbackVisible,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 // 状态栏可见（关闭沉浸式/瞬态显示）时随系统栏 inset 下移，避免被预留位遮挡。
                 .padding(top = (pageDanmakuTopInset + 16.dp).coerceAtLeast(48.dp)),
-            enter = fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { -it }),
-            exit = fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { -it })
+            enter = if (longPressMotionEnabled) {
+                fadeIn(animationSpec = tween(200)) + slideInVertically(initialOffsetY = { -it })
+            } else androidx.compose.animation.EnterTransition.None,
+            exit = if (longPressMotionEnabled) {
+                fadeOut(animationSpec = tween(200)) + slideOutVertically(targetOffsetY = { -it })
+            } else androidx.compose.animation.ExitTransition.None,
         ) {
-            val infiniteTransition = rememberInfiniteTransition(label = "fast_forward_portrait")
-            val arrow1Alpha by infiniteTransition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = keyframes {
-                        durationMillis = 900
-                        0.3f at 0
-                        1.0f at 300
-                        0.3f at 600
-                        0.3f at 900
-                    },
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "arrow1"
-            )
-            val arrow2Alpha by infiniteTransition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = keyframes {
-                        durationMillis = 900
-                        0.3f at 0
-                        0.3f at 300
-                        1.0f at 600
-                        0.3f at 900
-                    },
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "arrow2"
-            )
-            val arrow3Alpha by infiniteTransition.animateFloat(
-                initialValue = 0.3f,
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = keyframes {
-                        durationMillis = 900
-                        0.3f at 0
-                        0.3f at 600
-                        1.0f at 900
-                    },
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "arrow3"
-            )
+            val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+            val arrowAlphas = if (longPressFeedbackVisible && animationGate.active) {
+                val infiniteTransition = rememberInfiniteTransition(label = "fast_forward_portrait")
+                val arrow1Alpha = infiniteTransition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = keyframes {
+                            durationMillis = 900
+                            0.3f at 0
+                            1.0f at 300
+                            0.3f at 600
+                            0.3f at 900
+                        },
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "arrow1"
+                )
+                val arrow2Alpha = infiniteTransition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = keyframes {
+                            durationMillis = 900
+                            0.3f at 0
+                            0.3f at 300
+                            1.0f at 600
+                            0.3f at 900
+                        },
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "arrow2"
+                )
+                val arrow3Alpha = infiniteTransition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 1.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = keyframes {
+                            durationMillis = 900
+                            0.3f at 0
+                            0.3f at 600
+                            1.0f at 900
+                        },
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "arrow3"
+                )
+                listOf(arrow1Alpha, arrow2Alpha, arrow3Alpha)
+            } else {
+                val staticAlpha = rememberUpdatedState(0.65f)
+                listOf(staticAlpha, staticAlpha, staticAlpha)
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
                 // 透明度设置作用于整个提示（箭头 + 文字 + 关闭按钮）。
                 modifier = Modifier
+                    .then(animationGate.modifier)
                     .graphicsLayer { alpha = longPressSpeedHintAlpha }
                     .padding(
                         horizontal = 8.dp * longPressSpeedHintScale,
                         vertical = 5.dp * longPressSpeedHintScale
                     )
             ) {
-                val arrowAlphas = listOf(arrow1Alpha, arrow2Alpha, arrow3Alpha)
                 arrowAlphas.forEach { alpha ->
                     Canvas(
                         modifier = Modifier.size(10.dp * longPressSpeedHintScale)
@@ -3660,7 +3674,7 @@ private fun VideoPageItem(
                         }
                         drawPath(
                             path = path,
-                            color = Color.White.copy(alpha = alpha)
+                            color = Color.White.copy(alpha = alpha.value)
                         )
                     }
                 }

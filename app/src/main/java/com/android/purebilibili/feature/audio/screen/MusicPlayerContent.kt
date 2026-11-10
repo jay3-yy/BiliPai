@@ -17,7 +17,6 @@ import com.android.purebilibili.navigation.animatePagerSelection
 import coil3.request.allowHardware
 
 import android.os.Build
-import android.provider.Settings
 import androidx.media3.common.Player
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -556,13 +555,7 @@ internal fun MusicPlayerContent(
             state.currentQueueIndex.coerceIn(0, realQueue.lastIndex)
         }
     }
-    val systemReduceMotion = remember(context) {
-        Settings.Global.getFloat(
-            context.contentResolver,
-            Settings.Global.ANIMATOR_DURATION_SCALE,
-            1f
-        ) == 0f
-    }
+    val systemReduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion()
     val effectiveReduceMotion = reduceMotion || systemReduceMotion || BackgroundManager.isInBackground
     val musicBackdropSource = rememberChromeBackdropSource()
     // The source and all liquid overlays are siblings in this draw tree, so the content layer is

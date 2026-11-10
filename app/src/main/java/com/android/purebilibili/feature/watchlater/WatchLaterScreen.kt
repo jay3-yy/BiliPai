@@ -1441,11 +1441,14 @@ fun WatchLaterScreen(
                     Box(Modifier.fillMaxSize()) {
                         when {
                             state.isLoading -> {
-                                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                                val skeletonAnimationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+                                    respectComponentMotion = false,
+                                )
+                                BoxWithConstraints(modifier = Modifier.fillMaxSize().then(skeletonAnimationGate.modifier)) {
                                     val skeletonColumns = pinchListColumns
                                     val skeletonBlockColor = com.android.purebilibili.core.ui.skeleton
                                         .rememberContentSkeletonBlockColor(
-                                            com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState()
+                                            com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(animated = skeletonAnimationGate.active)
                                         )
                                     LazyVerticalGrid(
                                         columns = GridCells.Fixed(skeletonColumns),

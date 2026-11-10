@@ -240,11 +240,14 @@ internal fun PersonalMediaCardSkeleton(
     stacked: Boolean = false,
     horizontalCoverMaxWidthDp: Float? = null,
 ) {
-    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState(animated = animationGate.active))
     val cardShape = AppShapes.container(ContainerLevel.Card)
 
     AppSurface(
-        modifier = modifier
+        modifier = modifier.then(animationGate.modifier)
             .fillMaxWidth(),
         shape = cardShape,
         color = AppSurfaceTokens.cardContainer(),

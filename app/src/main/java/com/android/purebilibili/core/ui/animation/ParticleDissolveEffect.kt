@@ -100,6 +100,8 @@ fun Modifier.jiggleOnDissolve(
 ): Modifier {
     // 🚀 [性能优化] 提前检查是否需要抖动，避免不必要的状态读取和动画创建
     if (!enabled) return this
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val observedModifier = this.then(animationGate.modifier)
     
     val isDissolving by DissolveAnimationManager.isAnyCardDissolving
     val dissolvingId by DissolveAnimationManager.dissolvingCardId
@@ -112,11 +114,11 @@ fun Modifier.jiggleOnDissolve(
     )
     
     // 🚀 [关键优化] 不抖动时直接返回，不创建任何动画对象
-    if (!shouldJiggle) return this
+    if (!shouldJiggle || !animationGate.active) return observedModifier
     
     val infiniteTransition = rememberInfiniteTransition(label = "jiggle")
     
-    val rotation by infiniteTransition.animateFloat(
+    val rotation = infiniteTransition.animateFloat(
         initialValue = -1.5f,
         targetValue = 1.5f,
         animationSpec = infiniteRepeatable(
@@ -126,7 +128,7 @@ fun Modifier.jiggleOnDissolve(
         label = "jiggleRotation"
     )
     
-    val offsetX by infiniteTransition.animateFloat(
+    val offsetX = infiniteTransition.animateFloat(
         initialValue = -1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
@@ -136,9 +138,9 @@ fun Modifier.jiggleOnDissolve(
         label = "jiggleOffset"
     )
     
-    return this.graphicsLayer {
-        rotationZ = rotation
-        translationX = offsetX
+    return observedModifier.graphicsLayer {
+        rotationZ = rotation.value
+        translationX = offsetX.value
     }
 }
 

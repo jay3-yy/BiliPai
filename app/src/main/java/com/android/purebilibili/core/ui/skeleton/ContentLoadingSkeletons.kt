@@ -40,7 +40,8 @@ import com.android.purebilibili.core.ui.ContainerLevel
 
 /** 内容列表首屏骨架共用扫光状态，位置仅在绘制阶段读取。 */
 @Composable
-fun rememberContentSkeletonPulseState(): State<Float> = rememberSkeletonSweepState()
+fun rememberContentSkeletonPulseState(animated: Boolean = true): State<Float> =
+    rememberSkeletonSweepState(animated = animated)
 
 @Composable
 fun rememberContentSkeletonBlockColor(pulse: State<Float>): () -> Color {
@@ -131,7 +132,10 @@ fun ContentVideoGridSkeleton(
     horizontalSpacing: Dp = 8.dp,
     verticalSpacing: Dp = 8.dp,
 ) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false, // 扫光使用独立的骨架动效开关。
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = itemCount > 0 && animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = minItemWidth),
@@ -139,7 +143,7 @@ fun ContentVideoGridSkeleton(
         horizontalArrangement = Arrangement.spacedBy(horizontalSpacing),
         verticalArrangement = Arrangement.spacedBy(verticalSpacing),
         userScrollEnabled = false,
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().then(animationGate.modifier),
     ) {
         val skeletonKeys = List(itemCount.coerceAtLeast(0)) { it }
         lazyGridItems(
@@ -166,7 +170,10 @@ fun ContentVideoGridSkeletonFixedColumns(
 ) {
     val safeColumns = columns.coerceAtLeast(1)
     val skeletonKeys = List(safeColumns * rows.coerceAtLeast(1)) { it }
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false, // 扫光使用独立的骨架动效开关。
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyVerticalGrid(
         columns = GridCells.Fixed(safeColumns),
@@ -174,7 +181,7 @@ fun ContentVideoGridSkeletonFixedColumns(
         horizontalArrangement = Arrangement.spacedBy(spacing),
         verticalArrangement = Arrangement.spacedBy(spacing),
         userScrollEnabled = false,
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().then(animationGate.modifier),
     ) {
         lazyGridItems(
             items = skeletonKeys,
@@ -237,13 +244,17 @@ fun MediaListRowSkeleton(
     blockColor: Color? = null,
     blockColorProvider: (() -> Color)? = null,
 ) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
     val color = blockColorProvider ?: if (blockColor != null) {
         { blockColor }
     } else {
-        rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
+        rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState(animated = animationGate.active))
     }
     Row(
         modifier = modifier
+            .then(animationGate.modifier)
             .fillMaxWidth()
             .padding(contentPadding),
         verticalAlignment = Alignment.CenterVertically,
@@ -289,13 +300,17 @@ fun UserListRowSkeleton(
     blockColor: Color? = null,
     blockColorProvider: (() -> Color)? = null,
 ) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
     val color = blockColorProvider ?: if (blockColor != null) {
         { blockColor }
     } else {
-        rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
+        rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState(animated = animationGate.active))
     }
     Row(
         modifier = modifier
+            .then(animationGate.modifier)
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -482,11 +497,14 @@ fun ContentMediaListSkeleton(
     mediaRowContentPadding: PaddingValues = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
     mediaRowContentGap: Dp = 12.dp,
 ) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false, // 扫光使用独立的骨架动效开关。
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = itemCount > 0 && animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     val skeletonKeys = List(itemCount.coerceAtLeast(0)) { it }
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().then(animationGate.modifier),
         contentPadding = contentPadding,
         userScrollEnabled = false,
     ) {
@@ -516,10 +534,13 @@ fun ArticleDetailSkeleton(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(20.dp),
 ) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false, // 扫光使用独立的骨架动效开关。
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().then(animationGate.modifier),
         contentPadding = contentPadding,
         userScrollEnabled = false,
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -557,10 +578,13 @@ fun PosterDetailSkeleton(
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false, // 扫光使用独立的骨架动效开关。
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().then(animationGate.modifier),
         contentPadding = contentPadding,
         userScrollEnabled = false,
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -602,11 +626,14 @@ fun ContentCategoryGridSkeleton(
     spacing: Dp = 16.dp,
 ) {
     val safeColumns = columns.coerceAtLeast(1)
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false, // 扫光使用独立的骨架动效开关。
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyVerticalGrid(
         columns = GridCells.Fixed(safeColumns),
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().then(animationGate.modifier),
         contentPadding = contentPadding,
         userScrollEnabled = false,
         horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -633,10 +660,13 @@ fun TrendingListSkeleton(
     itemCount: Int = 10,
     contentPadding: PaddingValues = PaddingValues(bottom = 24.dp),
 ) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false, // 扫光使用独立的骨架动效开关。
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().then(animationGate.modifier),
         contentPadding = contentPadding,
         userScrollEnabled = false,
     ) {

@@ -49,9 +49,13 @@ internal fun ProfileLoadingSkeleton(
     animated: Boolean = true,
 ) {
     val windowSizeClass = LocalWindowSizeClass.current
-    val blockColor = rememberProfileSkeletonBlockColor(animated)
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val blockColor = rememberProfileSkeletonBlockColor(animated && animationGate.active)
     Box(
         modifier = modifier
+            .then(animationGate.modifier)
             .fillMaxSize()
             .globalWallpaperAwareBackground()
             .clearAndSetSemantics {

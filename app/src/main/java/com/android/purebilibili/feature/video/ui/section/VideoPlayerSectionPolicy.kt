@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppTopTabPresentation
 import com.android.purebilibili.core.ui.transition.VideoSharedTransitionPlaybackIntent
-import com.android.purebilibili.feature.video.ui.components.GesturePercentMotionDefaults
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
@@ -951,16 +950,6 @@ internal data class GestureLevelOverlayVisualPolicy(
 )
 
 internal data class VideoGestureMotionSpec(
-    val digitInitialBlurRadiusDp: Float,
-    val digitInitialAlpha: Float,
-    val digitBlurHoldDurationMillis: Int,
-    val digitBlurResetDurationMillis: Int,
-    val digitAlphaResetDurationMillis: Int,
-    val digitEnterFadeDurationMillis: Int,
-    val digitExitFadeDurationMillis: Int,
-    val digitScaleDurationMillis: Int,
-    val digitSlideSpringDampingRatio: Float,
-    val digitSlideSpringStiffness: Float,
     val levelOverlayEnterFadeDurationMillis: Int,
     val levelOverlayEnterTransformDurationMillis: Int,
     val levelOverlayExitDurationMillis: Int,
@@ -980,16 +969,6 @@ internal data class VideoGestureMotionSpec(
 
 internal fun resolveVideoGestureMotionSpec(): VideoGestureMotionSpec {
     return VideoGestureMotionSpec(
-        digitInitialBlurRadiusDp = GesturePercentMotionDefaults.InitialBlurRadiusDp,
-        digitInitialAlpha = GesturePercentMotionDefaults.InitialAlpha,
-        digitBlurHoldDurationMillis = GesturePercentMotionDefaults.BlurHoldDurationMillis,
-        digitBlurResetDurationMillis = GesturePercentMotionDefaults.BlurResetDurationMillis,
-        digitAlphaResetDurationMillis = GesturePercentMotionDefaults.AlphaResetDurationMillis,
-        digitEnterFadeDurationMillis = GesturePercentMotionDefaults.EnterFadeDurationMillis,
-        digitExitFadeDurationMillis = GesturePercentMotionDefaults.ExitFadeDurationMillis,
-        digitScaleDurationMillis = 0,
-        digitSlideSpringDampingRatio = GesturePercentMotionDefaults.SlideSpringDampingRatio,
-        digitSlideSpringStiffness = GesturePercentMotionDefaults.SlideSpringStiffness,
         levelOverlayEnterFadeDurationMillis = 160,
         levelOverlayEnterTransformDurationMillis = 220,
         levelOverlayExitDurationMillis = 200,
@@ -1039,29 +1018,6 @@ internal fun resolveGestureLevelOverlayVisualPolicy(
             borderAlpha = 0.50f,
             glowAlpha = 0.32f
         )
-    }
-}
-
-internal fun resolveGesturePercentDigits(percent: Int): List<Char?> {
-    val normalized = percent.coerceIn(0, 100)
-    val hundreds = (normalized / 100)
-    val tens = (normalized / 10) % 10
-    val ones = normalized % 10
-    return listOf(
-        hundreds.takeIf { it > 0 }?.let { ('0'.code + it).toChar() },
-        if (hundreds > 0 || tens > 0) ('0'.code + tens).toChar() else null,
-        ('0'.code + ones).toChar()
-    )
-}
-
-internal fun resolveGesturePercentDigitChangeMask(
-    previousPercent: Int,
-    currentPercent: Int
-): List<Boolean> {
-    val previousDigits = resolveGesturePercentDigits(previousPercent)
-    val currentDigits = resolveGesturePercentDigits(currentPercent)
-    return currentDigits.indices.map { index ->
-        previousDigits.getOrNull(index) != currentDigits.getOrNull(index)
     }
 }
 

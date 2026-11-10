@@ -24,6 +24,20 @@ internal fun AppGlassChoiceValueText(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    if (!com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current ||
+        com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+    ) {
+        AppText(
+            text = text,
+            style = style,
+            color = color,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            tapToCopyEnabled = false,
+            modifier = modifier,
+        )
+        return
+    }
     AnimatedContent(
         targetState = text,
         modifier = modifier,

@@ -32,8 +32,11 @@ internal fun BangumiPosterSkeletonItem(
     modifier: Modifier = Modifier,
     blockColor: (() -> Color)? = null,
 ) {
-    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
-    Column(modifier = modifier.fillMaxWidth()) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState(animated = animationGate.active))
+    Column(modifier = modifier.then(animationGate.modifier).fillMaxWidth()) {
         ContentSkeletonBlock(
             color = color,
             shape = AppShapes.container(ContainerLevel.Chip),
@@ -64,9 +67,12 @@ internal fun BangumiPosterSkeletonRow(
     itemCount: Int = 4,
     blockColor: (() -> Color)? = null,
 ) {
-    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState(animated = itemCount > 0 && animationGate.active))
     LazyRow(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.then(animationGate.modifier).fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         userScrollEnabled = false,
@@ -85,9 +91,12 @@ internal fun BangumiPosterGridSkeleton(
     modifier: Modifier = Modifier,
     itemCount: Int = 8,
 ) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = itemCount > 0 && animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+    BoxWithConstraints(modifier = modifier.then(animationGate.modifier).fillMaxWidth()) {
         val spacing = 10.dp
         val columnCount = ((maxWidth.value + spacing.value) / (112f + spacing.value))
             .toInt()
@@ -117,10 +126,13 @@ internal fun BangumiPosterGridSkeleton(
 
 @Composable
 internal fun BangumiTimelineSkeleton(modifier: Modifier = Modifier) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.then(animationGate.modifier).fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
@@ -143,10 +155,13 @@ internal fun BangumiTimelineSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun BangumiFilterSkeleton(modifier: Modifier = Modifier) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.then(animationGate.modifier).fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         repeat(5) {
@@ -176,11 +191,14 @@ internal fun BangumiFilterSkeleton(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun BangumiFollowManagerSkeleton(modifier: Modifier = Modifier) {
-    val pulse = rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val pulse = rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = rememberContentSkeletonBlockColor(pulse)
     LazyVerticalGrid(
         columns = GridCells.Adaptive(310.dp),
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.then(animationGate.modifier).fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, top = 4.dp, end = 12.dp, bottom = 24.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),

@@ -2997,7 +2997,11 @@ internal fun CommonListContent(
     val fixedHeaderInset = resolveCommonListViewportTopPadding(padding.calculateTopPadding())
     val scrollableHeaderInset = if (scrollUnderHeader) fixedHeaderInset else AppSpacingTokens.None
     // History retains its own layout; other single-column lists share a bounded content width.
+    val skeletonAnimationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
     val viewportModifier = Modifier
+        .then(skeletonAnimationGate.modifier)
         .then(if (columns == 1 && !isHistoryPersonalList) Modifier.responsiveContentWidth(resolveCommonListSingleColumnMaxWidth()) else Modifier)
         .fillMaxSize()
         .padding(top = if (scrollUnderHeader) AppSpacingTokens.None else fixedHeaderInset)
@@ -3010,7 +3014,7 @@ internal fun CommonListContent(
     val showInitialSkeleton = isLoading && items.isEmpty()
     val historySkeletonBlockColor = if (showInitialSkeleton && isPersonalList) {
         com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(
-            com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState()
+            com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState(animated = skeletonAnimationGate.active)
         )
     } else {
         null

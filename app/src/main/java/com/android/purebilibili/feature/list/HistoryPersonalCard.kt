@@ -103,13 +103,16 @@ internal fun HistoryPersonalCardSkeleton(
     blockColor: (() -> Color)? = null,
     stacked: Boolean = false,
 ) {
-    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val color = blockColor ?: rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState(animated = animationGate.active))
     val blockShape = AppShapes.container(ContainerLevel.Card)
 
     HorizontalVideoCardFrame(
         stacked = stacked,
         fillInfoHeight = !stacked,
-        modifier = modifier
+        modifier = modifier.then(animationGate.modifier)
             .fillMaxWidth(),
         coverContent = {
             ContentSkeletonBlock(

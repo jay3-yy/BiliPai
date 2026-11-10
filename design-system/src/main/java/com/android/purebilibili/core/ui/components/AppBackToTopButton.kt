@@ -32,13 +32,19 @@ fun AppBackToTopButton(
     contentDescription: String = "回到顶部",
 ) {
     val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
+    val motionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
+        !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
-        enter = fadeIn(animationSpec = AppMotionTokens.standardSpec()) +
-            scaleIn(animationSpec = AppMotionTokens.standardSpec(), initialScale = 0.92f),
-        exit = fadeOut(animationSpec = AppMotionTokens.expressiveSpec()) +
-            scaleOut(animationSpec = AppMotionTokens.expressiveSpec(), targetScale = 0.92f),
+        enter = if (motionEnabled) {
+            fadeIn(animationSpec = AppMotionTokens.standardSpec()) +
+            scaleIn(animationSpec = AppMotionTokens.standardSpec(), initialScale = 0.92f)
+        } else androidx.compose.animation.EnterTransition.None,
+        exit = if (motionEnabled) {
+            fadeOut(animationSpec = AppMotionTokens.expressiveSpec()) +
+            scaleOut(animationSpec = AppMotionTokens.expressiveSpec(), targetScale = 0.92f)
+        } else androidx.compose.animation.ExitTransition.None,
     ) {
         AppSmallFloatingActionButton(
             onClick = {

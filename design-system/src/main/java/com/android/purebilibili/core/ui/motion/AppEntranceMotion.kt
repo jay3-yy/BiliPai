@@ -67,7 +67,7 @@ fun resolveEntranceMotionSpec(tier: MotionTier): EntranceMotionSpec {
             initialScale = 0.99f,
             alphaLeadFraction = 0.7f
         )
-        // 大多数设备:无过冲的柔和落位。
+        // 大多数设备:接近临界阻尼的柔和落位。
         MotionTier.Normal -> EntranceMotionSpec(
             animate = true,
             dampingRatio = 0.9f,
@@ -120,9 +120,9 @@ data class EntranceFrame(
     val scale: Float
 )
 
-/** 由 progress(0→1)非线性派生当帧视觉值。progress=0 起始态,1 终态。 */
+/** 透明度限定在 0..1；几何保留弹簧过冲，避免提前截断落位。 */
 fun resolveEntranceFrame(progress: Float, spec: EntranceMotionSpec): EntranceFrame {
-    val p = progress.coerceIn(0f, 1f)
+    val p = progress
     val alphaLead = spec.alphaLeadFraction.coerceIn(0.05f, 1f)
     val alpha = (p / alphaLead).coerceIn(0f, 1f)
     return EntranceFrame(

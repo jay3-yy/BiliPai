@@ -42,8 +42,8 @@ import com.android.purebilibili.core.ui.ContainerLevel
  * 骨架展示期间逐帧仅触发重绘,不再让屏幕级组合作用域逐帧失效。
  */
 @Composable
-internal fun rememberHomeFeedSkeletonPulseState(): State<Float> =
-    com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState()
+internal fun rememberHomeFeedSkeletonPulseState(animated: Boolean = true): State<Float> =
+    com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(animated = animated)
 
 @Composable
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)

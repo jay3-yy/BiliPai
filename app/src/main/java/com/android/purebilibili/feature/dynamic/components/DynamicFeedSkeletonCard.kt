@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
 import com.android.purebilibili.core.ui.skeleton.skeletonBackground
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,10 +39,6 @@ internal const val DYNAMIC_FEED_SKELETON_ITEM_COUNT = 6
  * 返回 [State] 而非裸 Float:调用方把 state 包进 provider 传给骨架卡,
  * 值只在 draw 阶段被 [drawBehind] 读取,骨架期间逐帧仅重绘、不触发重组。
  */
-@Composable
-internal fun rememberDynamicFeedSkeletonPulseState(): State<Float> =
-    com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState()
-
 /**
  * 动态 feed 首屏骨架卡，对齐 BiliPai 的 DynamicCardSkeleton：
  * 头像 + 双行文字 + 正文条 + 封面块 + 底部操作占位。

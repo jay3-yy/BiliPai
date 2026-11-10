@@ -45,9 +45,14 @@ fun ShimmerContainer(
     animated: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
     val animationAllowed = animated && LocalVideoSkeletonAnimationAllowed.current
     val pulse = if (animationAllowed) {
-        LocalVideoSkeletonPulse.current ?: rememberVideoSkeletonPulse()
+        LocalVideoSkeletonPulse.current ?: com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
+            animated = animationGate.active,
+        )
     } else {
         androidx.compose.runtime.rememberUpdatedState(Float.NaN)
     }
@@ -55,7 +60,7 @@ fun ShimmerContainer(
         LocalVideoSkeletonPulse provides pulse,
         LocalVideoSkeletonAnimationAllowed provides animationAllowed,
     ) {
-        Box(modifier = modifier) {
+        Box(modifier = modifier.then(animationGate.modifier)) {
             content()
         }
     }
@@ -414,10 +419,6 @@ private fun SkeletonBlock(
             .skeletonBackground(rememberVideoSkeletonBlockColor())
     )
 }
-
-@Composable
-private fun rememberVideoSkeletonPulse(): androidx.compose.runtime.State<Float> =
-    com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState()
 
 @Composable
 private fun rememberVideoSkeletonBlockColor(): () -> Color {

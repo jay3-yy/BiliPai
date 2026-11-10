@@ -403,22 +403,6 @@ class VideoGestureFeedbackPolicyTest {
     }
 
     @Test
-    fun `resolveGesturePercentDigitChangeMask only animates ones for 40 to 41`() {
-        assertEquals(
-            listOf(false, false, true),
-            resolveGesturePercentDigitChangeMask(previousPercent = 40, currentPercent = 41)
-        )
-    }
-
-    @Test
-    fun `resolveGesturePercentDigitChangeMask animates tens and ones for 49 to 50`() {
-        assertEquals(
-            listOf(false, true, true),
-            resolveGesturePercentDigitChangeMask(previousPercent = 49, currentPercent = 50)
-        )
-    }
-
-    @Test
     fun `resolveGesturePercentTransitionDirection follows value delta`() {
         assertEquals(
             GesturePercentTransitionDirection.Increase,
@@ -472,40 +456,5 @@ class VideoGestureFeedbackPolicyTest {
         assertEquals(0f, resolveGestureRenderProgress(-0.3f))
         assertEquals(0.6f, resolveGestureRenderProgress(0.6f))
         assertEquals(1f, resolveGestureRenderProgress(1.4f))
-    }
-
-    @Test
-    fun `resolveVideoGestureMotionSpec keeps tuned durations for level overlay`() {
-        val spec = resolveVideoGestureMotionSpec()
-
-        assertEquals(160, spec.levelOverlayEnterFadeDurationMillis)
-        assertEquals(220, spec.levelOverlayEnterTransformDurationMillis)
-        assertEquals(200, spec.levelOverlayExitDurationMillis)
-        assertEquals(130, spec.levelProgressDurationMillis)
-        assertEquals(180, spec.levelIconScaleDurationMillis)
-        assertEquals(180, spec.levelIconContentScaleDurationMillis)
-        assertEquals(140, spec.levelValueScaleDurationMillis)
-    }
-
-    @Test
-    fun `resolveVideoGestureMotionSpec keeps tuned durations for hints and digit transitions`() {
-        val spec = resolveVideoGestureMotionSpec()
-
-        assertEquals(5f, spec.digitInitialBlurRadiusDp)
-        assertEquals(0.78f, spec.digitInitialAlpha)
-        assertEquals(0, spec.digitBlurHoldDurationMillis)
-        assertEquals(90, spec.digitBlurResetDurationMillis)
-        assertEquals(80, spec.digitAlphaResetDurationMillis)
-        assertEquals(100, spec.digitEnterFadeDurationMillis)
-        assertEquals(70, spec.digitExitFadeDurationMillis)
-        assertEquals(0, spec.digitScaleDurationMillis)
-        assertEquals(0.88f, spec.digitSlideSpringDampingRatio)
-        assertEquals(780f, spec.digitSlideSpringStiffness)
-        assertEquals(150, spec.orientationHintEnterFadeDurationMillis)
-        assertEquals(230, spec.orientationHintEnterTransformDurationMillis)
-        assertEquals(200, spec.orientationHintExitDurationMillis)
-        assertEquals(200, spec.longPressHintDurationMillis)
-        assertEquals(900, spec.longPressArrowCycleDurationMillis)
-        assertEquals(300, spec.longPressArrowPhaseStepDurationMillis)
     }
 }

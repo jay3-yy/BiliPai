@@ -4,7 +4,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.feature.home.HomeFeedSkeletonCard
-import com.android.purebilibili.feature.home.rememberHomeFeedSkeletonPulseState
 
 /** BGM recommendations use ElegantVideoCard, so reuse its home-feed loading silhouette. */
 @Composable
@@ -14,14 +13,19 @@ fun VideoCardSkeleton(
     coverAspectRatio: Float = com.android.purebilibili.core.ui.videoCardCoverAspectRatio(),
     compactMetadata: Boolean = false,
 ) {
-    val pulse = rememberHomeFeedSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val pulse = com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
+        animated = animationGate.active,
+    )
     HomeFeedSkeletonCard(
         pulse = { pulse.value },
         wallpaperTintEnabled = false,
         wallpaperEffectMode = HomeWallpaperEffectMode.OFF,
         isDataSaverActive = true,
         coverAspectRatio = coverAspectRatio,
-        modifier = modifier,
+        modifier = modifier.then(animationGate.modifier),
         compactMetadata = compactMetadata,
     )
 }

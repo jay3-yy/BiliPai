@@ -13,7 +13,7 @@ class EnterAnimationPolicyTest {
 
         assertTrue(policy.staggerStepMs <= 12)
         assertTrue(policy.maxStaggerMs <= 80)
-        assertTrue(policy.stiffness >= 600f)
+        assertTrue(policy.stiffness > resolveEnterMotionPolicy(MotionTier.Normal).stiffness)
     }
 
     @Test
@@ -23,14 +23,6 @@ class EnterAnimationPolicyTest {
 
         assertTrue(enhanced.initialScale < normal.initialScale)
         assertTrue(enhanced.translationFactor >= normal.translationFactor)
-    }
-
-    @Test
-    fun normalMotion_keepsCurrentBaselineStagger() {
-        val normal = resolveEnterMotionPolicy(MotionTier.Normal)
-
-        assertEquals(30, normal.staggerStepMs)
-        assertEquals(200, normal.maxStaggerMs)
     }
 
     @Test

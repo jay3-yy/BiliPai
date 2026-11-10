@@ -52,15 +52,18 @@ fun UiSkinAnimatedAsset(
             }
         }
         val text = jsonText ?: return
+        val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
         val composition by rememberLottieComposition(LottieCompositionSpec.JsonString(text))
         val progress by animateLottieCompositionAsState(
             composition = composition,
             iterations = iterations,
+            isPlaying = animationGate.active,
+            restartOnPlay = false,
         )
         LottieAnimation(
             composition = composition,
             progress = { progress },
-            modifier = modifier.size(size),
+            modifier = modifier.size(size).then(animationGate.modifier),
         )
     } else {
         AsyncImage(

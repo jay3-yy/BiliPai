@@ -5,12 +5,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.findRootCoordinates
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.skeleton.ContentSkeletonBlock
 import com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor
 import com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState
@@ -21,22 +17,16 @@ internal fun BangumiPlayerSkeleton(
     contentMode: BangumiPlayerContentMode,
     modifier: Modifier = Modifier,
 ) {
-    var inViewport by remember { mutableStateOf(false) }
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
     val pulse = rememberSkeletonSweepState(
-        animated = inViewport && LocalComponentMotionEnabled.current,
+        animated = animationGate.active,
     )
     val color = rememberContentSkeletonBlockColor(pulse)
     val comments = contentMode == BangumiPlayerContentMode.Comments ||
         contentMode == BangumiPlayerContentMode.CommentOverlay
     LazyColumn(
         modifier = modifier
-            .onGloballyPositioned { coordinates ->
-                inViewport = coordinates.isAttached && run {
-                    val bounds = coordinates.boundsInWindow()
-                    bounds.width > 0f && bounds.height > 0f &&
-                        bounds.overlaps(coordinates.findRootCoordinates().boundsInWindow())
-                }
-            }
+            .then(animationGate.modifier)
             .clearAndSetSemantics { },
         userScrollEnabled = false,
         contentPadding = PaddingValues(16.dp),

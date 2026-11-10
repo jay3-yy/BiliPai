@@ -95,4 +95,16 @@ class AppEntranceMotionPolicyTest {
         // 此时位移尚未归零,体现「先看清、后落位」
         assertTrue(frame.translationYDp > 0f)
     }
+    @Test
+    fun `spring overshoot moves geometry past target while alpha stays opaque`() {
+        val spec = resolveEntranceMotionSpec(MotionTier.Enhanced)
+        val overshoot = resolveEntranceFrame(1.02f, spec)
+        assertEquals(1f, overshoot.alpha)
+        assertTrue(overshoot.translationYDp < 0f)
+        assertTrue(overshoot.scale > 1f)
+        val settled = resolveEntranceFrame(1f, spec)
+        assertEquals(0f, settled.translationYDp)
+        assertEquals(1f, settled.scale)
+    }
+
 }

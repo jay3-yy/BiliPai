@@ -753,21 +753,28 @@ fun DynamicScreen(
             //  [新增] 模式切换动画
             val modeEnterFadeSpec = AppMotionTokens.emphasizedSpec<Float>()
             val modeExitFadeSpec = AppMotionTokens.standardSpec<Float>()
+            val modeMotionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
+                !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
             var activeDynamicBackdrop by remember { mutableStateOf<Backdrop?>(null) }
             AnimatedContent(
                 targetState = displayMode,
                 transitionSpec = {
-                    //  根据切换方向使用不同动画
-                    val slideDirection = if (targetState.isHorizontalUserList()) {
-                        // 从侧边栏切换到横向：向左滑出+淡出，向左滑入+淡入
-                        (slideInHorizontally { -it / 4 } + fadeIn(animationSpec = modeEnterFadeSpec)) togetherWith
-                        (slideOutHorizontally { it / 4 } + fadeOut(animationSpec = modeExitFadeSpec))
+                    if (!modeMotionEnabled) {
+                        (androidx.compose.animation.EnterTransition.None togetherWith
+                            androidx.compose.animation.ExitTransition.None).using(null)
                     } else {
-                        // 从横向切换到侧边栏：向右滑出+淡出，向右滑入+淡入
-                        (slideInHorizontally { it / 4 } + fadeIn(animationSpec = modeEnterFadeSpec)) togetherWith
-                        (slideOutHorizontally { -it / 4 } + fadeOut(animationSpec = modeExitFadeSpec))
+                        //  根据切换方向使用不同动画
+                        val slideDirection = if (targetState.isHorizontalUserList()) {
+                            // 从侧边栏切换到横向：向左滑出+淡出，向左滑入+淡入
+                            (slideInHorizontally { -it / 4 } + fadeIn(animationSpec = modeEnterFadeSpec)) togetherWith
+                            (slideOutHorizontally { it / 4 } + fadeOut(animationSpec = modeExitFadeSpec))
+                        } else {
+                            // 从横向切换到侧边栏：向右滑出+淡出，向右滑入+淡入
+                            (slideInHorizontally { it / 4 } + fadeIn(animationSpec = modeEnterFadeSpec)) togetherWith
+                            (slideOutHorizontally { -it / 4 } + fadeOut(animationSpec = modeExitFadeSpec))
+                        }
+                        slideDirection.using(SizeTransform(clip = false))
                     }
-                    slideDirection.using(SizeTransform(clip = false))
                 },
                 label = "displayModeTransition"
             ) { targetMode ->

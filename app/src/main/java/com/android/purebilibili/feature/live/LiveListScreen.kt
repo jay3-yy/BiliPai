@@ -796,11 +796,14 @@ internal fun LiveHomeContent(
             areaEntries.getOrNull(resolveLiveHomeAreaListIndex(selectedAreaIndex).coerceAtLeast(0))?.parentAreaId == it.id
         }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val skeletonAnimationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    BoxWithConstraints(Modifier.fillMaxSize().then(skeletonAnimationGate.modifier)) {
         val skeletonLayout = rememberLiveSkeletonLayout(maxWidth, maxHeight, metrics)
         val skeletonColor = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(
             com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
-                animated = showInitialSkeleton || showContentSkeleton,
+                animated = (showInitialSkeleton || showContentSkeleton) && skeletonAnimationGate.active,
             ),
         )
         LazyVerticalGrid(

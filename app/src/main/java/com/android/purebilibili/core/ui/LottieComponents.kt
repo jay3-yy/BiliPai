@@ -46,19 +46,21 @@ fun LottieAnimation(
     iterations: Int = LottieConstants.IterateForever,
     autoPlay: Boolean = true
 ) {
+    val animationGate = rememberDecorativeAnimationGate()
     val composition by rememberLottieComposition(
         spec = LottieCompositionSpec.Url(url)
     )
     val progress by animateLottieCompositionAsState(
         composition = composition,
         iterations = iterations,
-        isPlaying = autoPlay
+        isPlaying = autoPlay && animationGate.active,
+        restartOnPlay = false,
     )
     
     com.airbnb.lottie.compose.LottieAnimation(
         composition = composition,
         progress = { progress },
-        modifier = modifier.size(size)
+        modifier = modifier.size(size).then(animationGate.modifier)
     )
 }
 /**

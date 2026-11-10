@@ -161,7 +161,9 @@ private fun PlayingEqualizerIcon(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
-    val phase = if (playing) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
+    val animate = playing && animationGate.active
+    val phase = if (animate) {
         val transition = rememberInfiniteTransition(label = "pagePlayback")
         transition.animateFloat(
             initialValue = 0f,
@@ -175,13 +177,13 @@ private fun PlayingEqualizerIcon(
     } else {
         null
     }
-    Canvas(modifier = modifier) {
+    Canvas(modifier = modifier.then(animationGate.modifier)) {
         val barCount = 3
         val gap = size.width * 0.22f
         val barWidth = (size.width - gap * (barCount - 1)) / barCount
         val currentPhase = phase?.value ?: 0f
         repeat(barCount) { index ->
-            val ratio = if (playing) {
+            val ratio = if (animate) {
                 0.28f + 0.72f * (0.5f + 0.5f * sin(
                     currentPhase * 2f * PI.toFloat() + index * 2.1f
                 ))

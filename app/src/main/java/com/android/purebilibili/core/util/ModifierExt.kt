@@ -21,10 +21,13 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
  * 骨架屏闪光特效 Modifier（深浅色主题自适应）。
  */
 fun Modifier.shimmerEffect(): Modifier = composed {
-    val color = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(
-        com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState(),
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
     )
-    this.skeletonBackground(color)
+    val color = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(
+        com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState(animated = animationGate.active),
+    )
+    this.then(animationGate.modifier).skeletonBackground(color)
 }
 
 // =============================================================================
@@ -109,10 +112,14 @@ fun <T> rememberDebounceCallback(
  */
 @Composable
 fun VideoGridItemSkeleton(coverAspectRatio: Float = 4f / 3f) {
-    val pulse = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState()
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val pulse = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonPulseState(animated = animationGate.active)
     val blockColor = com.android.purebilibili.core.ui.skeleton.rememberContentSkeletonBlockColor(pulse)
     com.android.purebilibili.core.ui.skeleton.ContentVideoGridItemSkeleton(
         coverAspectRatio = coverAspectRatio,
+        modifier = animationGate.modifier,
         blockColorProvider = blockColor,
     )
 }
@@ -190,49 +197,6 @@ fun rememberHapticFeedback(
 }
 
 /**
- *  弹性点击 Modifier (带缩放动画 + 触觉反馈)
- * 
- * Android 特有的交互体验：
- * - 按压时缩放到 0.95
- * - 弹性回弹动画
- * - 自动触觉反馈
- */
-fun Modifier.bouncyClickable(
-    hapticType: HapticType = HapticType.LIGHT,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val haptic = rememberHapticFeedback()
-    
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "bounce_scale"
-    )
-    
-    this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-        }
-        .clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            enabled = enabled
-        ) {
-            com.android.purebilibili.core.ui.AppActionHaptics.runAction {
-                onClick()
-                haptic(hapticType)
-            }
-        }
-}
-
-/**
  *  带涟漪效果的触觉点击 (Material 3 风格)
  */
 fun Modifier.hapticClickable(
@@ -247,91 +211,6 @@ fun Modifier.hapticClickable(
             onClick()
             haptic(hapticType)
         }
-    }
-}
-
-/**
- *  iOS 风格点击效果 Modifier
- * 
- * 特性：
- * - 按压时缩放到 0.96f (iOS 默认值)
- * - 弹性回弹动画 (damping=0.6f)
- * - 自动触发轻量触觉反馈
- * 
- * @param scale 按压时的缩放比例，默认 0.96f
- * @param hapticEnabled 是否启用触觉反馈
- * @param onClick 点击回调
- */
-fun Modifier.iOSTapEffect(
-    scale: Float = 0.96f,
-    hapticEnabled: Boolean = true,
-    onClick: () -> Unit
-): Modifier = composed {
-    val uiStyle = LocalAppUiStyle.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val haptic = rememberHapticFeedback()
-    val targetScale = if (isPressed) {
-        if (uiStyle == AppUiStyle.MATERIAL3) 0.985f else scale
-    } else {
-        1f
-    }
-    
-    val animatedScale by animateFloatAsState(
-        targetValue = targetScale,
-        animationSpec = spring(
-            dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.9f else 0.6f,
-            stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 650f else 400f
-        ),
-        label = "ios_tap_scale"
-    )
-    
-    this
-        .graphicsLayer {
-            scaleX = animatedScale
-            scaleY = animatedScale
-        }
-        .clickable(
-            interactionSource = interactionSource,
-            indication = null
-        ) {
-            com.android.purebilibili.core.ui.AppActionHaptics.runAction {
-                onClick()
-                if (hapticEnabled) {
-                    haptic(HapticType.LIGHT)
-                }
-            }
-        }
-}
-
-/**
- *  iOS 风格点击效果 (仅动画，不处理点击事件)
- * 
- * 用于需要自定义点击处理的场景
- */
-fun Modifier.iOSTapScale(
-    scale: Float = 0.96f
-): Modifier = composed {
-    val uiStyle = LocalAppUiStyle.current
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    
-    val animatedScale by animateFloatAsState(
-        targetValue = if (isPressed) {
-            if (uiStyle == AppUiStyle.MATERIAL3) 0.985f else scale
-        } else {
-            1f
-        },
-        animationSpec = spring(
-            dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.9f else 0.6f,
-            stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 650f else 400f
-        ),
-        label = "ios_tap_scale_only"
-    )
-    
-    this.graphicsLayer {
-        scaleX = animatedScale
-        scaleY = animatedScale
     }
 }
 
@@ -355,32 +234,34 @@ fun Modifier.iOSCardTapEffect(
     onClick: () -> Unit
 ): Modifier = composed {
     val uiStyle = LocalAppUiStyle.current
+    val motionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
+        !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val haptic = rememberHapticFeedback()
-    val targetScale = if (isPressed) {
+    val targetScale = if (isPressed && motionEnabled) {
         if (uiStyle == AppUiStyle.MATERIAL3) 0.985f else pressScale
     } else {
         1f
     }
-    val targetTranslation = if (isPressed) {
+    val targetTranslation = if (isPressed && motionEnabled) {
         if (uiStyle == AppUiStyle.MATERIAL3) 2f else pressTranslationY
     } else {
         0f
     }
     
-    val animatedScale by animateFloatAsState(
+    val animatedScale = animateFloatAsState(
         targetValue = targetScale,
-        animationSpec = spring(
+        animationSpec = if (!motionEnabled) snap() else spring(
             dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.92f else if (isPressed) 0.75f else 0.55f,
             stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 700f else if (isPressed) 600f else 300f
         ),
         label = "card_tap_scale"
     )
     
-    val animatedTranslationY by animateFloatAsState(
+    val animatedTranslationY = animateFloatAsState(
         targetValue = targetTranslation,
-        animationSpec = spring(
+        animationSpec = if (!motionEnabled) snap() else spring(
             dampingRatio = if (uiStyle == AppUiStyle.MATERIAL3) 0.95f else if (isPressed) 0.85f else 0.5f,
             stiffness = if (uiStyle == AppUiStyle.MATERIAL3) 850f else if (isPressed) 800f else 250f
         ),
@@ -389,9 +270,9 @@ fun Modifier.iOSCardTapEffect(
     
     this
         .graphicsLayer {
-            scaleX = animatedScale
-            scaleY = animatedScale
-            translationY = animatedTranslationY
+            scaleX = animatedScale.value
+            scaleY = animatedScale.value
+            translationY = animatedTranslationY.value
         }
         .clickable(
             interactionSource = interactionSource,

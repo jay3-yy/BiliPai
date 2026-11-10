@@ -82,8 +82,11 @@ fun BangumiTimelineContent(
 
 @Composable
 private fun BangumiTimelineScreenSkeleton(modifier: Modifier = Modifier) {
-    val blockColor = rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState())
-    Column(modifier = modifier.fillMaxSize()) {
+    val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+    )
+    val blockColor = rememberContentSkeletonBlockColor(rememberContentSkeletonPulseState(animated = animationGate.active))
+    Column(modifier = modifier.then(animationGate.modifier).fillMaxSize()) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

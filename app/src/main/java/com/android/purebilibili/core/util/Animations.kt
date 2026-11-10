@@ -2,16 +2,13 @@ package com.android.purebilibili.core.util
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
+import com.android.purebilibili.core.ui.motion.resolveEntranceMotionSpec
 import kotlinx.coroutines.delay
 
 data class EnterMotionPolicy(
@@ -25,40 +22,26 @@ data class EnterMotionPolicy(
 
 /**
  * @param coordinateWithSharedTransition 为 true 时走「过渡协同」档：
- * 无缩放、极小位移、更短错峰、更高刚度，避免与 sharedBounds 抢几何，也更快让位给点击进详情。
+ * 无缩放和位移、更短错峰、更高刚度，避免与 sharedBounds 抢几何，也更快让位给点击进详情。
  */
 fun resolveEnterMotionPolicy(
     motionTier: MotionTier,
     coordinateWithSharedTransition: Boolean = false
 ): EnterMotionPolicy {
-    val base = when (motionTier) {
-        MotionTier.Reduced -> EnterMotionPolicy(
-            staggerStepMs = 10,
-            maxStaggerMs = 60,
-            initialScale = 0.97f,
-            translationFactor = 0.35f,
-            dampingRatio = 0.92f,
-            stiffness = 720f
-        )
-
-        MotionTier.Enhanced -> EnterMotionPolicy(
-            staggerStepMs = 24,
-            maxStaggerMs = 180,
-            initialScale = 0.88f,
-            translationFactor = 1.1f,
-            dampingRatio = 0.62f,
-            stiffness = 320f
-        )
-
-        MotionTier.Normal -> EnterMotionPolicy(
-            staggerStepMs = 30,
-            maxStaggerMs = 200,
-            initialScale = 0.9f,
-            translationFactor = 1f,
-            dampingRatio = 0.7f,
-            stiffness = 350f
-        )
-    }
+    val entrance = resolveEntranceMotionSpec(motionTier)
+    // 列表挂载与页面入场共用尺度和弹簧；位移仍由调用方的像素距离决定。
+    val base = EnterMotionPolicy(
+        staggerStepMs = entrance.staggerStepMs,
+        maxStaggerMs = entrance.maxStaggerMs,
+        initialScale = entrance.initialScale,
+        translationFactor = when (motionTier) {
+            MotionTier.Reduced -> 0.35f
+            MotionTier.Normal -> 1f
+            MotionTier.Enhanced -> 1.1f
+        },
+        dampingRatio = entrance.dampingRatio,
+        stiffness = entrance.stiffness,
+    )
 
     if (!coordinateWithSharedTransition) return base
 
@@ -121,7 +104,7 @@ fun Modifier.animateEnter(
 
     this.graphicsLayer {
         val p = progress.value
-        alpha = p
+        alpha = p.coerceIn(0f, 1f)
         val translateFactor = motionPolicy.translationFactor
         if (translateFactor != 0f) {
             translationY = (initialOffsetY * translateFactor) * (1f - p)
@@ -133,36 +116,4 @@ fun Modifier.animateEnter(
             scaleY = scale
         }
     }
-}
-
-/**
- * Q弹点击效果 (按压缩放)
- */
-fun Modifier.bouncyClickable(
-    scaleDown: Float = 0.90f,
-    onClick: () -> Unit
-): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val scale = androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isPressed) scaleDown else 1f,
-        animationSpec = spring(
-            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
-            stiffness = androidx.compose.animation.core.Spring.StiffnessMedium
-        ),
-        label = "BouncyScale"
-    )
-
-    this
-        .graphicsLayer {
-            val s = scale.value
-            scaleX = s
-            scaleY = s
-        }
-        .clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = onClick
-        )
 }

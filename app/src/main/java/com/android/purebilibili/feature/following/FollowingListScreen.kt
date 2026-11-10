@@ -10,7 +10,6 @@ import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -39,8 +38,6 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -1004,7 +1001,7 @@ fun FollowingListScreen(
                                         } else {
                                     // 统计信息
                                     item {
-                                        AnimatedBlurFadeText(
+                                        AnimatedFollowingCountText(
                                             targetText = when {
                                                 isEditMode -> "已选 $selectedCount 人"
                                                 searchQuery.isEmpty() && (selectedGroupFilter == null || selectedGroupFilter == Long.MIN_VALUE) ->
@@ -1038,7 +1035,7 @@ fun FollowingListScreen(
                                                         (selectedGroupFilter == null && chip.tagid == Long.MIN_VALUE),
                                                     onClick = { selectedGroupFilter = chipFilterId },
                                                     label = {
-                                                        AnimatedBlurFadeText(targetText = "${chip.name} ${chip.count}") { text, modifier ->
+                                                        AnimatedFollowingCountText(targetText = "${chip.name} ${chip.count}") { text, modifier ->
                                                             AppText(text = text, modifier = modifier)
                                                         }
                                                     }
@@ -1303,29 +1300,18 @@ fun FollowingListScreen(
 }
 
 @Composable
-private fun AnimatedBlurFadeText(
+private fun AnimatedFollowingCountText(
     targetText: String,
     modifier: Modifier = Modifier,
     content: @Composable (String, Modifier) -> Unit
 ) {
-    val blurAnim = remember { Animatable(0f) }
-    val alphaAnim = remember { Animatable(1f) }
-    val standardMotionSpec = AppMotionTokens.standardSpec<Float>()
-
-    LaunchedEffect(targetText) {
-        blurAnim.snapTo(6f)
-        alphaAnim.snapTo(0.55f)
-        launch {
-            blurAnim.animateTo(
-                targetValue = 0f,
-                animationSpec = standardMotionSpec
-            )
-        }
-        alphaAnim.animateTo(
-            targetValue = 1f,
-            animationSpec = standardMotionSpec
-        )
+    if (!com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current ||
+        com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+    ) {
+        content(targetText, modifier)
+        return
     }
+    val standardMotionSpec = AppMotionTokens.standardSpec<Float>()
 
     AnimatedContent(
         targetState = targetText,
@@ -1334,13 +1320,11 @@ private fun AnimatedBlurFadeText(
                 fadeOut(animationSpec = standardMotionSpec)) using
                 SizeTransform(clip = false)
         },
-        label = "following-count-blur-fade"
+        label = "following-count-fade"
     ) { text ->
         content(
             text,
             modifier
-                .alpha(alphaAnim.value)
-                .blur(blurAnim.value.dp)
         )
     }
 }
