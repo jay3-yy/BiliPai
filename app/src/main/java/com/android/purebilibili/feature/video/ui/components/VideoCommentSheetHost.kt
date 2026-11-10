@@ -553,7 +553,7 @@ fun VideoCommentSheetHost(
             when (
                 resolveVideoCommentPredictiveBackTarget(
                     subReplyVisible = subReplyState.visible,
-                    conversationActive = subReplyState.conversationAnchor != null && !subReplyState.isTargetOnly
+                    conversationActive = subReplyState.conversationAnchor != null
                 )
             ) {
                 VideoCommentPredictiveBackTarget.CLOSE_CONVERSATION ->
@@ -800,7 +800,7 @@ fun VideoCommentSheetHost(
                             exit = if (threadBackCompleted) androidx.compose.animation.ExitTransition.None else motionSpec.contentExit,
                         ) {
                             val rootReply = subReplyState.rootReply
-                            if (rootReply != null || subReplyState.isTargetOnly) {
+                            if (rootReply != null || subReplyState.items.isNotEmpty()) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -817,7 +817,6 @@ fun VideoCommentSheetHost(
                                         listModifier = threadListModifier,
                                         headerDragModifier = threadDrag.headerModifier,
                                         rootReply = rootReply,
-                                        isTargetOnly = subReplyState.isTargetOnly,
                                         subReplies = subReplyState.items,
                                         sortMode = subReplyState.sortMode,
                                         error = subReplyState.error,

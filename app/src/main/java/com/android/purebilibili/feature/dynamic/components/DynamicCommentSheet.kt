@@ -585,7 +585,7 @@ fun DynamicCommentSheet(
                     exit = if (threadBackCompleted) androidx.compose.animation.ExitTransition.None else threadSheetMotion.contentExit,
                 ) {
                     val rootReply = subReplyState.rootReply
-                    if (rootReply != null || subReplyState.isTargetOnly) {
+                    if (rootReply != null || subReplyState.items.isNotEmpty()) {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -601,7 +601,6 @@ fun DynamicCommentSheet(
                             SubReplyDetailContent(
                                 headerDragModifier = threadDrag.headerModifier,
                                 rootReply = rootReply,
-                                isTargetOnly = subReplyState.isTargetOnly,
                                 upMid = dynamicAuthorMid,
                                 subReplies = subReplyState.items,
                                 sortMode = subReplyState.sortMode,

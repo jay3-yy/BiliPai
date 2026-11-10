@@ -14,7 +14,6 @@ internal fun SubReplyUiState.resetForSort(mode: SubReplySortMode): SubReplyUiSta
     page = 1,
     basePage = 1,
     isEnd = false,
-    isTargetOnly = false,
     baseIsEnd = false,
     grpcNextOffset = null,
     baseGrpcNextOffset = null,
@@ -28,6 +27,10 @@ internal fun SubReplyUiState.resetForSort(mode: SubReplySortMode): SubReplyUiSta
 
 internal fun isSortedSubReplyPageEnd(cursorIsEnd: Boolean, nextOffset: String?): Boolean =
     com.android.purebilibili.data.repository.isSortedSubReplyPageEnd(cursorIsEnd, nextOffset)
+
+/** No readable floor: only the recovered target (and its dialog) is available. */
+internal val SubReplyUiState.hasUnavailableFloor: Boolean
+    get() = rootReply == null && items.isNotEmpty()
 
 /** A new local reply belongs at the tail, not beside its parent in an earlier time page. */
 internal fun insertSentSubReply(
@@ -99,6 +102,6 @@ internal fun SubReplyUiState.withSentSubReply(
             insertSentSubReply(items, reply).toImmutableList()
         } else items,
         baseItems = updatedBase,
-        totalCount = if (isTargetOnly) totalCount else totalCount + if (alreadyLoaded) 0 else 1
+        totalCount = if (rootReply == null) totalCount else totalCount + if (alreadyLoaded) 0 else 1
     )
 }
