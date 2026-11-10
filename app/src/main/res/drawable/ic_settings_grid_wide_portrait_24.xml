@@ -1,0 +1,10 @@
+<!-- App-authored: portrait tablet with three grid columns, distinct from the narrow phone panel. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="@android:color/white" android:strokeWidth="2"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M6,3h12a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2H6a2,2 0 0 1 -2,-2V5a2,2 0 0 1 2,-2z M9.33,3v18 M14.66,3v18 M4,12h16" />
+</vector>

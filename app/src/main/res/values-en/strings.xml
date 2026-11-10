@@ -759,7 +759,10 @@
     <string name="home_settings_display_mode_grid_desc">Arrange videos in columns based on screen width.</string>
     <string name="home_settings_display_mode_single">Single-column list</string>
     <string name="home_settings_display_mode_single_desc">Show one video per row.</string>
-    <string name="home_settings_grid_columns_title">Default columns for wide windows</string>
+    <string name="home_settings_grid_columns_title">Wide landscape columns</string>
+    <string name="home_settings_grid_wide_portrait_title">Wide portrait columns</string>
+    <string name="home_settings_grid_wide_portrait_summary">Used for portrait tablet and unfolded windows, independently of landscape. Narrow split windows use the narrow setting.</string>
+    <string name="home_settings_grid_wide_landscape_summary">Used for wide landscape windows, independently of portrait. Fixed counts remain limited by the available content width.</string>
     <string name="home_settings_grid_columns_adaptive">Adaptive by default. Foldable cover screens and narrow windows save their own setting. Pinch to adjust.</string>
     <string name="home_settings_grid_columns_fixed">Use %1$d columns on wide screens. Foldable cover screens and narrow windows save their own setting.</string>
     <string name="home_settings_grid_columns_auto">Automatic</string>
@@ -902,7 +905,7 @@
     <string name="animation_indicator_wobble_summary">Add squash and rebound when selecting a tab or releasing a drag. Applies only to liquid glass indicators; turning it off keeps normal movement and press feedback.</string>
     <string name="animation_settings_container_blur_summary">Blur the settings page behind container transitions in real time; requires Android 12 or later</string>
     <string name="home_settings_grid_customization_summary">Turn off to restore automatic layouts while keeping your choices. Single-column video mode is unchanged.</string>
-    <string name="home_settings_grid_share_summary">Share and save the last column count across supported lists, or adjust each page independently. Narrow and wide windows keep separate values.</string>
+    <string name="home_settings_grid_share_summary">Share and save the last column count across supported lists, or adjust each page independently. Narrow, wide portrait and wide landscape windows keep separate values.</string>
     <string name="home_settings_grid_default_summary">Automatic uses the page layout. Fixed counts are limited by the content width. Shared pinch changes update this value.</string>
     <string name="home_settings_grid_customization_title">Customize list columns</string>
     <string name="home_settings_grid_share_title">Share columns across pages</string>

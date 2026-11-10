@@ -707,8 +707,9 @@ data class HomeSettings(
         CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
     val isHeaderCollapseEnabled: Boolean = true,
     val showPgcTimeline: Boolean = true,
-    val gridColumnCount: Int = 0, // [New] 网格列数 (0=自动, 1-7=固定)——宽屏（折叠屏内屏/平板）
+    val gridColumnCount: Int = 0, // 宽屏横屏列数 (0=自动, 1-7=固定)
     val gridColumnCountCompact: Int = 0, // [New] 窄屏（折叠屏外屏/手机竖屏）独立列数记忆 (0=自动)
+    val gridColumnCountWidePortrait: Int = gridColumnCount,
     val gridColumnCustomizationEnabled: Boolean = true,
     val gridColumnsSharedAcrossPages: Boolean = true,
     val pinchToChangeGridColumnsEnabled: Boolean = true, // [新增] 双指缩放切换网格列数
@@ -1645,6 +1646,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_SCREEN_DISPLAY_MODE_ID = intPreferencesKey("screen_display_mode_id")
     //  [新增] 网格列数 (0=Auto)
     private val KEY_GRID_COLUMN_COUNT = intPreferencesKey("grid_column_count")
+    private val KEY_GRID_COLUMN_COUNT_WIDE_PORTRAIT = intPreferencesKey("grid_column_count_wide_portrait")
     //  [新增] 窄屏（折叠屏外屏/手机竖屏）独立列数记忆，与宽屏（内屏/平板）的
     //  KEY_GRID_COLUMN_COUNT 互不影响；0=Auto（外屏自动解析为 2 列）。
     private val KEY_GRID_COLUMN_COUNT_COMPACT = intPreferencesKey("grid_column_count_compact")
@@ -1919,6 +1921,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             showPgcTimeline = preferences[KEY_SHOW_PGC_TIMELINE] ?: true,
             gridColumnCount = preferences[KEY_GRID_COLUMN_COUNT] ?: 0,
             gridColumnCountCompact = preferences[KEY_GRID_COLUMN_COUNT_COMPACT] ?: 0,
+            // 老设置只保存宽屏一份列数，拆分前两种方向都沿用该值。
+            gridColumnCountWidePortrait = preferences[KEY_GRID_COLUMN_COUNT_WIDE_PORTRAIT]
+                ?: preferences[KEY_GRID_COLUMN_COUNT] ?: 0,
             gridColumnCustomizationEnabled = preferences[KEY_GRID_COLUMN_CUSTOMIZATION_ENABLED] ?: true,
             gridColumnsSharedAcrossPages = preferences[KEY_GRID_COLUMNS_SHARED_ACROSS_PAGES] ?: true,
             pinchToChangeGridColumnsEnabled =
@@ -3404,11 +3409,21 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setGridColumnCount(context: Context, count: Int) {
         context.settingsDataStore.edit { preferences ->
+            // 首次调整横屏时冻结原宽屏值，不能连带改动尚未单独编辑的竖屏列数。
+            if (preferences[KEY_GRID_COLUMN_COUNT_WIDE_PORTRAIT] == null) {
+                preferences[KEY_GRID_COLUMN_COUNT_WIDE_PORTRAIT] = preferences[KEY_GRID_COLUMN_COUNT] ?: 0
+            }
             preferences[KEY_GRID_COLUMN_COUNT] = count.coerceIn(0, 7)
         }
     }
 
-    //  窄屏（折叠屏外屏/手机竖屏）独立列数记忆；内屏/平板写 setGridColumnCount。
+    suspend fun setGridColumnCountWidePortrait(context: Context, count: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_GRID_COLUMN_COUNT_WIDE_PORTRAIT] = count.coerceIn(0, 7)
+        }
+    }
+
+    // 窄屏（折叠屏外屏/窄分屏）保持独立，不借用宽屏任一方向的列数。
     suspend fun setGridColumnCountCompact(context: Context, count: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_GRID_COLUMN_COUNT_COMPACT] = count.coerceIn(0, 4)
@@ -8759,6 +8774,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             IntShareablePreferenceDefinition(KEY_DISPLAY_MODE, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_GRID_COLUMN_COUNT, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_GRID_COLUMN_COUNT_COMPACT, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_GRID_COLUMN_COUNT_WIDE_PORTRAIT, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_GRID_COLUMN_CUSTOMIZATION_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_GRID_COLUMNS_SHARED_ACROSS_PAGES, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(

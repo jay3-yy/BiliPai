@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.space
 
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.navigation.isTabSelectionInProgress
-import com.android.purebilibili.feature.home.effectiveGridColumnCount
+import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
 import androidx.lifecycle.viewmodel.initializer
@@ -1795,7 +1795,7 @@ private fun SpaceContent(
             fixedColumnCount = resolveHomeFeedStoredColumnCount(
                 widthSizeClass = windowSizeClass.widthSizeClass,
                 compactColumnCount = homeSettings.effectiveGridColumnCountCompact,
-                defaultColumnCount = homeSettings.effectiveGridColumnCount,
+                defaultColumnCount = homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
             ),
             cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
             contentMaxWidthDp = adaptiveLayoutSpec.contentMaxWidthDp,

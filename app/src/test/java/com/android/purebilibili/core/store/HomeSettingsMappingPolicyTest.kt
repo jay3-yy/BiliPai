@@ -18,6 +18,27 @@ import kotlin.test.assertTrue
 class HomeSettingsMappingPolicyTest {
 
     @Test
+    fun oldWideColumnPreferenceSeedsBothOrientationsWithoutOverridingNewPortraitChoice() {
+        val wide = intPreferencesKey("grid_column_count")
+        val portrait = intPreferencesKey("grid_column_count_wide_portrait")
+        val prefs = mutablePreferencesOf(wide to 4)
+        val inherited = mapHomeSettingsFromPreferences(prefs)
+        assertEquals(4, inherited.gridColumnCount)
+        assertEquals(4, inherited.gridColumnCountWidePortrait)
+
+        prefs[portrait] = 3
+        val separate = mapHomeSettingsFromPreferences(prefs)
+        assertEquals(4, separate.gridColumnCount)
+        assertEquals(3, separate.gridColumnCountWidePortrait)
+
+        // 自动是独立选择，不能误当成未设置而继续沿用横屏固定值。
+        prefs[portrait] = 0
+        val automaticPortrait = mapHomeSettingsFromPreferences(prefs)
+        assertEquals(4, automaticPortrait.gridColumnCount)
+        assertEquals(0, automaticPortrait.gridColumnCountWidePortrait)
+    }
+
+    @Test
     fun emptyPreferences_useExpectedRuntimeDefaults() {
         val prefs = mutablePreferencesOf()
 

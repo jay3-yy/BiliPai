@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.list
 
 import com.android.purebilibili.navigation.tabIndicatorPosition
-import com.android.purebilibili.feature.home.effectiveGridColumnCount
+import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
@@ -296,7 +296,7 @@ fun CommonListScreen(
         settings = homeSettings,
         widthSizeClass = windowSizeClass.widthSizeClass,
         defaultColumns = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
-            windowSizeClass.widthSizeClass, homeSettings.effectiveGridColumnCountCompact, homeSettings.effectiveGridColumnCount,
+            windowSizeClass.widthSizeClass, homeSettings.effectiveGridColumnCountCompact, homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
         ).takeIf { it > 0 } ?: defaultPersonalColumns,
         bounds = resolveHomeFeedPinchColumnBounds(
             windowSizeClass.widthSizeClass, LocalConfiguration.current.screenWidthDp,

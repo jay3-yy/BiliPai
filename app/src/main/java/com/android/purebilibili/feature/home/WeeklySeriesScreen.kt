@@ -170,7 +170,7 @@ private fun WeeklySeriesContent(
                 fixedColumnCount = resolveHomeFeedStoredColumnCount(
                     widthSizeClass = windowSizeClass.widthSizeClass,
                     compactColumnCount = homeSettings.effectiveGridColumnCountCompact,
-                    defaultColumnCount = homeSettings.effectiveGridColumnCount,
+                    defaultColumnCount = homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
                 ),
                 cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
                 widthSizeClass = windowSizeClass.widthSizeClass,

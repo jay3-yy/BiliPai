@@ -6,6 +6,7 @@ import kotlin.math.roundToInt
 internal const val GRID_CUSTOMIZATION_SETTING_ID = "appearance.grid_column_customization_enabled"
 internal const val GRID_SHARE_SETTING_ID = "appearance.grid_columns_shared_across_pages"
 internal const val GRID_COMPACT_SETTING_ID = "appearance.grid_column_count_compact"
+internal const val GRID_WIDE_PORTRAIT_SETTING_ID = "appearance.grid_column_count_wide_portrait"
 internal const val PROGRESSIVE_BLUR_RENDERER_SETTING_ID = "animation.progressive_blur_renderer"
 
 internal val additionalSettingsDirectory = listOf(
@@ -156,7 +157,8 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("appearance.app_font_weight_preset", "文字粗细", SettingsRootCategory.APPEARANCE_THEME, "appearance_text_size", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> state.appFontWeightPreset.label }),
     PlaybackSettingItem("appearance.app_ui_scale_preset", "界面缩放", SettingsRootCategory.APPEARANCE_THEME, "appearance_text_size", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> state.appUiScalePreset.label }),
     PlaybackSettingItem("appearance.startup_animation_style", "启动动画样式", SettingsRootCategory.APPEARANCE_THEME, "appearance_splash_icon", { context -> com.android.purebilibili.core.store.SettingsManager.getStartupAnimationStyle(context).map { it.toString() } }, target = SettingsSearchTarget.APPEARANCE),
-    PlaybackSettingItem("appearance.grid_column_count", "宽屏默认列数", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeSettings(context).map { if (it.gridColumnCount == 0) "自动" else "${it.gridColumnCount} 列" } }, aliases = listOf("网格列数", "平板列数", "内屏列数"), target = SettingsSearchTarget.HOME_FEED),
+    PlaybackSettingItem(GRID_WIDE_PORTRAIT_SETTING_ID, "宽屏竖屏列数", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeSettings(context).map { if (it.gridColumnCountWidePortrait == 0) "自动" else "${it.gridColumnCountWidePortrait} 列" } }, aliases = listOf("平板竖屏", "竖屏三列", "内屏竖屏"), target = SettingsSearchTarget.HOME_FEED),
+    PlaybackSettingItem("appearance.grid_column_count", "宽屏横屏列数", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeSettings(context).map { if (it.gridColumnCount == 0) "自动" else "${it.gridColumnCount} 列" } }, aliases = listOf("网格列数", "平板列数", "内屏列数", "横屏四列"), target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_feed_card_width_preset", "推荐卡片宽度", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", null, target = SettingsSearchTarget.HOME_FEED, readState = { state -> state.homeFeedCardWidthPreset.toString() }),
     PlaybackSettingItem("appearance.home_feed_card_style", "卡片封面比例", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeFeedCardStyle(context).map { it.label } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_duration_style", "首页视频时长", SettingsRootCategory.HOME_RECOMMENDATION, "home_list", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeDurationStyle(context).map { it.label } }, target = SettingsSearchTarget.HOME_FEED),

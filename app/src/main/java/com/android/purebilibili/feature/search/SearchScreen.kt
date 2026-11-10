@@ -3,7 +3,7 @@ package com.android.purebilibili.feature.search
 
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
-import com.android.purebilibili.feature.home.effectiveGridColumnCount
+import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.core.ui.components.resolveAppCountedTabLabel
 import com.android.purebilibili.core.ui.components.appCountedTabOption
@@ -823,7 +823,7 @@ fun SearchScreen(
     val videoGridColumns = remember(
         searchContentWidth,
         listLayout.singleColumn,
-        homeSettings.effectiveGridColumnCount,
+        homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
         homeSettings.effectiveGridColumnCountCompact,
         homeSettings.homeFeedCardWidthPreset,
         windowSizeClass.widthSizeClass
@@ -834,7 +834,7 @@ fun SearchScreen(
             fixedColumnCount = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
                 widthSizeClass = windowSizeClass.widthSizeClass,
                 compactColumnCount = homeSettings.effectiveGridColumnCountCompact,
-                defaultColumnCount = homeSettings.effectiveGridColumnCount,
+                defaultColumnCount = homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
             ),
             cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
             widthSizeClass = windowSizeClass.widthSizeClass

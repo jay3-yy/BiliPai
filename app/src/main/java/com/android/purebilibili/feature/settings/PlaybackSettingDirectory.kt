@@ -28,6 +28,7 @@ internal fun settingItemTitle(settingId: String, context: Context): String = whe
     GRID_CUSTOMIZATION_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_customization_title)
     GRID_SHARE_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_share_title)
     GRID_COMPACT_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_compact_title)
+    GRID_WIDE_PORTRAIT_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_wide_portrait_title)
     "appearance.grid_column_count" -> context.getString(com.android.purebilibili.R.string.home_settings_grid_columns_title)
     "appearance.pinch_to_change_grid_columns_enabled" -> context.getString(com.android.purebilibili.R.string.home_settings_pinch_columns_title)
     else -> settingItemTitle(settingId)

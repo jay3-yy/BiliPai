@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.plugin.js
 
 import com.android.purebilibili.feature.home.rememberFeedGridColumnPreference
-import com.android.purebilibili.feature.home.effectiveGridColumnCount
+import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
 import com.android.purebilibili.core.util.LocalWindowSizeClass
@@ -155,7 +155,7 @@ fun BiliPaiJsPluginContentScreen(
             defaultColumns = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
                 windowSizeClass.widthSizeClass,
                 homeSettings.effectiveGridColumnCountCompact,
-                homeSettings.effectiveGridColumnCount,
+                homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
             ).takeIf { it > 0 } ?: BILI_PAI_JS_GRID_COLUMNS,
             bounds = BILI_PAI_JS_PINCH_COLUMN_BOUNDS,
             minimumColumns = BILI_PAI_JS_PINCH_COLUMN_BOUNDS.first,

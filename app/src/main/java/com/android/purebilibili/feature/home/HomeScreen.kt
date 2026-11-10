@@ -952,7 +952,7 @@ fun HomeScreen(
     val gridColumns = remember(
         contentWidth,
         displayMode,
-        homeSettings.effectiveGridColumnCount,
+        homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
         homeSettings.effectiveGridColumnCountCompact,
         homeSettings.homeFeedCardWidthPreset,
         windowSizeClass.widthSizeClass
@@ -964,7 +964,7 @@ fun HomeScreen(
             fixedColumnCount = resolveHomeFeedStoredColumnCount(
                 widthSizeClass = windowSizeClass.widthSizeClass,
                 compactColumnCount = homeSettings.effectiveGridColumnCountCompact,
-                defaultColumnCount = homeSettings.effectiveGridColumnCount,
+                defaultColumnCount = homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
             ),
             cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
             widthSizeClass = windowSizeClass.widthSizeClass

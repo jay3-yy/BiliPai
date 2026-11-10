@@ -10,13 +10,33 @@ import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.WindowWidthSizeClass
+import com.android.purebilibili.core.util.WindowSizeClass
+import com.android.purebilibili.core.util.LocalWindowSizeClass
 import kotlinx.coroutines.launch
-
-internal val HomeSettings.effectiveGridColumnCount: Int
-    get() = if (gridColumnCustomizationEnabled) gridColumnCount else 0
 
 internal val HomeSettings.effectiveGridColumnCountCompact: Int
     get() = if (gridColumnCustomizationEnabled) gridColumnCountCompact else 0
+
+internal enum class FeedGridColumnScope { COMPACT, WIDE_PORTRAIT, WIDE_LANDSCAPE }
+
+internal fun resolveFeedGridColumnScope(
+    widthSizeClass: WindowWidthSizeClass,
+    landscape: Boolean,
+): FeedGridColumnScope = when {
+    isCompactHomeFeedScreen(widthSizeClass) -> FeedGridColumnScope.COMPACT
+    landscape -> FeedGridColumnScope.WIDE_LANDSCAPE
+    else -> FeedGridColumnScope.WIDE_PORTRAIT
+}
+
+/** 使用当前窗口比例，分屏与折叠后跟随实际可用窗口，不按设备物理朝向分档。 */
+internal fun HomeSettings.effectiveGridColumnCountForWindow(window: WindowSizeClass): Int =
+    if (!gridColumnCustomizationEnabled) 0 else when (resolveFeedGridColumnScope(
+        window.widthSizeClass, window.widthDp > window.heightDp,
+    )) {
+        FeedGridColumnScope.COMPACT -> gridColumnCountCompact
+        FeedGridColumnScope.WIDE_PORTRAIT -> gridColumnCountWidePortrait
+        FeedGridColumnScope.WIDE_LANDSCAPE -> gridColumnCount
+    }
 
 internal val HomeSettings.gridColumnPinchEnabled: Boolean
     get() = gridColumnCustomizationEnabled && pinchToChangeGridColumnsEnabled
@@ -40,7 +60,7 @@ internal fun resolveFeedGridColumnPreference(
     return requestedColumns.coerceIn(effectiveMinimum, bounds.last)
 }
 
-/** 网格行为与材质无关；窄屏和宽屏分别保存，关闭共用后仅保留各页面自己的手势选择。 */
+/** 网格行为与材质无关；窄屏、宽屏竖屏和宽屏横屏分别记忆。 */
 @Composable
 internal fun rememberFeedGridColumnPreference(
     settings: HomeSettings,
@@ -52,31 +72,36 @@ internal fun rememberFeedGridColumnPreference(
 ): FeedGridColumnPreference {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val compact = isCompactHomeFeedScreen(widthSizeClass)
+    val window = LocalWindowSizeClass.current
+    val columnScope = resolveFeedGridColumnScope(widthSizeClass, window.widthDp > window.heightDp)
     var pageColumns by rememberSaveable(
         settings.gridColumnCountCompact,
         settings.gridColumnCount,
+        settings.gridColumnCountWidePortrait,
         settings.gridColumnsSharedAcrossPages,
         settings.gridColumnCustomizationEnabled,
-    ) { mutableStateOf(mapOf<Boolean, Int>()) }
+    ) { mutableStateOf(mapOf<FeedGridColumnScope, Int>()) }
     val customizationEnabled = settings.gridColumnCustomizationEnabled && customizationApplies
     val columns = resolveFeedGridColumnPreference(
         customizationEnabled = customizationEnabled,
         defaultColumns = defaultColumns,
-        pageColumns = pageColumns[compact],
+        pageColumns = pageColumns[columnScope],
         bounds = bounds,
         minimumColumns = minimumColumns,
     )
     return FeedGridColumnPreference(
         columns = columns,
-        onChange = { pageColumns = pageColumns + (compact to it.coerceIn(bounds)) },
+        onChange = { pageColumns = pageColumns + (columnScope to it.coerceIn(bounds)) },
         onGestureEnd = { finalColumns ->
             val count = finalColumns.coerceIn(bounds)
-            pageColumns = pageColumns + (compact to count)
+            pageColumns = pageColumns + (columnScope to count)
             if (customizationEnabled && settings.gridColumnsSharedAcrossPages) {
                 scope.launch {
-                    if (compact) SettingsManager.setGridColumnCountCompact(context, count)
-                    else SettingsManager.setGridColumnCount(context, count)
+                    when (columnScope) {
+                        FeedGridColumnScope.COMPACT -> SettingsManager.setGridColumnCountCompact(context, count)
+                        FeedGridColumnScope.WIDE_PORTRAIT -> SettingsManager.setGridColumnCountWidePortrait(context, count)
+                        FeedGridColumnScope.WIDE_LANDSCAPE -> SettingsManager.setGridColumnCount(context, count)
+                    }
                 }
             }
         },

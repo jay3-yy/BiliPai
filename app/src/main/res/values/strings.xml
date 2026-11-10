@@ -761,7 +761,10 @@
     <string name="home_settings_display_mode_grid_desc">按屏幕宽度排列多列视频</string>
     <string name="home_settings_display_mode_single">单列视频</string>
     <string name="home_settings_display_mode_single_desc">每行显示一个视频</string>
-    <string name="home_settings_grid_columns_title">宽屏默认列数</string>
+    <string name="home_settings_grid_columns_title">宽屏横屏列数</string>
+    <string name="home_settings_grid_wide_portrait_title">宽屏竖屏列数</string>
+    <string name="home_settings_grid_wide_portrait_summary">平板与展开内屏的竖向窗口使用此值，与宽屏横屏分别保存；窄分屏使用窄屏列数</string>
+    <string name="home_settings_grid_wide_landscape_summary">宽屏横向窗口使用此值，与宽屏竖屏分别保存；固定列数仍受可用内容宽度限制</string>
     <string name="home_settings_grid_columns_adaptive">自适应（默认）；折叠屏外屏与窄屏独立记忆，可用双指缩放调整</string>
     <string name="home_settings_grid_columns_fixed">宽屏固定 %1$d 列；折叠屏外屏与窄屏独立记忆</string>
     <string name="home_settings_grid_columns_auto">自动</string>
@@ -903,7 +906,7 @@
     <string name="animation_indicator_wobble_summary">点按切换与拖动松手时追加形变回弹，仅作用于液态玻璃指示器；关闭后保留原有位移和按压反馈</string>
     <string name="animation_settings_container_blur_summary">容器形变进入与返回时，实时模糊背后的设置页；需 Android 12 及以上</string>
     <string name="home_settings_grid_customization_summary">关闭后恢复各页面自动布局，保留已选列数；不影响单列视频模式</string>
-    <string name="home_settings_grid_share_summary">开启后，支持缩放的列表共用并保存最后列数；关闭后各页独立调整，不互相覆盖。窄屏与宽屏分别记忆</string>
+    <string name="home_settings_grid_share_summary">开启后，支持缩放的列表共用并保存最后列数；关闭后各页独立调整。窄屏、宽屏竖屏与宽屏横屏分别记忆</string>
     <string name="home_settings_grid_default_summary">自动沿用页面布局；固定列数按当前内容宽度限制上限。共用开启时，缩放会更新此值</string>
     <string name="home_settings_grid_customization_title">自定义列表列数</string>
     <string name="home_settings_grid_share_title">跨页面共用列数</string>

@@ -289,6 +289,7 @@ internal enum class SettingsIconRole {
     SPLASH_ANIMATION_STYLE,
     GRID_SHARE_COLUMNS,
     COMPACT_GRID_COLUMNS,
+    WIDE_PORTRAIT_GRID_COLUMNS,
     WIDE_GRID_COLUMNS,
     PINCH_GRID_COLUMNS,
     CARD_COVER_RATIO,
@@ -606,6 +607,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.SPLASH_ANIMATION_STYLE -> R.drawable.ic_settings_splash_animation_24
     SettingsIconRole.GRID_SHARE_COLUMNS -> R.drawable.ic_settings_grid_share_24
     SettingsIconRole.COMPACT_GRID_COLUMNS -> R.drawable.ic_settings_grid_compact_24
+    SettingsIconRole.WIDE_PORTRAIT_GRID_COLUMNS -> R.drawable.ic_settings_grid_wide_portrait_24
     SettingsIconRole.WIDE_GRID_COLUMNS -> R.drawable.ic_settings_grid_wide_24
     SettingsIconRole.PINCH_GRID_COLUMNS -> R.drawable.ic_settings_pinch_grid_24
     SettingsIconRole.CARD_COVER_RATIO -> R.drawable.ms_aspect_ratio_24

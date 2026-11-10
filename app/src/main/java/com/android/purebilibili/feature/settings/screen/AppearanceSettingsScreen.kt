@@ -94,6 +94,7 @@ import com.android.purebilibili.core.ui.setWindowNavigationBarColor
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.core.util.HapticType
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
@@ -1782,11 +1783,30 @@ fun AppearanceSettingsContent(
                             )
                         }
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                        SettingsItemAnchor(com.android.purebilibili.feature.settings.GRID_WIDE_PORTRAIT_SETTING_ID) {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.WIDE_PORTRAIT_GRID_COLUMNS),
+                                title = com.android.purebilibili.feature.settings.settingItemTitle(com.android.purebilibili.feature.settings.GRID_WIDE_PORTRAIT_SETTING_ID, context),
+                                subtitle = context.getString(R.string.home_settings_grid_wide_portrait_summary),
+                                enabled = homeConfiguration.gridColumnCustomizationEnabled,
+                                options = (0..7).map { count ->
+                                    AppSegmentOption(
+                                        value = count,
+                                        label = if (count == 0) context.getString(R.string.home_settings_grid_columns_auto)
+                                        else context.getString(R.string.home_settings_grid_columns_count, count),
+                                    )
+                                },
+                                selectedValue = homeConfiguration.gridColumnCountWidePortrait,
+                                optionLeading = { value -> SettingsOptionPreviewThumb(SettingsOptionPreview.Feed(columns = value)) },
+                                onSelectionChange = { count -> scope.launch { SettingsManager.setGridColumnCountWidePortrait(context, count) } },
+                            )
+                        }
+                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.grid_column_count") {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.WIDE_GRID_COLUMNS),
                                 title = com.android.purebilibili.feature.settings.settingItemTitle("appearance.grid_column_count", context),
-                                subtitle = context.getString(R.string.home_settings_grid_default_summary),
+                                subtitle = context.getString(R.string.home_settings_grid_wide_landscape_summary),
                                 enabled = homeConfiguration.gridColumnCustomizationEnabled,
                                 options = (0..7).map { count ->
                                     AppSegmentOption(
@@ -1806,8 +1826,8 @@ fun AppearanceSettingsContent(
                                 SettingsSingleChoicePreference(
                                     icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_CARD_WIDTH),
                                     title = context.getString(R.string.home_settings_card_width_title),
-                                    subtitle = if (homeConfiguration.gridColumnCustomizationEnabled && homeConfiguration.gridColumnCount > 0) {
-                                        context.getString(R.string.home_settings_card_width_current, homeConfiguration.gridColumnCount)
+                                    subtitle = if (homeConfiguration.gridColumnCustomizationEnabled && homeConfiguration.effectiveGridColumnCountForWindow(windowSizeClass) > 0) {
+                                        context.getString(R.string.home_settings_card_width_current, homeConfiguration.effectiveGridColumnCountForWindow(windowSizeClass))
                                     } else {
                                         context.getString(R.string.home_settings_card_width_auto)
                                     },

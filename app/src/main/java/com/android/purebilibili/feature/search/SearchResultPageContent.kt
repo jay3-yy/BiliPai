@@ -1,7 +1,7 @@
 package com.android.purebilibili.feature.search
 
 import com.android.purebilibili.feature.home.resolveIsVerticalForNavigation
-import com.android.purebilibili.feature.home.effectiveGridColumnCount
+import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
 import com.android.purebilibili.core.ui.AppContentColors
@@ -321,7 +321,7 @@ internal fun SearchResultPageContent(
                     fixedColumnCount = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
                         widthSizeClass = windowSizeClass.widthSizeClass,
                         compactColumnCount = homeSettings.effectiveGridColumnCountCompact,
-                        defaultColumnCount = homeSettings.effectiveGridColumnCount,
+                        defaultColumnCount = homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
                     ),
                     cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
                     widthSizeClass = windowSizeClass.widthSizeClass
