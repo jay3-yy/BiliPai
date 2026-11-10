@@ -11,7 +11,6 @@ import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
-import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavRole
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
@@ -81,22 +80,8 @@ private fun realtimeCoveredBlurTransition(
     maxPreviewFraction: Float,
     motionTierProvider: () -> MotionTier,
 ): NavTransition {
-    return object : NavTransition {
-        override val motion: NavMotion
-            get() = if (progressControlEnabled) {
-                baseTransition.motion
-            } else {
-                NavMotion.Default
-            }
-
-        override fun scrimFraction(scope: NavTransitionScope): Float = if (
-            progressControlEnabled
-        ) {
-            baseTransition.scrimFraction(scope)
-        } else {
-            scope.relativeDepth.coerceIn(0f, 1f)
-        }
-
+    // 仅附加被覆盖页模糊；各样式继续拥有自己的时钟、遮罩及裁剪契约。
+    return object : NavTransition by baseTransition {
         override fun Modifier.transformEntry(scope: NavTransitionScope): Modifier {
             val transformed = with(baseTransition) {
                 this@transformEntry.transformEntry(scope)

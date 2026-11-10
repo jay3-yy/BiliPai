@@ -44,13 +44,18 @@ internal data class VideoCardTransitionSession(
     val hasUsableSourceGeometry: Boolean
         get() = cardBounds != null && (cardFullyVisible || hasCompleteSourcePixels)
 
-    fun refreshedForReturn(): VideoCardTransitionSession =
-        if (sourceAnchor == null) this else withReturnBounds(sourceAnchor.boundsInRoot()).copy(
-            sourceCornerDp = sourceAnchor.cornerRadiusDp() ?: sourceCornerDp,
+    fun refreshedForReturn(): VideoCardTransitionSession {
+        val anchor = sourceAnchor ?: return this
+        val fullyVisibleBounds = anchor.boundsInRoot()
+        // 与进入共用部分可见策略；落位不会使已经完整捕获的整卡像素变成局部截图。
+        val currentBounds = fullyVisibleBounds ?: anchor.boundsInRoot(allowPartial = hasCompleteSourcePixels)
+        return withReturnBounds(currentBounds, fullyVisible = fullyVisibleBounds != null).copy(
+            sourceCornerDp = anchor.cornerRadiusDp() ?: sourceCornerDp,
         )
+    }
 
     /** 封面和信息面保持卡片内的实测相对位置，不重新按宽高比猜测布局。 */
-    internal fun withReturnBounds(current: Rect?): VideoCardTransitionSession {
+    internal fun withReturnBounds(current: Rect?, fullyVisible: Boolean = true): VideoCardTransitionSession {
         val original = cardBounds
         if (current == null || original == null || original.width <= 0f || original.height <= 0f) {
             return copy(cardBounds = null, coverBounds = null, infoBounds = null, cardFullyVisible = false)
@@ -62,7 +67,7 @@ internal data class VideoCardTransitionSession(
             current.top + (bottom - original.top) * current.height / original.height,
         )
         return copy(cardBounds = current, coverBounds = coverBounds?.relocate(),
-            infoBounds = infoBounds?.relocate(), cardFullyVisible = true)
+            infoBounds = infoBounds?.relocate(), cardFullyVisible = fullyVisible)
     }
 
     companion object {

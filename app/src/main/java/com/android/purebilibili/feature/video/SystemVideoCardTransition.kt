@@ -71,6 +71,8 @@ internal object SystemVideoCardTransition {
         val anchor: VideoCardSourceAnchor,
         val thumbnail: Bitmap,
         val windowCoordinates: Boolean,
+        // 打开时完整录制的截图在整个往返期间保留，不依赖落位后是否还持有源图层。
+        val hasCompleteSourcePixels: Boolean,
         val canRefreshBitmap: Boolean,
         val canConfigureBlur: Boolean,
         val canConfigureBackgroundScale: Boolean,
@@ -155,7 +157,7 @@ internal object SystemVideoCardTransition {
         val capability = deviceCapability(activity)
         Logger.i("SystemVideoCardTransition", "系统条件: ${capability.systemConditionSummary ?: "由标准接口判定"}")
         if (!capability.available) return rejected("system_protocol_unavailable ${capability.systemConditionSummary.orEmpty()}")
-        val layer = CardPositionManager.nativeVideoCardLayerFor(source.sourceChromeSnapshot)
+        val layer = CardPositionManager.nativeCardLayerForOwner(owner)
             ?.takeIf { !it.isReleased && it.size.width > 1 && it.size.height > 1 }
         currentCoroutineContext().ensureActive()
         if (!isCurrent() || !CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("request_expired_after_capture")
@@ -204,6 +206,7 @@ internal object SystemVideoCardTransition {
             sourceActivity = WeakReference(activity),
             sourceWindow = sourceWindow,
             anchor, thumbnail, windowCoordinates,
+            hasCompleteSourcePixels = layer != null,
             canRefreshBitmap = extras?.containsKey(ViewAnimationExtras.EXTRA_BITMAP) == true,
             canConfigureBlur = canConfigureBlur,
             canConfigureBackgroundScale = canConfigureBackgroundScale,
@@ -319,14 +322,14 @@ internal object SystemVideoCardTransition {
         val sourceAvailable = sameContent && sameWindow
         // 返回仍复用打开截图；窗口、原实例或截图尺寸变化后均不能提交旧像素落点。
         val currentBounds = if (sourceAvailable && session != null) {
-            session.anchor.bounds(session.windowCoordinates)
+            session.anchor.bounds(session.windowCoordinates, allowPartial = session.hasCompleteSourcePixels)
         } else null
         val bounds = if (session != null) currentBounds?.takeIf {
             it.width() == session.openingBounds.width() && it.height() == session.openingBounds.height()
         } else null
         if (token.startsWith("vivo:")) {
             if (!preparingToFinish || session == null) return
-            // 收回只使用仍完整可见的原卡片；不把新实例或旧尺寸当作返回目标。
+            // 完整录制截图可收回部分可见的原卡片；不把新实例或旧尺寸当作返回目标。
             val returnBounds = bounds
             val sameShape = returnBounds != null &&
                 returnBounds.width() == session.openingBounds.width() &&

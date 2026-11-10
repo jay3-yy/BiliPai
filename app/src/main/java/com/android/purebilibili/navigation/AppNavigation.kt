@@ -1080,7 +1080,7 @@ fun AppNavigation(
             } else null
             // 各来源使用自身实际视口裁剪，不套用首页固定顶栏高度。
             // 完整录制层可还原被视口裁切的整卡；窗口截图来源仍要求完整可见。
-            val sourceLayer = CardPositionManager.nativeVideoCardLayerFor(CardPositionManager.lastClickedVideoSourceChromeSnapshot)
+            val sourceLayer = CardPositionManager.nativeCardLayerForOwner(CardPositionManager.videoCardPixelOwnerFor(source.key))
             val hasCompleteSourcePixels = sourceLayer != null && !sourceLayer.isReleased &&
                 sourceLayer.size.width > 1 && sourceLayer.size.height > 1
             val cardFullyVisible = anchor?.boundsInRoot() != null

@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -28,7 +29,7 @@ internal class SystemWindowCardSource internal constructor(
     fun boundsInRoot(): Rect? = coordinates?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
 
     /** 点击时先于路由跳转调用；未登记成功时调用方继续原窗口内导航。 */
-    fun record(cornerRadiusPx: Float) {
+    fun record(cornerRadiusPx: Float, layer: GraphicsLayer? = null) {
         val bounds = boundsInRoot() ?: return
         CardPositionManager.recordVideoCardPosition(
             bvid = identity,
@@ -39,6 +40,10 @@ internal class SystemWindowCardSource internal constructor(
             density = densityValue,
             sourceCornerDp = cornerRadiusPx.takeIf { it > 0f }
                 ?.let { (it / densityValue).roundToInt() },
+        )
+        // 登记当前点击自己的整卡像素，视口裁切时不从窗口截图补齐被遮挡区域。
+        CardPositionManager.recordNativeCardLayer(
+            layer?.takeIf { !it.isReleased && it.size == coordinates?.size },
         )
     }
 }

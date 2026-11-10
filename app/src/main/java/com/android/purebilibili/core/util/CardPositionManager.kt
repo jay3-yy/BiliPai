@@ -167,6 +167,10 @@ object CardPositionManager {
             ownsVideoCardSourceSnapshot(snapshot, lastClickedVideoSourceChromeSnapshot)
         }
 
+    /** 系统窗口也承接动态、直播等整卡，以当次点击的像素归属校验，无需视频文字快照。 */
+    internal fun nativeCardLayerForOwner(owner: VideoCardPixelOwner?): GraphicsLayer? =
+        lastClickedNativeCardLayer.takeIf { owner != null && owner === nativeResourcesOwner }
+
     internal fun nativeVideoCoverOverlayLayerFor(snapshot: VideoCardSourceChromeSnapshot?): GraphicsLayer? =
         lastClickedNativeCoverOverlayLayer.takeIf {
             ownsVideoCardSourceSnapshot(snapshot, lastClickedVideoSourceChromeSnapshot)

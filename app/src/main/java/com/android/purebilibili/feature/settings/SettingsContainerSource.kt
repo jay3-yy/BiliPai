@@ -12,22 +12,29 @@ import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.unit.IntSize
+import com.android.purebilibili.core.ui.transition.sameVideoCardBounds
+import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 
 /** 坐标只由布局回调更新，不让测量结果反向触发页面组合。 */
-internal class SettingsContainerAnchor {
+internal class SettingsContainerAnchor(val allowPartial: Boolean = false) {
     var coordinates: LayoutCoordinates? = null
     var recorded = false
     var boundsInRoot: Rect? = null
+    var visibleBoundsInRoot: Rect? = null
 
     fun update(value: LayoutCoordinates) {
         coordinates = value
-        boundsInRoot = if (value.isAttached) value.boundsInRoot() else null
+        visibleBoundsInRoot = if (value.isAttached) value.boundsInRoot() else null
+        boundsInRoot = if (value.isAttached) {
+            if (allowPartial) value.videoCardSourceBoundsInRoot() else visibleBoundsInRoot
+        } else null
     }
 
     fun detach() {
         coordinates = null
         boundsInRoot = null
+        visibleBoundsInRoot = null
         recorded = false
     }
 }
@@ -104,11 +111,14 @@ internal class SettingsContainerSources {
         if (!coordinates.isAttached || !anchor.recorded || hostSize == IntSize.Zero) return
         // 点击时再采集一次，与布局回调共用同一份边界，避免缺失实时边界而误降级。
         anchor.update(coordinates)
+        val hasCompletePixels = !layer.isReleased && layer.size == coordinates.size
         val bounds = resolveSettingsContainerCaptureBounds(
             boundsInRoot = anchor.boundsInRoot,
             rowSize = coordinates.size,
             hostOrigin = hostOrigin,
             hostSize = hostSize,
+            allowPartial = anchor.allowPartial && hasCompletePixels,
+            visibleBoundsInRoot = anchor.visibleBoundsInRoot,
         ) ?: return
         sources[target] = SettingsContainerSource(
             anchor, layer, owner, bounds, hostSize, hostOrigin, color, topRadius, bottomRadius,
@@ -120,17 +130,24 @@ internal class SettingsContainerSources {
 internal val LocalSettingsContainerSources = staticCompositionLocalOf<SettingsContainerSources?> { null }
 internal val LocalSettingsContainerOwner = staticCompositionLocalOf<BiliPaiNavKey?> { null }
 
-/** 部分可见或尚未完成布局的行不作为起点，完整行统一转换到导航宿主坐标。 */
+/** 内容卡片有完整录制像素时允许部分可见；设置行保留完整可见要求。 */
 internal fun resolveSettingsContainerCaptureBounds(
     boundsInRoot: Rect?,
     rowSize: IntSize,
     hostOrigin: Offset,
     hostSize: IntSize,
+    allowPartial: Boolean = false,
+    visibleBoundsInRoot: Rect? = boundsInRoot,
 ): Rect? {
     if (boundsInRoot == null || rowSize.width <= 1 || rowSize.height <= 1 ||
         hostSize.width <= 1 || hostSize.height <= 1) return null
     val bounds = boundsInRoot.translate(-hostOrigin)
-    if (bounds.width < rowSize.width - 1f || bounds.height < rowSize.height - 1f ||
+    if (bounds.width < rowSize.width - 1f || bounds.height < rowSize.height - 1f) return null
+    if (allowPartial) {
+        val visible = visibleBoundsInRoot?.translate(-hostOrigin) ?: return null
+        if (minOf(visible.right, hostSize.width.toFloat()) - maxOf(visible.left, 0f) <= 1f ||
+            minOf(visible.bottom, hostSize.height.toFloat()) - maxOf(visible.top, 0f) <= 1f) return null
+    } else if (visibleBoundsInRoot == null || !sameVideoCardBounds(boundsInRoot, visibleBoundsInRoot) ||
         bounds.left < 0f || bounds.top < 0f ||
         bounds.right > hostSize.width || bounds.bottom > hostSize.height) return null
     return bounds

@@ -5,6 +5,7 @@ import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VideoCardReturnGeometryTest {
@@ -27,10 +28,21 @@ class VideoCardReturnGeometryTest {
 
     @Test
     fun missingOriginalCardDisablesMorphInsteadOfReusingClickCoordinates() {
-        val refreshed = session.withReturnBounds(null)
+        val refreshed = session.copy(hasCompleteSourcePixels = true).withReturnBounds(null)
         assertFalse(refreshed.hasUsableSourceGeometry)
         assertNull(refreshed.cardBounds)
         assertNull(refreshed.coverBounds)
         assertNull(refreshed.infoBounds)
+    }
+
+    @Test
+    fun partialReturnKeepsFullGeometryWithoutPretendingTheCardIsFullyVisible() {
+        val refreshed = session.copy(hasCompleteSourcePixels = true)
+            .withReturnBounds(Rect(20f, 840f, 120f, 1040f), fullyVisible = false)
+        assertTrue(refreshed.hasUsableSourceGeometry)
+        assertFalse(refreshed.cardFullyVisible)
+        assertEquals(Rect(20f, 840f, 120f, 900f), refreshed.coverBounds)
+        assertEquals(Rect(20f, 900f, 120f, 1040f), refreshed.infoBounds)
+        assertFalse(refreshed.copy(hasCompleteSourcePixels = false).hasUsableSourceGeometry)
     }
 }
