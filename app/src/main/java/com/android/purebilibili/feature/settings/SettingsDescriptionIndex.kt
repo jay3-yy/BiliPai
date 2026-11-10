@@ -157,6 +157,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "playback.fullscreen_action_counts" to "横屏与竖屏全屏播放时，点赞、评论、收藏按钮右上角显示主题色数量，支持分别关闭；与播放器内设置同步",
     "playback.show_fullscreen_action_items" to "横屏顶部显示点赞/投币/分享等快捷操作；关闭后隐藏横屏顶部互动按钮，保留返回与更多入口",
     "playback.show_fullscreen_battery_level" to "在横屏左上角展示电池图标和电量百分比",
+    "playback.show_center_playback_button" to "横竖屏共用，关闭后在左下角显示播放/暂停按钮",
     "playback.show_fullscreen_lock_button" to "显示锁定按钮，避免误触",
     "playback.show_fullscreen_screenshot_button" to "显示截图按钮，保存视频画面",
     "playback.show_online_count" to "在视频详情和播放器中显示同时观看人数；不影响视频卡片",

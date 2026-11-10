@@ -369,6 +369,7 @@ fun VideoSettingsPanel(
         resolveVideoSettingsPanelActionPolicy(widthDp = configuration.screenWidthDp)
     }
     val scope = rememberCoroutineScope()
+    val hideCenterPlayback = com.android.purebilibili.feature.video.ui.overlay.rememberHideCenterPlayback()
     val visibleActionCounts by remember(context) { FullscreenActionCountSettings.getVisibleCounts(context) }
         .collectAsStateWithLifecycle(initialValue = null)
     val seekForwardSeconds by com.android.purebilibili.core.store.SettingsManager
@@ -484,6 +485,16 @@ fun VideoSettingsPanel(
                                     options = ChapterDisplayMode.entries.map { it.label },
                                 ) { index -> onModeChange(ChapterDisplayMode.entries[index]) }
                             }
+                            PlayerSettingsToggleRow(
+                                title = playbackSettingTitle("playback.show_center_playback_button"),
+                                checked = !hideCenterPlayback,
+                                onCheckedChange = { visible ->
+                                    scope.launch {
+                                        com.android.purebilibili.core.store.player.PlayerSettingsStore
+                                            .setHideCenterPlayback(context, !visible)
+                                    }
+                                },
+                            )
                             PlayerSettingsRow("重载视频") { dismissWithAction(onReload) }
                             PlayerSettingsRow(
                                 "画质增强",

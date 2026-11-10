@@ -66,6 +66,7 @@ internal object SystemVideoCardTransition {
 
     private class Session(
         val openingBvid: String,
+        val sourceRoute: String?,
         val sourceActivity: WeakReference<ComponentActivity>,
         val sourceWindow: WindowGeometry,
         val anchor: VideoCardSourceAnchor,
@@ -203,6 +204,7 @@ internal object SystemVideoCardTransition {
         val session = Session(
             // 内容卡使用来源身份；非视频窗口的播放请求没有视频编号。
             openingBvid = source.bvid,
+            sourceRoute = source.sourceRoute,
             sourceActivity = WeakReference(activity),
             sourceWindow = sourceWindow,
             anchor, thumbnail, windowCoordinates,
@@ -419,6 +421,14 @@ internal object SystemVideoCardTransition {
     fun release(token: String?) {
         if (token != null) sessions.remove(token)
         if (latestWindowRequestToken == token) latestWindowRequestToken = null
+    }
+
+    /** 首页来源保持同一窗口和卡片，不通过重新启动首页破坏系统返回会话。 */
+    fun returnsDirectlyToHome(activity: VideoActivity): Boolean {
+        val token = activity.intent.getStringExtra(EXTRA_SESSION) ?: return false
+        val session = sessions[token] ?: return false
+        return session.sourceRoute == com.android.purebilibili.navigation.ScreenRoutes.Home.route &&
+            session.sourceActivity.get() is com.android.purebilibili.MainActivity
     }
 
     fun afterFinish(activity: VideoActivity) {

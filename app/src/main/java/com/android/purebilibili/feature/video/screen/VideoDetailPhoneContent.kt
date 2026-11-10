@@ -132,7 +132,8 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     onShowExternalPlaylistQueueSheet: () -> Unit,
     commentThreadCoveredBlurProgressProvider: () -> Float = { 0f },
     commentPullToRefreshEnabled: Boolean = true,
-    animateLateEntryContent: Boolean = false,
+    contentReveal: androidx.compose.runtime.State<Float>,
+    skeletonPulse: androidx.compose.runtime.State<Float>,
     deferFreshEntryContent: Boolean = false,
     navigationOwnsEntryMotion: Boolean = false,
     commentPagePreloadReady: Boolean = true,
@@ -159,10 +160,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
         // 正文被入场门控拦住时骨架垫底必须撑住（Loading 骨架此刻已卸载），
         // 否则骨架结束到正文放行之间是一段纯黑空窗。
         val holdSkeletonUnderlay = !detailContentVisible && !isLeaving
-        val lateContentReveal = rememberVideoDetailLateContentReveal(
-            animateOnMount = animateLateEntryContent,
-            contentVisible = detailContentVisible,
-        )
+        val lateContentReveal = contentReveal
         val showLoadingUnderlay by remember(detailContentVisible, isLeaving) {
             derivedStateOf { holdSkeletonUnderlay || lateContentReveal.value < 1f }
         }
@@ -176,14 +174,11 @@ internal fun VideoDetailPhoneSuccessContentLayer(
             Box(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // Only late arrival adds an opacity handoff; root geometry and the
-                // glass / MD3 / Miuix layouts stay unchanged. Drop the static underlay
-                // once complete instead of leaving an invisible skeleton mounted.
+                // 加载骨架与交接垫底共用扫光；正文完全覆盖后卸载，保留各材质布局。
                 if (showLoadingUnderlay) {
-                    Box(Modifier.fillMaxSize().graphicsLayer {
-                        alpha = if (holdSkeletonUnderlay) 1f else 1f - lateContentReveal.value
-                    }) {
-                        VideoDetailSkeleton(animated = false)
+                    // 正文在不透明骨架上淡入，避免两层同时降透明度时透出底色。
+                    Box(Modifier.fillMaxSize()) {
+                        VideoDetailSkeleton(sharedPulse = skeletonPulse)
                     }
                 }
                 val detailContentRevealEnter = fadeIn(

@@ -873,8 +873,17 @@ private fun VideoPlayerOverlayContent(
     val viewportIsLandscape = playerBoundsInWindow?.let { it.width > it.height }
         ?: (configuration.screenWidthDp > configuration.screenHeightDp)
     // 竖屏页面的内嵌视频与竖屏全屏共用精简策略；宽屏视频视口不能代表页面方向。
+    val hideCenterPlayback = rememberHideCenterPlayback()
     val simplifiedPortraitChrome = if (isFullscreen) !viewportIsLandscape else
         configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+    // 折叠工具栏复用播放器更多菜单；打开后消费请求，关闭菜单或重建控件不重复弹出。
+    val consumeMoreMenuRequest by rememberUpdatedState(actions.onMoreMenuRequestConsumed)
+    LaunchedEffect(state.moreMenuRequested) {
+        if (state.moreMenuRequested) {
+            if (simplifiedPortraitChrome) showPortraitMore = true else showVideoSettings = true
+            consumeMoreMenuRequest()
+        }
+    }
     // 仅播放器玻璃开启时采用三键竖向 dock；菜单路由不依赖弹窗自身的材质开关。
     val usePortraitGlassDock = simplifiedPortraitChrome && isFullscreen && LocalPlayerControlGlassEnabled.current
     var showInsightDetails by remember(player, bvid, cid) { mutableStateOf(false) }
@@ -1731,6 +1740,9 @@ private fun VideoPlayerOverlayContent(
                 ) {
                     key(player, bvid, cid) {
                         BottomControlBar(
+                            showPlayPauseButton = hideCenterPlayback,
+                            isPlaying = effectiveIsPlaying,
+                            onPlayPauseClick = { togglePlayPause() },
                             simplifiedPortrait = simplifiedPortraitChrome,
                             menuRequest = portraitControlMenuRequest,
                             onMenuRequestConsumed = { portraitControlMenuRequest = null },
@@ -2033,7 +2045,7 @@ private fun VideoPlayerOverlayContent(
             }
         }
 
-        val showCenterPlaybackControl = showPlayerChrome &&
+        val showCenterPlaybackControl = !hideCenterPlayback && showPlayerChrome &&
             (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY ||
                 player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED) &&
             !isSeekScrubbing && !endDrawerVisible && !landscapeCommentPanelVisible && !showInsightDetails

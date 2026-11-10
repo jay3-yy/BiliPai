@@ -220,8 +220,14 @@ fun BottomControlBar(
     simplifiedPortrait: Boolean = false,
     menuRequest: PlayerControlAnchor? = null,
     onMenuRequestConsumed: () -> Unit = {},
+    showPlayPauseButton: Boolean = false,
+    isPlaying: Boolean = false,
+    onPlayPauseClick: () -> Unit = {},
 ) {
     val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
+    // 玻璃时间和文字胶囊对齐圆形按钮；MD3、Miuix 保留原生 30dp 控件高度。
+    val controlContentHeight = if (glass) PlayerGlassIconButtonSize else 30.dp
+
     val menuSources = PlayerControlAnchor.entries.associateWith {
         com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource()
     }
@@ -317,11 +323,24 @@ fun BottomControlBar(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp).height(PILI_PLAYER_BOTTOM_ROW_HEIGHT_DP.dp)
                     .testTag("player_control_row"),
                 left = {
+                    if (showPlayPauseButton) {
+                        PlayerControlIconAction(
+                            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            description = if (isPlaying) "暂停播放" else "开始播放",
+                            width = slotWidth,
+                            height = 30.dp,
+                            onClick = onPlayPauseClick,
+                            modifier = Modifier.testTag("player_play_pause"),
+                        )
+                    }
                     PlayerControlGlassDock(enabled = glass, shape = androidx.compose.foundation.shape.RoundedCornerShape(50)) {
                         ProgressTimeText(
                             positionProvider = displayPosition,
                             durationProvider = { progressProvider().duration },
-                            modifier = Modifier.padding(horizontal = 8.dp).testTag("player_time_viewport"),
+                            modifier = Modifier
+                                .heightIn(min = controlContentHeight)
+                                .padding(horizontal = 8.dp)
+                                .testTag("player_time_viewport"),
                         )
                     }
                     if (!simplifiedPortrait && hasEpisodeEntry) {
@@ -341,6 +360,7 @@ fun BottomControlBar(
                     // 竖屏内嵌控制栏优先提供画质入口，热度曲线仍按原设置绘制。
                     if (showInlineQuality) {
                         PlayerControlTextAction(
+                            height = controlContentHeight,
                             text = currentQualityLabel.ifBlank { "画质" },
                             description = "画质",
                             onClick = onQualityClick,
@@ -356,6 +376,7 @@ fun BottomControlBar(
                     }
                     if (!simplifiedPortrait && anime4kAvailable) {
                         PlayerControlTextAction(
+                            height = controlContentHeight,
                             text = if (!anime4kEnabled) "禁用" else if (anime4kPreset == Anime4KPreset.FAST) "效率" else "画质",
                             description = "超分辨率",
                             modifier = anchor(PlayerControlAnchor.ENHANCEMENT, "player_enhancement_action"),
@@ -380,6 +401,7 @@ fun BottomControlBar(
                     }
                     if (!simplifiedPortrait && showExtendedOptions) {
                         PlayerControlTextAction(
+                            height = controlContentHeight,
                             text = currentRatio.displayName, description = "画面比例", onClick = onRatioClick,
                             modifier = anchor(PlayerControlAnchor.RATIO, "player_ratio_action"),
                         )
@@ -403,6 +425,7 @@ fun BottomControlBar(
                         )
                     }
                     PlayerControlTextAction(
+                        height = controlContentHeight,
                         text = "${currentSpeed}X", description = "倍速", onClick = onSpeedClick,
                         modifier = anchor(PlayerControlAnchor.SPEED, "player_speed_action"),
                     )
@@ -410,6 +433,7 @@ fun BottomControlBar(
                     if (!isFullscreen && LocalConfiguration.current.orientation == Configuration.ORIENTATION_PORTRAIT) {
                         onPortraitFullscreen?.let { enterPortrait ->
                             PlayerControlTextAction(
+                                height = controlContentHeight,
                                 text = "竖屏", description = "竖屏播放", onClick = enterPortrait,
                                 modifier = Modifier.testTag("player_portrait_fullscreen"),
                             )
@@ -417,6 +441,7 @@ fun BottomControlBar(
                     }
                     if (!showInlineQuality && (simplifiedPortrait || showExtendedOptions) && currentQualityLabel.isNotEmpty()) {
                         PlayerControlTextAction(
+                            height = controlContentHeight,
                             text = currentQualityLabel, description = "画质", onClick = onQualityClick,
                             modifier = anchor(PlayerControlAnchor.QUALITY, "player_quality_action"),
                         )

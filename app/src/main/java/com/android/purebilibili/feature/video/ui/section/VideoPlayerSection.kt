@@ -33,7 +33,6 @@ import com.android.purebilibili.feature.video.danmaku.resolveDanmakuCloudSyncSta
 import com.android.purebilibili.feature.video.danmaku.resolveDanmakuCloudSyncStateAfterStarted
 import com.android.purebilibili.feature.video.danmaku.shouldRunDanmakuManualCloudSync
 import com.android.purebilibili.feature.video.danmaku.filterVisibleCommandDanmakuItems
-import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.viewmodel.CommentSubjectKey
@@ -94,7 +93,6 @@ import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.video.progress.PbpProgressData
 import com.android.purebilibili.feature.video.ui.overlay.HotDanmakuBar
 import com.android.purebilibili.feature.video.progress.buildPbpRidgeSamples
-import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 
 import android.app.Activity
 import android.content.Context
@@ -4345,15 +4343,18 @@ private fun VideoPlayerSectionContent(
         },
         modifier = Modifier.zIndex(coverLayerZIndex)
     ) {
-        // Keep the per-frame color read inside the cover subtree, away from PlayerView.
-        val coverRevealPolishProgress by animateFloatAsState(
-            targetValue = if (isSurfaceRevealSettling) 0f else 1f,
-            animationSpec = tween(revealMotionSpec.surfaceRevealDurationMillis),
-            label = "coverRevealPolish",
-        )
-        val coverRevealColorFilter = remember(coverRevealPolishProgress) {
-            resolveVideoPlayerCoverRevealColorFilter(coverRevealPolishProgress)
-        }
+        // 普通导航只保留视频面与封面的透明度交接，不再逐帧调色和重组封面。
+        // 卡片形变保留原有揭开效果；此边界与玻璃、MD3、Miuix 材质无关。
+        val coverRevealColorFilter = if (transitionEnabled) {
+            val coverRevealPolishProgress by animateFloatAsState(
+                targetValue = if (isSurfaceRevealSettling) 0f else 1f,
+                animationSpec = tween(revealMotionSpec.surfaceRevealDurationMillis),
+                label = "coverRevealPolish",
+            )
+            remember(coverRevealPolishProgress) {
+                resolveVideoPlayerCoverRevealColorFilter(coverRevealPolishProgress)
+            }
+        } else null
         val coverCardShape = RoundedCornerShape(
             resolveVideoPlayerCoverCornerDp(
                 sourceCornerDp = videoSharedTransitionVisualSpec.sourceCornerDp,
@@ -4476,7 +4477,9 @@ private fun VideoPlayerSectionContent(
                     )
                 }
 
-                if (entryPresentationSpec.showManualStartPlayButton) {
+                if (entryPresentationSpec.showManualStartPlayButton &&
+                    !com.android.purebilibili.feature.video.ui.overlay.rememberHideCenterPlayback()
+                ) {
                     if (manualStartPlayButtonLayoutSpec.showCoverScrim) {
                         Box(
                             modifier = Modifier
@@ -4557,8 +4560,7 @@ private fun VideoPlayerSectionContent(
             // Portrait fullscreen owns a separate pager host. Inline/landscape layers keep
             // video-relative geometry, especially authored advanced/BAS coordinates.
 
-            //  [修复] 移除 key(isFullscreen)，避免横竖屏切换时重建 DanmakuView 导致弹幕消失
-            // 使用 remember 保存 DanmakuView 引用，在 update 回调中处理尺寸变化
+            // 玻璃、MD3 与 Miuix 共用可复用弹幕视图；全屏切换仅更新视口和字体。
             val viewportAspectRatio = if (liquidGlassLayoutEnabled && !isFullscreen) VideoAspectRatio.FIT else currentAspectRatio
             BoxWithConstraints(
                 modifier = playerContentModifier
@@ -4587,49 +4589,13 @@ private fun VideoPlayerSectionContent(
                     )
                 }
                 DanmakuViewportHost(danmakuSurfaceModifier) { viewport ->
-                key(danmakuManager) {
-                    AndroidView(
-                        factory = { ctx ->
-                            DanmakuRenderView(ctx).apply {
-                                danmakuManager.useFullscreenTextSize = useFullscreenDanmakuBaseline
-                                danmakuManager.updateViewport(viewport)
-                                addOnLayoutChangeListener { view, _, _, _, _, _, _, _, _ ->
-                                    if (view.width > 0 && view.height > 0) danmakuManager.attachView(this)
-                                }
-                                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                configureAsPassiveDanmakuOverlay()
-                                danmakuManager.setRenderingPaused(this, suppressTransientOverlaysForTransition)
-                                danmakuManager.attachView(this)
-                                Logger.d("VideoPlayerSection") {
-                                    "DanmakuView (RenderEngine) created, isFullscreen=$isFullscreen"
-                                }
-                            }
-                        },
-                        update = { view ->
-                            danmakuManager.setRenderingPaused(view, suppressTransientOverlaysForTransition)
-                            danmakuManager.updateViewport(viewport)
-                            //  [关键] 横竖屏切换后视图尺寸变化时，重新 attachView 确保弹幕正确显示
-                            Logger.d("VideoPlayerSection") {
-                                "DanmakuView update: size=${view.width}x${view.height}, isFullscreen=$isFullscreen"
-                            }
-                            danmakuManager.useFullscreenTextSize = useFullscreenDanmakuBaseline
-                            // 只有当视图有有效尺寸时才 re-attach
-                            if (view.width > 0 && view.height > 0) {
-                                val sizeTag = "${view.width}x${view.height}"
-                                if (view.tag != sizeTag) {
-                                    view.tag = sizeTag
-                                    danmakuManager.attachView(view)
-                                }
-                            }
-                        },
-                        onRelease = { view ->
-                            // 仅当本 view 仍是当前绑定的弹幕视图时才解绑；
-                            // 相关推荐跳转后旧页面销毁不能清掉新页面已接管的 view/controller。
-                            danmakuManager.detachView(view)
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
+                VideoDanmakuRenderSurface(
+                    manager = danmakuManager,
+                    viewport = viewport,
+                    useFullscreenTextSize = useFullscreenDanmakuBaseline,
+                    renderingPaused = suppressTransientOverlaysForTransition,
+                    modifier = Modifier.fillMaxSize(),
+                )
                 // Above the passive renderer, below BAS links and interactive command danmaku.
                 PlayerGestureInputSurface(modifier = Modifier.fillMaxSize())
                 com.android.purebilibili.feature.video.ui.overlay.AdvancedDanmakuOverlay(
@@ -5327,6 +5293,7 @@ private fun VideoPlayerSectionContent(
                     uiState.withEngagementUiState(it)
                 } ?: uiState
                 val overlayState = VideoPlayerOverlayState(
+                    moreMenuRequested = state.moreMenuRequested,
                     player = playerState.player,
                     title = uiState.info.title,
                     // [修复] 竖屏全屏模式下隐藏底部 Overlay，避免进度状态冲突
@@ -5507,6 +5474,7 @@ private fun VideoPlayerSectionContent(
                     landscapeCommentCloseProgressProvider = state.landscapeCommentCloseProgressProvider,
                 )
                 val overlayActions = VideoPlayerOverlayActions(
+                    onMoreMenuRequestConsumed = actions.onMoreMenuRequestConsumed,
                     onToggleVisible = { showControls = !showControls },
                     onQualitySelected = { index ->
                         val id = uiState.qualityIds.getOrNull(index) ?: 0

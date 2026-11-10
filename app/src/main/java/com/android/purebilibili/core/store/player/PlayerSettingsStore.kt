@@ -39,6 +39,7 @@ object PlayerSettingsStore {
     private val keyPreferredPlayerVolume = floatPreferencesKey("preferred_player_volume")
     private val keyPlayerInsightMode = stringPreferencesKey("player_insight_mode")
     private val keyNativeMiuixPlayerPopups = booleanPreferencesKey("native_miuix_player_popups")
+    // 沿用已有存储键，保留用户显式选择；现用于所有播放器材质。
     private val keyHideGlassCenterPlayback = booleanPreferencesKey("hide_glass_center_playback")
     private const val playbackSpeedCachePrefs = "playback_speed_cache"
     private const val cacheKeyDefaultPlaybackSpeed = "default_speed"
@@ -54,10 +55,10 @@ object PlayerSettingsStore {
 
     const val PLAYER_VOLUME_STEP = 0.02f
 
-    fun getHideGlassCenterPlayback(context: Context): Flow<Boolean> =
-        context.settingsDataStore.data.map { it[keyHideGlassCenterPlayback] ?: false }
+    fun getHideCenterPlayback(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[keyHideGlassCenterPlayback] ?: true }
 
-    suspend fun setHideGlassCenterPlayback(context: Context, hidden: Boolean) {
+    suspend fun setHideCenterPlayback(context: Context, hidden: Boolean) {
         context.settingsDataStore.edit { it[keyHideGlassCenterPlayback] = hidden }
     }
 

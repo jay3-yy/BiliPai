@@ -14,6 +14,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -25,6 +29,16 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.motion.continuityTween
+
+/** 横竖屏和各材质读取同一份选择；设置未到达时也默认隐藏中央按钮。 */
+@Composable
+internal fun rememberHideCenterPlayback(): Boolean {
+    val context = LocalContext.current
+    val hidden by remember(context) {
+        com.android.purebilibili.core.store.player.PlayerSettingsStore.getHideCenterPlayback(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
+    return hidden
+}
 
 /** The central play/pause target follows the visibility of the rest of the player controls. */
 @Composable

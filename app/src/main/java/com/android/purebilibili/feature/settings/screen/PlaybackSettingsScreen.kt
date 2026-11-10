@@ -2463,6 +2463,9 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
         val fullscreenGestureReverse = playerConfiguration.fullscreenGestureReverse
         val autoEnterFullscreen = playerConfiguration.autoEnterFullscreenEnabled
         val autoExitFullscreen = playerConfiguration.autoExitFullscreenEnabled
+        val hideCenterPlayback by remember(context) {
+            com.android.purebilibili.core.store.player.PlayerSettingsStore.getHideCenterPlayback(context)
+        }.collectAsStateWithLifecycle(initialValue = true)
         val showFullscreenLockButton by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenLockButton(context) }.collectAsStateWithLifecycle(initialValue = true)
         val showFullscreenScreenshotButton by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenScreenshotButton(context) }.collectAsStateWithLifecycle(initialValue = true)
         val appGestureScreenshotEnabled by remember(context) { SettingsManager.getAppGestureScreenshotEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
@@ -2875,6 +2878,22 @@ SettingsItemAnchor("playback.video_ambient_settings.power_saving") {
                             .setAutoExitFullscreenMode(context, mode)
                     }
                 },
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor("playback.show_center_playback_button") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.PLAYBACK),
+                title = playbackSettingTitle("playback.show_center_playback_button"),
+                subtitle = "横竖屏共用，关闭后在左下角显示播放/暂停按钮",
+                checked = !hideCenterPlayback,
+                onCheckedChange = { visible ->
+                    scope.launch {
+                        com.android.purebilibili.core.store.player.PlayerSettingsStore
+                            .setHideCenterPlayback(context, !visible)
+                    }
+                },
+                iconTint = AppContentColors.secondaryText(),
             )
         }
         AppPreferenceDivider()

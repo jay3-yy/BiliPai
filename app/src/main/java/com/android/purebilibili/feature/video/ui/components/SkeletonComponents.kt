@@ -43,6 +43,7 @@ private val LocalVideoSkeletonAnimationAllowed = staticCompositionLocalOf { true
 fun ShimmerContainer(
     modifier: Modifier = Modifier,
     animated: Boolean = true,
+    sharedPulse: androidx.compose.runtime.State<Float>? = null,
     content: @Composable () -> Unit
 ) {
     val animationGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
@@ -50,7 +51,7 @@ fun ShimmerContainer(
     )
     val animationAllowed = animated && LocalVideoSkeletonAnimationAllowed.current
     val pulse = if (animationAllowed) {
-        LocalVideoSkeletonPulse.current ?: com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
+        sharedPulse ?: LocalVideoSkeletonPulse.current ?: com.android.purebilibili.core.ui.skeleton.rememberSkeletonSweepState(
             animated = animationGate.active,
         )
     } else {
@@ -89,10 +90,14 @@ fun SkeletonCircle(size: Dp = 48.dp) {
  *  视频详情页内容骨架屏（不包含播放器区域）
  */
 @Composable
-fun VideoDetailSkeleton(animated: Boolean = true) {
+fun VideoDetailSkeleton(
+    animated: Boolean = true,
+    sharedPulse: androidx.compose.runtime.State<Float>? = null,
+) {
     ShimmerContainer(
         modifier = Modifier.fillMaxSize(),
         animated = animated,
+        sharedPulse = sharedPulse,
     ) {
         Column(
             modifier = Modifier

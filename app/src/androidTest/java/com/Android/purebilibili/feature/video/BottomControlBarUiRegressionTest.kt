@@ -37,6 +37,55 @@ class BottomControlBarUiRegressionTest {
     @get:Rule val rule = createComposeRule()
 
     @Test
+    fun replacementPlaybackButtonTogglesAndDisappearsWhenCenterControlIsRestored() {
+        val playing = mutableStateOf(false)
+        val showReplacement = mutableStateOf(true)
+        val landscape = mutableStateOf(false)
+        val glass = mutableStateOf(false)
+        val style = mutableStateOf(AppUiStyle.MATERIAL3)
+        rule.setContent {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val density = LocalDensity.current.density * maxWidth.value / 900f
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density, 1f),
+                    LocalAppUiStyle provides style.value,
+                    LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glass.value),
+                ) {
+                    MaterialTheme { MiuixTheme {
+                        BottomControlBar(
+                            modifier = Modifier.width(if (landscape.value) 840.dp else 320.dp),
+                            isFullscreen = landscape.value,
+                            viewportIsLandscape = landscape.value,
+                            viewportWidthDpOverride = if (landscape.value) 840 else 320,
+                            showPlayPauseButton = showReplacement.value,
+                            isPlaying = playing.value,
+                            onPlayPauseClick = { playing.value = !playing.value },
+                            onSeek = {}, onToggleFullscreen = {},
+                        )
+                    } }
+                }
+            }
+        }
+        for (uiStyle in AppUiStyle.entries) {
+            for (wide in listOf(false, true)) {
+                for (useGlass in listOf(false, true)) {
+                    rule.runOnIdle {
+                        style.value = uiStyle
+                        landscape.value = wide
+                        glass.value = useGlass
+                        playing.value = false
+                        showReplacement.value = true
+                    }
+                    rule.onNodeWithContentDescription("开始播放").assertIsDisplayed().performClick()
+                    rule.onNodeWithContentDescription("暂停播放").assertIsDisplayed().performClick()
+                    rule.runOnIdle { assertTrue(!playing.value); showReplacement.value = false }
+                    rule.onNodeWithTag("player_play_pause").assertDoesNotExist()
+                }
+            }
+        }
+    }
+
+    @Test
     fun seekPreviewStaysAboveTrackWithoutMovingControlsAcrossOrientationsAndMaterials() {
         val scrubbing = mutableStateOf(false)
         val landscape = mutableStateOf(false)

@@ -351,8 +351,12 @@ open class VideoActivity : ComponentActivity() {
                 ProvideAppThemeConfig(config = appThemeConfig) {
                 ProvideRuntimeVisualGuard(widthSizeClass = windowWidthSizeClass) {
                 com.android.purebilibili.core.ui.blur.ProvideUnifiedBlurIntensity {
+                // 独立播放窗口必须读取女仆开关，不能依赖 CompositionLocal 默认值。
+                com.android.purebilibili.core.ui.MaidLottieAnimationSettingsHost {
                 ProvideAppTextSelectionHost {
                 CompositionLocalProvider(
+                    com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer provides
+                        com.android.purebilibili.core.ui.blur.rememberWindowProgressiveBlurRenderer(),
                     // 整卡留给窗口开合；播放器首帧只使用实测封面区域。
                     LocalVideoDetailOpeningSeed provides SystemVideoCardTransition.peekOpeningSeed(
                         intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
@@ -408,19 +412,24 @@ open class VideoActivity : ComponentActivity() {
                     initialVideoRoute = request.toInitialRoute(),
                     videoActivityPlaybackActive = playbackWindowActive,
                     onVideoActivityHome = {
-                        updateOfficialReturnContent(null)
-                        intent.removeExtra("video_parent_is_video")
-                        startActivity(Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,
-                                com.android.purebilibili.navigation.ScreenRoutes.Home.route)
-                        })
-                        finish()
+                        if (SystemVideoCardTransition.returnsDirectlyToHome(this@VideoActivity)) {
+                            finish()
+                        } else {
+                            updateOfficialReturnContent(null)
+                            intent.removeExtra("video_parent_is_video")
+                            startActivity(Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                putExtra(com.android.purebilibili.EXTRA_PENDING_NAVIGATION_ROUTE,
+                                    com.android.purebilibili.navigation.ScreenRoutes.Home.route)
+                            })
+                            finish()
+                        }
                     },
                     miniPlayerManager = MiniPlayerManager.getInstance(this@VideoActivity),
                     isInPipMode = isInPipMode ||
                         MiniPlayerManager.getInstance(this@VideoActivity).shouldKeepPlaybackForPipTransition(),
                 )
+                }
                 }
                 }
                 }

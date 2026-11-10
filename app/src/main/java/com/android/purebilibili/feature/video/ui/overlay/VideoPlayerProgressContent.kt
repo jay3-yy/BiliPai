@@ -14,11 +14,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -118,13 +120,24 @@ internal fun ProgressTimeText(
     val seconds by remember(positionProvider) { derivedStateOf { positionProvider() / 1000L } }
     val durationSeconds by remember(durationProvider) { derivedStateOf { durationProvider() / 1000L } }
     val duration = FormatUtils.formatDuration(durationSeconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-    val style = TextStyle(fontSize = 10.sp, lineHeight = 14.sp, fontFamily = FontFamily.Monospace, fontFeatureSettings = "tnum")
+    val style = TextStyle(
+        fontSize = 10.sp,
+        lineHeight = 12.sp,
+        fontWeight = FontWeight.Medium,
+        fontFamily = FontFamily.Default,
+        fontFeatureSettings = "tnum",
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+    )
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val width = remember(duration, measurer, density) {
         with(density) { measurer.measure(duration, style).size.width.toDp() }
     }
-    Column(modifier.width(width), horizontalAlignment = Alignment.End) {
+    Column(
+        modifier = modifier.width(width),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.Center,
+    ) {
         AppText(
             text = FormatUtils.formatDuration(seconds.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()),
             color = Color.White, style = style, textAlign = TextAlign.End,

@@ -1783,7 +1783,7 @@ private fun VideoPlayerOverlayContent(
         val centerPlaybackSupported = (isFullscreen ||
             configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) &&
             com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-        val hideCenterPlayback = if (centerPlaybackSupported) rememberHideGlassCenterPlayback() else true
+        val hideCenterPlayback = if (centerPlaybackSupported) rememberHideCenterPlayback() else true
         val showCenterPlaybackControl = centerPlaybackSupported && !hideCenterPlayback && showPlayerChrome &&
             (pluginPlaybackStatus.first || player.playbackState == Player.STATE_READY ||
                 player.playbackState == Player.STATE_BUFFERING || player.playbackState == Player.STATE_ENDED) &&

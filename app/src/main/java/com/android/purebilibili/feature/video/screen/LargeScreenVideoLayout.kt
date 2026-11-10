@@ -194,80 +194,96 @@ internal fun LargeScreenVideoLayout(
             )
         }
         val intro: @Composable (Modifier) -> Unit = { modifier ->
-            if (success != null) {
-                TabletVideoInfoPane(
-                    currentPositionMsProvider = { playerState.player.currentPosition },
-                    success = success,
-                    engagementState = engagementState,
-                    downloadProgress = downloadProgress,
-                    playbackActions = playbackActions,
-                    engagementActions = engagementActions,
-                    onBgmClick = onBgmClick,
-                    onRelatedVideoClick = onRelatedVideoClick,
-                    onOpenBilibiliLink = onOpenBilibiliLink,
-                    danmakuEnabled = danmakuChrome.enabled,
-                    onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
-                    onDanmakuToggle = danmakuChrome.onToggle,
-                    onOwnerUploadsClick = {
-                        success.info.owner.mid.takeIf { it > 0L }?.let(onUpClick)
-                    },
-                    videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
-                    videoNoteEnabled = videoNoteEnabled,
-                    videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
-                    modifier = modifier.videoDetailTransitionChrome(transitionChromeAlphaProvider),
-                    showRelatedVideos = showRelatedInIntro,
-                    showSupportingInfo = metrics.mode == LargeScreenVideoLayoutMode.VerticalThreePane,
-                    onSearchKeywordClick = onSearchKeywordClick,
-                )
-            } else if (uiState is VideoPlaybackUiState.Loading) {
-                com.android.purebilibili.feature.video.ui.components.VideoDetailInfoPaneSkeleton(
-                    modifier = modifier.videoDetailTransitionChrome(transitionChromeAlphaProvider),
-                )
+            VideoDetailSkeletonHandoff(
+                identity = bvid,
+                ready = success != null,
+                loading = success == null && uiState is VideoPlaybackUiState.Loading,
+                modifier = modifier.videoDetailTransitionChrome(transitionChromeAlphaProvider),
+                skeleton = {
+                    com.android.purebilibili.feature.video.ui.components.VideoDetailInfoPaneSkeleton(
+                        Modifier.fillMaxSize(),
+                    )
+                },
+            ) {
+                if (success != null) {
+                    TabletVideoInfoPane(
+                        currentPositionMsProvider = { playerState.player.currentPosition },
+                        success = success,
+                        engagementState = engagementState,
+                        downloadProgress = downloadProgress,
+                        playbackActions = playbackActions,
+                        engagementActions = engagementActions,
+                        onBgmClick = onBgmClick,
+                        onRelatedVideoClick = onRelatedVideoClick,
+                        onOpenBilibiliLink = onOpenBilibiliLink,
+                        danmakuEnabled = danmakuChrome.enabled,
+                        onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
+                        onDanmakuToggle = danmakuChrome.onToggle,
+                        onOwnerUploadsClick = {
+                            success.info.owner.mid.takeIf { it > 0L }?.let(onUpClick)
+                        },
+                        videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
+                        videoNoteEnabled = videoNoteEnabled,
+                        videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
+                        modifier = Modifier.fillMaxSize(),
+                        showRelatedVideos = showRelatedInIntro,
+                        showSupportingInfo = metrics.mode == LargeScreenVideoLayoutMode.VerticalThreePane,
+                        onSearchKeywordClick = onSearchKeywordClick,
+                    )
+                }
             }
         }
         val side: @Composable (Boolean) -> Unit = { includeIntro ->
             Box(Modifier.fillMaxSize().videoDetailTransitionChrome(transitionChromeAlphaProvider)) {
-                if (success != null) {
-                    TabletSecondaryContent(
-                        success = success,
-                        commentStateHandle = commentStateHandle,
-                        subReplyStateHandle = subReplyStateHandle,
-                        playbackActions = playbackActions,
-                        engagementState = engagementState,
-                        engagementActions = engagementActions,
-                        commentActions = commentActions,
-                        playerState = playerState,
-                        onUpClick = onUpClick,
-                        paneMode = TabletSecondaryPaneMode.EXPANDED,
-                        onPaneModeChange = {},
-                        onRelatedVideoClick = onRelatedVideoClick,
-                        onSearchKeywordClick = onSearchKeywordClick,
-                        showUpBadge = showUpBadge,
-                        showIdentityDecorations = commentMemberDecorationsEnabled,
-                        onOpenBilibiliLink = onOpenBilibiliLink,
-                        externalQueueTitle = externalQueueTitle,
-                        externalQueueContent = externalQueueContent,
-                        requestedTabName = null,
-                        onRequestedTabConsumed = {},
-                        danmakuEnabled = danmakuChrome.enabled,
-                        onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
-                        onDanmakuToggle = danmakuChrome.onToggle,
-                        introContent = if (includeIntro) {
-                            { intro(Modifier.fillMaxSize()) }
-                        } else {
-                            null
-                        },
-                        applyStatusBarPadding = applySideStatusBarPadding,
-                        includeRelatedTab = includeRelatedTab,
-                        includeOwnerUploadsTab = true,
-                        relatedTabFirst = relatedTabFirst,
-                    )
-                } else if (uiState is VideoPlaybackUiState.Loading) {
-                    com.android.purebilibili.feature.video.ui.components.VideoDetailSecondaryPaneSkeleton(
-                        showComments = !relatedTabFirst || !includeRelatedTab,
-                        modifier = Modifier.fillMaxSize(),
-                        showIntro = includeIntro,
-                    )
+                VideoDetailSkeletonHandoff(
+                    identity = bvid,
+                    ready = success != null,
+                    loading = success == null && uiState is VideoPlaybackUiState.Loading,
+                    modifier = Modifier.fillMaxSize(),
+                    skeleton = {
+                        com.android.purebilibili.feature.video.ui.components.VideoDetailSecondaryPaneSkeleton(
+                            showComments = !relatedTabFirst || !includeRelatedTab,
+                            modifier = Modifier.fillMaxSize(),
+                            showIntro = includeIntro,
+                        )
+                    },
+                ) {
+                    if (success != null) {
+                        TabletSecondaryContent(
+                            success = success,
+                            commentStateHandle = commentStateHandle,
+                            subReplyStateHandle = subReplyStateHandle,
+                            playbackActions = playbackActions,
+                            engagementState = engagementState,
+                            engagementActions = engagementActions,
+                            commentActions = commentActions,
+                            playerState = playerState,
+                            onUpClick = onUpClick,
+                            paneMode = TabletSecondaryPaneMode.EXPANDED,
+                            onPaneModeChange = {},
+                            onRelatedVideoClick = onRelatedVideoClick,
+                            onSearchKeywordClick = onSearchKeywordClick,
+                            showUpBadge = showUpBadge,
+                            showIdentityDecorations = commentMemberDecorationsEnabled,
+                            onOpenBilibiliLink = onOpenBilibiliLink,
+                            externalQueueTitle = externalQueueTitle,
+                            externalQueueContent = externalQueueContent,
+                            requestedTabName = null,
+                            onRequestedTabConsumed = {},
+                            danmakuEnabled = danmakuChrome.enabled,
+                            onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
+                            onDanmakuToggle = danmakuChrome.onToggle,
+                            introContent = if (includeIntro) {
+                                { intro(Modifier.fillMaxSize()) }
+                            } else {
+                                null
+                            },
+                            applyStatusBarPadding = applySideStatusBarPadding,
+                            includeRelatedTab = includeRelatedTab,
+                            includeOwnerUploadsTab = true,
+                            relatedTabFirst = relatedTabFirst,
+                        )
+                    }
                 }
             }
         }

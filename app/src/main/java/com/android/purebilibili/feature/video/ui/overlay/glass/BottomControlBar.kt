@@ -529,11 +529,11 @@ fun BottomControlBar(
     val nearbyHandoff = com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val hideCenterPlayback = rememberHideGlassCenterPlayback()
+    val hideCenterPlayback = rememberHideCenterPlayback()
     val toggleCenterPlayback: () -> Unit = {
         scope.launch {
             com.android.purebilibili.core.store.player.PlayerSettingsStore
-                .setHideGlassCenterPlayback(context, !hideCenterPlayback)
+                .setHideCenterPlayback(context, !hideCenterPlayback)
         }
     }
     val configuration = LocalConfiguration.current
