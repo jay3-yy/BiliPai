@@ -76,7 +76,7 @@ private fun SupplementEntryIcon(
     label: String,
     onClick: () -> Unit,
 ) {
-    // 浮于统计行右上的紧凑入口：28dp 点击槽贴合统计行高度，不再借 40dp 按钮撑出空白。
+    // 统计区右侧入口使用 28dp 点击槽；时间与在线人数为它预留实际宽度，图标保持 18dp。
     Box(
         modifier = Modifier
             .size(28.dp)

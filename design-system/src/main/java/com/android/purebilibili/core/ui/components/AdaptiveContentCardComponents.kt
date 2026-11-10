@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -163,7 +164,7 @@ fun resolveAppTagChipMetrics(size: AppTagChipSize): AppTagChipMetrics = when (si
 
 /**
  * Compact tag / keyword chip:
- * - Material 3 → [Surface] with native chip shape, colors and border, without icon-slot padding
+ * - Material 3 → [AssistChip], retaining the selected compact tag size
  * - Miuix → themed [Surface] with [ContainerLevel.Chip] / pill-scale corners
  */
 @Composable
@@ -193,29 +194,26 @@ fun AppTagChip(
     val colorScheme = MaterialTheme.colorScheme
     when (LocalAppUiStyle.current) {
         AppUiStyle.MATERIAL3 -> {
-            val colors = AssistChipDefaults.assistChipColors(
-                containerColor = colorScheme.surfaceContainerHighest,
-                labelColor = colorScheme.onSurfaceVariant,
-            )
-            Surface(
+            AssistChip(
                 onClick = onClick,
                 enabled = enabled,
                 modifier = modifier.then(sizeModifier),
-                shape = AssistChipDefaults.shape,
-                color = if (enabled) colors.containerColor else colors.disabledContainerColor,
-                contentColor = if (enabled) colors.labelColor else colors.disabledLabelColor,
-                border = AssistChipDefaults.assistChipBorder(enabled = enabled),
-            ) {
-                AppText(
-                    text = label,
-                    style = labelStyle,
-                    maxLines = 1,
-                    modifier = Modifier.padding(
-                        horizontal = metrics.horizontalPadding,
-                        vertical = metrics.verticalPadding,
-                    ),
-                )
-            }
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = colorScheme.surfaceContainerHighest,
+                    labelColor = colorScheme.onSurfaceVariant,
+                ),
+                contentPadding = PaddingValues(
+                    horizontal = metrics.horizontalPadding,
+                    vertical = metrics.verticalPadding,
+                ),
+                label = {
+                    AppText(
+                        text = label,
+                        style = labelStyle,
+                        maxLines = 1,
+                    )
+                },
+            )
         }
         AppUiStyle.MIUIX -> {
             Surface(
