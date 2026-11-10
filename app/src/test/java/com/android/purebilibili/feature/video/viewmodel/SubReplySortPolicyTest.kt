@@ -219,7 +219,7 @@ class SubReplySortPolicyTest {
     fun `partial thread accepts sent replies using the real child root without inventing totals`() {
         val target = ReplyItem(rpid = 20L, root = 10L)
         val state = SubReplyUiState(
-            visible = true, isTargetOnly = true,
+            visible = true,
             items = persistentListOf(target), baseItems = persistentListOf(target),
         )
         assertEquals(10L, state.threadRootId)

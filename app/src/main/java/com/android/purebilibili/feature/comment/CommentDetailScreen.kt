@@ -120,7 +120,7 @@ fun CommentDetailScreen(
     }
 
     BackHandler(enabled = true) {
-        if (subReplyState.conversationAnchor != null && !subReplyState.isTargetOnly) {
+        if (subReplyState.conversationAnchor != null && subReplyState.rootReply != null) {
             viewModel.closeConversation()
         } else {
             onBack()
@@ -159,7 +159,7 @@ fun CommentDetailScreen(
         ) {
             val rootReply = subReplyState.rootReply
             when {
-                subReplyState.isLoading && rootReply == null && !subReplyState.isTargetOnly -> {
+                subReplyState.isLoading && rootReply == null && subReplyState.items.isEmpty() -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -167,7 +167,7 @@ fun CommentDetailScreen(
                         AdaptiveLoadingIndicator()
                     }
                 }
-                subReplyState.error != null && rootReply == null && !subReplyState.isTargetOnly -> {
+                subReplyState.error != null && rootReply == null && subReplyState.items.isEmpty() -> {
                     MessageFeedError(
                         text = subReplyState.error ?: "加载失败",
                         onRetry = {
@@ -181,10 +181,9 @@ fun CommentDetailScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                rootReply != null || subReplyState.isTargetOnly -> {
+                rootReply != null || subReplyState.items.isNotEmpty() -> {
                     SubReplyDetailContent(
                         rootReply = rootReply,
-                        isTargetOnly = subReplyState.isTargetOnly,
                         subReplies = subReplyState.items,
                         sortMode = subReplyState.sortMode,
                         error = subReplyState.error,

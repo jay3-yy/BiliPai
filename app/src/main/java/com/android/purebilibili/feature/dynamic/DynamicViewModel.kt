@@ -1752,7 +1752,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 if (data.isTargetOnly) {
                     updateCommentUiState {
                         it.copy(pinnedRootReplyId = resolvedId, pinnedTargetReplyId = resolvedTargetId,
-                            pinnedReplyError = "根评论不可用，已打开可读取的回复")
+                            pinnedReplyError = "根评论不可用，已打开目标回复")
                     }
                     subReplyLoadRequestId++
                     subCommentPagingSession = null
@@ -1763,7 +1763,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     }
                     _subReplyState.value = resolveDynamicSubReplyStateAfterSuccess(
                         currentState = SubReplyUiState(
-                            visible = true, isTargetOnly = true,
+                            visible = true,
                             targetReplyId = resolvedTargetId,
                             upMid = _selectedDynamic.value?.modules?.module_author?.mid ?: 0L,
                         ),
@@ -1774,7 +1774,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                     return@launchAccount
                 }
                 val root = resolveRoutedCommentRootReply(emptyList(), data, resolvedId)
-                    ?: error("根评论不可用，可在回复详情中查看可读取的回复")
+                    ?: error("根评论不可用，可在回复详情中查看目标回复")
                 val merged = sentCommentReplies.merge(listOf(root)).firstOrNull { it.rpid == resolvedId }
                     ?: return@launchAccount
                 updateCommentUiState {
@@ -2103,7 +2103,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         val state = _subReplyState.value
         val target = _selectedCommentTarget.value ?: return
         val rootId = state.threadRootId.takeIf { it > 0L } ?: activeSubReplyRootId
-        if (!state.visible || state.isTargetOnly || state.sortMode == mode || rootId <= 0L) return
+        if (!state.visible || (state.rootReply == null && !state.isLoading) || state.sortMode == mode || rootId <= 0L) return
         subCommentPagingSession = null
         subReplyLoadJob?.cancel()
         remoteSubReplies = emptyList()
@@ -2119,7 +2119,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         if (!state.visible || state.isRefreshing ||
             rootId <= 0L
         ) return
-        _subReplyState.value = state.copy(targetReplyId = if (state.isTargetOnly) state.targetReplyId else 0L)
+        _subReplyState.value = state.copy(targetReplyId = if (state.rootReply == null) state.targetReplyId else 0L)
         loadSubReplies(
             oid = target.oid,
             type = target.type,
@@ -2227,12 +2227,12 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         rootReply = root,
                         loadedReplyCount = updatedItems.size,
                         remoteReplyCount = remoteTotalCount,
-                        previousTotalCount = if ((isRefresh && page == 1) || current.isTargetOnly ||
+                        previousTotalCount = if ((isRefresh && page == 1) || current.rootReply == null ||
                             current.threadRootId != threadRootId) 0 else current.totalCount
                     )
                     val isEnd = isSortedSubReplyPageEnd(data.cursor.isEnd, data.grpcNextOffset)
                     _subReplyState.value = resolveDynamicSubReplyStateAfterSuccess(
-                        currentState = current.copy(rootReply = root, isTargetOnly = data.isTargetOnly,
+                        currentState = current.copy(rootReply = root,
                             targetReplyId = locatedTargetId.takeIf { it > 0L && it != threadRootId }
                                 ?: current.targetReplyId.takeIf { it != threadRootId } ?: 0L),
                         remoteItems = remoteSubReplies,
@@ -2639,7 +2639,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         sentCommentReplies.merge(removeDynamicCommentFromList(it, rpid, rootId))
                     }
                     _subReplyState.value = if (subState.rootReply?.rpid == rpid ||
-                        (subState.isTargetOnly && subState.rootReply == null && subState.items.all { it.rpid == rpid })
+                        (subState.rootReply == null && subState.items.isNotEmpty() && subState.items.all { it.rpid == rpid })
                     ) {
                         SubReplyUiState()
                     } else {

@@ -109,7 +109,7 @@ fun SubReplySheet(
                     isBackEnabled = true,
                     onBackCompleted = onDismiss,
                 )
-                if (rootReply == null && !state.isTargetOnly) {
+                if (rootReply == null && state.items.isEmpty()) {
                     SubReplyInitialContent(
                         isLoading = state.isLoading,
                         error = state.error,
@@ -120,7 +120,6 @@ fun SubReplySheet(
                 SubReplyDetailContent(
                     headerDragModifier = threadDrag.headerModifier,
                     rootReply = rootReply,
-                    isTargetOnly = state.isTargetOnly,
                     subReplies = state.items,
                     sortMode = state.sortMode,
                     error = state.error,

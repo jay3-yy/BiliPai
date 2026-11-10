@@ -97,7 +97,6 @@ class VideoCommentThreadRecoveryTest {
         runCurrent()
         val state = model.subReplyState.value
         assertNull(state.rootReply)
-        assertTrue(state.isTargetOnly)
         assertEquals(listOf(50L, 70L), state.items.map { it.rpid })
         assertEquals(target.root, state.items.last().root)
         assertEquals(target.rpid, state.items.last().parent)
@@ -155,7 +154,6 @@ class VideoCommentThreadRecoveryTest {
         runCurrent()
         val partial = model.subReplyState.value
         assertTrue(partial.visible)
-        assertTrue(partial.isTargetOnly)
         assertNull(partial.rootReply)
         assertEquals(target, partial.conversationAnchor)
         assertEquals(listOf(target), partial.items)
@@ -175,7 +173,6 @@ class VideoCommentThreadRecoveryTest {
         model.openSubReply(root, target.rpid)
         runCurrent()
         assertEquals(root, model.subReplyState.value.rootReply)
-        assertTrue(model.subReplyState.value.isTargetOnly)
         assertEquals(listOf(target), model.subReplyState.value.items)
         assertEquals(0, model.subReplyState.value.totalCount)
     }
@@ -191,7 +188,6 @@ class VideoCommentThreadRecoveryTest {
         model.refreshSubReplies()
         runCurrent()
         assertTrue(model.subReplyState.value.isRefreshing)
-        assertTrue(model.subReplyState.value.isTargetOnly)
         assertEquals(listOf(target), model.subReplyState.value.items)
         assertEquals(target.rpid, model.subReplyState.value.targetReplyId)
         refresh.complete(Result.success(ReplyData(
@@ -200,7 +196,6 @@ class VideoCommentThreadRecoveryTest {
         )))
         runCurrent()
         val full = model.subReplyState.value
-        assertFalse(full.isTargetOnly)
         assertFalse(full.isRefreshing)
         assertEquals(root, full.rootReply)
         assertEquals(listOf(50L, 60L), full.items.map { it.rpid })
@@ -216,7 +211,7 @@ class VideoCommentThreadRecoveryTest {
         } returns Result.failure(IllegalStateException("refresh offline"))
         model.refreshSubReplies()
         runCurrent()
-        assertTrue(model.subReplyState.value.isTargetOnly)
+        assertNull(model.subReplyState.value.rootReply)
         assertEquals(listOf(target), model.subReplyState.value.items)
         assertEquals("refresh offline", model.subReplyState.value.error)
         coEvery {
@@ -243,7 +238,6 @@ class VideoCommentThreadRecoveryTest {
         } returns Result.failure(IllegalStateException("append offline"))
         model.loadMoreSubReplies()
         runCurrent()
-        assertFalse(model.subReplyState.value.isTargetOnly)
         assertNull(model.subReplyState.value.conversationAnchor)
         assertEquals(listOf(target), model.subReplyState.value.items)
         assertEquals("append offline", model.subReplyState.value.error)
@@ -315,7 +309,6 @@ class VideoCommentThreadRecoveryTest {
         runCurrent()
         assertFalse(model.subReplyState.value.visible)
         assertTrue(model.subReplyState.value.items.isEmpty())
-        assertFalse(model.subReplyState.value.isTargetOnly)
     }
 
     @Test
@@ -332,7 +325,6 @@ class VideoCommentThreadRecoveryTest {
         runCurrent()
         assertFalse(model.subReplyState.value.visible)
         assertTrue(model.subReplyState.value.items.isEmpty())
-        assertFalse(model.subReplyState.value.isTargetOnly)
     }
 
     @Test
@@ -349,7 +341,6 @@ class VideoCommentThreadRecoveryTest {
         runCurrent()
         assertFalse(model.subReplyState.value.visible)
         assertTrue(model.subReplyState.value.items.isEmpty())
-        assertFalse(model.subReplyState.value.isTargetOnly)
     }
 
     @Test
@@ -372,7 +363,6 @@ class VideoCommentThreadRecoveryTest {
         runCurrent()
         val first = model.subReplyState.value
         assertNull(first.rootReply)
-        assertTrue(first.isTargetOnly)
         assertEquals(target, first.conversationAnchor)
         assertEquals(listOf(parent, target), first.items)
         assertFalse(first.isEnd)
@@ -382,7 +372,6 @@ class VideoCommentThreadRecoveryTest {
         val complete = model.subReplyState.value
         assertEquals(listOf(parent, remoteTarget, later), complete.items)
         assertTrue(complete.isEnd)
-        assertTrue(complete.isTargetOnly)
         assertNull(complete.error)
         model.closeSubReplyConversation()
         val returned = model.subReplyState.value
@@ -405,7 +394,7 @@ class VideoCommentThreadRecoveryTest {
             assertEquals(listOf(reply), partial.items)
             assertNull(partial.conversationAnchor)
             assertNull(partial.error)
-            assertTrue(partial.isTargetOnly)
+            assertNull(partial.rootReply)
             assertTrue(partial.isEnd)
             model.closeSubReply()
         }
@@ -429,7 +418,6 @@ class VideoCommentThreadRecoveryTest {
         assertEquals(listOf(parent, target), model.subReplyState.value.items)
         model.closeSubReplyConversation()
         assertTrue(model.subReplyState.value.visible)
-        assertFalse(model.subReplyState.value.isTargetOnly)
         assertNull(model.subReplyState.value.conversationAnchor)
         assertEquals(all, model.subReplyState.value.items)
     }

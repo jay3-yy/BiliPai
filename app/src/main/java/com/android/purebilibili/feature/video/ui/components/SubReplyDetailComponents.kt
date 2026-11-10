@@ -345,7 +345,7 @@ internal fun VideoInlineSubReplyDetailContent(
     com.android.purebilibili.core.ui.LocalNavigationBackHandler(enabled = true) {
         onDismiss()
     }
-    if (rootReply == null && !state.isTargetOnly) {
+    if (rootReply == null && state.items.isEmpty()) {
         SubReplyInitialContent(
             isLoading = state.isLoading,
             error = state.error,
@@ -375,7 +375,6 @@ internal fun VideoInlineSubReplyDetailContent(
 
     SubReplyDetailContent(
         rootReply = rootReply,
-        isTargetOnly = state.isTargetOnly,
         subReplies = state.items,
         sortMode = state.sortMode,
         error = state.error,
@@ -430,7 +429,6 @@ private data class SubReplyDetailPage(
     val isRefreshing: Boolean,
     val isLoading: Boolean,
     val isEnd: Boolean,
-    val isTargetOnly: Boolean,
     val error: String?,
     val showManualLoadMore: Boolean,
     val replyDisplayCount: Int,
@@ -483,7 +481,6 @@ internal fun SubReplyDetailContent(
     listModifier: Modifier = Modifier,
     modifier: Modifier = Modifier,
     paginationPage: Int = 1,
-    isTargetOnly: Boolean = false,
 ) {
     val layoutPolicy = remember {
         resolveSubReplyDetailLayoutPolicy()
@@ -576,10 +573,10 @@ internal fun SubReplyDetailContent(
             )
         }
     }
-    val shouldLoadMore by remember(listState, isLoading, isEnd, error, localConversationMode, isTargetOnly, effectiveConversationMode) {
+    val shouldLoadMore by remember(listState, isLoading, isEnd, error, localConversationMode, isConversationMode) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            error == null && !localConversationMode && (!isTargetOnly || isConversationMode) &&
+            error == null && !localConversationMode &&
                 shouldLoadMoreSubReplyList(
                     lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
                     totalItemsCount = layoutInfo.totalItemsCount,
@@ -589,10 +586,10 @@ internal fun SubReplyDetailContent(
         }
     }
     val shouldPrefetchShortList by remember(
-        canScrollForwardState, isLoading, isEnd, error, localConversationMode, visibleReplies.size, detailReplyDisplayCount, isTargetOnly, isConversationMode
+        canScrollForwardState, isLoading, isEnd, error, localConversationMode, visibleReplies.size, detailReplyDisplayCount
     ) {
         derivedStateOf {
-            error == null && !localConversationMode && (!isTargetOnly || isConversationMode) &&
+            error == null && !localConversationMode &&
                 shouldPrefetchSubRepliesWhenListNotScrollable(
                     isLoading = isLoading,
                     isEnd = isEnd,
@@ -605,9 +602,9 @@ internal fun SubReplyDetailContent(
         detailReplyDisplayCount,
         isLoading,
         isEnd,
-        localConversationMode, isTargetOnly, isConversationMode
+        localConversationMode
     ) {
-        !localConversationMode && (!isTargetOnly || isConversationMode) &&
+        !localConversationMode &&
             shouldShowSubReplyManualLoadMore(
                 isLoading = isLoading,
                 isEnd = isEnd
@@ -657,14 +654,14 @@ internal fun SubReplyDetailContent(
         previousConversationMode = currentMode
         previousSortMode = sortMode.apiMode
     }
-    LaunchedEffect(threadRootId, targetReplyId, visibleReplies, isLoading, isEnd, effectiveConversationMode, activeConversationId, isTargetOnly, error, paginationPage) {
+    LaunchedEffect(threadRootId, targetReplyId, visibleReplies, isLoading, isEnd, effectiveConversationMode, activeConversationId, rootReply, error, paginationPage) {
         if (targetReplyId <= 0L) {
             highlightedTargetId = 0L
             return@LaunchedEffect
         }
         // This is an entry-time navigation request, not a persistent scroll anchor.
         // Loading/refreshing changes the effect keys but must not replay the jump.
-        val locateFallbackTarget = isTargetOnly && isConversationMode && activeConversationId == targetReplyId
+        val locateFallbackTarget = rootReply == null && isConversationMode && activeConversationId == targetReplyId
         if (targetReplyHandled || (effectiveConversationMode && !locateFallbackTarget)) return@LaunchedEffect
         // The retained target is already present while DialogList is loading. Wait for its
         // context before consuming the one-shot jump, otherwise it highlights the placeholder.
@@ -682,8 +679,8 @@ internal fun SubReplyDetailContent(
                 targetReplyHandled = true
                 highlightedTargetId = targetReplyId
             }
-            error == null && !isLoading && !isEnd && !isTargetOnly -> onLoadMore()
-            error == null && !isLoading && isEnd && !isTargetOnly -> {
+            error == null && !isLoading && !isEnd && rootReply != null -> onLoadMore()
+            error == null && !isLoading && isEnd && rootReply != null -> {
                 targetReplyHandled = true
                 targetReplyMissing = true
             }
@@ -728,7 +725,7 @@ internal fun SubReplyDetailContent(
                             color = appearance.primaryTextColor,
                         )
                     }
-                    if (isTargetOnly) {
+                    if (rootReply == null && (!isLoading || effectiveConversationMode)) {
                         AppText(
                             text = "部分结果",
                             modifier = Modifier
@@ -736,9 +733,9 @@ internal fun SubReplyDetailContent(
                                 .testTag(SUB_REPLY_DETAIL_PARTIAL_TAG)
                                 .clearAndSetSemantics {
                                     contentDescription = if (effectiveConversationMode) {
-                                        "完整楼层暂不可用，当前显示目标回复的可读取对话；下拉刷新可重试完整楼层"
+                                        "完整楼层暂不可用，当前显示目标回复所在对话；下拉刷新可重试完整楼层"
                                     } else {
-                                        "完整楼层暂不可用，当前显示可读取的回复；下拉刷新可重试完整楼层"
+                                        "完整楼层暂不可用，当前仅显示已读取的目标回复；下拉刷新可重试完整楼层"
                                     }
                                 },
                             color = appearance.secondaryTextColor,
@@ -781,7 +778,6 @@ internal fun SubReplyDetailContent(
                 isRefreshing = isRefreshing,
                 isLoading = isLoading,
                 isEnd = isEnd || localConversationMode,
-                isTargetOnly = isTargetOnly,
                 error = error,
                 showManualLoadMore = showManualLoadMore,
                 replyDisplayCount = detailReplyDisplayCount,
@@ -799,7 +795,6 @@ internal fun SubReplyDetailContent(
             val isRefreshing = page.isRefreshing
             val isLoading = page.isLoading
             val isEnd = page.isEnd
-            val isTargetOnly = page.isTargetOnly
             val error = page.error
             val showManualLoadMore = page.showManualLoadMore
             val detailReplyDisplayCount = page.replyDisplayCount
@@ -865,12 +860,11 @@ internal fun SubReplyDetailContent(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 AppText(
-                                    text = if (isTargetOnly) {
-                                        "可读取的回复"
-                                    } else if (effectiveConversationMode) {
-                                        resolveSubReplyConversationSectionTitle(replyCount = visibleReplies.size)
-                                    } else {
-                                        resolveSubReplyDetailSectionTitle(
+                                    text = when {
+                                        effectiveConversationMode ->
+                                            resolveSubReplyConversationSectionTitle(replyCount = visibleReplies.size)
+                                        rootReply == null && !isLoading -> "目标回复"
+                                        else -> resolveSubReplyDetailSectionTitle(
                                             replyCount = detailReplyDisplayCount,
                                             loadedReplyCount = visibleReplies.size,
                                             showLoadedReplyCount = showLoadedReplyCount,
@@ -880,7 +874,7 @@ internal fun SubReplyDetailContent(
                                     color = appearance.primaryTextColor
                                 )
                                 Spacer(modifier = Modifier.weight(1f))
-                                if (effectiveConversationMode && !isTargetOnly) {
+                                if (effectiveConversationMode && rootReply != null) {
                                     AppText(
                                         text = "返回全部回复",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
@@ -897,7 +891,7 @@ internal fun SubReplyDetailContent(
                                             .wrapContentHeight()
                                             .padding(horizontal = 4.dp, vertical = 6.dp)
                                     )
-                                } else if (!isTargetOnly) {
+                                } else if (rootReply != null) {
                                     Row(
                                         modifier = Modifier
                                             .testTag(SUB_REPLY_DETAIL_SORT_TAG)
@@ -1007,7 +1001,7 @@ internal fun SubReplyDetailContent(
                                     text = "$error，点击重试",
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable(onClick = if (isTargetOnly && !isConversationMode) onRefresh else onLoadMore)
+                                        .clickable(onClick = if (rootReply == null && !effectiveConversationMode) onRefresh else onLoadMore)
                                         .sizeIn(minHeight = 48.dp)
                                         .padding(16.dp),
                                     textAlign = TextAlign.Center,
@@ -1036,7 +1030,7 @@ internal fun SubReplyDetailContent(
                                     color = appearance.sortTint
                                 )
                             }
-                            isEnd && !isLoading && !isRefreshing && !isTargetOnly -> {
+                            isEnd && !isLoading && !isRefreshing && rootReply != null -> {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()

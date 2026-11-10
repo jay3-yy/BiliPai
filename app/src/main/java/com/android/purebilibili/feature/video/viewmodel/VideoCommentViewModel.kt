@@ -157,7 +157,6 @@ data class SubReplyUiState(
     val isRefreshing: Boolean = false,
     val basePage: Int = 1,
     val isEnd: Boolean = false,
-    val isTargetOnly: Boolean = false,
     val baseIsEnd: Boolean = false,
     val error: String? = null,
     val upMid: Long = 0,
@@ -793,7 +792,7 @@ class VideoCommentViewModel : ViewModel() {
         if (newReply == null) {
             if (subState.visible && activeRootId > 0L) {
                 _subReplyState.value = subState.copy(
-                    items = if (subState.isTargetOnly) subState.items else persistentListOf(),
+                    items = if (subState.rootReply == null) subState.items else persistentListOf(),
                     page = 1,
                     isEnd = false,
                     isLoading = true,
@@ -836,7 +835,7 @@ class VideoCommentViewModel : ViewModel() {
     fun setSubReplySortMode(mode: SubReplySortMode) {
         val state = _subReplyState.value
         val rootId = state.rootReply?.rpid ?: activeSubReplyRootId
-        if (!state.visible || state.isTargetOnly || state.conversationAnchor != null || state.sortMode == mode || rootId <= 0L) return
+        if (!state.visible || (state.rootReply == null && !state.isLoading) || state.conversationAnchor != null || state.sortMode == mode || rootId <= 0L) return
         dialogPagingSession = null
         subReplyPagingSession = null
         subReplyLoadJob?.cancel()
@@ -855,14 +854,14 @@ class VideoCommentViewModel : ViewModel() {
         subReplyPagingSession = null
         subReplyLoadJob?.cancel()
         // A partial conversation is a fallback, not a permanent replacement for the floor.
-        val anchor = state.conversationAnchor.takeUnless { state.isTargetOnly }
+        val anchor = state.conversationAnchor.takeIf { state.rootReply != null }
         _subReplyState.update { current ->
             current.copy(
                 isLoading = true,
                 isRefreshing = true,
                 error = null,
                 conversationAnchor = anchor,
-                targetReplyId = if (current.isTargetOnly) current.targetReplyId else 0L,
+                targetReplyId = if (current.rootReply == null) current.targetReplyId else 0L,
             )
         }
         if (anchor != null) {
@@ -875,7 +874,7 @@ class VideoCommentViewModel : ViewModel() {
     fun loadMoreSubReplies() {
         val state = _subReplyState.value
         if (!state.visible || state.isLoading ||
-            (state.isTargetOnly && state.conversationAnchor == null) ||
+            (state.rootReply == null && state.conversationAnchor == null) ||
             (state.isEnd && state.error == null)) return
         if (state.conversationAnchor != null && dialogPagingSession != null) {
             dialogPagingSession?.loadMore()
@@ -935,7 +934,7 @@ class VideoCommentViewModel : ViewModel() {
     fun closeSubReplyConversation() {
         val current = _subReplyState.value
         if (current.conversationAnchor == null) return
-        if (current.isTargetOnly) {
+        if (current.rootReply == null) {
             closeSubReply()
             return
         }
@@ -1028,12 +1027,11 @@ class VideoCommentViewModel : ViewModel() {
                             rootReply = mergedRoot,
                             targetReplyId = pages.first().data.resolvedTargetReplyId.takeIf { it > 0L }
                                 ?: current.targetReplyId.takeIf { it != threadRootId } ?: 0L,
-                            isTargetOnly = last.data.isTargetOnly,
                             items = items.toImmutableList(), baseItems = items.toImmutableList(),
                             totalCount = if (last.data.isTargetOnly) 0 else resolveSubReplyLoadedTotalCount(
                                 rootReply = mergedRoot, loadedReplyCount = items.size,
                                 remoteReplyCount = resolveSubReplyRemoteTotalCount(last.data, mergedRoot),
-                                previousTotalCount = if (current.isTargetOnly || current.threadRootId != threadRootId) 0 else current.totalCount
+                                previousTotalCount = if (current.rootReply == null || current.threadRootId != threadRootId) 0 else current.totalCount
                             ),
                             page = last.request.page, basePage = last.request.page,
                             grpcNextOffset = last.data.grpcNextOffset, baseGrpcNextOffset = last.data.grpcNextOffset,
@@ -1051,7 +1049,7 @@ class VideoCommentViewModel : ViewModel() {
                         isEnd = states.append.endOfPaginationReached, baseIsEnd = states.append.endOfPaginationReached,
                         error = failure?.let { it.message ?: "回复加载失败" }
                     )
-                    if (ready && page == 1 && next.isTargetOnly) {
+                    if (ready && page == 1 && pages.last().data.isTargetOnly) {
                         next.items.firstOrNull { it.rpid == next.targetReplyId }
                             ?.let(::openSubReplyConversation)
                     }
@@ -1112,7 +1110,7 @@ class VideoCommentViewModel : ViewModel() {
                     remoteItems,
                     buildList {
                         // DialogList can omit the known target from its first page.
-                        if (current.isTargetOnly) add(anchorReply)
+                        if (current.rootReply == null) add(anchorReply)
                         localSubReplies.values.forEach {
                             if (it.dialog == dialogId || it.parent == anchorReply.rpid || it.rpid == anchorReply.rpid) {
                                 add(it)
@@ -1302,10 +1300,10 @@ class VideoCommentViewModel : ViewModel() {
                         subReplyPagingSession = null
                         subReplyLoadJob?.cancel()
                         _subReplyState.value = currentSub.copy(
-                            items = if (currentSub.isTargetOnly) {
+                            items = if (currentSub.rootReply == null) {
                                 if (currentSub.conversationAnchor == null) currentSub.items else currentSub.baseItems
                             } else persistentListOf(),
-                            baseItems = if (currentSub.isTargetOnly) currentSub.baseItems else persistentListOf(),
+                            baseItems = if (currentSub.rootReply == null) currentSub.baseItems else persistentListOf(),
                             conversationAnchor = null,
                             page = 1,
                             isEnd = false,
@@ -1675,7 +1673,7 @@ class VideoCommentViewModel : ViewModel() {
             baseItems = current.baseItems.filterNot { it.rpid == rpid }.toImmutableList(),
             dissolvingIds = (current.dissolvingIds - rpid).toImmutableSet()
         )
-        if (matchesThread && current.isTargetOnly && current.rootReply == null &&
+        if (matchesThread && current.rootReply == null &&
             updatedItems.isEmpty() && current.baseItems.none { it.rpid != rpid }) {
             closeSubReply()
         }
