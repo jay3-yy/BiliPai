@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.video.ui.section
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.data.model.response.AiSummaryData
 import com.android.purebilibili.data.model.response.ViewInfo
+import com.android.purebilibili.data.model.response.VideoStaff
 import java.util.Locale
 import java.util.TimeZone
 
@@ -99,6 +100,13 @@ internal fun resolveVideoDetailBadges(info: ViewInfo): List<String> {
 
 internal fun shouldShowCreatorTeamSection(info: ViewInfo): Boolean {
     return info.staff.isNotEmpty()
+}
+
+internal fun resolveCreatorTeamMembers(info: ViewInfo): List<VideoStaff> {
+    if (info.staff.isEmpty()) return emptyList()
+    val owner = info.staff.firstOrNull { it.mid == info.owner.mid }
+        ?: VideoStaff(mid = info.owner.mid, name = info.owner.name, face = info.owner.face, title = "UP主")
+    return listOf(owner) + info.staff.filter { it.mid != info.owner.mid }
 }
 
 /** 恰饭徽标超过该字数时改为标题上方独立一行，避免挤压标题。 */

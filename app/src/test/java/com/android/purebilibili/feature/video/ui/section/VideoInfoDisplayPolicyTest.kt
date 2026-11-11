@@ -5,6 +5,7 @@ import com.android.purebilibili.data.model.response.AiOutline
 import com.android.purebilibili.data.model.response.AiSummaryData
 import com.android.purebilibili.data.model.response.VideoDetailRights
 import com.android.purebilibili.data.model.response.VideoStaff
+import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.ViewInfo
 import java.util.Locale
 import java.util.TimeZone
@@ -173,6 +174,21 @@ class VideoInfoDisplayPolicyTest {
                 ViewInfo(rights = VideoDetailRights(isCooperation = 1))
             )
         )
+    }
+
+    @Test
+    fun creatorTeamIncludesOwnerOnceEvenWhenStaffOmitsOwner() {
+        val owner = Owner(mid = 1L, name = "主UP", face = "owner.jpg")
+        val collaborator = VideoStaff(mid = 2L, name = "合作UP")
+        val suppliedOwner = VideoStaff(mid = 1L, name = "主UP", title = "发起人")
+        val missingOwner = resolveCreatorTeamMembers(ViewInfo(owner = owner, staff = listOf(collaborator)))
+        assertEquals(listOf(1L, 2L), missingOwner.map { it.mid })
+        assertEquals("owner.jpg", missingOwner.first().face)
+        val includedOwner = resolveCreatorTeamMembers(
+            ViewInfo(owner = owner, staff = listOf(collaborator, suppliedOwner))
+        )
+        assertEquals(listOf(suppliedOwner, collaborator), includedOwner)
+        assertTrue(resolveCreatorTeamMembers(ViewInfo(owner = owner)).isEmpty())
     }
 
     @Test

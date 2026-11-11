@@ -1102,6 +1102,21 @@ fun UpInfoSection(
         .collectAsStateWithLifecycle(
             initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
         )
+    if (shouldShowCreatorTeamSection(info)) {
+        CreatorTeamSection(
+            staff = remember(info.owner, info.staff) { resolveCreatorTeamMembers(info) },
+            ownerMid = info.owner.mid,
+            ownerFollowing = isFollowing,
+            ownerFollowStatusKnown = followStatusKnown,
+            showOwnerFollow = playerControlVisibility.showFollowButton,
+            onOwnerFollowClick = onFollowClick,
+            onMemberClick = onUpClick,
+            horizontalPadding = horizontalPadding,
+            modifier = modifier,
+            trailingContent = trailingContent,
+        )
+        return
+    }
     //  尝试获取共享元素作用域
     val sharedTransitionScope = com.android.purebilibili.core.ui.LocalSharedTransitionScope.current
     val animatedVisibilityScope = com.android.purebilibili.core.ui.LocalAnimatedVisibilityScope.current
@@ -1454,13 +1469,6 @@ fun UpInfoSection(
                     }
                 }
             }
-            if (shouldShowCreatorTeamSection(info)) {
-                CreatorTeamSection(
-                    staff = info.staff,
-                    ownerMid = info.owner.mid,
-                    onMemberClick = onUpClick
-                )
-            }
         }
     }
 }
@@ -1469,7 +1477,14 @@ fun UpInfoSection(
 private fun CreatorTeamSection(
     staff: List<VideoStaff>,
     ownerMid: Long,
-    onMemberClick: (Long) -> Unit
+    ownerFollowing: Boolean,
+    ownerFollowStatusKnown: Boolean,
+    showOwnerFollow: Boolean,
+    onOwnerFollowClick: () -> Unit,
+    onMemberClick: (Long) -> Unit,
+    horizontalPadding: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+    trailingContent: (@Composable RowScope.() -> Unit)? = null,
 ) {
     if (staff.isEmpty()) return
     // 每个成员的关注状态:null=查询中;经 followStateChanges 与全局动作同步。
@@ -1490,9 +1505,9 @@ private fun CreatorTeamSection(
     }
     val scope = rememberCoroutineScope()
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 10.dp)
+            .padding(start = horizontalPadding, end = horizontalPadding, bottom = 10.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1510,6 +1525,10 @@ private fun CreatorTeamSection(
                 style = MaterialTheme.typography.labelSmall,
                 color = AppContentColors.secondaryText()
             )
+            if (trailingContent != null) {
+                Spacer(Modifier.width(8.dp))
+                trailingContent()
+            }
         }
         Spacer(modifier = Modifier.height(8.dp))
         Row(
@@ -1521,10 +1540,11 @@ private fun CreatorTeamSection(
             staff.forEach { member ->
                 CreatorTeamMemberChip(
                     member = member,
-                    showFollow = member.mid > 0L && member.mid != ownerMid,
-                    isFollowing = followStates[member.mid] ?: false,
+                    showFollow = member.mid > 0L && (member.mid != ownerMid || showOwnerFollow),
+                    followEnabled = member.mid != ownerMid || ownerFollowStatusKnown,
+                    isFollowing = if (member.mid == ownerMid) ownerFollowing else followStates[member.mid] ?: false,
                     onFollowToggle = {
-                        scope.launch {
+                        if (member.mid == ownerMid) onOwnerFollowClick() else scope.launch {
                             val target = !(followStates[member.mid] ?: false)
                             val ok = com.android.purebilibili.data.repository.ActionRepository
                                 .followUser(member.mid, target)
@@ -1543,6 +1563,7 @@ private fun CreatorTeamSection(
 private fun CreatorTeamMemberChip(
     member: VideoStaff,
     showFollow: Boolean,
+    followEnabled: Boolean,
     isFollowing: Boolean,
     onFollowToggle: () -> Unit,
     onClick: () -> Unit
@@ -1624,6 +1645,7 @@ private fun CreatorTeamMemberChip(
                 modifier = Modifier
                     .heightIn(min = 48.dp)
                     .clickable(
+                        enabled = followEnabled,
                         role = Role.Button,
                         onClick = rememberFollowActionWithConfirmation(
                             targetKey = member.mid,
