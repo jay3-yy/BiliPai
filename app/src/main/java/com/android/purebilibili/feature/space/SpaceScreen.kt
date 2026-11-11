@@ -172,7 +172,7 @@ import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.boundsInRoot
+import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -4491,7 +4491,7 @@ private fun SpaceHomeVideoCard(
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
             .onGloballyPositioned { coordinates ->
-                cardBounds = coordinates.boundsInRoot()
+                cardBounds = coordinates.videoCardSourceBoundsInRoot()
             }
             .appActionClickable spaceCardClick@{
                 if (CardPositionManager.isVideoNavigationDebounceActive()) {
@@ -4533,7 +4533,7 @@ private fun SpaceHomeVideoCard(
         Box(
             modifier = coverModifier
                 .onGloballyPositioned { coordinates ->
-                    coverBounds = coordinates.boundsInRoot()
+                    coverBounds = coordinates.videoCardSourceBoundsInRoot()
                 }
                 .fillMaxWidth()
                 .clip(coverShape)
@@ -4712,7 +4712,7 @@ private fun SpaceAggregateMediaCard(
             .then(nativeCardSnapshot.modifier)
             .clip(coverShape)
             .onGloballyPositioned { coordinates ->
-                cardBounds = coordinates.boundsInRoot()
+                cardBounds = coordinates.videoCardSourceBoundsInRoot()
             }
             .appActionClickable spaceCardClick@{
                 if (CardPositionManager.isVideoNavigationDebounceActive()) {
@@ -4754,7 +4754,7 @@ private fun SpaceAggregateMediaCard(
         Box(
             modifier = coverModifier
                 .onGloballyPositioned { coordinates ->
-                    coverBounds = coordinates.boundsInRoot()
+                    coverBounds = coordinates.videoCardSourceBoundsInRoot()
                 }
                 .fillMaxWidth()
                 .height(118.dp)
@@ -5073,7 +5073,7 @@ private fun SpaceArchiveListItemRow(
             .background(AppSurfaceTokens.cardContainer())
             .border(width = 3.dp, color = locateHighlightColor, shape = cardShellShape)
             .onGloballyPositioned { coordinates ->
-                cardBounds = coordinates.boundsInRoot()
+                cardBounds = coordinates.videoCardSourceBoundsInRoot()
             }
             .appActionClickable spaceCardClick@{
                 if (CardPositionManager.isVideoNavigationDebounceActive()) {
@@ -5120,7 +5120,7 @@ private fun SpaceArchiveListItemRow(
             },
         coverModifier = Modifier
                 .onGloballyPositioned { coordinates ->
-                    coverBounds = coordinates.boundsInRoot()
+                    coverBounds = coordinates.videoCardSourceBoundsInRoot()
                 },
         coverContent = {
             AsyncImage(

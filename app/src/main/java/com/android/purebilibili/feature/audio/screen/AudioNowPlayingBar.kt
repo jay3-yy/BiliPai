@@ -80,7 +80,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
-import androidx.compose.ui.layout.boundsInRoot
+import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -280,8 +280,8 @@ internal fun AudioNowPlayingBar(
                     // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
                     return@nowPlayingBarExpand
                 }
-                barCoordsRef[0]?.takeIf { it.isAttached }?.boundsInRoot()?.let { bounds ->
-                    val sourceCoverBounds = coverCoordsRef[0]?.takeIf { it.isAttached }?.boundsInRoot()
+                barCoordsRef[0]?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()?.let { bounds ->
+                    val sourceCoverBounds = coverCoordsRef[0]?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
                     val effectiveSourceLayout = if (iconOnlyProgress() >= 0.99f) {
                         VideoCardSourceLayout.COVER_ONLY
                     } else {
