@@ -4528,7 +4528,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             autoPlay = resumePlaybackAfterRetry,
             cid = currentCid,
             audioLang = currentAudioLang,
-            fallbackResumePositionMs = fallbackResumePositionMs
+            fallbackResumePositionMs = fallbackResumePositionMs,
+            force = true,
         )
     }
 
