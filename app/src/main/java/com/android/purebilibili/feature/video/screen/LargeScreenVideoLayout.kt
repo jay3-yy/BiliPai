@@ -222,6 +222,7 @@ internal fun LargeScreenVideoLayout(
                         onOwnerUploadsClick = {
                             success.info.owner.mid.takeIf { it > 0L }?.let(onUpClick)
                         },
+                        onUpClick = onUpClick,
                         videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                         videoNoteEnabled = videoNoteEnabled,
                         videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,

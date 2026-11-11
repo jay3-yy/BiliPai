@@ -569,6 +569,7 @@ internal fun TabletVideoLayout(
                                     requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
                                     secondaryPaneModeName = TabletSecondaryPaneMode.EXPANDED.name
                                 },
+                                onUpClick = onUpClick,
                                 videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                                 videoNoteEnabled = videoNoteEnabled,
                                 videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
@@ -646,6 +647,7 @@ internal fun TabletVideoLayout(
                                             onOwnerUploadsClick = {
                                                 requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
                                             },
+                                            onUpClick = onUpClick,
                                             videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                                             videoNoteEnabled = videoNoteEnabled,
                                             videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
@@ -721,6 +723,7 @@ internal fun TabletVideoInfoPane(
     onDanmakuSendClick: () -> Unit,
     onDanmakuToggle: () -> Unit,
     onOwnerUploadsClick: () -> Unit,
+    onUpClick: (Long) -> Unit,
     videoAiSummaryEntryEnabled: Boolean = true,
     videoNoteEnabled: Boolean = true,
     videoNoteDefaultCollapsed: Boolean = true,
@@ -794,7 +797,9 @@ internal fun TabletVideoInfoPane(
         onCoinClick = engagementActions.openCoinDialog,
         onTripleClick = engagementActions.doTripleAction,
         onPageSelect = playbackActions.switchPage,
-        onUpClick = { onOwnerUploadsClick() },
+        onUpClick = { mid ->
+            if (mid == success.info.owner.mid) onOwnerUploadsClick() else onUpClick(mid)
+        },
         onDownloadClick = playbackActions.openDownloadDialog,
         onWatchLaterClick = engagementActions.toggleWatchLater,
         onRelatedVideoClick = onRelatedVideoClick,
