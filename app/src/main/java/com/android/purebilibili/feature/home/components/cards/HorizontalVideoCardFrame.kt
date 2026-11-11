@@ -3,8 +3,6 @@ package com.android.purebilibili.feature.home.components.cards
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -191,11 +189,12 @@ private fun HorizontalVideoCardInfo(
     trailingContent: (@Composable BoxScope.() -> Unit)?,
 ) {
     val spacing = HORIZONTAL_VIDEO_CARD_INFO_SPACING_DP.dp
-    BoxWithConstraints(
+    Box(
         modifier = modifier.padding(top = infoPadding, bottom = infoPadding, end = infoPadding),
+        propagateMinConstraints = true,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().heightIn(min = minHeight),
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(

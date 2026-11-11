@@ -67,7 +67,7 @@ class HomeTopCategoryPolicyTest {
         )
 
         assertEquals(HomeTopTabEntry.Partition, resolveHomeTopTabEntryOrNull(entries, 0))
-        assertEquals(HomeCategory.entries.size, resolveHomeTopTabEntryKey(entries, 0))
+        assertEquals(HOME_TOP_PARTITION_TAB_ID, resolveHomeTopTabEntryKey(entries, 0))
         assertEquals("分区", resolveHomeTopTabEntryLabel(HomeTopTabEntry.Partition))
     }
 

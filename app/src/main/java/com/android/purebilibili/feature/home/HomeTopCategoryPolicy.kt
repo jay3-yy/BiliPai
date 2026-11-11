@@ -178,13 +178,9 @@ fun resolveHomeTopTabEntryOrNull(
 fun resolveHomeTopTabEntryKey(
     entries: List<HomeTopTabEntry>,
     index: Int
-): Int {
-    return when (val entry = resolveHomeTopTabEntryOrNull(entries, index)) {
-        is HomeTopTabEntry.Category -> entry.category.ordinal
-        HomeTopTabEntry.Partition -> HomeCategory.entries.size
-        HomeTopTabEntry.Subscriptions -> HomeCategory.entries.size + 1
-        null -> HomeCategory.entries.size + index + 2
-    }
+): String {
+    // 与 Pager 的数字页码区分，避免恢复时将页码误认作另一标签的键。
+    return resolveHomeTopTabEntryOrNull(entries, index)?.id ?: "missing_home_tab_$index"
 }
 
 fun ensureSubscriptionHomeTab(

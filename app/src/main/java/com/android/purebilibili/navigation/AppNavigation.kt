@@ -1383,7 +1383,14 @@ fun AppNavigation(
                     seedCover = seed.coverUrl,
                     sourceRoute = source.route,
                     openId = SystemClock.uptimeMillis()
-                )
+                ),
+                beforeNavigation = {
+                    // 竖屏流使用独立播放器，即使同一视频也不能保留旧小窗。
+                    miniPlayerManager?.let { manager ->
+                        if (manager.isMiniMode) manager.dismiss()
+                        else manager.haltForeignPlaybackForIncomingVideo(seed.bvid)
+                    }
+                },
             )
         }
         fun navigateToVideoRouteInNavigation3(
