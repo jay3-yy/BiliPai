@@ -21,6 +21,15 @@ enum class GlassPopupPalette(val value: Int, val label: String) {
     }
 }
 
+enum class GlassPopupImplementation(val value: Int, val label: String) {
+    MIUIX(0, "Miuix"),
+    BILIPAI(1, "BiliPai");
+
+    companion object {
+        fun fromValue(value: Int): GlassPopupImplementation = entries.firstOrNull { it.value == value } ?: MIUIX
+    }
+}
+
 enum class GlassMotionStyle(val value: Int, val label: String) {
     STANDARD(0, "标准"),
     ELASTIC(1, "弹性");
@@ -35,9 +44,19 @@ internal val glassDockMotionStylePreferencesKey = intPreferencesKey("liquid_glas
 internal val glassPopupMotionStylePreferencesKey = intPreferencesKey("liquid_glass_popup_motion_style")
 
 internal val glassPopupPalettePreferencesKey = intPreferencesKey("liquid_glass_popup_palette")
+internal val glassPopupImplementationPreferencesKey = intPreferencesKey("liquid_glass_popup_implementation")
 internal val progressiveBlurRendererPreferencesKey = intPreferencesKey("progressive_blur_renderer")
 
 object LiquidGlassSettingsStore {
+    fun observePopupImplementation(context: Context): Flow<GlassPopupImplementation> =
+        context.settingsDataStore.data.map {
+            GlassPopupImplementation.fromValue(it[glassPopupImplementationPreferencesKey] ?: GlassPopupImplementation.MIUIX.value)
+        }.distinctUntilChanged()
+
+    suspend fun setPopupImplementation(context: Context, implementation: GlassPopupImplementation) {
+        context.settingsDataStore.edit { it[glassPopupImplementationPreferencesKey] = implementation.value }
+    }
+
     fun observeProgressiveBlurRenderer(context: Context): Flow<ProgressiveBlurRenderer> =
         context.settingsDataStore.data.map {
             ProgressiveBlurRenderer.fromValue(it[progressiveBlurRendererPreferencesKey] ?: 0)

@@ -42,7 +42,7 @@ dependencies {
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.4.0")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:${libs.versions.kotlin.get()}")
     // android.jar 的 org.json 是桩；BAS(JSON) 解析单测需要真实实现
     testImplementation("org.json:json:20240303")
 }

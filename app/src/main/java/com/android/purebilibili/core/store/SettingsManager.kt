@@ -28,6 +28,7 @@ import com.android.purebilibili.core.store.home.HomeSettingsStore
 import com.android.purebilibili.core.store.home.dynamicUpListVisiblePreferencesKey
 import com.android.purebilibili.core.store.home.dynamicCommentPreviewVisiblePreferencesKey
 import com.android.purebilibili.core.store.home.glassPopupPalettePreferencesKey
+import com.android.purebilibili.core.store.home.glassPopupImplementationPreferencesKey
 import com.android.purebilibili.core.store.home.liquidGlassReadabilityModePreferencesKey
 import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
 import com.android.purebilibili.core.store.navigation.bottomBarItemLabelsPreferencesKey
@@ -8758,6 +8759,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.APPEARANCE,
             ),
             IntShareablePreferenceDefinition(glassPopupPalettePreferencesKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(glassPopupImplementationPreferencesKey, SettingsShareSection.APPEARANCE),
             FloatShareablePreferenceDefinition(
                 KEY_LIQUID_GLASS_CONTENT_READABILITY,
                 SettingsShareSection.APPEARANCE,
@@ -9080,6 +9082,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             KEY_LIQUID_GLASS_PROGRESSIVE_BLUR_CURVE.name,
             liquidGlassReadabilityModePreferencesKey.name,
             glassPopupPalettePreferencesKey.name,
+            glassPopupImplementationPreferencesKey.name,
             KEY_LIQUID_GLASS_CONTENT_READABILITY.name,
             KEY_LIQUID_GLASS_CHROMATIC_ABERRATION.name,
             KEY_LIQUID_GLASS_CONTENT_DISTORTION.name,
@@ -9163,6 +9166,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 advancedSettings.progressiveBlurCurve
             ),
             glassPopupPalettePreferencesKey.name to JsonPrimitive(preferences[glassPopupPalettePreferencesKey] ?: 0),
+            glassPopupImplementationPreferencesKey.name to JsonPrimitive(preferences[glassPopupImplementationPreferencesKey] ?: 0),
             liquidGlassReadabilityModePreferencesKey.name to JsonPrimitive(
                 preferences[liquidGlassReadabilityModePreferencesKey]
                     ?: LiquidGlassReadabilityMode.STABLE.value

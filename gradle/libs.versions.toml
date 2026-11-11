@@ -1,6 +1,6 @@
 [versions]
 agp = "9.3.2"
-kotlin = "2.4.0"
+kotlin = "2.4.21"
 # AGP 9 兼容线：1.4.x 及以下与 AGP 9.2+ 不兼容，必须用 1.5.0+
 baselineprofile = "1.5.0"
 coreKtx = "1.19.0"
@@ -11,7 +11,7 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 composeBom = "2026.09.00"
 window = "1.5.1"
-miuix = "0.9.4-153920c7-SNAPSHOT"
+miuix = "0.9.4-b7a5f08f-SNAPSHOT"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -36,6 +36,7 @@ miuix-blur = { group = "top.yukonga.miuix.kmp", name = "miuix-blur-android", ver
 miuix-shader = { group = "top.yukonga.miuix.kmp", name = "miuix-shader-android", version.ref = "miuix" }
 miuix-squircle = { group = "top.yukonga.miuix.kmp", name = "miuix-squircle-android", version.ref = "miuix" }
 miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons-android", version.ref = "miuix" }
+miuix-glass = { group = "top.yukonga.miuix.kmp", name = "miuix-glass-android", version.ref = "miuix" }
 # Navigation is bundled in :miuix-navigation to retain the video-return patches.
 
 [plugins]

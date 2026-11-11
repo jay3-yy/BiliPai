@@ -22,9 +22,9 @@ plugins {
 
     // 2. Kotlin 插件（AGP 9+ 内置 Kotlin，无需 org.jetbrains.kotlin.android）
     // Compose 编译器插件
-    id("org.jetbrains.kotlin.plugin.compose") version "2.4.0" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.4.21" apply false
     // 序列化插件
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.0" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.21" apply false
 
     // 3. Firebase 相关插件
     id("com.google.gms.google-services") version "4.4.2" apply false

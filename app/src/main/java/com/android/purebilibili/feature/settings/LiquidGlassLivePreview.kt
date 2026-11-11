@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.rememberCoroutineScope
 import com.android.purebilibili.core.store.home.GlassPopupPalette
+import com.android.purebilibili.core.store.home.GlassPopupImplementation
 import com.android.purebilibili.core.store.home.GlassMotionStyle
 import com.android.purebilibili.core.store.home.LiquidGlassSettingsStore
 import com.android.purebilibili.core.ui.components.AppSingleChoicePreference
@@ -117,6 +118,8 @@ internal fun LiquidGlassAdjustmentPanel(
     val context = LocalContext.current
     val paletteFlow = remember(context) { LiquidGlassSettingsStore.observePopupPalette(context) }
     val popupPalette by paletteFlow.collectAsStateWithLifecycle(initialValue = GlassPopupPalette.DOCK)
+    val popupImplementationFlow = remember(context) { LiquidGlassSettingsStore.observePopupImplementation(context) }
+    val popupImplementation by popupImplementationFlow.collectAsStateWithLifecycle(initialValue = GlassPopupImplementation.MIUIX)
     val motionStyleFlow = remember(context) { LiquidGlassSettingsStore.observePopupMotionStyle(context) }
     val popupMotionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
     val dockMotionFlow = remember(context) { LiquidGlassSettingsStore.observeDockMotionStyle(context) }
@@ -249,10 +252,22 @@ internal fun LiquidGlassAdjustmentPanel(
             )
         }
 
+        SettingsItemAnchor("glass.popup_implementation") {
+            AppSingleChoicePreference(
+                title = settingItemTitle("glass.popup_implementation"),
+                subtitle = "选择锚点弹窗的展开和收回样式，下次打开时生效；复杂交互面板保留现有样式",
+                selectedValue = popupImplementation,
+                options = remember { GlassPopupImplementation.entries.map { AppChoiceOption(it, it.label) } },
+                onValueChange = { implementation ->
+                    paletteScope.launch { LiquidGlassSettingsStore.setPopupImplementation(context, implementation) }
+                },
+            )
+        }
+
         SettingsItemAnchor("glass.popup_motion_style") {
             AppSingleChoicePreference(
                 title = settingItemTitle("glass.popup_motion_style"),
-                subtitle = "标准保留当前动画；弹性让展开与收回更柔和、回弹更明显。下次打开菜单时生效",
+                subtitle = "控制 BiliPai 样式：标准保留当前动画，弹性让展开与收回更柔和。下次打开菜单时生效",
                 selectedValue = popupMotionStyle,
                 options = remember { GlassMotionStyle.entries.map { AppChoiceOption(it, it.label) } },
                 onValueChange = { style ->

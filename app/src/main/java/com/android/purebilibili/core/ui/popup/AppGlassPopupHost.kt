@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.store.home.GlassMotionStyle
+import com.android.purebilibili.core.store.home.GlassPopupImplementation
 import com.android.purebilibili.core.store.home.LiquidGlassSettingsStore
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -339,6 +340,8 @@ private fun AppGlassPopupContentHost(
     val context = LocalContext.current
     val motionStyleFlow = remember(context) { LiquidGlassSettingsStore.observePopupMotionStyle(context) }
     val motionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
+    val implementationFlow = remember(context) { LiquidGlassSettingsStore.observePopupImplementation(context) }
+    val popupImplementation by implementationFlow.collectAsStateWithLifecycle(initialValue = GlassPopupImplementation.MIUIX)
     SideEffect { controller.preferredMotionStyle = motionStyle }
     DisposableEffect(controller) { onDispose { controller.dispose() } }
     val parentExiting = com.android.purebilibili.core.ui.LocalAppDialogExitRunning.current
@@ -422,7 +425,30 @@ private fun AppGlassPopupContentHost(
             // 即使关闭与再次打开合并在同一帧，也重新测量完整的新展示。
             // 同一展示中反向只更新动画 session，不丢失当前轮廓及滚动位置。
             key(controller, controller.morph.presentation) {
-                AppGlassChoicePopupOverlay(
+                // 以下场景尚未迁移，继续使用现有弹窗：居中或无来源快照的弹窗、
+                // 非锚点菜单、复杂交互面板、带滚动条、整项测量或占满可用高度的菜单及键盘操作。
+                // 低版本、不支持着色器或减少动态效果时也保留现有实现。
+                val useMiuix = remember(request) {
+                    // 请求类型来自其他模块，先保存菜单引用才能在判空后智能转换。
+                    val menu = request.menu
+                    popupImplementation == GlassPopupImplementation.MIUIX &&
+                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                        top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() && !reduceMotion &&
+                        inputModeManager.inputMode != InputMode.Keyboard &&
+                        (menu == null || (menu.placement == AppGlassMenuPlacement.ANCHOR_END &&
+                            !menu.interactiveContent && !menu.showScrollbar &&
+                            !menu.fitWholeItems && !menu.useAvailableHeight)) &&
+                        !request.centered &&
+                        request.controlBoundsInWindow != null && request.sourceLayer != null
+                }
+                if (useMiuix) MiuixGlassChoicePopupOverlay(
+                    request = request,
+                    controller = controller,
+                    backdrop = menuBackdrop,
+                    tuning = tuning,
+                    backdropReady = source.isReady,
+                    onFinished = finishPopup,
+                ) else AppGlassChoicePopupOverlay(
                     request = request,
                     tuning = tuning,
                     controller = controller,

@@ -40,7 +40,7 @@
         android:required="false" />
 
     <!-- miuix-blur 内部按高版本声明能力，实际调用由运行时能力检测兜底。 -->
-    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
+    <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur,top.yukonga.miuix.kmp.glass" />
 
     <queries>
         <package android:name="com.tencent.mm" />

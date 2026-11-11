@@ -466,6 +466,7 @@ dependencies {
     implementation(libs.miuix.shader)
     implementation(libs.miuix.squircle)
     implementation(libs.miuix.icons)
+    implementation(libs.miuix.glass)
     implementation(project(":miuix-navigation"))
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
@@ -622,7 +623,7 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.10.2")
     // AGP 9 使用内建 Kotlin 2.4；JUnit Platform 下必须使用同版本的 JUnit 5
     // 适配层，否则 kotlin.test.Test 不会落到 JVM 测试注解。
-    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:2.4.0")
+    testImplementation("org.jetbrains.kotlin:kotlin-test-junit5:${libs.versions.kotlin.get()}")
     // MockK for Kotlin mocking
     testImplementation("io.mockk:mockk:1.13.9")
     // Coroutines testing
