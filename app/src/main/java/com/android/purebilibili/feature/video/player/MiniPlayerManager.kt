@@ -1564,6 +1564,23 @@ class MiniPlayerManager private constructor(private val context: Context) :
     // 直播主播名（展开时传回 LivePlayerScreen）
     var currentLiveUname by mutableStateOf("")
         private set
+    // 直播转入应用内小窗前的全屏状态，供重新展开直播间时恢复方向。
+    var liveRestoreFullscreen by mutableStateOf(false)
+        private set
+
+    /** 直播页面交出播放器进入小窗时记录退出前的全屏状态；只认当前小窗直播间。 */
+    fun noteLiveRestoreFullscreen(roomId: Long, fullscreen: Boolean) {
+        if (isLiveMode && currentRoomId == roomId) {
+            liveRestoreFullscreen = fullscreen
+        }
+    }
+
+    /** 展开直播间时取走全屏恢复标记；无关直播间同样清除，避免旧标记串房。 */
+    fun consumeLiveRestoreFullscreen(roomId: Long): Boolean {
+        val restore = isLiveMode && currentRoomId == roomId && liveRestoreFullscreen
+        liveRestoreFullscreen = false
+        return restore
+    }
 
     // 📐 [新增] 视频原始流分辨率与高宽比，用于小窗和系统画中画自适应
     var videoWidth by mutableIntStateOf(0)
@@ -1608,6 +1625,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isLiveMode = false
         currentRoomId = 0L
         currentLiveUname = ""
+        liveRestoreFullscreen = false
         updateMediaMetadata(
             title = info.title,
             artist = info.owner.name,
@@ -2363,6 +2381,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isLiveMode = false
         currentRoomId = 0L
         currentLiveUname = ""
+        liveRestoreFullscreen = false
         isActive = true
         isMiniMode = false
         forcedMiniMode = false
@@ -2571,6 +2590,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         isLiveMode = false  // 📺 清除直播模式
         currentRoomId = 0L
         currentLiveUname = ""
+        liveRestoreFullscreen = false
         videoWidth = 0
         videoHeight = 0
         videoAspectRatio = 16f / 9f
@@ -2949,6 +2969,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
                     isLiveMode = false
                     currentRoomId = 0L
                     currentLiveUname = ""
+                    liveRestoreFullscreen = false
                     duration = loadResult.duration.coerceAtLeast(0L)
                     isPlaying = true
                     updateMediaMetadata(currentTitle, currentOwner, currentCover)

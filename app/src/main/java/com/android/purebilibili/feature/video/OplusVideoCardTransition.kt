@@ -19,6 +19,17 @@ internal object OplusVideoCardTransition {
     private const val TAG = "OplusVideoCardTransition"
     private const val OPEN = "view_seamless_open"
 
+    private val remoteManagerClass: Class<*>? by lazy {
+        try {
+            Class.forName("android.app.viewseamless.OplusViewSeamlessRemoteManager", false, null)
+        } catch (_: ClassNotFoundException) {
+            null
+        }
+    }
+
+    /** 标准门面的识别不依赖旧接口反射是否获准，避免误用其他实现的返回更新策略。 */
+    val hasSystemManager: Boolean get() = remoteManagerClass != null
+
     private data class Protocol(
         val open: Method,
         val skipBack: Method,
@@ -72,11 +83,8 @@ internal object OplusVideoCardTransition {
     /** 读取执行器实际使用的缓存值，并由系统自身判断窗口；不可读与关闭分开记录。 */
     fun conditions(activity: Activity?): Conditions {
         val errors = mutableListOf<String>()
-        val manager = try {
-            Class.forName("android.app.viewseamless.OplusViewSeamlessRemoteManager", false, null)
-        } catch (error: ClassNotFoundException) {
-            return Conditions(null, null, null, null, null, null, listOf(error.toString()))
-        }
+        val manager = remoteManagerClass
+            ?: return Conditions(null, null, null, null, null, null, listOf("原生无缝管理器不存在"))
         fun <T> read(name: String, block: () -> T): T? = try {
             block()
         } catch (error: ReflectiveOperationException) {

@@ -190,7 +190,8 @@ fun LivePlayerScreen(
     onBack: () -> Unit,
     onUserClick: (Long) -> Unit,
     viewModel: LivePlayerViewModel = viewModel(),
-    siteId: String = "bilibili"
+    siteId: String = "bilibili",
+    startFullscreen: Boolean = false
 ) {
     LiveRoomTheme {
         com.android.purebilibili.core.ui.popup.AppGlassPopupHost(
@@ -202,7 +203,7 @@ fun LivePlayerScreen(
             androidx.compose.runtime.CompositionLocalProvider(
                 com.android.purebilibili.core.ui.LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.playerGlassEnabled),
             ) {
-                LiveRoomScreen(roomId, title, uname, onBack, onUserClick, viewModel, siteId)
+                LiveRoomScreen(roomId, title, uname, onBack, onUserClick, viewModel, siteId, startFullscreen)
             }
         }
     }
@@ -219,6 +220,7 @@ private fun LiveRoomScreen(
     onUserClick: (Long) -> Unit,
     viewModel: LivePlayerViewModel,
     siteId: String,
+    startFullscreen: Boolean,
 ) {
     val bilibiliRoomId = roomId.toLongOrNull() ?: 0L
     val context = LocalContext.current
@@ -269,7 +271,7 @@ private fun LiveRoomScreen(
         showSendDanmakuSheet = true
     }
     var reportTarget by remember(roomId, siteId) { mutableStateOf<LiveDanmakuItem?>(null) }
-    var fullscreenRequested by rememberSaveable { mutableStateOf(false) }
+    var fullscreenRequested by rememberSaveable { mutableStateOf(startFullscreen) }
     var isPlaying by remember { mutableStateOf(true) }
     var selectedInteractionTab by rememberSaveable(roomId, siteId) { mutableIntStateOf(0) }
     val chatListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -953,6 +955,8 @@ private fun LiveRoomScreen(
                 exoPlayer.release()
                 Logger.d(TAG, "📺 播放器未被小窗持有，释放")
             } else {
+                // 交出播放器进入应用内小窗时记录退出前的全屏状态，供重新展开时恢复方向。
+                miniPlayerManager.noteLiveRestoreFullscreen(bilibiliRoomId, fullscreenRequested)
                 Logger.d(TAG, "📺 播放器被小窗持有，保留")
             }
             activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

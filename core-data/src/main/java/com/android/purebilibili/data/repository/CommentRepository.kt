@@ -493,6 +493,9 @@ object CommentRepository {
                     mode = mode,
                     nextOffset = paginationOffset
                 )
+                resolveGrpcCommentReadRestriction(grpcResult.exceptionOrNull())?.let {
+                    return@withContext Result.failure(it)
+                }
                 if (grpcResult.isSuccess) {
                     commentReadRouteMemo.recordGrpcSuccess()
                     val grpcData = grpcResult.getOrNull()
@@ -665,6 +668,9 @@ object CommentRepository {
                     oid = oid, type = type, mode = mode, nextOffset = continuation?.offset,
                 )
                 currentCoroutineContext().ensureActive()
+                resolveGrpcCommentReadRestriction(result.exceptionOrNull())?.let {
+                    return@withContext Result.failure(it)
+                }
                 val data = result.getOrNull()
                 val missingCursor = data != null && !data.cursor.isEnd &&
                     data.mainListContinuation?.offset.isNullOrBlank()

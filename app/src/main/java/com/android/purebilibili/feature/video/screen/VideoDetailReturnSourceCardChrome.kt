@@ -91,10 +91,10 @@ import com.android.purebilibili.core.theme.BiliPink
 import com.android.purebilibili.core.theme.withDensityScale
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.feature.home.resolveHomeCardInfoSurfaceAppearance
+import com.android.purebilibili.feature.home.components.cards.VideoCardCoverMetadataLayout
+import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCoverOverlayBottomLayout
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoStatRow
 import com.android.purebilibili.feature.home.components.cards.resolveVideoCardCoverOverlayTextShadow
-import com.android.purebilibili.feature.home.components.cards.resolveVideoCardPrimaryStatBadgeMinWidthDp
-import com.android.purebilibili.feature.home.components.cards.resolveVideoCardSecondaryStatBadgeMinWidthDp
 
 /** 屏幕几何仅用于落点；裁原生图层必须先换回录制像素，优先使用点击时的局部实测。 */
 internal fun resolveVideoDetailNativeInfoCrop(
@@ -811,11 +811,9 @@ private fun BoxScope.LandingCoverChrome(
         )
     }
 
-    val progressBottomPadding = if (presentation.showHistoryProgressBar) {
-        AppSpacingTokens.ExtraSmall
-    } else {
-        AppSpacingTokens.None
-    }
+    val coverOverlayBottomLayout = resolveVideoCardCoverOverlayBottomLayout(
+        presentation.showHistoryProgressBar,
+    )
     if (presentation.showHistoryProgressBar) {
         Box(
             modifier = Modifier
@@ -836,57 +834,52 @@ private fun BoxScope.LandingCoverChrome(
     }
 
     if (presentation.showStatsOnCover) {
-        Box(
+        VideoCardCoverMetadataLayout(
+            durationAtEnd = presentation.showDurationOnCover,
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
                 .padding(
                     start = AppSpacingTokens.Small,
                     end = AppSpacingTokens.Small,
-                    bottom = AppSpacingTokens.ExtraSmall + progressBottomPadding,
+                    bottom = coverOverlayBottomLayout.compactStatsBottomPaddingDp.dp,
                 ),
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        end = if (presentation.showDurationOnCover) {
-                            AppSpacingTokens.TripleExtraLarge
-                        } else {
-                            AppSpacingTokens.None
-                        },
+            stats = {
+                Row(
+                    modifier = Modifier,
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(
+                        AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro,
                     ),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(
-                    AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro,
-                ),
-            ) {
-                LandingCoverStat(
-                    icon = Icons.Outlined.PlayCircle,
-                    text = model.viewText,
-                    minWidth = resolveVideoCardPrimaryStatBadgeMinWidthDp(model.viewText).dp,
-                    useGlass = presentation.useGlassStats,
-                    textStyle = overlayStyle,
-                )
-                if (presentation.showSecondaryStatOnCover && model.danmakuText.isNotBlank()) {
+                ) {
                     LandingCoverStat(
-                        icon = Icons.Outlined.Subtitles,
-                        text = model.danmakuText,
-                        minWidth = resolveVideoCardSecondaryStatBadgeMinWidthDp(
-                            model.danmakuText,
-                        ).dp,
+                        icon = Icons.Outlined.PlayCircle,
+                        text = model.viewText,
+                        modifier = Modifier.weight(1f, fill = false),
                         useGlass = presentation.useGlassStats,
                         textStyle = overlayStyle,
                     )
+                    if (presentation.showSecondaryStatOnCover && model.danmakuText.isNotBlank()) {
+                        LandingCoverStat(
+                            icon = Icons.Outlined.Subtitles,
+                            text = model.danmakuText,
+                            modifier = Modifier.weight(1f, fill = false),
+                            useGlass = presentation.useGlassStats,
+                            textStyle = overlayStyle,
+                        )
+                    }
+                    if (presentation.showOnlineCountOnCover) {
+                        LandingCoverStat(
+                            icon = Icons.Outlined.Visibility,
+                            text = presentation.onlineCountText,
+                            modifier = Modifier.weight(1f, fill = false),
+                            useGlass = presentation.useGlassStats,
+                            textStyle = overlayStyle,
+                        )
+                    }
                 }
-                if (presentation.showOnlineCountOnCover) {
-                    LandingCoverStat(
-                        icon = Icons.Outlined.Visibility,
-                        text = presentation.onlineCountText,
-                        useGlass = presentation.useGlassStats,
-                        textStyle = overlayStyle,
-                    )
-                }
+            },
+            duration = {
                 if (presentation.showDurationAsStat && model.durationText.isNotBlank()) {
                     LandingCoverStat(
                         icon = Icons.Outlined.Alarm,
@@ -895,18 +888,18 @@ private fun BoxScope.LandingCoverChrome(
                         textStyle = overlayStyle,
                     )
                 }
-            }
-            if (presentation.showDurationOnCover && model.durationText.isNotBlank()) {
-                AppText(
-                    text = model.durationText,
-                    color = MediaContrastPalette.Foreground,
-                    style = MaterialTheme.typography.labelSmall.merge(overlayStyle),
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                    maxLines = 1,
-                )
-            }
-        }
+                if (presentation.showDurationOnCover && model.durationText.isNotBlank()) {
+                    AppText(
+                        text = model.durationText,
+                        color = MediaContrastPalette.Foreground,
+                        style = MaterialTheme.typography.labelSmall.merge(overlayStyle),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier,
+                        maxLines = 1,
+                    )
+                }
+            },
+        )
     } else if (presentation.showDurationOnCover && model.durationText.isNotBlank()) {
         AppText(
             text = model.durationText,
@@ -917,8 +910,8 @@ private fun BoxScope.LandingCoverChrome(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(
-                    end = AppSpacingTokens.Small + AppSpacingTokens.Micro,
-                    bottom = AppSpacingTokens.Small + progressBottomPadding,
+                    end = AppSpacingTokens.Small - AppSpacingTokens.Micro,
+                    bottom = coverOverlayBottomLayout.floatingDurationBottomPaddingDp.dp,
                 ),
         )
     }
@@ -931,7 +924,6 @@ private fun LandingCoverStat(
     useGlass: Boolean,
     textStyle: TextStyle,
     modifier: Modifier = Modifier,
-    minWidth: Dp = 0.dp,
 ) {
     if (text.isBlank()) return
     val pillShape = AppShapes.container(ContainerLevel.Pill)
@@ -952,9 +944,7 @@ private fun LandingCoverStat(
         Modifier
     }
     Row(
-        modifier = modifier
-            .widthIn(min = minWidth)
-            .then(pillDecoration),
+        modifier = modifier.then(pillDecoration),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Micro),
     ) {
@@ -966,12 +956,13 @@ private fun LandingCoverStat(
         )
         AppText(
             text = text,
+            modifier = Modifier.weight(1f, fill = false),
             color = MediaContrastPalette.Foreground.copy(alpha = 0.94f),
             style = MaterialTheme.typography.labelSmall.merge(textStyle),
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             softWrap = false,
-            overflow = TextOverflow.Visible,
+            overflow = TextOverflow.Clip,
         )
     }
 }

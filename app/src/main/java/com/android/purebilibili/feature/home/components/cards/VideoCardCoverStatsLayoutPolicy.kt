@@ -5,8 +5,8 @@ private const val COMPACT_DURATION_BADGE_SPACING_DP = 6f
 private const val COMPACT_ONLINE_BADGE_MIN_WIDTH_DP = 52f
 private const val HISTORY_PROGRESS_BAR_HEIGHT_DP = 2f
 private const val HISTORY_PROGRESS_BAR_CLEARANCE_DP = 2f
-private const val COMPACT_STATS_BASE_BOTTOM_PADDING_DP = 6f
-private const val FLOATING_DURATION_BASE_BOTTOM_PADDING_DP = 10f
+private const val COMPACT_STATS_BASE_BOTTOM_PADDING_DP = 0f
+private const val FLOATING_DURATION_BASE_BOTTOM_PADDING_DP = 4f
 // 时长统计 pill：闹钟图标 + 文本，文本宽度按字符数估算（labelSmall 半角/全角混合）。
 private const val DURATION_STAT_BASE_MIN_WIDTH_DP = 30f
 private const val DURATION_STAT_MIN_WIDTH_DP = 44f
@@ -86,9 +86,8 @@ internal fun resolveVideoCardCompactCoverStatsLayout(
     return VideoCardCompactCoverStatsLayout(
         primaryMinWidthDp = primaryMinWidth,
         secondaryMinWidthDp = secondaryMinWidth,
-        // 时长进统计行后空间更紧张：播放量 + 时长保底，弹幕次之，在线人数最先让位。
-        showSecondaryStat = showSecondary &&
-            (!hasDurationStat || statsAvailableWidth >= requiredForPrimaryAndSecondary),
+        // 评论数不为时长让位；时长是否换行由封面布局按实际尺寸测量决定。
+        showSecondaryStat = showSecondary,
         showOnlineCount = hasOnlineCount && statsAvailableWidth >= requiredWithOnline,
         statsEndPaddingDp = durationReserveWidth
     )

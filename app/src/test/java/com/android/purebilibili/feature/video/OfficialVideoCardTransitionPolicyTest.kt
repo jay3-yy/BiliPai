@@ -9,6 +9,91 @@ import org.junit.Test
 
 class OfficialVideoCardTransitionPolicyTest {
     @Test
+    fun oplusSdkDoesNotWriteIrreversibleReturnControlsBeforeFinish() {
+        // 页面首帧身份未知、后续绑定就绪，都不能在关闭前写入返回控制。
+        for (sourceAvailable in listOf(false, true)) {
+            assertNull(
+                resolveOfficialVideoCardReturnPlan(
+                    metadata = "int",
+                    oplusSdkWindow = true,
+                    preparingToFinish = false,
+                    motionEnabled = true,
+                    sourceAvailable = sourceAvailable,
+                    sourceRadiusUnchanged = true,
+                    preferSystemPredictiveBack = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun oplusSdkPreservesNativeCardReturnAndOnlyUpdatesWritableGeometry() {
+        val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
+            metadata = "int",
+            oplusSdkWindow = true,
+            preparingToFinish = true,
+            motionEnabled = true,
+            sourceAvailable = true,
+            sourceRadiusUnchanged = true,
+            preferSystemPredictiveBack = true,
+        ))
+        assertEquals(ViewAnimationType.VIEW_ANIM_DEFAULT, plan.backAnimType)
+        assertTrue(plan.useSourceBounds)
+        assertFalse(plan.updateRadius)
+        assertFalse(plan.updateEffects)
+    }
+
+    @Test
+    fun oplusSdkRejectsStaleCardGeometryAtFinish() {
+        // 来源已失效或圆角改变时，都不能把旧截图收回新形状。
+        for ((sourceAvailable, sameRadius) in listOf(false to true, true to false)) {
+            val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
+                metadata = "int",
+                oplusSdkWindow = true,
+                preparingToFinish = true,
+                motionEnabled = true,
+                sourceAvailable = sourceAvailable,
+                sourceRadiusUnchanged = sameRadius,
+                preferSystemPredictiveBack = false,
+            ))
+            assertEquals(ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM, plan.backAnimType)
+            assertFalse(plan.useSourceBounds)
+        }
+    }
+
+    @Test
+    fun oplusSdkHonorsReducedMotionAtFinish() {
+        val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
+            metadata = "int",
+            oplusSdkWindow = true,
+            preparingToFinish = true,
+            motionEnabled = false,
+            sourceAvailable = true,
+            sourceRadiusUnchanged = true,
+            preferSystemPredictiveBack = true,
+        ))
+        assertEquals(ViewAnimationType.VIEW_ANIM_NONE, plan.backAnimType)
+        assertFalse(plan.useSourceBounds)
+    }
+
+    @Test
+    fun otherSdkImplementationsKeepLiveOverridesAndPredictiveBackPolicy() {
+        val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
+            metadata = "int",
+            oplusSdkWindow = false,
+            preparingToFinish = false,
+            motionEnabled = true,
+            sourceAvailable = true,
+            sourceRadiusUnchanged = false,
+            preferSystemPredictiveBack = true,
+        ))
+        assertEquals(ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM, plan.backAnimType)
+        assertTrue(plan.useSourceBounds)
+        assertTrue(plan.updateRadius)
+        assertTrue(plan.updateEffects)
+    }
+
+    @Test
     fun systemPredictiveReturnRequiresWritableFollowSystemAndKeepsMotionPolicy() {
         val supported = "int|VIEW_ANIM_DEFAULT,VIEW_ANIM_FOLLOW_SYSTEM,VIEW_ANIM_NONE|Back animation type"
         assertEquals(

@@ -5380,6 +5380,12 @@ fun AppNavigation(
                 fun RenderLiveEntryContent(key: BiliPaiNavKey) {
                     val liveKey = key as BiliPaiNavKey.Live
                     val activity = context as? android.app.Activity
+                    // 从应用内小窗展开时恢复退出前的全屏方向；只在此处消费一次。
+                    val startFullscreen = remember(liveKey.roomId) {
+                        miniPlayerManager?.consumeLiveRestoreFullscreen(
+                            liveKey.roomId.toLongOrNull() ?: 0L
+                        ) == true
+                    }
                     DisposableEffect(liveKey.roomId, miniPlayerManager) {
                         onDispose {
                             val isChangingConfigurations = activity?.isChangingConfigurations == true
@@ -5400,6 +5406,7 @@ fun AppNavigation(
                         title = liveKey.title,
                         uname = liveKey.uname,
                         siteId = liveKey.siteId,
+                        startFullscreen = startFullscreen,
                         onBack = { performSystemBackAction() },
                         onUserClick = { mid -> pushNavigation3Key(BiliPaiNavKey.Space(mid)) }
                     )

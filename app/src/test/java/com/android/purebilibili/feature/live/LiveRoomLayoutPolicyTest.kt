@@ -46,7 +46,7 @@ class LiveRoomLayoutPolicyTest {
     }
 
     @Test
-    fun `phone split window enters fullscreen without waiting for physical rotation`() {
+    fun `phone system window requests fullscreen orientation and waits for matching bounds`() {
         val splitWindow = resolveAppDisplayContext(
             AppDisplayContextInput(
                 currentWindowWidthDp = 390,
@@ -59,8 +59,17 @@ class LiveRoomLayoutPolicyTest {
             ),
         )
         val mode = resolveLiveRequestedOrientationMode(splitWindow, isFullscreen = true)
-        assertEquals(LiveRequestedOrientationMode.Unspecified, mode)
-        assertTrue(shouldPresentLiveFullscreen(true, isLandscape = false, orientationMode = mode))
+        assertEquals(LiveRequestedOrientationMode.SensorLandscape, mode)
+        assertFalse(shouldPresentLiveFullscreen(true, isLandscape = false, orientationMode = mode))
+        assertTrue(shouldPresentLiveFullscreen(true, isLandscape = true, orientationMode = mode))
+        assertEquals(
+            LiveRequestedOrientationMode.SensorPortrait,
+            resolveLiveRequestedOrientationMode(splitWindow, isFullscreen = true, isPortraitLive = true),
+        )
+        assertEquals(
+            LiveRequestedOrientationMode.Portrait,
+            resolveLiveRequestedOrientationMode(splitWindow, isFullscreen = false),
+        )
     }
 
     @Test

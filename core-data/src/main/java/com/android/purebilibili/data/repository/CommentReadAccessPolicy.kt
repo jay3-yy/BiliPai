@@ -1,5 +1,6 @@
 package com.android.purebilibili.data.repository
 
+import com.android.purebilibili.core.network.grpc.BiliGrpcException
 import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyItem
 
@@ -32,12 +33,20 @@ internal fun shouldFallbackCommentRead(code: Int): Boolean {
     return code in setOf(-101, -111, -352, -403, -412)
 }
 
+/** 评论区限制是读取结果，不能被后续 REST 请求的错误覆盖。 */
+internal fun resolveGrpcCommentReadRestriction(failure: Throwable?): CommentReadException? {
+    val code = (failure as? BiliGrpcException)?.businessCode ?: return null
+    if (code != 12002 && code != 12061) return null
+    return CommentReadException(code).apply { initCause(failure) }
+}
+
 internal fun hasRenderableCommentPayload(data: ReplyData?): Boolean {
     if (data == null) return false
     return data.replies.orEmpty().isNotEmpty() ||
         data.hots.orEmpty().isNotEmpty() ||
         data.collectTopReplies().isNotEmpty() ||
         data.voteCard != null ||
+        data.control?.inputDisable == true ||
         !data.control?.sectionNotice().isNullOrBlank() ||
         !data.control?.emptyMessage().isNullOrBlank()
 }

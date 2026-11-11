@@ -36,6 +36,8 @@ internal data class SystemVideoCardCapability(
     val roundedWindow: Boolean = false,
     val oplusWindow: Boolean = false,
     val vivoWindow: Boolean = false,
+    /** 标准 SDK 与原生无缝门面并存，使用该门面的返回更新契约。 */
+    val oplusSdkWindow: Boolean = false,
     val systemConditionSummary: String? = null,
 )
 
@@ -81,6 +83,7 @@ internal object SystemVideoCardTransition {
         val roundedSource: WeakReference<ComponentActivity>?,
         val oplusWindow: Boolean,
         val vivoWindow: Boolean,
+        val oplusSdkWindow: Boolean,
         val openingBounds: Rect,
         val openingRadius: Float,
         val coverCornerDp: Float?,
@@ -107,17 +110,21 @@ internal object SystemVideoCardTransition {
     }
 
     fun deviceCapability(activity: Activity? = null): SystemVideoCardCapability {
+        // 标准 SDK 的能力探测只检查静态开关；原生无缝实现还会按当前窗口拒绝请求。
+        val oplusSystemManager = OplusVideoCardTransition.hasSystemManager
+        val conditions = if (oplusSystemManager) OplusVideoCardTransition.conditions(activity) else null
+        if (conditions?.blocked == true) {
+            return SystemVideoCardCapability(false, false, null, systemConditionSummary = conditions.toString())
+        }
         if (ViewAnimationManager.isViewAnimationSupported() > 0) {
             val extras = ViewAnimationManager.getViewAnimationExtras()
             return SystemVideoCardCapability(
                 available = true,
                 configurableBlur = extras?.containsKey(ViewAnimationExtras.EXTRA_BLUR) == true,
                 backAnimMetadata = extras?.get(ViewAnimationExtras.EXTRA_BACK_ANIM_TYPE),
+                oplusSdkWindow = oplusSystemManager,
+                systemConditionSummary = conditions?.toString(),
             )
-        }
-        val conditions = if (OplusVideoCardTransition.available) OplusVideoCardTransition.conditions(activity) else null
-        if (conditions?.blocked == true) {
-            return SystemVideoCardCapability(false, false, null, systemConditionSummary = conditions.toString())
         }
         if (OplusVideoCardTransition.available) {
             return SystemVideoCardCapability(
@@ -193,6 +200,9 @@ internal object SystemVideoCardTransition {
         val configuration = Bundle().apply {
             if (canConfigureBlur) putBoolean(ViewAnimationExtras.EXTRA_BLUR, realtimeBlurEnabled)
             if (canConfigureBackgroundScale) putFloat(ViewAnimationExtras.EXTRA_BACKGROUND_SCALE, 1f)
+            if (capability.oplusSdkWindow && extras?.containsKey(ViewAnimationExtras.EXTRA_COLOR) == true) {
+                putInt(ViewAnimationExtras.EXTRA_COLOR, sourceBackgroundColor)
+            }
         }
         val prefix = when {
             capability.oplusWindow -> "oplus:"
@@ -216,6 +226,7 @@ internal object SystemVideoCardTransition {
             roundedSource = if (capability.roundedWindow) WeakReference(activity) else null,
             oplusWindow = capability.oplusWindow,
             vivoWindow = capability.vivoWindow,
+            oplusSdkWindow = capability.oplusSdkWindow,
             openingBounds = Rect(bounds),
             openingRadius = radius,
             coverCornerDp = source.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
@@ -383,36 +394,46 @@ internal object SystemVideoCardTransition {
             }
             return
         }
+        // onResume、内容绑定和设置变更不得提前写入此门面的跳过返回标记。
+        if (session?.oplusSdkWindow == true && !preparingToFinish) return
         val capability = deviceCapability(activity)
         if (!capability.available || capability.roundedWindow || capability.oplusWindow || capability.vivoWindow) return
-        val config = ViewAnimationConfig()
-        resolveOfficialReturnAnimType(
-            capability.backAnimMetadata, motionEnabled, sourceAvailable = session != null && bounds != null,
-            preferSystemPredictiveBack = preferSystemPredictiveBack,
-        )?.let { config.setBackAnimType(it) }
-        if (motionEnabled && session != null && bounds != null) {
-            config.setBounds(bounds)
-                .setRadius(
-                    resolveVideoCardSourceClipRadiusPx(
-                        requireNotNull(session.anchor.radiusPx()),
-                        session.coverCornerDp,
-                        activity.resources.displayMetrics.density,
-                    )
+        val currentRadius = if (session != null && bounds != null) {
+            session.anchor.radiusPx()?.let { anchorRadius ->
+                resolveVideoCardSourceClipRadiusPx(
+                    anchorRadius, session.coverCornerDp, activity.resources.displayMetrics.density,
                 )
-        }
+            }
+        } else null
+        val oplusSdkWindow = session?.oplusSdkWindow ?: capability.oplusSdkWindow
+        val plan = resolveOfficialVideoCardReturnPlan(
+            metadata = capability.backAnimMetadata,
+            oplusSdkWindow = oplusSdkWindow,
+            preparingToFinish = preparingToFinish,
+            motionEnabled = motionEnabled,
+            sourceAvailable = session != null && bounds != null && currentRadius != null,
+            sourceRadiusUnchanged = session != null && currentRadius == session.openingRadius,
+            preferSystemPredictiveBack = preferSystemPredictiveBack,
+        ) ?: return
+        val config = ViewAnimationConfig()
+        plan.backAnimType?.let { config.setBackAnimType(it) }
+        if (plan.useSourceBounds) config.setBounds(requireNotNull(bounds))
+        if (plan.updateRadius) config.setRadius(requireNotNull(currentRadius))
         val bundle = config.toBundle()
-        if (session != null && bounds != null && session.canRefreshBitmap) {
+        if (session != null && bounds != null && session.canRefreshBitmap &&
+            (!oplusSdkWindow || plan.useSourceBounds)) {
             bundle.putParcelable(ViewAnimationExtras.EXTRA_BITMAP, session.thumbnail)
         }
-        if (session?.canConfigureBlur == true) {
+        if (plan.updateEffects && session?.canConfigureBlur == true) {
             bundle.putBoolean(ViewAnimationExtras.EXTRA_BLUR, realtimeBlurEnabled)
         }
-        if (session?.canConfigureBackgroundScale == true) {
+        if (plan.updateEffects && session?.canConfigureBackgroundScale == true) {
             bundle.putFloat(ViewAnimationExtras.EXTRA_BACKGROUND_SCALE, 1f)
         }
         Logger.d("SystemVideoCardTransition", "session=$token 更新返回配置: reason=$reason openingEvent=${session?.openingEvent} " +
             "lifecycle=${activity.lifecycle.currentState} finishing=${activity.isFinishing} " +
-            "motion=$motionEnabled sameContent=$sameContent sameWindow=$sameWindow bounds=$bounds keys=${bundle.keySet()}")
+            "motion=$motionEnabled sameContent=$sameContent sameWindow=$sameWindow bounds=$bounds " +
+            "oplusSdk=$oplusSdkWindow plan=$plan keys=${bundle.keySet()}")
         com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork(
             "official_return_override", detail = { "reason=$reason session=$token" },
         ) { ViewAnimationManager.overrideViewAnimationTransition(activity, bundle) }

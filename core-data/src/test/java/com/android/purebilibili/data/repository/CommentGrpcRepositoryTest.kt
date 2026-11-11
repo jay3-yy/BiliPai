@@ -8,6 +8,19 @@ import org.junit.Assert.assertFalse
 class CommentGrpcRepositoryTest {
 
     @Test
+    fun `input disabled empty main list does not trigger empty payload fallback`() {
+        val subject = ProtoWire.message(ProtoWire.bool(13, true))
+        val data = CommentGrpcRepository.parseMainListReply(ProtoWire.message(
+            ProtoWire.bytes(1, ProtoWire.message(ProtoWire.bool(4, true))),
+            ProtoWire.bytes(3, subject),
+        ))
+        assertEquals(true, data.control?.inputDisable)
+        assertEquals(true, data.cursor.isEnd)
+        assertFalse(shouldFallbackHotCommentReadOnEmptySuccess(1, 3, 0, data))
+        assertFalse(shouldFallbackCommentReadOnEmptyRenderableSuccess(0, data))
+    }
+
+    @Test
     fun `main list keeps curated title and empty guidance without triggering fallback`() {
         val subject = ProtoWire.message(
             ProtoWire.string(17, "精选评论"),

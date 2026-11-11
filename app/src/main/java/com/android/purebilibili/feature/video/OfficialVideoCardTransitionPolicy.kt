@@ -42,3 +42,35 @@ internal fun resolveOfficialReturnAnimType(
         else -> null
     }
 }
+
+internal data class OfficialVideoCardReturnPlan(
+    val backAnimType: Int?,
+    val useSourceBounds: Boolean,
+    val updateRadius: Boolean,
+    val updateEffects: Boolean,
+)
+
+/** 此门面的默认类型不清除跳过标记；只在关闭前提交返回控制，且不更新仅支持打开的字段。 */
+internal fun resolveOfficialVideoCardReturnPlan(
+    metadata: String?,
+    oplusSdkWindow: Boolean,
+    preparingToFinish: Boolean,
+    motionEnabled: Boolean,
+    sourceAvailable: Boolean,
+    sourceRadiusUnchanged: Boolean,
+    preferSystemPredictiveBack: Boolean,
+): OfficialVideoCardReturnPlan? {
+    if (oplusSdkWindow && !preparingToFinish) return null
+    val usableSource = sourceAvailable && (!oplusSdkWindow || sourceRadiusUnchanged)
+    val useSourceBounds = motionEnabled && usableSource
+    return OfficialVideoCardReturnPlan(
+        backAnimType = resolveOfficialReturnAnimType(
+            metadata, motionEnabled, usableSource,
+            // 此门面的 FOLLOW_SYSTEM 会跳过回卡，正常来源仍交给其原生开合执行器。
+            preferSystemPredictiveBack = preferSystemPredictiveBack && !oplusSdkWindow,
+        ),
+        useSourceBounds = useSourceBounds,
+        updateRadius = useSourceBounds && !oplusSdkWindow,
+        updateEffects = !oplusSdkWindow,
+    )
+}

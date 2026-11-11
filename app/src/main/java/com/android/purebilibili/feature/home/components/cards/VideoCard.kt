@@ -1629,7 +1629,8 @@ internal fun ElegantVideoCard(
                         }
                     )
                 }
-                Box(
+                VideoCardCoverMetadataLayout(
+                    durationAtEnd = showDurationOnCover,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
@@ -1638,46 +1639,16 @@ internal fun ElegantVideoCard(
                             top = AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro,
                             end = AppSpacingTokens.Small,
                             bottom = coverOverlayBottomLayout.compactStatsBottomPaddingDp.dp
-                        )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(end = compactStatsLayout.statsEndPaddingDp.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro)
-                    ) {
-                        val compactViewsModifier = Modifier.widthIn(min = compactStatsLayout.primaryMinWidthDp.dp)
-                        HomeVideoBadgePill(
-                            modifier = compactViewsModifier,
-                            style = badgeStylePolicy.coverStyle,
-                            useRealtimeHaze = badgeEffectVisual.useRealtimeHaze,
-                            shape = AppShapes.container(ContainerLevel.Pill),
-                            containerColor = coverPillColors.containerColor,
-                            borderColor = coverPillColors.borderColor
+                        ),
+                    stats = {
+                        Row(
+                            modifier = Modifier,
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro)
                         ) {
-                            AppIcon(
-                                imageVector = Icons.Outlined.PlayCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(AppSpacingTokens.Small + AppSpacingTokens.Micro),
-                                tint = MediaContrastPalette.Foreground.copy(alpha = 0.94f)
-                            )
-                            AppText(
-                                text = primaryStatText,
-                                color = MediaContrastPalette.Foreground.copy(alpha = 0.94f),
-                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                                fontWeight = FontWeight.Medium,
-                                style = coverOverlayTextStyle,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Visible
-                            )
-                        }
-
-                        if (compactStatsLayout.showSecondaryStat && secondaryStatText != null) {
-                            val compactDanmakuModifier = Modifier.widthIn(min = compactStatsLayout.secondaryMinWidthDp.dp)
+                            val compactViewsModifier = Modifier.weight(1f, fill = false)
                             HomeVideoBadgePill(
-                                modifier = compactDanmakuModifier,
+                                modifier = compactViewsModifier,
                                 style = badgeStylePolicy.coverStyle,
                                 useRealtimeHaze = badgeEffectVisual.useRealtimeHaze,
                                 shape = AppShapes.container(ContainerLevel.Pill),
@@ -1685,52 +1656,86 @@ internal fun ElegantVideoCard(
                                 borderColor = coverPillColors.borderColor
                             ) {
                                 AppIcon(
-                                    imageVector = Icons.Outlined.Subtitles,
+                                    imageVector = Icons.Outlined.PlayCircle,
                                     contentDescription = null,
                                     modifier = Modifier.size(AppSpacingTokens.Small + AppSpacingTokens.Micro),
-                                    tint = MediaContrastPalette.Foreground.copy(alpha = 0.90f)
+                                    tint = MediaContrastPalette.Foreground.copy(alpha = 0.94f)
                                 )
                                 AppText(
-                                    text = secondaryStatText,
-                                    color = MediaContrastPalette.Foreground.copy(alpha = 0.90f),
+                                    text = primaryStatText,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    color = MediaContrastPalette.Foreground.copy(alpha = 0.94f),
                                     fontSize = MaterialTheme.typography.labelSmall.fontSize,
                                     fontWeight = FontWeight.Medium,
                                     style = coverOverlayTextStyle,
                                     maxLines = 1,
                                     softWrap = false,
-                                    overflow = TextOverflow.Visible
+                                    overflow = TextOverflow.Clip
                                 )
                             }
-                        }
 
-                        if (compactStatsLayout.showOnlineCount) {
-                            HomeVideoBadgePill(
-                                modifier = Modifier.weight(1f, fill = false),
-                                style = badgeStylePolicy.coverStyle,
-                                useRealtimeHaze = badgeEffectVisual.useRealtimeHaze,
-                                shape = AppShapes.container(ContainerLevel.Pill),
-                                containerColor = coverPillColors.containerColor,
-                                borderColor = coverPillColors.borderColor
-                            ) {
-                                AppIcon(
-                                    imageVector = Icons.Outlined.Visibility,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(AppSpacingTokens.Small + AppSpacingTokens.Micro),
-                                    tint = MediaContrastPalette.Foreground.copy(alpha = 0.90f)
-                                )
-                                AppText(
-                                    text = onlineCount,
-                                    color = MediaContrastPalette.Foreground.copy(alpha = 0.90f),
-                                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                                    fontWeight = FontWeight.Medium,
-                                    style = coverOverlayTextStyle,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                    overflow = TextOverflow.Visible
-                                )
+                            if (compactStatsLayout.showSecondaryStat && secondaryStatText != null) {
+                                val compactDanmakuModifier = Modifier.weight(1f, fill = false)
+                                HomeVideoBadgePill(
+                                    modifier = compactDanmakuModifier,
+                                    style = badgeStylePolicy.coverStyle,
+                                    useRealtimeHaze = badgeEffectVisual.useRealtimeHaze,
+                                    shape = AppShapes.container(ContainerLevel.Pill),
+                                    containerColor = coverPillColors.containerColor,
+                                    borderColor = coverPillColors.borderColor
+                                ) {
+                                    AppIcon(
+                                        imageVector = Icons.Outlined.Subtitles,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(AppSpacingTokens.Small + AppSpacingTokens.Micro),
+                                        tint = MediaContrastPalette.Foreground.copy(alpha = 0.90f)
+                                    )
+                                    AppText(
+                                        text = secondaryStatText,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        color = MediaContrastPalette.Foreground.copy(alpha = 0.90f),
+                                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                        fontWeight = FontWeight.Medium,
+                                        style = coverOverlayTextStyle,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Clip
+                                    )
+                                }
                             }
-                        }
 
+                            if (compactStatsLayout.showOnlineCount) {
+                                HomeVideoBadgePill(
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    style = badgeStylePolicy.coverStyle,
+                                    useRealtimeHaze = badgeEffectVisual.useRealtimeHaze,
+                                    shape = AppShapes.container(ContainerLevel.Pill),
+                                    containerColor = coverPillColors.containerColor,
+                                    borderColor = coverPillColors.borderColor
+                                ) {
+                                    AppIcon(
+                                        imageVector = Icons.Outlined.Visibility,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(AppSpacingTokens.Small + AppSpacingTokens.Micro),
+                                        tint = MediaContrastPalette.Foreground.copy(alpha = 0.90f)
+                                    )
+                                    AppText(
+                                        text = onlineCount,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                        color = MediaContrastPalette.Foreground.copy(alpha = 0.90f),
+                                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                        fontWeight = FontWeight.Medium,
+                                        style = coverOverlayTextStyle,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Clip
+                                    )
+                                }
+                            }
+
+                        }
+                    },
+                    duration = {
                         // 时长随统计行显示（OUTSIDE_COVER）：闹钟图标 + 时长，与其他统计 pill 同结构。
                         if (showDurationOutside) {
                             HomeVideoBadgePill(
@@ -1758,23 +1763,23 @@ internal fun ElegantVideoCard(
                                 )
                             }
                         }
-                    }
 
-                    //  时长标签 (与播放量/评论数同行对齐)
-                    if (showDurationOnCover) {
-                        AppText(
-                            text = durationText,
-                            color = MediaContrastPalette.Foreground,
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            fontWeight = FontWeight.Medium,
-                            style = coverOverlayTextStyle,
-                            maxLines = 1,
-                            softWrap = false,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.align(Alignment.BottomEnd)
-                        )
-                    }
-                }
+                        // 时长文字由共享布局决定同行或下一行。
+                        if (showDurationOnCover) {
+                            AppText(
+                                text = durationText,
+                                color = MediaContrastPalette.Foreground,
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                fontWeight = FontWeight.Medium,
+                                style = coverOverlayTextStyle,
+                                maxLines = 1,
+                                softWrap = false,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                            )
+                        }
+                    },
+                )
             } else {
                 //  非贴封面模式时，时长标签仍独立显示在右下角
                 if (showDurationOnCover) {
@@ -1790,7 +1795,7 @@ internal fun ElegantVideoCard(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(
-                                end = AppSpacingTokens.Small + AppSpacingTokens.Micro,
+                                end = AppSpacingTokens.Small - AppSpacingTokens.Micro,
                                 bottom = coverOverlayBottomLayout.floatingDurationBottomPaddingDp.dp
                             )
                     )

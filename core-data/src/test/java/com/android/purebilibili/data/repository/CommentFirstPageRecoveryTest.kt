@@ -38,6 +38,7 @@ class CommentFirstPageRecoveryTest {
         for ((page, count, data) in listOf(
             Triple(1, 0, ReplyData()),
             Triple(1, 41, ReplyData(control = ReplyPageControl(emptyText = "暂时没有可见评论"))),
+            Triple(1, 41, ReplyData(control = ReplyPageControl(inputDisable = true))),
             Triple(2, 41, ReplyData()),
             Triple(1, 41, ReplyData(hots = listOf(ReplyItem(rpid = 1)))),
         )) {

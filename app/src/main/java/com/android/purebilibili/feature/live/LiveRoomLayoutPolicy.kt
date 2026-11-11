@@ -32,7 +32,8 @@ fun resolveLiveRequestedOrientationMode(
     isPortraitLive: Boolean = false,
 ): LiveRequestedOrientationMode {
     return when {
-        displayContext.usesInWindowFullscreen || displayContext.isInMultiWindowMode -> LiveRequestedOrientationMode.Unspecified
+        // 手机系统小窗仍提交方向请求，由窗口管理器决定窗口形状；不因多窗口状态丢失全屏方向。
+        displayContext.usesInWindowFullscreen -> LiveRequestedOrientationMode.Unspecified
         !shouldUsePhonePlayerOrientation(displayContext) -> LiveRequestedOrientationMode.Unspecified
         isFullscreen && isPortraitLive -> LiveRequestedOrientationMode.SensorPortrait
         isFullscreen -> LiveRequestedOrientationMode.SensorLandscape
