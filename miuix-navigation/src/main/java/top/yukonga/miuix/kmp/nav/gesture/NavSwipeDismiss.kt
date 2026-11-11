@@ -303,6 +303,8 @@ internal fun Modifier.navSwipeDismissImpl(
                 }
                 velocityTracker.addPosition(change.uptimeMillis, change.position)
                 if (!change.pressed) {
+                    // 系统取消触摸会表现为已消费的抬起，不应提交返回。
+                    forceCancel = change.isConsumed
                     event.changes.forEach { it.consume() }
                     break
                 }
