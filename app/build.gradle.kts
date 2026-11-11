@@ -468,6 +468,8 @@ dependencies {
     implementation(libs.miuix.icons)
     implementation(libs.miuix.glass)
     implementation(project(":miuix-navigation"))
+    // AI 总结（自定义模型）插件：编译期集成，见 feature/plugin/AiSummaryBuiltinPlugin.kt
+    implementation(project(":ai-summary-plugin"))
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.animation:animation")

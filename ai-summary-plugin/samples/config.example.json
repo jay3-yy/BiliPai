@@ -1,0 +1,17 @@
+{
+  "_comment": "示例配置，仅说明字段含义。真实 API Key 永远不要写进文件，请在 App 设置页填写（加密存本机）。",
+  "providerId": "deepseek",
+  "baseUrl": "https://api.deepseek.com/v1",
+  "model": "deepseek-chat",
+  "temperature": 0.3,
+  "maxTokensPerSegment": 1600,
+  "chunkCharBudget": 4500,
+  "overlapChars": 160,
+  "maxConcurrency": 2,
+  "timeoutSeconds": 90,
+  "maxRetries": 2,
+  "style": "full_note",
+  "fallbackToOfficial": true,
+  "cacheEnabled": true,
+  "saveAsNoteDraft": true
+}
