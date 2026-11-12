@@ -76,7 +76,14 @@ internal fun ContentDynamicShareSheet(payload: ContentSharePayload, onDismiss: (
                 if (!published) ShareRichTextTools(
                     contentKey = payload.key, enabled = !posting,
                     onAppend = { text = (text + it).take(2000) },
-                    onMention = { user -> text = (text + "@${user.name} ").take(2000); mentions = mentions + (user.name to user.uid) },
+                    onMentions = { selected ->
+                        val nextText = text + selected.joinToString(separator = "") { "@${it.name} " }
+                        if (nextText.length <= 2000) {
+                            text = nextText
+                            mentions = mentions + selected.associate { it.name to it.uid }
+                            true
+                        } else false
+                    },
                     onTopic = { topic -> text = (text + "#${topic.name}# ").take(2000); selectedTopic = com.android.purebilibili.data.model.response.DynamicCreateTopic(topic.id, topic.name) },
                 )
                 if (payload.replyOid > 0 || payload.bvid.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {

@@ -101,7 +101,7 @@ class DanmakuSplitWindowUiTest {
                     Box(Modifier.size(280.dp, height.value.dp).consumeWindowInsets(WindowInsets.safeDrawing)
                         .testTag("composer_viewport")) {
                         DanmakuSendDialogContent(
-                            visible = true, onDismiss = {}, onSend = { _, _, _, _, _ -> }, initialText = "保留草稿",
+                            visible = true, onSend = { _, _, _, _, _ -> }, initialText = "保留草稿",
                         )
                     }
                 }

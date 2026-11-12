@@ -39,8 +39,6 @@ providers.gradleProperty("bili.miuix.source").orNull?.let { sourcePath ->
                 .using(project(":miuix-squircle"))
             substitute(module("top.yukonga.miuix.kmp:miuix-icons-android"))
                 .using(project(":miuix-icons"))
-            substitute(module("top.yukonga.miuix.kmp:miuix-glass-android"))
-                .using(project(":miuix-glass"))
             substitute(module("top.yukonga.miuix.kmp:miuix-nav-android"))
                 .using(project(":miuix-nav"))
         }

@@ -860,6 +860,7 @@ fun SearchScreen(
         }
     }
     val searchHeaderCollapseMode = homeSettings.commonListHeaderCollapseMode
+    val headerScrollDirection = remember(searchHeaderCollapseMode, state.searchType) { floatArrayOf(0f) }
     val isSearchCollapseEnabled = searchHeaderCollapseMode != CommonListHeaderCollapseMode.ALWAYS_VISIBLE
     var searchTopBarHeightPx by remember { mutableIntStateOf(0) }
     var searchHeaderOffsetPx by remember { mutableFloatStateOf(0f) }
@@ -943,18 +944,21 @@ fun SearchScreen(
                     firstVisibleItemIndex = if (state.showResults) index else 0,
                     firstVisibleItemScrollOffset = if (state.showResults) offset else 0,
                     maxCollapsePx = searchCollapseDistancePx,
+                    currentOffsetPx = searchHeaderOffsetPx,
+                    lastScrollDeltaYPx = headerScrollDirection[0],
                     mode = searchHeaderCollapseMode,
                 ))
             }
         }
     }
-    val searchHeaderScrollConnection = remember(searchHeaderCollapseMode, searchCollapseDistancePx, isSearchResultsAtTop) {
+    val searchHeaderScrollConnection = remember(searchHeaderCollapseMode, searchCollapseDistancePx, isSearchResultsAtTop, headerScrollDirection) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (!isSearchCollapseEnabled || searchCollapseDistancePx <= 0f) return Offset.Zero
                 if (kotlin.math.abs(available.y) < 0.5f) return Offset.Zero
                 if (kotlin.math.abs(available.y) < kotlin.math.abs(available.x)) return Offset.Zero
                 // 到顶后的剩余滚动交给展开动画，避免直接归零或被连续回调打断。
+                headerScrollDirection[0] = available.y
                 if (isSearchResultsAtTop && available.y > 0f) {
                     animateSearchHeaderOffsetTo(0f)
                     return Offset.Zero

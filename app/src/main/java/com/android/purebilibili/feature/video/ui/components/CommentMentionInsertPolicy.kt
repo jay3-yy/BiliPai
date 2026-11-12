@@ -28,10 +28,19 @@ internal fun insertCommentMentionText(
     cursor: Int,
     mentionName: String
 ): Pair<String, TextRange> {
+    return insertCommentMentionsText(text, cursor, listOf(mentionName))
+}
+
+internal fun insertCommentMentionsText(
+    text: String,
+    cursor: Int,
+    mentionNames: List<String>
+): Pair<String, TextRange> {
     val safeCursor = cursor.coerceIn(0, text.length)
+    if (mentionNames.isEmpty()) return text to TextRange(safeCursor)
     val activeQuery = resolveActiveCommentMentionQuery(text = text, cursor = safeCursor)
     val start = activeQuery?.atIndex ?: safeCursor
-    val insertText = "@$mentionName "
+    val insertText = mentionNames.joinToString(separator = "") { "@$it " }
     val newText = text.replaceRange(start, safeCursor, insertText)
     val newCursor = start + insertText.length
     return newText to TextRange(newCursor)

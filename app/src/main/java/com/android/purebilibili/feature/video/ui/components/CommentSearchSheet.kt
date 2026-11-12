@@ -684,7 +684,7 @@ private fun CommentSearchResultRow(
                         }
 
                         val location = item.replyControl?.location
-                        if (!location.isNullOrBlank()) {
+                        if (com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled.current && !location.isNullOrBlank()) {
                             AppText(
                                 text = location,
                                 style = MaterialTheme.typography.labelSmall,

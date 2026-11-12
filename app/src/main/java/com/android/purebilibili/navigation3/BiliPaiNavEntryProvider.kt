@@ -66,6 +66,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     entry<BiliPaiNavKey.AccountLedger>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.AicuQuery>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.History>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.PersonalRecapUps>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.HistorySearch>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Favorite>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.FavoriteSubscribed>(swipeDismiss = swipeBackDirection, content = content)

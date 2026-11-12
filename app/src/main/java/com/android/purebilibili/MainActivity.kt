@@ -1479,6 +1479,9 @@ class MainActivity : AppCompatActivity() {
             val globalTextTapCopyEnabled by SettingsManager
                 .getGlobalTextTapCopyEnabled(context)
                 .collectAsStateWithLifecycle(initialValue = false)
+            val commentIpLocationEnabled by remember(context) {
+                SettingsManager.getCommentIpLocationEnabled(context)
+            }.collectAsStateWithLifecycle(initialValue = true)
             val detailedCommentTimeEnabled by remember(context) {
                 SettingsManager.getDetailedCommentTimeEnabled(context)
             }.collectAsStateWithLifecycle(initialValue = false)
@@ -1685,6 +1688,7 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.core.ui.components.LocalContentImageSettings provides contentImages,
                         com.android.purebilibili.core.ui.components.LocalScrollFeedbackPreset provides scrollFeedbackPreset,
                         LocalDensity provides effectiveDensity,
+                        com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                         LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
                         com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                         LocalWindowSizeClass provides windowSizeClass,

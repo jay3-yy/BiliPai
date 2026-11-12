@@ -83,6 +83,9 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.android.purebilibili.core.ui.components.AppGlassMenuSource
+import com.android.purebilibili.core.ui.components.appGlassMenuSource
+import com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.ui.graphics.Color
@@ -300,6 +303,7 @@ private fun CollapsedPlayerNavigationBar(
     onHomeClick: () -> Unit,
     onPlayClick: () -> Unit,
     onMoreClick: () -> Unit,
+    moreMenuSource: AppGlassMenuSource,
     modifier: Modifier = Modifier,
 ) {
     val useMiuixNonGlassChrome = isMiuixNonGlassEnabled()
@@ -409,7 +413,8 @@ private fun CollapsedPlayerNavigationBar(
                         enabled = toolbarInteractive,
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .size(AppChromeSizeTokens.MinimumTouchTarget),
+                            .size(AppChromeSizeTokens.MinimumTouchTarget)
+                            .appGlassMenuSource(moreMenuSource, onOpen = onMoreClick, enabled = toolbarInteractive),
                     ) {
                         AppIcon(
                             Icons.Filled.MoreVert,
@@ -423,7 +428,9 @@ private fun CollapsedPlayerNavigationBar(
                         enabled = toolbarInteractive,
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .size(width = 42.dp, height = 34.dp).appElasticPress(),
+                            .size(width = 42.dp, height = 34.dp)
+                            .appElasticPress()
+                            .appGlassMenuSource(moreMenuSource, onOpen = onMoreClick, enabled = toolbarInteractive),
                     ) {
                         Icon(
                             Icons.Filled.MoreVert,
@@ -1415,7 +1422,9 @@ internal fun VideoDetailScreenStateHolder(
     }
     var manualPortraitHoldActive by rememberSaveable { mutableStateOf(false) }
     var preserveCurrentFrameOnFullscreenChange by remember { mutableStateOf(false) }
-    var pendingFullscreenPositionRestoreMs by remember { mutableLongStateOf(-1L) }
+    var pendingFullscreenPositionRestoreMs by remember(currentBvid, playbackTargetCid) {
+        mutableLongStateOf(-1L)
+    }
     val playerWindowOrientationPolicy = remember(displayContext) {
         com.android.purebilibili.core.util.resolvePlayerWindowOrientationPolicy(displayContext)
     }
@@ -2210,13 +2219,42 @@ internal fun VideoDetailScreenStateHolder(
             (entryRelatedReady || uiState is VideoPlaybackUiState.Error),
         playbackSessionActive = playbackSessionActiveForMorph,
     )
-    LaunchedEffect(isFullscreenMode) {
+    // 原生与玻璃共用：结束或新的 seek 已取代切屏前的位置，不能再用旧进度覆盖重播。
+    DisposableEffect(playerState.player, currentBvid, playbackTargetCid) {
+        val player = playerState.player
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_ENDED) {
+                    pendingFullscreenPositionRestoreMs = -1L
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                    pendingFullscreenPositionRestoreMs = -1L
+                }
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+    LaunchedEffect(isFullscreenMode, playerState.player, currentBvid, playbackTargetCid) {
         val restorePositionMs = pendingFullscreenPositionRestoreMs
         if (restorePositionMs <= 0L) return@LaunchedEffect
 
         val player = playerState.player
         kotlinx.coroutines.withTimeoutOrNull(3_000L) {
             while (isActive) {
+                if (
+                    pendingFullscreenPositionRestoreMs != restorePositionMs ||
+                    player.playbackState == Player.STATE_ENDED
+                ) {
+                    break
+                }
                 if (
                     player.mediaItemCount > 0 &&
                     player.playbackState == Player.STATE_READY
@@ -3464,8 +3502,11 @@ internal fun VideoDetailScreenStateHolder(
         val currentPositionMs = playerState.player.currentPosition.coerceAtLeast(0L)
         val shouldPreserveCurrentFrame = activity != null &&
             (!isVerticalVideo || isFullscreenMode) &&
-            playerState.player.playWhenReady &&
-            currentPositionMs > 0L
+            shouldPreserveFullscreenPlaybackPosition(
+                playbackState = playerState.player.playbackState,
+                playWhenReady = playerState.player.playWhenReady,
+                positionMs = currentPositionMs
+            )
         preserveCurrentFrameOnFullscreenChange = shouldPreserveCurrentFrame
         if (shouldPreserveCurrentFrame) {
             pendingFullscreenPositionRestoreMs = currentPositionMs
@@ -3700,6 +3741,7 @@ internal fun VideoDetailScreenStateHolder(
     // Entry lifetime, not BVID lifetime: once attached, never defer the player again.
     val continuousPlayerHostMounted = remember { mutableStateOf(false) }
     var collapsedPlayerMoreRequested by remember(currentBvid) { mutableStateOf(false) }
+    val collapsedPlayerMoreSource = rememberAppGlassMenuSource()
     val continuousPlayerRenderer = rememberUpdatedState<@Composable (ContinuousPlayerHostLayout) -> Unit> { layout ->
         val mountPlayerHost = shouldMountVideoDetailPlayerHost(
             alreadyMounted = continuousPlayerHostMounted.value,
@@ -3729,6 +3771,7 @@ internal fun VideoDetailScreenStateHolder(
             val composerDrafts by composerDraftsHandle
             PortraitInlineVideoPlayerHost(
             moreMenuRequested = collapsedPlayerMoreRequested,
+            moreMenuSource = collapsedPlayerMoreSource,
             onMoreMenuRequestConsumed = { collapsedPlayerMoreRequested = false },
             modifier = layout.modifier,
             animatedViewportWidth = layout.viewportWidth,
@@ -5290,6 +5333,7 @@ internal fun VideoDetailScreenStateHolder(
                                         playPlayerFromUserAction(playerState.player)
                                     },
                                     onMoreClick = { collapsedPlayerMoreRequested = true },
+                                    moreMenuSource = collapsedPlayerMoreSource,
                                     modifier = Modifier
                                         .matchParentSize()
                                         .zIndex(2f),

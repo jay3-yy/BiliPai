@@ -76,6 +76,8 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.ProfileAccountEdit -> "profile_account_edit"
         is BiliPaiNavKey.AccountLedger -> ScreenRoutes.AccountLedger.createRoute(kind)
         is BiliPaiNavKey.AicuQuery -> ScreenRoutes.AicuQuery.createRoute(uid, category)
+        // 统计快照由类型化导航键持有，不通过字符串路由重建。
+        is BiliPaiNavKey.PersonalRecapUps -> "personal_recap_ups?window=${window.name}"
         BiliPaiNavKey.History -> ScreenRoutes.History.route
         is BiliPaiNavKey.HistorySearch -> "history_search?query=${encodeRouteValue(query)}"
         BiliPaiNavKey.Favorite -> ScreenRoutes.Favorite.route

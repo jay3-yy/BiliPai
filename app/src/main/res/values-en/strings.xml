@@ -494,8 +494,8 @@
     <string name="settings_search_legacy_005_summary">Screen orientation, screenshots, lock button, brightness, volume, and seek gestures</string>
     <string name="settings_search_legacy_006_title">Interactions and comments</string>
     <string name="settings_search_legacy_006_summary">Comment display, likes and favorites, video descriptions, and notes</string>
-    <string name="settings_search_legacy_007_title">Comment IP location</string>
-    <string name="settings_search_legacy_007_summary">Shown automatically when data is available. It cannot be forced when Bilibili does not provide it.</string>
+    <string name="settings_search_legacy_007_title">IP location</string>
+    <string name="settings_search_legacy_007_summary">Show IP location beside comment time. Enabled by default; some comments have no location data.</string>
     <string name="settings_search_legacy_008_title">Full comment timestamps</string>
     <string name="settings_search_legacy_008_summary">Show the full date and time instead of a relative time such as “2 hours ago”</string>
     <string name="settings_search_legacy_009_title">Downloads and backup</string>

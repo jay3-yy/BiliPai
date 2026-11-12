@@ -12,22 +12,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
-/** 只返回列表到达边界后未消费的手指位移；列表仍可滚动的方向不驱动面板形变。 */
-internal fun popupPanelOverscrollDelta(
-    fingerDelta: Float,
-    scrollBefore: Int,
-    scrollAfter: Int,
-    maxScroll: Int,
-): Float {
-    if (maxScroll == Int.MAX_VALUE) return 0f
-    val remaining = fingerDelta - (scrollBefore - scrollAfter)
-    return when {
-        fingerDelta > 0f && scrollAfter <= 0 -> remaining.coerceIn(0f, fingerDelta)
-        fingerDelta < 0f && scrollAfter >= maxScroll -> remaining.coerceIn(fingerDelta, 0f)
-        else -> 0f
-    }
-}
-
 /** 按实际指针到静止面板边界的距离计算，列表能否继续滚动不改变越界拖拽。 */
 internal fun popupPullBeyondBounds(pointer: Offset, bounds: Rect): Offset {
     if (bounds.isEmpty) return Offset.Zero
@@ -43,10 +27,10 @@ internal fun popupRubberBandPull(pull: Offset, shortSide: Float, maxPull: Float 
 }
 
 /** pull 为阻尼后的位移；纵向拖动提供更明显的拉伸，松手后随位移回弹。 */
-internal fun popupElasticFrame(frame: AppGlassPopupFrame, growth: Float, pull: Offset, density: Float, maxGrowthDp: Float = 16f): AppGlassPopupFrame {
+internal fun popupElasticFrame(frame: AppGlassPopupFrame, growth: Float, pull: Offset, density: Float, maxGrowthDp: Float = 16f, horizontalStretch: Float = 0.5f): AppGlassPopupFrame {
     if (frame.rect.isEmpty || (growth == 0f && pull == Offset.Zero)) return frame
     val swell = 1f + growth * minOf(0.25f, maxGrowthDp * density / maxOf(frame.rect.width, frame.rect.height))
-    val scaleX = swell * (1f + kotlin.math.abs(pull.x) / frame.rect.width * 0.5f)
+    val scaleX = swell * (1f + kotlin.math.abs(pull.x) / frame.rect.width * horizontalStretch)
     val scaleY = swell * (1f + kotlin.math.abs(pull.y) / frame.rect.height)
     val center = frame.rect.center + pull
     val halfWidth = frame.rect.width * scaleX / 2f
@@ -113,11 +97,13 @@ internal class PopupElasticMotion {
     private var growthTarget: Float? = null
     private var pullTarget: Offset? = null
     private var trackingTarget: Boolean? = null
+    private var draggedDuringTracking = false
 
     fun stop() {
         growthJob?.cancel(); xJob?.cancel(); yJob?.cancel(); resetJob?.cancel()
         growthJob = null; xJob = null; yJob = null; resetJob = null
         growthTarget = null; pullTarget = null; trackingTarget = null
+        draggedDuringTracking = false
     }
 
     /** 仅改变需要追随的轴，移动指针不会重启按压放大；松手使用独立回弹。 */
@@ -129,6 +115,9 @@ internal class PopupElasticMotion {
             return
         }
         resetJob?.cancel()
+        if (isTracking && trackingTarget != true) draggedDuringTracking = false
+        if (isTracking && pull != Offset.Zero) draggedDuringTracking = true
+        val completePressLift = !draggedDuringTracking
         val grow = if (pressed) 1f else 0f
         if (growthTarget != grow) {
             val speed = growth.velocity
@@ -136,9 +125,9 @@ internal class PopupElasticMotion {
             growthJob?.cancel()
             growthTarget = grow
             growthJob = scope.launch {
-                // 短按先完成抬升，再回弹；移动手指不重启抬升。
+                // 静止短按先完成抬升；真实拖拽松手直接从当前形变回弹，不再补一次放大。
                 var releaseVelocity = speed
-                if (!pressed && wasPressed && growth.value < 0.975f) {
+                if (!pressed && wasPressed && completePressLift && growth.value < 0.975f) {
                     coroutineScope {
                         val lifting = launch { growth.animateTo(1f, PopupPressSpring, initialVelocity = speed) }
                         snapshotFlow { growth.value }.first { it >= 0.975f }
@@ -172,10 +161,10 @@ internal class PopupElasticMotion {
     }
 
 
-    fun frame(base: AppGlassPopupFrame, density: Float, weight: Float = 1f, maxGrowthDp: Float = 16f): AppGlassPopupFrame {
+    fun frame(base: AppGlassPopupFrame, density: Float, weight: Float = 1f, maxGrowthDp: Float = 16f, horizontalStretch: Float = 0.5f): AppGlassPopupFrame {
         val blend = weight.coerceIn(0f, 1f)
         val pull = Offset(x.value, y.value)
-        return popupElasticFrame(base, growth.value * blend, pull * blend, density, maxGrowthDp)
+        return popupElasticFrame(base, growth.value * blend, pull * blend, density, maxGrowthDp, horizontalStretch)
     }
 
     fun velocity() = PopupElasticVelocity(growth.velocity, x.velocity, y.velocity)

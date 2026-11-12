@@ -39,6 +39,7 @@ internal data class VideoDetailInputOverlayLayoutInfo(
 private data class DanmakuInputSnapshot(
     val visible: Boolean,
     val isSending: Boolean,
+    val vipColorAvailable: Boolean,
     val initialColor: Int,
     val initialMode: Int,
     val initialFontSize: Int,
@@ -96,6 +97,7 @@ internal fun VideoDetailInputOverlayAdapter(
     val showDanmakuDialog by viewModel.showDanmakuDialog.collectAsStateWithLifecycle()
     val isSendingDanmaku by viewModel.isSendingDanmaku.collectAsStateWithLifecycle()
     val composerDrafts by viewModel.composerDrafts.collectAsStateWithLifecycle()
+    val playbackState by viewModel.uiState.collectAsStateWithLifecycle()
     val rememberedDanmakuSendColor by SettingsManager.getDanmakuSendColor(context)
         .collectAsStateWithLifecycle(initialValue = 16_777_215)
     val rememberedDanmakuSendMode by SettingsManager.getDanmakuSendMode(context)
@@ -140,6 +142,7 @@ internal fun VideoDetailInputOverlayAdapter(
         snapshot = DanmakuInputSnapshot(
             visible = showDanmakuDialog && !shouldUseInlineDanmakuComposer(isFullscreenMode),
             isSending = isSendingDanmaku,
+            vipColorAvailable = (playbackState as? com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState.Success)?.isVip == true,
             initialColor = rememberedDanmakuSendColor,
             initialMode = rememberedDanmakuSendMode,
             initialFontSize = rememberedDanmakuSendFontSize,
@@ -225,6 +228,7 @@ private fun VideoDetailDanmakuInputOverlayContent(
         onDismiss = actions.dismiss,
         onSend = actions.send,
         isSending = snapshot.isSending,
+        vipColorAvailable = snapshot.vipColorAvailable,
         initialColor = snapshot.initialColor,
         initialMode = snapshot.initialMode,
         initialFontSize = snapshot.initialFontSize,

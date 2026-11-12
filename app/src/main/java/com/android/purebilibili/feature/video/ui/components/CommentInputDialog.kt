@@ -13,6 +13,9 @@ import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import com.android.purebilibili.core.ui.components.AppButton
+import com.android.purebilibili.core.ui.components.AppCheckbox
+import com.android.purebilibili.core.ui.components.AppTextButton
+import androidx.compose.foundation.selection.toggleable
 import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
@@ -58,8 +61,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -87,12 +88,8 @@ import com.android.purebilibili.core.ui.motion.verticalContentRevealExitTransiti
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.data.model.response.MentionSearchUser
-import kotlinx.coroutines.delay
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
-
-private const val COMMENT_INPUT_FOCUS_RETRY_COUNT = 3
-private const val COMMENT_INPUT_FOCUS_RETRY_DELAY_MS = 80L
 
 /** 展开按钮以浮层覆盖外层顶部和编辑区顶部留白，不额外占宽高。 */
 private const val COMMENT_INPUT_EXPAND_BUTTON_SIZE_DP = 40
@@ -313,7 +310,6 @@ fun CommentInputDialog(
         isSending = isSending
     )
 
-    val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val sheetMotion = rememberAppBottomSheetMotion()
@@ -463,12 +459,6 @@ fun CommentInputDialog(
                 if (!shouldAutoShowCommentKeyboard(inputActive, canInputComment, showEmojiPanel)) {
                     keyboardController?.hide()
                     focusManager.clearFocus(force = true)
-                } else {
-                    repeat(COMMENT_INPUT_FOCUS_RETRY_COUNT) { index ->
-                        delay(COMMENT_INPUT_FOCUS_RETRY_DELAY_MS + index * 40L)
-                        focusRequester.requestFocus()
-                        keyboardController?.show()
-                    }
                 }
             }
             DisposableEffect(focusManager, keyboardController) {
@@ -550,6 +540,9 @@ fun CommentInputDialog(
                                         emoteUrls = inputEmoteUrls,
                                         enabled = canInputComment && !isSending,
                                         readOnly = showEmojiPanel,
+                                        autoShowKeyboard = shouldAutoShowCommentKeyboard(
+                                            inputActive, canInputComment && !isSending, showEmojiPanel
+                                        ),
                                         onBeginEditing = { showEmojiPanel = false },
                                         hint = inputHint.ifBlank { "进来唠会嗑呗~" }.let { resolvedHint ->
                                             if (replyToName != null) "回复 @$replyToName: $resolvedHint" else resolvedHint
@@ -557,7 +550,6 @@ fun CommentInputDialog(
                                         hintColor = AppContentColors.secondaryText().copy(alpha = 0.7f),
                                         cursorColor = AppContentColors.accent(),
                                         modifier = Modifier.fillMaxSize()
-                                            .focusRequester(focusRequester)
                                             .testTag("comment_composer_input"),
                                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                                             color = AppContentColors.primaryText()
@@ -572,6 +564,7 @@ fun CommentInputDialog(
                                 exit = verticalContentRevealExitTransition(resolveCommentVerticalContentRevealMotionSpec())
                             ) {
                                 CommentMentionSearchPanel(
+                                    selectionKey = draftKey,
                                     query = mentionSearchText,
                                     onQueryChange = { query ->
                                         mentionSearchText = query
@@ -580,16 +573,19 @@ fun CommentInputDialog(
                                     users = mentionUsers,
                                     isLoading = isMentionSearching,
                                     errorMessage = mentionSearchError,
-                                    onUserClick = { user ->
+                                    onConfirm = { selected ->
                                         val cursor = textFieldValue.selection.end
-                                        val (nextText, nextSelection) = insertCommentMentionText(
+                                        val (nextText, nextSelection) = insertCommentMentionsText(
                                             text = textFieldValue.text,
                                             cursor = cursor,
-                                            mentionName = user.name
+                                            mentionNames = selected.map { it.name }
                                         )
-                                        updateTextFieldValue(TextFieldValue(nextText, nextSelection))
-                                        showMentionPanel = false
-                                        mentionSearchText = ""
+                                        if (nextText.length <= 1000) {
+                                            updateTextFieldValue(TextFieldValue(nextText, nextSelection))
+                                            showMentionPanel = false
+                                            mentionSearchText = ""
+                                            true
+                                        } else false
                                     },
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
@@ -1087,18 +1083,26 @@ private fun CommentKaomojiGrid(
 
 @Composable
 private fun CommentMentionSearchPanel(
+    selectionKey: String,
     query: String,
     onQueryChange: (String) -> Unit,
     users: List<MentionSearchUser>,
     isLoading: Boolean,
     errorMessage: String?,
-    onUserClick: (MentionSearchUser) -> Unit,
+    onConfirm: (List<MentionSearchUser>) -> Boolean,
     modifier: Modifier = Modifier
 ) {
+    var selected by remember(selectionKey) { mutableStateOf<List<MentionSearchUser>>(emptyList()) }
+    var insertionError by remember(selectionKey) { mutableStateOf(false) }
+    fun toggle(user: MentionSearchUser) {
+        selected = if (selected.any { it.uid == user.uid }) selected.filterNot { it.uid == user.uid }
+        else selected + user
+        insertionError = false
+    }
     AppSurface(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(max = 220.dp),
+            .heightIn(max = 280.dp),
         shape = AppShapes.container(ContainerLevel.Chip),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
     ) {
@@ -1180,7 +1184,11 @@ private fun CommentMentionSearchPanel(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onUserClick(user) }
+                                    .toggleable(
+                                        value = selected.any { it.uid == user.uid },
+                                        role = Role.Checkbox,
+                                        onValueChange = { toggle(user) },
+                                    )
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -1209,9 +1217,25 @@ private fun CommentMentionSearchPanel(
                                         maxLines = 1
                                     )
                                 }
+                                AppCheckbox(checked = selected.any { it.uid == user.uid }, onCheckedChange = null)
                             }
                         }
                     }
+                }
+            }
+            if (selected.isNotEmpty()) LazyRow(Modifier.fillMaxWidth()) {
+                items(selected, key = { it.uid }) { user ->
+                    AppTextButton(onClick = { toggle(user) }) { AppText("${user.name} ×") }
+                }
+            }
+            if (insertionError) AppText("插入后将超过 1000 字，请减少选择或缩短正文")
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                AppTextButton(onClick = { selected = emptyList(); insertionError = false }, enabled = selected.isNotEmpty()) {
+                    AppText("清空")
+                }
+                Spacer(Modifier.weight(1f))
+                AppTextButton(onClick = { insertionError = !onConfirm(selected) }, enabled = selected.isNotEmpty()) {
+                    AppText("插入 @（${selected.size}）")
                 }
             }
         }

@@ -437,7 +437,7 @@ class SettingsSearchPolicyTest {
         assertTrue(resolveSettingsSearchResults("顶部标签").any { it.target == SettingsSearchTarget.NAVIGATION })
         assertTrue(resolveSettingsSearchResults("首页壁纸").any { it.target == SettingsSearchTarget.HOME_FEED })
         assertTrue(resolveSettingsSearchResults("评论装扮").any { it.target == SettingsSearchTarget.INTERACTION_COMMENT })
-        assertTrue(resolveSettingsSearchResults("IP属地").any { it.title == "评论 IP 属地" })
+        assertTrue(resolveSettingsSearchResults("IP属地").any { it.settingId == "playback.comment_ip_location_enabled" })
         assertTrue(resolveSettingsSearchResults("WebDAV").any { it.target == SettingsSearchTarget.DATA_BACKUP })
     }
 

@@ -7,6 +7,47 @@ import kotlin.test.assertEquals
 class CommonListHeaderCollapsePolicyTest {
 
     @Test
+    fun `reverse reveal settles open away from top instead of immediately hiding again`() {
+        val mode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL
+        val partial = resolveCommonListHeaderOffsetAfterContentScroll(-240f, 24f, 240f, false, mode)
+        assertEquals(-216f, partial)
+        assertEquals(0f, resolveCommonListHeaderOffsetForSettledContent(
+            8, 120, 240f, mode, currentOffsetPx = partial, lastScrollDeltaYPx = 24f,
+        ))
+        assertEquals(0f, resolveCommonListHeaderOffsetForSettledContent(
+            8, 120, 240f, mode, currentOffsetPx = 0f, lastScrollDeltaYPx = 24f,
+        ))
+    }
+
+    @Test
+    fun `new forward scroll overrides prior reveal and settles hidden`() {
+        val mode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL
+        val partial = resolveCommonListHeaderOffsetAfterContentScroll(0f, -24f, 240f, false, mode)
+        assertEquals(-240f, resolveCommonListHeaderOffsetForSettledContent(
+            8, 144, 240f, mode, currentOffsetPx = partial, lastScrollDeltaYPx = -24f,
+        ))
+    }
+
+    @Test
+    fun `top only mode does not reveal away from top after reverse scrolling`() {
+        assertEquals(-240f, resolveCommonListHeaderOffsetForSettledContent(
+            8, 120, 240f, CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+            currentOffsetPx = -216f, lastScrollDeltaYPx = 24f,
+        ))
+        assertEquals(0f, resolveCommonListHeaderOffsetForSettledContent(
+            0, 0, 240f, CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
+            currentOffsetPx = -216f, lastScrollDeltaYPx = -24f,
+        ))
+    }
+
+    @Test
+    fun `without scroll direction header settles to nearest endpoint`() {
+        val mode = CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL
+        assertEquals(0f, resolveCommonListHeaderOffsetForSettledContent(8, 0, 240f, mode, -60f))
+        assertEquals(-240f, resolveCommonListHeaderOffsetForSettledContent(8, 0, 240f, mode, -180f))
+    }
+
+    @Test
     fun `collapse mode falls back to top only behavior`() {
         assertEquals(
             CommonListHeaderCollapseMode.SHOW_AT_TOP_ONLY,
@@ -138,6 +179,7 @@ class CommonListHeaderCollapsePolicyTest {
         assertEquals(
             0f,
             resolveCommonListHeaderOffsetForSettledContent(
+                currentOffsetPx = -240f,
                 firstVisibleItemIndex = 0,
                 firstVisibleItemScrollOffset = 0,
                 maxCollapsePx = 240f,
@@ -151,6 +193,7 @@ class CommonListHeaderCollapsePolicyTest {
         assertEquals(
             -240f,
             resolveCommonListHeaderOffsetForSettledContent(
+                currentOffsetPx = -240f,
                 firstVisibleItemIndex = 1,
                 firstVisibleItemScrollOffset = 0,
                 maxCollapsePx = 240f,
@@ -160,6 +203,7 @@ class CommonListHeaderCollapsePolicyTest {
         assertEquals(
             -240f,
             resolveCommonListHeaderOffsetForSettledContent(
+                currentOffsetPx = -240f,
                 firstVisibleItemIndex = 0,
                 firstVisibleItemScrollOffset = 1,
                 maxCollapsePx = 240f,
@@ -173,6 +217,7 @@ class CommonListHeaderCollapsePolicyTest {
         assertEquals(
             0f,
             resolveCommonListHeaderOffsetForSettledContent(
+                currentOffsetPx = -240f,
                 firstVisibleItemIndex = 8,
                 firstVisibleItemScrollOffset = 120,
                 maxCollapsePx = 240f,

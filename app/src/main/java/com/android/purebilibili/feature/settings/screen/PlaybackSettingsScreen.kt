@@ -1381,6 +1381,8 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = false)
     val commentMemberDecorationsEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getCommentMemberDecorationsEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
+    val commentIpLocationEnabled by remember(context) { SettingsManager.getCommentIpLocationEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = true)
     val detailedCommentTimeEnabled by remember(context) { SettingsManager.getDetailedCommentTimeEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val subReplyLoadedCountEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getSubReplyLoadedCountEnabled(context) }
@@ -1695,19 +1697,20 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
         }
         AppPreferenceDivider()
 
-        AppListItem(
-            headlineContent = { AppText("评论 IP 属地") },
-            supportingContent = {
-                AppText("无需开启；B站返回属地时会在评论时间旁自动显示。部分评论没有属地数据。")
-            },
-            leadingContent = {
-                SettingsFunctionIcon(
-                    rememberMaterialSymbol(R.drawable.ms_info_24),
-                    title = "评论 IP 属地",
-                    contentDescription = null,
-                )
-            },
-        )
+        SettingsItemAnchor("playback.comment_ip_location_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_IP_LOCATION),
+                title = playbackSettingTitle("playback.comment_ip_location_enabled"),
+                subtitle = "在评论时间旁显示 IP 归属地，部分评论没有属地数据",
+                checked = commentIpLocationEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch {
+                        SettingsManager.setCommentIpLocationEnabled(context, enabled)
+                    }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
         AppPreferenceDivider()
         SettingsItemAnchor("playback.detailed_comment_time_enabled") {
             AppSwitchPreference(

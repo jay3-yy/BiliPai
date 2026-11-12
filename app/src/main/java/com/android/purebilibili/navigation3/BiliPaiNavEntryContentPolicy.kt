@@ -33,6 +33,7 @@ internal enum class BiliPaiNavEntryContentRole {
     VIDEO_DETAIL,
     AICU_QUERY,
     HISTORY,
+    PERSONAL_RECAP_UPS,
     FAVORITE,
     LIKED_VIDEOS,
     WATCH_LATER,
@@ -114,6 +115,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         is BiliPaiNavKey.AccountLedger -> BiliPaiNavEntryContentRole.ACCOUNT_LEDGER
         is BiliPaiNavKey.VideoDetail -> BiliPaiNavEntryContentRole.VIDEO_DETAIL
         is BiliPaiNavKey.AicuQuery -> BiliPaiNavEntryContentRole.AICU_QUERY
+        is BiliPaiNavKey.PersonalRecapUps -> BiliPaiNavEntryContentRole.PERSONAL_RECAP_UPS
         BiliPaiNavKey.History -> BiliPaiNavEntryContentRole.HISTORY
         is BiliPaiNavKey.HistorySearch -> BiliPaiNavEntryContentRole.HISTORY
         BiliPaiNavKey.Favorite -> BiliPaiNavEntryContentRole.FAVORITE

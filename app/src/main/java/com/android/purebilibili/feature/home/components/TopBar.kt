@@ -2612,6 +2612,8 @@ private fun BoxScope.LightweightTopTabIndicatorOverlay(
                 width = indicatorWidth,
                 height = dockIndicatorHeight,
                 dockHeight = rowHeight,
+                // 完整边缘色散只属于玻璃材质，原生指示器保留缝隙策略。
+                gapOnlyDispersion = !shouldUseLiquidGlassIndicator,
                 combinedBackdrop = indicatorCombinedBackdrop,
                 pressProgress = topTabLensProgress,
                 scaleX = indicatorScaleX,
@@ -2650,6 +2652,8 @@ private fun BoxScope.LightweightTopTabIndicatorOverlay(
                 width = md3LiquidCapsuleWidth,
                 height = dockIndicatorHeight,
                 dockHeight = rowHeight,
+                // 完整边缘色散只属于玻璃材质，原生指示器保留缝隙策略。
+                gapOnlyDispersion = !shouldUseLiquidGlassIndicator,
                 combinedBackdrop = indicatorCombinedBackdrop,
                 pressProgress = topTabLensProgress,
                 scaleX = indicatorScaleX,
@@ -2686,6 +2690,8 @@ private fun BoxScope.LightweightTopTabIndicatorOverlay(
                 width = md3LiquidCapsuleWidth,
                 height = dockIndicatorHeight,
                 dockHeight = rowHeight,
+                // 完整边缘色散只属于玻璃材质，原生指示器保留缝隙策略。
+                gapOnlyDispersion = !shouldUseLiquidGlassIndicator,
                 combinedBackdrop = indicatorCombinedBackdrop,
                 pressProgress = topTabLensProgress,
                 scaleX = indicatorScaleX,

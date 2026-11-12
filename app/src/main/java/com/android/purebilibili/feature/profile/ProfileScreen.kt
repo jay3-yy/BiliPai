@@ -466,6 +466,7 @@ private fun ProfileScreenContent(
     val purposeAccountMids by viewModel.purposeAccountMids.collectAsStateWithLifecycle()
     val view = LocalView.current
     var showAccountSwitchDialog by remember { mutableStateOf(false) }
+    var accountPopupSource by remember { mutableStateOf<com.android.purebilibili.core.ui.components.AppGlassMenuSource?>(null) }
     val windowSizeClass = LocalWindowSizeClass.current
     val skinProfileBackgroundPath = remember(
         windowSizeClass.shouldUseSplitLayout,
@@ -595,6 +596,7 @@ private fun ProfileScreenContent(
 
     if (showAccountSwitchDialog) {
         AccountSwitchDialog(
+            source = accountPopupSource,
             accounts = accounts,
             activeAccountMid = activeAccountMid,
             playbackAccountMid = playbackAccountMid,
@@ -649,238 +651,106 @@ private fun ProfileScreenContent(
         )
     }
 
-    //  未登录状态使用沉浸式全屏布局，已登录使用正常 Scaffold
-    val currentUiState = state
-    val profileProgressiveChrome = rememberProfileProgressiveTopChrome()
-    val profileHeaderBlurActive = false
-    when (currentUiState) {
-        is ProfileUiState.Loading -> {
-            ProfileLoadingSkeleton(animated = isCurrentPage)
-        }
-        is ProfileUiState.LoggedOut -> {
-            // [Modified] 游客模式：复用统一 UI，但使用虚拟游客数据
-            val guestUser = UserState(
-                isLogin = false,
-                name = "点击登录/注册",
-                face = "", // 空头像，UserInfoSection 会处理为默认或占位符
-                mid = 0,
-                level = 0,
-                coin = 0.0,
-                bcoin = 0.0,
-                isVip = false,
-                vipLabel = "",
-                following = 0,
-                follower = 0,
-
-                dynamic = 0,
-                topPhoto = skinProfileBackgroundPath ?: currentUiState.topPhoto
-            )
-
-
-            Box(modifier = Modifier.fillMaxSize()) {
-                MobileProfileContent(
-                    captureBackground = {
-                        ProfileBackground(
-                            user = guestUser,
-                            viewModel = viewModel,
-                            deferImmersiveRenderBudget = deferImmersiveRenderBudget,
-                            skinVideoBackgroundPath = skinVideoBackgroundPath,
-                            skinVideoPlayMode = skinVideoPlayMode,
-                            playSkinVideo = isCurrentPage && !initialEditAccount,
-                        )
-                    },
-                    progressiveTopChrome = profileProgressiveChrome,
-                    user = guestUser,
-                    onLogout = onGoToLogin, // "退出登录" 变为 "登录"
-                    onAccountManageClick = { showAccountSwitchDialog = true },
-                    onHistoryClick = onGoToLogin, // 游客点击功能需登录
-                    showHistoryService = showHistoryService,
-                    onFavoriteClick = onGoToLogin,
-                    onFollowingClick = { onGoToLogin() },
-                    onDownloadClick = onGoToLogin,
-                    onWatchLaterClick = onGoToLogin,
-                    onInboxClick = onGoToLogin,  //  [新增] 游客点击需登录
-                    onVideoClick = { },  // 游客模式不显示三连
-                    scrollBehavior = if (shouldPinProfileTopBarOnScroll(useSplitLayout = false)) {
-                        TopAppBarDefaults.pinnedScrollBehavior()
-                    } else {
-                        TopAppBarDefaults.enterAlwaysScrollBehavior()
-                    },
-                    onBack = onBack,
-                    onSettingsClick = onSettingsClick,
-                    hazeState = hazeState,
-                    // [New] 传递点击头部去登录的回调 (需修改 MobileProfileContent 支持)
-                    onHeaderClick = onGoToLogin,
-                    paddingValues = PaddingValues(0.dp), // 全屏
-                    scrollToTopRequestId = profileScrollToTopRequestId
-                )
+    CompositionLocalProvider(LocalProfileAccountPopupSource provides { accountPopupSource = it }) {
+        //  未登录状态使用沉浸式全屏布局，已登录使用正常 Scaffold
+        val currentUiState = state
+        val profileProgressiveChrome = rememberProfileProgressiveTopChrome()
+        val profileHeaderBlurActive = false
+        when (currentUiState) {
+            is ProfileUiState.Loading -> {
+                ProfileLoadingSkeleton(animated = isCurrentPage)
             }
+            is ProfileUiState.LoggedOut -> {
+                // [Modified] 游客模式：复用统一 UI，但使用虚拟游客数据
+                val guestUser = UserState(
+                    isLogin = false,
+                    name = "点击登录/注册",
+                    face = "", // 空头像，UserInfoSection 会处理为默认或占位符
+                    mid = 0,
+                    level = 0,
+                    coin = 0.0,
+                    bcoin = 0.0,
+                    isVip = false,
+                    vipLabel = "",
+                    following = 0,
+                    follower = 0,
 
-        }
-        is ProfileUiState.Error -> {
-            // 🔧 [新增] 离线/错误状态 - 显示错误信息并提供重试和离线缓存入口
-            AppScaffold(
-                topBarIconBackdropSource = profileProgressiveChrome.source,
-                containerColor = MaterialTheme.colorScheme.background,
-                topBar = {
-                    BiliPaiImmersiveTopBar(
-                        backdrop = profileProgressiveChrome.backdrop,
-                        enabled = profileProgressiveChrome.enabled,
-                        headerBlurActive = profileHeaderBlurActive,
-                    ) {
-                    Box {
-                        if (!profileProgressiveChrome.enabled) {
-                        TopReadabilityChrome(
-                            height = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp,
-                            surfaceColor = MaterialTheme.colorScheme.background,
-                            surfaceAlpha = 0.86f
-                        )
-                        }
-                        AppTopBar(
-                            title = "我的",
-                            style = AppTopBarStyle.CENTERED,
-                            navigationIcon = {
-                                AppIconButton(onClick = onBack) {
-                                    AppIcon(rememberAppBackIcon(), contentDescription = "Back")
-                                }
-                            },
-                            actions = {
-                                AppIconButton(onClick = onSettingsClick) {
-                                    AppIcon(rememberAppSettingsIcon(), contentDescription = "Settings")
-                                }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = Color.Transparent,
-                                scrolledContainerColor = Color.Transparent
+                    dynamic = 0,
+                    topPhoto = skinProfileBackgroundPath ?: currentUiState.topPhoto
+                )
+
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    MobileProfileContent(
+                        captureBackground = {
+                            ProfileBackground(
+                                user = guestUser,
+                                viewModel = viewModel,
+                                deferImmersiveRenderBudget = deferImmersiveRenderBudget,
+                                skinVideoBackgroundPath = skinVideoBackgroundPath,
+                                skinVideoPlayMode = skinVideoPlayMode,
+                                playSkinVideo = isCurrentPage && !initialEditAccount,
                             )
-                        )
-                    }
-                    }
-                }
-            ) { padding ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .profileProgressiveBackdrop(profileProgressiveChrome)
-                        .globalWallpaperAwareBackground(MaterialTheme.colorScheme.background)
-                        .padding(padding)
-                        .padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    // 错误图标
-                    AppIcon(
-                        rememberAppWarningIcon(),
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = AppContentColors.secondaryText()
+                        },
+                        progressiveTopChrome = profileProgressiveChrome,
+                        user = guestUser,
+                        onLogout = onGoToLogin, // "退出登录" 变为 "登录"
+                        onAccountManageClick = { showAccountSwitchDialog = true },
+                        onHistoryClick = onGoToLogin, // 游客点击功能需登录
+                        showHistoryService = showHistoryService,
+                        onFavoriteClick = onGoToLogin,
+                        onFollowingClick = { onGoToLogin() },
+                        onDownloadClick = onGoToLogin,
+                        onWatchLaterClick = onGoToLogin,
+                        onInboxClick = onGoToLogin,  //  [新增] 游客点击需登录
+                        onVideoClick = { },  // 游客模式不显示三连
+                        scrollBehavior = if (shouldPinProfileTopBarOnScroll(useSplitLayout = false)) {
+                            TopAppBarDefaults.pinnedScrollBehavior()
+                        } else {
+                            TopAppBarDefaults.enterAlwaysScrollBehavior()
+                        },
+                        onBack = onBack,
+                        onSettingsClick = onSettingsClick,
+                        hazeState = hazeState,
+                        // [New] 传递点击头部去登录的回调 (需修改 MobileProfileContent 支持)
+                        onHeaderClick = onGoToLogin,
+                        paddingValues = PaddingValues(0.dp), // 全屏
+                        scrollToTopRequestId = profileScrollToTopRequestId
                     )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    AppText(
-                        text = currentUiState.message,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = AppContentColors.secondaryText()
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // 重试按钮
-                    AppButton(
-                        onClick = { viewModel.loadProfile(force = true) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
-
-                            contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
-                        )
-                    ) {
-                        AppIcon(rememberAppRefreshIcon(), contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        AppText("重试")
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 离线缓存入口
-                    AppOutlinedButton(onClick = onDownloadClick) {
-                        AppIcon(rememberAppDownloadIcon(), contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        AppText("查看离线缓存")
-                    }
                 }
-            }
-        }
-        is ProfileUiState.Success -> {
-            val decoratedUser = remember(currentUiState.user, skinProfileBackgroundPath) {
-                currentUiState.user.copy(
-                    topPhoto = skinProfileBackgroundPath ?: currentUiState.user.topPhoto
-                )
-            }
-            val scrollBehavior = if (shouldPinProfileTopBarOnScroll(windowSizeClass.shouldUseSplitLayout)) {
-                TopAppBarDefaults.pinnedScrollBehavior()
-            } else {
-                TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-            }
-            val favoriteFolderShortcuts = remember(currentUiState.favoriteFolders, currentUiState.user.mid) {
-                resolveProfileFavoriteFolderShortcuts(
-                    folders = currentUiState.favoriteFolders,
-                    ownerMid = currentUiState.user.mid
-                )
-            }
-            LaunchedEffect(currentUiState.space.signSaveMessage) {
-                currentUiState.space.signSaveMessage?.let { message ->
-                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                    viewModel.clearProfileSpaceMessage()
-                }
-            }
 
-            AppScaffold(
-                topBarIconBackdropSource = profileProgressiveChrome.source,
-                modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-                containerColor = MaterialTheme.colorScheme.background,
-                // [Immersive] Mobile hides default TopBar, Tablet keeps it
-                topBar = {
-                    if (windowSizeClass.shouldUseSplitLayout) {
+            }
+            is ProfileUiState.Error -> {
+                // 🔧 [新增] 离线/错误状态 - 显示错误信息并提供重试和离线缓存入口
+                AppScaffold(
+                    topBarIconBackdropSource = profileProgressiveChrome.source,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    topBar = {
                         BiliPaiImmersiveTopBar(
                             backdrop = profileProgressiveChrome.backdrop,
                             enabled = profileProgressiveChrome.enabled,
-                            headerBlurActive = false,
+                            headerBlurActive = profileHeaderBlurActive,
                         ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                        ) {
+                        Box {
                             if (!profileProgressiveChrome.enabled) {
                             TopReadabilityChrome(
-                                height = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 104.dp,
+                                height = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 64.dp,
                                 surfaceColor = MaterialTheme.colorScheme.background,
-                                surfaceAlpha = 0.82f,
-                                hazeState = null,
-                                hazeEnabled = false
+                                surfaceAlpha = 0.86f
                             )
                             }
                             AppTopBar(
                                 title = "我的",
-                                largeTitle = "我的",
-                                style = AppTopBarStyle.LARGE,
+                                style = AppTopBarStyle.CENTERED,
                                 navigationIcon = {
                                     AppIconButton(onClick = onBack) {
                                         AppIcon(rememberAppBackIcon(), contentDescription = "Back")
                                     }
                                 },
                                 actions = {
-                                    ProfileTopActions(
-                                        compact = false,
-                                        privacyModeEnabled = privacyModeEnabled,
-                                        onSearchClick = onSearchClick,
-                                        onInboxClick = onInboxClick,
-                                        onPrivacyClick = togglePrivacyMode,
-                                        onAccountClick = { showAccountSwitchDialog = true },
-                                        onThemeClick = toggleThemeMode,
-                                        onSettingsClick = onSettingsClick,
-                                        tint = androidx.compose.material3.LocalContentColor.current,
-                                    )
+                                    AppIconButton(onClick = onSettingsClick) {
+                                        AppIcon(rememberAppSettingsIcon(), contentDescription = "Settings")
+                                    }
                                 },
                                 colors = TopAppBarDefaults.topAppBarColors(
                                     containerColor = Color.Transparent,
@@ -890,90 +760,224 @@ private fun ProfileScreenContent(
                         }
                         }
                     }
-                },
-                contentWindowInsets = if (!windowSizeClass.shouldUseSplitLayout) WindowInsets(0.dp) else ScaffoldDefaults.contentWindowInsets
-            ) { padding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .then(
-                            if (windowSizeClass.shouldUseSplitLayout) {
-                                Modifier.profileProgressiveBackdrop(profileProgressiveChrome)
-                            } else {
-                                Modifier
-                            }
-                        ),
-                ) {
-                    if (windowSizeClass.shouldUseSplitLayout) {
-                        ProfileBackground(
-                            user = decoratedUser,
-                            viewModel = viewModel,
-                            deferImmersiveRenderBudget = deferImmersiveRenderBudget,
-                            skinVideoBackgroundPath = skinVideoBackgroundPath,
-                            skinVideoPlayMode = skinVideoPlayMode,
-                            playSkinVideo = isCurrentPage && !initialEditAccount,
+                ) { padding ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .profileProgressiveBackdrop(profileProgressiveChrome)
+                            .globalWallpaperAwareBackground(MaterialTheme.colorScheme.background)
+                            .padding(padding)
+                            .padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        // 错误图标
+                        AppIcon(
+                            rememberAppWarningIcon(),
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = AppContentColors.secondaryText()
                         )
-                    }
 
-                    ProfileSpaceContent(
-                        viewModel = viewModel,
-                        initialEditAccount = initialEditAccount,
-                        user = decoratedUser,
-                        accountFace = currentUiState.user.face,
-                        space = currentUiState.space,
-                        editableAccount = currentUiState.editableAccount,
-                        favoriteFolderShortcuts = favoriteFolderShortcuts,
-                        onTabSelected = viewModel::selectProfileSpaceTab,
-                        onSignSave = viewModel::updateProfileSign,
-                        onLogout = {
-                            viewModel.logout()
-                            onLogoutSuccess()
-                        },
-                        onAccountManageClick = { showAccountSwitchDialog = true },
-                        onHistoryClick = onHistoryClick,
-                        showHistoryService = showHistoryService,
-                        onFavoriteClick = onFavoriteClick,
-                        onSubscriptionClick = onSubscriptionClick,
-                        onFavoriteFolderClick = onFavoriteFolderClick,
-                        onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
-                        onFansClick = { onFansClick(currentUiState.user.mid) },
-                        onDownloadClick = onDownloadClick,
-                        onWatchLaterClick = onWatchLaterClick,
-                        onInboxClick = onInboxClick,
-                        onVideoClick = onVideoClick,
-                        onContributionRetry = viewModel::retryProfileContributions,
-                        onDynamicDeleteClick = { action ->
-                            viewModel.deleteProfileDynamic(action) { _, message ->
-                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onBangumiClick = onBangumiClick,
-                        onBangumiMoreClick = onBangumiMoreClick,
-                        scrollBehavior = scrollBehavior,
-                        onBack = onBack,
-                        onSettingsClick = onSettingsClick,
-                        onSearchClick = onSearchClick,
-                        privacyModeEnabled = privacyModeEnabled,
-                        onPrivacyClick = togglePrivacyMode,
-                        onThemeClick = toggleThemeMode,
-                        hazeState = hazeState,
-                        paddingValues = padding,
-                        isTablet = windowSizeClass.shouldUseSplitLayout,
-                        scrollToTopRequestId = profileScrollToTopRequestId,
-                        progressiveTopChrome = profileProgressiveChrome,
-                        captureBackground = {
-                            if (!windowSizeClass.shouldUseSplitLayout) {
-                                ProfileBackground(
-                                    user = decoratedUser,
-                                    viewModel = viewModel,
-                                    deferImmersiveRenderBudget = deferImmersiveRenderBudget,
-                                    skinVideoBackgroundPath = skinVideoBackgroundPath,
-                                    skinVideoPlayMode = skinVideoPlayMode,
-                                    playSkinVideo = isCurrentPage && !initialEditAccount,
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        AppText(
+                            text = currentUiState.message,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = AppContentColors.secondaryText()
+                        )
+
+                        Spacer(modifier = Modifier.height(24.dp))
+
+                        // 重试按钮
+                        AppButton(
+                            onClick = { viewModel.loadProfile(force = true) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
+
+                                contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
+                            )
+                        ) {
+                            AppIcon(rememberAppRefreshIcon(), contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            AppText("重试")
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // 离线缓存入口
+                        AppOutlinedButton(onClick = onDownloadClick) {
+                            AppIcon(rememberAppDownloadIcon(), contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            AppText("查看离线缓存")
+                        }
+                    }
+                }
+            }
+            is ProfileUiState.Success -> {
+                val decoratedUser = remember(currentUiState.user, skinProfileBackgroundPath) {
+                    currentUiState.user.copy(
+                        topPhoto = skinProfileBackgroundPath ?: currentUiState.user.topPhoto
+                    )
+                }
+                val scrollBehavior = if (shouldPinProfileTopBarOnScroll(windowSizeClass.shouldUseSplitLayout)) {
+                    TopAppBarDefaults.pinnedScrollBehavior()
+                } else {
+                    TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+                }
+                val favoriteFolderShortcuts = remember(currentUiState.favoriteFolders, currentUiState.user.mid) {
+                    resolveProfileFavoriteFolderShortcuts(
+                        folders = currentUiState.favoriteFolders,
+                        ownerMid = currentUiState.user.mid
+                    )
+                }
+                LaunchedEffect(currentUiState.space.signSaveMessage) {
+                    currentUiState.space.signSaveMessage?.let { message ->
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        viewModel.clearProfileSpaceMessage()
+                    }
+                }
+
+                AppScaffold(
+                    topBarIconBackdropSource = profileProgressiveChrome.source,
+                    modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+                    containerColor = MaterialTheme.colorScheme.background,
+                    // [Immersive] Mobile hides default TopBar, Tablet keeps it
+                    topBar = {
+                        if (windowSizeClass.shouldUseSplitLayout) {
+                            BiliPaiImmersiveTopBar(
+                                backdrop = profileProgressiveChrome.backdrop,
+                                enabled = profileProgressiveChrome.enabled,
+                                headerBlurActive = false,
+                            ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            ) {
+                                if (!profileProgressiveChrome.enabled) {
+                                TopReadabilityChrome(
+                                    height = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 104.dp,
+                                    surfaceColor = MaterialTheme.colorScheme.background,
+                                    surfaceAlpha = 0.82f,
+                                    hazeState = null,
+                                    hazeEnabled = false
+                                )
+                                }
+                                AppTopBar(
+                                    title = "我的",
+                                    largeTitle = "我的",
+                                    style = AppTopBarStyle.LARGE,
+                                    navigationIcon = {
+                                        AppIconButton(onClick = onBack) {
+                                            AppIcon(rememberAppBackIcon(), contentDescription = "Back")
+                                        }
+                                    },
+                                    actions = {
+                                        ProfileTopActions(
+                                            compact = false,
+                                            privacyModeEnabled = privacyModeEnabled,
+                                            onSearchClick = onSearchClick,
+                                            onInboxClick = onInboxClick,
+                                            onPrivacyClick = togglePrivacyMode,
+                                            onAccountClick = { showAccountSwitchDialog = true },
+                                            onThemeClick = toggleThemeMode,
+                                            onSettingsClick = onSettingsClick,
+                                            tint = androidx.compose.material3.LocalContentColor.current,
+                                        )
+                                    },
+                                    colors = TopAppBarDefaults.topAppBarColors(
+                                        containerColor = Color.Transparent,
+                                        scrolledContainerColor = Color.Transparent
+                                    )
                                 )
                             }
-                        },
-                    )
+                            }
+                        }
+                    },
+                    contentWindowInsets = if (!windowSizeClass.shouldUseSplitLayout) WindowInsets(0.dp) else ScaffoldDefaults.contentWindowInsets
+                ) { padding ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .then(
+                                if (windowSizeClass.shouldUseSplitLayout) {
+                                    Modifier.profileProgressiveBackdrop(profileProgressiveChrome)
+                                } else {
+                                    Modifier
+                                }
+                            ),
+                    ) {
+                        if (windowSizeClass.shouldUseSplitLayout) {
+                            ProfileBackground(
+                                user = decoratedUser,
+                                viewModel = viewModel,
+                                deferImmersiveRenderBudget = deferImmersiveRenderBudget,
+                                skinVideoBackgroundPath = skinVideoBackgroundPath,
+                                skinVideoPlayMode = skinVideoPlayMode,
+                                playSkinVideo = isCurrentPage && !initialEditAccount,
+                            )
+                        }
+
+                        ProfileSpaceContent(
+                            viewModel = viewModel,
+                            initialEditAccount = initialEditAccount,
+                            user = decoratedUser,
+                            accountFace = currentUiState.user.face,
+                            space = currentUiState.space,
+                            editableAccount = currentUiState.editableAccount,
+                            favoriteFolderShortcuts = favoriteFolderShortcuts,
+                            onTabSelected = viewModel::selectProfileSpaceTab,
+                            onSignSave = viewModel::updateProfileSign,
+                            onLogout = {
+                                viewModel.logout()
+                                onLogoutSuccess()
+                            },
+                            onAccountManageClick = { showAccountSwitchDialog = true },
+                            onHistoryClick = onHistoryClick,
+                            showHistoryService = showHistoryService,
+                            onFavoriteClick = onFavoriteClick,
+                            onSubscriptionClick = onSubscriptionClick,
+                            onFavoriteFolderClick = onFavoriteFolderClick,
+                            onFollowingClick = { onFollowingClick(currentUiState.user.mid) },
+                            onFansClick = { onFansClick(currentUiState.user.mid) },
+                            onDownloadClick = onDownloadClick,
+                            onWatchLaterClick = onWatchLaterClick,
+                            onInboxClick = onInboxClick,
+                            onVideoClick = onVideoClick,
+                            onContributionRetry = viewModel::retryProfileContributions,
+                            onDynamicDeleteClick = { action ->
+                                viewModel.deleteProfileDynamic(action) { _, message ->
+                                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onBangumiClick = onBangumiClick,
+                            onBangumiMoreClick = onBangumiMoreClick,
+                            scrollBehavior = scrollBehavior,
+                            onBack = onBack,
+                            onSettingsClick = onSettingsClick,
+                            onSearchClick = onSearchClick,
+                            privacyModeEnabled = privacyModeEnabled,
+                            onPrivacyClick = togglePrivacyMode,
+                            onThemeClick = toggleThemeMode,
+                            hazeState = hazeState,
+                            paddingValues = padding,
+                            isTablet = windowSizeClass.shouldUseSplitLayout,
+                            scrollToTopRequestId = profileScrollToTopRequestId,
+                            progressiveTopChrome = profileProgressiveChrome,
+                            captureBackground = {
+                                if (!windowSizeClass.shouldUseSplitLayout) {
+                                    ProfileBackground(
+                                        user = decoratedUser,
+                                        viewModel = viewModel,
+                                        deferImmersiveRenderBudget = deferImmersiveRenderBudget,
+                                        skinVideoBackgroundPath = skinVideoBackgroundPath,
+                                        skinVideoPlayMode = skinVideoPlayMode,
+                                        playSkinVideo = isCurrentPage && !initialEditAccount,
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
             }
         }
@@ -1901,6 +1905,7 @@ private fun ProfilePinnedSpaceTopBar(
         }
         Spacer(modifier = Modifier.weight(1f))
         AppWindowActionMenu(
+            onActionSource = LocalProfileAccountPopupSource.current,
             groups = listOf(
                 listOf(
                     AppWindowAction(label = "搜索", onClick = onSearchClick),
@@ -2048,6 +2053,7 @@ private fun ProfileTopActions(
     tint: Color,
     onWallpaperClick: (() -> Unit)? = null,
 ) {
+    val accountAction = rememberProfileAccountPopupAction(onAccountClick)
     val openLedger = LocalProfileLedgerNavigation.current
     val openComments = LocalProfileCommentsNavigation.current
     var showQrAuthorization by remember { mutableStateOf(false) }
@@ -2071,7 +2077,7 @@ private fun ProfileTopActions(
                 tint = tint,
             )
         }
-        AppIconButton(onClick = onAccountClick) {
+        AppIconButton(onClick = accountAction.onClick, modifier = accountAction.modifier) {
             AppIcon(rememberAppProfileAddIcon(), contentDescription = "切换账号", tint = tint)
         }
         AppIconButton(onClick = onThemeClick) {
@@ -2082,6 +2088,7 @@ private fun ProfileTopActions(
         }
     } else {
         AppWindowActionMenu(
+            onActionSource = LocalProfileAccountPopupSource.current,
             groups = listOf(
                 buildList {
                     add(
@@ -3893,6 +3900,7 @@ fun TabletProfileContent(
     onInboxClick: () -> Unit = {},
     paddingValues: PaddingValues
 ) {
+    val accountAction = rememberProfileAccountPopupAction(onAccountManageClick)
     AppSplitLayout(
         modifier = Modifier.fillMaxSize().padding(paddingValues),
         primaryRatio = 0.4f,
@@ -3965,8 +3973,8 @@ fun TabletProfileContent(
 
                     Row(modifier = Modifier.fillMaxWidth()) {
                         AppOutlinedButton(
-                            onClick = onAccountManageClick,
-                            modifier = Modifier.weight(1f)
+                            onClick = accountAction.onClick,
+                            modifier = Modifier.weight(1f).then(accountAction.modifier)
                         ) {
                             AppText("切换账号")
                         }
@@ -4984,6 +4992,7 @@ fun ServicesSection(
     isTablet: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val accountAction = rememberProfileAccountPopupAction(onAccountManageClick)
     val queryAicu = com.android.purebilibili.feature.aicu.LocalAicuNavigation.current
     val downloadIcon = rememberAppDownloadIcon()
     val historyIcon = rememberAppHistoryIcon()
@@ -5031,11 +5040,13 @@ fun ServicesSection(
                             AppPreferenceGridItem(
                                 icon = icon,
                                 title = title,
-                                onClick = onClick,
+                                onClick = if (title == "账号切换") accountAction.onClick else onClick,
                                 iconTint = contentColor,
                                 containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
                                 contentColor = contentColor,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f).then(
+                                    if (title == "账号切换") accountAction.modifier else Modifier
+                                )
                             )
                         }
                         if (rowItems.size < 2) {
@@ -5210,13 +5221,15 @@ fun ServicesSection(
                         iconTint = secondaryAccent,
                         textColor = contentColor
                     )
-                    AppPreference(
-                        icon = accountIcon,
-                        title = "账号切换",
-                        onClick = onAccountManageClick,
-                        iconTint = secondaryAccent,
-                        textColor = contentColor
-                    )
+                    Box(accountAction.modifier) {
+                        AppPreference(
+                            icon = accountIcon,
+                            title = "账号切换",
+                            onClick = accountAction.onClick,
+                            iconTint = secondaryAccent,
+                            textColor = contentColor
+                        )
+                    }
                     AppPreference(
                         icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(com.android.purebilibili.feature.settings.SettingsIconRole.ACCOUNT_LOGIN),
                         title = if (isLogin) "退出登录" else "立即登录",
@@ -5255,10 +5268,11 @@ private fun ProfileServiceRow(
     onClick: () -> Unit,
     icon: ImageVector,
     iconTint: Color,
-    textColor: Color
+    textColor: Color,
+    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 58.dp)
             .clickable(onClick = onClick)
@@ -5320,12 +5334,14 @@ private fun ProfileAccountActionArea(
     borderColor: Color?,
     embeddedInPanel: Boolean = false
 ) {
+    val accountAction = rememberProfileAccountPopupAction(onAccountManageClick)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (embeddedInPanel) {
             ProfileServiceRow(
                 icon = accountIcon,
                 title = "账号切换",
-                onClick = onAccountManageClick,
+                onClick = accountAction.onClick,
+                modifier = accountAction.modifier,
                 iconTint = MaterialTheme.colorScheme.secondary,
                 textColor = textColor
             )
@@ -5338,7 +5354,8 @@ private fun ProfileAccountActionArea(
                 ProfileServiceRow(
                     icon = accountIcon,
                     title = "账号切换",
-                    onClick = onAccountManageClick,
+                    onClick = accountAction.onClick,
+                    modifier = accountAction.modifier,
                     iconTint = MaterialTheme.colorScheme.secondary,
                     textColor = textColor
                 )
@@ -5538,6 +5555,7 @@ internal fun AccountSwitchDialog(
     onRemove: (Long) -> Unit,
     purposeAccountMids: Map<com.android.purebilibili.core.store.AccountPurpose, Long?>? = null,
     onSetPurpose: ((com.android.purebilibili.core.store.AccountPurpose, Long?) -> Unit)? = null,
+    source: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
 ) {
     val useGlassPurposeControls = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
         android.os.Build.VERSION.SDK_INT >= 33 && com.android.purebilibili.core.ui.components.appGlassMenuAvailable()
@@ -5566,6 +5584,7 @@ internal fun AccountSwitchDialog(
     )
 
     AccountPurposeDialogSurface(
+        source = source,
         onDismissRequest = onDismiss,
         title = "账号与用途",
         contentLayout = resolveAppContentDialogLayoutPolicy(maxWidthDp = 440, minWidthDp = 320),

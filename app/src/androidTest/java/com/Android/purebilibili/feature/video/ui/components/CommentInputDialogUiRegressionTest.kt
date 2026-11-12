@@ -1,11 +1,17 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import android.widget.EditText
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.data.model.response.EmoteItem
 import com.android.purebilibili.data.model.response.EmotePackage
@@ -21,6 +27,36 @@ import org.junit.runner.RunWith
 class CommentInputDialogUiRegressionTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun openingComposer_showsKeyboardWithoutTappingEditor() {
+        val visible = mutableStateOf(false)
+        composeRule.setContent {
+            MaterialTheme {
+                androidx.compose.material3.Button(onClick = { visible.value = true }) {
+                    androidx.compose.material3.Text("写评论")
+                }
+                CommentInputDialog(
+                    visible = visible.value,
+                    draftKey = "auto-keyboard",
+                    onDismiss = { visible.value = false },
+                    onSend = { _, _, _ -> },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("写评论").performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            var keyboardVisible = false
+            onView(isAssignableFrom(EditText::class.java)).inRoot(isDialog()).check { view, error ->
+                if (error != null) throw error
+                keyboardVisible = view.hasFocus() &&
+                    ViewCompat.getRootWindowInsets(view)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+            }
+            keyboardVisible
+        }
+        composeRule.onNodeWithTag("comment_composer_input").assertIsFocused()
+    }
 
     @Test
     fun replySessions_restoreTheirOwnDraftAndClearOnlyThePublishedReply() {

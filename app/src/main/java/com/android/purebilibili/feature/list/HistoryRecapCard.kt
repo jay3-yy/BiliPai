@@ -7,11 +7,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.shape.CircleShape
-import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.ExpandLess
+import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.PersonOutline
 import androidx.compose.material.icons.outlined.SmartDisplay
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +35,6 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppTextButton
-import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.plugin.feed.FeedSource
 import com.android.purebilibili.core.plugin.feed.loadEnabledFeedSources
 import kotlinx.coroutines.CancellationException
@@ -51,7 +52,10 @@ internal fun HistoryRecapCard(
     refreshToken: Any,
     active: Boolean,
     onUpClick: ((Long) -> Unit)?,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     snapshotCache: MutableMap<PersonalRecapWindow, HistoryRecapSnapshot>? = null,
+    onShowAllUps: ((PersonalRecapWindow, PersonalVideoRecapStats) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -90,8 +94,11 @@ internal fun HistoryRecapCard(
         videoStats = snapshot?.videoStats,
         loading = loading,
         videoUnavailable = videoUnavailable,
+        expanded = expanded,
+        onExpandedChange = onExpandedChange,
         onWindowChange = { window = it },
         onUpClick = onUpClick,
+        onShowAllUps = onShowAllUps,
         modifier = modifier,
     )
 }
@@ -105,11 +112,13 @@ private fun HistoryRecapCardContent(
     videoStats: PersonalVideoRecapStats?,
     loading: Boolean,
     videoUnavailable: Boolean,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
     onWindowChange: (PersonalRecapWindow) -> Unit,
     onUpClick: ((Long) -> Unit)?,
+    onShowAllUps: ((PersonalRecapWindow, PersonalVideoRecapStats) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var showAllUps by rememberSaveable(window) { mutableStateOf(false) }
     AppSurface(
         modifier = modifier,
         shape = AppShapes.container(ContainerLevel.Card),
@@ -121,22 +130,37 @@ private fun HistoryRecapCardContent(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                AppText("我的回顾", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                    PersonalRecapWindow.entries.forEach { entry ->
-                        val selected = entry == window
-                        AppText(
-                            text = entry.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (selected) AppContentColors.accent() else AppContentColors.secondaryText(),
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable { onWindowChange(entry) }
-                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AppText(
+                        "我的回顾",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    AppTextButton(
+                        onClick = { onExpandedChange(!expanded) },
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .semantics { stateDescription = if (expanded) "回顾详情已展开" else "回顾详情已收起" },
+                    ) {
+                        AppText(if (expanded) "收起" else "展开")
+                        Spacer(Modifier.width(4.dp))
+                        AppIcon(
+                            if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
                         )
                     }
                 }
+                PersonalRecapWindowSelector(
+                    window = window,
+                    onWindowChange = onWindowChange,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
             val currentVideoStats = videoStats
             val emptyRss = rssStats.readCount <= 0
@@ -164,7 +188,7 @@ private fun HistoryRecapCardContent(
                                 tint = AppContentColors.accent(),
                                 modifier = Modifier.size(22.dp),
                             )
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 AppText(
                                     text = "已读 ${rssStats.readCount} 篇",
                                     style = MaterialTheme.typography.titleMedium,
@@ -172,7 +196,7 @@ private fun HistoryRecapCardContent(
                                 )
                                 val sourceTitle = rssStats.topSourceKey
                                     ?.let { key -> sources.firstOrNull { it.id == key }?.title }
-                                if (!sourceTitle.isNullOrBlank()) {
+                                if (expanded && !sourceTitle.isNullOrBlank()) {
                                     AppText(
                                         text = "最常读：$sourceTitle",
                                         style = MaterialTheme.typography.labelSmall,
@@ -196,7 +220,7 @@ private fun HistoryRecapCardContent(
                                 tint = AppContentColors.accent(),
                                 modifier = Modifier.size(22.dp),
                             )
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 AppText(
                                     text = "看了 ${currentVideoStats.videoCount} 个视频",
                                     style = MaterialTheme.typography.titleMedium,
@@ -211,12 +235,6 @@ private fun HistoryRecapCardContent(
                         }
                     }
                 }
-                PersonalRecapActivityChart(
-                    window = window,
-                    rssStats = rssStats,
-                    videoStats = currentVideoStats,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 if (currentVideoStats?.historyMayBeIncomplete == true) {
                     AppText(
                         "较早的观看记录尚未全部载入，视频统计仅包含已载入记录。",
@@ -224,79 +242,89 @@ private fun HistoryRecapCardContent(
                         color = AppContentColors.secondaryText(),
                     )
                 }
-                if (currentVideoStats != null && currentVideoStats.videoCount > 0) {
-                    PersonalRecapProgress(
-                        label = "视频看完比例",
-                        detail = "${currentVideoStats.finishedCount} / ${currentVideoStats.videoCount}",
-                        fraction = currentVideoStats.finishedCount.toFloat() / currentVideoStats.videoCount,
+                // 摘要与时间窗始终保留；收起后移除详情组合，不保留隐藏图表与头像。
+                // 三种材质共用展开行为，材质参数仍由现有 AppSurface 决定。
+                if (expanded) {
+                    PersonalRecapActivityChart(
+                        window = window,
+                        rssStats = rssStats,
+                        videoStats = currentVideoStats,
                         modifier = Modifier.fillMaxWidth(),
                     )
-                }
-                if (currentVideoStats != null && currentVideoStats.topUps.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
+                    if (currentVideoStats != null && currentVideoStats.videoCount > 0) {
+                        PersonalRecapProgress(
+                            label = "视频看完比例",
+                            detail = "${currentVideoStats.finishedCount} / ${currentVideoStats.videoCount}",
+                            fraction = currentVideoStats.finishedCount.toFloat() / currentVideoStats.videoCount,
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            AppText(
-                                text = "最近爱看",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = AppContentColors.secondaryText(),
-                            )
-                            if (currentVideoStats.topUps.size > 5) {
-                                AppTextButton(onClick = { showAllUps = true }) {
-                                    AppText("查看更多")
+                        )
+                    }
+                    if (currentVideoStats != null && currentVideoStats.topUps.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                AppText(
+                                    text = "最近爱看",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = AppContentColors.secondaryText(),
+                                )
+                                if (currentVideoStats.topUps.size > 5 && onShowAllUps != null) {
+                                    AppTextButton(onClick = { onShowAllUps(window, currentVideoStats) }) {
+                                        AppText("查看更多")
+                                    }
                                 }
                             }
-                        }
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        ) {
-                            currentVideoStats.topUps.take(5).forEach { up ->
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier
-                                        .width(56.dp)
-                                        .then(
-                                            if (onUpClick != null) {
-                                                Modifier.clickable { onUpClick(up.mid) }
-                                            } else {
-                                                Modifier
-                                            }
-                                        ),
-                                ) {
-                                    Box(
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            ) {
+                                currentVideoStats.topUps.take(5).forEach { up ->
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
                                         modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                                        contentAlignment = Alignment.Center,
+                                            .width(56.dp)
+                                            .then(
+                                                if (onUpClick != null) {
+                                                    Modifier.clickable { onUpClick(up.mid) }
+                                                } else {
+                                                    Modifier
+                                                }
+                                            ),
                                     ) {
-                                        if (up.face.isNotBlank()) {
-                                            coil3.compose.AsyncImage(
-                                                model = up.face,
-                                                contentDescription = up.name,
-                                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                                modifier = Modifier.fillMaxSize(),
-                                            )
-                                        } else {
-                                            AppIcon(
-                                                Icons.Outlined.PersonOutline,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(22.dp),
-                                            )
+                                        Box(
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            if (up.face.isNotBlank()) {
+                                                coil3.compose.AsyncImage(
+                                                    model = up.face,
+                                                    contentDescription = up.name,
+                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            } else {
+                                                AppIcon(
+                                                    Icons.Outlined.PersonOutline,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(22.dp),
+                                                )
+                                            }
                                         }
+                                        AppText(
+                                            text = up.name,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = AppContentColors.secondaryText(),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
                                     }
-                                    AppText(
-                                        text = up.name,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = AppContentColors.secondaryText(),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
                                 }
                             }
                         }
@@ -305,41 +333,9 @@ private fun HistoryRecapCardContent(
             }
         }
     }
-    if (showAllUps && videoStats != null) {
-        AppAlertDialog(
-            onDismissRequest = { showAllUps = false },
-            title = { AppText("${window.label} · 最近爱看") },
-            text = {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    items(videoStats.topUps, key = { it.mid }) { up ->
-                        PersonalRecapProgress(
-                            label = up.name,
-                            detail = "${up.watchCount} 个视频 · 观看占比" +
-                                formatRecapDuration(up.totalDurationSec).takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty(),
-                            fraction = up.watchCount.toFloat() / videoStats.videoCount.coerceAtLeast(1),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(if (onUpClick != null) Modifier.clickable {
-                                    showAllUps = false
-                                    onUpClick(up.mid)
-                                } else Modifier),
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                AppTextButton(onClick = { showAllUps = false }) { AppText("关闭") }
-            },
-        )
-    }
 }
 
-private fun formatRecapDuration(totalSec: Long): String {
+internal fun formatRecapDuration(totalSec: Long): String {
     val hours = totalSec / 3600
     val minutes = (totalSec % 3600) / 60
     return when {

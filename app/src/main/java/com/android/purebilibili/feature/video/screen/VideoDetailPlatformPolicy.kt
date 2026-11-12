@@ -32,6 +32,13 @@ internal fun shouldUseVideoDetailSharedElementMorph(
 ): Boolean = foldPosture != AdaptiveFoldPosture.Book &&
     foldPosture != AdaptiveFoldPosture.Tabletop
 
+internal fun shouldPreserveFullscreenPlaybackPosition(
+    playbackState: Int,
+    playWhenReady: Boolean,
+    positionMs: Long
+): Boolean = playWhenReady && positionMs > 0L &&
+    (playbackState == Player.STATE_READY || playbackState == Player.STATE_BUFFERING)
+
 internal data class VideoDetailSystemBarsSnapshot(
     val statusBarColor: Int,
     val navigationBarColor: Int,

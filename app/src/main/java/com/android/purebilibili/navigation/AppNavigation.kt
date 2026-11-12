@@ -3390,6 +3390,14 @@ fun AppNavigation(
                         } else {
                             null
                         },
+                        onRecapUpsClick = { window, stats ->
+                            pushNavigation3Key(
+                                BiliPaiNavKey.PersonalRecapUps(
+                                    window = window,
+                                    stats = stats.copy(watchTimestampsMs = emptyList()),
+                                )
+                            )
+                        },
                         onUpClick = { mid -> pushNavigation3Route(ScreenRoutes.Space.createRoute(mid)) },
                         onVideoClick = { lookupKey, cid, cover, isVertical ->
                             val historyItem = historyViewModel.getHistoryItem(lookupKey)
@@ -5558,6 +5566,15 @@ fun AppNavigation(
                             RenderHomeEntryContent(key, isBottomPagerPageActive, isBottomPagerPageVisibleDuringNavigation)
                         BiliPaiNavEntryContentRole.LISTEN_VIDEO ->
                             RenderListenVideoEntryContent(key)
+                        BiliPaiNavEntryContentRole.PERSONAL_RECAP_UPS -> {
+                            val recapKey = key as BiliPaiNavKey.PersonalRecapUps
+                            com.android.purebilibili.feature.list.PersonalRecapUpsScreen(
+                                window = recapKey.window,
+                                stats = recapKey.stats,
+                                onBack = { performSystemBackAction() },
+                                onUpClick = { mid -> pushNavigation3Key(BiliPaiNavKey.Space(mid)) },
+                            )
+                        }
                         BiliPaiNavEntryContentRole.HISTORY ->
                             RenderHistoryEntryContent(key, isBottomPagerPageActive, isBottomPagerHosted)
                         BiliPaiNavEntryContentRole.DYNAMIC ->

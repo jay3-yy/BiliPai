@@ -17,6 +17,11 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.text.TextRange
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.matcher.RootMatchers.isDialog
+import androidx.test.espresso.matcher.ViewMatchers.isRoot
 import com.android.purebilibili.core.ui.AppThemeConfig
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.theme.AppUiStyle
@@ -93,10 +98,10 @@ class DanmakuComposerUiRegressionTest {
                 )
             }
         }
-        composeTestRule.onNodeWithText("颜色、位置与大小").performClick()
-        composeTestRule.onNodeWithTag("danmaku_compact_input")
-            .performTextReplacement("继续编辑")
-        composeTestRule.onNodeWithText("颜色").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("danmaku_compact_input").performTextReplacement("继续编辑")
+        composeTestRule.onNodeWithContentDescription("弹幕样式").performClick()
+        composeTestRule.runOnIdle { draft.value = "外部草稿回流" }
+        composeTestRule.onNodeWithText("弹幕颜色").assertIsDisplayed()
         composeTestRule.onNodeWithTag("danmaku_compact_input").assertTextEquals("继续编辑")
     }
 
@@ -115,10 +120,97 @@ class DanmakuComposerUiRegressionTest {
 
         composeTestRule.onNodeWithTag("danmaku_compact_input").assertIsFocused()
         composeTestRule.onNodeWithText("未发送草稿").assertIsDisplayed()
-        composeTestRule.onNodeWithText("颜色").assertDoesNotExist()
+        composeTestRule.onNodeWithText("弹幕颜色").assertDoesNotExist()
 
-        composeTestRule.onNodeWithText("颜色、位置与大小").performClick()
-        composeTestRule.onNodeWithText("颜色").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("弹幕样式").performClick()
+        composeTestRule.onNodeWithText("弹幕颜色").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("会员渐变色").assertDoesNotExist()
+    }
+
+    @Test
+    fun compactComposer_materialStylePanelReplacesKeyboardAndSendsSelectedOptions() {
+        assertCompactComposerInteraction(AppUiStyle.MATERIAL3, false)
+    }
+
+    @Test
+    fun compactComposer_miuixStylePanelReplacesKeyboardAndSendsSelectedOptions() {
+        assertCompactComposerInteraction(AppUiStyle.MIUIX, false)
+    }
+
+    @Test
+    fun compactComposer_glassStylePanelReplacesKeyboardAndSendsSelectedOptions() {
+        assertCompactComposerInteraction(AppUiStyle.MATERIAL3, true)
+    }
+
+    @Test
+    fun compactComposer_miuixGlassStylePanelReplacesKeyboardAndSendsSelectedOptions() {
+        assertCompactComposerInteraction(AppUiStyle.MIUIX, true)
+    }
+
+    private fun waitForCompactKeyboard(visible: Boolean) {
+        composeTestRule.waitUntil(5_000) {
+            var matches = false
+            onView(isRoot()).inRoot(isDialog()).check { view, error ->
+                if (error != null) throw error
+                val insets = ViewCompat.getRootWindowInsets(view)
+                matches = insets != null && insets.isVisible(WindowInsetsCompat.Type.ime()) == visible
+            }
+            matches
+        }
+    }
+
+    private fun assertCompactComposerInteraction(style: AppUiStyle, glass: Boolean) {
+        var sentText: String? = null
+        var sentSelection: Triple<Int, Int, Int>? = null
+        composeTestRule.setContent {
+            CompositionLocalProvider(
+                LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glass),
+                LocalAppUiStyle provides style,
+            ) {
+                MaterialTheme { MiuixTheme {
+                    DanmakuSendDialog(
+                        visible = true,
+                        initialText = "待发送弹幕",
+                        vipColorAvailable = true,
+                        onDismiss = {},
+                        onSend = { text, color, mode, size, _ ->
+                            sentText = text
+                            sentSelection = Triple(color, mode, size)
+                        },
+                    )
+                } }
+            }
+        }
+        val input = composeTestRule.onNodeWithTag("danmaku_compact_input")
+        composeTestRule.waitUntil(5_000) {
+            input.fetchSemanticsNode().config.getOrElse(SemanticsProperties.Focused) { false }
+        }
+        composeTestRule.onNodeWithTag("danmaku_compact_style_panel").assertDoesNotExist()
+        waitForCompactKeyboard(true)
+        composeTestRule.onNodeWithContentDescription("弹幕样式").performClick()
+        waitForCompactKeyboard(false)
+        input.assertIsNotFocused()
+        composeTestRule.onNodeWithText("顶部").performClick().assertIsSelected()
+        composeTestRule.onNodeWithText("小").performClick().assertIsSelected()
+        composeTestRule.onNodeWithContentDescription("红色").performScrollTo().performClick().assertIsSelected()
+        input.assertTextEquals("待发送弹幕")
+        input.performTouchInput { click() }
+        composeTestRule.onNodeWithTag("danmaku_compact_style_panel").assertDoesNotExist()
+        waitForCompactKeyboard(true)
+        composeTestRule.waitUntil(5_000) {
+            input.fetchSemanticsNode().config.getOrElse(SemanticsProperties.Focused) { false }
+        }
+        input.performTextReplacement("  样式已保留  ")
+        composeTestRule.onNodeWithContentDescription("弹幕样式").performClick()
+        composeTestRule.onNodeWithText("顶部").assertIsSelected()
+        composeTestRule.onNodeWithText("小").assertIsSelected()
+        composeTestRule.onNodeWithContentDescription("红色").performScrollTo().assertIsSelected()
+        composeTestRule.onNodeWithContentDescription("会员渐变色").performScrollTo().performClick().assertIsSelected()
+        composeTestRule.onNodeWithTag("danmaku_compact_send").performClick()
+        composeTestRule.runOnIdle {
+            assertEquals("样式已保留", sentText)
+            assertEquals(Triple(-1, 5, 18), sentSelection)
+        }
     }
 
     @Test

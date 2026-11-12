@@ -191,6 +191,14 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data class PersonalRecapUps(
+        val window: com.android.purebilibili.feature.list.PersonalRecapWindow,
+        val stats: com.android.purebilibili.feature.list.PersonalVideoRecapStats,
+    ) : BiliPaiNavKey {
+        override val routeBase: String = "personal_recap_ups"
+    }
+
+    @Serializable
     data class HistorySearch(val query: String = "") : BiliPaiNavKey {
         override val routeBase: String = "history_search"
     }

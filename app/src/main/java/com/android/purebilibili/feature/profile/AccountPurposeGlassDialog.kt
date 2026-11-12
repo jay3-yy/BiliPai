@@ -18,6 +18,27 @@ import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.popup.AppGlassPopupHost
 import com.android.purebilibili.feature.home.components.LocalLiquidGlassRenderConfig
 
+/** 各账号入口发布自己的快照，不把页面或上一轮触发器当作本次锚点。 */
+internal val LocalProfileAccountPopupSource = compositionLocalOf<((AppGlassMenuSource?) -> Unit)?> { null }
+
+internal data class ProfileAccountPopupAction(val modifier: Modifier, val onClick: () -> Unit)
+
+@Composable
+internal fun rememberProfileAccountPopupAction(
+    onClick: () -> Unit,
+): ProfileAccountPopupAction {
+    val source = rememberAppGlassMenuSource()
+    val publish = LocalProfileAccountPopupSource.current
+    val action = {
+        onClick()
+        publish?.invoke(source.takeIf { it.isAvailable })
+        Unit
+    }
+    return ProfileAccountPopupAction(
+        Modifier.appGlassMenuSource(source, onOpen = action), action,
+    )
+}
+
 /** 本入口显式选择同窗容器采样；玻璃关闭或同窗宿主不可用时保留原生弹窗参数。 */
 @Composable
 internal fun AccountPurposeDialogSurface(
@@ -27,6 +48,7 @@ internal fun AccountPurposeDialogSurface(
     confirmButton: @Composable () -> Unit,
     dismissButton: @Composable () -> Unit,
     contentLayout: AppContentDialogLayoutPolicy,
+    source: AppGlassMenuSource? = null,
 ) {
     if (LocalAppThemeConfig.current.liquidGlassEnabled && Build.VERSION.SDK_INT >= 33 && appGlassMenuAvailable()) {
         val maxHeight = minOf(640.dp, (LocalConfiguration.current.screenHeightDp * 0.8f).dp)
@@ -34,8 +56,8 @@ internal fun AccountPurposeDialogSurface(
         val handled = AppGlassMenu(
             expanded = true,
             onDismissRequest = onDismissRequest,
-            placement = AppGlassMenuPlacement.CENTER,
-            source = null,
+            placement = if (source?.isAvailable == true) AppGlassMenuPlacement.ANCHOR_END else AppGlassMenuPlacement.CENTER,
+            source = source,
             minWidth = contentLayout.minWidthDp.dp,
             maxWidth = contentLayout.maxWidthDp.dp,
             maxHeight = maxHeight,

@@ -36,7 +36,14 @@ fun RepostDialog(
             ShareRichTextTools(
                 contentKey = contentKey, enabled = !posting,
                 onAppend = { text = (text + it).take(2000) },
-                onMention = { user -> text = (text + "@${user.name} ").take(2000); mentions = mentions + (user.name to user.uid) },
+                onMentions = { selected ->
+                    val nextText = text + selected.joinToString(separator = "") { "@${it.name} " }
+                    if (nextText.length <= 2000) {
+                        text = nextText
+                        mentions = mentions + selected.associate { it.name to it.uid }
+                        true
+                    } else false
+                },
                 onTopic = { selected -> text = (text + "#${selected.name}# ").take(2000); topic = DynamicCreateTopic(selected.id, selected.name) },
             )
             Row(verticalAlignment = Alignment.CenterVertically) {

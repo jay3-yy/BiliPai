@@ -9,6 +9,66 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlayerPresentationPolicyTest {
+    @Test
+    fun `tablet inset below 600dp stays inline on entry and after fullscreen back`() {
+        // 这是阈值回归输入，不是特定型号的实测尺寸。
+        for ((width, height) in listOf(1000 to 576, 576 to 1000)) {
+            val display = resolveAppDisplayContext(AppDisplayContextInput(
+                currentWindowWidthDp = width,
+                currentWindowHeightDp = height,
+                maximumWindowWidthDp = 1000,
+                maximumWindowHeightDp = 600,
+                smallestScreenWidthDp = 600,
+                configurationOrientation = if (width > height) Configuration.ORIENTATION_LANDSCAPE
+                    else Configuration.ORIENTATION_PORTRAIT,
+                displayRotation = if (width > height) Surface.ROTATION_90 else Surface.ROTATION_0,
+            ))
+            assertEquals(AppFoldableDisplayRole.Standard, display.foldableDisplayRole)
+            assertFalse(shouldUsePhonePlayerOrientation(display))
+            for (manualFullscreen in listOf(false, true, false)) {
+                val presentation = resolvePlayerPresentationPolicy(
+                    display, isLandscape = width > height, userFullscreenIntent = manualFullscreen,
+                    prefersManualFullscreen = false, isInMultiWindowMode = false,
+                )
+                assertFalse(presentation.isOrientationDriven)
+                assertFalse(presentation.orientationGeneratedFullscreen)
+                assertEquals(manualFullscreen, presentation.isFullscreen)
+            }
+            for (appRotate in listOf(false, true)) {
+                for (systemRotate in listOf(false, true)) {
+                    val request = com.android.purebilibili.feature.video.screen.resolvePhoneVideoRequestedOrientation(
+                        autoRotateEnabled = appRotate,
+                        systemAutoRotateEnabled = systemRotate,
+                        fullscreenMode = com.android.purebilibili.core.store.FullscreenMode.AUTO,
+                        isCompactDevice = shouldUsePhonePlayerOrientation(display),
+                        isOrientationDrivenFullscreen = false,
+                        isFullscreenMode = false,
+                        manualFullscreenRequested = false,
+                        manualPortraitHoldActive = false,
+                        isVerticalVideo = false,
+                        isPortraitFullscreen = false,
+                        isCurrentlyLandscape = width > height,
+                    )
+                    assertEquals(if (appRotate) ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                        else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, request)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `stable tablet identity wins over transient narrow maximum window metrics`() {
+        val display = resolveAppDisplayContext(AppDisplayContextInput(
+            currentWindowWidthDp = 900,
+            currentWindowHeightDp = 550,
+            maximumWindowWidthDp = 900,
+            maximumWindowHeightDp = 550,
+            smallestScreenWidthDp = 720,
+        ))
+        assertFalse(shouldUsePhonePlayerOrientation(display))
+        assertFalse(resolvePlayerPresentationPolicy(display, true, false, false, false).isFullscreen)
+    }
+
 
     @Test
     fun `Pura X Max cover stays in-window across landscape, portrait grip, and letterboxed lock`() {

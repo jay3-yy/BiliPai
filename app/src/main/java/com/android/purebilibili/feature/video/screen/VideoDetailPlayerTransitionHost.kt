@@ -185,6 +185,7 @@ internal fun PortraitInlineVideoPlayerHost(
     onHomeClick: () -> Unit,
     endDrawerRequestKey: Int = 0,
     moreMenuRequested: Boolean = false,
+    moreMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
     onMoreMenuRequestConsumed: () -> Unit = {},
     videoPlayerSectionTarget: VideoPlayerSectionTarget,
     sponsorSegment: com.android.purebilibili.data.model.response.SponsorSegment?,
@@ -328,6 +329,7 @@ internal fun PortraitInlineVideoPlayerHost(
             ),
             actions = VideoPlayerSectionActions(
                 onMoreMenuRequestConsumed = onMoreMenuRequestConsumed,
+                moreMenuSource = moreMenuSource,
                     resolveNextWatch = playbackActions.resolveNextWatch,
                     playNextWatch = playbackActions.playNextWatch,
                 onToggleFullscreen = onToggleFullscreen,

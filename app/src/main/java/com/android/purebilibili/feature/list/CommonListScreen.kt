@@ -250,6 +250,7 @@ fun CommonListScreen(
     onBack: () -> Unit,
     onVideoClick: (String, Long, String, Boolean) -> Unit,
     onUpClick: ((Long) -> Unit)? = null,
+    onRecapUpsClick: ((PersonalRecapWindow, PersonalVideoRecapStats) -> Unit)? = null,
     onCollectionClick: ((FavoriteCollectionRoute) -> Unit)? = null,
     onFavoriteFolderClick: ((Long, Long, String, String) -> Unit)? = null,
     onFavoriteBangumiClick: (Long) -> Unit = {},
@@ -346,9 +347,11 @@ fun CommonListScreen(
         historyViewModel?.setPageActive(isCurrentPage)
         onDispose { historyViewModel?.setPageActive(false) }
     }
-    val personalRecapEnabled = if (historyViewModel != null) {
+    // 折叠选择属于历史页浏览状态，不随回顾 Lazy item 离开视口、搜索或批量管理而重置。
+    var personalRecapExpanded by rememberSaveable(accountIdentity) { mutableStateOf(false) }
+    val personalRecapEnabled: Boolean? = if (historyViewModel != null) {
         SettingsManager.getSubscriptionRecapEnabled(LocalContext.current)
-            .collectAsStateWithLifecycle(initialValue = false).value
+            .collectAsStateWithLifecycle(initialValue = null).value
     } else false
     val likedVideosViewModel = viewModel as? LikedVideosViewModel
     val isManagingLikes by likedVideosViewModel?.isManagingLikes?.collectAsStateWithLifecycle()
@@ -932,6 +935,8 @@ fun CommonListScreen(
     var commonListHeaderSettleJob by remember { androidx.compose.runtime.mutableStateOf<Job?>(null) }
     var commonListHeaderSettleTargetPx by remember { mutableFloatStateOf(0f) }
     val commonListHeaderCollapseMode = homeSettings.commonListHeaderCollapseMode
+    // 只由滚动回调写、收尾时读，不让逐帧方向记录触发重组。
+    val headerScrollDirection = remember(commonListHeaderCollapseMode, activeCommonListScrollState) { floatArrayOf(0f) }
     val commonListHeaderCollapseEnabled = supportsCollapsibleCommonListHeader &&
         commonListHeaderCollapseMode != CommonListHeaderCollapseMode.ALWAYS_VISIBLE
     val statusBarHeightPx = with(LocalDensity.current) {
@@ -1096,6 +1101,8 @@ fun CommonListScreen(
                         firstVisibleItemIndex = firstVisibleItemIndex,
                         firstVisibleItemScrollOffset = firstVisibleItemScrollOffset,
                         maxCollapsePx = commonListHeaderMaxCollapsePx,
+                        currentOffsetPx = commonListHeaderOffsetPx,
+                        lastScrollDeltaYPx = headerScrollDirection[0],
                         mode = if (supportsCollapsibleCommonListHeader) {
                             commonListHeaderCollapseMode
                         } else {
@@ -1110,7 +1117,8 @@ fun CommonListScreen(
         commonListHeaderCollapseMode,
         commonListHeaderMaxCollapsePx,
         isCommonListAtTop,
-        supportsCollapsibleCommonListHeader
+        supportsCollapsibleCommonListHeader,
+        headerScrollDirection,
     ) {
         object : NestedScrollConnection {
             // 与首页一致，在内容消费滚动前更新顶部位移，保证 Dock 与手势同帧跟随。
@@ -1123,6 +1131,7 @@ fun CommonListScreen(
                     return Offset.Zero
                 }
                 // 到顶后的剩余滚动交给展开动画，避免直接归零或被连续回调打断。
+                headerScrollDirection[0] = available.y
                 if (isCommonListAtTop && available.y > 0f) {
                     animateCommonListHeaderOffsetTo(0f)
                     return Offset.Zero
@@ -1465,6 +1474,17 @@ fun CommonListScreen(
                             beyondViewportPageCount = 0,
                         ) { pageIndex ->
                             val pageFilter = historyFilters.getOrElse(pageIndex) { HistoryContentFilter.ALL }
+                            // 开关未知时先不挂载列表，避免首批视频成为锚点后再在其前插入回顾。
+                            // 玻璃、MD3 与 Miuix 共用此数据就绪边界，不改变各自布局参数。
+                            if (personalRecapEnabled == null) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize().padding(top = headerHeightDp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AppText("正在加载历史记录…", color = AppContentColors.secondaryText())
+                                }
+                                return@HorizontalPager
+                            }
                             val pageItems = remember(state.items, pageFilter, historyViewModel) {
                                 filterHistoryItemsByContent(
                                     items = state.items,
@@ -1479,7 +1499,7 @@ fun CommonListScreen(
                             }
 
                             val recapHeader: (@Composable () -> Unit)? = if (
-                                pageFilter == HistoryContentFilter.ALL && personalRecapEnabled &&
+                                pageFilter == HistoryContentFilter.ALL && personalRecapEnabled == true &&
                                 !isSearchDestination && searchQuery.isBlank() && !isHistoryBatchMode
                             ) {
                                 {
@@ -1487,7 +1507,10 @@ fun CommonListScreen(
                                         refreshToken = state.items,
                                         active = isCurrentPage && !state.isLoading,
                                         onUpClick = onUpClick,
-                                        snapshotCache = historyViewModel?.recapSnapshots,
+                                        expanded = personalRecapExpanded,
+                                        onExpandedChange = { personalRecapExpanded = it },
+                                        snapshotCache = historyViewModel.recapSnapshots,
+                                        onShowAllUps = onRecapUpsClick,
                                         modifier = Modifier.fillMaxWidth(),
                                     )
                                 }

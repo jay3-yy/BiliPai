@@ -43,7 +43,7 @@ import com.android.purebilibili.core.util.rememberAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
 import com.android.purebilibili.core.util.resolveAppDisplayContext
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
-import com.android.purebilibili.core.util.LARGE_SCREEN_SMALLEST_WIDTH_DP
+import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.player.buildPipPlaybackRemoteActions
 import com.android.purebilibili.feature.video.screen.isActivityInMultiWindowOrFloatingMode
@@ -164,11 +164,7 @@ open class VideoActivity : ComponentActivity() {
         if (
             savedInstanceState == null &&
             !entryIsInMultiWindowOrFloatingMode &&
-            (entryDisplayContext.isFoldableCoverWindow ||
-                minOf(
-                    entryDisplayContext.currentWindowWidthDp,
-                    entryDisplayContext.currentWindowHeightDp,
-                ) < LARGE_SCREEN_SMALLEST_WIDTH_DP)
+            shouldUsePhonePlayerOrientation(entryDisplayContext)
         ) {
             applyPlayerRequestedOrientation(
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
@@ -259,6 +255,9 @@ open class VideoActivity : ComponentActivity() {
             val cardFrostedGlassEnabled by SettingsManager
                 .getHomeCardFrostedGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = false)
+            val commentIpLocationEnabled by remember(this@VideoActivity) {
+                SettingsManager.getCommentIpLocationEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
             val commentReplyPreviewVisible by remember(this@VideoActivity) {
                 SettingsManager.getCommentReplyPreviewVisible(this@VideoActivity)
             }.collectAsStateWithLifecycle(initialValue = true)
@@ -362,6 +361,7 @@ open class VideoActivity : ComponentActivity() {
                         intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
                     ),
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
+                    com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
                         startActivity(android.content.Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {

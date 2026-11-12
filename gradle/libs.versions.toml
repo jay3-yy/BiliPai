@@ -36,7 +36,6 @@ miuix-blur = { group = "top.yukonga.miuix.kmp", name = "miuix-blur-android", ver
 miuix-shader = { group = "top.yukonga.miuix.kmp", name = "miuix-shader-android", version.ref = "miuix" }
 miuix-squircle = { group = "top.yukonga.miuix.kmp", name = "miuix-squircle-android", version.ref = "miuix" }
 miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons-android", version.ref = "miuix" }
-miuix-glass = { group = "top.yukonga.miuix.kmp", name = "miuix-glass-android", version.ref = "miuix" }
 # Navigation is bundled in :miuix-navigation to retain the video-return patches.
 
 [plugins]

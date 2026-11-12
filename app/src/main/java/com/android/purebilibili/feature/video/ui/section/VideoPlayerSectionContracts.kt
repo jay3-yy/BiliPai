@@ -174,4 +174,5 @@ internal data class VideoPlayerSectionActions(
         com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions(),
     val onQuickFavorite: () -> Unit = {},
     val onMoreMenuRequestConsumed: () -> Unit = {},
+    val moreMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
 )

@@ -93,7 +93,7 @@ val openSourceLibraries = listOf(
         name = "Miuix",
         license = "Apache 2.0",
         url = "https://github.com/compose-miuix-ui/miuix",
-        description = "Miuix Compose 组件、偏好设置组件与模糊能力"
+        description = "Miuix Compose 组件、偏好设置组件、模糊能力及弹窗预测性返回交互参考"
     ),
     OpenSourceLibrary(
         name = "AndroidX Media3 / ExoPlayer",

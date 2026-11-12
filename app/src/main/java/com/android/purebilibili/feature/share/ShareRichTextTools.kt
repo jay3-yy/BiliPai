@@ -2,9 +2,13 @@ package com.android.purebilibili.feature.share
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.semantics.Role
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.data.model.response.*
@@ -19,13 +23,15 @@ internal fun ShareRichTextTools(
     contentKey: String,
     enabled: Boolean,
     onAppend: (String) -> Unit,
-    onMention: (MentionSearchUser) -> Unit,
+    onMentions: (List<MentionSearchUser>) -> Boolean,
     onTopic: (DynamicTopicSearchItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var panel by remember(contentKey) { mutableStateOf("") }
     var query by remember(contentKey) { mutableStateOf("") }
     var users by remember(contentKey) { mutableStateOf<List<MentionSearchUser>>(emptyList()) }
+    var selectedUsers by remember(contentKey) { mutableStateOf<List<MentionSearchUser>>(emptyList()) }
+    var mentionLimitError by remember(contentKey) { mutableStateOf(false) }
     var topics by remember(contentKey) { mutableStateOf<List<DynamicTopicSearchItem>>(emptyList()) }
     var packages by remember { mutableStateOf(DynamicEmoteCatalog.snapshotPackages()) }
     var loading by remember { mutableStateOf(false) }
@@ -71,9 +77,48 @@ internal fun ShareRichTextTools(
             } else if (!loading && (if (panel == "mention") users.isEmpty() else topics.isEmpty())) AppText("没有匹配结果")
             AppLazyColumn(Modifier.fillMaxWidth().heightIn(max = 160.dp)) {
                 if (panel == "mention") items(users, key = { it.uid }) { user ->
-                    AppTextButton(onClick = { onMention(user); panel = "" }, enabled = enabled) { AppText(user.name) }
+                    Row(
+                        Modifier.fillMaxWidth().toggleable(
+                            value = selectedUsers.any { it.uid == user.uid },
+                            enabled = enabled,
+                            role = Role.Checkbox,
+                            onValueChange = { checked ->
+                                selectedUsers = if (checked) selectedUsers + user else selectedUsers.filterNot { it.uid == user.uid }
+                                mentionLimitError = false
+                            },
+                        ).padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppText(user.name, modifier = Modifier.weight(1f))
+                        AppCheckbox(checked = selectedUsers.any { it.uid == user.uid }, onCheckedChange = null)
+                    }
                 } else items(topics, key = { it.id }) { topic ->
                     AppTextButton(onClick = { onTopic(topic); panel = "" }, enabled = enabled) { AppText(topic.name) }
+                }
+            }
+            if (panel == "mention") {
+                if (selectedUsers.isNotEmpty()) LazyRow(Modifier.fillMaxWidth()) {
+                    items(selectedUsers, key = { it.uid }) { user ->
+                        AppTextButton(enabled = enabled, onClick = {
+                            selectedUsers = selectedUsers.filterNot { it.uid == user.uid }
+                            mentionLimitError = false
+                        }) { AppText("${user.name} ×") }
+                    }
+                }
+                if (mentionLimitError) AppText("插入后将超过 2000 字，请减少选择或缩短正文")
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    AppTextButton(enabled = enabled && selectedUsers.isNotEmpty(), onClick = {
+                        selectedUsers = emptyList()
+                        mentionLimitError = false
+                    }) { AppText("清空") }
+                    Spacer(Modifier.weight(1f))
+                    AppTextButton(enabled = enabled && selectedUsers.isNotEmpty(), onClick = {
+                        if (onMentions(selectedUsers)) {
+                            selectedUsers = emptyList()
+                            mentionLimitError = false
+                            panel = ""
+                        } else mentionLimitError = true
+                    }) { AppText("插入 @（${selectedUsers.size}）") }
                 }
             }
         }

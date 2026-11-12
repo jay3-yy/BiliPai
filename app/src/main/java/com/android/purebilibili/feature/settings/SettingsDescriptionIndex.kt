@@ -110,6 +110,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "playback.comment_member_decorations_enabled" to "显示粉丝牌、铭牌和装扮卡片；关闭后评论区更清爽",
     "playback.dash_segment_requests_enabled" to "用于部分视频的分段加载；若出现无法播放或卡住，请关闭此项；默认关闭，使用兼容性更好的常规加载方式",
     "playback.default_audio_quality" to "新视频跟随播放器上次手动选择；新视频使用所选音质，播放时可临时切换",
+    "playback.comment_ip_location_enabled" to "在评论时间旁显示 IP 归属地，默认开启；部分评论没有属地数据",
     "playback.detailed_comment_time_enabled" to "显示年月日和时分秒；关闭后显示“多久前”",
     "playback.direct_portrait_story_entry" to "点开竖屏视频即全屏播放，可上下滑动切换；先进入视频页，再点“竖屏”进入刷视频",
     "playback.directed_traffic_enabled" to "移动网络下尝试使用套餐内定向流量（实验性）；若套餐含 B 站定向流量，建议开启",

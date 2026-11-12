@@ -1377,8 +1377,9 @@ fun ReplyItemView(
             }
         }
     }
-    val displayLocation = remember(location) {
-        resolveReplyLocationText(location)
+    val commentIpLocationEnabled = com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled.current
+    val displayLocation = remember(location, commentIpLocationEnabled) {
+        if (commentIpLocationEnabled) resolveReplyLocationText(location) else null
     }
     val metadataText = remember(item.ctime, displayLocation, detailedCommentTimeEnabled) {
         buildString {

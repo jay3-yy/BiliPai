@@ -136,14 +136,22 @@ internal fun resolveCommonListHeaderOffsetForSettledContent(
     firstVisibleItemIndex: Int,
     firstVisibleItemScrollOffset: Int,
     maxCollapsePx: Float,
-    mode: CommonListHeaderCollapseMode
+    mode: CommonListHeaderCollapseMode,
+    currentOffsetPx: Float,
+    lastScrollDeltaYPx: Float = 0f,
 ): Float {
     if (mode == CommonListHeaderCollapseMode.ALWAYS_VISIBLE || maxCollapsePx <= 0f) return 0f
-    return if (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0) {
-        0f
-    } else {
-        -maxCollapsePx
+    if (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0) return 0f
+    if (mode == CommonListHeaderCollapseMode.SHOW_ON_REVERSE_SCROLL) {
+        return when {
+            lastScrollDeltaYPx > 0f -> 0f
+            lastScrollDeltaYPx < 0f -> -maxCollapsePx
+            // 没有本轮滚动方向（如切换列表）时按当前展开程度停靠。
+            currentOffsetPx.coerceIn(-maxCollapsePx, 0f) > -maxCollapsePx / 2f -> 0f
+            else -> -maxCollapsePx
+        }
     }
+    return -maxCollapsePx
 }
 
 internal fun resolveCommonListVideoCardAppearance(

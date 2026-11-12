@@ -46,6 +46,9 @@ import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.DynamicCreateRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.semantics.Role
 
 @Composable
 internal fun DynamicMentionPickerDialog(
@@ -55,6 +58,10 @@ internal fun DynamicMentionPickerDialog(
     var query by remember { mutableStateOf("") }
     var users by remember { mutableStateOf<List<MentionSearchUser>>(emptyList()) }
     var selected by remember { mutableStateOf<List<DynamicPublishMention>>(emptyList()) }
+    fun toggle(user: MentionSearchUser) {
+        selected = if (selected.any { it.uid == user.uid }) selected.filterNot { it.uid == user.uid }
+        else selected + DynamicPublishMention(user.uid, user.name)
+    }
     var message by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -97,6 +104,13 @@ internal fun DynamicMentionPickerDialog(
                 onSearch = ::search,
                 message = message,
             ) {
+                if (selected.isNotEmpty()) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    selected.forEach { user ->
+                        AppTextButton(onClick = { selected = selected.filterNot { it.uid == user.uid } }) {
+                            AppText("${user.name} ×")
+                        }
+                    }
+                }
                 users.forEach { user ->
                     AppListItem(
                         headlineContent = { AppText(user.name) },
@@ -112,14 +126,13 @@ internal fun DynamicMentionPickerDialog(
                             )
                         },
                         trailingContent = {
-                            AppCheckbox(checked = selected.any { it.uid == user.uid }, onCheckedChange = { checked ->
-                                selected = if (checked) selected + DynamicPublishMention(user.uid, user.name)
-                                else selected.filterNot { it.uid == user.uid }
-                            })
+                            AppCheckbox(checked = selected.any { it.uid == user.uid }, onCheckedChange = null)
                         },
-                        modifier = Modifier.fillMaxWidth().appActionClickable {
-                            onSelected(listOf(DynamicPublishMention(user.uid, user.name)))
-                        },
+                        modifier = Modifier.fillMaxWidth().toggleable(
+                            value = selected.any { it.uid == user.uid },
+                            role = Role.Checkbox,
+                            onValueChange = { toggle(user) },
+                        ),
                     )
                 }
             }

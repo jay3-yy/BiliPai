@@ -250,6 +250,7 @@ fun rememberAppWindowAdaptiveInfo(
         activity,
         configuration.screenWidthDp,
         configuration.screenHeightDp,
+        configuration.smallestScreenWidthDp,
         configuration.orientation,
         foldingFeatureInfo,
     ) {
@@ -260,6 +261,7 @@ fun rememberAppWindowAdaptiveInfo(
             AppDisplayContextInput(
                 currentWindowWidthDp = configuration.screenWidthDp,
                 currentWindowHeightDp = configuration.screenHeightDp,
+                smallestScreenWidthDp = configuration.smallestScreenWidthDp,
                 configurationOrientation = configuration.orientation,
                 hasCurrentFoldingFeature = foldingFeatureInfo.posture != AppFoldPosture.None,
             )

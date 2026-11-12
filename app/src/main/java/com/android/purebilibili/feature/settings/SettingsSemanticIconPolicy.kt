@@ -105,6 +105,7 @@ internal enum class SettingsIconRole {
     MEMBER_SHOP,
     BLOCK_GOODS_DYNAMIC,
     BLOCK_GOODS_REPLY,
+    COMMENT_IP_LOCATION,
     COMMENT_EXACT_TIME,
     COMMENT_AVATAR_PUSH,
     VERTICAL_RECOMMENDATIONS,
@@ -423,6 +424,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.DYNAMIC_CONTENT_NOTICE -> R.drawable.ic_settings_dynamic_warning_24
     SettingsIconRole.BLOCK_GOODS_DYNAMIC -> R.drawable.ic_settings_block_goods_dynamic_24
     SettingsIconRole.BLOCK_GOODS_REPLY -> R.drawable.ic_settings_block_goods_reply_24
+    SettingsIconRole.COMMENT_IP_LOCATION -> R.drawable.ic_settings_comment_ip_location_24
     SettingsIconRole.COMMENT_EXACT_TIME -> R.drawable.ms_calendar_clock_24
     SettingsIconRole.COMMENT_AVATAR_PUSH -> R.drawable.ic_settings_comment_avatar_push_24
     SettingsIconRole.VERTICAL_RECOMMENDATIONS -> R.drawable.ms_view_stream_24

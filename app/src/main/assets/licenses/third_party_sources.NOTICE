@@ -287,3 +287,21 @@ Official developer documentation: https://dev.mi.com/xiaomihyperos/documentation
 Protocol field tables and Binder callback contract consulted on 2026-11-06.
 The receiver, cache-release orchestration and tests are implemented locally;
 no vendor SDK or sample source is bundled for this protocol.
+
+Glass popup predictive-back interaction behavior reference:
+Miuix, version 0.9.4-b7a5f08f-SNAPSHOT (Apache-2.0).
+https://github.com/compose-miuix-ui/miuix
+miuix-glass/src/commonMain/kotlin/top/yukonga/miuix/kmp/glass/GlassPopupBackProgress.kt
+miuix-glass/src/commonMain/kotlin/top/yukonga/miuix/kmp/glass/GlassTransformPopup.kt
+Copyright 2026, compose-miuix-ui contributors.
+Full gesture progress and independent cancellation recovery inform the local
+AppGlassPopupPredictiveBack.kt and popupPredictiveBackFrame implementations.
+
+Video danmaku input and style panel interaction reference:
+PiliPlus, revision d635f20e22becbc6587c05c7a03671a4a9a3db9f (GPL-3.0).
+https://github.com/bggRGjQaUbCoE/PiliPlus
+Reference paths: lib/pages/video/send_danmaku/view.dart,
+lib/pages/common/publish/common_publish_page.dart.
+PiliPlus contributors; GPL-3.0. BiliPai uses its existing Compose input,
+account, theme and danmaku send components. Distributed under GPLv3.
+License copy: artwork/third-party/piliplus/LICENSE in the source distribution.

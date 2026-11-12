@@ -56,6 +56,7 @@ internal fun CommentEmoteTextField(
     emoteUrls: Map<String, String>,
     enabled: Boolean,
     readOnly: Boolean,
+    autoShowKeyboard: Boolean = false,
     hint: String,
     textStyle: TextStyle,
     hintColor: Color,
@@ -140,6 +141,7 @@ internal fun CommentEmoteTextField(
                 }
             }
             view.bind(value, emoteUrls, enabled, readOnly)
+            view.setAutoShowKeyboard(autoShowKeyboard)
         },
         onReset = null,
         onRelease = { it.release() },
@@ -164,6 +166,37 @@ private class CommentEmoteEditText(
     private var initialized = false
     private var panelReadOnly = false
     private var previousCaret = 0
+    private var autoShowKeyboard = false
+    private var keyboardShowPending = false
+    private val showKeyboard = Runnable {
+        if (keyboardShowPending && isAttachedToWindow && hasWindowFocus() && isEnabled && !panelReadOnly) {
+            if (requestFocus()) {
+                context.getSystemService(InputMethodManager::class.java).showSoftInput(this, 0)
+                keyboardShowPending = false
+            }
+        }
+    }
+
+    fun setAutoShowKeyboard(show: Boolean) {
+        if (autoShowKeyboard == show) return
+        autoShowKeyboard = show
+        keyboardShowPending = show
+        removeCallbacks(showKeyboard)
+        if (show) scheduleKeyboardShow()
+    }
+
+    private fun scheduleKeyboardShow() {
+        if (!keyboardShowPending || !isAttachedToWindow || !hasWindowFocus()) return
+        // 对实际 EditText 请求焦点；等窗口焦点分发完成后再建立输入法连接。
+        requestFocus()
+        removeCallbacks(showKeyboard)
+        post(showKeyboard)
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (hasWindowFocus) scheduleKeyboardShow()
+    }
 
     init {
         background = null
@@ -423,14 +456,18 @@ private class CommentEmoteEditText(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         updateAnimationState()
+        scheduleKeyboardShow()
     }
 
     override fun onDetachedFromWindow() {
+        removeCallbacks(showKeyboard)
         images.values.forEach { (it as? Animatable)?.stop() }
         super.onDetachedFromWindow()
     }
 
     fun release() {
+        keyboardShowPending = false
+        removeCallbacks(showKeyboard)
         initialized = false
         requests.values.forEach { it.dispose() }
         images.values.forEach {

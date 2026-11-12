@@ -31,6 +31,8 @@ internal fun shouldUsePhonePlayerOrientation(
         AppFoldableDisplayRole.UnknownFoldable -> false
         AppFoldableDisplayRole.Cover -> true
         AppFoldableDisplayRole.Standard -> {
+            // 方向策略按稳定设备宽度识别平板，不随系统栏、分屏或入场窗口尺寸波动。
+            if (displayContext.smallestScreenWidthDp >= LARGE_SCREEN_SMALLEST_WIDTH_DP) return false
             val maxShortSideDp = if (
                 displayContext.maximumWindowWidthDp != null &&
                 displayContext.maximumWindowHeightDp != null

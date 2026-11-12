@@ -496,8 +496,8 @@
     <string name="settings_search_legacy_005_summary">全屏方向、截图、锁定按钮、亮度、音量与进度手势</string>
     <string name="settings_search_legacy_006_title">互动与评论</string>
     <string name="settings_search_legacy_006_summary">评论显示、点赞收藏、视频简介和笔记</string>
-    <string name="settings_search_legacy_007_title">评论 IP 属地</string>
-    <string name="settings_search_legacy_007_summary">有数据时自动显示，无需开启；B站未返回时无法强制显示</string>
+    <string name="settings_search_legacy_007_title">IP归属地</string>
+    <string name="settings_search_legacy_007_summary">在评论时间旁显示 IP 归属地，默认开启；部分评论没有属地数据</string>
     <string name="settings_search_legacy_008_title">完整评论时间</string>
     <string name="settings_search_legacy_008_summary">显示年月日和时分秒；关闭后显示“多久前”</string>
     <string name="settings_search_legacy_009_title">下载与备份</string>

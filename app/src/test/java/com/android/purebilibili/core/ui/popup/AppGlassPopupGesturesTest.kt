@@ -48,20 +48,6 @@ class AppGlassPopupGesturesTest {
     }
 
     @Test
-    fun panelScrollOnlyDeformsForUnconsumedDistanceBeyondEitherEdge() {
-        // 普通滚动，以及朝列表内部滚动，都不能拉伸面板。
-        assertEquals(0f, popupPanelOverscrollDelta(-30f, 100, 130, 300))
-        assertEquals(0f, popupPanelOverscrollDelta(-30f, 0, 30, 300))
-        assertEquals(0f, popupPanelOverscrollDelta(30f, 300, 270, 300))
-        // 同一帧跨过边界时，只计入余下的 20px，不把前面的滚动距离算进去。
-        assertEquals(20f, popupPanelOverscrollDelta(30f, 10, 0, 300))
-        assertEquals(-20f, popupPanelOverscrollDelta(-30f, 290, 300, 300))
-        assertEquals(30f, popupPanelOverscrollDelta(30f, 0, 0, 300))
-        assertEquals(-30f, popupPanelOverscrollDelta(-30f, 300, 300, 300))
-        assertEquals(0f, popupPanelOverscrollDelta(30f, 0, 0, Int.MAX_VALUE))
-    }
-
-    @Test
     fun pressedGeometryReturnsWithoutSnappingBackToTheUnpressedCard() {
         val card = Rect(40f, 200f, 240f, 500f)
         val anchor = Rect(180f, 170f, 240f, 202f)

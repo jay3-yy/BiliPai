@@ -28,7 +28,6 @@ import com.android.purebilibili.core.store.home.HomeSettingsStore
 import com.android.purebilibili.core.store.home.dynamicUpListVisiblePreferencesKey
 import com.android.purebilibili.core.store.home.dynamicCommentPreviewVisiblePreferencesKey
 import com.android.purebilibili.core.store.home.glassPopupPalettePreferencesKey
-import com.android.purebilibili.core.store.home.glassPopupImplementationPreferencesKey
 import com.android.purebilibili.core.store.home.liquidGlassReadabilityModePreferencesKey
 import com.android.purebilibili.core.store.navigation.NavigationSettingsStore
 import com.android.purebilibili.core.store.navigation.bottomBarItemLabelsPreferencesKey
@@ -1779,6 +1778,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("comment_avatar_push_enabled")
     private val KEY_COMMENT_MEMBER_DECORATIONS_ENABLED =
         booleanPreferencesKey("comment_member_decorations_enabled")
+    private val KEY_COMMENT_IP_LOCATION_ENABLED = booleanPreferencesKey("comment_ip_location_enabled")
     private val KEY_DETAILED_COMMENT_TIME_ENABLED =
         booleanPreferencesKey("detailed_comment_time_enabled")
     private val KEY_COMMENT_REPLY_PREVIEW_VISIBLE =
@@ -6765,6 +6765,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    fun getCommentIpLocationEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_COMMENT_IP_LOCATION_ENABLED] ?: true }
+
+    suspend fun setCommentIpLocationEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_COMMENT_IP_LOCATION_ENABLED] = enabled
+        }
+    }
+
     fun getDetailedCommentTimeEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_DETAILED_COMMENT_TIME_ENABLED] ?: false }
@@ -8759,7 +8769,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.APPEARANCE,
             ),
             IntShareablePreferenceDefinition(glassPopupPalettePreferencesKey, SettingsShareSection.APPEARANCE),
-            IntShareablePreferenceDefinition(glassPopupImplementationPreferencesKey, SettingsShareSection.APPEARANCE),
             FloatShareablePreferenceDefinition(
                 KEY_LIQUID_GLASS_CONTENT_READABILITY,
                 SettingsShareSection.APPEARANCE,
@@ -8873,6 +8882,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_COMMENT_FRAUD_DETECTION_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_COMMENT_AVATAR_PUSH_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_COMMENT_MEMBER_DECORATIONS_ENABLED, SettingsShareSection.PLAYBACK),
+            BooleanShareablePreferenceDefinition(KEY_COMMENT_IP_LOCATION_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_DETAILED_COMMENT_TIME_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_IMAGE_PREVIEW_LONG_PRESS_SAVE_ENABLED, SettingsShareSection.PLAYBACK),
             BooleanShareablePreferenceDefinition(KEY_IMAGE_PREVIEW_3D_PAGE_ENABLED, SettingsShareSection.PLAYBACK),
@@ -9082,7 +9092,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             KEY_LIQUID_GLASS_PROGRESSIVE_BLUR_CURVE.name,
             liquidGlassReadabilityModePreferencesKey.name,
             glassPopupPalettePreferencesKey.name,
-            glassPopupImplementationPreferencesKey.name,
             KEY_LIQUID_GLASS_CONTENT_READABILITY.name,
             KEY_LIQUID_GLASS_CHROMATIC_ABERRATION.name,
             KEY_LIQUID_GLASS_CONTENT_DISTORTION.name,
@@ -9166,7 +9175,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 advancedSettings.progressiveBlurCurve
             ),
             glassPopupPalettePreferencesKey.name to JsonPrimitive(preferences[glassPopupPalettePreferencesKey] ?: 0),
-            glassPopupImplementationPreferencesKey.name to JsonPrimitive(preferences[glassPopupImplementationPreferencesKey] ?: 0),
             liquidGlassReadabilityModePreferencesKey.name to JsonPrimitive(
                 preferences[liquidGlassReadabilityModePreferencesKey]
                     ?: LiquidGlassReadabilityMode.STABLE.value

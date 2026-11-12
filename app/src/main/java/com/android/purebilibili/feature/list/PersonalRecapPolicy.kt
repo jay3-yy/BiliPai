@@ -10,6 +10,7 @@ import java.time.Instant
 import java.time.ZoneId
 
 /** 回顾时间窗：今日 / 近七天 / 近一个月。 */
+@kotlinx.serialization.Serializable
 enum class PersonalRecapWindow(val label: String) {
     TODAY("今日"),
     LAST_SEVEN_DAYS("近七天"),
@@ -36,6 +37,7 @@ data class PersonalRssRecapStats(
     val readTimestampsMs: List<Long> = emptyList(),
 )
 
+@kotlinx.serialization.Serializable
 data class PersonalUpRecap(
     val mid: Long,
     val name: String,
@@ -44,6 +46,7 @@ data class PersonalUpRecap(
     val totalDurationSec: Long,
 )
 
+@kotlinx.serialization.Serializable
 data class PersonalVideoRecapStats(
     val videoCount: Int = 0,
     val totalDurationSec: Long = 0L,

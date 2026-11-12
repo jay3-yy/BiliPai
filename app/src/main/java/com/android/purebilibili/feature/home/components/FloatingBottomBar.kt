@@ -1674,6 +1674,8 @@ fun FloatingBottomBar(
                             width = fittedIndicatorWidth,
                             height = fittedIndicatorHeight,
                             shellExtent = shellHeight,
+                            // 玻璃指示器沿完整透镜边缘分色，不限制在壳体外溢缝隙。
+                            gapOnlyDispersion = false,
                             tuning = liquidGlassTuning,
                             darkTheme = isInDark,
                             progressProvider = indicatorOpticalProgressProvider,

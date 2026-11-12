@@ -119,8 +119,8 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
     SettingsSearchEntry(
         settingId = "legacy.007",
         target = SettingsSearchTarget.INTERACTION_COMMENT,
-        title = "评论 IP 属地",
-        subtitle = "有数据时自动显示，无需开启；B站未返回时无法强制显示",
+        title = settingItemTitle("playback.comment_ip_location_enabled"),
+        subtitle = "在评论时间旁显示 IP 归属地，默认开启；部分评论没有属地数据",
         section = "设置",
         aliases = listOf("IP属地", "IP归属地", "显示IP", "评论地区", "评论定位"),
         focusId = SettingsSearchFocusIds.PLAYBACK_INTERACTION,

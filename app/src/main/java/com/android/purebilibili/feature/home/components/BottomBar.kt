@@ -4780,6 +4780,8 @@ internal fun BoxScope.BiliPaiMiuixBottomBarIndicatorLayer(
                         scaleXProvider = layerScaleX,
                         scaleYProvider = layerScaleY,
                         vertical = swapMotionAxes,
+                        // 仅玻璃材质取消缝隙遮罩，原生路径保留共享默认行为。
+                        gapOnlyDispersion = !glassEnabled,
                         highlightProvider = {
                             if (glassEnabled) pillHighlight?.value?.copy(alpha = effectivePressProgress)
                             else if (isDragging) pillHighlight?.value?.copy(alpha = opticalProgress) else null

@@ -704,6 +704,8 @@ private fun VideoPlayerOverlayContent(
         mutableStateMapOf<PlayerControlAnchor, com.android.purebilibili.core.ui.components.AppGlassMenuSource>()
     }
     val moreSource = com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource()
+    // 当前菜单保留实际点击入口；收起后的工具栏与播放器内部按钮拥有不同坐标和快照。
+    var activeMoreSource by remember(bvid, cid, isFullscreen) { mutableStateOf(moreSource) }
     val danmakuSource = com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource()
     var playerBoundsInWindow by remember(bvid, cid) { mutableStateOf<IntRect?>(null) }
     var showHeatmap by remember(bvid, cid) { mutableStateOf(true) }
@@ -878,8 +880,10 @@ private fun VideoPlayerOverlayContent(
         configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
     // 折叠工具栏复用播放器更多菜单；打开后消费请求，关闭菜单或重建控件不重复弹出。
     val consumeMoreMenuRequest by rememberUpdatedState(actions.onMoreMenuRequestConsumed)
+    val requestedMoreSource by rememberUpdatedState(actions.moreMenuSource)
     LaunchedEffect(state.moreMenuRequested) {
         if (state.moreMenuRequested) {
+            activeMoreSource = requestedMoreSource ?: moreSource
             if (simplifiedPortraitChrome) showPortraitMore = true else showVideoSettings = true
             consumeMoreMenuRequest()
         }
@@ -1690,6 +1694,7 @@ private fun VideoPlayerOverlayContent(
                     commentsVisible = landscapeCommentPanelVisible,
                     relatedVideosVisible = endDrawerVisible && endDrawerInitialTab == 0,
                     onMoreClick = {
+                        activeMoreSource = moreSource
                         onDismissEndDrawer()
                         if (landscapeCommentPanelVisible) onLandscapeCommentClick()
                         showEpisodeMenu = false
@@ -2381,7 +2386,7 @@ private fun VideoPlayerOverlayContent(
             }
             com.android.purebilibili.feature.video.ui.components.PlayerSelectionPopup(
                 title = "更多",
-                source = moreSource,
+                source = activeMoreSource,
                 onDismissRequest = { showPortraitMore = false },
             ) {
                 entries.forEachIndexed { index, (label, action) ->
@@ -2396,7 +2401,7 @@ private fun VideoPlayerOverlayContent(
         }
 
         if (showVideoSettings) {
-            CompositionLocalProvider(com.android.purebilibili.core.ui.components.LocalAppGlassMenuSource provides moreSource) {
+            CompositionLocalProvider(com.android.purebilibili.core.ui.components.LocalAppGlassMenuSource provides activeMoreSource) {
                 VideoSettingsPanel(
                     playerDiagnosticsEnabled = insightMode != PlayerSettingsStore.PlayerInsightMode.OFF,
                     onPlayerDiagnosticsChange = { enabled ->

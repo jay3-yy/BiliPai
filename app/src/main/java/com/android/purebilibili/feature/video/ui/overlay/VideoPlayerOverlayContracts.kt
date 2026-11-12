@@ -292,4 +292,5 @@ data class VideoPlayerOverlayActions(
     val onQuickFavorite: () -> Unit = {},
     val onFloatingPanelVisibilityChange: (Boolean) -> Unit = {},
     val onMoreMenuRequestConsumed: () -> Unit = {},
+    val moreMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
 )

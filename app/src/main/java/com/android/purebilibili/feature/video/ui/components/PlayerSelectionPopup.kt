@@ -100,7 +100,7 @@ fun PlayerSelectionPopup(
                 PlayerListPopupPlacement.END_BOTTOM -> com.android.purebilibili.core.ui.components.AppGlassMenuPlacement.END_BOTTOM
                 PlayerListPopupPlacement.ANCHOR_END -> com.android.purebilibili.core.ui.components.AppGlassMenuPlacement.ANCHOR_END
             },
-            anchorBounds = popupAnchorBounds?.let { androidx.compose.ui.geometry.Rect(
+            anchorBounds = popupAnchorBounds?.takeUnless { anchorToGlassSource }?.let { androidx.compose.ui.geometry.Rect(
                 it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()) },
             minWidth = minWidth.coerceAtMost(glassMaxWidth),
             maxWidth = glassMaxWidth,

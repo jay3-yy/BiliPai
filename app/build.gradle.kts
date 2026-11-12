@@ -144,7 +144,7 @@ android {
         targetSdk = 37
         // 版本名按发行计划确定；versionCode 每次发布单调 +1
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 569
+        versionCode = 570
         versionName = "0.7.9-beta.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -466,7 +466,6 @@ dependencies {
     implementation(libs.miuix.shader)
     implementation(libs.miuix.squircle)
     implementation(libs.miuix.icons)
-    implementation(libs.miuix.glass)
     implementation(project(":miuix-navigation"))
     // 图标扩展库 (全屏、设置图标等)
     implementation("androidx.compose.material:material-icons-extended")

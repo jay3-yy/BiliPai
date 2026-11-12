@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.store.home.GlassMotionStyle
-import com.android.purebilibili.core.store.home.GlassPopupImplementation
 import com.android.purebilibili.core.store.home.LiquidGlassSettingsStore
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -76,6 +75,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -179,7 +179,7 @@ private const val MenuLensScale = 0.5f
 /** 一次弹窗形变的实时状态：阶段、时钟与几何输入（窗口坐标系，像素）。 */
 @Stable
 internal class PopupMorphState {
-    val predictiveBack = com.android.purebilibili.core.ui.AppDialogBackState()
+    val predictiveBack = AppGlassPopupBackState()
     var opening by mutableStateOf(true)
         private set
     var seconds by mutableFloatStateOf(0f)
@@ -340,8 +340,6 @@ private fun AppGlassPopupContentHost(
     val context = LocalContext.current
     val motionStyleFlow = remember(context) { LiquidGlassSettingsStore.observePopupMotionStyle(context) }
     val motionStyle by motionStyleFlow.collectAsStateWithLifecycle(initialValue = GlassMotionStyle.STANDARD)
-    val implementationFlow = remember(context) { LiquidGlassSettingsStore.observePopupImplementation(context) }
-    val popupImplementation by implementationFlow.collectAsStateWithLifecycle(initialValue = GlassPopupImplementation.MIUIX)
     SideEffect { controller.preferredMotionStyle = motionStyle }
     DisposableEffect(controller) { onDispose { controller.dispose() } }
     val parentExiting = com.android.purebilibili.core.ui.LocalAppDialogExitRunning.current
@@ -425,30 +423,7 @@ private fun AppGlassPopupContentHost(
             // 即使关闭与再次打开合并在同一帧，也重新测量完整的新展示。
             // 同一展示中反向只更新动画 session，不丢失当前轮廓及滚动位置。
             key(controller, controller.morph.presentation) {
-                // 以下场景尚未迁移，继续使用现有弹窗：居中或无来源快照的弹窗、
-                // 非锚点菜单、复杂交互面板、带滚动条、整项测量或占满可用高度的菜单及键盘操作。
-                // 低版本、不支持着色器或减少动态效果时也保留现有实现。
-                val useMiuix = remember(request) {
-                    // 请求类型来自其他模块，先保存菜单引用才能在判空后智能转换。
-                    val menu = request.menu
-                    popupImplementation == GlassPopupImplementation.MIUIX &&
-                        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
-                        top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() && !reduceMotion &&
-                        inputModeManager.inputMode != InputMode.Keyboard &&
-                        (menu == null || (menu.placement == AppGlassMenuPlacement.ANCHOR_END &&
-                            !menu.interactiveContent && !menu.showScrollbar &&
-                            !menu.fitWholeItems && !menu.useAvailableHeight)) &&
-                        !request.centered &&
-                        request.controlBoundsInWindow != null && request.sourceLayer != null
-                }
-                if (useMiuix) MiuixGlassChoicePopupOverlay(
-                    request = request,
-                    controller = controller,
-                    backdrop = menuBackdrop,
-                    tuning = tuning,
-                    backdropReady = source.isReady,
-                    onFinished = finishPopup,
-                ) else AppGlassChoicePopupOverlay(
+                AppGlassChoicePopupOverlay(
                     request = request,
                     tuning = tuning,
                     controller = controller,
@@ -795,12 +770,11 @@ private fun AppGlassChoicePopupOverlay(
 
     // Menus share the host window; bind above the route's nested comment back stack.
     com.android.purebilibili.core.ui.CommentWindowNavigation {
-        com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler(
+        AppGlassPopupPredictiveBackHandler(
             state = morph.predictiveBack,
-            windowScoped = false,
             gesturesEnabled = morph.opening,
-            animateCompletion = false,
-            onBackCompleted = { controller.requestDismiss() },
+            onGestureStarted = controller::cancelPress,
+            onBackCompleted = controller::requestDismiss,
         )
     }
     val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current ||
@@ -1008,7 +982,7 @@ private fun PopupMorphState.frameAt(time: Float, radius: Float, density: Float):
     val frame = if (opening) fitPopupElasticFrame(
         elastic.frame(valid, density, popupDragBlend(time, openDuration)), safeBounds,
     ) else valid
-    return popupPredictiveBackFrame(frame, predictiveBack.progress, density)
+    return popupPredictiveBackFrame(frame, predictiveBack.progress, density, anchor, hasSourceControl)
 }
 
 /** 正文与玻璃共用按压和每轴拖拽缩放，光学层保留固定的窗口空间采样。 */
@@ -1146,6 +1120,33 @@ private fun AppGlassChoicePopupCard(
     val touchSlop = androidx.compose.ui.platform.LocalViewConfiguration.current.touchSlop
     val dragEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.globalDragFeedbackEnabled
     SideEffect { controller.configure(densityScale, cornerRadiusPx, touchSlop, dragEnabled) }
+    val scrollDrag = remember(request, controller, touchSlop) {
+        PopupScrollDragState(touchSlop) { drag ->
+            if (drag.blocked) {
+                if (drag.feedbackStarted) controller.cancelPress()
+                drag.feedbackStarted = false
+            } else {
+                val pull = drag.pull
+                if (!drag.feedbackStarted && pull != Offset.Zero) {
+                    drag.feedbackStarted = controller.beginPress(drag.origin, allowGrowth = false)
+                }
+                if (drag.feedbackStarted) {
+                    controller.movePress(
+                        drag.origin + pull,
+                        allowSelection = drag.canSelect,
+                        allowDeformation = pull != Offset.Zero,
+                        fromScrollBoundary = true,
+                    )
+                }
+            }
+        }
+    }
+    DisposableEffect(scrollDrag, controller) {
+        onDispose {
+            scrollDrag.end(cancelled = true)
+            controller.cancelPress()
+        }
+    }
     val sourceSnapshotAvailable = remember(request, morph) {
         {
             morph.hasSourceControl && request.sourceLayer?.isReleased == false &&
@@ -1263,45 +1264,32 @@ private fun AppGlassChoicePopupCard(
                     }
                 }
             }
-            .pointerInput(controller, request.menu?.interactiveContent) {
-                if (request.menu?.interactiveContent == true) {
-                    // 面板子控件先处理 Main 事件；仅滚动边界未消费的位移驱动整块形变。
+            .nestedScroll(scrollDrag)
+            .pointerInput(controller, interactivePanel, scrollDrag) {
+                if (interactivePanel) {
+                    // 子列表与控件优先消费事件；仅通过嵌套滚动接收真正未消费的纵向位移。
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Main)
-                        down.consume()
-                        val origin = morph.card.center
-                        var previousScroll = scrollState.value
-                        var overscroll = 0f
-                        var elasticActive = false
+                        scrollDrag.begin(
+                            position = morph.card.topLeft + down.position,
+                            panelBounds = morph.card,
+                            interactive = true,
+                            feedbackStarted = false,
+                        )
+                        var released = false
                         try {
                             while (true) {
                                 val event = awaitPointerEvent(PointerEventPass.Final)
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (!change.pressed || event.changes.count { it.pressed } > 1) break
-                                val drag = change.position - down.position
-                                // 横向已消费的手势属于滑块/分区，优先保持精确调节。
-                                if (kotlin.math.abs(drag.x) > touchSlop &&
-                                    kotlin.math.abs(drag.x) > kotlin.math.abs(drag.y)) break
-                                val nextScroll = scrollState.value
-                                val remaining = popupPanelOverscrollDelta(
-                                    fingerDelta = change.position.y - change.previousPosition.y,
-                                    scrollBefore = previousScroll,
-                                    scrollAfter = nextScroll,
-                                    maxScroll = scrollState.maxValue,
-                                )
-                                previousScroll = nextScroll
-                                overscroll = if (remaining == 0f) 0f else overscroll + remaining
-                                if (kotlin.math.abs(overscroll) <= touchSlop) {
-                                    if (elasticActive) controller.cancelPress()
-                                    elasticActive = false
-                                    continue
+                                if (!change.pressed) {
+                                    released = true
+                                    break
                                 }
-                                if (!elasticActive) elasticActive = controller.beginPress(origin)
-                                if (elasticActive) {
-                                    controller.movePress(origin + Offset(0f, overscroll), allowSelection = false, fromScrollBoundary = true)
-                                }
+                                if (event.changes.count { it.pressed } > 1) break
+                                scrollDrag.move(morph.card.topLeft + change.position)
                             }
                         } finally {
+                            scrollDrag.end(cancelled = !released)
                             controller.cancelPress()
                         }
                     }
@@ -1318,10 +1306,16 @@ private fun AppGlassChoicePopupCard(
                             morph.card.topLeft + down.position,
                             allowGrowth = scrollState.maxValue <= 0,
                         )) return@awaitEachGesture
-                    val pressOrigin = morph.card.topLeft + down.position
-                    var previousScroll = scrollState.value
-                    var edgePull = 0f
-                    var scrollGesture = false
+                    var released = false
+                    val scrollable = scrollState.maxValue > 0
+                    if (scrollable) {
+                        scrollDrag.begin(
+                            position = morph.card.topLeft + down.position,
+                            panelBounds = morph.card,
+                            interactive = false,
+                            feedbackStarted = true,
+                        )
+                    }
                     try {
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
@@ -1329,11 +1323,13 @@ private fun AppGlassChoicePopupCard(
                             if (change == null) break
                             if (event.changes.any { it.id != down.id && it.pressed }) {
                                 event.changes.forEach { it.consume() }
+                                scrollDrag.end(cancelled = true)
                                 controller.cancelPress()
                                 continue
                             }
                             val position = morph.card.topLeft + change.position
                             if (!change.pressed) {
+                                released = true
                                 change.consume()
                                 controller.releasePress(position)
                                 break
@@ -1344,36 +1340,14 @@ private fun AppGlassChoicePopupCard(
                             val finalEvent = awaitPointerEvent(PointerEventPass.Final)
                             val finalChange = finalEvent.changes.firstOrNull { it.id == down.id }
                             if (finalChange == null) break
-                            val scrolled = finalChange.isConsumed && finalChange.position != finalChange.previousPosition
-                            val nextScroll = scrollState.value
-                            scrollGesture = scrollGesture || scrolled || nextScroll != previousScroll ||
-                                (finalChange.position - down.position).getDistance() > touchSlop
-                            val remaining = popupPanelOverscrollDelta(
-                                fingerDelta = finalChange.position.y - finalChange.previousPosition.y,
-                                scrollBefore = previousScroll,
-                                scrollAfter = nextScroll,
-                                maxScroll = scrollState.maxValue,
-                            )
-                            previousScroll = nextScroll
-                            if (scrollState.maxValue > 0) {
-                                // 列表内位移不累积为拉伸量，否则到边界时形变早已饱和。
-                                edgePull = if (remaining == 0f) 0f else edgePull + remaining
-                                val beyondEdge = scrollGesture && kotlin.math.abs(edgePull) > touchSlop
-                                val pull = if (beyondEdge) edgePull else 0f
-                                // 列表滚动不覆盖真实越界坐标：手指拖出面板后持续拉伸，
-                                // 即便该帧仍有滚动消费，也不能把形变重新归零。
-                                val outside = popupPullBeyondBounds(position, morph.card) != Offset.Zero
-                                controller.movePress(
-                                    if (outside) position else pressOrigin + Offset(0f, pull),
-                                    allowSelection = !scrollGesture,
-                                    allowDeformation = outside || beyondEdge,
-                                    fromScrollBoundary = !outside,
-                                )
+                            if (scrollable) {
+                                scrollDrag.move(morph.card.topLeft + finalChange.position)
                             } else {
                                 controller.movePress(position)
                             }
                         }
                     } finally {
+                        scrollDrag.end(cancelled = !released)
                         controller.cancelPress()
                     }
                 }
@@ -1446,6 +1420,8 @@ private fun AppGlassChoicePopupCard(
         Box(
             modifier = Modifier
                 .graphicsLayer { applyPopupContentFrame(morph, cornerRadiusPx, densityScale) }
+                .then(if (!interactivePanel && request.menu?.showScrollbar == true) Modifier
+                    else Modifier.popupScrollHint(scrollState))
                 .graphicsLayer {
                     clip = true
                     val frame = morph.frame(cornerRadiusPx, densityScale)

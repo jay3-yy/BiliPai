@@ -299,22 +299,58 @@ internal fun resolveAppGlassPopupPosition(
 internal fun resolveGlassMenuInitialScroll(item: Rect, viewportHeight: Int, maxScroll: Int): Int =
     (item.center.y - viewportHeight / 2f).roundToInt().coerceIn(0, maxScroll.coerceAtLeast(0))
 
-/** 手势预览保留来源与卡片身份，确认后将当前帧交给原有回收动画。 */
+/** 手势直接驱动完整收拢进度；确认后将当前几何与材质交给原有回收动画。 */
 internal fun popupPredictiveBackFrame(
     frame: AppGlassPopupFrame,
     progress: Float,
     density: Float,
+    anchor: Rect,
+    sourceControl: Boolean,
 ): AppGlassPopupFrame {
-    if (progress <= 0f) return frame
-    val scale = 1f - 0.2f * progress
-    val half = frame.rect.size * (scale / 2f)
+    if (progress <= 0f || frame.rect.isEmpty) return frame
+    val fraction = progress.coerceIn(0f, 1f)
+    val remaining = 1f - fraction
+    if (anchor.isEmpty) {
+        val scale = 1f - 0.2f * fraction
+        val half = frame.rect.size * (scale / 2f)
+        return frame.copy(
+            rect = Rect(frame.rect.center - Offset(half.width, half.height),
+                frame.rect.center + Offset(half.width, half.height)),
+            radius = frame.radius * scale,
+            contentScale = frame.contentScale * scale,
+            contentAlpha = frame.contentAlpha * remaining,
+            contentBlur = frame.contentBlur + 8f * density * fraction,
+            surfaceAlpha = frame.surfaceAlpha * remaining,
+            surfaceBlend = frame.surfaceBlend * remaining,
+            sourceAlpha = frame.sourceAlpha * remaining,
+            materialProgress = frame.materialProgress * remaining,
+        )
+    }
+    fun blend(from: Float, to: Float) = from + (to - from) * fraction
+    fun bounds(from: Rect, to: Rect) = Rect(
+        from.topLeft + (to.topLeft - from.topLeft) * fraction,
+        from.bottomRight + (to.bottomRight - from.bottomRight) * fraction,
+    )
+    val diameter = anchor.minDimension * 0.41f
+    val half = Offset(diameter / 2f, diameter / 2f)
+    val body = bounds(frame.rect, Rect(anchor.center - half, anchor.center + half))
+    val sourceStart = frame.sourceRect ?: run {
+        val center = anchor.center + (frame.rect.center - anchor.center) * 0.25f
+        val sourceHalf = Offset(anchor.width, anchor.height) * 0.125f
+        Rect(center - sourceHalf, center + sourceHalf)
+    }
     return frame.copy(
-        rect = Rect(frame.rect.center - Offset(half.width, half.height),
-            frame.rect.center + Offset(half.width, half.height)),
-        radius = frame.radius * scale,
-        contentScale = frame.contentScale * scale,
-        contentAlpha = frame.contentAlpha * (1f - progress),
-        contentBlur = frame.contentBlur + 8f * density * progress,
-        surfaceAlpha = frame.surfaceAlpha * (1f - progress),
+        rect = body,
+        radius = body.minDimension / 2f * blend(popupCornerRoundness(frame), 1f),
+        contentScale = blend(frame.contentScale, frame.contentScale * diameter / frame.rect.width),
+        contentAlpha = frame.contentAlpha * remaining,
+        contentBlur = frame.contentBlur + 8f * density * fraction,
+        surfaceAlpha = frame.surfaceAlpha * remaining,
+        sourceRect = if (sourceControl) bounds(sourceStart, anchor) else null,
+        sourceAlpha = if (sourceControl) blend(frame.sourceAlpha, 1f) else 0f,
+        sourceBlur = frame.sourceBlur * remaining,
+        surfaceBlend = frame.surfaceBlend * remaining,
+        materialProgress = frame.materialProgress * remaining,
+        lensProgress = frame.lensProgress?.times(remaining),
     )
 }

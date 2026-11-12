@@ -5475,6 +5475,7 @@ private fun VideoPlayerSectionContent(
                 )
                 val overlayActions = VideoPlayerOverlayActions(
                     onMoreMenuRequestConsumed = actions.onMoreMenuRequestConsumed,
+                    moreMenuSource = actions.moreMenuSource,
                     onToggleVisible = { showControls = !showControls },
                     onQualitySelected = { index ->
                         val id = uiState.qualityIds.getOrNull(index) ?: 0
