@@ -24,6 +24,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Rational
 import android.view.Gravity
+import android.view.Menu
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.view.animation.PathInterpolator
@@ -83,6 +84,9 @@ import androidx.window.layout.WindowMetrics
 import androidx.window.layout.WindowMetricsCalculator
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.ui.adaptive.APP_SHORTCUT_DEFINITIONS
+import com.android.purebilibili.core.ui.adaptive.AppShortcutAction
+import com.android.purebilibili.core.ui.adaptive.resolveAppShortcutAction
 import com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled
 import com.android.purebilibili.core.coroutines.AppScope
 
@@ -224,6 +228,7 @@ internal fun resolveShortcutRoute(host: String): String? {
         "history" -> ScreenRoutes.History.route
         "watch_later" -> ScreenRoutes.WatchLater.route
         "login" -> ScreenRoutes.Login.route
+        "settings" -> ScreenRoutes.Settings.route
         "playback" -> ScreenRoutes.PlaybackSettings.route
         "plugins" -> ScreenRoutes.PluginsSettings.createRoute()
         else -> null
@@ -1856,6 +1861,7 @@ class MainActivity : AppCompatActivity() {
                                 pendingVideoId = pendingVideoId,
                                 pendingShortcutRoute = pendingRoute,
                                 pendingNavigationRoute = pendingNavigationRoute,
+                                pendingAppShortcutNavIndex = pendingAppShortcutNavIndex,
                                 onPendingVideoIdConsumed = { consumedVideoId ->
                                     if (pendingVideoId == consumedVideoId) {
                                         pendingVideoId = null
@@ -1869,6 +1875,11 @@ class MainActivity : AppCompatActivity() {
                                 onPendingNavigationRouteConsumed = { consumedRoute ->
                                     if (pendingNavigationRoute == consumedRoute) {
                                         pendingNavigationRoute = null
+                                    }
+                                },
+                                onPendingAppShortcutNavIndexConsumed = { consumedIndex ->
+                                    if (pendingAppShortcutNavIndex == consumedIndex) {
+                                        pendingAppShortcutNavIndex = null
                                     }
                                 },
                                 initialSearchKeyword = pendingSearchKeyword,
@@ -2568,7 +2579,43 @@ class MainActivity : AppCompatActivity() {
             }
             return true
         }
+        // 键鼠全局快捷键：仅纯 Ctrl 组合（Ctrl+K/F、Ctrl+,、Ctrl+数字），
+        // 普通字符键由聚焦的 TextField 自行消费，不会进入该分支。
+        resolveAppShortcutAction(event)?.let { action ->
+            when (action) {
+                AppShortcutAction.OpenSearch -> pendingRoute = "search"
+                AppShortcutAction.OpenSettings -> pendingRoute = "settings"
+                is AppShortcutAction.SelectBottomNavItem -> pendingAppShortcutNavIndex = action.index
+            }
+            return true
+        }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun onProvideKeyboardShortcuts(
+        data: MutableList<android.view.KeyboardShortcutGroup>,
+        menu: Menu?,
+        deviceId: Int,
+    ) {
+        val shortcutInfos = APP_SHORTCUT_DEFINITIONS.map { definition ->
+            val labelRes = when (definition.action) {
+                AppShortcutAction.OpenSearch -> R.string.keyboard_shortcut_open_search
+                AppShortcutAction.OpenSettings -> R.string.keyboard_shortcut_open_settings
+                is AppShortcutAction.SelectBottomNavItem -> R.string.keyboard_shortcut_select_bottom_nav
+            }
+            android.view.KeyboardShortcutInfo(
+                getString(labelRes),
+                definition.helperCharacter,
+                definition.helperMetaState,
+            )
+        }
+        data.add(
+            android.view.KeyboardShortcutGroup(
+                getString(R.string.keyboard_shortcut_group_app),
+                shortcutInfos,
+            )
+        )
+        super.onProvideKeyboardShortcuts(data, menu, deviceId)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -2798,6 +2845,7 @@ class MainActivity : AppCompatActivity() {
     //  待导航的视频 ID（用于在 Compose 中触发导航）
     var pendingVideoId by mutableStateOf<String?>(null)
     var pendingRoute by mutableStateOf<String?>(null)  // 🚀 App Shortcuts: pending route
+    var pendingAppShortcutNavIndex by mutableStateOf<Int?>(null)  // ⌨️ Ctrl+数字切换底栏页
     var pendingSearchKeyword by mutableStateOf<String?>(null)
     var pendingNavigationRoute by mutableStateOf<String?>(null)
         private set

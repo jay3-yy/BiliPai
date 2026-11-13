@@ -654,9 +654,9 @@ fun SearchScreen(
     var previousShowResults by rememberSaveable { mutableStateOf(false) }
     var restoreLandingFocusOnBack by rememberSaveable { mutableStateOf(false) }
     var pendingLandingFocusRestore by remember { mutableStateOf(false) }
-    val searchLayoutPolicy = remember(configuration.screenWidthDp) {
+    val searchLayoutPolicy = remember(windowSizeClass.widthDp) {
         resolveSearchLayoutPolicy(
-            widthDp = configuration.screenWidthDp
+            widthDp = windowSizeClass.widthDp.value.toInt()
         )
     }
 
@@ -1672,7 +1672,7 @@ fun SearchScreen(
                 }
             } else {
                 val useSplitLayout = shouldUseSearchSplitLayout(
-                    widthDp = configuration.screenWidthDp
+                    widthDp = windowSizeClass.widthDp.value.toInt()
                 )
                 SearchLandingStateHost(
                     source = searchState,

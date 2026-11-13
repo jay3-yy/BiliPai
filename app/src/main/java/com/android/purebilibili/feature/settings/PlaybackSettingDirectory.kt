@@ -23,6 +23,7 @@ internal fun settingItemTitle(settingId: String): String =
     settingsItemDirectory.first { it.settingId == settingId }.title
 
 internal fun settingItemTitle(settingId: String, context: Context): String = when (settingId) {
+    "navigation.video_companion_enabled" -> context.getString(com.android.purebilibili.R.string.video_companion_title)
     "animation.card_transition_enabled" -> context.getString(com.android.purebilibili.R.string.animation_title_card_transition)
     PROGRESSIVE_BLUR_RENDERER_SETTING_ID -> context.getString(com.android.purebilibili.R.string.animation_progressive_renderer_title)
     GRID_CUSTOMIZATION_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_customization_title)

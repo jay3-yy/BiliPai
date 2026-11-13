@@ -1,6 +1,6 @@
 package com.android.purebilibili.feature.live.components
 
-import com.android.purebilibili.feature.live.liveSecondaryClick
+import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import com.android.purebilibili.feature.live.encodeLiveDanmakuInfo
 import com.android.purebilibili.feature.live.resolveLiveMessageMedal
 import androidx.compose.foundation.BorderStroke
@@ -184,7 +184,7 @@ internal fun LiveSuperChatCard(
               )
               Row(
                   modifier = Modifier.fillMaxWidth()
-                      .liveSecondaryClick { menuExpanded = true }
+                      .onSecondaryClick { menuExpanded = true }
                       .clickable(onClickLabel = "醒目留言操作") { menuExpanded = true }
                       .padding(8.dp),
                   verticalAlignment = Alignment.CenterVertically,

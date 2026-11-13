@@ -7,7 +7,7 @@ import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import com.android.purebilibili.feature.live.encodeLiveDanmakuInfo
 import com.android.purebilibili.feature.live.resolveLiveMessageMedal
-import com.android.purebilibili.feature.live.liveSecondaryClick
+import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import androidx.compose.foundation.text.appendInlineContent
 import com.android.purebilibili.data.model.response.splitLiveMessageEmotes
 import com.android.purebilibili.data.model.response.LiveMessageEmote
@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -274,7 +275,7 @@ private fun ChatMessageItem(
         val bubbleModifier = Modifier
             .widthIn(max = maxWidth * bubbleWidthFraction)
             .clip(bubbleShape)
-            .liveSecondaryClick(if (item.uid > 0L) ({ showMenu = true }) else null)
+            .onSecondaryClick(if (item.uid > 0L) { _: Offset -> showMenu = true } else null)
             .background(bubbleBackground)
             .padding(horizontal = if (compact) 6.dp else tokens.horizontalPaddingDp.dp, vertical = if (compact) 2.dp else tokens.verticalPaddingDp.dp)
 

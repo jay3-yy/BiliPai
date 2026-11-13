@@ -8327,6 +8327,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     // ========== 📱 平板导航模式 ==========
     
     private val KEY_TABLET_NAVIGATION_MODE = booleanPreferencesKey("tablet_use_sidebar")
+    private val KEY_VIDEO_COMPANION_ENABLED = booleanPreferencesKey("video_companion_enabled")
+
+    fun getVideoCompanionEnabled(context: Context): Flow<Boolean> =
+        NavigationSettingsStore.getVideoCompanionEnabled(context)
+
+    suspend fun setVideoCompanionEnabled(context: Context, enabled: Boolean) =
+        NavigationSettingsStore.setVideoCompanionEnabled(context, enabled)
     private val KEY_SIDEBAR_EXPANDED = booleanPreferencesKey("sidebar_expanded")
     private val KEY_SIDEBAR_ACCOUNT_SWITCHER_ENABLED =
         booleanPreferencesKey("sidebar_account_switcher_enabled")
@@ -9045,6 +9052,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_SCROLL_COMPACT_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_SHOW_PGC_TIMELINE, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_TABLET_NAVIGATION_MODE, SettingsShareSection.NAVIGATION),
+            BooleanShareablePreferenceDefinition(KEY_VIDEO_COMPANION_ENABLED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_SIDEBAR_EXPANDED, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(
                 KEY_SIDEBAR_ACCOUNT_SWITCHER_ENABLED,

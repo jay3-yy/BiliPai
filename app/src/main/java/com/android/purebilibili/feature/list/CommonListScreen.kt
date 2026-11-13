@@ -273,10 +273,9 @@ fun CommonListScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val accountIdentity by com.android.purebilibili.core.store.TokenManager.accountIdentity
         .collectAsStateWithLifecycle()
-    // 个人列表（历史/收藏）默认单列，列数由双指缩放调节；其余页面保持双列默认。
+    // 手机保留个人列表单列；宽屏自动增列，手动列数与双指缩放仍优先。
     val personalListPage = viewModel is HistoryViewModel || viewModel is FavoriteViewModel
     val windowSizeClass = LocalWindowSizeClass.current
-    val defaultPersonalColumns = if (personalListPage) 1 else 2
     val primaryGridState = rememberCompatibleStaggeredGridState()
     val subscribedFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val favoriteFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -298,9 +297,14 @@ fun CommonListScreen(
         widthSizeClass = windowSizeClass.widthSizeClass,
         defaultColumns = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
             windowSizeClass.widthSizeClass, homeSettings.effectiveGridColumnCountCompact, homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
-        ).takeIf { it > 0 } ?: defaultPersonalColumns,
+        ).takeIf { it > 0 } ?: com.android.purebilibili.feature.personal.resolvePersonalListDefaultColumns(
+            contentWidthDp = (windowSizeClass.widthDp.value - 32f).toInt(),
+            compactColumns = if (personalListPage) 1 else 2,
+            cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+        ),
         bounds = resolveHomeFeedPinchColumnBounds(
-            windowSizeClass.widthSizeClass, LocalConfiguration.current.screenWidthDp,
+            windowSizeClass.widthSizeClass, windowSizeClass.widthDp.value.toInt(),
         ),
     )
     val pinchListColumns = gridColumnPreference.columns

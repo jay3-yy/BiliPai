@@ -144,6 +144,10 @@ internal fun settingsDestinationCopy(target: SettingsSearchTarget): SettingsDest
         title = "使用技巧",
         summary = "了解不容易发现的快捷操作和进阶功能",
     )
+    SettingsSearchTarget.KEYBOARD_SHORTCUTS -> SettingsDestinationCopy(
+        title = "键盘快捷键",
+        summary = "外接键盘时快速打开搜索、切换底栏项",
+    )
     SettingsSearchTarget.OPEN_LINKS -> SettingsDestinationCopy(
         title = "默认打开链接",
         summary = "用 BiliPai 打开 B 站链接",

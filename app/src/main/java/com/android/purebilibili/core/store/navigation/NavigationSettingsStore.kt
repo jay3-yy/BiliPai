@@ -66,6 +66,16 @@ internal fun parseBottomBarItemLabels(raw: String): Map<String, String> {
 }
 
 object NavigationSettingsStore {
+    private val keyVideoCompanionEnabled = booleanPreferencesKey("video_companion_enabled")
+
+    fun getVideoCompanionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { it[keyVideoCompanionEnabled] ?: true }
+        .distinctUntilChanged()
+
+    suspend fun setVideoCompanionEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[keyVideoCompanionEnabled] = enabled }
+    }
+
     private val keyTabletUseSidebar = booleanPreferencesKey("tablet_use_sidebar")
     private val keySidebarExpanded = booleanPreferencesKey("sidebar_expanded")
     private val keySidebarAccountSwitcherEnabled =

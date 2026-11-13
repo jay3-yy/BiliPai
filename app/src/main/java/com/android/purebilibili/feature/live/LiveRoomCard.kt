@@ -24,7 +24,9 @@ import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
@@ -89,7 +91,7 @@ internal fun LiveRoomCard(
         modifier = modifier
             .fillMaxWidth()
             .then(containerTransition.modifier)
-            .liveSecondaryClick(onLongPress)
+            .onSecondaryClick(onLongPress?.let { callback -> { _: Offset -> callback() } })
             .combinedClickable(
                 onClick = containerTransition.onClick,
                 onLongClick = onLongPress,

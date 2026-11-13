@@ -167,6 +167,7 @@ internal data class SettingsRootCategoryActions(
     val onVersionClick: () -> Unit,
     val onReplayOnboardingClick: () -> Unit,
     val onTipsClick: () -> Unit,
+    val onKeyboardShortcutsClick: () -> Unit,
     val onOpenLinksClick: () -> Unit,
     val onPrivacyModeChange: (Boolean) -> Unit,
     val onSearchSuggestionsChange: (Boolean) -> Unit,
@@ -843,6 +844,7 @@ internal fun SettingsRootCategoryContent(
                     SettingsDetailGroup(title = "帮助与工具") {
                         SupportToolsSection(
                             onTipsClick = actions.onTipsClick,
+                            onKeyboardShortcutsClick = actions.onKeyboardShortcutsClick,
                             onOpenLinksClick = actions.onOpenLinksClick,
                         )
                     }
@@ -910,11 +912,13 @@ internal fun SettingsRootCategoryContent(
 @Composable
 fun SupportToolsSection(
     onTipsClick: () -> Unit,
+    onKeyboardShortcutsClick: () -> Unit,
     onOpenLinksClick: () -> Unit,
 ) {
     val tipsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.TIPS)
+    val keyboardShortcutsVisual = rememberSettingsEntryVisual(SettingsSearchTarget.KEYBOARD_SHORTCUTS)
     val openLinksVisual = rememberSettingsEntryVisual(SettingsSearchTarget.OPEN_LINKS)
-    val siblingTints = rememberSettingsSiblingIconTints(2, paletteOffset = 1)
+    val siblingTints = rememberSettingsSiblingIconTints(3, paletteOffset = 1)
 
     SettingsCardGroup {
         SettingClickableItem(
@@ -927,12 +931,21 @@ fun SupportToolsSection(
         )
         SettingsAdaptiveDivider()
         SettingClickableItem(
+            icon = keyboardShortcutsVisual.icon,
+            iconPainter = keyboardShortcutsVisual.iconResId?.let { painterResource(id = it) },
+            title = settingsDestinationCopy(SettingsSearchTarget.KEYBOARD_SHORTCUTS).title,
+            subtitle = settingsDestinationCopy(SettingsSearchTarget.KEYBOARD_SHORTCUTS).summary,
+            onClick = onKeyboardShortcutsClick,
+            iconTint = siblingTints[1]
+        )
+        SettingsAdaptiveDivider()
+        SettingClickableItem(
             icon = openLinksVisual.icon,
             iconPainter = openLinksVisual.iconResId?.let { painterResource(id = it) },
             title = settingsDestinationCopy(SettingsSearchTarget.OPEN_LINKS).title,
             value = settingsDestinationCopy(SettingsSearchTarget.OPEN_LINKS).summary,
             onClick = onOpenLinksClick,
-            iconTint = siblingTints[1]
+            iconTint = siblingTints[2]
         )
     }
 }

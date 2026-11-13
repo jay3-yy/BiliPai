@@ -155,7 +155,8 @@ internal fun resolveSettingsRootCategoryForSearchTarget(
     SettingsSearchTarget.TWITTER,
     SettingsSearchTarget.DONATE,
     SettingsSearchTarget.TIPS,
-    SettingsSearchTarget.OPEN_LINKS -> SettingsRootCategory.SYSTEM_ABOUT
+    SettingsSearchTarget.OPEN_LINKS,
+    SettingsSearchTarget.KEYBOARD_SHORTCUTS -> SettingsRootCategory.SYSTEM_ABOUT
 }
 
 internal fun isSceneSettingsSearchTarget(target: SettingsSearchTarget): Boolean = target in setOf(

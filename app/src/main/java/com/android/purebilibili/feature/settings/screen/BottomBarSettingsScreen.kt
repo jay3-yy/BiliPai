@@ -180,6 +180,9 @@ fun BottomBarSettingsContent(
         com.android.purebilibili.core.ui.LocalBottomBarContentPadding.current,
     )
     val scope = rememberCoroutineScope()
+    val videoCompanionEnabled by remember(context) {
+        SettingsManager.getVideoCompanionEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     val listState = rememberLazyListState()
     val focusRequest by SettingsSearchFocusController.request.collectAsStateWithLifecycle()
     val deviceUiProfile = remember(windowSizeClass.widthSizeClass) {
@@ -837,6 +840,20 @@ fun BottomBarSettingsContent(
             item(key = "navigation_tablet") {
                 Box(modifier = Modifier.entrance()) {
                     AppPreferenceGroup {
+                        SettingsItemAnchor("navigation.video_companion_enabled") {
+                            AppSwitchPreference(
+                                icon = com.android.purebilibili.feature.settings.rememberSettingsSemanticIcon(
+                                    com.android.purebilibili.feature.settings.SettingsIconRole.VIDEO_COMPANION,
+                                ),
+                                title = settingItemTitle("navigation.video_companion_enabled", context),
+                                subtitle = stringResource(R.string.video_companion_summary),
+                                checked = videoCompanionEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch { SettingsManager.setVideoCompanionEnabled(context, enabled) }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
+                            )
+                        }
                         SettingsItemAnchor("navigation.tablet_use_sidebar") {
                             AppSwitchPreference(
                                 icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_view_sidebar_24),

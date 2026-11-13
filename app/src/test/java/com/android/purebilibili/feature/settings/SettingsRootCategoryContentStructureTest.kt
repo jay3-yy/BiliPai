@@ -272,6 +272,7 @@ class SettingsRootCategoryContentStructureTest {
             "BiliPaiNavEntryContentRole.PLAYBACK_SETTINGS ->",
             "BiliPaiNavEntryContentRole.PLUGINS_SETTINGS ->",
             "BiliPaiNavEntryContentRole.TIPS_SETTINGS ->",
+            "BiliPaiNavEntryContentRole.KEYBOARD_SHORTCUTS_SETTINGS ->",
         ).forEach { marker ->
             val block = source.substringAfter(marker)
             assertTrue(

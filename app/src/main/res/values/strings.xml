@@ -4,6 +4,41 @@
 
     <string name="common_back">返回</string>
     <string name="common_more">更多</string>
+
+    <string name="keyboard_shortcut_group_app">应用快捷键</string>
+    <string name="keyboard_shortcut_open_search">打开搜索</string>
+    <string name="keyboard_shortcut_open_settings">打开设置</string>
+    <string name="keyboard_shortcut_select_bottom_nav">切换到第 N 个底栏项</string>
+    <string name="keyboard_shortcuts_title">键盘快捷键</string>
+    <string name="keyboard_shortcuts_section_app">应用内快捷键</string>
+    <string name="keyboard_shortcuts_section_player">播放器快捷键</string>
+    <string name="keyboard_shortcuts_player_note">进入播放画面后生效</string>
+    <string name="keyboard_shortcut_player_play_pause">播放 / 暂停</string>
+    <string name="keyboard_shortcut_player_play_pause_keys">空格 / K</string>
+    <string name="keyboard_shortcut_player_seek_short">快退 / 快进 5 秒</string>
+    <string name="keyboard_shortcut_player_seek_short_keys">← / →</string>
+    <string name="keyboard_shortcut_player_seek_long">快退 / 快进 10 秒</string>
+    <string name="keyboard_shortcut_player_seek_long_keys">Shift+← / Shift+→</string>
+    <string name="keyboard_shortcut_player_volume">音量增 / 减</string>
+    <string name="keyboard_shortcut_player_volume_keys">↑ / ↓</string>
+    <string name="keyboard_shortcut_player_fullscreen">全屏切换</string>
+    <string name="keyboard_shortcut_player_fullscreen_keys">F / Enter</string>
+    <string name="keyboard_shortcut_player_mute">静音切换</string>
+    <string name="keyboard_shortcut_player_mute_keys">M</string>
+    <string name="keyboard_shortcut_player_danmaku">弹幕开关</string>
+    <string name="keyboard_shortcut_player_danmaku_keys">D</string>
+    <string name="keyboard_shortcut_player_like_coin_fav">点赞 / 投币 / 收藏</string>
+    <string name="keyboard_shortcut_player_like_coin_fav_keys">Q / W / E</string>
+    <string name="keyboard_shortcut_player_screenshot">截图</string>
+    <string name="keyboard_shortcut_player_screenshot_keys">S</string>
+    <string name="keyboard_shortcut_player_lock">播放锁定切换</string>
+    <string name="keyboard_shortcut_player_lock_keys">L</string>
+    <string name="keyboard_shortcut_player_parts">上 / 下一个分 P</string>
+    <string name="keyboard_shortcut_player_parts_keys">[ / ]</string>
+    <string name="keyboard_shortcut_player_percent">按百分比跳转进度</string>
+    <string name="keyboard_shortcut_player_percent_keys">0–9</string>
+    <string name="keyboard_shortcut_player_speed">切换 1x / 2x 倍速</string>
+    <string name="keyboard_shortcut_player_speed_keys">Shift+1 / Shift+2</string>
     <string name="common_retry">重试</string>
     <string name="common_delete">删除</string>
     <string name="common_clear">清空</string>
@@ -984,4 +1019,10 @@
     <string name="icon_palette_auto_background">自动搭配背景</string>
     <string name="icon_palette_auto_background_selected">自动搭配背景（已选）</string>
     <string name="icon_live_color_target">调色对象</string>
+    <string name="companion_resize">拖动调整双栏宽度，拖至边缘切换单栏</string>
+    <string name="companion_restore_split">恢复双栏</string>
+    <string name="companion_show_feed">仅显示首页</string>
+    <string name="companion_show_video">仅显示视频</string>
+    <string name="video_companion_title">大屏视频分栏</string>
+    <string name="video_companion_summary">大屏下从各页面打开视频时保留来源页，可拖动调整宽度或切换单栏</string>
 </resources>

@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.live
 import androidx.compose.foundation.border
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 
 import android.app.Application
 import androidx.compose.foundation.background
@@ -1098,7 +1099,7 @@ private fun LiveFollowAvatarRow(
             Column(
                 modifier = Modifier
                     .width(metrics.followItemExtentDp.dp)
-                    .liveSecondaryClick { if (item.uid > 0) onUserClick(item.uid) }
+                    .onSecondaryClick { if (item.uid > 0) onUserClick(item.uid) }
                     .combinedClickable(
                         onClick = { onLiveClick(item.roomId, item.title, item.uname) },
                         onLongClick = { if (item.uid > 0) onUserClick(item.uid) },

@@ -54,6 +54,8 @@ internal enum class SettingsIconRole {
     VIEW_RELEASE_NOTES,
     REPLAY_ONBOARDING,
     TIPS,
+    KEYBOARD_SHORTCUTS,
+    VIDEO_COMPANION,
     OPEN_LINKS,
     DONATE,
     DISCLAIMER,
@@ -373,6 +375,8 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.VIEW_RELEASE_NOTES -> R.drawable.ms_newspaper_24
     SettingsIconRole.REPLAY_ONBOARDING -> R.drawable.ms_replay_24
     SettingsIconRole.TIPS -> R.drawable.ms_lightbulb_24
+    SettingsIconRole.KEYBOARD_SHORTCUTS -> R.drawable.ms_keyboard_24
+    SettingsIconRole.VIDEO_COMPANION -> R.drawable.ic_settings_video_split_24
     SettingsIconRole.OPEN_LINKS -> R.drawable.ms_link_24
     SettingsIconRole.DONATE -> R.drawable.ms_card_giftcard_24
     SettingsIconRole.DISCLAIMER -> R.drawable.ms_warning_amber_24
@@ -682,6 +686,7 @@ internal fun resolveSettingsSearchTargetIconRole(
     SettingsSearchTarget.VIEW_RELEASE_NOTES -> SettingsIconRole.VIEW_RELEASE_NOTES
     SettingsSearchTarget.REPLAY_ONBOARDING -> SettingsIconRole.REPLAY_ONBOARDING
     SettingsSearchTarget.TIPS -> SettingsIconRole.TIPS
+    SettingsSearchTarget.KEYBOARD_SHORTCUTS -> SettingsIconRole.KEYBOARD_SHORTCUTS
     SettingsSearchTarget.OPEN_LINKS -> SettingsIconRole.OPEN_LINKS
     SettingsSearchTarget.DONATE -> SettingsIconRole.DONATE
     SettingsSearchTarget.TELEGRAM -> SettingsIconRole.OPEN_LINKS

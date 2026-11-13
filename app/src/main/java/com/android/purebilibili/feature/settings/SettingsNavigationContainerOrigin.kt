@@ -99,5 +99,6 @@ internal fun resolveSettingsContainerTarget(target: SettingsSearchTarget): BiliP
         SettingsSearchTarget.WEBDAV_BACKUP -> BiliPaiNavKey.WebDavBackup
         SettingsSearchTarget.OPEN_SOURCE_LICENSES -> BiliPaiNavKey.OpenSourceLicenses
         SettingsSearchTarget.TIPS -> BiliPaiNavKey.TipsSettings
+        SettingsSearchTarget.KEYBOARD_SHORTCUTS -> BiliPaiNavKey.KeyboardShortcutsSettings
         else -> null
     }

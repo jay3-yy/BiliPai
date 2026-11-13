@@ -36,6 +36,7 @@ enum class SettingsSearchTarget {
     VIEW_RELEASE_NOTES,
     REPLAY_ONBOARDING,
     TIPS,
+    KEYBOARD_SHORTCUTS,
     OPEN_LINKS,
     DONATE,
     TELEGRAM,
@@ -591,6 +592,13 @@ private val SETTINGS_SEARCH_INDEX: List<SettingsSearchEntry> = listOf(
         subtitle = settingsDestinationCopy(SettingsSearchTarget.TIPS).summary,
         section = "帮助与工具",
         aliases = listOf("贴士", "技巧", "帮助", "隐藏操作", "摸鱼模式", "空降助手", "自动连播", "自动横竖屏")
+    ),
+    SettingsSearchEntry(
+        target = SettingsSearchTarget.KEYBOARD_SHORTCUTS,
+        title = settingsDestinationCopy(SettingsSearchTarget.KEYBOARD_SHORTCUTS).title,
+        subtitle = settingsDestinationCopy(SettingsSearchTarget.KEYBOARD_SHORTCUTS).summary,
+        section = "帮助与工具",
+        aliases = listOf("快捷键", "键盘", "键鼠", "鼠标右键", "外接键盘", "Ctrl", "touchpad", "keyboard")
     ),
     SettingsSearchEntry(
         settingId = "legacy.032",

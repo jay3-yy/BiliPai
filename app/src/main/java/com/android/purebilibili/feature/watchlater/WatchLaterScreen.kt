@@ -829,13 +829,13 @@ fun WatchLaterScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val accountIdentity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val initialAccountIdentity = remember { accountIdentity }
-    // 默认单列，可通过默认列数或双指缩放调整。
+    // 手机默认单列，宽屏按卡宽自动增列；手动列数与双指缩放仍优先。
     val windowSizeClass = LocalWindowSizeClass.current
     val configuration = LocalConfiguration.current
-    val pinchColumnBounds = remember(windowSizeClass.widthSizeClass, configuration.screenWidthDp) {
+    val pinchColumnBounds = remember(windowSizeClass.widthSizeClass, windowSizeClass.widthDp) {
         resolveHomeFeedPinchColumnBounds(
             widthSizeClass = windowSizeClass.widthSizeClass,
-            contentWidthDp = configuration.screenWidthDp,
+            contentWidthDp = windowSizeClass.widthDp.value.toInt(),
         )
     }
     val context = LocalContext.current
@@ -847,9 +847,14 @@ fun WatchLaterScreen(
         widthSizeClass = windowSizeClass.widthSizeClass,
         defaultColumns = com.android.purebilibili.feature.home.resolveHomeFeedStoredColumnCount(
             windowSizeClass.widthSizeClass, homeSettings.effectiveGridColumnCountCompact, homeSettings.effectiveGridColumnCountForWindow(windowSizeClass),
-        ).takeIf { it > 0 } ?: 1,
+        ).takeIf { it > 0 } ?: com.android.purebilibili.feature.personal.resolvePersonalListDefaultColumns(
+            contentWidthDp = (windowSizeClass.widthDp.value - 32f).toInt(),
+            compactColumns = 1,
+            cardWidthPreset = homeSettings.homeFeedCardWidthPreset,
+            widthSizeClass = windowSizeClass.widthSizeClass,
+        ),
         bounds = resolveHomeFeedPinchColumnBounds(
-            windowSizeClass.widthSizeClass, LocalConfiguration.current.screenWidthDp,
+            windowSizeClass.widthSizeClass, windowSizeClass.widthDp.value.toInt(),
         ),
     )
     val pinchListColumns = gridColumnPreference.columns
