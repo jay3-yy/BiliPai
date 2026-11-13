@@ -22,6 +22,7 @@ dependencies {
     api("com.squareup.retrofit2:retrofit:3.0.0")
     implementation("com.squareup.retrofit2:converter-kotlinx-serialization:3.0.0")
     api("com.squareup.okhttp3:okhttp:5.5.0")
+    implementation("com.squareup.okhttp3:okhttp-brotli:5.5.0")
     api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     api("androidx.datastore:datastore-preferences:1.2.1")
     api("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")

@@ -7,20 +7,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Reply
-import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Report
-import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import com.android.purebilibili.core.ui.ClientDanmakuActionIcon
+import com.android.purebilibili.core.ui.ClientDanmakuGlyph
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -75,6 +75,8 @@ internal fun DanmakuActionToolbar(
     if (!rememberPlayerPopupHostActive(onDismiss)) return
     val density = LocalDensity.current
     val gap = with(density) { 6.dp.roundToPx() }
+    val windowSize = LocalWindowInfo.current.containerSize
+    val bubbleShape = remember(anchor, windowSize, gap) { DanmakuToolbarBubbleShape(anchor, windowSize, gap) }
     val maxWidth = with(density) { (anchor.viewportRight - anchor.viewportLeft).toDp() - 12.dp }.coerceAtLeast(40.dp)
     val position = remember(anchor, gap) {
         object : PopupPositionProvider {
@@ -92,16 +94,16 @@ internal fun DanmakuActionToolbar(
         // The shared popup surface selects glass explicitly and retains MD3/Miuix rendering otherwise.
         AppPopupSurface(
             type = AppPopupSurfaceType.DIALOG,
-            shape = RoundedCornerShape(12.dp),
+            shape = bubbleShape,
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
             modifier = modifier.widthIn(max = maxWidth),
         ) {
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 2.dp, vertical = 6.dp)) {
                 val countLabel = if (voteCount > 999) "999+" else voteCount.toString()
                 Box(Modifier.size(40.dp)) {
                     ToolbarAction(
-                        icon = Icons.Filled.ThumbUp,
+                        icon = { tint -> ClientDanmakuActionIcon(if (hasLiked) ClientDanmakuGlyph.LIKED else ClientDanmakuGlyph.LIKE, tint) },
                         description = "${if (hasLiked) "取消点赞" else "点赞"}，$countLabel 赞",
                         enabled = canVote && !voteLoading,
                         selected = hasLiked,
@@ -115,14 +117,14 @@ internal fun DanmakuActionToolbar(
                         modifier = Modifier.align(Alignment.TopEnd).padding(top = 1.dp),
                     )
                 }
-                ToolbarAction(Icons.Filled.ContentCopy, "复制弹幕", onClick = onCopy)
+                ToolbarAction({ tint -> ClientDanmakuActionIcon(ClientDanmakuGlyph.COPY, tint) }, "复制弹幕", onClick = onCopy)
                 ToolbarAction(
-                    if (canRecall) Icons.AutoMirrored.Filled.Reply else Icons.Filled.Report,
+                    { tint -> ClientDanmakuActionIcon(if (canRecall) ClientDanmakuGlyph.RECALL else ClientDanmakuGlyph.REPORT, tint) },
                     if (canRecall) "撤回弹幕" else "举报弹幕",
                     onClick = onReportOrRecall,
                 )
-                if (hasTimestamp) ToolbarAction(Icons.Filled.PlayArrow, "跳转到弹幕时间", onClick = onTimestamp)
-                ToolbarAction(Icons.Filled.MoreHoriz, "更多弹幕操作", onClick = onMore)
+                if (hasTimestamp) ToolbarAction({ tint -> AppIcon(Icons.Filled.PlayArrow, null, Modifier.size(20.dp), tint = tint) }, "跳转到弹幕时间", onClick = onTimestamp)
+                ToolbarAction({ tint -> AppIcon(Icons.Filled.MoreHoriz, null, Modifier.size(20.dp), tint = tint) }, "更多弹幕操作", onClick = onMore)
             }
         }
     }
@@ -130,15 +132,14 @@ internal fun DanmakuActionToolbar(
 
 @Composable
 private fun ToolbarAction(
-    icon: ImageVector,
+    icon: @Composable (Color) -> Unit,
     description: String,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     selected: Boolean = false,
     onClick: () -> Unit,
 ) {
-    AppIconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(40.dp)) {
-        AppIcon(icon, description, Modifier.size(20.dp), tint =
-            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+    AppIconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(40.dp).semantics { contentDescription = description }) {
+        icon(if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
     }
 }

@@ -1092,8 +1092,18 @@ data class DynamicVipInfo(
 @Serializable
 data class DecorateInfo(
     val card_url: String = "", // 装扮卡片 URL
-    val name: String = ""
+    val name: String = "",
+    val fan: DynamicDecorationFan? = null,
 )
+
+@Serializable
+data class DynamicDecorationFan(
+    val color: String? = null,
+    val num_str: String? = null,
+    val num_desc: String? = null,
+) {
+    val displayNumber: String get() = num_str?.takeIf { it.isNotBlank() } ?: num_desc.orEmpty()
+}
 
 // --- 内容模块 ---
 @Serializable

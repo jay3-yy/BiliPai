@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,8 +35,7 @@ import com.android.purebilibili.feature.video.ui.VideoDetailShapes
 import com.android.purebilibili.feature.video.viewmodel.AiSummaryPromptState
 
 /**
- * PiliPlus 式信息行右端紧凑入口：AI 总结（AutoAwesome）与视频笔记（EditNote）小图标。
- * 与 PiliPlus 一致，图标只作触发器，内容在 [AiSummarySheet] / [VideoNoteListSheet] 中展示。
+ * 信息行右端提供 AI 总结与视频笔记入口，内容在各自面板中展示。
  */
 @Composable
 fun VideoSupplementStatsActions(
@@ -54,11 +52,12 @@ fun VideoSupplementStatsActions(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (showAiSummary) {
-            SupplementEntryIcon(
-                icon = Icons.Outlined.AutoAwesome,
-                label = "AI 总结",
-                onClick = onAiSummaryClick,
-            )
+            Box(
+                Modifier.size(28.dp).clickable(onClickLabel = "AI 总结", onClick = onAiSummaryClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                com.android.purebilibili.core.ui.ClientAiSummaryIcon(Modifier.size(18.dp))
+            }
         }
         if (showNote) {
             SupplementEntryIcon(

@@ -7,11 +7,10 @@ import com.android.purebilibili.core.subtitle.*
 import com.android.purebilibili.data.model.response.PlayerInfoData
 import okhttp3.CacheControl
 import okhttp3.Request
-import java.util.concurrent.ConcurrentHashMap
 
 object SubtitleContentRepository {
-    private val cache = ConcurrentHashMap<String, List<SubtitleCue>>()
-    fun cachedCues(): List<List<SubtitleCue>> = cache.values.toList()
+    private val cache = SubtitleCueMemoryCache()
+    fun cacheStats(): SubtitleCueMemoryCacheStats = cache.stats()
     fun clearCache() = cache.clear()
     suspend fun playerInfo(bvid: String, cid: Long): Result<PlayerInfoData> = dataRequest {
         val keys = WbiKeyManager.getWbiKeys().getOrThrow()
@@ -25,13 +24,13 @@ object SubtitleContentRepository {
         val url = normalizeBilibiliSubtitleUrl(subtitleUrl)
         require(isTrustedBilibiliSubtitleUrl(url)) { "字幕地址无效" }
         val key = "$bvid:$cid:$subtitleId:$subtitleIdStr:$subtitleLan:$url"
+        val generation = cache.generation()
         cache[key] ?: NetworkModule.okHttpClient.newCall(Request.Builder().url(url)
             .cacheControl(CacheControl.FORCE_NETWORK).header("Referer", "https://www.bilibili.com").build())
             .execute().use { response ->
                 check(response.isSuccessful) { "字幕请求失败（HTTP ${response.code}）" }
                 parseBiliSubtitleBody(response.body.string()).also {
-                    if (cache.size >= 48) cache.clear()
-                    cache[key] = it
+                    cache.put(key, it, generation)
                 }
             }
     }

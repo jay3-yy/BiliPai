@@ -479,12 +479,12 @@ internal fun HomeCategoryPageContent(
         derivedStateOf { resolveHomeVisibleVideoRange(visibleLazyItemKeys.value, videoRangesByLazyKey) }
     }
     val coverLoadRange = remember(
-        visibleVideoRange, visibleGridVideos.size, gridColumns, isDataSaverActive,
+        visibleVideoRange, visibleGridVideos.size,
     ) {
         derivedStateOf {
             val visible = visibleVideoRange.value
             resolveHomeCoverLoadRange(
-                visible?.first, visible?.last, visibleGridVideos.size, gridColumns, isDataSaverActive,
+                visible?.first, visible?.last, visibleGridVideos.size,
             )
         }
     }

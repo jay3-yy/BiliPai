@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -553,65 +555,74 @@ private fun TopicHeaderCard(
         tonalElevation = 1.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.Top
-        ) {
-            TopicTagCapsule(
-                modifier = Modifier.size(TOPIC_TAG_CAPSULE_SIZE_DP.dp),
-                iconSize = TOPIC_TAG_CAPSULE_ICON_SIZE_DP.dp,
+        Box(Modifier.fillMaxWidth().heightIn(min = 160.dp).aspectRatio(1125f / 720f)) {
+            AsyncImage(
+                model = R.drawable.bili_topic_header,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alignment = Alignment.BottomCenter,
+                modifier = Modifier.matchParentSize(),
             )
-            Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
-            Column(modifier = Modifier.weight(1f)) {
-                AppText(
-                    text = topic?.name.orEmpty().ifBlank { "话题" },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = AppContentColors.primaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                TopicTagCapsule(
+                    modifier = Modifier.size(TOPIC_TAG_CAPSULE_SIZE_DP.dp),
+                    iconSize = TOPIC_TAG_CAPSULE_ICON_SIZE_DP.dp,
                 )
-                if (!topicDescription.isNullOrBlank()) {
-                    Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
+                Column(modifier = Modifier.weight(1f)) {
                     AppText(
-                        text = topicDescription,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AppContentColors.secondaryText(),
-                        maxLines = 2,
+                        text = topic?.name.orEmpty().ifBlank { "话题" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = androidx.compose.ui.graphics.Color.White,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                }
-                Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
-                AppText(
-                    text = buildString {
-                        append("浏览 ${FormatUtils.formatStat(topic?.view ?: 0)}")
-                        append(" · 讨论 ${FormatUtils.formatStat(topic?.discuss ?: 0)}")
-                        if (!creatorName.isNullOrBlank()) {
-                            append(" · $creatorName")
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AppContentColors.secondaryText()
-                )
-            }
-            if (!creatorFace.isNullOrBlank()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(normalizeSearchImageUrl(creatorFace))
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = creatorName,
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .appActionClickable(enabled = (creator?.uid ?: 0L) > 0L) {
-                            onUserClick(creator?.uid ?: 0L)
+                    if (!topicDescription.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+                        AppText(
+                            text = topicDescription,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
+                    AppText(
+                        text = buildString {
+                            append("浏览 ${FormatUtils.formatStat(topic?.view ?: 0)}")
+                            append(" · 讨论 ${FormatUtils.formatStat(topic?.discuss ?: 0)}")
+                            if (!creatorName.isNullOrBlank()) {
+                                append(" · $creatorName")
+                            }
                         },
-                    contentScale = ContentScale.Crop
-                )
+                        style = MaterialTheme.typography.bodySmall,
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.85f)
+                    )
+                }
+                if (!creatorFace.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(normalizeSearchImageUrl(creatorFace))
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = creatorName,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .appActionClickable(enabled = (creator?.uid ?: 0L) > 0L) {
+                                onUserClick(creator?.uid ?: 0L)
+                            },
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
         }
     }

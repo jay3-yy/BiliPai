@@ -30,6 +30,7 @@ class PiliSubtitleSession internal constructor(val identity: SubtitleDocumentIde
         private set
     var acquiredTracks by mutableStateOf<List<SubtitleTrackMeta>>(emptyList())
     var acquiredCues by mutableStateOf<Map<String, List<SubtitleCue>>>(emptyMap())
+        private set
     var acquiredSecondaryTrackKey by mutableStateOf<String?>(null)
     var acquiredDisplayMode by mutableStateOf(SubtitleDisplayMode.OFF)
     var acquiredInitialized by mutableStateOf(false)
@@ -38,6 +39,36 @@ class PiliSubtitleSession internal constructor(val identity: SubtitleDocumentIde
     var largeTextEnabled by mutableStateOf(false)
     var timeOffsetMs by mutableLongStateOf(0L)
     private var nextId = 0L
+    private var downloadedCueUsers = 0
+    internal var downloadedCueGeneration = 0L
+        private set
+
+    internal fun retainDownloadedCues() { downloadedCueUsers++ }
+
+    internal fun releaseDownloadedCues() {
+        check(downloadedCueUsers > 0)
+        downloadedCueUsers--
+    }
+
+    internal fun trimUnusedDownloadedCues() {
+        if (downloadedCueUsers != 0) return
+        acquiredCues = emptyMap()
+        downloadedCueGeneration++
+    }
+
+    internal fun mergeAcquiredCues(cues: Map<String, List<SubtitleCue>>, generation: Long): Boolean {
+        if (downloadedCueUsers == 0 || generation != downloadedCueGeneration) return false
+        acquiredCues = acquiredCues + cues
+        return true
+    }
+
+    /** 恢复已选原生轨道的正文，导入文档与显示选项不参与清理或重新初始化。 */
+    internal fun missingSelectedNativeTracks(): List<SubtitleTrackMeta> {
+        val primary = acquiredTracks.firstOrNull { it.trackKey == selectedTrackKey } ?: return emptyList()
+        return listOfNotNull(primary, acquiredTracks.firstOrNull { it.trackKey == acquiredSecondaryTrackKey })
+            .distinctBy { it.trackKey }
+            .filterNot { acquiredCues.containsKey(it.trackKey) }
+    }
 
     fun append(name: String, cues: List<SubtitleCue>) {
         val track = ImportedSubtitleTrack("local:${identity.bvid}:${identity.cid}:${++nextId}", name, cues)
@@ -49,6 +80,13 @@ class PiliSubtitleSession internal constructor(val identity: SubtitleDocumentIde
 
 object PiliSubtitleSessions {
     private val sessions = LinkedHashMap<SubtitleDocumentIdentity, PiliSubtitleSession>(24, 0.75f, true)
+    private val cleanupHandler by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    internal fun releaseAfterUiHandoff(session: PiliSubtitleSession) {
+        session.releaseDownloadedCues()
+        // 同一轮界面更新中的全屏/普通模式可先接手；仅无人继续使用的会话释放正文。
+        cleanupHandler.post { session.trimUnusedDownloadedCues() }
+    }
     @Synchronized fun get(bvid: String, cid: Long): PiliSubtitleSession {
         val identity = SubtitleDocumentIdentity(bvid, cid)
         return sessions.getOrPut(identity) { PiliSubtitleSession(identity) }.also {

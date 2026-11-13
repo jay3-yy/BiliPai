@@ -9,11 +9,10 @@ import coil3.ImageLoader
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import com.android.purebilibili.core.util.homeCoverDecodePolicy
+import com.android.purebilibili.core.util.AppImageLoadPriority
+import com.android.purebilibili.core.util.backgroundImagePreload
 import com.android.purebilibili.data.model.response.VideoItem
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
 /** Headers have no video range; aligned rows and waterfall cards share this mapping. */
 internal fun resolveHomeVisibleVideoRange(
@@ -50,7 +49,6 @@ internal fun HomeFeedCoverPreload(
             .collectLatest { lastVisibleIndex ->
                 // A header-only viewport cancels work instead of pretending video zero is visible.
                 if (lastVisibleIndex == null) return@collectLatest
-                delay(HOME_COVER_PRELOAD_SETTLE_MS)
                 val range = resolveHomeCoverPreloadRange(
                     isDataSaverActive = false,
                     isScrollInProgress = false,
@@ -61,8 +59,8 @@ internal fun HomeFeedCoverPreload(
                 val sources = range.map { resolveHomeCoverImageSource(videos[it], false, requestSpec) }
                     .filter { it.url.isNotBlank() }
                     .distinctBy { it.cacheKey }
-                coroutineScope {
-                    for (source in sources) launch {
+                for (source in sources) {
+                    AppImageLoadPriority.prefetch(HOME_COVER_PRELOAD_SETTLE_MS) {
                         loader.execute(
                             ImageRequest.Builder(context)
                                 .data(source.url)
@@ -70,6 +68,7 @@ internal fun HomeFeedCoverPreload(
                                 .homeCoverDecodePolicy()
                                 .memoryCacheKey(source.cacheKey)
                                 .diskCacheKey(source.cacheKey)
+                                .backgroundImagePreload()
                                 .build(),
                         )
                     }

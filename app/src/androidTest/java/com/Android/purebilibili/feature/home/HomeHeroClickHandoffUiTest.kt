@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -18,6 +19,7 @@ import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSo
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.home.components.HomeHeroCarousel
+import com.android.purebilibili.feature.home.components.cards.LocalHomeCardScrolling
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -61,6 +63,20 @@ class HomeHeroClickHandoffUiTest {
     }
 
     @Test
+    fun clickWhileImageLoadingIsPausedStillNavigates() {
+        showHero(imageLoadingAllowed = false)
+        rule.onNodeWithTag("home_hero_video_card").performClick()
+        rule.waitUntil { clicks == 1 }
+    }
+
+    @Test
+    fun clickWhileFeedScrollingStillNavigates() {
+        showHero(scrolling = true)
+        rule.onNodeWithTag("home_hero_video_card").performTouchInput { click(center) }
+        rule.waitUntil { clicks == 1 }
+    }
+
+    @Test
     fun longPressOpensPreviewWithoutVideoNavigation() {
         showHero()
         rule.onNodeWithTag("home_hero_video_card").performTouchInput { longClick(center) }
@@ -71,12 +87,17 @@ class HomeHeroClickHandoffUiTest {
         }
     }
 
-    private fun showHero(sharedEnabled: Boolean = true) {
+    private fun showHero(
+        sharedEnabled: Boolean = true,
+        imageLoadingAllowed: Boolean = true,
+        scrolling: Boolean = false,
+    ) {
         rule.setContent {
             MaterialTheme {
                 CompositionLocalProvider(
                     LocalSharedTransitionEnabled provides sharedEnabled,
-                    LocalPageImageLoadingAllowed provides true,
+                    LocalPageImageLoadingAllowed provides imageLoadingAllowed,
+                    LocalHomeCardScrolling provides mutableStateOf(scrolling),
                     LocalVideoCardSharedElementSourceRoute provides "home:recommend",
                 ) {
                     Box(Modifier.width(360.dp)) {
@@ -90,7 +111,7 @@ class HomeHeroClickHandoffUiTest {
                                 assertEquals(7L, it.cid)
                                 val card = CardPositionManager.lastClickedNativeCardLayer
                                 val overlay = CardPositionManager.lastClickedNativeCoverOverlayLayer
-                                if (sharedEnabled) {
+                                if (sharedEnabled && imageLoadingAllowed && !scrolling) {
                                     val cardSize = requireNotNull(card).size
                                     val overlaySize = requireNotNull(overlay).size
                                     assertTrue(cardSize.width > 1 && cardSize.height > 1)

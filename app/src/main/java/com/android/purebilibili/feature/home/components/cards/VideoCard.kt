@@ -1036,20 +1036,19 @@ internal fun ElegantVideoCard(
         menuState = VideoCardMenuState(offset, fromOverflowButton = pressOffset == null)
     }
     val hasTrailingCardAction = onUnfavorite != null || hasOverflowMenu
-    // Home sources mount only for an input gesture or their active navigation identity.
-    // Other lists keep their existing eager preparation policy.
+    // 所有列表仅在输入准备期间或持有当前导航源身份时挂载转场图层。
+    // 玻璃、MD3 和 Miuix 共用来源交接，材质与布局仍由各自分支决定。
     val sourceEnabled = transitionEnabled && LocalSharedTransitionEnabled.current
-    val onDemandSource = homeScrollTickProvider != null && sourceEnabled
     val sourceInteraction = remember(video.bvid, video.cid, effectiveSharedElementSourceRoute) {
         VideoCardSourceInteraction()
     }
     val sourcePreparationAllowed by rememberUpdatedState(
-        onDemandSource && LocalPageImageLoadingAllowed.current && cardVisibleInWindow &&
+        sourceEnabled && LocalPageImageLoadingAllowed.current && cardVisibleInWindow &&
             com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
             LocalHomeCardScrolling.current?.value != true
     )
     val prepareCardTransition = sourceEnabled && (
-        !onDemandSource || (sourcePreparationAllowed && sourceInteraction.preparing) ||
+        (sourcePreparationAllowed && sourceInteraction.preparing) ||
             isVideoCardSharedReturnTarget(
                 bvid = video.bvid,
                 sourceRoute = effectiveSharedElementSourceRoute,
@@ -1213,7 +1212,7 @@ internal fun ElegantVideoCard(
         onClick(video.bvid, video.cid)
     })
     val requestCardClick by rememberUpdatedState {
-        if (onDemandSource) {
+        if (sourceEnabled) {
             if (!CardPositionManager.isVideoNavigationDebounceActive()) {
                 sourceInteraction.requestClick()
             }
@@ -1225,7 +1224,7 @@ internal fun ElegantVideoCard(
         VideoCardPreparedClickEffect(
             interaction = sourceInteraction,
             capture = captureState,
-            allowed = onDemandSource && sourcePreparationAllowed,
+            allowed = sourceEnabled && sourcePreparationAllowed,
             onClick = { triggerCardClick() },
         )
     }
@@ -1326,7 +1325,7 @@ internal fun ElegantVideoCard(
                 lastClickedVideoSourceKey = CardPositionManager.lastClickedVideoSourceKey,
             )
         }
-        val sharedSourceOwnershipAllowed = (onDemandSource && sourceInteraction.preparing) || isVideoCardSharedSourceInstanceOwner(
+        val sharedSourceOwnershipAllowed = (sourceEnabled && sourceInteraction.preparing) || isVideoCardSharedSourceInstanceOwner(
             sourceInstanceId = sharedSourceInstanceId,
             lastClickedSourceInstanceId = CardPositionManager.lastClickedVideoSourceInstanceId,
         )
@@ -1459,12 +1458,12 @@ internal fun ElegantVideoCard(
                 )
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 //  [交互优化] 封面区域：点击跳转
-                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, onDemandSource, sourceInteraction) {
+                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, sourceEnabled, sourceInteraction) {
                     val hasPreviewAction = isLongPressEnabled && onLongClick != null
                     val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
                     detectTapGestures(
                         onPress = {
-                            if (onDemandSource && sourcePreparationAllowed) sourceInteraction.press()
+                            if (sourceEnabled && sourcePreparationAllowed) sourceInteraction.press()
                             try {
                                 tryAwaitRelease()
                             } finally {
@@ -2029,12 +2028,12 @@ internal fun ElegantVideoCard(
                     titleCoordsRef.value = coordinates
                 }
                 //  [交互优化] 标题区域：长按弹出菜单，点击跳转
-                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, onDemandSource, sourceInteraction) {
+                .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, sourceEnabled, sourceInteraction) {
                     val hasPreviewAction = isLongPressEnabled && onLongClick != null
                     val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
                     detectTapGestures(
                         onPress = {
-                            if (onDemandSource && sourcePreparationAllowed) sourceInteraction.press()
+                            if (sourceEnabled && sourcePreparationAllowed) sourceInteraction.press()
                             try {
                                 tryAwaitRelease()
                             } finally {

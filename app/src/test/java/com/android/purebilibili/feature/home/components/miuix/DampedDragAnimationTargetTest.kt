@@ -219,6 +219,49 @@ class DampedDragAnimationTargetTest {
     }
 
     @Test
+    fun `pager follow takes over a running glass spring and stops requesting frames`() = runTest {
+        val clock = BroadcastFrameClock()
+        withContext(clock) {
+            val animation = createAnimation(this, useMiuixIndicatorMotion = true)
+            animation.animateToValue(2f)
+            repeat(8) { frame ->
+                testScheduler.runCurrent()
+                clock.sendFrame(frame * 16_000_000L)
+                testScheduler.runCurrent()
+            }
+
+            animation.followPagerPosition(0.5f)
+            assertEquals(0.5f, animation.value)
+            assertEquals(0.5f, animation.targetValue)
+            assertEquals(1f, animation.pressProgress, 0.001f)
+            assertEquals(1.2f, animation.scaleX, 0.001f)
+            assertEquals(1.2f, animation.scaleY, 0.001f)
+
+            animation.followPagerPosition(1f)
+            testScheduler.runCurrent()
+            repeat(8) { frame ->
+                clock.sendFrame((frame + 8) * 16_000_000L)
+                testScheduler.runCurrent()
+            }
+            assertEquals(1f, animation.value)
+            assertEquals(0f, animation.pressProgress, 0.001f)
+            assertEquals(1f, animation.scaleX, 0.001f)
+            assertEquals(1f, animation.scaleY, 0.001f)
+            assertTrue(!clock.hasAwaiters)
+
+            animation.updateValue(2f)
+            repeat(180) { frame ->
+                testScheduler.runCurrent()
+                clock.sendFrame((frame + 16) * 16_000_000L)
+                testScheduler.runCurrent()
+            }
+            assertEquals(2f, animation.value, 0.001f)
+            assertEquals(0f, animation.velocity, 0.001f)
+            assertTrue(!clock.hasAwaiters)
+        }
+    }
+
+    @Test
     fun `direct tracking takes ownership before dispatcher advances`() {
         val dispatcher = StandardTestDispatcher()
         val animation = DampedDragAnimation(

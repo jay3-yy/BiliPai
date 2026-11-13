@@ -21,3 +21,19 @@ License: GNU GPL v3; the source repository's license is included in `LICENSE`.
 与 `lib/models_new/pgc/pgc_review/`，由本项目 Compose 组件实现。
 计数与排序栏随滚动方向浮动的行为同时参考
 `lib/common/widgets/sliver/sliver_floating_header.dart`。
+
+## 客户端专用视觉资源
+
+从本地 PiliPlus 源码 `d635f20e22becbc6587c05c7a03671a4a9a3db9f` 导入以下资源，保留原始文件内容：
+
+- `assets/images/ai.png` → `drawable-nodpi/bili_ai_summary.png`。
+- `assets/images/trending_banner.png` → `drawable-nodpi/bili_trending_banner.png`。
+- `assets/images/topic-header-bg.png` → `drawable-nodpi/bili_topic_header.png`。
+- `assets/fonts/digital_id_num.ttf` → `font/bili_digital_id.ttf`。
+- `assets/fonts/custom_icon.ttf` → `font/bili_client_icons.ttf`；与早期 `piliplus_custom_icons.ttf` 独立保存，
+  弹幕点赞、已点赞、复制、撤回、举报按本次字体对应的 `custom_icon.dart` 映射。
+
+界面与数据参考：`lib/plugin/pl_player/view/widgets.dart` 的弹幕指向气泡、
+`lib/pages/dynamics/widgets/author_panel.dart` 的装扮编号及 `lib/models/dynamics/result.dart` 的 fan 字段。
+字体用于评论和动态装扮编号、空间头衔数字；图标和图片分别用于对应入口，不替换原生材质。
+来源仓库及 GPL-3.0 许可证同上；这些资源沿用来源仓库的归档说明。

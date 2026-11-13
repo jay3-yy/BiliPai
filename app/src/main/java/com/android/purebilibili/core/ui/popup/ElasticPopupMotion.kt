@@ -72,15 +72,16 @@ internal object ElasticPopupMotion {
                 surfaceAlpha = p.coerceIn(0f, 1f))
         }
         val initialScale = diameter(card, anchor) / card.width
-        val scale = Eject.sample(t, initialScale, 1f).value.coerceAtLeast(0.001f)
-        val height = Eject.sample(t, card.width, card.height).value
+        // 同一弹簧、时间与零初速度的通道共用进度，只映射各自的起终值。
+        val scale = (initialScale + (1f - initialScale) * p).coerceAtLeast(0.001f)
+        val height = card.width + (card.height - card.width) * p
         val distance = card.center.y - anchor.center.y
         val kick = if (source) staged(t, 0.07f, 0f,
             distance.sign * min(abs(distance) * 0.124f, 23f * density), 0f, Kick, Kick) else 0f
         val body = rect(anchor.center + (card.center - anchor.center) * p + Offset(0f, kick * scale),
             card.width * scale, height * scale)
         val corner = staged(t, 0.07f, card.width / 2f, card.width, radius, Eject, Eject) * scale
-        val sourceScale = Eject.sample(t, 1f, 0.25f).value
+        val sourceScale = 1f - 0.75f * p
         val pivot = anchor.center + (card.center - anchor.center) * 0.25f
         val sourceCenter = anchor.center + (pivot - anchor.center) * p
         val sourceRect = if (source) rect(sourceCenter,

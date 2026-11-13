@@ -237,7 +237,7 @@ class AppGlassPopupInterruptionTest {
     }
 
     @Test
-    fun rapidSettingsSelectionCommitsOnce() {
+    fun rapidSettingsSelectionCommitsImmediatelyAndOnlyOnce() {
         val controller = controller()
         var selections = 0
         controller.show(AppSingleChoicePopupRequest(
@@ -245,7 +245,26 @@ class AppGlassPopupInterruptionTest {
             anchorBoundsInWindow = null, centered = true,
         )) { selections++ }
         repeat(20) { controller.select("value") }
+        assertEquals(1, selections)
+        assertFalse(controller.morph.opening)
+        assertTrue(controller.request != null)
         controller.finish()?.invoke()
+        controller.finish()?.invoke()
+        assertEquals(1, selections)
+    }
+
+    @Test
+    fun committedSettingsSelectionSurvivesParentExitWithoutRepeating() {
+        val controller = controller()
+        var selections = 0
+        val request = AppSingleChoicePopupRequest(
+            title = "设置", options = emptyList(), selectedValue = null,
+            anchorBoundsInWindow = anchor, centered = false,
+        )
+        controller.show(request) { selections++ }
+        controller.select("value")
+        assertEquals(1, selections)
+        controller.dismissWithParent()
         controller.finish()?.invoke()
         assertEquals(1, selections)
     }

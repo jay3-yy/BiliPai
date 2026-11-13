@@ -38,7 +38,8 @@ import com.android.purebilibili.core.lifecycle.BackgroundManager
 import com.android.purebilibili.core.lifecycle.BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES
 import com.android.purebilibili.core.lifecycle.BACKGROUND_IMAGE_CACHE_MAX_BYTES
 import com.android.purebilibili.core.lifecycle.BACKGROUND_IMAGE_TRIM_DELAY_MS
-import com.android.purebilibili.core.lifecycle.resolveBackgroundImageCacheTrimTargetBytes
+import com.android.purebilibili.core.ui.components.AppPageImageMemory
+import com.android.purebilibili.core.lifecycle.BackgroundImageCacheBudget
 import com.android.purebilibili.core.lifecycle.shouldTrimImageCacheAfterBackgroundDelay
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.WbiKeyManager
@@ -98,6 +99,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
 
     //  保存 ImageLoader 引用以便在 onTrimMemory 中使用
     private var _imageLoader: ImageLoader? = null
+    private var imageMemoryBudget: BackgroundImageCacheBudget? = null
     private var fairMemoryTrimReceiver: android.content.BroadcastReceiver? = null
     private var launcherIconUiModeSnapshot: Int? = null
 
@@ -111,16 +113,9 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                 backgroundElapsedMs = SystemClock.elapsedRealtime() - enteredBackgroundForImageTrimAtMs,
             )
         ) {
-            // Keep a warm cache for return-to-home: covers must stay decodable without a
-            // disk round-trip, otherwise the first bottom-tab switch after resume competes
-            // with a decode storm. This never stops playback or clears a video surface.
-            // 封面代表色表与壁纸调色板只占几 KB，重建代价却是「解码 + Palette 聚类」，
-            // 因此不在这里清理。
-            _imageLoader?.memoryCache?.apply {
-                trimToSize(resolveBackgroundImageCacheTrimTargetBytes(size, BACKGROUND_IMAGE_TRIM_DELAY_MS))
-            }
-            // Raw bytes are reconstructible; active sessions retain their parsed playback window.
-            // Run on sustained background as modern Android may not send pressure callbacks.
+            // 页面引用与缓存分别释放；音频通知封面由播放会话独立持有，画中画在上方豁免。
+            AppPageImageMemory.release()
+            applyBackgroundImageCacheBudget(BACKGROUND_IMAGE_TRIM_DELAY_MS)
             com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
             Logger.d(
                 PureApplicationRuntimeConfig.TAG,
@@ -137,15 +132,29 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             // the light budget synchronously while the process is still running.
             val miniPlayer = com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
             if (!StartupRecovery.isRecoveryMode && miniPlayer?.shouldKeepPlaybackForPipTransition() != true) {
-                _imageLoader?.memoryCache?.apply {
-                    trimToSize(resolveBackgroundImageCacheTrimTargetBytes(size, 0L))
-                }
+                applyBackgroundImageCacheBudget(0L)
             }
             backgroundImageTrimHandler.postDelayed(delayedBackgroundImageTrim, BACKGROUND_IMAGE_TRIM_DELAY_MS)
         }
 
         override fun onEnterForeground() {
             backgroundImageTrimHandler.removeCallbacks(delayedBackgroundImageTrim)
+            imageMemoryBudget?.foreground()
+            AppPageImageMemory.resume()
+        }
+    }
+
+    private fun applyBackgroundImageCacheBudget(elapsedMs: Long) {
+        imageMemoryBudget?.background(elapsedMs)
+    }
+
+    private fun releaseBackgroundPageImages() {
+        if (BackgroundManager.isInBackground &&
+            com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
+                ?.shouldKeepPlaybackForPipTransition() != true
+        ) {
+            AppPageImageMemory.release()
+            applyBackgroundImageCacheBudget(BACKGROUND_IMAGE_TRIM_DELAY_MS)
         }
     }
 
@@ -163,14 +172,12 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             isLowRamDevice = activityManager.isLowRamDevice
         )
         val diskCacheBytes = 100L * 1024 * 1024
-        // 图片请求集中在 i0/i1/i2.hdslb.com，默认每 host 只允许 5 个并发，
-        // 一屏几十张封面会排成几十批。这里不限制 per-host 并发，
-        // 交给 HTTP/2 多路复用自己调度（和 PiliPlus 的表现对齐）。
+        // 图片使用独立调度预算；离屏预加载另行串行让位，避免大量图片同时争用带宽。
         val imageCallFactory = NetworkModule.okHttpClient.newBuilder()
             .dispatcher(
                 okhttp3.Dispatcher().apply {
-                    maxRequests = 128
-                    maxRequestsPerHost = 128
+                    maxRequests = 32
+                    maxRequestsPerHost = 16
                 }
             )
             .build()
@@ -213,7 +220,18 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             .allowRgb565(false)
             .crossfade(true)
             .build()
-            .also { _imageLoader = it }  // 保存引用
+            .also {
+                _imageLoader = it
+                imageMemoryBudget = it.memoryCache?.let(::BackgroundImageCacheBudget)
+                if (BackgroundManager.isInBackground &&
+                    com.android.purebilibili.feature.video.player.MiniPlayerManager.getInstanceOrNull()
+                        ?.shouldKeepPlaybackForPipTransition() != true
+                ) {
+                    applyBackgroundImageCacheBudget(
+                        SystemClock.elapsedRealtime() - enteredBackgroundForImageTrimAtMs
+                    )
+                }
+            }
     }
     
     @OptIn(ExperimentalFoundationApi::class, dev.chrisbanes.haze.ExperimentalHazeApi::class)
@@ -327,6 +345,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             scope = AppScope.ioScope,
             trim = {
                 kotlinx.coroutines.withContext(Dispatchers.Main.immediate) {
+                    releaseBackgroundPageImages()
                     _imageLoader?.memoryCache?.clear()
                 }
                 releaseRebuildableMemoryCaches()
@@ -617,6 +636,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         if (com.android.purebilibili.feature.message.notification.isLightweightServiceProcess(this)) return
         if (StartupRecovery.isRecoveryMode) return
         val plan = PureApplicationRuntimeConfig.resolveBackgroundMemoryTrimPlan(level)
+        if (plan.clearImageMemoryCache) releaseBackgroundPageImages()
         if (plan.imageCacheTrimLevel != null) {
             _imageLoader?.memoryCache?.apply {
                 if (plan.clearImageMemoryCache) clear() else trimToSize(size / 2)
@@ -670,6 +690,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         val plan = PureApplicationRuntimeConfig.resolveBackgroundMemoryTrimPlan(
             ComponentCallbacks2.TRIM_MEMORY_COMPLETE
         )
+        releaseBackgroundPageImages()
         _imageLoader?.memoryCache?.clear()
         com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
         if (plan.notifyPlayerHeavyOptimization) {

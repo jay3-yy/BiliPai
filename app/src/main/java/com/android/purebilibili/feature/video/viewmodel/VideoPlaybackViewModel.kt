@@ -1523,7 +1523,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         relatedPreloadJob = null
     }
 
-    private fun publishVideoDetailInfo(info: ViewInfo, requestBvid: String, requestToken: Long) {
+    private fun publishVideoDetailInfo(info: ViewInfo, requestBvid: String, requestToken: Long, primaryLoad: Job?) {
         if (currentLoadRequestToken != requestToken) return
         logVideoLoadStage(VideoLoadStage.DETAILS_READY, requestToken)
         _detailState.update { state ->
@@ -1543,7 +1543,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             )
         )
         if (!requestBvid.startsWith("BV", ignoreCase = true) && relatedLoadJob == null) {
-            loadRelatedVideosForRequest(info.bvid, requestToken)
+            loadRelatedVideosForRequest(info.bvid, requestToken, primaryLoad)
         }
     }
     private var subjectGeneration: Long = 0L
@@ -3483,6 +3483,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             }
             Logger.w("VideoReturnTrace", "show Loading.Initial for ${playbackRequest.bvid}")
             _uiState.value = VideoPlaybackUiState.Loading.Initial
+            val primaryLoad = coroutineContext[Job]
             val videoInfoDeferred = async {
                 if (!canStartDataLoad) {
                     return@async Result.failure<ViewInfo>(IllegalStateException("Playback request is in cooldown"))
@@ -3493,12 +3494,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     requestedCid = playbackRequest.cid
                 ).also { result ->
                     result.onSuccess { info ->
-                        publishVideoDetailInfo(info, playbackRequest.bvid, requestToken)
+                        publishVideoDetailInfo(info, playbackRequest.bvid, requestToken, primaryLoad)
                     }
                 }
             }
             if (canStartDataLoad && playbackRequest.bvid.startsWith("BV", ignoreCase = true)) {
-                loadRelatedVideosForRequest(playbackRequest.bvid, requestToken)
+                loadRelatedVideosForRequest(playbackRequest.bvid, requestToken, primaryLoad)
             }
             var provisionalPlayer: ExoPlayer? = null
             var provisionalMediaItem: androidx.media3.common.MediaItem? = null
@@ -8677,14 +8678,19 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     private fun loadRelatedVideosForRequest(
         bvid: String,
-        requestToken: Long
+        requestToken: Long,
+        primaryLoad: Job? = activeLoadJob,
     ) {
         relatedLoadJob?.cancel()
         relatedLoadJob = viewModelScope.launch {
+            if (!awaitRelatedVideoRequest(primaryLoad) {
+                    currentLoadRequestToken == requestToken
+                }
+            ) return@launch
             repeat(2) { attempt ->
                 if (currentLoadRequestToken != requestToken) return@launch
-                // 列表元数据与播放并行请求，不等待首帧、缓冲或网络带宽许可。
-                // 入场期间的数据发布仍由下方门控约束；切换视频会取消本请求。
+                // 详情和取流结束后请求列表元数据，不额外等待首帧；
+                // 入场发布仍受下方门控约束，切换视频会取消等待及请求。
                 logVideoLoadStage(VideoLoadStage.RELATED_REQUEST_STARTED, requestToken)
                 val result = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
                     VideoRepository.getRelatedVideosResult(bvid)

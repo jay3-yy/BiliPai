@@ -24,11 +24,72 @@ import coil3.request.crossfadeMillis
 import com.android.purebilibili.feature.home.LocalHomeCardCoverLoadingAllowed
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
 
 class PageAwareAsyncImageTest {
     @get:Rule val composeRule = createComposeRule()
+
+    @Test
+    fun backgroundReleaseDropsImageAndPainterWithoutWaitingForRecomposition() {
+        val memory = PageImageMemory()
+        val slot = PageImageSlot(memory)
+        memory.register(slot)
+        val bitmap = solidBitmap(android.graphics.Color.RED)
+        val painter = object : androidx.compose.ui.graphics.painter.Painter(), androidx.compose.runtime.RememberObserver {
+            override val intrinsicSize = androidx.compose.ui.geometry.Size(8f, 8f)
+            override fun androidx.compose.ui.graphics.drawscope.DrawScope.onDraw() = Unit
+            override fun onRemembered() = Unit
+            override fun onForgotten() { forgotten++ }
+            override fun onAbandoned() = Unit
+            var forgotten = 0
+        }
+        val resource = slot.hold(bitmap.asImage(), painter)
+        resource.onRemembered()
+        slot.retain(resource)
+        memory.release()
+        // 同一调用栈中检查，无帧推进、无 Compose 重组。
+        assertNull(resource.image)
+        assertEquals(1, painter.forgotten)
+        assertEquals(0L, resource.size)
+        assertNull(slot.retained)
+        memory.resume()
+        // 后台前发出的旧请求即使回前台才返回，也不能重新占用旧槽位。
+        val lateResult = slot.hold(bitmap.asImage(), null)
+        assertNull(lateResult.image)
+        memory.unregister(slot)
+    }
+
+    @Test
+    fun releasedImageReloadsCurrentIdentityAndKeepsNativeCallbackImageType() {
+        val memory = PageImageMemory()
+        val image = mutableStateOf(solidBitmap(android.graphics.Color.RED))
+        val successes = AtomicInteger()
+        composeRule.setContent {
+            CompositionLocalProvider(LocalPageImageMemory provides memory) {
+                PageAwareAsyncImage(
+                    model = image.value,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp).background(Color.Gray).testTag("page-image"),
+                    onSuccess = {
+                        org.junit.Assert.assertTrue(it.result.image is coil3.BitmapImage)
+                        successes.incrementAndGet()
+                    },
+                )
+            }
+        }
+        composeRule.waitUntil(5_000) { successes.get() == 1 }
+        composeRule.runOnIdle { memory.release() }
+        composeRule.waitForIdle()
+        assertPixel(Color.Gray)
+        composeRule.runOnIdle { image.value = solidBitmap(android.graphics.Color.BLUE) }
+        composeRule.waitForIdle()
+        assertEquals(1, successes.get())
+        composeRule.runOnIdle { memory.resume() }
+        composeRule.waitUntil(5_000) { successes.get() == 2 }
+        assertPixel(Color.Blue)
+    }
 
     @Test
     fun decodedHomeBitmapSurvivesTransitionPauseWithoutRestartingRequest() {

@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material.icons.outlined.AutoAwesome
 import com.android.purebilibili.core.ui.components.AppDropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem
 import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
@@ -558,7 +557,7 @@ internal fun RelatedVideoGridRow(
                             }
                         })
                         if (video.cid > 0L && video.bvid.isNotBlank()) {
-                            AppDropdownMenuItem(text = { AppText("AI总结") }, leadingIcon = { AppIcon(Icons.Outlined.AutoAwesome, null) }, onClick = {
+                            AppDropdownMenuItem(text = { AppText("AI总结") }, leadingIcon = { com.android.purebilibili.core.ui.ClientAiSummaryIcon(Modifier.size(20.dp)) }, onClick = {
                                 menuVideo = null
                                 summaryVideo = video
                                 summaryLoading = true

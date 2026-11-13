@@ -9,12 +9,17 @@ import coil3.memory.MemoryCache
 import com.android.purebilibili.core.store.SettingsManager
 
 private val OriginalBiliImage = Extras.Key<Boolean>(default = false)
+private val BackgroundImagePreload = Extras.Key<Boolean>(default = false)
 private const val QUALITY_CACHE_EXTRA = "bilipai_image_quality_v1"
 private const val QUALITY_DISK_SUFFIX = "|bilipai-image-quality-v1:"
 
 /** 大图预览和原图保存不经过列表图片的压缩策略。 */
 internal fun ImageRequest.Builder.originalBiliImage() = apply {
     extras[OriginalBiliImage] = true
+}
+
+internal fun ImageRequest.Builder.backgroundImagePreload() = apply {
+    extras[BackgroundImagePreload] = true
 }
 
 /** 显示、预加载、取色共用同一质量及缓存身份；重复应用不会重复追加。 */
@@ -60,6 +65,10 @@ internal class BiliImageQualityInterceptor : Interceptor {
         } else {
             request.withBiliImageQuality()
         }
-        return chain.withRequest(prepared).proceed()
+        return if (prepared.extras[BackgroundImagePreload] == true) {
+            chain.withRequest(prepared).proceed()
+        } else {
+            AppImageLoadPriority.foreground { chain.withRequest(prepared).proceed() }
+        }
     }
 }

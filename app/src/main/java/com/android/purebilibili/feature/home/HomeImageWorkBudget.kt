@@ -34,17 +34,14 @@ internal fun rememberHomeCardAuxiliaryWorkAllowed(
     return workActive && !isScrolling && ready
 }
 
-/** Only already-composed neighbours may load, at most one card row on either side. */
+/** 普通封面请求仅覆盖可见范围；离屏封面由可取消的串行预加载入口处理。 */
 internal fun resolveHomeCoverLoadRange(
     firstVisibleVideoIndex: Int?,
     lastVisibleVideoIndex: Int?,
     itemCount: Int,
-    columns: Int,
-    isDataSaverActive: Boolean,
 ): IntRange? {
     val first = firstVisibleVideoIndex ?: return null
     val last = lastVisibleVideoIndex ?: return null
     if (itemCount <= 0 || first !in 0 until itemCount || last !in first until itemCount) return null
-    val ahead = if (isDataSaverActive) 0 else columns.coerceAtLeast(1)
-    return (first - ahead).coerceAtLeast(0)..(last + ahead).coerceAtMost(itemCount - 1)
+    return first..last
 }

@@ -2980,10 +2980,11 @@ internal fun FanGroupDecorationBadge(
                 )
                 AppText(
                     text = fanNumberText,
+                    fontFamily = com.android.purebilibili.core.ui.ClientDigitalIdFont,
                     style = MaterialTheme.typography.labelSmall.copy(
                         fontSize = 8.sp,
                         lineHeight = 9.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Normal
                     ),
                     color = textColor,
                     maxLines = 1

@@ -2,15 +2,8 @@ package com.android.purebilibili.core.lifecycle
 
 import android.content.ComponentCallbacks2
 
-/**
- * 切后台只是「用户离开了」，不等于「内存吃紧」。原来的 24 MiB / 8 MiB 预算会让回前台后
- * 每一张可见封面都必须重新磁盘解码、重新提取代表色，正好和底栏切页动画抢主线程。
- *
- * 现在只做温和收敛：切后台立即回到 [BACKGROUND_IMAGE_CACHE_LIGHT_MAX_BYTES]，
- * 长时间挂后台（[BACKGROUND_IMAGE_TRIM_DELAY_MS]）后回到 [BACKGROUND_IMAGE_CACHE_MAX_BYTES]。
- * 真正的激进释放留给系统的 TRIM_MEMORY_BACKGROUND 及以上档位。
- */
-internal const val BACKGROUND_IMAGE_TRIM_DELAY_MS = 45_000L
+/** 短暂切换保留热图片；持续后台在缓存进程可能冻结前释放页面像素并收紧预算。 */
+internal const val BACKGROUND_IMAGE_TRIM_DELAY_MS = 5_000L
 internal const val BACKGROUND_IMAGE_CACHE_LIGHT_MAX_BYTES = 64L * 1024 * 1024
 internal const val BACKGROUND_IMAGE_CACHE_MAX_BYTES = 32L * 1024 * 1024
 

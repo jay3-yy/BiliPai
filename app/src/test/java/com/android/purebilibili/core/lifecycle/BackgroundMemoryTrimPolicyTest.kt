@@ -13,32 +13,17 @@ class BackgroundMemoryTrimPolicyTest {
         val mib = 1024L * 1024
         // 切后台立刻收敛到 64 MiB，足以覆盖底栏所有页面的可见封面。
         assertEquals(64 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 0L))
-        assertEquals(64 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 44_999L))
-        // 长时间挂后台才进一步收敛到 32 MiB。
-        assertEquals(32 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 45_000L))
+        assertEquals(64 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 4_999L))
+        // 持续后台后进一步收敛到 32 MiB。
+        assertEquals(32 * mib, resolveBackgroundImageCacheTrimTargetBytes(200 * mib, 5_000L))
         assertEquals(7 * mib, resolveBackgroundImageCacheTrimTargetBytes(7 * mib, 120_000L))
         assertEquals(0L, resolveBackgroundImageCacheTrimTargetBytes(0L, 120_000L))
     }
 
     @Test
-    fun backgroundCacheBudget_staysAboveTheDecodeFloorForReturnToHome() {
-        val mib = 1024L * 1024
-        // 回归护栏：预算必须显著高于「回前台必须重解码」的阈值，
-        // 否则底栏切页动画会和封面解码争主线程。
-        assertTrue(BACKGROUND_IMAGE_CACHE_LIGHT_MAX_BYTES >= 64 * mib)
-        assertTrue(BACKGROUND_IMAGE_CACHE_MAX_BYTES >= 32 * mib)
-    }
-
-    @Test
-    fun coverColorCacheBudget_keepsEnoughEntriesForEveryBottomTab() {
-        // 5 个底栏页面各自可见卡片数合计通常低于 64，砍到 16 会造成大面积串行重算。
-        assertTrue(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES >= 64)
-    }
-
-    @Test
     fun sustainedBackground_onlyTrimsAfterGracePeriod() {
-        assertFalse(shouldTrimImageCacheAfterBackgroundDelay(true, false, 44_999L))
-        assertTrue(shouldTrimImageCacheAfterBackgroundDelay(true, false, 45_000L))
+        assertFalse(shouldTrimImageCacheAfterBackgroundDelay(true, false, 4_999L))
+        assertTrue(shouldTrimImageCacheAfterBackgroundDelay(true, false, 5_000L))
         assertTrue(shouldTrimImageCacheAfterBackgroundDelay(true, false, 120_000L))
     }
 

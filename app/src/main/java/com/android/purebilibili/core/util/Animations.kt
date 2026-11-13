@@ -2,14 +2,20 @@ package com.android.purebilibili.core.util
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.node.LayoutModifierNode
+import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.invalidatePlacement
+import androidx.compose.ui.platform.InspectorInfo
+import androidx.compose.ui.unit.Constraints
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.motion.resolveEntranceMotionSpec
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 data class EnterMotionPolicy(
     val staggerStepMs: Int,
@@ -61,7 +67,7 @@ fun resolveEnterMotionPolicy(
  *
  * 流畅度约定：
  * - [animationEnabled] 在 call site 已做滚动/返回/分类门控；此处不再读滚动态
- * - 使用 [Animatable] + 在 graphicsLayer 内读 value，避免 animate*AsState 的每帧重组
+ * - 节点持有 [Animatable]，仅图层读取进度，避免每项创建组合和 Effect 节点
  * - [coordinateWithSharedTransition] 为 true 时仅 alpha 淡入，不改 scale/translation
  *
  * @param index 列表项索引，用于交错延迟
@@ -78,42 +84,89 @@ fun Modifier.animateEnter(
     animationEnabled: Boolean = true,
     motionTier: MotionTier = MotionTier.Normal,
     coordinateWithSharedTransition: Boolean = false
-): Modifier = if (!animationEnabled) this else composed {
-    val motionPolicy = remember(motionTier, coordinateWithSharedTransition) {
-        resolveEnterMotionPolicy(
-            motionTier = motionTier,
-            coordinateWithSharedTransition = coordinateWithSharedTransition
-        )
-    }
-    val progress = remember(key) { Animatable(0f) }
+): Modifier = if (!animationEnabled) this else this then EnterAnimationElement(
+    index, key, initialOffsetY, resolveEnterMotionPolicy(motionTier, coordinateWithSharedTransition),
+)
 
-    LaunchedEffect(key, motionPolicy) {
-        // 挂载时若已是终态（例如配置热切换后的重组），不再倒播
-        if (progress.value >= 0.999f) return@LaunchedEffect
-        progress.snapTo(0f)
-        val delayMs = (index * motionPolicy.staggerStepMs).coerceAtMost(motionPolicy.maxStaggerMs)
-        if (delayMs > 0) delay(delayMs.toLong())
-        progress.animateTo(
-            targetValue = 1f,
-            animationSpec = spring(
-                dampingRatio = motionPolicy.dampingRatio,
-                stiffness = motionPolicy.stiffness
-            )
-        )
+private data class EnterAnimationElement(
+    val index: Int,
+    val key: Any?,
+    val initialOffsetY: Float,
+    val policy: EnterMotionPolicy,
+) : ModifierNodeElement<EnterAnimationNode>() {
+    override fun create() = EnterAnimationNode(index, key, initialOffsetY, policy)
+    override fun update(node: EnterAnimationNode) = node.update(index, key, initialOffsetY, policy)
+    override fun InspectorInfo.inspectableProperties() {
+        name = "animateEnter"
     }
+}
 
-    this.graphicsLayer {
-        val p = progress.value
-        alpha = p.coerceIn(0f, 1f)
-        val translateFactor = motionPolicy.translationFactor
-        if (translateFactor != 0f) {
-            translationY = (initialOffsetY * translateFactor) * (1f - p)
+private class EnterAnimationNode(
+    private var index: Int,
+    private var key: Any?,
+    private var initialOffsetY: Float,
+    private var policy: EnterMotionPolicy,
+) : Modifier.Node(), LayoutModifierNode {
+    private var progress = Animatable(0f)
+    private var animationJob: Job? = null
+
+    override fun onAttach() = startEntrance()
+
+    override fun onReset() {
+        // Lazy 容器复用节点时，新内容仍从自己的入场起点开始。
+        animationJob?.cancel()
+        progress = Animatable(0f)
+        if (isAttached) {
+            startEntrance()
+            invalidatePlacement()
         }
-        val startScale = motionPolicy.initialScale
-        if (startScale != 1f) {
-            val scale = startScale + (1f - startScale) * p
-            scaleX = scale
-            scaleY = scale
+    }
+
+    fun update(index: Int, key: Any?, initialOffsetY: Float, policy: EnterMotionPolicy) {
+        val identityChanged = this.key != key
+        val policyChanged = this.policy != policy
+        this.index = index
+        this.key = key
+        this.initialOffsetY = initialOffsetY
+        this.policy = policy
+        if (identityChanged) {
+            animationJob?.cancel()
+            progress = Animatable(0f)
+        }
+        if (isAttached && (identityChanged || policyChanged)) startEntrance()
+    }
+
+    private fun startEntrance() {
+        animationJob?.cancel()
+        // 已完成入场的节点切换动效档时保持可见，不倒播。
+        if (progress.value >= 0.999f) return
+        val currentProgress = progress
+        val currentPolicy = policy
+        val delayMs = (index * currentPolicy.staggerStepMs).coerceAtMost(currentPolicy.maxStaggerMs)
+        animationJob = coroutineScope.launch {
+            currentProgress.snapTo(0f)
+            if (delayMs > 0) delay(delayMs.toLong())
+            currentProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(
+                    dampingRatio = currentPolicy.dampingRatio,
+                    stiffness = currentPolicy.stiffness,
+                ),
+            )
+        }
+    }
+
+    override fun MeasureScope.measure(measurable: Measurable, constraints: Constraints): MeasureResult {
+        val placeable = measurable.measure(constraints)
+        return layout(placeable.width, placeable.height) {
+            placeable.placeWithLayer(0, 0) {
+                val p = progress.value
+                alpha = p.coerceIn(0f, 1f)
+                translationY = initialOffsetY * policy.translationFactor * (1f - p)
+                val scale = policy.initialScale + (1f - policy.initialScale) * p
+                scaleX = scale
+                scaleY = scale
+            }
         }
     }
 }

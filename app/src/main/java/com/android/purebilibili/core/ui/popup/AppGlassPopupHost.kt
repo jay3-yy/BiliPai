@@ -41,7 +41,9 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -184,7 +186,7 @@ internal class PopupMorphState {
         private set
     var seconds by mutableFloatStateOf(0f)
         private set
-    var hasSourceControl = false
+    var hasSourceControl by mutableStateOf(false)
         private set
     var elastic = PopupElasticMotion()
         private set
@@ -219,6 +221,26 @@ internal class PopupMorphState {
     var anchor by mutableStateOf(Rect.Zero)
     var card by mutableStateOf(Rect.Zero)
     var safeBounds by mutableStateOf(Rect.Zero)
+
+    private class FrameCache(
+        val session: Int,
+        val radius: Float,
+        val density: Float,
+        val result: State<AppGlassPopupFrame>,
+    )
+
+    private var frameCache: FrameCache? = null
+
+    /** 各绘制层共享当前结果；依赖仍在读取阶段观察，不从 draw 回写组合状态。 */
+    fun frame(radius: Float, density: Float): AppGlassPopupFrame {
+        val cached = frameCache
+        val current = if (cached != null && cached.session == session &&
+            cached.radius == radius && cached.density == density
+        ) cached else FrameCache(session, radius, density, derivedStateOf {
+            frameAt(seconds, radius, density)
+        }).also { frameCache = it }
+        return current.result.value
+    }
 
     fun advanceTo(elapsedSeconds: Float, expectedSession: Int = session): Boolean {
         // 等待下一帧期间可能已经关闭或反向；旧时钟不得推进新动画。
@@ -541,7 +563,7 @@ internal class AppGlassChoicePopupController(
         if (active != null) {
             val sameSource = request.sourceLayer != null && request.sourceLayer === active.sourceLayer
             request.carriedPress?.cancel()
-            if (sameSource && menuOwner == null && !morph.opening && pendingSelection == null) {
+            if (sameSource && menuOwner == null && !morph.opening && pendingSelection == null && this.onSelect != null) {
                 this.onSelect = onSelect
                 resumeOpen()
             }
@@ -721,13 +743,13 @@ internal class AppGlassChoicePopupController(
         morph.closeWithParent(frame, previous)
     }
 
-    /** 设置变更等待回收结束；触摸与语义点击共用单次分发入口。 */
+    /** 选项立即生效；关闭中的弹层继续使用当前请求展示，不重复提交选择。 */
     fun select(value: Any?) {
         if (!morph.opening) return
         val callback = onSelect
         onSelect = null
-        pendingSelection = { callback?.invoke(value) }
         requestDismiss()
+        callback?.invoke(value)
     }
 
     fun finish(expectedSession: Int = morph.session): (() -> Unit)? {
@@ -957,8 +979,6 @@ private fun AppGlassChoicePopupPlacement(
         layout(boundsWidth, boundsHeight) { placeable.place(position.x, position.y) }
     }
 }
-
-internal fun PopupMorphState.frame(radius: Float, density: Float): AppGlassPopupFrame = frameAt(seconds, radius, density)
 
 private fun PopupMorphState.frameAt(time: Float, radius: Float, density: Float): AppGlassPopupFrame {
     val start = openStartFrame?.takeUnless { it.rect.isEmpty }

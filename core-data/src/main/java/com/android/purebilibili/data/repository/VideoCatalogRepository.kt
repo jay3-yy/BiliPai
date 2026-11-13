@@ -31,6 +31,12 @@ object VideoCatalogRepository {
         canCache = { it.isSuccess }
     )
 
+    // 只合并正在进行的期数查询；完成后不缓存，下拉刷新仍能获取最新期数。
+    private val weeklyPeriodRequests = OnDemandRequestCache<Unit, Result<List<PopularSeriesPeriod>>>(
+        maxEntries = 1,
+        maxAgeMs = 0L,
+    )
+
     /** 分区 latest 接口出现空数据或错误时，允许用排行榜兜底的一级分区集合。 */
     private val UGC_MAIN_REGION_TIDS = setOf(
         1, 3, 4, 5, 36, 119, 129, 155, 160, 181, 188, 202, 211, 217, 223, 234
@@ -135,19 +141,14 @@ object VideoCatalogRepository {
         }
     }
 
-    suspend fun getWeeklyPeriods(): Result<List<PopularSeriesPeriod>> = withContext(Dispatchers.IO) {
-        try {
+    suspend fun getWeeklyPeriods(): Result<List<PopularSeriesPeriod>> = weeklyPeriodRequests.getOrLoad(Unit) {
+        dataRequest {
             val response = api.getWeeklySeriesList()
             if (response.code != 0) {
-                Result.failure(Exception(response.message.ifBlank { "每周必看期数加载失败(${response.code})" }))
-            } else {
-                Result.success(response.data?.list.orEmpty().filter { it.number > 0 }
-                    .distinctBy { it.number }.sortedByDescending { it.number })
+                throw ContentRequestException(response.code, response.message.ifBlank { "每周必看期数加载失败" })
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
+            response.data?.list.orEmpty().filter { it.number > 0 }
+                .distinctBy { it.number }.sortedByDescending { it.number }
         }
     }
 
@@ -171,13 +172,7 @@ object VideoCatalogRepository {
         try {
             BuvidManager.ensureBuvid3()
             val targetNumber = number ?: run {
-                val listResp = api.getWeeklySeriesList()
-                if (listResp.code != 0) {
-                    return@withContext Result.failure(Exception(listResp.message.ifBlank { "每周必看列表加载失败(${listResp.code})" }))
-                }
-                val latest = listResp.data?.list
-                    ?.map { it.number }
-                    ?.maxOrNull()
+                val latest = getWeeklyPeriods().getOrThrow().maxOfOrNull { it.number }
                 latest ?: 1
             }
             val resp = api.getWeeklySeriesVideos(number = targetNumber)

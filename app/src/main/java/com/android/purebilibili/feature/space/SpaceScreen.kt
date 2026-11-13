@@ -6211,7 +6211,8 @@ private fun SpaceHeaderTitleBadge(
             if (title.subTitle.isNotBlank()) {
                 AppText(
                     text = title.subTitle,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    fontFamily = com.android.purebilibili.core.ui.ClientDigitalIdFont,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal),
                     color = subTitleColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

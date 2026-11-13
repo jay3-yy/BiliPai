@@ -75,6 +75,21 @@ class HomeCardClickHandoffUiTest {
     }
 
     @Test
+    fun nonHomeGridClickPreparesBothLayersBeforeNavigation() {
+        showCard(homeSource = false)
+        rule.runOnIdle { assertNull(CardPositionManager.lastClickedNativeCardLayer) }
+        rule.onNodeWithTag("home_video_cover").performClick()
+        rule.waitUntil { clicks == 1 }
+    }
+
+    @Test
+    fun nonHomeStoryClickPreparesBothLayersBeforeNavigation() {
+        showCard(story = true, homeSource = false)
+        rule.onNodeWithTag("home_story_video_card").performClick()
+        rule.waitUntil { clicks == 1 }
+    }
+
+    @Test
     fun storyAccessibilityClickWaitsForBothSourceLayersAndKeepsCid() {
         showCard(story = true, sharedHomeVisibility = true)
         rule.onNodeWithTag("home_story_video_card").performClick()
@@ -157,6 +172,7 @@ class HomeCardClickHandoffUiTest {
         sharedEnabled: Boolean = true,
         longPressEnabled: Boolean = false,
         sharedHomeVisibility: Boolean = false,
+        homeSource: Boolean = true,
         scrolling: MutableState<Boolean> = mutableStateOf(false),
         imageLoadingAllowed: Boolean? = null,
         expectSourceLayers: Boolean = transitionEnabled && sharedEnabled,
@@ -165,7 +181,7 @@ class HomeCardClickHandoffUiTest {
             MaterialTheme {
                 val visibility = remember { VideoCardVisibilityState() }
                 CompositionLocalProvider(
-                    LocalHomeScrollTickProvider provides { 0 },
+                    LocalHomeScrollTickProvider provides if (homeSource) ({ 0 }) else null,
                     LocalHomeCardScrolling provides scrolling,
                     LocalHomeCardAuxiliaryWorkAllowed provides false,
                     LocalHomeCardVisibility provides if (sharedHomeVisibility) visibility else null,

@@ -1,6 +1,8 @@
 // 文件路径: feature/dynamic/components/DynamicSidebar.kt
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.core.util.backgroundImagePreload
+
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -272,7 +274,13 @@ fun DynamicSidebar(
                 }
             },
         ) { url ->
-            imageLoader.execute(buildDynamicUserAvatarRequest(context, url, avatarDecodeSizePx))
+            com.android.purebilibili.core.util.AppImageLoadPriority.prefetch {
+                imageLoader.execute(
+                    buildDynamicUserAvatarRequest(context, url, avatarDecodeSizePx).newBuilder()
+                        .backgroundImagePreload()
+                        .build(),
+                )
+            }
         }
     }
 

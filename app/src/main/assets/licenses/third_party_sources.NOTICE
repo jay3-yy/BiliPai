@@ -305,3 +305,16 @@ lib/pages/common/publish/common_publish_page.dart.
 PiliPlus contributors; GPL-3.0. BiliPai uses its existing Compose input,
 account, theme and danmaku send components. Distributed under GPLv3.
 License copy: artwork/third-party/piliplus/LICENSE in the source distribution.
+
+Client visual asset alignment with the local PiliPlus source (GPL-3.0),
+revision d635f20e22becbc6587c05c7a03671a4a9a3db9f:
+assets/images/ai.png, trending_banner.png, topic-header-bg.png,
+assets/fonts/digital_id_num.ttf and custom_icon.ttf are included unchanged as
+bili_ai_summary.png, bili_trending_banner.png, bili_topic_header.png,
+bili_digital_id.ttf and bili_client_icons.ttf. The newer icon font is independent
+of piliplus_custom_icons.ttf and uses lib/common/widgets/custom_icon.dart mappings.
+Danmaku pointer bubble and dynamic decoration number behavior reference
+lib/plugin/pl_player/view/widgets.dart, lib/pages/dynamics/widgets/author_panel.dart
+and lib/models/dynamics/result.dart.
+Source: https://github.com/bggRGjQaUbCoE/PiliPlus
+License copy: artwork/third-party/piliplus/LICENSE. Distributed under GPLv3.

@@ -7,11 +7,10 @@ import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -41,10 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -147,75 +143,12 @@ fun SearchTrendingScreen(
 
 @Composable
 private fun SearchTrendingHero() {
-    val heroPrimary = AppContentColors.accent()
-    val heroPrimaryContainer = MaterialTheme.colorScheme.primaryContainer
-    val heroTertiary = MaterialTheme.colorScheme.tertiary
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(240.dp)
-            .background(
-                brush = Brush.linearGradient(
-                    colors = listOf(
-                        heroPrimary,
-                        heroPrimaryContainer,
-                        heroTertiary,
-                    )
-                )
-            )
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            drawCircle(
-                color = Color.White.copy(alpha = 0.10f),
-                radius = size.minDimension * 0.33f,
-                center = Offset(x = size.width * 0.18f, y = size.height * 0.46f)
-            )
-            drawCircle(
-                color = heroTertiary.copy(alpha = 0.25f),
-                radius = size.minDimension * 0.20f,
-                center = Offset(x = size.width * 0.88f, y = size.height * 0.82f)
-            )
-            drawCircle(
-                color = Color.White.copy(alpha = 0.12f),
-                radius = size.minDimension * 0.12f,
-                center = Offset(x = size.width * 0.21f, y = size.height * 0.48f),
-                style = Stroke(width = 36f)
-            )
-            repeat(3) { index ->
-                drawArc(
-                    color = Color.White.copy(alpha = 0.10f - index * 0.02f),
-                    startAngle = 210f,
-                    sweepAngle = 150f,
-                    useCenter = false,
-                    topLeft = Offset(x = size.width * 0.36f, y = size.height * (0.04f + index * 0.08f)),
-                    size = androidx.compose.ui.geometry.Size(
-                        width = size.width * 0.72f,
-                        height = size.height * 0.52f
-                    ),
-                    style = Stroke(width = 3f)
-                )
-            }
-        }
-        AppIcon(
-            imageVector = Icons.Rounded.Search,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.18f),
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 28.dp)
-                .size(164.dp)
-        )
-        AppText(
-            text = "bilibili 热搜",
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 24.dp),
-            color = Color.White,
-            style = MaterialTheme.typography.displayMedium.copy(
-                fontWeight = FontWeight.Black
-            )
-        )
-    }
+    coil3.compose.AsyncImage(
+        model = com.android.purebilibili.R.drawable.bili_trending_banner,
+        contentDescription = "bilibili 热搜",
+        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+        modifier = Modifier.fillMaxWidth().aspectRatio(1125f / 528f),
+    )
 }
 
 @Composable

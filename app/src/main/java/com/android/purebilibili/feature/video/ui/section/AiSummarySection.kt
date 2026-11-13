@@ -101,12 +101,7 @@ fun AiSummaryCard(
                 LeadingIconBadge(
                     containerColor = AppContentColors.accent().copy(alpha = 0.12f),
                 ) {
-                    AppIcon(
-                        imageVector = Icons.Filled.AutoAwesome,
-                        contentDescription = null,
-                        tint = AppContentColors.accent(),
-                        modifier = Modifier.size(18.dp),
-                    )
+                    com.android.purebilibili.core.ui.ClientAiSummaryIcon(Modifier.size(18.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     AppText(
@@ -181,11 +176,7 @@ fun AiSummaryCard(
                         onClick = onCreateNoteDraftClick,
                         modifier = Modifier.align(Alignment.End),
                     ) {
-                        AppIcon(
-                            imageVector = Icons.Filled.AutoAwesome,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
+                        com.android.purebilibili.core.ui.ClientAiSummaryIcon(Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         AppText("生成笔记草稿")
                     }
@@ -216,12 +207,7 @@ private fun MiuixAiSummaryHeader(
         role = Role.Button,
         startAction = {
             LeadingIconBadge(containerColor = AppSurfaceTokens.primary().copy(alpha = 0.12f)) {
-                AppIcon(
-                    imageVector = Icons.Filled.AutoAwesome,
-                    contentDescription = null,
-                    tint = AppSurfaceTokens.primary(),
-                    modifier = Modifier.size(18.dp)
-                )
+                com.android.purebilibili.core.ui.ClientAiSummaryIcon(Modifier.size(18.dp))
             }
         },
         endActions = {

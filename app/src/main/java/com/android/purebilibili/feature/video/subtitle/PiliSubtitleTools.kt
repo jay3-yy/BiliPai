@@ -72,6 +72,13 @@ fun rememberPiliSubtitleTools(
     val currentIdentity by rememberUpdatedState(identity)
     val currentNativeCallbacks by rememberUpdatedState(nativeCallbacks)
     val session = remember(identity) { PiliSubtitleSessions.get(bvid, cid) }
+    val sessionInUse = acquisitionActive && com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current
+    DisposableEffect(session, sessionInUse) {
+        if (sessionInUse) session.retainDownloadedCues()
+        onDispose {
+            if (sessionInUse) PiliSubtitleSessions.releaseAfterUiHandoff(session)
+        }
+    }
     val storedAppearance by remember(context) { SubtitleToolsStore.appearance(context) }
         .collectAsStateWithLifecycle(initialValue = PlayerSubtitleAppearance())
     val positionLocked by remember(context) { SettingsManager.getSubtitlePositionLocked(context) }
@@ -92,12 +99,20 @@ fun rememberPiliSubtitleTools(
         ).getOrThrow()
     }
     val visualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    LaunchedEffect(identity, acquireNativeSubtitles, nativeTracks, nativeTracksKnown, acquisitionActive, visualWorkActive) {
-        if (!acquireNativeSubtitles || !acquisitionActive || !visualWorkActive ||
-            session.acquiredInitialized || bvid.isBlank() || cid <= 0L
+    LaunchedEffect(identity, acquireNativeSubtitles, nativeTracks, nativeTracksKnown, sessionInUse, visualWorkActive) {
+        if (!acquireNativeSubtitles || !sessionInUse || !visualWorkActive ||
+            bvid.isBlank() || cid <= 0L
         ) return@LaunchedEffect
+        val cueGeneration = session.downloadedCueGeneration
         val initializationSelectionSerial = nativeSelectionSerial
         try {
+            if (session.acquiredInitialized) {
+                val loaded = session.missingSelectedNativeTracks().associate { it.trackKey to loadNativeCues(it) }
+                if (subtitleDocumentResultBelongsTo(identity, currentIdentity)) {
+                    session.mergeAcquiredCues(loaded, cueGeneration)
+                }
+                return@LaunchedEffect
+            }
             val tracks = if (nativeTracksKnown || nativeTracks.isNotEmpty()) nativeTracks else withContext(Dispatchers.IO) {
                 mapPlayerInfoSubtitleTracks(SubtitleContentRepository.playerInfo(bvid, cid).getOrThrow().subtitle?.subtitles.orEmpty())
             }
@@ -109,7 +124,7 @@ fun rememberPiliSubtitleTools(
             val loaded = listOfNotNull(primary, secondary).associate { it.trackKey to loadNativeCues(it) }
             val preference = SettingsManager.getSubtitleAutoPreference(context).first()
             if (!subtitleDocumentResultBelongsTo(identity, currentIdentity)) return@LaunchedEffect
-            session.acquiredCues = session.acquiredCues + loaded
+            if (!session.mergeAcquiredCues(loaded, cueGeneration)) return@LaunchedEffect
             if (initializationSelectionSerial == nativeSelectionSerial) {
                 session.acquiredSecondaryTrackKey = secondary?.trackKey
                 session.acquiredDisplayMode = resolveSubtitleDisplayModeByAutoPreference(
@@ -221,16 +236,17 @@ fun rememberPiliSubtitleTools(
                 currentNativeCallbacks.onEnabledChange(false)
             } else if (managedNative && session.acquiredTracks.any { it.trackKey == key }) {
                 val track = session.acquiredTracks.first { it.trackKey == key }
+                val cueGeneration = session.downloadedCueGeneration
                 scope.launch {
                     try {
                         val cues = loadNativeCues(track)
                         if (identity == currentIdentity && selection == nativeSelectionSerial) {
+                            if (!session.mergeAcquiredCues(mapOf(key to cues), cueGeneration)) return@launch
                             if (session.acquiredSecondaryTrackKey == key) {
                                 session.acquiredSecondaryTrackKey = session.selectedTrackKey?.takeIf { previous ->
                                     session.acquiredTracks.any { it.trackKey == previous } && previous != key
                                 }
                             }
-                            session.acquiredCues = session.acquiredCues + (key to cues)
                             session.selectedTrackKey = key
                             session.externalEnabled = true
                             session.acquiredDisplayMode = SubtitleDisplayMode.PRIMARY_ONLY

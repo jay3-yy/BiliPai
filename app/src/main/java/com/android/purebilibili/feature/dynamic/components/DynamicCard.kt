@@ -606,26 +606,17 @@ fun DynamicCardV2(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AppText(
-                            authorTimeText,
+                            text = authorTimeText + author.pub_action.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty(),
                             fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            color = AppContentColors.secondaryText().copy(0.6f)
+                            color = AppContentColors.secondaryText().copy(0.6f),
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
                         )
-                        if (author.pub_action.isNotBlank()) {
-                            AppText(
-                                " · ${author.pub_action}",
-                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                                color = AppContentColors.secondaryText().copy(0.6f)
-                            )
-                        }
-                        // 粉丝装扮牌（作者行时间旁的小徽章）
-                        author.decorate?.card_url?.takeIf { it.isNotBlank() }?.let { badgeUrl ->
-                            PageAwareAsyncImage(
-                                model = badgeUrl,
-                                contentDescription = author.decorate?.name,
-                                modifier = Modifier
-                                    .padding(start = AppSpacingTokens.ExtraSmall)
-                                    .height(14.dp),
-                                contentScale = ContentScale.FillHeight
+                        author.decorate?.let { decorate ->
+                            DynamicAuthorDecoration(
+                                decorate = decorate,
+                                modifier = Modifier.padding(start = AppSpacingTokens.ExtraSmall),
                             )
                         }
                     }

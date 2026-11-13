@@ -73,7 +73,6 @@ class DampedDragAnimation(
     private val valueAnimation =
         Animatable(initialValue, visibilityThreshold)
     private val velocityAnimation = LiquidIndicatorVelocity(animationScope)
-    private val miuixVelocityAnimation = Animatable(0f, 5f)
     private val pressProgressAnimation =
         Animatable(0f, 0.001f)
     private val scaleXAnimation =
@@ -97,7 +96,7 @@ class DampedDragAnimation(
     val pressProgress: Float get() = pressProgressAnimation.value
     val scaleX: Float get() = scaleXAnimation.value
     val scaleY: Float get() = scaleYAnimation.value
-    val velocity: Float get() = if (useMiuixIndicatorMotion) miuixVelocityAnimation.value else velocityAnimation.value
+    val velocity: Float get() = velocityAnimation.value
 
     /** Glass-only landing feedback overlaps shrink instead of waiting for all springs to stop. */
     val isReadyForRecoil: Boolean get() =
@@ -264,21 +263,20 @@ class DampedDragAnimation(
         }
     }
 
-    /** Follow the pager's position and bloom on the same timeline, without a second spring. */
-    fun followPagerPosition(value: Float) {
+    /** Pager 跟随由调用方协程直接同步，不为每次采样创建位置任务。 */
+    suspend fun followPagerPosition(value: Float) {
         val next = value.coerceIn(valueRange)
         requestedValue = next
         pressJob?.cancel()
         releaseJob?.cancel()
         val progress = LiquidIndicatorMotion.pagerPressProgress(next)
         val scale = initialScale + (pressedScale - initialScale) * progress
-        launchValueTracking {
-            valueAnimation.snapTo(next)
-            updateVelocity()
-            pressProgressAnimation.snapTo(progress)
-            scaleXAnimation.snapTo(scale)
-            scaleYAnimation.snapTo(scale)
-        }
+        valueTrackingJob?.cancel()
+        valueAnimation.snapTo(next)
+        updateVelocity()
+        pressProgressAnimation.snapTo(progress)
+        scaleXAnimation.snapTo(scale)
+        scaleYAnimation.snapTo(scale)
     }
 
     fun updateValue(value: Float) {
@@ -330,11 +328,7 @@ class DampedDragAnimation(
                     }
                 }
                 if (velocity != 0f) {
-                    if (useMiuixIndicatorMotion) {
-                        launch { miuixVelocityAnimation.animateTo(0f, LiquidIndicatorMotion.velocitySpec()) }
-                    } else {
-                        velocityAnimation.updateTarget(0f)
-                    }
+                    velocityAnimation.updateTarget(0f)
                 }
                 if (animatePress) release()
             }
@@ -361,9 +355,7 @@ class DampedDragAnimation(
             // its positions again with millisecond pointer timestamps adds start/stop
             // spikes, especially when several retargets arrive within one frame.
             val normalized = normalizeFloatingDockDragVelocity(springVelocity, valueRange)
-            animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                miuixVelocityAnimation.snapTo(normalized)
-            }
+            velocityAnimation.snapTo(normalized)
             return
         }
         velocityTracker.addPosition(
@@ -375,10 +367,8 @@ class DampedDragAnimation(
             valueRange = valueRange,
         )
         if (useMiuixIndicatorMotion) {
-            // Upstream snaps the measured, range-normalized velocity without smoothing.
-            animationScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                miuixVelocityAnimation.snapTo(targetVelocity)
-            }
+            // 玻璃跟手直接发布采样速度；原生路径保留平滑弹簧。
+            velocityAnimation.snapTo(targetVelocity)
         } else {
             velocityAnimation.updateTarget(targetVelocity)
         }

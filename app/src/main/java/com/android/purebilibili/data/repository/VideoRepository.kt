@@ -38,13 +38,8 @@ import kotlinx.coroutines.flow.first
 import okhttp3.CacheControl
 import okhttp3.Request
 import java.io.InputStream
-import java.security.MessageDigest
 import java.util.TreeMap
 import java.util.concurrent.ConcurrentHashMap
-
-private const val SUBTITLE_CUE_CACHE_MAX_ENTRIES = 512
-private const val SUBTITLE_CUE_CACHE_ENTRY_OVERHEAD_BYTES = 512L
-private const val SUBTITLE_CUE_ESTIMATED_BYTES_PER_CUE = 160L
 
 internal fun shouldStartHomePreload(
     hasPreloadedData: Boolean,
@@ -229,33 +224,6 @@ internal fun resolveHomeFeedWbiKeys(
     return if (imgKey.isNotEmpty() && subKey.isNotEmpty()) imgKey to subKey else null
 }
 
-internal fun buildSubtitleCueCacheKey(
-    bvid: String,
-    cid: Long,
-    subtitleId: Long,
-    subtitleIdStr: String,
-    subtitleLan: String,
-    normalizedSubtitleUrl: String
-): String {
-    val urlHash = MessageDigest.getInstance("SHA-1")
-        .digest(normalizedSubtitleUrl.toByteArray(Charsets.UTF_8))
-        .joinToString(separator = "") { "%02x".format(it) }
-    val idPart = subtitleIdStr.takeIf { it.isNotBlank() }
-        ?: subtitleId.takeIf { it > 0L }?.toString()
-        ?: "no-id"
-    return "${bvid.ifBlank { "unknown" }}:${cid.coerceAtLeast(0L)}:${idPart}:${subtitleLan.ifBlank { "unknown" }}:$urlHash"
-}
-
-internal fun estimateSubtitleCueCacheBytes(
-    entryCount: Int,
-    totalCueCount: Int
-): Long {
-    val normalizedEntryCount = entryCount.coerceAtLeast(0)
-    val normalizedCueCount = totalCueCount.coerceAtLeast(0)
-    return normalizedEntryCount * SUBTITLE_CUE_CACHE_ENTRY_OVERHEAD_BYTES +
-        normalizedCueCount * SUBTITLE_CUE_ESTIMATED_BYTES_PER_CUE
-}
-
 data class SubtitleCueCacheStats(
     val entryCount: Int,
     val totalCueCount: Int,
@@ -342,16 +310,11 @@ object VideoRepository {
         )
 
     fun getSubtitleCueCacheStats(): SubtitleCueCacheStats {
-        val snapshot = SubtitleContentRepository.cachedCues()
-        val entryCount = snapshot.size
-        val totalCueCount = snapshot.sumOf { it.size }
+        val stats = SubtitleContentRepository.cacheStats()
         return SubtitleCueCacheStats(
-            entryCount = entryCount,
-            totalCueCount = totalCueCount,
-            estimatedBytes = estimateSubtitleCueCacheBytes(
-                entryCount = entryCount,
-                totalCueCount = totalCueCount
-            )
+            entryCount = stats.entryCount,
+            totalCueCount = stats.totalCueCount,
+            estimatedBytes = stats.estimatedBytes,
         )
     }
 
