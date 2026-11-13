@@ -12,6 +12,32 @@ class ViewPointSegmentBarPolicyTest {
         ViewPoint(from = from, to = to, content = content)
 
     @Test
+    fun fill_tracksProgressBoundariesAndBackwardSeek() {
+        val segment = NormalizedViewPointSegment(10_000, 30_000, "当前章节")
+        for ((position, expected) in listOf(
+            0L to 0f,
+            10_000L to 0f,
+            15_000L to 0.25f,
+            20_000L to 0.5f,
+            30_000L to 1f,
+            40_000L to 1f,
+            15_000L to 0.25f,
+        )) {
+            assertEquals(expected, viewPointSegmentFillFraction(segment, position))
+        }
+    }
+
+    @Test
+    fun fill_keepsCompletedAndFutureChaptersDistinctAcrossGap() {
+        val first = NormalizedViewPointSegment(0, 10_000, "第一章")
+        val second = NormalizedViewPointSegment(20_000, 40_000, "第二章")
+        assertEquals(1f, viewPointSegmentFillFraction(first, 15_000))
+        assertEquals(0f, viewPointSegmentFillFraction(second, 15_000))
+        assertEquals(1f, viewPointSegmentFillFraction(first, 30_000))
+        assertEquals(0.5f, viewPointSegmentFillFraction(second, 30_000))
+    }
+
+    @Test
     fun normalize_sorts_clampsAndDropsInvalidSegments() {
         val segments = normalizeViewPointSegments(
             viewPoints = listOf(

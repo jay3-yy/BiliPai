@@ -74,6 +74,7 @@ internal fun PlayerControlViewPointSegments(
     onSeek: (Long) -> Unit,
     spacing: Dp,
     modifier: Modifier = Modifier,
+    positionProvider: (() -> Long)? = null,
 ) {
     if (viewPoints.isEmpty()) return
     val progress = progressProvider()
@@ -82,6 +83,7 @@ internal fun PlayerControlViewPointSegments(
         viewPoints = viewPoints,
         durationMs = progress.duration,
         currentPositionMs = progress.current,
+        positionProvider = positionProvider,
         onSeek = onSeek,
         modifier = modifier,
     )

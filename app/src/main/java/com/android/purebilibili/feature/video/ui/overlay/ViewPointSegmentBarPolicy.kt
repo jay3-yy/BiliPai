@@ -71,3 +71,13 @@ internal fun shouldFloorShortViewPointChips(
     }
     return flooredTotal <= barWidthPx * flooredShareLimit
 }
+
+/** 已过章节填满，当前章节按播放位置填充；回拖时直接按新位置重算。 */
+internal fun viewPointSegmentFillFraction(
+    segment: NormalizedViewPointSegment,
+    positionMs: Long,
+): Float = when {
+    positionMs <= segment.fromMs -> 0f
+    positionMs >= segment.toMs -> 1f
+    else -> (positionMs - segment.fromMs).toFloat() / (segment.toMs - segment.fromMs)
+}

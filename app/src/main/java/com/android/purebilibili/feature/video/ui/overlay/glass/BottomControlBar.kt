@@ -857,6 +857,7 @@ fun BottomControlBar(
             progressBarContent()
             PlayerControlViewPointSegments(
                 progressProvider = progressProvider,
+                    positionProvider = displayedPositionProvider,
                 viewPoints = visibleViewPoints,
                 onSeek = onSeek,
                 spacing = layoutPolicy.progressSpacingDp.dp,

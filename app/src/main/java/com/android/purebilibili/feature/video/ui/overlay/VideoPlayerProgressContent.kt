@@ -95,6 +95,7 @@ internal fun PlayerControlViewPointSegments(
     onSeek: (Long) -> Unit,
     spacing: Dp,
     modifier: Modifier = Modifier,
+    positionProvider: (() -> Long)? = null,
     interactive: Boolean = true,
 ) {
     if (viewPoints.isEmpty()) return
@@ -104,6 +105,7 @@ internal fun PlayerControlViewPointSegments(
         viewPoints = viewPoints,
         durationMs = progress.duration,
         currentPositionMs = progress.current,
+        positionProvider = positionProvider,
         onSeek = onSeek,
         modifier = modifier,
         interactive = interactive,

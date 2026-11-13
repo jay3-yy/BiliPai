@@ -309,6 +309,7 @@ fun BottomControlBar(
                 )
                 PlayerControlViewPointSegments(
                     progressProvider = progressProvider,
+                    positionProvider = displayPosition,
                     viewPoints = if (showViewPoints) viewPoints else emptyList(),
                     onSeek = onSeek,
                     spacing = 0.dp,
