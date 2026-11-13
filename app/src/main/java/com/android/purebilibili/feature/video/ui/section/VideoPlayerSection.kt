@@ -4477,9 +4477,7 @@ private fun VideoPlayerSectionContent(
                     )
                 }
 
-                if (entryPresentationSpec.showManualStartPlayButton &&
-                    !com.android.purebilibili.feature.video.ui.overlay.rememberHideCenterPlayback()
-                ) {
+                if (entryPresentationSpec.showManualStartPlayButton) {
                     if (manualStartPlayButtonLayoutSpec.showCoverScrim) {
                         Box(
                             modifier = Modifier
@@ -5682,14 +5680,25 @@ private fun VideoPlayerSectionContent(
                         alpha = transitionChromeAlphaProvider()
                     }
             ) {
+                val pageChromeBackdrop = playerPageBackdrop.backdrop.takeIf {
+                    capturePlayerPage && playerPageBackdrop.video.isReady &&
+                        playerViewRef?.videoSurfaceView is TextureView
+                }
+                // 大屏竖屏舞台 dock 经此出口消费播放页 backdrop；无出口的页面（手机、
+                // 全屏、直播间）跳过写入。dock 显隐跟随控制条显隐请求：采样窗口在
+                // 控制条淡出期间保持开启，dock 整个退场都能采到活体 backdrop，
+                // 不会落进录制停止后的黑帧。
+                LocalStagePageBackdropOutlet.current?.also { stageOutlet ->
+                    androidx.compose.runtime.SideEffect {
+                        stageOutlet.backdrop = pageChromeBackdrop
+                        stageOutlet.visible = pageGlassRequested && !suppressTransientOverlaysForTransition
+                    }
+                }
                 CompositionLocalProvider(
                     LocalPlayerPanelViewport provides panelViewport.takeIf { panelAvoidanceEnabled },
                     com.android.purebilibili.feature.video.ui.overlay.LocalPlayerLevelGestureActive provides shouldShowLevelIndicator,
                     com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop provides
-                        playerPageBackdrop.backdrop.takeIf {
-                            capturePlayerPage && playerPageBackdrop.video.isReady &&
-                                playerViewRef?.videoSurfaceView is TextureView
-                        },
+                        pageChromeBackdrop,
                 ) {
                     renderVideoPlayerOverlay()
                 }

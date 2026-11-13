@@ -972,7 +972,7 @@ private fun AppGlassChoicePopupPlacement(
             margin = margin,
             overlap = margins.anchorOverlapPx,
             placement = placement,
-            verticalMargin = if (height > boundsHeight * 0.65f) {
+            verticalMargin = if (!useAvailableHeight && height > boundsHeight * 0.65f) {
                 maxOf(margin, (boundsHeight * 0.10f).toInt())
             } else margin,
         )

@@ -10,7 +10,7 @@ import kotlinx.coroutines.delay
 import com.android.purebilibili.core.store.SettingsManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
-import top.yukonga.miuix.kmp.nav.core.LocalNavTransitionScope
+import com.android.purebilibili.core.ui.LocalVideoDetailNavigationTransitionScope
 
 internal val LocalAmbientPresentation = staticCompositionLocalOf<AmbientPresentation?> { null }
 internal val LocalAmbientController = staticCompositionLocalOf<AmbientFrameController?> { null }
@@ -38,7 +38,11 @@ internal fun BindPlayerAmbient(
     val controller = LocalAmbientController.current ?: return
     val settings by SettingsManager.getVideoAmbientSettings(context).collectAsStateWithLifecycle(AmbientSettings())
     val environment = rememberAmbientEnvironment(settings.enabled || statusBar)
-    val navTransition = LocalNavTransitionScope.current
+    // 分栏和独立播放器不属于 NavDisplay entry；此时由页面可见性控制采集。
+    val navTransition = LocalVideoDetailNavigationTransitionScope.current
+    val navigationSettled = {
+        navTransition == null || (!navTransition.isRunning && kotlin.math.abs(navTransition.relativeDepth) <= 0.001f)
+    }
     var refresh by remember(player) { mutableIntStateOf(0) }
     var playing by remember(player) { mutableStateOf(player.isPlaying) }
     var seekSettlesAt by remember(player) { mutableLongStateOf(0L) }
@@ -103,8 +107,7 @@ internal fun BindPlayerAmbient(
         onDispose { if (observer?.isAlive == true) observer.removeOnPreDrawListener(listener) }
     }
     val recoveryReady = rememberUpdatedState {
-        visualActive && foreground && !excluded && !transitioning && !navTransition.isRunning &&
-            kotlin.math.abs(navTransition.relativeDepth) <= 0.001f
+        visualActive && foreground && !excluded && !transitioning && navigationSettled()
     }
     LaunchedEffect(player) {
         snapshotFlow { recoveryReady.value() }.collect { ready ->
@@ -121,7 +124,7 @@ internal fun BindPlayerAmbient(
         seekReady = true
     }
     val latestPolicy = rememberUpdatedState {
-        val moving = transitioning || navTransition.isRunning || kotlin.math.abs(navTransition.relativeDepth) > 0.001f
+        val moving = transitioning || !navigationSettled()
         AmbientRunPolicy(active && !moving && seekReady, glowAllowed, playing && motionAllowed,
             settings.powerSaving || environment.saving, refresh, diagnosticLogging)
     }
@@ -130,7 +133,7 @@ internal fun BindPlayerAmbient(
         presentation.claimBinding(bindingOwner)
         presentation.layoutEnabled = glowAllowed && !excluded
         presentation.visible = glowAllowed && active
-        presentation.visibilityGate = { !transitioning && !navTransition.isRunning && kotlin.math.abs(navTransition.relativeDepth) <= 0.001f }
+        presentation.visibilityGate = { !transitioning && navigationSettled() }
         presentation.videoBoundsInWindow = {
             surface?.takeIf { it.isAttachedToWindow && it.width > 0 && it.height > 0 }?.let {
                 it.getLocationInWindow(surfaceLocation)

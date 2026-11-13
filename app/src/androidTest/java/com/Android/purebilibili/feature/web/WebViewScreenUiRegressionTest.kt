@@ -19,8 +19,16 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.android.purebilibili.feature.web.WebViewScreen
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AdaptiveScaffoldHazeHandle
+import com.android.purebilibili.core.ui.AppThemeConfig
+import com.android.purebilibili.core.ui.LocalAdaptiveScaffoldHazeFactory
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import dev.chrisbanes.haze.HazeState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,6 +37,48 @@ import org.junit.runner.RunWith
 class WebViewScreenUiRegressionTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun webContentNeverEntersTopBarBlurCaptureAcrossStylesAndGlassModes() {
+        val style = mutableStateOf(AppUiStyle.MATERIAL3)
+        val glass = mutableStateOf(false)
+        val handle = AdaptiveScaffoldHazeHandle(HazeState(), mutableStateOf(true))
+        var captureRequests = 0
+        lateinit var rootView: View
+        composeRule.setContent {
+            val view = LocalView.current
+            SideEffect { rootView = view.rootView }
+            CompositionLocalProvider(
+                LocalAppUiStyle provides style.value,
+                LocalAppThemeConfig provides AppThemeConfig(
+                    headerBlurEnabled = true,
+                    liquidGlassEnabled = glass.value,
+                ),
+                LocalAdaptiveScaffoldHazeFactory provides {
+                    captureRequests++
+                    handle
+                },
+            ) {
+                MaterialTheme {
+                    // Exercise a real system WebView without depending on a remote page.
+                    WebViewScreen(url = "about:blank", onBack = {})
+                }
+            }
+        }
+        for (uiStyle in AppUiStyle.entries) {
+            for (glassEnabled in listOf(false, true)) {
+                composeRule.runOnIdle {
+                    style.value = uiStyle
+                    glass.value = glassEnabled
+                }
+                composeRule.waitForIdle()
+                composeRule.runOnIdle {
+                    assertTrue(containsWebView(rootView))
+                    assertEquals(0, captureRequests)
+                }
+            }
+        }
+    }
 
     @Test
     fun retainedExternalEntryDoesNotCreateWebViewOrRelaunchOnRecomposition() {

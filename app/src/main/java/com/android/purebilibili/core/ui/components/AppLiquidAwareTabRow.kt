@@ -351,10 +351,12 @@ fun <T> AppLiquidAwareTabRow(
             }
             // A short scrollable rail still owns fixed glass slots, even when it
             // fits without scrolling. Do not redistribute them across the viewport.
-            val rowItemWidth = if (contentSizedRail) {
-                readableTabWidth
-            } else {
-                null
+            // 玻璃等宽槽位按实测最宽标签定宽，不再把整条胶囊拉满视口，
+            // 避免少选项时长胶囊内出现大片空隙；原生 MD3/Miuix 保持填满默认。
+            val rowItemWidth = when {
+                contentSizedRail -> readableTabWidth
+                forceEqualWidth && liquidGlassEnabled -> readableTabWidth
+                else -> null
             }
             BottomBarLiquidSegmentedControl(
                 items = labels,
