@@ -86,7 +86,7 @@ internal fun resolveVideoCardCompactCoverStatsLayout(
     return VideoCardCompactCoverStatsLayout(
         primaryMinWidthDp = primaryMinWidth,
         secondaryMinWidthDp = secondaryMinWidth,
-        // 评论数不为时长让位；时长是否换行由封面布局按实际尺寸测量决定。
+        // 保留评论数入口；封面布局预留时长宽度，统计文字在剩余空间内省略。
         showSecondaryStat = showSecondary,
         showOnlineCount = hasOnlineCount && statsAvailableWidth >= requiredWithOnline,
         statsEndPaddingDp = durationReserveWidth

@@ -23,7 +23,7 @@ import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 
-/** Miuix owns cross-axis touch recognition; Material keeps Foundation's native pager. */
+/** Miuix defaults to cross-axis recognition; nested ownership can opt into native gestures. */
 @Composable
 fun AppHorizontalPager(
     state: PagerState,
@@ -41,25 +41,28 @@ fun AppHorizontalPager(
     snapPosition: SnapPosition = SnapPosition.Start,
     overscrollEffect: OverscrollEffect? = rememberOverscrollEffect(),
     shouldYieldGesture: () -> Boolean = { false },
+    /** Keep Foundation's recognizer attached when a nested pager changes gesture ownership. */
+    useNativeGestures: Boolean = false,
     pageContent: @Composable PagerScope.(Int) -> Unit,
 ) {
     val miuix = LocalAppUiStyle.current == AppUiStyle.MIUIX
+    val useMiuixGestures = miuix && !useNativeGestures
     val enabled = userScrollEnabled && !shouldYieldGesture()
     val resolvedFling = flingBehavior ?: if (miuix) {
         PagerDefaults.flingBehavior(state, snapAnimationSpec = PagerNavigationSpringSpec)
     } else PagerDefaults.flingBehavior(state)
-    val resolvedNestedScroll = pageNestedScrollConnection ?: if (miuix) {
+    val resolvedNestedScroll = pageNestedScrollConnection ?: if (useMiuixGestures) {
         PagerGestureNestedScrollConnection
     } else PagerDefaults.pageNestedScrollConnection(state, Orientation.Horizontal)
     HorizontalPager(
         state = state,
-        modifier = if (miuix) modifier.pagerGestureOverride(
+        modifier = if (useMiuixGestures) modifier.pagerGestureOverride(
             pagerState = state, flingBehavior = resolvedFling, enabled = enabled,
         ) else modifier,
         contentPadding = contentPadding, pageSize = pageSize,
         beyondViewportPageCount = beyondViewportPageCount, pageSpacing = pageSpacing,
         verticalAlignment = verticalAlignment, flingBehavior = resolvedFling,
-        userScrollEnabled = !miuix && enabled, reverseLayout = reverseLayout, key = key,
+        userScrollEnabled = !useMiuixGestures && enabled, reverseLayout = reverseLayout, key = key,
         pageNestedScrollConnection = resolvedNestedScroll, snapPosition = snapPosition,
         overscrollEffect = overscrollEffect, pageContent = pageContent,
     )

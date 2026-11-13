@@ -97,6 +97,47 @@ class LargeScreenVideoLayoutPolicyTest {
     }
 
     @Test
+    fun nearSquareVerticalVideoUsesFullHeightStageWithSingleSidePane() {
+        val metrics = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 880f,
+            windowHeightDp = 900f,
+            isVerticalVideo = true,
+            enableVerticalExpand = true,
+        )
+        assertEquals(LargeScreenVideoLayoutMode.Split, metrics.mode)
+        assertFalse(metrics.introBelowPlayer)
+        assertEquals(900f / (16f / 9f), metrics.playerWidthDp, 1f)
+        assertEquals(900f, metrics.playerHeightDp, 1f)
+        assertEquals(880f - metrics.playerWidthDp, metrics.sidePaneWidthDp, 1f)
+    }
+
+    @Test
+    fun tallNearSquareVerticalVideoCentersStageBetweenTwoSidePanes() {
+        val metrics = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 1150f,
+            windowHeightDp = 1000f,
+            isVerticalVideo = true,
+            enableVerticalExpand = true,
+        )
+        assertEquals(LargeScreenVideoLayoutMode.VerticalThreePane, metrics.mode)
+        assertFalse(metrics.introBelowPlayer)
+        assertEquals(1000f / (16f / 9f), metrics.playerWidthDp, 1f)
+        assertEquals((1150f - metrics.playerWidthDp) / 2f, metrics.sidePaneWidthDp, 1f)
+    }
+
+    @Test
+    fun narrowPortraitVerticalVideoKeepsAlmostSquareFallback() {
+        val metrics = resolveLargeScreenVideoMetrics(
+            windowWidthDp = 665f,
+            windowHeightDp = 940f,
+            isVerticalVideo = true,
+            enableVerticalExpand = true,
+        )
+        assertEquals(LargeScreenVideoLayoutMode.AlmostSquare, metrics.mode)
+        assertTrue(metrics.introBelowPlayer)
+    }
+
+    @Test
     fun compactPortraitStaysOnPhoneLayout() {
         assertFalse(
             shouldUseLargeScreenVideoLayout(

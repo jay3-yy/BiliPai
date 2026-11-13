@@ -145,9 +145,10 @@ internal fun HorizontalVideoCardFrame(
                     resolvePlainHorizontalVideoCoverWidthDp(widthDp, effectiveAspectRatio)
                         .dp.toPx().toInt().coerceAtMost(width - gap)
                 } else {
-                    (width * widthFraction).toInt().coerceAtMost(width - gap)
+                    resolveHorizontalVideoCoverWidthDp(widthDp)
+                        .dp.roundToPx().coerceAtMost(width - gap)
                 }
-                // Only opted-in horizontal lists cap the cover; stacked and other callers keep their geometry.
+                // 入口可进一步收窄横卡封面；竖排卡片不经过此处。
                 val coverWidth = horizontalCoverMaxWidthDp
                     ?.takeIf { it.isFinite() && it > 0f }
                     ?.let { naturalCoverWidth.coerceAtMost(it.dp.roundToPx()) }

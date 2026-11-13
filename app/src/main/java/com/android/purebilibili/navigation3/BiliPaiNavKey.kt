@@ -161,6 +161,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object KeyboardShortcutsSettings : BiliPaiNavKey {
+        override val routeBase: String = "keyboard_shortcuts_settings"
+    }
+
+    @Serializable
     data object Login : BiliPaiNavKey {
         override val routeBase: String = "login"
     }

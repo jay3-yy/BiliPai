@@ -33,6 +33,10 @@ import kotlin.math.sin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 
+// setBackdropRenderEffect 公开于 37.2（SDK_INT_FULL 3_700_002）。36 起方法已存在于
+// RenderNode，但真机实测（小米 13 / Android 17.0，2026-11-13 logcat）hidden API 名单
+// 将其标记为 blocked，应用域反射调用被平台拒绝，回退链正常触发。因此必须按完整版本
+// 号门控；反射探测仅用于 37.2 上确认方法可用，不作为 36/17.0/17.1 的启用依据。
 internal const val OFFICIAL_BACKDROP_MIN_FULL_SDK = 3_700_002
 
 /** 只接受已发布的完整版本号；方法存在检查同时防止不完整的平台实现。 */

@@ -1,9 +1,27 @@
 package com.android.purebilibili.feature.personal
 
+import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
+import com.android.purebilibili.core.util.WindowWidthSizeClass
 import com.android.purebilibili.feature.home.components.cards.HORIZONTAL_VIDEO_CARD_COVER_ASPECT_RATIO
 import com.android.purebilibili.feature.home.components.cards.HORIZONTAL_VIDEO_CARD_COVER_WIDTH_DP
+import com.android.purebilibili.feature.home.resolveHomeFeedGridColumns
 import kotlin.math.ceil
-import kotlin.math.max
+
+/** 手机保留入口原有列数；宽屏的视频网格跟随首页卡宽，避免默认单列撑满窗口。 */
+internal fun resolvePersonalListDefaultColumns(
+    contentWidthDp: Int,
+    compactColumns: Int,
+    cardWidthPreset: HomeFeedCardWidthPreset,
+    widthSizeClass: WindowWidthSizeClass,
+): Int = if (widthSizeClass == WindowWidthSizeClass.Compact) compactColumns else {
+    resolveHomeFeedGridColumns(
+        contentWidthDp = contentWidthDp,
+        displayMode = 0,
+        fixedColumnCount = 0,
+        cardWidthPreset = cardWidthPreset,
+        widthSizeClass = widthSizeClass,
+    )
+}
 
 internal const val PERSONAL_LIST_MAX_ITEM_WIDTH_DP = 480f
 internal const val PERSONAL_LIST_BASE_MIN_HEIGHT_DP = 90f

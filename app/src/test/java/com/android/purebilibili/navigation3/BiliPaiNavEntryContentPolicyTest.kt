@@ -65,6 +65,10 @@ class BiliPaiNavEntryContentPolicyTest {
         assertEquals(BiliPaiNavEntryContentRole.SETTINGS_SHARE, resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.SettingsShare))
         assertEquals(BiliPaiNavEntryContentRole.WEB_DAV_BACKUP, resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.WebDavBackup))
         assertEquals(BiliPaiNavEntryContentRole.TIPS_SETTINGS, resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.TipsSettings))
+        assertEquals(
+            BiliPaiNavEntryContentRole.KEYBOARD_SHORTCUTS_SETTINGS,
+            resolveBiliPaiNavEntryContentRole(BiliPaiNavKey.KeyboardShortcutsSettings)
+        )
     }
 
     @Test

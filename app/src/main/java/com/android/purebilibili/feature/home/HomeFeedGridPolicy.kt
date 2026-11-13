@@ -7,6 +7,26 @@ import androidx.compose.ui.unit.dp
 
 internal fun resolveHomeFeedMaxContentWidth(): Dp = 1280.dp
 
+/** 临时收窄的列表面板限制卡片密度，不覆盖用户保存的整窗列数。 */
+internal fun resolveHomeFeedPaneColumns(
+    requestedColumns: Int,
+    paneWidthDp: Int?,
+    displayMode: Int,
+    cardWidthPreset: HomeFeedCardWidthPreset,
+): Int {
+    if (paneWidthDp == null) return requestedColumns
+    return minOf(
+        requestedColumns,
+        resolveHomeFeedGridColumns(
+            contentWidthDp = paneWidthDp,
+            displayMode = displayMode,
+            fixedColumnCount = 0,
+            cardWidthPreset = cardWidthPreset,
+            widthSizeClass = com.android.purebilibili.core.util.resolveWindowWidthSizeClass(paneWidthDp.dp),
+        ),
+    )
+}
+
 /**
  * 当前窗口是否按"窄屏"档处理列数记忆：折叠屏外屏、手机竖屏（Compact 宽度）。
  * 宽屏（Medium/Expanded+）另外按窗口横竖比例拆分，两种方向均不覆盖窄屏。

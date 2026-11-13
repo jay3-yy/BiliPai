@@ -121,6 +121,31 @@ internal fun resolveLargeScreenVideoMetrics(
             introBelowPlayer = false,
         )
     }
+    // 非横屏窗口的竖屏视频走中央舞台：全高 9:16 播放器，剩余宽度给信息/评论侧栏。
+    // 两侧都容得下 280dp 时用 VerticalThreePane 居中；只够一侧时用 Split；
+    // 连单侧 280dp 都不够时回退 AlmostSquare，避免侧栏不可读。
+    if (enableVerticalExpand && isVerticalVideo && !landscape) {
+        val stagePlayerWidth = windowHeightDp / LARGE_SCREEN_VIDEO_ASPECT_16_9
+        val remainingWidth = windowWidthDp - stagePlayerWidth
+        if (remainingWidth / 2f >= LARGE_SCREEN_VIDEO_MIN_SIDE_PANE_DP) {
+            return LargeScreenVideoMetrics(
+                mode = LargeScreenVideoLayoutMode.VerticalThreePane,
+                playerWidthDp = stagePlayerWidth,
+                playerHeightDp = windowHeightDp,
+                sidePaneWidthDp = remainingWidth / 2f,
+                introBelowPlayer = false,
+            )
+        }
+        if (remainingWidth >= LARGE_SCREEN_VIDEO_MIN_SIDE_PANE_DP) {
+            return LargeScreenVideoMetrics(
+                mode = LargeScreenVideoLayoutMode.Split,
+                playerWidthDp = stagePlayerWidth,
+                playerHeightDp = windowHeightDp,
+                sidePaneWidthDp = remainingWidth,
+                introBelowPlayer = false,
+            )
+        }
+    }
     if (landscape) {
         val playerWidth = resolveLargeScreenLandscapePlayerWidthDp(windowWidthDp, windowHeightDp)
         val playerHeight = playerWidth / LARGE_SCREEN_VIDEO_ASPECT_16_9

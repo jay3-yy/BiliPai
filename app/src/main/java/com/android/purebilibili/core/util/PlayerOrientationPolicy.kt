@@ -14,9 +14,13 @@ internal data class PlayerWindowOrientationPolicy(
     val displayRotation: Int?,
     val isFoldableCoverWindow: Boolean,
     val isLandscapeNaturalDisplay: Boolean,
+    val foldPosture: AppFoldPosture = AppFoldPosture.None,
 ) {
     val usesInWindowFullscreen: Boolean
         get() = isFoldableCoverWindow && isLandscapeNaturalDisplay
+
+    val isTabletopPosture: Boolean
+        get() = foldPosture == AppFoldPosture.Tabletop
 }
 
 internal fun AppDisplayContext.toPlayerWindowOrientationPolicy(): PlayerWindowOrientationPolicy {
@@ -31,6 +35,7 @@ internal fun AppDisplayContext.toPlayerWindowOrientationPolicy(): PlayerWindowOr
         isFoldableCoverWindow = isFoldableCoverWindow,
         isLandscapeNaturalDisplay =
             naturalOrientation == AppDisplayNaturalOrientation.Landscape,
+        foldPosture = foldPosture,
     )
 }
 
@@ -144,8 +149,11 @@ private fun isPlayerAxisOrientationRequest(requestedOrientation: Int): Boolean {
 internal fun resolveEffectivePlayerRequestedOrientation(
     requestedOrientation: Int,
     usesInWindowFullscreen: Boolean,
+    isTabletopPosture: Boolean = false,
 ): Int {
-    return if (usesInWindowFullscreen && isPlayerAxisOrientationRequest(requestedOrientation)) {
+    // Tabletop 姿态下设备物理半折，轴类旋转请求会把铰链转到竖向、撕裂上下分区，
+    // 与横屏自然外屏同理：一律放回 UNSPECIFIED。
+    return if ((usesInWindowFullscreen || isTabletopPosture) && isPlayerAxisOrientationRequest(requestedOrientation)) {
         ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     } else {
         requestedOrientation
@@ -165,18 +173,57 @@ internal fun Activity.applyPlayerRequestedOrientation(
     val effectiveOrientation = resolveEffectivePlayerRequestedOrientation(
         requestedOrientation = requestedOrientation,
         usesInWindowFullscreen = policy.usesInWindowFullscreen,
+        isTabletopPosture = policy.isTabletopPosture,
     )
     if (effectiveOrientation != requestedOrientation) {
         Logger.d(
             "PlayerOrientationPolicy",
-            "Suppress axis request=$requestedOrientation on landscape-natural cover: " +
+            "Suppress axis request=$requestedOrientation on landscape-natural cover " +
+                "or tabletop posture: " +
                 "current=${policy.currentWindowWidthDp}x${policy.currentWindowHeightDp}dp, " +
                 "maximum=${policy.maximumWindowWidthDp}x${policy.maximumWindowHeightDp}dp, " +
                 "mode=${policy.displayModeWidthPx}x${policy.displayModeHeightPx}px, " +
-                "rotation=${policy.displayRotation}"
+                "rotation=${policy.displayRotation}, posture=${policy.foldPosture}"
         )
     }
     if (this.requestedOrientation == effectiveOrientation) return false
     this.requestedOrientation = effectiveOrientation
     return true
+}
+
+/** 全屏播放器 tabletop 分区：上屏容纳画面与弹幕，下屏容纳控制条。 */
+internal data class PlayerTabletopLayoutPolicy(
+    val isTabletop: Boolean,
+    /** 铰链上缘以上分区的 dp 高度；null 表示不分区（沿用整窗布局）。 */
+    val videoHostHeightDp: Int?,
+)
+
+internal const val PLAYER_TABLETOP_MIN_VIDEO_HOST_DP = 200
+internal const val PLAYER_TABLETOP_MIN_BOTTOM_PANE_DP = 180
+
+internal fun resolvePlayerTabletopLayoutPolicy(
+    foldPosture: AppFoldPosture,
+    hingeOrientation: AppHingeOrientation,
+    hingeTopPx: Int?,
+    windowWidthPx: Int,
+    windowHeightPx: Int,
+    density: Float,
+): PlayerTabletopLayoutPolicy {
+    val postureUsable = foldPosture == AppFoldPosture.Tabletop &&
+        hingeOrientation == AppHingeOrientation.Horizontal &&
+        hingeTopPx != null && hingeTopPx > 0 &&
+        windowWidthPx > 0 && windowHeightPx > 0 && density > 0f
+    if (!postureUsable) {
+        return PlayerTabletopLayoutPolicy(isTabletop = false, videoHostHeightDp = null)
+    }
+    // FoldingFeature.bounds 位于窗口坐标系（px），铰链上缘即上屏高度上限。
+    val hingeTopDp = (hingeTopPx / density).toInt()
+    val windowHeightDp = (windowHeightPx / density).toInt()
+    val videoHostHeightDp = hingeTopDp
+        .coerceAtMost(windowHeightDp - PLAYER_TABLETOP_MIN_BOTTOM_PANE_DP)
+        .takeIf { it >= PLAYER_TABLETOP_MIN_VIDEO_HOST_DP }
+    return PlayerTabletopLayoutPolicy(
+        isTabletop = videoHostHeightDp != null,
+        videoHostHeightDp = videoHostHeightDp,
+    )
 }

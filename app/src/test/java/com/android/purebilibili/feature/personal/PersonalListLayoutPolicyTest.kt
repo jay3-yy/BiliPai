@@ -2,8 +2,36 @@ package com.android.purebilibili.feature.personal
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import com.android.purebilibili.core.store.HomeFeedCardWidthPreset
+import com.android.purebilibili.core.util.WindowWidthSizeClass
 
 class PersonalListLayoutPolicyTest {
+
+    @Test
+    fun automaticColumnsFollowWindowWidthAndReturnToPhoneLayout() {
+        val windows = listOf(
+            380 to WindowWidthSizeClass.Compact,
+            700 to WindowWidthSizeClass.Medium,
+            1000 to WindowWidthSizeClass.Expanded,
+            380 to WindowWidthSizeClass.Compact,
+        )
+        assertEquals(listOf(1, 3, 5, 1), windows.map { (width, sizeClass) ->
+            resolvePersonalListDefaultColumns(width, 1, HomeFeedCardWidthPreset.AUTO, sizeClass)
+        })
+        assertEquals(2, resolvePersonalListDefaultColumns(
+            380, 2, HomeFeedCardWidthPreset.AUTO, WindowWidthSizeClass.Compact,
+        ))
+    }
+
+    @Test
+    fun automaticWideColumnsRespectCardWidthPreset() {
+        assertEquals(4, resolvePersonalListDefaultColumns(
+            700, 1, HomeFeedCardWidthPreset.COMPACT, WindowWidthSizeClass.Medium,
+        ))
+        assertEquals(2, resolvePersonalListDefaultColumns(
+            700, 1, HomeFeedCardWidthPreset.WIDE, WindowWidthSizeClass.Medium,
+        ))
+    }
 
     @Test
     fun columnCount_matchesBiliPaiMaxExtentBehavior() {

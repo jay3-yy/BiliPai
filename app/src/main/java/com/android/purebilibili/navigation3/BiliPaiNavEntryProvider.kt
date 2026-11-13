@@ -60,6 +60,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     settingsEntry<BiliPaiNavKey.SettingsShare>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     settingsEntry<BiliPaiNavKey.WebDavBackup>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     settingsEntry<BiliPaiNavKey.TipsSettings>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
+    settingsEntry<BiliPaiNavKey.KeyboardShortcutsSettings>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Login>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Profile>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.ProfileAccountEdit>(swipeDismiss = swipeBackDirection, content = content)

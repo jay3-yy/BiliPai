@@ -257,6 +257,7 @@ fun rememberAppWindowAdaptiveInfo(
         activity?.resolveAppDisplayContext(
             configuration = configuration,
             hasCurrentFoldingFeature = foldingFeatureInfo.posture != AppFoldPosture.None,
+            foldPosture = foldingFeatureInfo.posture,
         ) ?: resolveAppDisplayContext(
             AppDisplayContextInput(
                 currentWindowWidthDp = configuration.screenWidthDp,
@@ -264,6 +265,7 @@ fun rememberAppWindowAdaptiveInfo(
                 smallestScreenWidthDp = configuration.smallestScreenWidthDp,
                 configurationOrientation = configuration.orientation,
                 hasCurrentFoldingFeature = foldingFeatureInfo.posture != AppFoldPosture.None,
+                foldPosture = foldingFeatureInfo.posture,
             )
         )
     }
@@ -442,9 +444,22 @@ fun rememberAdaptiveGridColumns(
 ): Int {
     val windowSizeClass = LocalWindowSizeClass.current
     return remember(windowSizeClass.widthDp, minColumnWidth, maxColumns) {
-        val columns = (windowSizeClass.widthDp / minColumnWidth).toInt()
-        columns.coerceIn(1, maxColumns)
+        resolveAdaptiveGridColumns(
+            widthDp = windowSizeClass.widthDp,
+            minColumnWidth = minColumnWidth,
+            maxColumns = maxColumns,
+        )
     }
+}
+
+/** 按最小列宽推导列数，供 [rememberAdaptiveGridColumns] 与矩阵测试共用。 */
+fun resolveAdaptiveGridColumns(
+    widthDp: Dp,
+    minColumnWidth: Dp,
+    maxColumns: Int,
+): Int {
+    val columns = (widthDp / minColumnWidth).toInt()
+    return columns.coerceIn(1, maxColumns)
 }
 
 /**

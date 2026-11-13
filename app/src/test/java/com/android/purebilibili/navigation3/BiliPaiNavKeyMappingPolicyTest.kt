@@ -255,6 +255,10 @@ class BiliPaiNavKeyMappingPolicyTest {
         assertEquals(BiliPaiNavKey.SettingsShare, legacyRouteToBiliPaiNavKey(ScreenRoutes.SettingsShare.route))
         assertEquals(BiliPaiNavKey.WebDavBackup, legacyRouteToBiliPaiNavKey(ScreenRoutes.WebDavBackup.route))
         assertEquals(BiliPaiNavKey.TipsSettings, legacyRouteToBiliPaiNavKey(ScreenRoutes.TipsSettings.route))
+        assertEquals(
+            BiliPaiNavKey.KeyboardShortcutsSettings,
+            legacyRouteToBiliPaiNavKey(ScreenRoutes.KeyboardShortcutsSettings.route)
+        )
     }
 
     @Test

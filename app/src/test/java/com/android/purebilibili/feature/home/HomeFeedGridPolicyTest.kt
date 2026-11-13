@@ -10,6 +10,20 @@ import kotlin.test.assertTrue
 class HomeFeedGridPolicyTest {
 
     @Test
+    fun companionPaneLimitsWideWindowColumnsAndRestoresThemWhenClosed() {
+        assertEquals(2, resolveHomeFeedPaneColumns(4, 350, 0, HomeFeedCardWidthPreset.AUTO))
+        assertEquals(1, resolveHomeFeedPaneColumns(4, 280, 0, HomeFeedCardWidthPreset.AUTO))
+        assertEquals(4, resolveHomeFeedPaneColumns(4, null, 0, HomeFeedCardWidthPreset.AUTO))
+    }
+
+    @Test
+    fun companionPanePreservesLowerDensityAndFitsStoryCards() {
+        assertEquals(1, resolveHomeFeedPaneColumns(1, 350, 0, HomeFeedCardWidthPreset.AUTO))
+        assertEquals(1, resolveHomeFeedPaneColumns(2, 350, 1, HomeFeedCardWidthPreset.AUTO))
+        assertEquals(2, resolveHomeFeedPaneColumns(4, 504, 0, HomeFeedCardWidthPreset.AUTO))
+    }
+
+    @Test
     fun expandedFeedWidth_usesNamedLayoutLimit() {
         assertEquals(1280.dp, resolveHomeFeedMaxContentWidth())
     }

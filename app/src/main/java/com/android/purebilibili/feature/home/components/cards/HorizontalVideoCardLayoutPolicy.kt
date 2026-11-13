@@ -20,6 +20,12 @@ internal const val HORIZONTAL_VIDEO_STAT_WRAP_SPACING_DP = 2
 internal const val HORIZONTAL_VIDEO_STAT_ICON_SIZE_DP = 13
 internal const val HORIZONTAL_VIDEO_STAT_ICON_TEXT_GAP_DP = 2
 
+/** 横卡封面在手机上按行宽分配，大屏上停止放大，为列表密度和信息区保留空间。 */
+internal fun resolveHorizontalVideoCoverWidthDp(availableWidthDp: Float): Float {
+    val fraction = 0.55f - 0.10f * ((availableWidthDp - 320f) / 160f).coerceIn(0f, 1f)
+    return minOf(availableWidthDp * fraction, WIDE_LIST_COVER_MAX_WIDTH_DP)
+}
+
 /** 真实横卡与加载占位按同一可用行宽收缩，避免窄分栏加载完成后封面跳宽。 */
 internal fun resolvePlainHorizontalVideoCoverWidthDp(
     availableWidthDp: Float,

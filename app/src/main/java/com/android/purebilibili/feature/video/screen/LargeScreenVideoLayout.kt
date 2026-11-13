@@ -5,6 +5,9 @@ import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import android.content.res.Configuration
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope.OverlayClip
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -22,14 +25,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
 import com.android.purebilibili.core.ui.AppSurfaceTokens
@@ -50,12 +58,19 @@ import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActions
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionState
+import com.android.purebilibili.feature.video.ui.section.LocalStagePageBackdropOutlet
+import com.android.purebilibili.feature.video.ui.section.PlayerPageBackdropOutlet
 import com.android.purebilibili.feature.video.ui.section.resolveAllowLivePlayerSharedElementForMorph
 import com.android.purebilibili.feature.video.ui.section.resolveNavigationLiveSurfaceTextureEnabled
 import com.android.purebilibili.feature.video.viewmodel.CommentUiState
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoEngagementUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
+import com.android.purebilibili.feature.video.share.VideoShareSheetHost
+import com.android.purebilibili.feature.video.share.buildVideoSharePayload
+import com.android.purebilibili.feature.video.ui.overlay.PLAYER_GLASS_VISIBILITY_DURATION_MS
+import com.android.purebilibili.feature.video.ui.overlay.PortraitEngagementRail
+import com.android.purebilibili.feature.video.ui.overlay.PlayerControlsBackdropHost
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -124,16 +139,29 @@ internal fun LargeScreenVideoLayout(
     val playerBackdropModifier = if (playerContent == null) {
         Modifier.background(Color.Black)
     } else Modifier
-    val danmakuChrome = rememberTabletDanmakuChromeState(danmakuManager)
-    val context = LocalContext.current
-    val secondaryDefaultTab by SettingsManager
-        .getTabletSecondaryDefaultTab(context)
-        .collectAsStateWithLifecycle(initialValue = TabletSecondaryDefaultTab.RELATED)
+        val danmakuChrome = rememberTabletDanmakuChromeState(danmakuManager)
+        val context = LocalContext.current
+        val secondaryDefaultTab by SettingsManager
+            .getTabletSecondaryDefaultTab(context)
+            .collectAsStateWithLifecycle(initialValue = TabletSecondaryDefaultTab.RELATED)
+        // 竖屏舞台（Split）里简介在侧栏 tab 中，互动操作固定在画面右缘的竖向 dock；
+        // 评论按钮把侧栏 pager 切到评论 tab，分享复用详情页的分享面板。
+        var requestedSideTabName by rememberSaveable(bvid) { mutableStateOf<String?>(null) }
+        var pendingStageVideoShare by remember { mutableStateOf<com.android.purebilibili.feature.video.share.VideoSharePayload?>(null) }
+        VideoShareSheetHost(
+            payload = pendingStageVideoShare,
+            onDismiss = { pendingStageVideoShare = null },
+        )
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(pageColor),
     ) {
+        // 舞台 dock 的播放页 backdrop 出口：VideoPlayerSection 采样门控变化时写回，
+        // dock 玻璃路径据此采样真实折射并随控制条显隐。
+        val stageBackdropOutlet = remember { PlayerPageBackdropOutlet() }
+        val liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
+        CompositionLocalProvider(LocalStagePageBackdropOutlet provides stageBackdropOutlet) {
         val windowWidthDp = maxWidth.value
         val windowHeightDp = maxHeight.value
         val metrics = remember(windowWidthDp, windowHeightDp, isVerticalVideo) {
@@ -269,8 +297,8 @@ internal fun LargeScreenVideoLayout(
                             onOpenBilibiliLink = onOpenBilibiliLink,
                             externalQueueTitle = externalQueueTitle,
                             externalQueueContent = externalQueueContent,
-                            requestedTabName = null,
-                            onRequestedTabConsumed = {},
+                            requestedTabName = requestedSideTabName,
+                            onRequestedTabConsumed = { requestedSideTabName = null },
                             danmakuEnabled = danmakuChrome.enabled,
                             onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
                             onDanmakuToggle = danmakuChrome.onToggle,
@@ -339,6 +367,61 @@ internal fun LargeScreenVideoLayout(
                                 .height(metrics.playerHeightDp.dp)
                                 .then(playerBackdropModifier),
                         )
+                        if (isVerticalVideo && success != null) {
+                            // 舞台层不在播放器控制宿主内，需显式接入控制玻璃环境与播放页 backdrop：
+                            // 玻璃开启时 dock 与控制条同起同落，退场淡出窗口内采样保持开启，
+                            // 全程真实折射；玻璃关闭为常驻原生四按钮，材质分支由 rail 自身处理。
+                            CompositionLocalProvider(
+                                com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop provides
+                                    stageBackdropOutlet.backdrop,
+                            ) {
+                                // Row 嵌套作用域内必须显式限定顶层重载，避免误解析到 RowScope 扩展版本。
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = !liquidGlassEnabled || stageBackdropOutlet.visible,
+                                    enter = fadeIn(animationSpec = tween(PLAYER_GLASS_VISIBILITY_DURATION_MS)),
+                                    exit = fadeOut(animationSpec = tween(PLAYER_GLASS_VISIBILITY_DURATION_MS)),
+                                    modifier = Modifier.align(Alignment.CenterEnd),
+                                ) {
+                                    PlayerControlsBackdropHost(
+                                        enabled = true,
+                                        modifier = Modifier.padding(end = 8.dp),
+                                    ) {
+                                        PortraitEngagementRail(
+                                    isLiked = engagementState.isLiked,
+                                    likeStatusKnown = engagementState.likeStatusKnown,
+                                    isCoined = engagementState.coinCount > 0,
+                                    isFavorited = engagementState.isFavorited,
+                                    likeCount = engagementState.likeCount
+                                        .takeIf { engagementState.likeStatusKnown }?.toLong(),
+                                    commentCount = success.info.stat.reply.toLong(),
+                                    favoriteCount = engagementState.favoriteCount
+                                        .takeIf { engagementState.likeStatusKnown }?.toLong(),
+                                    onLike = engagementActions.toggleLike,
+                                    onTriple = engagementActions.doTripleAction,
+                                    onCoin = engagementActions.openCoinDialog,
+                                    onComment = { requestedSideTabName = TabletSecondaryTab.COMMENTS.name },
+                                    onFavorite = { engagementActions.onFavoriteAction(false) },
+                                    onQuickFavorite = { engagementActions.onFavoriteAction(true) },
+                                    onShare = {
+                                        pendingStageVideoShare = buildVideoSharePayload(
+                                            title = success.info.title,
+                                            bvid = success.info.bvid,
+                                            page = success.info.pages
+                                                .indexOfFirst { it.cid == success.info.cid }
+                                                .coerceAtLeast(0) + 1,
+                                            positionMs = playerState.player.currentPosition.coerceAtLeast(0L),
+                                            authorId = success.info.owner.mid,
+                                            coverUrl = success.info.pic,
+                                            upName = success.info.owner.name,
+                                            playCountText = com.android.purebilibili.core.util.FormatUtils
+                                                .formatStat(success.info.stat.view.toLong()),
+                                        )
+                                    },
+                                    )
+                                    }
+                                }
+                            }
+                        }
                     }
                     VerticalDivider(
                         modifier = Modifier.fillMaxHeight()
@@ -458,9 +541,10 @@ internal fun LargeScreenVideoLayout(
                         side(!metrics.introBelowPlayer)
                     }
                 }
-            }
+        }
         }
     }
+}
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)

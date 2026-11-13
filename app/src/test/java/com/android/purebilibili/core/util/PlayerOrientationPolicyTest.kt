@@ -125,6 +125,99 @@ class PlayerOrientationPolicyTest {
     }
 
     @Test
+    fun `tabletop posture suppresses axis orientation requests`() {
+        listOf(
+            ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+        ).forEach { requestedOrientation ->
+            assertEquals(
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                resolveEffectivePlayerRequestedOrientation(
+                    requestedOrientation = requestedOrientation,
+                    usesInWindowFullscreen = false,
+                    isTabletopPosture = true,
+                )
+            )
+        }
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+            resolveEffectivePlayerRequestedOrientation(
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                usesInWindowFullscreen = false,
+                isTabletopPosture = true,
+            )
+        )
+        // 非 tabletop 姿态不改写用户请求。
+        assertEquals(
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+            resolveEffectivePlayerRequestedOrientation(
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE,
+                usesInWindowFullscreen = false,
+                isTabletopPosture = false,
+            )
+        )
+    }
+
+    @Test
+    fun `tabletop layout policy only partitions with horizontal hinge and usable height`() {
+        // 非 tabletop / 纵向铰链 / 缺铰链边界：不分区。
+        assertFalse(
+            resolvePlayerTabletopLayoutPolicy(
+                foldPosture = AppFoldPosture.None,
+                hingeOrientation = AppHingeOrientation.Horizontal,
+                hingeTopPx = 600,
+                windowWidthPx = 2208,
+                windowHeightPx = 1760,
+                density = 2.625f,
+            ).isTabletop
+        )
+        assertFalse(
+            resolvePlayerTabletopLayoutPolicy(
+                foldPosture = AppFoldPosture.Tabletop,
+                hingeOrientation = AppHingeOrientation.Vertical,
+                hingeTopPx = 600,
+                windowWidthPx = 2208,
+                windowHeightPx = 1760,
+                density = 2.625f,
+            ).isTabletop
+        )
+        // 铰链上缘太靠上：上屏容不下最低画面高度，退回整窗布局。
+        assertFalse(
+            resolvePlayerTabletopLayoutPolicy(
+                foldPosture = AppFoldPosture.Tabletop,
+                hingeOrientation = AppHingeOrientation.Horizontal,
+                hingeTopPx = 300,
+                windowWidthPx = 2208,
+                windowHeightPx = 1760,
+                density = 2.625f,
+            ).isTabletop
+        )
+        // 正常 tabletop：上屏高度即铰链上缘，且不被压到下屏最小高度以下。
+        val policy = resolvePlayerTabletopLayoutPolicy(
+            foldPosture = AppFoldPosture.Tabletop,
+            hingeOrientation = AppHingeOrientation.Horizontal,
+            hingeTopPx = 1200,
+            windowWidthPx = 2208,
+            windowHeightPx = 1760,
+            density = 2.625f,
+        )
+        assertTrue(policy.isTabletop)
+        // 1200px / 2.625 密度取整为 457dp。
+        assertEquals(457, policy.videoHostHeightDp)
+        // 铰链上缘过高：保留下屏控制条最小高度。
+        val clamped = resolvePlayerTabletopLayoutPolicy(
+            foldPosture = AppFoldPosture.Tabletop,
+            hingeOrientation = AppHingeOrientation.Horizontal,
+            hingeTopPx = 1760,
+            windowWidthPx = 2208,
+            windowHeightPx = 1760,
+            density = 2.625f,
+        )
+        // 670dp 窗口高度减去下屏最小 180dp，上屏被压到 490dp。
+        assertEquals(490, clamped.videoHostHeightDp)
+    }
+
+    @Test
     fun `display mode keeps landscape natural cover detectable while activity is portrait letterboxed`() {
         assertTrue(
             isLandscapeNaturalDisplay(

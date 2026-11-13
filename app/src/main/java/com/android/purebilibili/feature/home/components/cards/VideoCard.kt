@@ -127,6 +127,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick as semanticClick
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.adaptive.adaptiveCardHoverEffect
+import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.components.resolveUpStatsText
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
@@ -1431,6 +1432,30 @@ internal fun ElegantVideoCard(
             Modifier
         }
 
+        // 鼠标右键与长按共用同一入口（预览/操作菜单），触屏路径不受影响。
+        val handleCoverLongPress: (Offset) -> Unit = { pressOffset ->
+            val hasPreviewAction = isLongPressEnabled && onLongClick != null
+            val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
+            if (hasPreviewAction) {
+                longPressHaptic(HapticType.HEAVY)
+                onLongClick(video)
+            } else if (shouldOpenLongPressMenu(hasPreviewAction, hasLongPressMenu)) {
+                longPressHaptic(HapticType.HEAVY)
+                if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
+                    showUnfavoriteDialog = true
+                } else {
+                    openDismissMenu(coverCoordsRef.value, pressOffset)
+                }
+            }
+        }
+        val coverSecondaryClickModifier = if (
+            isLongPressEnabled && (onLongClick != null || onDismiss != null || onWatchLater != null || onUnfavorite != null)
+        ) {
+            Modifier.onSecondaryClick(handleCoverLongPress)
+        } else {
+            Modifier
+        }
+
         Box(
             modifier = coverSharedBoundsModifier
                 .fillMaxWidth()
@@ -1457,7 +1482,8 @@ internal fun ElegantVideoCard(
                     } else Modifier
                 )
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                //  [交互优化] 封面区域：点击跳转
+                //  [交互优化] 封面区域：点击跳转，右键复用长按菜单
+                .then(coverSecondaryClickModifier)
                 .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, sourceEnabled, sourceInteraction) {
                     val hasPreviewAction = isLongPressEnabled && onLongClick != null
                     val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
@@ -1471,19 +1497,7 @@ internal fun ElegantVideoCard(
                             }
                         },
                         onLongPress = if (isLongPressEnabled && (hasPreviewAction || hasLongPressMenu)) {
-                            { pressOffset ->
-                                if (hasPreviewAction) {
-                                    longPressHaptic(HapticType.HEAVY)
-                                    onLongClick(video)
-                                } else if (shouldOpenLongPressMenu(hasPreviewAction, hasLongPressMenu)) {
-                                    longPressHaptic(HapticType.HEAVY)
-                                    if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
-                                        showUnfavoriteDialog = true
-                                    } else {
-                                        openDismissMenu(coverCoordsRef.value, pressOffset)
-                                    }
-                                }
-                            }
+                            { pressOffset -> handleCoverLongPress(pressOffset) }
                         } else null,
                         onTap = {
                             requestCardClick()
@@ -1669,7 +1683,7 @@ internal fun ElegantVideoCard(
                                     style = coverOverlayTextStyle,
                                     maxLines = 1,
                                     softWrap = false,
-                                    overflow = TextOverflow.Clip
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
 
@@ -1698,7 +1712,7 @@ internal fun ElegantVideoCard(
                                         style = coverOverlayTextStyle,
                                         maxLines = 1,
                                         softWrap = false,
-                                        overflow = TextOverflow.Clip
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -1727,7 +1741,7 @@ internal fun ElegantVideoCard(
                                         style = coverOverlayTextStyle,
                                         maxLines = 1,
                                         softWrap = false,
-                                        overflow = TextOverflow.Clip
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -1763,7 +1777,7 @@ internal fun ElegantVideoCard(
                             }
                         }
 
-                        // 时长文字由共享布局决定同行或下一行。
+                        // 共享布局为时长预留空间，与统计项保持同行。
                         if (showDurationOnCover) {
                             AppText(
                                 text = durationText,
@@ -2010,6 +2024,30 @@ internal fun ElegantVideoCard(
             Spacer(modifier = Modifier.height(if (compactMetadata) AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro else AppSpacingTokens.Small))
         }
 
+        // 鼠标右键与长按共用同一入口（预览/操作菜单），触屏路径不受影响。
+        val handleTitleLongPress: (Offset) -> Unit = { pressOffset ->
+            val hasPreviewAction = isLongPressEnabled && onLongClick != null
+            val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
+            if (hasPreviewAction) {
+                longPressHaptic(HapticType.HEAVY)
+                onLongClick(video)
+            } else if (shouldOpenLongPressMenu(hasPreviewAction, hasLongPressMenu)) {
+                longPressHaptic(HapticType.HEAVY)
+                if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
+                    showUnfavoriteDialog = true
+                } else {
+                    openDismissMenu(titleCoordsRef.value, pressOffset)
+                }
+            }
+        }
+        val titleSecondaryClickModifier = if (
+            isLongPressEnabled && (onLongClick != null || onDismiss != null || onWatchLater != null || onUnfavorite != null)
+        ) {
+            Modifier.onSecondaryClick(handleTitleLongPress)
+        } else {
+            Modifier
+        }
+
         AppText(
             text = highlightedTitle ?: AnnotatedString(video.title),
             maxLines = videoCardTitleMaxLines(titleMaxLines),
@@ -2027,7 +2065,8 @@ internal fun ElegantVideoCard(
                 .onPlaced { coordinates ->
                     titleCoordsRef.value = coordinates
                 }
-                //  [交互优化] 标题区域：长按弹出菜单，点击跳转
+                //  [交互优化] 标题区域：长按弹出菜单，点击跳转，右键复用同一菜单
+                .then(titleSecondaryClickModifier)
                 .pointerInput(isLongPressEnabled, onLongClick, onDismiss, onWatchLater, onUnfavorite, sourceEnabled, sourceInteraction) {
                     val hasPreviewAction = isLongPressEnabled && onLongClick != null
                     val hasLongPressMenu = isLongPressEnabled && (onDismiss != null || onWatchLater != null || onUnfavorite != null)
@@ -2041,19 +2080,7 @@ internal fun ElegantVideoCard(
                             }
                         },
                         onLongPress = if (isLongPressEnabled && (hasPreviewAction || hasLongPressMenu)) {
-                            { pressOffset ->
-                                if (hasPreviewAction) {
-                                    longPressHaptic(HapticType.HEAVY)
-                                    onLongClick(video)
-                                } else if (shouldOpenLongPressMenu(hasPreviewAction, hasLongPressMenu)) {
-                                    longPressHaptic(HapticType.HEAVY)
-                                    if (onUnfavorite != null && onDismiss == null && onWatchLater == null) {
-                                        showUnfavoriteDialog = true
-                                    } else {
-                                        openDismissMenu(titleCoordsRef.value, pressOffset)
-                                    }
-                                }
-                            }
+                            { pressOffset -> handleTitleLongPress(pressOffset) }
                         } else null,
                         onTap = {
                             requestCardClick()

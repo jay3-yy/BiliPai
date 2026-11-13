@@ -43,6 +43,7 @@ data class AppDisplayContext(
     val detectionBasis: AppFoldableDetectionBasis = AppFoldableDetectionBasis.None,
     val isInMultiWindowMode: Boolean = false,
     val smallestScreenWidthDp: Int = 0,
+    val foldPosture: AppFoldPosture = AppFoldPosture.None,
 ) {
     val isFoldableCoverWindow: Boolean
         get() = foldableDisplayRole == AppFoldableDisplayRole.Cover
@@ -68,6 +69,7 @@ internal data class AppDisplayContextInput(
     val hasHingeAngleSensor: Boolean = false,
     val isInMultiWindowMode: Boolean = false,
     val smallestScreenWidthDp: Int = 0,
+    val foldPosture: AppFoldPosture = AppFoldPosture.None,
 )
 
 internal fun resolveAppDisplayContext(input: AppDisplayContextInput): AppDisplayContext {
@@ -132,6 +134,7 @@ internal fun resolveAppDisplayContext(input: AppDisplayContextInput): AppDisplay
         detectionBasis = basis,
         isInMultiWindowMode = input.isInMultiWindowMode,
         smallestScreenWidthDp = input.smallestScreenWidthDp,
+        foldPosture = input.foldPosture,
     )
 }
 
@@ -196,6 +199,7 @@ internal fun isLandscapeNaturalDisplay(
 internal fun Activity.resolveAppDisplayContext(
     configuration: Configuration = resources.configuration,
     hasCurrentFoldingFeature: Boolean = false,
+    foldPosture: AppFoldPosture = AppFoldPosture.None,
 ): AppDisplayContext {
     val density = resources.displayMetrics.density.coerceAtLeast(1f)
     val maximumBounds = runCatching {
@@ -222,6 +226,7 @@ internal fun Activity.resolveAppDisplayContext(
             hasCurrentFoldingFeature = hasCurrentFoldingFeature,
             hasHingeAngleSensor = hasHingeAngleSensor,
             isInMultiWindowMode = isInMultiWindowMode,
+            foldPosture = foldPosture,
         )
     )
 }

@@ -293,6 +293,7 @@ internal fun TabletVideoLayout(
     transitionChromeAlphaProvider: () -> Float = { 1f },
 ) {
     val adaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
+    val companionPane = LocalVideoCompanionPane.current
     val contentState = detailContentState ?: (uiState as? VideoPlaybackUiState.Success)
     val hasHingePartition = adaptiveInfo.shouldAvoidHinge
     val layoutPosture = if (adaptiveInfo.shouldAvoidHinge) {
@@ -322,9 +323,9 @@ internal fun TabletVideoLayout(
         basePrimaryRatio = layoutPolicy.primaryRatio,
         secondaryPaneMode = secondaryPaneMode
     )
-    val useThreePaneLayout = LocalWindowSizeClass.current.shouldUseThreePaneLayout &&
+    val useThreePaneLayout = !companionPane && LocalWindowSizeClass.current.shouldUseThreePaneLayout &&
         !layoutPolicy.useTabletopLayout
-    val secondaryPaneHidden = shouldHideTabletSecondaryPane(
+    val secondaryPaneHidden = companionPane || shouldHideTabletSecondaryPane(
         paneMode = secondaryPaneMode,
         useThreePaneLayout = useThreePaneLayout,
         useTabletopLayout = layoutPolicy.useTabletopLayout,
@@ -566,14 +567,17 @@ internal fun TabletVideoLayout(
                                 onDanmakuSendClick = playbackActions.showDanmakuSendDialog,
                                 onDanmakuToggle = danmakuChrome.onToggle,
                                 onOwnerUploadsClick = {
-                                    requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
-                                    secondaryPaneModeName = TabletSecondaryPaneMode.EXPANDED.name
+                                    if (companionPane) onUpClick(contentState.info.owner.mid)
+                                    else {
+                                        requestedSecondaryTabName = TabletSecondaryTab.OWNER_UPLOADS.name
+                                        secondaryPaneModeName = TabletSecondaryPaneMode.EXPANDED.name
+                                    }
                                 },
                                 onUpClick = onUpClick,
                                 videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                                 videoNoteEnabled = videoNoteEnabled,
                                 videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
-                                showRelatedVideos = false,
+                                showRelatedVideos = companionPane,
                                 modifier = Modifier.fillMaxSize(),
                             )
                         }

@@ -962,7 +962,7 @@ private fun LandingCoverStat(
             fontWeight = FontWeight.Medium,
             maxLines = 1,
             softWrap = false,
-            overflow = TextOverflow.Clip,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

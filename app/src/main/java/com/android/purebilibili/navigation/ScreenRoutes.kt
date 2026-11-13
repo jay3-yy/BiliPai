@@ -161,6 +161,7 @@ sealed class ScreenRoutes(val route: String) {
     object SettingsShare : ScreenRoutes("settings_share")
     object WebDavBackup : ScreenRoutes("webdav_backup") // WebDAV 备份中心
     object TipsSettings : ScreenRoutes("tips_settings") // [Feature] 小贴士 & 隐藏操作
+    object KeyboardShortcutsSettings : ScreenRoutes("keyboard_shortcuts_settings") // [Feature] 键盘快捷键帮助
     //  [新增] 更多外观设置子页面
 
     object IconSettings : ScreenRoutes("icon_settings")  // 图标设置

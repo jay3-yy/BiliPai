@@ -868,6 +868,8 @@ fun AppDropdownMenu(
             anchorBounds = glassAnchorBounds,
             scrollState = scrollState,
             source = glassSource,
+            // 玻璃下拉菜单先使用安全区域内的完整高度，内容确实溢出时才出现滚动提示。
+            useAvailableHeight = true,
             content = { Column(content = content) },
         )) return
     if (LocalAppUiStyle.current == AppUiStyle.MIUIX && LocalAppThemeConfig.current.nativeMiuixPopupsEnabled) {
