@@ -13,4 +13,5 @@ internal object BuiltinPluginIds {
     const val GOOGLE_CAST = "google_cast"
     const val FEED_FILTER = "bilipai_feed_filter"
     const val SUBSCRIPTION_FEED = "subscription_feed"
+    const val AI_SUMMARY_BYOK = "ai_summary_byok"
 }

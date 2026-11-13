@@ -536,7 +536,10 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         //  [BiliPai 移植] 推荐流过滤(默认关闭, 可在插件中心启用)
         PluginManager.register(com.android.purebilibili.feature.plugin.BiliPaiFeedFilterPlugin())
         PluginManager.register(com.android.purebilibili.feature.plugin.SubscriptionFeedPlugin())
-        Logger.d(PureApplicationRuntimeConfig.TAG, " Plugin system initialized with 12 built-in plugins")
+        // [AI 总结] 编译期内置插件：先注入 Context，再注册（插件详情页可配置模型 Key）
+        com.android.purebilibili.feature.plugin.AiSummaryBuiltinPlugin.initialize(this@PureApplication)
+        PluginManager.register(com.android.purebilibili.feature.plugin.AiSummaryBuiltinPlugin)
+        Logger.d(PureApplicationRuntimeConfig.TAG, " Plugin system initialized with 13 built-in plugins")
 
         AppScope.ioScope.launch {
             com.android.purebilibili.core.plugin.json.JsonPluginManager.initialize(this@PureApplication)

@@ -7125,6 +7125,71 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         }
     }
 
+    /** 超时 / 网络类错误值得再试一次；配置错误、解析错误等重试没有意义。 */
+    private fun isRetryableAiSummaryFailure(throwable: Throwable?): Boolean {
+        var current = throwable
+        var depth = 0
+        while (current != null && depth < 6) {
+            if (current is java.io.IOException || current is kotlinx.coroutines.TimeoutCancellationException) {
+                return true
+            }
+            current = current.cause
+            depth++
+        }
+        return false
+    }
+
+    /** 失败原因压缩成一行，给 loading / 失败卡片直接用。 */
+    private fun describeAiSummaryFailure(throwable: Throwable?): String {
+        val message = throwable?.message?.trim().orEmpty()
+        return if (message.isBlank()) "未知错误" else message.take(60)
+    }
+
+    /**
+     * 官方兜底也失败时，如果自定义模型侧有具体失败原因，就展示它；
+     * 否则仍用官方诊断文案（例如视频真的没有语音）。
+     */
+    private fun buildAiSummaryFailurePrompt(
+        diagnosis: com.android.purebilibili.data.repository.AiSummaryFetchDiagnosis,
+        byokFailure: String?
+    ): AiSummaryPromptState? {
+        val officialPrompt = resolveAiSummaryPromptState(diagnosis)
+        if (byokFailure.isNullOrBlank()) return officialPrompt
+        val status = diagnosis.status
+        return when (status) {
+            com.android.purebilibili.data.repository.AiSummaryFetchStatus.UNSUPPORTED,
+            com.android.purebilibili.data.repository.AiSummaryFetchStatus.NO_SUMMARY,
+            com.android.purebilibili.data.repository.AiSummaryFetchStatus.FAILURE,
+            com.android.purebilibili.data.repository.AiSummaryFetchStatus.API_ERROR ->
+                AiSummaryPromptState(
+                    title = "自定义模型总结失败",
+                    message = "插件请求失败：$byokFailure；B 站官方接口也没有可用总结。可以稍后重试。",
+                    tone = AiSummaryPromptTone.WARNING,
+                    actionLabel = "重试"
+                )
+            else -> officialPrompt
+        }
+    }
+
+    /** 把插件/官方接口的真实阶段写进 loading 提示，替换固定的「正在获取…请稍等一下」。 */
+    private fun publishAiSummaryProgress(bvid: String, stage: String) {
+        if (stage.isBlank()) return
+        _uiState.update { current ->
+            if (
+                current is VideoPlaybackUiState.Success &&
+                current.info.bvid == bvid &&
+                current.aiSummary?.modelResult == null
+            ) {
+                current.copy(
+                    aiSummaryPrompt = (current.aiSummaryPrompt ?: initialAiSummaryPromptState()).copy(
+                        title = "AI 总结生成中",
+                        message = stage
+                    )
+                )
+            } else current
+        }
+    }
+
     // [新增] 加载 AI 视频总结
     private fun loadAiSummary(
         bvid: String,
@@ -7135,6 +7200,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         aiSummaryJob = viewModelScope.launch {
             var queuedRetryCount = 0
             var requestRetryCount = 0
+            // 自定义模型失败原因：官方兜底也失败时，用它拼出真实的失败提示（而不是误报「不支持」）
+            var lastByokFailure: String? = null
             val loadingPrompt = initialAiSummaryPromptState()
             _uiState.update { current ->
                 if (
@@ -7157,7 +7224,52 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         )
                         continue
                     }
-                    val result = VideoRepository.getAiSummary(bvid, cid, upMid)
+                    val videoTitle =
+                        (_uiState.value as? VideoPlaybackUiState.Success)?.info?.title.orEmpty()
+                    lastByokFailure = null
+                    val result = if (
+                        com.android.purebilibili.feature.plugin.AiSummaryBuiltinPlugin.isConfigured()
+                    ) {
+                        // 配置了模型 Key：走自定义模型；失败时回落 B 站官方总结。
+                        // onProgress 把插件内部真实阶段（字幕 / ASR / 模型请求）写进 loading 文案。
+                        val byok = run {
+                            var attempt = 1
+                            while (true) {
+                                val r = com.android.purebilibili.feature.plugin.AiSummaryBuiltinPlugin
+                                    .fetchSummary(bvid, cid, upMid, videoTitle) { stage ->
+                                        publishAiSummaryProgress(bvid, stage)
+                                    }
+                                if (r.isSuccess) return@run r
+                                val error = r.exceptionOrNull()
+                                if (attempt == 1 && isRetryableAiSummaryFailure(error)) {
+                                    // 网关偶发超时：自动再试一次，并把「正在重试」如实告诉用户
+                                    publishAiSummaryProgress(
+                                        bvid,
+                                        "请求失败（${describeAiSummaryFailure(error)}），2 秒后自动重试（第 2 次）…"
+                                    )
+                                    attempt++
+                                    delay(2_000)
+                                    continue
+                                }
+                                lastByokFailure = describeAiSummaryFailure(error)
+                                return@run r
+                            }
+                            @Suppress("UNREACHABLE_CODE")
+                            error("unreachable")
+                        }
+                        if (byok.isSuccess) {
+                            byok
+                        } else {
+                            publishAiSummaryProgress(
+                                bvid,
+                                "自定义模型失败（${lastByokFailure.orEmpty()}），回退 B 站官方总结…"
+                            )
+                            VideoRepository.getAiSummary(bvid, cid, upMid)
+                        }
+                    } else {
+                        publishAiSummaryProgress(bvid, "正在请求 B 站官方总结接口…")
+                        VideoRepository.getAiSummary(bvid, cid, upMid)
+                    }
                     var shouldPollAgain = false
                     var nextDelayMs = 0L
                     var completedQueuedRetry = false
@@ -7221,7 +7333,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             }
 
                             else -> {
-                                val prompt = resolveAiSummaryPromptState(diagnosis)
+                                val prompt = buildAiSummaryFailurePrompt(diagnosis, lastByokFailure)
                                 _uiState.update { current ->
                                     if (current is VideoPlaybackUiState.Success && current.info.bvid == bvid) {
                                         current.copy(aiSummaryPrompt = prompt)
@@ -7240,6 +7352,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             nextDelayMs = resolveAiSummaryRetryDelayMs(
                                 queuedRetryCount = requestRetryCount,
                                 isInBackground = BackgroundManager.isInBackground
+                            )
+                            // 让用户看到「为什么又重来一遍」，而不是进度文案无声重置
+                            publishAiSummaryProgress(
+                                bvid,
+                                "请求失败（${diagnosis.reason}），${nextDelayMs / 1000} 秒后自动重试（第 ${requestRetryCount + 2} 次）…"
                             )
                             shouldPollAgain = true
                             completedRequestRetry = true

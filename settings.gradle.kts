@@ -99,4 +99,7 @@ include(":danmaku-engine")
 include(":miuix-navigation")
 include(":ci-lint")
 
+// AI 总结插件：BYOK 自定义模型 + ASR 兜底
+include(":ai-summary-plugin")
+
  
