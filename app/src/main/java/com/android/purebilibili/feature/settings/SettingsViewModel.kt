@@ -963,7 +963,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             val normalizedIconKey = normalizeAppIconKey(iconKey)
             // 1. 保存偏好
             SettingsManager.setAppIcon(context, normalizedIconKey)
-            applyLauncherAliasForCurrentSplashIconSetting(normalizedIconKey)
+            com.android.purebilibili.core.store.syncAppLauncherIcon(context)
+        }
+    }
+
+    fun applyBiliPaiIconColor(colors: com.android.purebilibili.core.store.BiliPaiIconColorSettings, appPrimaryColor: Int) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            com.android.purebilibili.core.store.setBiliPaiIconColorSettings(context, colors)
+            SettingsManager.setAppIcon(context, com.android.purebilibili.core.store.BILIPAI_THEME_ICON_KEY)
+            com.android.purebilibili.core.store.syncAppThemeLauncherIcon(
+                context,
+                com.android.purebilibili.core.store.resolveBiliPaiThemeIconIndex(colors.foreground ?: appPrimaryColor, colors.background),
+            )
         }
     }
 
@@ -972,62 +983,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             SettingsManager.setAppIconAppearance(context, appearance)
             val currentIcon = SettingsManager.getAppIconSync(context)
             if (!supportsAppIconAppearance(currentIcon)) return@launch
-            applyLauncherAliasForCurrentSplashIconSetting(
-                iconKey = currentIcon,
-                appearance = appearance
-            )
-        }
-    }
-
-    private suspend fun applyLauncherAliasForCurrentSplashIconSetting(
-        iconKey: String,
-        appearance: AppIconAppearance = SettingsManager.getAppIconAppearanceSync(context)
-    ) {
-        val normalizedIconKey = normalizeAppIconKey(iconKey)
-        // 2. 应用 Alias
-        val pm = context.packageManager
-        val packageName = context.packageName
-        val splashIconVisible = SettingsManager.isSplashIconAnimationEnabledSync(context)
-
-        val targetAlias = resolveAppIconLauncherAlias(
-            packageName = packageName,
-            rawKey = normalizedIconKey,
-            splashIconVisible = splashIconVisible,
-            appearance = appearance
-        )
-        val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
-
-        android.util.Log.d("SettingsViewModel", "Switching icon to: $normalizedIconKey, splashIconVisible=$splashIconVisible -> $targetAlias")
-
-        try {
-            // 第一步：先启用目标 alias（确保始终有一个活动入口点）
-            // ⚠️ [修复] 在尝试杀死进程的操作前，再次延迟，确保 DataStore/SharedPrefs 完全写入磁盘
-            kotlinx.coroutines.delay(100)
-
-            pm.setComponentEnabledSetting(
-                android.content.ComponentName(packageName, targetAlias),
-                android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                android.content.pm.PackageManager.DONT_KILL_APP
-            )
-            android.util.Log.d("SettingsViewModel", "Enabled alias: $targetAlias")
-
-            // 第二步：立即禁用其他 alias，避免部分桌面出现“双图标”残留
-            allUniqueAliases
-                .filter { it != targetAlias }
-                .forEach { aliasFullName ->
-                    try {
-                        pm.setComponentEnabledSetting(
-                            android.content.ComponentName(packageName, aliasFullName),
-                            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                            android.content.pm.PackageManager.DONT_KILL_APP
-                        )
-                    } catch (e: Exception) {
-                        android.util.Log.w("SettingsViewModel", "Failed to disable alias: $aliasFullName", e)
-                    }
-                }
-            android.util.Log.d("SettingsViewModel", "Icon switch completed: $normalizedIconKey")
-        } catch (e: Exception) {
-            android.util.Log.e("SettingsViewModel", "Failed to switch app icon to $normalizedIconKey", e)
+            com.android.purebilibili.core.store.syncAppLauncherIcon(context)
         }
     }
 
@@ -1163,8 +1119,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     fun toggleSplashIconAnimationEnabled(value: Boolean) {
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             SettingsManager.setSplashIconAnimationEnabled(context, value)
-            val currentIcon = SettingsManager.getAppIconSync(context)
-            applyLauncherAliasForCurrentSplashIconSetting(currentIcon)
+            com.android.purebilibili.core.store.syncAppLauncherIcon(context)
         }
     }
 

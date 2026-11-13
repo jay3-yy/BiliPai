@@ -16,11 +16,12 @@ internal fun AppMiuixSwitch(
     modifier: Modifier,
     enabled: Boolean,
 ) {
-    val forcedThumb = when (LocalAppThemeConfig.current.liquidSwitchThumbMode) {
+    // 滑块强制色仅用于玻璃材质，关闭后恢复原生开关配色。
+    val forcedThumb = if (LocalAppThemeConfig.current.liquidGlassEnabled) when (LocalAppThemeConfig.current.liquidSwitchThumbMode) {
         LiquidSwitchThumbMode.THEME -> null
         LiquidSwitchThumbMode.DARK -> Color(0xFF202124)
         LiquidSwitchThumbMode.LIGHT -> Color.White
-    }
+    } else null
     ProvideAppMiuixHapticFeedback {
         Switch(
             checked = checked,

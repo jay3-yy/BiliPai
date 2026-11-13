@@ -31,6 +31,10 @@ private val CANONICAL_APP_ICON_KEYS = setOf(
     "icon_bilipai",
     "icon_bilipai_pink",
     "icon_bilipai_white",
+    BILIPAI_THEME_ICON_KEY,
+    "icon_bilipai_violet",
+    "icon_bilipai_green",
+    "icon_bilipai_ink",
     "icon_bilipai_monet"
 )
 
@@ -42,6 +46,9 @@ private val LAUNCHER_ALIAS_SUFFIX_BY_KEY = mapOf(
     "icon_bilipai" to "MainActivityAliasBiliPai",
     "icon_bilipai_pink" to "MainActivityAliasBiliPaiPink",
     "icon_bilipai_white" to "MainActivityAliasBiliPaiWhite",
+    "icon_bilipai_violet" to "MainActivityAliasBiliPaiViolet",
+    "icon_bilipai_green" to "MainActivityAliasBiliPaiGreen",
+    "icon_bilipai_ink" to "MainActivityAliasBiliPaiInk",
     "icon_bilipai_monet" to "MainActivityAliasBiliPaiMonet"
 )
 
@@ -53,6 +60,9 @@ private val NO_ICON_LAUNCHER_ALIAS_SUFFIX_BY_KEY = mapOf(
     "icon_bilipai" to "MainActivityAliasBiliPaiNoIcon",
     "icon_bilipai_pink" to "MainActivityAliasBiliPaiPinkNoIcon",
     "icon_bilipai_white" to "MainActivityAliasBiliPaiWhiteNoIcon",
+    "icon_bilipai_violet" to "MainActivityAliasBiliPaiVioletNoIcon",
+    "icon_bilipai_green" to "MainActivityAliasBiliPaiGreenNoIcon",
+    "icon_bilipai_ink" to "MainActivityAliasBiliPaiInkNoIcon",
     "icon_bilipai_monet" to "MainActivityAliasBiliPaiMonetNoIcon"
 )
 
@@ -118,9 +128,13 @@ fun resolveAppIconLauncherAlias(
     packageName: String,
     rawKey: String?,
     splashIconVisible: Boolean = true,
-    appearance: AppIconAppearance = AppIconAppearance.FOLLOW_SYSTEM
+    appearance: AppIconAppearance = AppIconAppearance.FOLLOW_SYSTEM,
+    themeIconIndex: Int = DEFAULT_BILIPAI_THEME_ICON_INDEX,
 ): String {
     val normalizedKey = normalizeAppIconKey(rawKey)
+    if (normalizedKey == BILIPAI_THEME_ICON_KEY) {
+        return "$APP_ICON_COMPONENT_PACKAGE_NAME.${biliPaiThemeAliasSuffix(themeIconIndex, splashIconVisible)}"
+    }
     val aliasMap = if (splashIconVisible) {
         LAUNCHER_ALIAS_SUFFIX_BY_KEY
     } else {
@@ -143,7 +157,10 @@ fun allManagedAppIconLauncherAliases(packageName: String): Set<String> {
             NO_ICON_LAUNCHER_ALIAS_SUFFIX_BY_KEY.values +
             FIXED_APPEARANCE_LAUNCHER_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE.values +
             FIXED_APPEARANCE_NO_ICON_ALIAS_SUFFIX_BY_KEY_AND_APPEARANCE.values +
-            RETIRED_APP_ICON_ALIAS_SUFFIXES
+            RETIRED_APP_ICON_ALIAS_SUFFIXES +
+            (0 until BILIPAI_THEME_ICON_PALETTE_SIZE).flatMap { index ->
+                listOf(biliPaiThemeAliasSuffix(index, true), biliPaiThemeAliasSuffix(index, false))
+            }
         )
         .map { aliasSuffix -> "$APP_ICON_COMPONENT_PACKAGE_NAME.$aliasSuffix" }
         .plus(APP_ICON_COMPAT_ALIAS_CLASS_NAME)

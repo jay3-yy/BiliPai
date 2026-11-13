@@ -779,11 +779,6 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                     SettingsManager.getAppIcon(this@PureApplication).first()
                 )
                 val appearance = SettingsManager.getAppIconAppearance(this@PureApplication).first()
-                val defaultLauncherAlias = resolveAppIconLauncherAlias(
-                    packageName = packageName,
-                    rawKey = DEFAULT_APP_ICON_KEY,
-                    appearance = appearance
-                )
                 val splashIconVisible = SettingsManager.isSplashIconAnimationEnabledSync(this@PureApplication)
                 val cacheSynced = this@PureApplication
                     .getSharedPreferences("app_icon_cache", Context.MODE_PRIVATE)
@@ -793,70 +788,34 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                     .commit()
                 Logger.d(PureApplicationRuntimeConfig.TAG, " Synced app icon cache from DataStore: $currentIcon (success=$cacheSynced)")
 
-                val allUniqueAliases = allManagedAppIconLauncherAliases(packageName)
                 val targetAlias = resolveAppIconLauncherAlias(
                     packageName = packageName,
                     rawKey = currentIcon,
                     splashIconVisible = splashIconVisible,
-                    appearance = appearance
+                    appearance = appearance,
+                    themeIconIndex = com.android.purebilibili.core.store.getBiliPaiThemeIconIndexSync(this@PureApplication),
                 )
                 
                 val targetAliasComponent = android.content.ComponentName(packageName, targetAlias)
                 val targetState = pm.getComponentEnabledSetting(targetAliasComponent)
 
-                // 如果目标 alias 是 disabled（说明之前被禁用了，可能是重装），强制重置为默认图标。
-                if (currentIcon != DEFAULT_APP_ICON_KEY && targetState == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                // 主题色切换会选择原先禁用的色板入口，不能将其作为重装依据。
+                // 其他固定图标沿用既有重装恢复规则。
+                if (currentIcon != DEFAULT_APP_ICON_KEY && currentIcon != com.android.purebilibili.core.store.BILIPAI_THEME_ICON_KEY && targetState == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
                     Logger.d(PureApplicationRuntimeConfig.TAG, " Detected reinstall: target icon '$currentIcon' is disabled, resetting to '$DEFAULT_APP_ICON_KEY'")
                     
                     SettingsManager.setAppIcon(this@PureApplication, DEFAULT_APP_ICON_KEY)
                     
-                    // 确保默认图标被启用
-                    val aliasDefault = android.content.ComponentName(packageName, defaultLauncherAlias)
-                    pm.setComponentEnabledSetting(
-                        aliasDefault,
-                        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-                        android.content.pm.PackageManager.DONT_KILL_APP
-                    )
-                    // 禁用其他所有alias
-                    allUniqueAliases.filter { it != defaultLauncherAlias }.forEach { aliasFullName ->
-                        pm.setComponentEnabledSetting(
-                            android.content.ComponentName(packageName, aliasFullName),
-                            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                            android.content.pm.PackageManager.DONT_KILL_APP
-                        )
-                    }
+                    com.android.purebilibili.core.store.syncAppLauncherIcon(this@PureApplication)
                     Logger.d(PureApplicationRuntimeConfig.TAG, " Reset to default icon: $DEFAULT_APP_ICON_KEY")
                     return@launch
                 }
                 
-                // 同步所有 alias 状态：只有目标启用，其他禁用
-                allUniqueAliases.forEach { aliasFullName ->
-                    try {
-                        val currentState = pm.getComponentEnabledSetting(
-                            android.content.ComponentName(packageName, aliasFullName)
-                        )
-                        val shouldBeEnabled = aliasFullName == targetAlias
-                        val targetState = if (shouldBeEnabled) {
-                            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-                        } else {
-                            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-                        }
-                        
-                        // 只在状态不一致时修改，减少不必要的操作
-                        if (currentState != targetState) {
-                            pm.setComponentEnabledSetting(
-                                android.content.ComponentName(packageName, aliasFullName),
-                                targetState,
-                                android.content.pm.PackageManager.DONT_KILL_APP
-                            )
-                        }
-                    } catch (e: Exception) {
-                        //  [容错] 忽略不存在的组件，防止崩溃
-                        Logger.d(PureApplicationRuntimeConfig.TAG, "⚠️ Component $aliasFullName not found, skipping")
-                    }
-                }
-                
+                com.android.purebilibili.core.store.syncAppLauncherIcon(this@PureApplication)
+
                 Logger.d(PureApplicationRuntimeConfig.TAG, " Synced app icon state: $currentIcon")
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 android.util.Log.e(PureApplicationRuntimeConfig.TAG, "Failed to sync app icon state", e)
             }

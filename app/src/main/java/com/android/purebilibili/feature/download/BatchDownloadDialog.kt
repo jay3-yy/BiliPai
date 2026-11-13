@@ -29,9 +29,11 @@ import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppOutlinedButton
 import com.android.purebilibili.core.ui.components.AppRadioButton
 import com.android.purebilibili.core.ui.components.AppText
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -73,8 +75,9 @@ internal fun BatchDownloadDialog(
         selectionOverrides = selectionOverrides + next.associate { it.id to it.selected }
         if (previousIds != nextIds) selectionHaptic(HapticType.LIGHT)
     }
-    var selectedQuality by remember(currentQuality) { mutableIntStateOf(currentQuality) }
-    var includeDanmaku by remember { mutableStateOf(true) }
+    val preferences = rememberDownloadPreferenceState(qualityOptions, currentQuality) ?: return
+    val context = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
     val dialogLayout = remember { resolveAppExpandedContentDialogLayoutPolicy() }
 
     Dialog(
@@ -242,22 +245,7 @@ internal fun BatchDownloadDialog(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { includeDanmaku = !includeDanmaku }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppCheckbox(
-                            checked = includeDanmaku,
-                            onCheckedChange = { includeDanmaku = it }
-                        )
-                        AppText(
-                            text = "同时缓存弹幕",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
+                    DownloadPreferenceControls(preferences, Modifier.fillMaxWidth())
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -272,13 +260,13 @@ internal fun BatchDownloadDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedQuality = qualityId }
+                                .clickable { preferences.selectedQuality = qualityId }
                                 .padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppRadioButton(
-                                selected = selectedQuality == qualityId,
-                                onClick = { selectedQuality = qualityId }
+                                selected = preferences.selectedQuality == qualityId,
+                                onClick = { preferences.selectedQuality = qualityId }
                             )
                             AppText(
                                 text = qualityLabel,
@@ -301,14 +289,17 @@ internal fun BatchDownloadDialog(
                         }
                         AppButton(
                             onClick = {
-                                onConfirm(
-                                    selectedQuality,
-                                    DownloadOptions(includeDanmaku = includeDanmaku),
-                                    workingCandidates
-                                )
+                                val confirmedCandidates = workingCandidates
+                                scope.launch {
+                                    preferences.confirm(context) { quality, options ->
+                                        onConfirm(quality, options, confirmedCandidates)
+                                    }
+                                }
                             },
                             modifier = Modifier.weight(1f),
-                            enabled = !isLoadingCandidates && canConfirmBatchDownload(workingCandidates)
+                            enabled = !preferences.saving && !isLoadingCandidates &&
+                                qualityOptions.any { it.first == preferences.selectedQuality } &&
+                                canConfirmBatchDownload(workingCandidates)
                         ) {
                             AppText("加入下载")
                         }

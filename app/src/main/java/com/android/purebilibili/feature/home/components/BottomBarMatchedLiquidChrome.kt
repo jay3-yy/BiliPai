@@ -29,7 +29,6 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -50,8 +49,6 @@ import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.motion.softLandingSpring
 import dev.chrisbanes.haze.HazeState
 import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 
 internal enum class BottomBarLiquidOrientation {
@@ -360,8 +357,14 @@ internal fun BottomBarMatchedReusableLiquidDock(
     val parentGlass = com.android.purebilibili.core.ui.blur.LocalAppGlassContainer.current
         .takeIf { glassEnabled }
     val suppliedBackdrop = if (parentGlass != null) parentGlass.backdrop else backdrop
-    val localBackdrop = if (suppliedBackdrop == null) rememberLayerBackdrop() else null
-    val effectiveBackdrop = (suppliedBackdrop ?: localBackdrop)?.let {
+    // 纯色采样也必须实际录制；alpha(0) 会使隐藏层被跳过，折射读到空纹理。
+    val localBackdrop = if (suppliedBackdrop == null) {
+        com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource(
+            drawContentToScreen = false,
+            recordingBackground = AppSurfaceTokens.background(),
+        )
+    } else null
+    val effectiveBackdrop = (suppliedBackdrop ?: localBackdrop?.takeIf { it.isReady }?.backdrop)?.let {
         com.android.purebilibili.feature.home.components.liquid.rememberStableBackdrop(it)
     }
     // 只录制外壳这一兄弟层，内部控件不得进入自身消费的背景源。
@@ -418,13 +421,7 @@ internal fun BottomBarMatchedReusableLiquidDock(
                     .then(if (drawShellLens) {
                         Modifier.bottomBarMatchedCaptureOverflow(captureSafeInset)
                     } else Modifier)
-                    .alpha(0f)
-                    .then(
-                        if (com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current) {
-                            Modifier.layerBackdrop(localBackdrop)
-                        } else Modifier
-                    )
-                    .background(AppSurfaceTokens.background())
+                    .then(localBackdrop.modifier)
             )
         }
         BottomBarMatchedLiquidDock(

@@ -1441,6 +1441,10 @@ fun AppearanceSettingsContent(
                             "BiliPai", "icon_bilipai" -> "BiliPai"
                             "BiliPai Pink", "icon_bilipai_pink" -> context.getString(R.string.appearance_icon_bilipai_pink)
                             "BiliPai White", "icon_bilipai_white" -> context.getString(R.string.appearance_icon_bilipai_white)
+                            "icon_bilipai_theme" -> context.getString(R.string.icon_bilipai_theme)
+                            "icon_bilipai_violet" -> context.getString(R.string.icon_bilipai_violet)
+                            "icon_bilipai_green" -> context.getString(R.string.icon_bilipai_green)
+                            "icon_bilipai_ink" -> context.getString(R.string.icon_bilipai_ink)
                             "BiliPai Monet", "icon_bilipai_monet" -> "BiliPai Monet"
                             "Yuki" -> context.getString(R.string.appearance_icon_yuki)
                             "Anime", "icon_anime" -> context.getString(R.string.appearance_icon_anime)

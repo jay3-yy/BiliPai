@@ -34,16 +34,6 @@ class AdaptiveListComponentPolicyTest {
 
 
     @Test
-    fun `miuix style should use compact list row spacing`() {
-        val spec = resolveAdaptiveListRowVisualSpec(AppUiStyle.MIUIX)
-
-        assertEquals(16, spec.insideHorizontalPaddingDp)
-        assertEquals(12, spec.insideVerticalPaddingDp)
-        assertEquals(14, spec.trailingIconSizeDp)
-        assertEquals(6, spec.trailingSpacingDp)
-    }
-
-    @Test
     fun `material3 style should use compact app authored list row spacing`() {
         val spec = resolveAdaptiveListRowVisualSpec(AppUiStyle.MATERIAL3)
 

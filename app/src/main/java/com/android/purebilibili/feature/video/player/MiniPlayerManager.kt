@@ -489,6 +489,10 @@ internal fun resolveNotificationSmallIconRes(iconKey: String): Int {
         "icon_bilipai" -> R.mipmap.ic_launcher_bilipai_monet_foreground
         "icon_bilipai_pink" -> R.mipmap.ic_launcher_bilipai_monet_foreground
         "icon_bilipai_white" -> R.mipmap.ic_launcher_bilipai_monet_foreground
+        "icon_bilipai_theme" -> R.mipmap.ic_launcher_bilipai_monet_foreground
+        "icon_bilipai_violet" -> R.mipmap.ic_launcher_bilipai_monet_foreground
+        "icon_bilipai_green" -> R.mipmap.ic_launcher_bilipai_monet_foreground
+        "icon_bilipai_ink" -> R.mipmap.ic_launcher_bilipai_monet_foreground
         "icon_bilipai_monet" -> R.mipmap.ic_launcher_bilipai_monet_foreground
         "icon_3d" -> R.drawable.ic_launcher_play_window_monochrome
         else -> R.mipmap.ic_launcher_blue_snow_maid_monochrome

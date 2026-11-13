@@ -557,6 +557,15 @@ internal fun shouldUseRealtimeSplashBlur(
 }
 
 internal fun resolveSplashIconResIdForComponentClassName(className: String?): Int {
+    val simpleName = className?.substringAfterLast('.')
+    val themePrefix = when {
+        simpleName?.startsWith("MainActivityAliasBiliPaiTheme") == true -> "MainActivityAliasBiliPaiTheme"
+        simpleName?.startsWith("MainActivitySplashBiliPaiTheme") == true -> "MainActivitySplashBiliPaiTheme"
+        else -> null
+    }
+    if (themePrefix != null) {
+        return biliPaiThemeIconResources[simpleName!!.removePrefix(themePrefix).removeSuffix("NoIcon").toInt()]
+    }
     return when (className?.substringAfterLast('.')) {
         "MainActivityAliasBlueSnowMaid",
         "MainActivityAliasBlueSnowMaidNoIcon" -> R.mipmap.ic_launcher_blue_snow_maid
@@ -604,6 +613,15 @@ internal fun resolveSplashIconResIdForComponentClassName(className: String?): In
         "MainActivityAliasBiliPaiWhite",
         "MainActivityAliasBiliPaiWhiteNoIcon",
         "MainActivitySplashBiliPaiWhite" -> R.mipmap.ic_launcher_bilipai_white
+        "MainActivityAliasBiliPaiViolet",
+        "MainActivityAliasBiliPaiVioletNoIcon",
+        "MainActivitySplashBiliPaiViolet" -> R.mipmap.ic_launcher_bilipai_violet
+        "MainActivityAliasBiliPaiGreen",
+        "MainActivityAliasBiliPaiGreenNoIcon",
+        "MainActivitySplashBiliPaiGreen" -> R.mipmap.ic_launcher_bilipai_green
+        "MainActivityAliasBiliPaiInk",
+        "MainActivityAliasBiliPaiInkNoIcon",
+        "MainActivitySplashBiliPaiInk" -> R.mipmap.ic_launcher_bilipai_ink
         "MainActivityAliasBiliPaiMonet",
         "MainActivityAliasBiliPaiMonetNoIcon" -> R.mipmap.ic_launcher_bilipai_monet
         "MainActivitySplashBiliPaiMonet" -> R.mipmap.splash_icon_bilipai_monet
@@ -1648,6 +1666,7 @@ class MainActivity : AppCompatActivity() {
 
             // 6. 传入参数
             PureBiliBiliTheme(
+                syncLauncherIcon = true,
                 themeTransitionEnabled = uiEntranceAnimationEnabled,
                 liquidGlassEnabled = liquidGlassEnabled,
                 uiStyle = appThemeSettings.uiStyle,

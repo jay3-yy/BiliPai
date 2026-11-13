@@ -880,6 +880,7 @@ fun PureBiliBiliTheme(
     appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     liquidGlassEnabled: Boolean = true,
     themeTransitionEnabled: Boolean = true,
+    syncLauncherIcon: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -904,9 +905,13 @@ fun PureBiliBiliTheme(
         resolveMaterialMotionScheme(uiStyle)
     }
     val miuixTextStyles = remember(uiStyle, liquidGlassEnabled, fontSizePreset, appFontFamily, appFontWeightPreset) {
-        resolveMaterialTypography(uiStyle, liquidGlassEnabled)
-            .toMiuixTextStyles()
-            .scaled(fontSizePreset.multiplier)
+        // 材质开关不改变主题字阶；用户字体设置在主题默认样式之上应用。
+        val nativeStyles = if (uiStyle == AppUiStyle.MIUIX) {
+            top.yukonga.miuix.kmp.theme.defaultTextStyles()
+        } else {
+            resolveMaterialTypography(uiStyle, liquidGlassEnabled).toMiuixTextStyles()
+        }
+        nativeStyles.scaled(fontSizePreset.multiplier)
             .withFontFamily(appFontFamily)
             .withFontWeight(appFontWeightPreset.fontWeight)
     }
@@ -1049,6 +1054,10 @@ fun PureBiliBiliTheme(
     // Only immutable settings/resource endpoints enter the transition. Animated frame
     // palettes flow down to components and never become new generation inputs.
     val targetPalette = if (darkTheme) darkEndpointPalette else lightEndpointPalette
+    val themeIconPaletteIndex = rememberAppThemeIconPaletteIndex(targetPalette.material.primary)
+    if (syncLauncherIcon) {
+        SyncAppThemeLauncherIcon(themeIconPaletteIndex)
+    }
     val reduceMotion = com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion()
     val animatedPalette = rememberAnimatedAppThemePalette(
         target = targetPalette,
@@ -1106,6 +1115,8 @@ fun PureBiliBiliTheme(
             style = appListItemStyle,
             uiStyle = uiStyle
         ),
+        LocalAppThemeIconPaletteIndex provides themeIconPaletteIndex,
+        LocalAppThemeIconPrimary provides targetPalette.material.primary,
         LocalCornerRadiusScale provides resolveCornerRadiusScale(uiStyle)
     ) {
         MiuixTheme(

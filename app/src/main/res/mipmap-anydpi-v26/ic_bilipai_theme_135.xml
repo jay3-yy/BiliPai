@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/bilipai_theme_background_135" />
+    <foreground android:drawable="@drawable/ic_bilipai_theme_135" />
+    <monochrome android:drawable="@drawable/ic_bilipai_mark_monochrome" />
+</adaptive-icon>

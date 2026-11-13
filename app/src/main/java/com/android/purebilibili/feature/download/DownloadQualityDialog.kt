@@ -7,10 +7,12 @@ import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
+import com.android.purebilibili.core.ui.components.AppButton
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.*
-import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
-import androidx.compose.foundation.lazy.items
 //  Material Icons
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -18,13 +20,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.android.purebilibili.core.ui.appContentDialogWidth
-import com.android.purebilibili.core.ui.components.AppCheckbox
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppOutlinedButton
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -46,7 +45,9 @@ fun DownloadQualityDialog(
     onQualitySelected: (Int, DownloadOptions) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var includeDanmaku by remember { mutableStateOf(true) }
+    val preferences = rememberDownloadPreferenceState(qualityOptions, currentQuality) ?: return
+    val context = LocalContext.current.applicationContext
+    val scope = rememberCoroutineScope()
     val dialogLayout = remember { resolveAppContentDialogLayoutPolicy(maxWidthDp = 420) }
     Dialog(
         onDismissRequest = onDismiss,
@@ -61,7 +62,11 @@ fun DownloadQualityDialog(
             shape = AppShapes.container(ContainerLevel.Card),
             containerColor = MaterialTheme.colorScheme.surface,
         ) {
-            Column(modifier = Modifier.padding(AppSpacingTokens.Large)) {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(AppSpacingTokens.Large),
+            ) {
                 // 标题行
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -95,36 +100,19 @@ fun DownloadQualityDialog(
 
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Large))
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(AppShapes.container(ContainerLevel.Chip))
-                        .clickable { includeDanmaku = !includeDanmaku }
-                        .padding(vertical = AppSpacingTokens.Small),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    AppCheckbox(
-                        checked = includeDanmaku,
-                        onCheckedChange = { includeDanmaku = it }
-                    )
-                    AppText(
-                        text = "同时缓存弹幕",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = AppContentColors.primaryText()
-                    )
-                }
+                DownloadPreferenceControls(preferences, Modifier.fillMaxWidth())
 
                 Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
 
                 // 画质列表
                 qualityOptions.forEach { (qualityId, qualityLabel) ->
-                    val isSelected = qualityId == currentQuality
+                    val isSelected = qualityId == preferences.selectedQuality
                     val isVip = qualityLabel.contains("4K") || qualityLabel.contains("HDR") || qualityLabel.contains("杜比")
 
                     AppSingleChoiceRow(
                         selected = isSelected,
                         onClick = {
-                            onQualitySelected(qualityId, DownloadOptions(includeDanmaku = includeDanmaku))
+                            preferences.selectedQuality = qualityId
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -155,6 +143,16 @@ fun DownloadQualityDialog(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
+
+                AppButton(
+                    onClick = {
+                        scope.launch { preferences.confirm(context, onQualitySelected) }
+                    },
+                    enabled = !preferences.saving && qualityOptions.any { it.first == preferences.selectedQuality },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    AppText("加入下载")
+                }
 
                 // 取消按钮
                 AppOutlinedButton(

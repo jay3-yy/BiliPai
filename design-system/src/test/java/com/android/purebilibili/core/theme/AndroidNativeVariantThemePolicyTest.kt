@@ -13,27 +13,35 @@ import kotlin.test.assertTrue
 class AndroidNativeVariantThemePolicyTest {
 
     @Test
-    fun bothVariantsUseStandardTypographyRegardlessOfLiquidGlass() {
-        assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MIUIX, false))
-        assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MIUIX, true))
-        assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MATERIAL3, false))
-        assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MATERIAL3, true))
+    fun themeTypographyDoesNotChangeWithGlassMaterial() {
+        for (glassEnabled in listOf(false, true)) {
+            assertSame(BiliMiuixTypography, resolveMaterialTypography(AppUiStyle.MIUIX, glassEnabled))
+            assertSame(Md3Typography, resolveMaterialTypography(AppUiStyle.MATERIAL3, glassEnabled))
+        }
     }
 
     @Test
-    fun miuixVariant_usesStandardTypography() {
-        val typography = resolveMaterialTypography(AppUiStyle.MIUIX)
-
-        assertSame(Md3Typography, typography)
-        assertSame(Md3Typography, typography)
-    }
-
-    @Test
-    fun material3Variant_usesMd3Typography() {
-        val typography = resolveMaterialTypography(AppUiStyle.MATERIAL3)
-
-        assertEquals(Md3Typography.bodyMedium.fontSize, typography.bodyMedium.fontSize)
-        assertEquals(Md3Typography.titleMedium.letterSpacing, typography.titleMedium.letterSpacing)
+    fun themeTextSupportsRelativeSizingAcrossMaterials() {
+        for (uiStyle in AppUiStyle.entries) {
+            for (glassEnabled in listOf(false, true)) {
+                for (preset in AppFontSizePreset.entries) {
+                    val typography = resolveMaterialTypography(uiStyle, glassEnabled).scaled(preset.multiplier)
+                    val styles = listOf(
+                        typography.displayLarge, typography.displayMedium, typography.displaySmall,
+                        typography.headlineLarge, typography.headlineMedium, typography.headlineSmall,
+                        typography.titleLarge, typography.titleMedium, typography.titleSmall,
+                        typography.bodyLarge, typography.bodyMedium, typography.bodySmall,
+                        typography.labelLarge, typography.labelMedium, typography.labelSmall,
+                    )
+                    for (style in styles) {
+                        // 页面会直接缩放行高；未指定单位会在这里复现崩溃。
+                        assertTrue((style.fontSize * 0.9f).isSp)
+                        assertTrue((style.lineHeight * 0.9f).isSp)
+                        assertTrue((style.letterSpacing * 0.9f).isSp)
+                    }
+                }
+            }
+        }
     }
 
     @Test

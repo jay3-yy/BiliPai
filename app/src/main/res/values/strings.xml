@@ -957,4 +957,31 @@
     <string name="preview_blur_compare_api_requirement">官方方案需要平台 API 37.2 或更高版本；当前为 API %1$s，暂时使用 Miuix。</string>
     <string name="animation_indicator_dynamic_length_title">液态玻璃指示器动态长度</string>
     <string name="animation_indicator_dynamic_length_summary">选中指示器随文字长度变化；关闭后覆盖完整槽位，仅作用于液态玻璃</string>
+
+
+    <string name="icon_bilipai_violet">BiliPai 紫</string>
+    <string name="icon_bilipai_violet_description">淡紫背景与紫色标志</string>
+    <string name="icon_bilipai_green">BiliPai 绿</string>
+    <string name="icon_bilipai_green_description">浅绿背景与绿色标志</string>
+    <string name="icon_bilipai_ink">BiliPai 墨</string>
+    <string name="icon_bilipai_ink_description">墨色背景与暖白标志</string>
+    <string name="icon_bilipai_theme">BiliPai 主题色</string>
+    <string name="icon_bilipai_theme_description">支持跟随应用主题色或独立调色。自动匹配最接近的预置配色，可能存在轻微色差。</string>
+
+    <string name="icon_live_color_title">BiliPai 图标配色</string>
+    <string name="icon_live_color_summary">实时预览标志颜色和桌面匹配效果。分别选择标志与背景，应用后使用 BiliPai 主题色图标。</string>
+    <string name="icon_live_color_edit">调色与预览</string>
+    <string name="icon_live_color_requested">所选颜色</string>
+    <string name="icon_live_color_matched">桌面匹配</string>
+    <string name="icon_live_color_follow_app">跟随应用主题色</string>
+    <string name="icon_live_color_independent">独立调色</string>
+    <string name="icon_live_color_source">配色来源</string>
+    <string name="icon_live_color_preview_notice">桌面使用最接近的预置配色，可能有轻微色差。预览不会修改桌面，点击应用后生效。</string>
+    <string name="icon_live_color_follow_summary">跟随应用设置中的系统壁纸、系统壁纸重新调色或自定义主题色。独立调色只改变图标，不改变应用配色。</string>
+    <string name="icon_live_color_apply">应用到主图标</string>
+    <string name="icon_palette_foreground">标志颜色</string>
+    <string name="icon_palette_background">背景颜色</string>
+    <string name="icon_palette_auto_background">自动搭配背景</string>
+    <string name="icon_palette_auto_background_selected">自动搭配背景（已选）</string>
+    <string name="icon_live_color_target">调色对象</string>
 </resources>

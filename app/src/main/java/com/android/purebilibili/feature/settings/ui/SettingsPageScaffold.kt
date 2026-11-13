@@ -247,7 +247,8 @@ internal fun SettingsPageScaffold(
                         },
                         actions = actions,
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = if (!topBarBlurActive || nonGlassMiuix) {
+                            // 原生 Miuix 同样遵循顶部特效开关；不透明底色会遮住已绘制的渐进模糊。
+                            containerColor = if (!topBarBlurActive) {
                                 pageContainerColor
                             } else {
                                 Color.Transparent

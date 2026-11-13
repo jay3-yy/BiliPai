@@ -71,7 +71,6 @@ internal fun ThemeCustomColorPickerDialog(
     var saturation by rememberSaveable(initialHex) { mutableFloatStateOf(initialHsv[1]) }
     var brightness by rememberSaveable(initialHex) { mutableFloatStateOf(initialHsv[2]) }
     var pendingHex by rememberSaveable(initialHex) { mutableStateOf(normalizeMd3CustomColorHex(initialHex)) }
-    var showAllColors by rememberSaveable { mutableStateOf(false) }
     var previewChecked by rememberSaveable { mutableStateOf(true) }
     var previewValue by rememberSaveable { mutableFloatStateOf(0.65f) }
     var lastHapticAtMs by remember { mutableLongStateOf(0L) }
@@ -248,56 +247,10 @@ internal fun ThemeCustomColorPickerDialog(
                             )
                         }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        AppText("拖动选色", style = MaterialTheme.typography.labelLarge)
-                        AppText("饱和 ${(saturation * 100).roundToInt()}% · 明亮 ${(brightness * 100).roundToInt()}%",
-                            style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
-                    }
-                    ThemeSaturationValuePanel(hue, saturation, brightness) { s, v -> updateHsv(hue, s, v) }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        AppText("色相", style = MaterialTheme.typography.labelLarge)
-                        AppText("${hue.roundToInt()}°", style = MaterialTheme.typography.bodySmall,
-                            color = AppContentColors.secondaryText())
-                    }
-                    ThemeHueStrip(hue) { updateHsv(it, saturation, brightness) }
-                    AppTextField(
-                        value = pendingHex, onValueChange = ::updateHex,
-                        modifier = Modifier.fillMaxWidth(), label = "HEX 颜色值",
-                        singleLine = true, isError = !validHex,
-                        supportingText = { AppText(if (validHex) "6 位颜色值，可省略 #" else "请输入 6 位颜色值，例如 #007AFF",
-                            style = MaterialTheme.typography.bodySmall) },
+                    ThemeColorSelectionControls(
+                        hue = hue, saturation = saturation, brightness = brightness,
+                        pendingHex = pendingHex, onHsvChange = ::updateHsv, onHexChange = ::updateHex,
                     )
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween) {
-                        AppText("常用颜色", style = MaterialTheme.typography.labelLarge)
-                        AppTextButton(onClick = { showAllColors = !showAllColors }) {
-                            AppText(if (showAllColors) "收起" else "全部 ${ThemeColors.size}", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ThemeColors.take(if (showAllColors) ThemeColors.size else 10).forEachIndexed { index, preset ->
-                            val hex = formatMd3CustomColorHex(preset)
-                            val selected = validHex && normalizeMd3CustomColorHex(pendingHex) == hex
-                            Box(
-                                Modifier.size(48.dp).clip(CircleShape)
-                                    .selectable(selected = selected, role = Role.RadioButton, onClick = {
-                                        updateHex(hex)
-                                        haptic(HapticType.SELECTION)
-                                    })
-                                    .padding(4.dp).background(preset, CircleShape)
-                                    .border(if (selected) 2.dp else 1.dp,
-                                        if (selected) AppContentColors.primaryText() else AppSurfaceTokens.divider(), CircleShape)
-                                    .semantics { contentDescription = "${ThemeColorNames.getOrElse(index) { "颜色" }} $hex" },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                if (selected) AppText("✓", color = resolveReadableForeground(preset),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier.clearAndSetSemantics { })
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
                 }
                 AppHorizontalDivider(modifier = Modifier.padding(top = 12.dp))
                 if (onReset != null) {
@@ -412,5 +365,73 @@ private fun ThemeHueStrip(hue: Float, onChange: (Float) -> Unit) {
         drawCircle(Color.White, layout.thumbRadius.toPx(), center)
         drawCircle(Color.hsv(hue, 1f, 1f), 8.dp.toPx(), center)
         drawCircle(Color.Black.copy(alpha = 0.15f), layout.thumbRadius.toPx(), center, style = Stroke(1.dp.toPx()))
+    }
+}
+
+/** 主题与图标共用的二维取色、色相、HEX 和常用颜色控件。 */
+@Composable
+internal fun ThemeColorSelectionControls(
+    hue: Float,
+    saturation: Float,
+    brightness: Float,
+    pendingHex: String,
+    onHsvChange: (Float, Float, Float) -> Unit,
+    onHexChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showAllColors by rememberSaveable { mutableStateOf(false) }
+    val validHex = isValidMd3CustomColorHex(pendingHex)
+    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT)
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            AppText("拖动选色", style = MaterialTheme.typography.labelLarge)
+            AppText("饱和 ${(saturation * 100).roundToInt()}% · 明亮 ${(brightness * 100).roundToInt()}%",
+                style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
+        }
+        ThemeSaturationValuePanel(hue, saturation, brightness) { s, v -> onHsvChange(hue, s, v) }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            AppText("色相", style = MaterialTheme.typography.labelLarge)
+            AppText("${hue.roundToInt()}°", style = MaterialTheme.typography.bodySmall,
+                color = AppContentColors.secondaryText())
+        }
+        ThemeHueStrip(hue) { onHsvChange(it, saturation, brightness) }
+        AppTextField(
+            value = pendingHex, onValueChange = onHexChange,
+            modifier = Modifier.fillMaxWidth(), label = "HEX 颜色值",
+            singleLine = true, isError = !validHex,
+            supportingText = { AppText(if (validHex) "6 位颜色值，可省略 #" else "请输入 6 位颜色值，例如 #007AFF",
+                style = MaterialTheme.typography.bodySmall) },
+        )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            AppText("常用颜色", style = MaterialTheme.typography.labelLarge)
+            AppTextButton(onClick = { showAllColors = !showAllColors }) {
+                AppText(if (showAllColors) "收起" else "全部 ${ThemeColors.size}", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThemeColors.take(if (showAllColors) ThemeColors.size else 10).forEachIndexed { index, preset ->
+                val hex = formatMd3CustomColorHex(preset)
+                val selected = validHex && normalizeMd3CustomColorHex(pendingHex) == hex
+                Box(
+                    Modifier.size(48.dp).clip(CircleShape)
+                        .selectable(selected = selected, role = Role.RadioButton, onClick = {
+                            onHexChange(hex)
+                            haptic(HapticType.SELECTION)
+                        })
+                        .padding(4.dp).background(preset, CircleShape)
+                        .border(if (selected) 2.dp else 1.dp,
+                            if (selected) AppContentColors.primaryText() else AppSurfaceTokens.divider(), CircleShape)
+                        .semantics { contentDescription = "${ThemeColorNames.getOrElse(index) { "颜色" }} $hex" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (selected) AppText("✓", color = resolveReadableForeground(preset),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.clearAndSetSemantics { })
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
     }
 }

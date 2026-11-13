@@ -121,110 +121,26 @@ val Md3Typography = Typography()
  */
 val CompactMiuixTypography = Typography()
 
-val BiliMiuixTypography = Typography(
-    displayLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 32.sp,
-        lineHeight = 38.sp,
-        letterSpacing = 0.sp
-    ),
-    displayMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
-        letterSpacing = 0.sp
-    ),
-    displaySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 20.sp,
-        lineHeight = 26.sp,
-        letterSpacing = 0.sp
-    ),
-    headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 24.sp,
-        lineHeight = 30.sp,
-        letterSpacing = 0.sp
-    ),
-    headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 20.sp,
-        lineHeight = 26.sp,
-        letterSpacing = 0.sp
-    ),
-    headlineSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.sp
-    ),
-    titleLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 18.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.sp
-    ),
-    titleMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.sp
-    ),
-    titleSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.sp
-    ),
-    bodyLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.sp
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 21.sp,
-        letterSpacing = 0.sp
-    ),
-    bodySmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 19.sp,
-        letterSpacing = 0.sp
-    ),
-    labelLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 17.sp,
-        lineHeight = 22.sp,
-        letterSpacing = 0.sp
-    ),
-    labelMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 13.sp,
-        lineHeight = 18.sp,
-        letterSpacing = 0.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
-        letterSpacing = 0.sp
+/**
+ * Miuix 字号映射到 Material 文本槽位；显式行高与字距支持页面的相对尺寸运算。
+ * 原生 Miuix 组件仍使用自己的默认样式，不经过此桥接。
+ */
+val BiliMiuixTypography = top.yukonga.miuix.kmp.theme.defaultTextStyles().let { native ->
+    Typography(
+        displayLarge = native.title1.copy(lineHeight = 38.sp, letterSpacing = 0.sp),
+        displayMedium = native.title2.copy(lineHeight = 30.sp, letterSpacing = 0.sp),
+        displaySmall = native.title3.copy(lineHeight = 26.sp, letterSpacing = 0.sp),
+        headlineLarge = native.title2.copy(lineHeight = 30.sp, letterSpacing = 0.sp),
+        headlineMedium = native.title3.copy(lineHeight = 26.sp, letterSpacing = 0.sp),
+        headlineSmall = native.title4.copy(lineHeight = 24.sp, letterSpacing = 0.sp),
+        titleLarge = native.title4.copy(lineHeight = 24.sp, letterSpacing = 0.sp),
+        titleMedium = native.headline1.copy(lineHeight = 22.sp, letterSpacing = 0.sp),
+        titleSmall = native.headline2.copy(lineHeight = 22.sp, letterSpacing = 0.sp),
+        bodyLarge = native.main.copy(lineHeight = 22.sp, letterSpacing = 0.sp),
+        bodyMedium = native.body1.copy(lineHeight = 21.sp, letterSpacing = 0.sp),
+        bodySmall = native.body2.copy(lineHeight = 19.sp, letterSpacing = 0.sp),
+        labelLarge = native.button.copy(lineHeight = 22.sp, letterSpacing = 0.sp),
+        labelMedium = native.footnote1.copy(lineHeight = 18.sp, letterSpacing = 0.sp),
+        labelSmall = native.footnote2.copy(lineHeight = 14.sp, letterSpacing = 0.sp),
     )
-)
+}

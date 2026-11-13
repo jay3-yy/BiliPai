@@ -11,6 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,6 +58,7 @@ import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import com.android.purebilibili.core.util.AppFoldPosture
 import com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.feature.settings.ui.SettingsPinnedChromeLayout
 import com.android.purebilibili.feature.settings.SettingsHomeSearchEntry
 import com.android.purebilibili.feature.settings.SettingsRootCategory
 import com.android.purebilibili.feature.settings.canonicalSettingsRootCategory
@@ -140,77 +143,92 @@ fun SettingsTabletShell(
     val singlePaneOnly = directive.maxHorizontalPartitions <= 1 ||
         LocalAppWindowAdaptiveInfo.current.posture == AppFoldPosture.Tabletop
     val listPaneContent: @Composable ThreePaneScaffoldPaneScope.() -> Unit = {
-        Column(
+        Box(
             modifier = Modifier
                 .preferredWidth(layoutPolicy.primaryRatio)
-                .fillMaxHeight()
-                .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer()),
+                .fillMaxHeight(),
         ) {
-                val config = LocalAppThemeConfig.current
-                val progressive = shouldUseBiliPaiProgressiveTopBlur(
-                    enabled = config.progressiveTopBlurEnabled && !config.headerBlurEnabled,
-                    hasBackdrop = true,
-                ) && !isLowBlurBudgetForced()
-                val fadeActive = config.progressiveTopFadeEnabled && !config.headerBlurEnabled
-                val tabletChromeSource = if (progressive) rememberChromeBackdropSource(
-                    recordingBackground = AppSurfaceTokens.groupedListContainer(),
-                ) else null
-                val tabletChromeBackdrop = tabletChromeSource?.takeIf { it.isReady }?.backdrop
-                val tabletHazeState = if (
-                    config.headerBlurEnabled && !progressive &&
-                        shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT)
-                ) rememberRecoverableHazeState() else null
-                val tabletHazeReady = tabletHazeState?.let { recoverableBlurEnabled(it) } == true
-                BiliPaiImmersiveTopBar(
-                    // 双栏标题与搜索框上下排列；顶部特效不得外绘到下方独立搜索胶囊。
-                    modifier = if (progressive) Modifier.clipToBounds() else Modifier,
-                    backdrop = tabletChromeBackdrop,
-                    enabled = progressive,
-                    headerBlurActive = tabletHazeReady,
-                    surfaceColor = AppSurfaceTokens.groupedListContainer(),
-                    fadeEnabled = fadeActive,
-                ) {
-                    AppTopBar(
-                        title = stringResource(R.string.settings_title),
-                        modifier = if (tabletHazeReady) {
-                            Modifier
-                                .unifiedBlur(
-                                    hazeState = requireNotNull(tabletHazeState),
-                                    surfaceType = BlurSurfaceType.HEADER,
-                                )
-                                .background(
-                                    AppSurfaceTokens.groupedListContainer()
-                                        .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
-                                )
-                        } else Modifier,
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = if (progressive || fadeActive || tabletHazeReady) {
-                                androidx.compose.ui.graphics.Color.Transparent
-                            } else {
-                                AppSurfaceTokens.groupedListContainer()
-                            },
-                            scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
-                        ),
-                        navigationIcon = {
-                            AppIconButton(onClick = onBack) {
-                                AppIcon(
-                                    imageVector = rememberAppBackIcon(),
-                                    contentDescription = stringResource(R.string.common_back),
-                                )
-                            }
-                        },
-                    )
-                }
-                Column(
+            val config = LocalAppThemeConfig.current
+            val progressive = shouldUseBiliPaiProgressiveTopBlur(
+                enabled = config.progressiveTopBlurEnabled && !config.headerBlurEnabled,
+                hasBackdrop = true,
+            ) && !isLowBlurBudgetForced()
+            val fadeActive = config.progressiveTopFadeEnabled && !config.headerBlurEnabled
+            val tabletChromeSource = if (progressive) rememberChromeBackdropSource(
+                recordingBackground = AppSurfaceTokens.groupedListContainer(),
+            ) else null
+            val tabletChromeBackdrop = tabletChromeSource?.takeIf { it.isReady }?.backdrop
+            val tabletHazeState = if (
+                config.headerBlurEnabled && !progressive &&
+                    shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT)
+            ) rememberRecoverableHazeState() else null
+            val tabletHazeReady = tabletHazeState?.let { recoverableBlurEnabled(it) } == true
+            // 列表视口覆盖整个左栏；固定顶部只消费列表背景，搜索框与阴影不进入录制。
+            SettingsPinnedChromeLayout(
+                modifier = Modifier.fillMaxSize(),
+                chrome = {
+                    BiliPaiImmersiveTopBar(
+                        modifier = if (progressive) Modifier.clipToBounds() else Modifier,
+                        backdrop = tabletChromeBackdrop,
+                        enabled = progressive,
+                        headerBlurActive = tabletHazeReady,
+                        surfaceColor = AppSurfaceTokens.groupedListContainer(),
+                        fadeEnabled = fadeActive,
+                    ) {
+                        Column(
+                            modifier = if (tabletHazeReady) {
+                                Modifier
+                                    .unifiedBlur(
+                                        hazeState = requireNotNull(tabletHazeState),
+                                        surfaceType = BlurSurfaceType.HEADER,
+                                    )
+                                    .background(
+                                        AppSurfaceTokens.groupedListContainer()
+                                            .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
+                                    )
+                            } else if (!progressive && !fadeActive) {
+                                Modifier.globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
+                            } else Modifier,
+                        ) {
+                            AppTopBar(
+                                title = stringResource(R.string.settings_title),
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = if (progressive || fadeActive || tabletHazeReady) {
+                                        androidx.compose.ui.graphics.Color.Transparent
+                                    } else {
+                                        AppSurfaceTokens.groupedListContainer()
+                                    },
+                                    scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                ),
+                                navigationIcon = {
+                                    AppIconButton(onClick = onBack) {
+                                        AppIcon(
+                                            imageVector = rememberAppBackIcon(),
+                                            contentDescription = stringResource(R.string.common_back),
+                                        )
+                                    }
+                                },
+                            )
+                            SettingsHomeSearchEntry(
+                                onClick = onSearchOpen,
+                                modifier = Modifier.padding(horizontal = layoutPolicy.masterPanePaddingDp.dp),
+                            )
+                            Spacer(Modifier.height(8.dp))
+                        }
+                    }
+                },
+            ) { contentPadding ->
+                Box(
                     modifier = Modifier
-                        .weight(1f)
+                        .fillMaxSize()
                         .then(tabletChromeSource?.modifier ?: Modifier)
                         .then(if (tabletHazeReady) Modifier.hazeSourceCompat(requireNotNull(tabletHazeState)) else Modifier)
+                        .globalWallpaperAwareBackground(AppSurfaceTokens.groupedListContainer())
                         .padding(horizontal = layoutPolicy.masterPanePaddingDp.dp),
                 ) {
-                    SettingsHomeSearchEntry(onClick = onSearchOpen)
                     LazyColumn(
-                        modifier = Modifier.fillMaxSize().padding(top = 8.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = contentPadding,
                     ) {
                         itemsIndexed(categories) { index, category ->
                             val visual = rememberSettingsEntryVisual(category.searchTarget)
@@ -268,6 +286,7 @@ fun SettingsTabletShell(
                 }
             }
         }
+    }
     val infoPaneContent: @Composable ThreePaneScaffoldPaneScope.() -> Unit = {
         Column(
             modifier = Modifier

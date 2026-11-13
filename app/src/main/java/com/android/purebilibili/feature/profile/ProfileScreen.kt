@@ -91,6 +91,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -3716,45 +3717,52 @@ private fun ProfileAccountEditRow(
     avatar: String? = null,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = modifier.fillMaxWidth().heightIn(min = 48.dp)
+    // 标题与内容参与同一行测量，长资料仅占剩余宽度；所有主题与材质共用。
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.CenterStart,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppText(title, color = AppContentColors.primaryText(), style = MaterialTheme.typography.bodyLarge)
-        if (!avatar.isNullOrBlank()) {
-            // 头像行与其他行一致：头像与右箭头右对齐，标题保持居左。
-            Row(
-                modifier = Modifier.align(Alignment.CenterEnd),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AsyncImage(model = avatar, contentDescription = "B 站账号头像", contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(36.dp).clip(CircleShape))
+        AppText(
+            text = title,
+            color = AppContentColors.primaryText(),
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(Modifier.width(12.dp))
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (!avatar.isNullOrBlank()) {
+                AsyncImage(
+                    model = avatar,
+                    contentDescription = "B 站账号头像",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(36.dp).clip(CircleShape),
+                )
                 Spacer(Modifier.width(4.dp))
-                AppIcon(com.android.purebilibili.core.ui.resolveAppChevronForwardIcon(), contentDescription = null,
-                    tint = AppContentColors.secondaryText(), modifier = Modifier.size(20.dp))
+            } else if (value.isNotBlank()) {
+                AppText(
+                    text = value,
+                    color = AppContentColors.secondaryText(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Spacer(Modifier.width(4.dp))
             }
-        } else {
-            Row(
-                modifier = Modifier.align(Alignment.CenterEnd).fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (value.isNotBlank()) {
-                    AppText(
-                        text = value,
-                        color = AppContentColors.secondaryText(),
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    Spacer(Modifier.width(4.dp))
-                }
-                AppIcon(com.android.purebilibili.core.ui.resolveAppChevronForwardIcon(), contentDescription = null,
-                    tint = AppContentColors.secondaryText(), modifier = Modifier.size(20.dp))
-            }
+            AppIcon(
+                com.android.purebilibili.core.ui.resolveAppChevronForwardIcon(),
+                contentDescription = null,
+                tint = AppContentColors.secondaryText(),
+                modifier = Modifier.size(20.dp),
+            )
         }
     }
 }

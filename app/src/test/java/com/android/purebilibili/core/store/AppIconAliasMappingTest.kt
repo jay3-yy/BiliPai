@@ -7,6 +7,30 @@ import kotlin.test.assertTrue
 class AppIconAliasMappingTest {
 
     @Test
+    fun vectorPaletteIconsRemainSelectedAndManagedAcrossLaunchModes() {
+        val presets = mapOf(
+            "icon_bilipai_violet" to "MainActivityAliasBiliPaiViolet",
+            "icon_bilipai_green" to "MainActivityAliasBiliPaiGreen",
+            "icon_bilipai_ink" to "MainActivityAliasBiliPaiInk",
+        )
+        val packageName = "com.android.purebilibili"
+        val managed = allManagedAppIconLauncherAliases(packageName)
+        for ((key, alias) in presets) {
+            assertEquals(key, normalizeAppIconKey(key))
+            for (appearance in AppIconAppearance.entries) {
+                for (splashVisible in listOf(false, true)) {
+                    val expected = "$packageName.$alias" + if (splashVisible) "" else "NoIcon"
+                    val resolved = resolveAppIconLauncherAlias(
+                        packageName, key, splashIconVisible = splashVisible, appearance = appearance,
+                    )
+                    assertEquals(expected, resolved)
+                    assertTrue(resolved in managed)
+                }
+            }
+        }
+    }
+
+    @Test
     fun resolveAppIconLauncherAlias_supportsCanonicalAndLegacyKeys() {
         val packageName = "com.android.purebilibili"
 

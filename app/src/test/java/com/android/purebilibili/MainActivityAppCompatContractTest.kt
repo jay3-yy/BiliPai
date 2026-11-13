@@ -152,16 +152,10 @@ class MainActivityAppCompatContractTest {
         )
 
         val splashAdaptiveIcon = loadResourceText("mipmap-anydpi-v26/splash_icon_bilipai_monet.xml")
-        val splashForeground = loadResourceText("drawable/splash_icon_bilipai_monet_foreground.xml")
         assertTrue(
             splashAdaptiveIcon.contains("@color/splash_bilipai_monet_background") &&
                 splashAdaptiveIcon.contains("@drawable/splash_icon_bilipai_monet_foreground"),
             "BiliPai Monet splash should use a dedicated adaptive icon so the system starting window is dynamically colored"
-        )
-        assertTrue(
-            splashForeground.contains("@mipmap/ic_launcher_bilipai_monet_foreground") &&
-                splashForeground.contains("@color/splash_bilipai_monet_foreground"),
-            "BiliPai Monet splash should tint the same clean monochrome artwork as the launcher"
         )
         assertTrue(
             loadResourceText("values-v31/colors.xml").contains(

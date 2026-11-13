@@ -484,31 +484,20 @@ private fun NativeAdaptiveTopAppBar(
             }
 
             AdaptiveTopAppBarStyle.SMALL -> {
-                if (isMiuixNonGlassEnabled()) {
-                    MiuixSmallTopAppBar(
-                        title = displayTitle,
-                        titleColor = if (smallTitleColor == Color.Unspecified) {
-                            top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface
-                        } else smallTitleColor,
-                        modifier = modifier,
-                        color = topAppBarColors.containerColor,
-                        navigationIcon = navigationContent,
-                        actions = actionsContent,
-                        titlePadding = 0.dp,
-                        navigationIconPadding = 0.dp,
-                        actionIconPadding = 0.dp,
-                    )
-                } else {
-                    TopAppBar(
-                        modifier = modifier,
-                        title = { Text(displayTitle, color = smallTitleColor, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                        navigationIcon = navigationContent,
-                        actions = actionsContent,
-                        colors = topAppBarColors,
-                        scrollBehavior = scrollBehavior,
-                        windowInsets = WindowInsets.statusBars
-                    )
-                }
+                // 玻璃仅由外层提供材质，标题、操作槽与关闭玻璃时共用原生布局。
+                MiuixSmallTopAppBar(
+                    title = displayTitle,
+                    titleColor = if (smallTitleColor == Color.Unspecified) {
+                        top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface
+                    } else smallTitleColor,
+                    modifier = modifier,
+                    color = topAppBarColors.containerColor,
+                    navigationIcon = navigationContent,
+                    actions = actionsContent,
+                    titlePadding = 0.dp,
+                    navigationIconPadding = 0.dp,
+                    actionIconPadding = 0.dp,
+                )
             }
 
             AdaptiveTopAppBarStyle.CENTERED -> {

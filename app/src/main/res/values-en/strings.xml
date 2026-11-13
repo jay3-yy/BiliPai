@@ -956,4 +956,31 @@
     <string name="preview_blur_compare_api_requirement">The platform renderer requires API 37.2 or later. This device runs API %1$s, so Miuix is used.</string>
     <string name="animation_indicator_dynamic_length_title">Dynamic glass indicator length</string>
     <string name="animation_indicator_dynamic_length_summary">Fit the selected indicator to its label; turn off to fill the slot. Applies only to liquid glass.</string>
+
+
+    <string name="icon_bilipai_violet">BiliPai Violet</string>
+    <string name="icon_bilipai_violet_description">Violet mark on a pale lavender background</string>
+    <string name="icon_bilipai_green">BiliPai Green</string>
+    <string name="icon_bilipai_green_description">Green mark on a pale mint background</string>
+    <string name="icon_bilipai_ink">BiliPai Ink</string>
+    <string name="icon_bilipai_ink_description">Warm white mark on an ink background</string>
+    <string name="icon_bilipai_theme">BiliPai Theme</string>
+    <string name="icon_bilipai_theme_description">Follow the app accent or choose an independent icon color. Uses the nearest preset, so slight color differences may occur.</string>
+
+    <string name="icon_live_color_title">BiliPai icon colors</string>
+    <string name="icon_live_color_summary">Preview the mark color and its home screen match. Choose mark and background colors separately, then apply the BiliPai Theme icon.</string>
+    <string name="icon_live_color_edit">Color editor and preview</string>
+    <string name="icon_live_color_requested">Selected color</string>
+    <string name="icon_live_color_matched">Home screen match</string>
+    <string name="icon_live_color_follow_app">Follow app accent</string>
+    <string name="icon_live_color_independent">Independent color</string>
+    <string name="icon_live_color_source">Color source</string>
+    <string name="icon_live_color_preview_notice">The home screen uses the nearest preset, so slight differences may occur. Previewing makes no changes until you apply.</string>
+    <string name="icon_live_color_follow_summary">Follows the app accent from system wallpaper, regenerated wallpaper colors, or a custom theme color. Independent color changes only the icon.</string>
+    <string name="icon_live_color_apply">Apply to app icon</string>
+    <string name="icon_palette_foreground">Mark color</string>
+    <string name="icon_palette_background">Background color</string>
+    <string name="icon_palette_auto_background">Automatic background</string>
+    <string name="icon_palette_auto_background_selected">Automatic background (selected)</string>
+    <string name="icon_live_color_target">Edit color</string>
 </resources>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bilipai_icon_violet_background">#F5F0FF</color>
+    <color name="bilipai_icon_green_background">#EFFAF5</color>
+    <color name="bilipai_icon_ink_background">#242321</color>
+    <style name="Theme.PureBiliBili.Splash.BiliPaiViolet" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenBackground">@color/bilipai_icon_violet_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai_violet</item>
+    </style>
+    <style name="Theme.PureBiliBili.Splash.BiliPaiGreen" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenBackground">@color/bilipai_icon_green_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai_green</item>
+    </style>
+    <style name="Theme.PureBiliBili.Splash.BiliPaiInk" parent="Theme.PureBiliBili">
+        <item name="windowSplashScreenBackground">@color/bilipai_icon_ink_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_bilipai_ink</item>
+    </style>
+</resources>

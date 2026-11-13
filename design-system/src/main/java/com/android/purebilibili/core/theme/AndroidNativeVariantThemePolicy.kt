@@ -67,7 +67,10 @@ fun shouldUseMiuixSmoothRounding(
 fun resolveMaterialTypography(
     uiStyle: AppUiStyle,
     liquidGlassEnabled: Boolean = true,
-): Typography = Md3Typography
+): Typography = when (uiStyle) {
+    AppUiStyle.MIUIX -> BiliMiuixTypography
+    AppUiStyle.MATERIAL3 -> Md3Typography
+}
 
 fun resolveMaterialMotionScheme(
     uiStyle: AppUiStyle

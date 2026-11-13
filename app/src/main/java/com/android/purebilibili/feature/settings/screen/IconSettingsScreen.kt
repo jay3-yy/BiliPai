@@ -86,6 +86,10 @@ fun getIconGroups(): List<IconGroup> {
                 IconOption(R.string.icon_bilipai, "icon_bilipai", R.string.icon_bilipai_description, R.mipmap.ic_launcher_bilipai_round),
                 IconOption(R.string.icon_bilipai_pink, "icon_bilipai_pink", R.string.icon_bilipai_pink_description, R.mipmap.ic_launcher_bilipai_pink_round),
                 IconOption(R.string.icon_bilipai_white, "icon_bilipai_white", R.string.icon_bilipai_white_description, R.mipmap.ic_launcher_bilipai_white_round),
+                IconOption(R.string.icon_bilipai_violet, "icon_bilipai_violet", R.string.icon_bilipai_violet_description, R.mipmap.ic_launcher_bilipai_violet_round),
+                IconOption(R.string.icon_bilipai_green, "icon_bilipai_green", R.string.icon_bilipai_green_description, R.mipmap.ic_launcher_bilipai_green_round),
+                IconOption(R.string.icon_bilipai_ink, "icon_bilipai_ink", R.string.icon_bilipai_ink_description, R.mipmap.ic_launcher_bilipai_ink_round),
+                IconOption(R.string.icon_bilipai_theme, "icon_bilipai_theme", R.string.icon_bilipai_theme_description, R.mipmap.ic_bilipai_theme_017),
                 IconOption(R.string.icon_bilipai_monet, "icon_bilipai_monet", R.string.icon_bilipai_monet_description, R.mipmap.ic_launcher_bilipai_monet_round)
             )
         )
@@ -94,8 +98,12 @@ fun getIconGroups(): List<IconGroup> {
 
 internal fun resolveIconOptionPreviewRes(
     iconKey: String,
-    appearance: AppIconAppearance
+    appearance: AppIconAppearance,
+    themeIconIndex: Int = com.android.purebilibili.core.store.DEFAULT_BILIPAI_THEME_ICON_INDEX,
 ): Int {
+    if (iconKey == com.android.purebilibili.core.store.BILIPAI_THEME_ICON_KEY) {
+        return com.android.purebilibili.biliPaiThemeIconResources[themeIconIndex]
+    }
     return when (iconKey to appearance) {
         "icon_3d" to AppIconAppearance.LIGHT -> R.mipmap.ic_launcher_3d_light_round
         "icon_3d" to AppIconAppearance.DARK -> R.mipmap.ic_launcher_3d_dark_round
@@ -174,6 +182,7 @@ fun IconSettingsContent(
         navigationBarsBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
         extraBottomPadding = 24.dp
     )
+    val themeIconIndex = com.android.purebilibili.core.theme.LocalAppThemeIconPaletteIndex.current
     val appearanceFollowSystem = stringResource(R.string.icon_appearance_follow_system)
     val appearanceLight = stringResource(R.string.icon_appearance_light)
     val appearanceDark = stringResource(R.string.icon_appearance_dark)
@@ -237,6 +246,13 @@ fun IconSettingsContent(
                 }
             }
 
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                BiliPaiIconLiveColorEditor(
+                    onApply = viewModel::applyBiliPaiIconColor,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
             iconGroups.forEach { group ->
                 // 分组标题
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -273,7 +289,7 @@ fun IconSettingsContent(
                             // iOS App Icon 形状: 连续曲率圆角 (Squircle)
                             val iconShape = AppShapes.container(ContainerLevel.Dialog)
                             AsyncImage(
-                                model = resolveIconOptionPreviewRes(option.key, iconAppearance),
+                                model = resolveIconOptionPreviewRes(option.key, iconAppearance, themeIconIndex),
                                 contentDescription = optionAccessibilityLabel,
                                 modifier = Modifier
                                     .size(64.dp)
@@ -322,7 +338,7 @@ fun IconSettingsContent(
                             color = if (isSelected) AppContentColors.accent()
                                     else AppContentColors.primaryText(),
                             textAlign = TextAlign.Center,
-                            maxLines = 1
+                            maxLines = if (option.key == com.android.purebilibili.core.store.BILIPAI_THEME_ICON_KEY) 2 else 1,
                         )
                     }
                 }
