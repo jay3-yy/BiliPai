@@ -844,9 +844,7 @@ object VideoRepository {
                 "build" to "2001100",
                 "c_locale" to "zh_CN",
                 "channel" to "master",
-                // 官方 App 接口没有 ps，条数由 column 决定，固定按 7 列要。
-                // 给 4 时实测只返回 8~10 条，填不满一屏之外还要等下一页。
-                "column" to HOME_FEED_REQUEST_COLUMN.toString(),
+                "column" to columns.toString(),
                 "device" to "pad",
                 "device_name" to "android",
                 "device_type" to "0",
@@ -865,7 +863,7 @@ object VideoRepository {
                 "network" to "wifi",
                 "platform" to "android",
                 "player_net" to "1",
-                "pull" to if (idx == 0) "true" else "false",  // 首页 true=刷新, 往后 false=加载更多
+                "pull" to if (flush == HOME_FEED_FLUSH_PULL_UP) "false" else "true",
                 "qn" to "32",
                 "recsys_mode" to "0",
                 "s_locale" to "zh_CN",

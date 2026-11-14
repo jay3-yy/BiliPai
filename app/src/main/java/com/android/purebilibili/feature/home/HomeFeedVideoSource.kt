@@ -87,8 +87,5 @@ internal fun resolveHomeFeedFlush(isLoadMore: Boolean, isManualRefresh: Boolean)
 }
 
 internal fun resolveHomeFeedPageSize(columns: Int): Int {
-    // 和请求里的 column 保持一致：统一按 7 列要量。
-    // 7 × 3 + 2 = 23，服务端 ps 上限在 30 左右（实测 ps=50 返回 -400）。
-    val requestColumns = com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN
-    return (requestColumns * 3 + 2).coerceIn(10, 30)
+    return (columns * 3 + 2).coerceIn(10, 30)
 }

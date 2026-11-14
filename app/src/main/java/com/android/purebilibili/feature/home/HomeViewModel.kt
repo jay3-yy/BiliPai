@@ -1064,7 +1064,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             com.android.purebilibili.core.util.Logger.d(
                 "HomeFeed",
                 "refresh 触发 category=$category 实际列=$feedGridColumns " +
-                    "请求column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN}",
+                    "请求column=$feedGridColumns",
             )
             _isRefreshing.value = true
             try {
@@ -1220,8 +1220,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (next != feedGridColumns) {
             com.android.purebilibili.core.util.Logger.d(
                 "HomeFeed",
-                "列数变化 $feedGridColumns → $next（实际列只影响本地排版，" +
-                    "请求固定 column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN}）",
+                "列数变化 $feedGridColumns → $next，请求 column=$next",
             )
         }
         feedGridColumns = next
@@ -1273,7 +1272,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             com.android.purebilibili.core.util.Logger.d(
                 "HomeFeed",
                 "loadMore 触发 category=$currentCategory 实际列=$feedGridColumns " +
-                    "请求column=${com.android.purebilibili.data.repository.HOME_FEED_REQUEST_COLUMN} " +
+                    "请求column=$feedGridColumns " +
                     "current=${categoryState.videos.size}",
             )
             fetchData(isLoadMore = true, category = category, popularSubCategory = popularSubCategory)

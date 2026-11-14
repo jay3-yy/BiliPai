@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 
 class HomeFeedRequestPolicyTest {
     @Test
-    fun legacyLoginRetainsPhoneIdentityAndRequestsFixedCardVolume() {
+    fun legacyLoginRetainsPhoneIdentityAndReportsCurrentLayout() {
         val initial = buildSignedHomePhoneFeedParams(idx = 0, accessToken = "test-token", platform = TokenManager.ACCESS_TOKEN_PLATFORM_TV, columns = 2, timestampSec = 123L)
         val next = buildSignedHomePhoneFeedParams(idx = 3, accessToken = "test-token", platform = TokenManager.ACCESS_TOKEN_PLATFORM_TV, columns = 4, flush = HOME_FEED_FLUSH_PULL_UP, timestampSec = 124L)
         assertEquals(AppSignUtils.TV_APP_KEY, initial["appkey"])
@@ -22,16 +22,27 @@ class HomeFeedRequestPolicyTest {
         assertEquals("android", initial["device"])
         assertEquals("8130300", initial["build"])
         assertEquals("test-token", initial["access_key"])
-        assertEquals("1", initial["pull"])
-        assertEquals("0", next["pull"])
+        assertEquals("true", initial["pull"])
+        assertEquals("false", next["pull"])
         assertEquals("3", next["idx"])
         assertNull(initial["ps"])
         assertNull(next["ps"])
-        assertEquals("7", initial["column"])
-        assertEquals(initial["column"], next["column"])
+        assertEquals("2", initial["column"])
+        assertEquals("4", next["column"])
         assertEquals("5", initial["flush"])
         assertEquals("8", next["flush"])
         assertEquals("124", next["ts"])
+    }
+
+    @Test
+    fun manualRefreshRemainsPullEvenAfterPaginationAdvanced() {
+        val refresh = buildSignedHomePhoneFeedParams(
+            idx = 7, accessToken = "test-token", platform = TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID,
+            flush = HOME_FEED_FLUSH_PULL_DOWN, timestampSec = 123L,
+        )
+        assertEquals("true", refresh["pull"])
+        assertEquals("6", refresh["flush"])
+        assertEquals("7", refresh["idx"])
     }
 
     @Test
