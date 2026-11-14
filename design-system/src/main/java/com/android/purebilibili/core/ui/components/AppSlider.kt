@@ -92,7 +92,8 @@ fun AppSlider(
         )
         AppUiStyle.MIUIX -> AppMiuixSlider(
             value = value,
-            onValueChange = onSliderValueChange,
+            // 原生滑块自行提供边缘触感，不叠加本地分档触感。
+            onValueChange = onValueChange,
             modifier = sizedModifier,
             enabled = enabled,
             valueRange = valueRange,

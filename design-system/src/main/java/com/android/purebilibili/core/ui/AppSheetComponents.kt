@@ -415,16 +415,31 @@ fun AppModalBottomSheet(
         }
 
         if (miuix && hingeSafeRegions == null) {
-            var show by remember { mutableStateOf(true) }
-            LaunchedEffect(visible) { show = visible }
+            var show by remember { mutableStateOf(visible) }
+            LaunchedEffect(visible) {
+                // 业务收起与手势收起共用开始通知；已进入收起时不重复通知。
+                if (show && !visible) latestDismissStarted()
+                show = visible
+            }
+            val requestNativeDismiss: () -> Unit = {
+                if (show) {
+                    latestDismissStarted()
+                    show = false
+                }
+            }
             val centeredBack = remember { AppDialogBackState() }
             val centeredBackModifier = Modifier.appDialogBackMotion(state = centeredBack) { centeredBack.progress }
             val body: @Composable () -> Unit = {
                 val blurMotionModifier = if (centered) {
                     AppDialogPredictiveBackHandler(
                         state = centeredBack,
-                        gesturesEnabled = dismissOnBackPress,
-                        onBackCompleted = { latestDismissStarted(); finishDismiss() },
+                        gesturesEnabled = dismissOnBackPress && show,
+                        onBackCompleted = {
+                            if (show) {
+                                requestNativeDismiss()
+                                finishDismiss()
+                            }
+                        },
                     )
                     ModalWindowBlurBehindEffect(enabled = blurBehind, progress = { 1f - centeredBack.progress })
                     Modifier
@@ -437,7 +452,15 @@ fun AppModalBottomSheet(
                         onBackCompleted = {},
                     )
                 }
-                Column(Modifier.fillMaxWidth().then(blurMotionModifier).then(sheetSurfaceModifier), content = content)
+                com.android.purebilibili.core.ui.components.ProvideAppActionContentColor(contentColor) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(blurMotionModifier)
+                            .then(sheetSurfaceModifier),
+                        content = content,
+                    )
+                }
             }
             if (centered) {
                 WindowDialog(
@@ -448,7 +471,7 @@ fun AppModalBottomSheet(
                     maxWidth = layoutSpec.maxWidthDp.dp,
                     largeScreen = true,
                     insideMargin = DpSize(0.dp, 0.dp),
-                    onDismissRequest = { latestDismissStarted(); show = false },
+                    onDismissRequest = requestNativeDismiss,
                     onDismissFinished = { if (!show) finishDismiss() },
                     content = body,
                 )
@@ -458,7 +481,7 @@ fun AppModalBottomSheet(
                     modifier = modifier,
                     backgroundColor = windowColor,
                     insideMargin = DpSize(0.dp, 0.dp),
-                    onDismissRequest = { latestDismissStarted(); show = false },
+                    onDismissRequest = requestNativeDismiss,
                     onDismissFinished = { if (!show) finishDismiss() },
                     content = body,
                 )

@@ -1323,7 +1323,11 @@ fun HomeScreen(
         resolveHomeTopPresetStyle(topChromePolicy, homeSettings.topTabLabelMode)
     }
     val homeTopSearchMetrics = resolveHomeTopSearchRowMetrics(
-        configuredHeight = homeTopPresetStyle.searchBarHeight,
+        // 与顶栏搜索场景使用相同测量，避免原生入口变高后内容预留与折叠距离仍用旧值。
+        configuredHeight = if (appUiStyle == com.android.purebilibili.core.theme.AppUiStyle.MIUIX &&
+            !homeSettings.homeSearchGlassEnabled
+        ) maxOf(homeTopPresetStyle.searchBarHeight, top.yukonga.miuix.kmp.basic.SearchBarDefaults.InputFieldMinHeight)
+            else homeTopPresetStyle.searchBarHeight,
         configuredTabsSpacing = homeTopPresetStyle.searchToTabsSpacing,
         bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
         hideTopTabs = effectiveHomeSettings.hideTopTabs,

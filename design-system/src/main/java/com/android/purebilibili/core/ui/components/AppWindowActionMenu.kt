@@ -81,7 +81,10 @@ fun AppWindowActionMenu(
     sourceCapturedByParent: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    if (compact) {
+    // 原生窗口菜单统一使用菜单条目与级联布局；紧凑列表仅用于其他材质。
+    val nativeMenu = LocalAppUiStyle.current == AppUiStyle.MIUIX &&
+        LocalAppThemeConfig.current.nativeMiuixPopupsEnabled && !appGlassMenuAvailable()
+    if (compact && !nativeMenu) {
         AppCompactWindowActionMenu(
             groups = groups,
             modifier = modifier,
@@ -183,6 +186,15 @@ fun AppWindowActionMenu(
             onExpandedChange?.invoke(false)
         }
     }
+    val selectNativeAction = appValueChangeWithFeedback<AppWindowAction>(
+        scene = com.android.purebilibili.core.ui.AppHapticScene.MENUS,
+        onValueChange = { action ->
+            if (expanded) {
+                dismiss()
+                action.onClick?.invoke()
+            }
+        },
+    )
     Box(modifier = modifier) {
         AppIconButton(
             modifier = anchorModifier,
@@ -193,12 +205,7 @@ fun AppWindowActionMenu(
             show = expanded,
             entries = groups.filter { it.isNotEmpty() }.map { actions ->
                 DropdownEntry(items = actions.map { action ->
-                    action.toDropdownItem { selected ->
-                        if (expanded) {
-                            dismiss()
-                            selected.onClick?.invoke()
-                        }
-                    }
+                    action.toDropdownItem(selectNativeAction)
                 })
             },
             alignment = PopupPositionProvider.Align.End,

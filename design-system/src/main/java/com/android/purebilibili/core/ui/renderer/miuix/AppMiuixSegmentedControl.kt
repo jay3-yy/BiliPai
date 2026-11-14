@@ -591,11 +591,14 @@ private fun <T> AppMiuixSizedTabs(
     val density = LocalDensity.current
     val scrollState = rememberScrollState()
     val motionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
-    val animatedPosition = animateFloatAsState(
+    // 非玻璃 Miuix 的离散选择直接切换背景；连续位置仍由页面 Pager 提供。
+    // 玻璃内的原生控件保留原有弹簧与按压反馈。
+    val animatedPosition = if (nativeStyle) null else animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
         animationSpec = if (!motionEnabled || indicatorPositionProvider != null) snap() else spring(),
         label = "miuixTabPosition",
     )
+    val indication = if (nativeStyle) null else androidx.compose.foundation.LocalIndication.current
     val inactiveBackground = if (nativeStyle) scheme.surface else if (shouldUseOpaqueMiuixTabBackdrop(true, LocalImmersiveTopChromeActive.current)) {
         AppSurfaceTokens.groupedListContainer()
     } else Color.Transparent
@@ -678,7 +681,9 @@ private fun <T> AppMiuixSizedTabs(
                 Modifier
                     .tabIndicatorBounds {
                         resolveElasticTabIndicatorBounds(
-                            position = indicatorPositionProvider?.invoke() ?: animatedPosition.value,
+                            position = indicatorPositionProvider?.invoke()
+                                ?: animatedPosition?.value
+                                ?: selectedIndex.toFloat(),
                             tabLeftsDp = indicatorLefts,
                             tabWidthsDp = indicatorWidths,
                             contentWidthsDp = indicatorWidths,
@@ -698,9 +703,16 @@ private fun <T> AppMiuixSizedTabs(
                         modifier = Modifier
                             .width(widths[index])
                             .height(height)
-                            .then(itemClip)
+                            .then(if (nativeStyle) Modifier else itemClip)
                             .then(if (nativeStyle && !selected) Modifier.squircleBorder(width = 1.dp, color = scheme.outline, cornerRadius = cornerRadius) else Modifier)
-                            .selectable(selected, enabled = enabled, role = Role.Tab) { onSelectionChange(option.value) }
+                            .selectable(
+                                selected = selected,
+                                enabled = enabled,
+                                role = Role.Tab,
+                                interactionSource = null,
+                                indication = indication,
+                                onClick = { onSelectionChange(option.value) },
+                            )
                             .semantics { collectionItemInfo = CollectionItemInfo(0, 1, index, 1) }
                             .padding(horizontal = 12.dp),
                         contentAlignment = Alignment.Center,

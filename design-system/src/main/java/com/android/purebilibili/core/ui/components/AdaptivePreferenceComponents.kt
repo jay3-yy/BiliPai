@@ -79,8 +79,12 @@ import top.yukonga.miuix.kmp.basic.CardDefaults as MiuixCardDefaults
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.preference.ArrowPreference as MiuixArrowPreference
 import top.yukonga.miuix.kmp.basic.InputField
+import top.yukonga.miuix.kmp.basic.SearchBarDefaults
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.Search as NativeSearch
 import top.yukonga.miuix.kmp.basic.TextField as MiuixTextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults as MiuixTextFieldDefaults
+import top.yukonga.miuix.kmp.squircle.squircleBorder
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -643,10 +647,13 @@ private fun AdaptiveSwitchPreferenceBody(
         iconStyle,
     )
     val listItemStyle = rememberResolvedAppListItemStyle()
+    val rowCheckedChange = appValueChangeWithFeedback<Boolean>(
+        scene = com.android.purebilibili.core.ui.AppHapticScene.CONTROLS,
+        feedbackType = { if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff },
+        onValueChange = onCheckedChange,
+    )
     if (listItemStyle == AppListItemStyle.NATIVE && uiStyle == AppUiStyle.MATERIAL3) {
         // MD3 原生:ListItem + M3 Switch
-        val haptic = LocalHapticFeedback.current
-        val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
         // 与 AppSingleChoicePreference 的禁用态保持一致：整行 alpha 0.6。
         // 只给文字降透明度会和开关的禁用态不同步。
         ListItem(
@@ -711,27 +718,20 @@ private fun AdaptiveSwitchPreferenceBody(
                 .fillMaxWidth()
                 .alpha(if (enabled) 1f else 0.6f)
                 .heightIn(min = rowSpec.minTouchTargetHeightDp.dp)
-                .toggleable(value = checked, enabled = enabled, role = Role.Switch) { next ->
-                    if (hapticsEnabled) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    }
-                    onCheckedChange(next)
-                },
+                .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = rowCheckedChange),
         )
         return
     }
     // The preference row is shared; only AppSwitch selects its native or glass material.
-    val haptic = LocalHapticFeedback.current
-    val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
+    val nativeTypography = if (isMiuixNonGlassEnabled()) MiuixTheme.textStyles else null
+    val rowTitleStyle = nativeTypography?.main ?: MaterialTheme.typography.bodyLarge
+    val rowSubtitleStyle = nativeTypography?.body2 ?: MaterialTheme.typography.bodySmall
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = rowSpec.minTouchTargetHeightDp.dp)
             .alpha(if (enabled) 1f else 0.6f)
-            .toggleable(value = checked, enabled = enabled, role = Role.Switch) { next ->
-                if (hapticsEnabled) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                onCheckedChange(next)
-            }
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = rowCheckedChange)
             .padding(
                 horizontal = rowSpec.insideHorizontalPaddingDp.dp,
                 vertical = rowSpec.insideVerticalPaddingDp.dp
@@ -759,17 +759,17 @@ private fun AdaptiveSwitchPreferenceBody(
         }
         Column(modifier = Modifier.weight(1f)) {
             if (titleTrailingContent == null) {
-                Text(text = appSearchHighlightedText(title), style = MaterialTheme.typography.bodyLarge, color = textColor)
+                Text(text = appSearchHighlightedText(title), style = rowTitleStyle, color = textColor)
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(text = appSearchHighlightedText(title), style = MaterialTheme.typography.bodyLarge,
+                    Text(text = appSearchHighlightedText(title), style = rowTitleStyle,
                         color = textColor, modifier = Modifier.weight(1f))
                     titleTrailingContent()
                 }
             }
             if (subtitle != null) {
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(text = appSearchHighlightedText(subtitle), style = MaterialTheme.typography.bodySmall, color = subtitleColor)
+                Text(text = appSearchHighlightedText(subtitle), style = rowSubtitleStyle, color = subtitleColor)
             }
         }
         Spacer(modifier = Modifier.width(rowSpec.trailingSpacingDp.dp))
@@ -1593,27 +1593,43 @@ fun AppSearchEntry(
     showPlaceholder: Boolean = true,
 ) {
     val uiStyle = LocalAppUiStyle.current
-    val hintColor = AppContentColors.secondaryText()
-    val shape = if (uiStyle == AppUiStyle.MIUIX) androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+    val nativeMiuix = isMiuixNonGlassEnabled()
+    val hintColor = if (nativeMiuix) MiuixTheme.colorScheme.onSurfaceContainerHigh else AppContentColors.secondaryText()
+    val shape = if (nativeMiuix) androidx.compose.foundation.shape.CircleShape
+        else if (uiStyle == AppUiStyle.MIUIX) androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
         else androidx.compose.foundation.shape.CircleShape
+    val defaultContainerColor = if (nativeMiuix) MiuixTheme.colorScheme.surfaceContainerHigh
+        else AppSurfaceTokens.searchContainer()
+    val labelStyle = if (nativeMiuix) MiuixTheme.textStyles.main.copy(
+        fontSize = SearchBarDefaults.InputFieldFontSize,
+        fontWeight = FontWeight.Medium,
+    ) else MaterialTheme.typography.bodyMedium
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 40.dp)
-            .appSearchElasticPress()
+            .heightIn(min = if (nativeMiuix) SearchBarDefaults.InputFieldMinHeight else 40.dp)
+            .then(if (nativeMiuix) Modifier else Modifier.appSearchElasticPress())
             .clip(shape)
-            .background(if (containerColor == Color.Unspecified) AppSurfaceTokens.searchContainer() else containerColor)
+            .background(if (containerColor == Color.Unspecified) defaultContainerColor else containerColor)
             .onFocusChanged { if (openOnFocus && it.isFocused) onClick() }
             .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .padding(horizontal = 16.dp),
         horizontalArrangement = if (centeredContent) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        AppIcon(Icons.Default.Search, contentDescription = if (showPlaceholder) null else "搜索",
-            tint = hintColor, modifier = Modifier.size(22.dp))
+        if (nativeMiuix) {
+            top.yukonga.miuix.kmp.basic.Icon(
+                imageVector = MiuixIcons.Basic.NativeSearch,
+                contentDescription = if (showPlaceholder) null else "搜索",
+                tint = hintColor,
+            )
+        } else {
+            AppIcon(Icons.Default.Search, contentDescription = if (showPlaceholder) null else "搜索",
+                tint = hintColor, modifier = Modifier.size(22.dp))
+        }
         if (showPlaceholder) {
             Spacer(Modifier.width(8.dp))
-            AppText(placeholder, color = hintColor, style = MaterialTheme.typography.bodyMedium,
+            AppText(placeholder, color = hintColor, style = labelStyle,
                 maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         }
     }
@@ -1635,11 +1651,20 @@ fun AdaptiveTextFieldRenderer(
 ) {
     val uiStyle = LocalAppUiStyle.current
     if (shouldUseNativeMiuixSearchBar(uiStyle)) {
+        val nativeError = isMiuixNonGlassEnabled() && isError
+        val errorColor = AppContentColors.error()
         Column(modifier = modifier.fillMaxWidth()) {
             MiuixTextField(
                 value = value,
                 onValueChange = onValueChange,
-                modifier = Modifier.fillMaxWidth(),
+                // 原生输入框本身只在聚焦时绘制边框，错误态额外保留失焦后的轮廓。
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (nativeError) Modifier.squircleBorder(
+                        width = 2.dp,
+                        color = errorColor,
+                        cornerRadius = MiuixTextFieldDefaults.CornerRadius,
+                    ) else Modifier),
                 label = label ?: placeholder.orEmpty(),
                 useLabelAsPlaceholder = label == null,
                 keyboardOptions = keyboardOptions,
@@ -1647,8 +1672,9 @@ fun AdaptiveTextFieldRenderer(
                 minLines = minLines,
                 maxLines = maxLines,
                 colors = MiuixTextFieldDefaults.textFieldColors(
+                    labelColor = if (nativeError) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
                     borderColor = if (isError) {
-                        AppContentColors.error()
+                        errorColor
                     } else {
                         MiuixTheme.colorScheme.primary
                     },

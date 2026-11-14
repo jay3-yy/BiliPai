@@ -27,14 +27,16 @@ internal fun AppMiuixSlider(
     } ?: if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
         SliderDefaults.sliderColors()
     } else SliderDefaults.sliderColors(thumbColor = com.android.purebilibili.core.ui.components.appControlThumbColor())
-    Slider(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.appDesktopFocusableItemVisuals(enabled),
-        enabled = enabled,
-        valueRange = valueRange,
-        steps = steps,
-        onValueChangeFinished = onValueChangeFinished,
-        colors = nativeColors,
-    )
+    ProvideAppMiuixHapticFeedback(scene = com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT) {
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier.appDesktopFocusableItemVisuals(enabled),
+            enabled = enabled,
+            valueRange = valueRange,
+            steps = steps,
+            onValueChangeFinished = onValueChangeFinished,
+            colors = nativeColors,
+        )
+    }
 }

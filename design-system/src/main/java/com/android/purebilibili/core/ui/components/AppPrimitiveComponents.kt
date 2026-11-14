@@ -19,6 +19,16 @@ import com.android.purebilibili.core.ui.renderer.miuix.AppMiuixMessageSnackbar
 import com.android.purebilibili.core.ui.renderer.miuix.AppMiuixNavigationDrawerItem
 import com.android.purebilibili.core.ui.renderer.miuix.AppMiuixSnackbar
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.semantics.Role
+import top.yukonga.miuix.kmp.basic.DropdownDefaults
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.Check as NativeMenuCheck
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -879,7 +889,12 @@ fun AppDropdownMenu(
             onDismissRequest = onDismissRequest,
         ) {
             Column(
-                modifier = Modifier.widthIn(max = 288.dp).verticalScroll(scrollState),
+                modifier = Modifier
+                    .widthIn(max = 288.dp)
+                    .verticalScroll(scrollState)
+                    .padding(vertical = if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+                        DropdownDefaults.FirstLastVerticalPadding - DropdownDefaults.MiddleVerticalPadding
+                    } else 0.dp),
                 content = content,
             )
         }
@@ -916,25 +931,23 @@ fun AppDropdownMenuItem(
     val menuModifier = modifier.glassMenuItem(enabled, dismissOnClick, feedbackClick).glassMenuSelectedItem(selected == true)
     val menuClick = { if (glassScope != null) glassScope.dispatch(feedbackClick, dismissOnClick) else feedbackClick() }
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
-    // MD3 弹窗查询菜单项固有宽度，原生行在无限宽度测量时会产生无效约束。
-    // 原生弹窗保留原生行；其他弹窗使用下方可计算固有尺寸的布局。
+    // 原生窗口使用菜单专用间距与选中反馈；其他材质保留各自条目布局。
     if (glassScope == null && com.android.purebilibili.core.ui.isMiuixNonGlassEnabled() &&
         LocalAppThemeConfig.current.nativeMiuixPopupsEnabled
     ) {
-        top.yukonga.miuix.kmp.basic.BasicComponent(
-            modifier = menuModifier.semantics { if (!enabled) disabled() },
-            startAction = leadingIcon,
-            endActions = trailingIcon?.let { slot -> { slot() } },
-            enabled = enabled,
-            holdDownState = selected == true,
+        AppNativeDropdownMenuItem(
+            text = text,
             onClick = menuClick,
+            modifier = menuModifier,
+            leadingIcon = leadingIcon,
+            trailingIcon = trailingIcon,
+            enabled = enabled,
+            selected = selected,
+            contentPadding = if (contentPadding == MenuDefaults.DropdownMenuItemContentPadding) {
+                PaddingValues(horizontal = DropdownDefaults.InsideHorizontalPadding, vertical = DropdownDefaults.MiddleVerticalPadding)
+            } else contentPadding,
             interactionSource = resolvedInteractionSource,
-        ) {
-            ProvideAppActionContentColor(
-                if (enabled) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.disabledOnSurface,
-                text,
-            )
-        }
+        )
         return
     }
     if (glassScope == null && LocalAppUiStyle.current == AppUiStyle.MIUIX) {
@@ -971,6 +984,82 @@ fun AppDropdownMenuItem(
         contentPadding = contentPadding,
         interactionSource = resolvedInteractionSource,
     )
+}
+
+@Composable
+internal fun AppNativeDropdownMenuItem(
+    text: @Composable () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier,
+    leadingIcon: (@Composable () -> Unit)?,
+    trailingIcon: (@Composable () -> Unit)?,
+    enabled: Boolean,
+    selected: Boolean?,
+    contentPadding: PaddingValues,
+    interactionSource: MutableInteractionSource,
+) {
+    val palette = DropdownDefaults.dropdownColors()
+    val contentColor = when {
+        !enabled -> MiuixTheme.colorScheme.disabledOnSecondaryVariant
+        selected == true -> palette.selectedContentColor
+        else -> palette.contentColor
+    }
+    val clickModifier = if (selected != null) {
+        Modifier.selectable(
+            selected = selected,
+            enabled = enabled,
+            role = Role.RadioButton,
+            interactionSource = interactionSource,
+            indication = androidx.compose.foundation.LocalIndication.current,
+            onClick = onClick,
+        )
+    } else {
+        Modifier.clickable(
+            interactionSource = interactionSource,
+            indication = androidx.compose.foundation.LocalIndication.current,
+            enabled = enabled,
+            role = Role.Button,
+            onClick = onClick,
+        )
+    }
+    ProvideAppActionContentColor(contentColor) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(if (selected == true) palette.selectedContainerColor else palette.containerColor)
+                .then(clickModifier)
+                .semantics { if (!enabled) disabled() }
+                .padding(contentPadding),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (leadingIcon != null) {
+                Box(
+                    Modifier
+                        .padding(end = DropdownDefaults.IconEndPadding)
+                        .defaultMinSize(minWidth = DropdownDefaults.IconMinSize, minHeight = DropdownDefaults.IconMinSize),
+                    contentAlignment = Alignment.Center,
+                ) { leadingIcon() }
+            }
+            Column(Modifier.weight(1f)) {
+                androidx.compose.runtime.CompositionLocalProvider(
+                    com.android.purebilibili.core.ui.LocalAppTextStyleOverride provides
+                        MiuixTheme.textStyles.body1.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Medium),
+                ) { text() }
+            }
+            if (trailingIcon != null || selected != null) {
+                Box(Modifier.padding(start = DropdownDefaults.CheckIconStartPadding)) {
+                    if (trailingIcon != null) trailingIcon() else {
+                        top.yukonga.miuix.kmp.basic.Icon(
+                            imageVector = MiuixIcons.Basic.NativeMenuCheck,
+                            contentDescription = null,
+                            tint = if (selected == true) contentColor else Color.Transparent,
+                            modifier = Modifier.size(DropdownDefaults.CheckIconSize),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

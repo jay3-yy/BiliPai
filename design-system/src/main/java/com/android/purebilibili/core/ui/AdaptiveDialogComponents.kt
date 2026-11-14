@@ -255,7 +255,8 @@ internal fun AdaptiveAlertDialog(
                     WindowDialog(
                         show = true,
                         modifier = nativeBackModifier,
-                        onDismissRequest = onDismissRequest,
+                        // 返回由内容内的处理器消费；窗口回调只按外部点击策略关闭。
+                        onDismissRequest = if (properties.dismissOnClickOutside) onDismissRequest else null,
                         maxWidth = contentLayout.maxWidthDp.dp,
                         backgroundColor = containerColor ?: top.yukonga.miuix.kmp.layout.DialogDefaults.backgroundColor(),
                     ) {
@@ -287,7 +288,7 @@ internal fun AdaptiveAlertDialog(
                 }
                 WindowDialog(
                     show = true,
-                    onDismissRequest = onDismissRequest,
+                    onDismissRequest = if (properties.dismissOnClickOutside) onDismissRequest else null,
                     maxWidth = contentLayout.maxWidthDp.dp,
                     // WindowDialog 自带背景、圆角和 24dp 内边距。这里只用其窗口/动画，
                     // 外观由 AppPopupSurface 负责，避免内外两张圆角卡片叠加。
@@ -452,6 +453,8 @@ private fun NativeMiuixAlertDialogBody(
             NativeMiuixDialogTextSlot(
                 style = typography.body1,
                 color = top.yukonga.miuix.kmp.layout.DialogDefaults.summaryColor(),
+                // 正文先收缩，保留标题与操作区；内容槽自行管理列表/文本滚动。
+                modifier = Modifier.weight(1f, fill = false),
                 content = it,
             )
         }
@@ -476,10 +479,16 @@ private fun NativeMiuixAlertDialogBody(
 private fun NativeMiuixDialogTextSlot(
     style: androidx.compose.ui.text.TextStyle,
     color: Color,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     val centeredStyle = style.copy(textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-    Box(Modifier.fillMaxWidth().padding(bottom = 12.dp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         androidx.compose.runtime.CompositionLocalProvider(LocalAppTextStyleOverride provides centeredStyle) {
             ProvideTextStyle(centeredStyle) { ProvideAppActionContentColor(color, content) }
         }

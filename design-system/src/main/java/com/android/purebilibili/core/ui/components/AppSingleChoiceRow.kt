@@ -19,6 +19,9 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.Role
 
 /**
  * Theme-native single-choice row.
@@ -37,25 +40,43 @@ fun AppSingleChoiceRow(
     content: @Composable RowScope.() -> Unit,
 ) {
     val feedbackClick = appActionWithFeedback(com.android.purebilibili.core.ui.AppHapticScene.MENUS, onClick)
+    // 选择状态由可点击整行承载，尾部标记不重复成为无障碍节点。
+    val rowModifier = modifier.semantics(mergeDescendants = true) {
+        this.selected = selected
+        role = Role.RadioButton
+        if (!enabled) disabled()
+    }
     if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+        val scheme = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+        val rowContentColor = when {
+            !enabled -> scheme.disabledOnSecondaryVariant
+            selected -> scheme.primary
+            else -> scheme.onBackground
+        }
         top.yukonga.miuix.kmp.basic.BasicComponent(
-            modifier = modifier.semantics {
-                this.selected = selected
-                if (!enabled) disabled()
-            },
+            modifier = rowModifier,
             onClick = feedbackClick,
             enabled = enabled,
             role = androidx.compose.ui.semantics.Role.RadioButton,
-            endActions = { AppRadioButton(selected = selected, onClick = null, enabled = enabled) },
+            endActions = {
+                AppRadioButton(
+                    selected = selected,
+                    onClick = null,
+                    enabled = enabled,
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
+            },
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, content = content)
+            ProvideAppActionContentColor(rowContentColor) {
+                Row(verticalAlignment = Alignment.CenterVertically, content = content)
+            }
         }
         return
     }
     AppSurface(
         onClick = feedbackClick,
         enabled = enabled,
-        modifier = modifier,
+        modifier = rowModifier,
         shape = shape,
         color = AppSurfaceTokens.surfaceContainerHigh(),
         contentColor = AppSurfaceTokens.onSurfaceContainerHigh(),
@@ -73,6 +94,7 @@ fun AppSingleChoiceRow(
                 selected = selected,
                 onClick = null,
                 enabled = enabled,
+                modifier = Modifier.clearAndSetSemantics {},
             )
         }
     }

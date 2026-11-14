@@ -18,9 +18,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -55,7 +56,10 @@ fun AppCompactMenuColumn(
             .widthIn(min = minWidth, max = maxWidth)
             .width(IntrinsicSize.Max)
             .then(scrollModifier)
-            .padding(vertical = 4.dp),
+            .padding(vertical = if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+                top.yukonga.miuix.kmp.basic.DropdownDefaults.FirstLastVerticalPadding -
+                    top.yukonga.miuix.kmp.basic.DropdownDefaults.MiddleVerticalPadding
+            } else 4.dp),
         content = content,
     )
 }
@@ -77,18 +81,34 @@ fun AppCompactMenuItem(
     val glassScope = LocalAppGlassMenuScope.current
     val menuModifier = modifier.glassMenuItem(enabled, dismissOnClick, feedbackClick).glassMenuSelectedItem(selected)
     if (glassScope == null && com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
-        top.yukonga.miuix.kmp.basic.BasicComponent(
-            modifier = menuModifier.semantics(mergeDescendants = true) {
-                this.selected = selected
-                if (!enabled) disabled()
+        val palette = top.yukonga.miuix.kmp.basic.DropdownDefaults.dropdownColors()
+        AppNativeDropdownMenuItem(
+            modifier = menuModifier,
+            text = {
+                AppText(text, tapToCopyEnabled = false)
+                if (summary != null) {
+                    AppText(
+                        summary,
+                        color = when {
+                            !enabled -> top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.disabledOnSecondaryVariant
+                            selected -> palette.selectedSummaryColor
+                            else -> palette.summaryColor
+                        },
+                        style = top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.body2,
+                        tapToCopyEnabled = false,
+                    )
+                }
             },
-            title = text,
-            summary = summary,
-            startAction = leadingIcon,
-            endActions = trailingIcon?.let { slot -> { slot() } },
+            leadingIcon = leadingIcon,
+            trailingIcon = trailingIcon,
             onClick = feedbackClick,
             enabled = enabled,
-            holdDownState = selected,
+            selected = selected,
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = top.yukonga.miuix.kmp.basic.DropdownDefaults.InsideHorizontalPadding,
+                vertical = top.yukonga.miuix.kmp.basic.DropdownDefaults.MiddleVerticalPadding,
+            ),
+            interactionSource = remember { MutableInteractionSource() },
         )
         return
     }
