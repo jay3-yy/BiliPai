@@ -28,6 +28,8 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.findRootCoordinates
 import com.android.purebilibili.feature.video.screen.VideoDetailDanmakuContextMenu
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -2265,6 +2267,9 @@ private fun VideoPageItem(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    var portraitPageInViewport by remember { mutableStateOf(false) }
+    val portraitVisualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
+        portraitPageInViewport
     val surfaceHdrRequired = if (isCurrentPage) {
         com.android.purebilibili.feature.video.ui.components.rememberVideoSurfaceHdrRequired(
             exoPlayer, selectedQualityId,
@@ -2283,9 +2288,13 @@ private fun VideoPageItem(
         audioOnly = isAudioOnly,
         pip = isInPipMode,
     )
+    // 后台音频许可不作为采集许可；只有当前页实际可见且前台聚焦时保留退场采样。
+    val portraitCaptureActive = portraitVisualWorkActive && isCurrentPage && isPortraitPlaybackAllowed
     val portraitGlassVisibility = androidx.compose.animation.core.animateFloatAsState(
-        targetValue = if (isCurrentPage && portraitOverlayVisible) 1f else 0f,
-        animationSpec = androidx.compose.animation.core.tween<Float>(
+        targetValue = if (portraitGlassSupported && portraitCaptureActive && portraitOverlayVisible) 1f else 0f,
+        animationSpec = if (!portraitCaptureActive || !portraitGlassSupported) {
+            androidx.compose.animation.core.snap<Float>()
+        } else androidx.compose.animation.core.tween<Float>(
             com.android.purebilibili.feature.video.ui.overlay.PLAYER_GLASS_VISIBILITY_DURATION_MS,
         ),
         label = "portraitPlayerGlassCapture",
@@ -2293,7 +2302,7 @@ private fun VideoPageItem(
     val portraitGlassCaptureVisible by remember(portraitGlassVisibility) {
         derivedStateOf { portraitGlassVisibility.value > 0f }
     }
-    val capturePortraitPage = portraitGlassSupported && isCurrentPage && isPortraitPlaybackAllowed &&
+    val capturePortraitPage = portraitGlassSupported && portraitCaptureActive &&
         (portraitOverlayVisible || portraitGlassCaptureVisible)
 
     val longPressSpeed by SettingsManager
@@ -2744,7 +2753,6 @@ private fun VideoPageItem(
         derivedStateOf { seekSession.pendingSeekPositionMs }
     }
 
-    val portraitProgressWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     com.android.purebilibili.feature.video.ui.overlay.rememberVideoPlayerOverlayProgress(
         player = exoPlayer,
         bvid = bvid,
@@ -2752,7 +2760,7 @@ private fun VideoPageItem(
         videoDuration = initialDuration,
         controlsVisible = portraitOverlayVisible,
         samplingActive = isCurrentPage && isPortraitPlaybackAllowed &&
-            isPlayerReadyForThisVideo && portraitProgressWorkActive,
+            isPlayerReadyForThisVideo && portraitVisualWorkActive,
         hasPendingSeekResume = pendingSeekPosition != null,
         highFrequencyProgressActive = false,
         onProgress = { sample ->
@@ -2979,7 +2987,13 @@ private fun VideoPageItem(
             .then(autoHide.focusModifier)
             .fillMaxSize()
             .background(Color.Black)
-            .onGloballyPositioned { danmakuTapCoordinates.value = it }
+            .onGloballyPositioned {
+                danmakuTapCoordinates.value = it
+                val bounds = it.boundsInWindow()
+                val rootBounds = it.findRootCoordinates().boundsInWindow()
+                portraitPageInViewport = it.isAttached && bounds.width > 0f && bounds.height > 0f &&
+                    bounds.overlaps(rootBounds)
+            }
             .onSizeChanged { size ->
                 portraitPageWidthPx = size.width
                 portraitPageHeightPx = size.height
@@ -3749,7 +3763,7 @@ private fun VideoPageItem(
         pageActive = isCurrentPage && isPortraitPlaybackAllowed && !isInPipMode,
     )
     val portraitSupplementActive = isCurrentPage && isPortraitPlaybackAllowed &&
-        portraitProgressWorkActive && !isInPipMode && !entryTransitionInProgress
+        portraitVisualWorkActive && !isInPipMode && !entryTransitionInProgress
     val portraitPagePlayerInfo by rememberPortraitPagePlayerInfo(
         bvid = bvid,
         cid = snapshotCid,

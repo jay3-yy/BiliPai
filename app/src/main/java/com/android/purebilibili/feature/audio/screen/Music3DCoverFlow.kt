@@ -42,6 +42,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -156,10 +157,14 @@ internal fun Music3DCoverFlow(
     if (queue.isEmpty()) return
 
     val validCurrentIndex = currentIndex.coerceIn(0, queue.size - 1)
-    val pagerState = rememberPagerState(
-        initialPage = validCurrentIndex,
-        pageCount = { queue.size }
-    )
+    // 队列长度变化时一起替换分页状态与内容，避免外层先更新页数、
+    // 内层延迟组合仍用旧队列生成封面键，导致索引越界。
+    val pagerState = key(queue.size) {
+        rememberPagerState(
+            initialPage = validCurrentIndex,
+            pageCount = { queue.size }
+        )
+    }
     val coroutineScope = rememberCoroutineScope()
     val latestQueue by rememberUpdatedState(queue)
     val latestMove by rememberUpdatedState(onQueueMove)
@@ -314,6 +319,7 @@ internal fun Music3DCoverFlow(
                                     )
                                 } else Modifier),
                         ) {
+                        key(pagerState) {
                         HorizontalPager(
                             state = pagerState,
                             userScrollEnabled = draggedKey == null,
@@ -526,6 +532,7 @@ internal fun Music3DCoverFlow(
                                     }
                                 }
                             }
+                        }
                         }
                         }
                     }

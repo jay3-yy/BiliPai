@@ -11,6 +11,8 @@ import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -153,7 +155,11 @@ fun SponsorContributionOverlay(
                 )
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // 横屏或窄分屏下只滚动表单正文，标题与提交操作保持可见。
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
                     AppText(
                         text = if (state.actionType == "full") {
                             "整个视频"

@@ -672,7 +672,7 @@ private fun LiveRoomScreen(
         glassSupported = livePageGlassSupported,
         controlsRequestCapture = liveBackdropRequired || landscapeInteractionVisible,
         controlsExitVisible = liveCaptureExiting,
-        hostStarted = liveHostLifecycleState.isAtLeast(Lifecycle.State.STARTED),
+        visualWorkActive = liveVisualWorkActive,
         miniMode = miniPlayerManager.isMiniMode,
         overlaysSuppressed = liveCapturePaused,
     )

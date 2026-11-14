@@ -1508,6 +1508,7 @@ fun HomeScreen(
             )
         ) == VideoDetailPresentationMode.COMPANION_PANE
     )
+    val latestOnCompanionVideoClick by rememberUpdatedState(onCompanionVideoClick)
     //  包装 onVideoClick：点击视频时先隐藏底栏再导航
     val wrappedOnVideoClick: (HomeVideoClickRequest) -> Unit = remember(
         feedNavigation,
@@ -1527,7 +1528,7 @@ fun HomeScreen(
             }
             // 伴随面板：Expanded+ 窗口的普通横屏视频不推栈，feed 驻留左侧；竖屏视频保持整页接管。
             if (companionPaneWindowEligible && !request.isVerticalVideo) {
-                onCompanionVideoClick(request)
+                latestOnCompanionVideoClick(request)
                 return@homeClick
             }
             val activeGridState = if (currentCategory == HomeCategory.POPULAR) {

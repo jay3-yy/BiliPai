@@ -492,6 +492,7 @@ internal fun VideoDetailScreenStateHolder(
     isPlaybackSessionActive: Boolean = isVisible,
     isOrientationOwner: Boolean = isVisible && !keepLoadedContentForBackPreview,
     onImmersivePlaybackChanged: (Boolean) -> Unit = {},
+    onPlaybackIdentityChanged: (String, Long) -> Unit = { _, _ -> },
     viewModel: VideoPlaybackViewModel = viewModel(),
     engagementViewModel: VideoEngagementViewModel = viewModel(),
     composerViewModel: VideoComposerViewModel = viewModel(),
@@ -841,6 +842,7 @@ internal fun VideoDetailScreenStateHolder(
         currentBvid = currentBvid,
         currentBvidCid = currentBvidCid
     )
+    SideEffect { onPlaybackIdentityChanged(currentBvid, playbackTargetCid) }
     val introListState = rememberSaveable(currentBvid, saver = LazyListState.Saver) {
         LazyListState()
     }
@@ -3914,9 +3916,18 @@ internal fun VideoDetailScreenStateHolder(
         val isSendingDanmaku by isSendingDanmakuHandle
         val composerDrafts by composerDraftsHandle
             // 📐 [平板适配] 全屏模式过渡动画（只有手机横屏才进入全屏）
-        // 全屏没有二级内容：仅物理遮挡铰链才把媒体钳进首个安全 pane；
-        // 软折痕（FOLD）允许跨整窗，否则半开姿态下下半屏整块留黑。
+        val fullscreenDensity = androidx.compose.ui.platform.LocalDensity.current
+        val tabletopPartition = com.android.purebilibili.core.util.resolvePlayerTabletopLayoutPolicy(
+            foldPosture = appWindowAdaptiveInfo.posture,
+            hingeOrientation = appWindowAdaptiveInfo.foldingFeature.hingeOrientation,
+            hingeTopPx = appWindowAdaptiveInfo.foldingFeature.hingeBounds?.top,
+            windowWidthPx = with(fullscreenDensity) { configuration.screenWidthDp.dp.roundToPx() },
+            windowHeightPx = with(fullscreenDensity) { configuration.screenHeightDp.dp.roundToPx() },
+            density = fullscreenDensity.density,
+        )
+        // Tabletop 由播放器内部划分上屏媒体与下屏控制；其它物理遮挡铰链仍使用安全 pane。
         val fullscreenOccludingHingePresent = isFullscreenMode &&
+            !tabletopPartition.isTabletop &&
             appWindowAdaptiveInfo.foldingFeature.layoutHinges().any { it.isOccluding }
         // 系统小窗只承接播放面：PiP 窗口尺寸与详情页排版无关，内联竖屏页、平板分栏和竖屏流
         // 装饰塞进小窗都会错位，因此与横屏全屏共用同一层播放面。
@@ -3925,7 +3936,7 @@ internal fun VideoDetailScreenStateHolder(
         if (isFullscreenMode || pipPlayerOnlyLayer) {
                 // 视图复用不受动画、设备方向策略或分屏开关影响。
                 // 只移动现有播放器；过渡开关仅控制布局动画，不再创建第二份输出面。
-                // 全屏＋物理遮挡铰链：媒体收进首个安全区，不跨缝；软折痕跨整窗。
+                // 无可用上下分区的物理遮挡铰链：媒体收进首个安全区，不跨缝。
                 if (fullscreenOccludingHingePresent) {
                     com.android.purebilibili.core.ui.adaptive.AppHingePaneLayout(
                         modifier = Modifier.fillMaxSize().background(Color.Black),

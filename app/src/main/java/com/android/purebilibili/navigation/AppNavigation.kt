@@ -1019,6 +1019,7 @@ fun AppNavigation(
         // 宽度仅在测量阶段读取，玻璃、MD3 与 Miuix 共用相同的避让边界。
         var navigationContentWidthPx by remember { mutableIntStateOf(0) }
         var companionVideoDetailKey by remember { mutableStateOf<BiliPaiNavKey.VideoDetail?>(null) }
+        var companionPlaybackIdentity by remember { mutableStateOf<Pair<String, Long>?>(null) }
         var companionSourceKey by remember { mutableStateOf<BiliPaiNavKey?>(null) }
         // 详情进入沉浸播放（全屏/竖屏全屏/PiP）时隐藏分栏把手，随其它播放页 chrome 一同退出。
         var companionImmersivePlayback by remember { mutableStateOf(false) }
@@ -1033,11 +1034,14 @@ fun AppNavigation(
         }
         val companionSessionVisible = companionVideoDetailKey != null &&
             currentNavigation3Key == companionSourceKey
-        val feedPaneVisible = !companionSessionVisible || companionPaneState.mode != CompanionPaneMode.Video
+        val companionFullscreenActive = companionSessionVisible && companionImmersivePlayback
+        val feedPaneVisible = !companionSessionVisible ||
+            (!companionFullscreenActive && companionPaneState.mode != CompanionPaneMode.Video)
         val companionVideoDetailVisible = companionSessionVisible && companionPaneState.mode != CompanionPaneMode.Feed
         // 组合只读取松手后的宽度；拖动中的连续值由下方测量修饰符读取。
         val companionPaneWidth = if (companionVideoDetailKey != null) {
-            companionContentWidth * companionPaneState.metadataVideoFraction(companionContentWidth.value)
+            if (companionFullscreenActive) companionContentWidth else
+                companionContentWidth * companionPaneState.metadataVideoFraction(companionContentWidth.value)
         } else 0.dp
         val companionFeedWidth = if (companionSessionVisible) {
             companionContentWidth * companionPaneState.metadataFeedFraction(companionContentWidth.value)
@@ -1198,6 +1202,7 @@ fun AppNavigation(
             navigationFocusManager.clearFocus()
             navigationKeyboardController?.hide()
             companionSourceKey = originKey
+            companionPlaybackIdentity = candidate.bvid to candidate.cid
             companionVideoDetailKey = candidate
             onVideoDetailEnter()
             return true
@@ -1979,7 +1984,7 @@ fun AppNavigation(
         // A transparent sidebar still reserves space in the Row.
         val sideBarMountGate = shouldMountSidebarForNavigation(
             routeAllowsSidebar = sideBarRouteGate,
-            isVideoDetailDestination = isVideoDetailDestination
+            isVideoDetailDestination = isVideoDetailDestination || companionFullscreenActive
         )
         val showBottomBar = shouldShowBottomBarForNavigation(
             activeRoute = bottomBarMountRoute,
@@ -2057,7 +2062,7 @@ fun AppNavigation(
         // Shared scroll position is also used by non-home destinations to drive the
         // linked playback dock without forcing the bottom bar itself to disappear.
         val scrollOffsetState = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
-        val finalBottomBarVisible = showBottomBar &&
+        val finalBottomBarVisible = !companionFullscreenActive && showBottomBar &&
             (driveBottomBarByProgress || videoCardSourceChromeVisible) &&
             resolveBottomBarVisibleForMode(
                 mode = bottomBarVisibilityMode,
@@ -2080,7 +2085,8 @@ fun AppNavigation(
         val bottomBarVisibilityState = remember { MutableTransitionState(finalBottomBarVisible) }
         bottomBarVisibilityState.targetState = finalBottomBarVisible
         val bottomBarCanMount =
-            bottomBarVisibilityMode != SettingsManager.BottomBarVisibilityMode.ALWAYS_HIDDEN &&
+            !companionFullscreenActive &&
+                bottomBarVisibilityMode != SettingsManager.BottomBarVisibilityMode.ALWAYS_HIDDEN &&
                 (
                     bottomBarMountGate ||
                         driveBottomBarByProgress ||
@@ -2616,9 +2622,25 @@ fun AppNavigation(
             var liveNavigationExitPending by remember { mutableStateOf(false) }
             // 📺⌨️ 伴随面板：Expanded+ 窗口内普通横屏视频不推返回栈，feed 驻留左侧。
             // 面板内容挂在主宿主层，整卡转场时钟与返回会话零接触（P0 隔离）。
+            fun currentCompanionVideoKey(): BiliPaiNavKey.VideoDetail? {
+                val entry = companionVideoDetailKey ?: return null
+                val (bvid, cid) = companionPlaybackIdentity ?: (entry.bvid to entry.cid)
+                val manager = miniPlayerManager?.takeIf {
+                    it.currentBvid == bvid && (cid <= 0L || it.currentCid == cid)
+                }
+                return entry.copy(
+                    bvid = bvid,
+                    cid = manager?.currentCid ?: cid,
+                    coverUrl = manager?.currentCover ?: entry.coverUrl.takeIf { bvid == entry.bvid }.orEmpty(),
+                    title = manager?.currentTitle ?: entry.title.takeIf { bvid == entry.bvid }.orEmpty(),
+                    resumePositionMs = manager?.player?.currentPosition?.coerceAtLeast(0L)
+                        ?: entry.resumePositionMs.takeIf { bvid == entry.bvid && cid == entry.cid } ?: 0L,
+                )
+            }
             fun closeCompanionVideoDetail() {
-                val key = companionVideoDetailKey ?: return
+                val key = currentCompanionVideoKey() ?: return
                 companionVideoDetailKey = null
+                companionPlaybackIdentity = null
                 companionSourceKey = null
                 onVideoDetailExit()
                 prepareVideoPlaybackForNavigationExit(key, navigation3BackStack.lastOrNull())
@@ -4243,8 +4265,9 @@ fun AppNavigation(
                             // 搜索、空间等页面覆盖主宿主后，面板停止可见页面工作。
                             isVisible = companionVideoDetailVisible,
                             isPlaybackSessionActive = companionSessionVisible,
-                            isOrientationOwner = false,
+                            isOrientationOwner = companionVideoDetailVisible,
                             onImmersivePlaybackChanged = { companionImmersivePlayback = it },
+                            onPlaybackIdentityChanged = { bvid, cid -> companionPlaybackIdentity = bvid to cid },
                             startInFullscreen = videoKey.fullscreen,
                             startAudioFromRoute = videoKey.startAudio,
                             autoEnterPortraitFromRoute = videoKey.autoPortrait,
@@ -6006,6 +6029,7 @@ fun AppNavigation(
                     windowSizeClass.widthSizeClass,
                     windowSizeClass.heightSizeClass,
                     appWindowAdaptiveInfo.posture,
+                    appWindowAdaptiveInfo.shouldAvoidHinge,
                 ) {
                     // 已主动收起视频时，合盖仍留在首页；恢复视频后再接管整页。
                     if (companionKey == null) return@LaunchedEffect
@@ -6030,18 +6054,13 @@ fun AppNavigation(
                         // 活跃播放器继续由 manager 持有，新详情沿用已有复用逻辑，
                         // 保留 playWhenReady；实时 cid/进度也交给整页入口。
                         val manager = miniPlayerManager
-                        val livePlayer = manager
-                            ?.takeIf { it.currentBvid == companionKey.bvid }
-                            ?.player
-                        val takeoverKey = if (manager != null && livePlayer != null) {
-                            companionKey.copy(
-                                cid = manager.currentCid,
-                                resumePositionMs = livePlayer.currentPosition.coerceAtLeast(0L),
-                            )
-                        } else companionKey
+                        val takeoverKey = currentCompanionVideoKey()?.copy(
+                            fullscreen = companionImmersivePlayback && !isInPipMode,
+                        ) ?: return@LaunchedEffect
                         // 旧面板的销毁也应识别为详情接管，避免延后恢复方向盖过新页面。
                         manager?.isNavigatingToVideo = true
                         companionVideoDetailKey = null
+                        companionPlaybackIdentity = null
                         companionSourceKey = null
                         pushResolvedNavigation3KeyDirect(takeoverKey)
                     }
@@ -6107,7 +6126,7 @@ fun AppNavigation(
                                 val feedWidth = (constraints.maxWidth * companionPaneState.measuredFeedFraction(widthDp)).toInt()
                                 val placeable = measurable.measure(constraints.copy(minWidth = feedWidth, maxWidth = feedWidth))
                                 layout(constraints.maxWidth, placeable.height) {
-                                    if (companionPaneState.mode != CompanionPaneMode.Video) placeable.placeRelative(0, 0)
+                                    if (feedPaneVisible) placeable.placeRelative(0, 0)
                                 }
                             } else Modifier,
                         )
@@ -6144,7 +6163,9 @@ fun AppNavigation(
                             .fillMaxSize()
                             .layout { measurable, constraints ->
                                 val widthDp = constraints.maxWidth.toDp().value
-                                val videoWidth = (constraints.maxWidth * companionPaneState.measuredVideoFraction(widthDp)).toInt()
+                                // 沉浸播放临时占满内容区，不改变用户提交的分栏比例；三种材质共用。
+                                val videoWidth = if (companionFullscreenActive) constraints.maxWidth else
+                                    (constraints.maxWidth * companionPaneState.measuredVideoFraction(widthDp)).toInt()
                                 val placeable = measurable.measure(constraints.copy(minWidth = videoWidth, maxWidth = videoWidth))
                                 layout(constraints.maxWidth, placeable.height) {
                                     if (companionSessionVisible && companionPaneState.mode != CompanionPaneMode.Feed) {
@@ -6619,7 +6640,7 @@ fun AppNavigation(
             )
 
             // 主宿主只有一个返回栈条目时，先关闭右侧面板，再执行首页退出行为。
-            androidx.activity.compose.BackHandler(enabled = companionSessionVisible) {
+            androidx.activity.compose.BackHandler(enabled = companionSessionVisible && !companionImmersivePlayback) {
                 performSystemBackAction()
             }
 
