@@ -738,6 +738,12 @@ fun AppNavigation(
         var accountSessionRefreshGeneration by remember { mutableIntStateOf(0) }
         val currentNavigation3Key = navigation3BackStack.lastOrNull()
         val currentRoute = currentNavigation3Key?.toLegacyRoute()
+        com.android.purebilibili.feature.message.ForegroundMessageSyncHost(
+            messagePageOpen = currentRoute == ScreenRoutes.Inbox.route ||
+                currentRoute?.startsWith("chat/") == true ||
+                currentRoute?.startsWith("message/") == true,
+            enabled = !isInPipMode,
+        )
         var previousOrientationDestination by remember { mutableStateOf(currentNavigation3Key) }
         LaunchedEffect(currentNavigation3Key) {
             val leavingVideo = previousOrientationDestination is BiliPaiNavKey.VideoDetail

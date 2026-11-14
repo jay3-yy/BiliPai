@@ -4,7 +4,7 @@ package com.android.purebilibili.core.store
  * 首页消息角标的「已清理」状态，对齐官方 cleanUnread：
  * 进消息中心置位，退出不复位；有新消息或冷启动才恢复显示。
  *
- * BiliPai 没有推送，用轮询到的总数上涨判断“下一条通知”。
+ * 前台按消息 ID 或分类未读增长恢复角标；其余查询仍可按总数上涨恢复。
  * lastTotal 只用于比较，不参与显示：角标始终是 0 或服务端完整总数。
  */
 internal object MessageBadgeCleanState {
@@ -19,6 +19,11 @@ internal object MessageBadgeCleanState {
         accountMid = mid
         cleaned = true
         lastTotal = UNKNOWN
+    }
+
+    /** 新消息已由会话身份确认，即使总数因其他消息已读而未增长也恢复显示。 */
+    fun onNewMessage(mid: Long) {
+        if (mid == accountMid) cleaned = false
     }
 
     /** 返回角标应显示的数字：0（清理中）或服务端完整总数。 */

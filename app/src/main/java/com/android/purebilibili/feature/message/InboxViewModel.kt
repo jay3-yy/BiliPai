@@ -142,6 +142,14 @@ class InboxViewModel : ViewModel() {
 
     fun loadSessions() = load(refresh = false)
     fun refresh() = load(refresh = true)
+    internal fun refreshFromForeground(snapshot: ForegroundMessageSnapshot) {
+        if (snapshot.identity == requests.identity && requests.isCurrent() &&
+            listJob?.isActive != true && moreJob?.isActive != true
+        ) {
+            refresh()
+        }
+    }
+
     private fun load(refresh: Boolean) {
         listJob?.cancel()
         moreJob?.cancel()

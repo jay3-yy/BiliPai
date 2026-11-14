@@ -49,32 +49,7 @@ object BiliGrpcClient {
         profile: BiliGrpcProfile = BiliGrpcProfile.ANDROID_HD,
         baseUrl: String = "https://app.bilibili.com",
     ): ByteArray {
-        val url = "$baseUrl$path"
-        val buvid = resolveBuvid()
-        val request = Request.Builder()
-            .url(url)
-            .post(ProtoWire.frame(message).toRequestBody(grpcMediaType))
-            .header("content-type", "application/grpc")
-            .header("grpc-encoding", "gzip")
-            .header("gzip-accept-encoding", "gzip,identity")
-            .header("user-agent", USER_AGENT)
-            .header("bili-http-engine", "cronet")
-            .header("x-bili-trace-id", TRACE_ID)
-            .header("buvid", buvid)
-            .header("cookie", if (profile.includeAccount) buildCookieHeader() else "buvid3=$buvid")
-            .header("x-bili-metadata-bin", buildMetadataHeader(buvid, profile))
-            .header("x-bili-device-bin", buildDeviceHeader(buvid, profile))
-            .header("x-bili-fawkes-req-bin", buildFawkesHeader())
-            .header("x-bili-network-bin", buildNetworkHeader())
-            .header("x-bili-locale-bin", buildLocaleHeader())
-            .apply {
-                if (profile.includeAccount) {
-                    TokenManager.accessTokenCache
-                        ?.takeIf { it.isNotBlank() }
-                        ?.let { header("authorization", "identify_v1 $it") }
-                }
-            }
-            .build()
+        val request = buildRequest(path, ProtoWire.frame(message).toRequestBody(grpcMediaType), profile, baseUrl)
 
         val client = if (profile.includeAccount) NetworkModule.okHttpClient else dynamicPreviewClient
         client.newCall(request).execute().use { response ->
@@ -96,6 +71,40 @@ object BiliGrpcClient {
             }
             return ProtoWire.unframe(body)
         }
+    }
+
+    internal fun buildRequest(
+        path: String,
+        body: okhttp3.RequestBody,
+        profile: BiliGrpcProfile = BiliGrpcProfile.ANDROID_HD,
+        baseUrl: String = "https://app.bilibili.com",
+    ): Request {
+        val url = "$baseUrl$path"
+        val buvid = resolveBuvid()
+        return Request.Builder()
+            .url(url)
+            .post(body)
+            .header("content-type", "application/grpc")
+            .header("grpc-encoding", "gzip")
+            .header("gzip-accept-encoding", "gzip,identity")
+            .header("user-agent", USER_AGENT)
+            .header("bili-http-engine", "cronet")
+            .header("x-bili-trace-id", TRACE_ID)
+            .header("buvid", buvid)
+            .header("cookie", if (profile.includeAccount) buildCookieHeader() else "buvid3=$buvid")
+            .header("x-bili-metadata-bin", buildMetadataHeader(buvid, profile))
+            .header("x-bili-device-bin", buildDeviceHeader(buvid, profile))
+            .header("x-bili-fawkes-req-bin", buildFawkesHeader())
+            .header("x-bili-network-bin", buildNetworkHeader())
+            .header("x-bili-locale-bin", buildLocaleHeader())
+            .apply {
+                if (profile.includeAccount) {
+                    TokenManager.accessTokenCache
+                        ?.takeIf { it.isNotBlank() }
+                        ?.let { header("authorization", "identify_v1 $it") }
+                }
+            }
+            .build()
     }
 
     internal fun buildMetadataHeader(

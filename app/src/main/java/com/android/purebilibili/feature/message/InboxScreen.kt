@@ -14,6 +14,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.store.MessageCenterPreferences
@@ -96,6 +99,14 @@ fun InboxScreen(
 ) {
     val accountIdentity by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(lifecycle, viewModel, accountIdentity) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            ForegroundMessageSync.snapshot.collect { snapshot ->
+                if (snapshot != null) viewModel.refreshFromForeground(snapshot)
+            }
+        }
+    }
     // 进消息中心本地清空角标，退出不还原（官方 cleanUnread）。
     LaunchedEffect(accountIdentity) {
         com.android.purebilibili.core.store.MessageBadgeCleanState

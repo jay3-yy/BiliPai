@@ -309,6 +309,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         accountRequests.observe { resetForAccountChange() }
         viewModelScope.launch {
+            com.android.purebilibili.feature.message.ForegroundMessageSync.snapshot.collect { snapshot ->
+                if (snapshot != null && snapshot.identity == accountRequests.awaitCurrentIdentity()) {
+                    val displayed = com.android.purebilibili.core.store.MessageBadgeCleanState.resolve(
+                        snapshot.identity.mid ?: 0L, snapshot.unread.total,
+                    )
+                    _uiState.update { it.copy(messageUnreadCount = displayed) }
+                }
+            }
+        }
+        viewModelScope.launch {
             MessageRepository.readEvents.collect {
                 messageUnreadRefreshJob?.cancel()
                 messageUnreadRefreshJob = accountRequests.launch { refreshMessageUnreadCount() }
