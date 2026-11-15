@@ -334,45 +334,24 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             endHoldMs = SUBTITLE_GAP_HOLD_MS,
         )
     }
-    val subtitlePositionMs by com.android.purebilibili.core.player.rememberPlaybackPosition(
+    val subtitlePositionState = com.android.purebilibili.core.player.rememberPlaybackPosition(
         player = player,
         identity = subtitlePollingIdentity,
         enabled = subtitleFeatureEnabled &&
             (subtitleOwner.subtitlePrimaryCues.isNotEmpty() || subtitleOwner.subtitleSecondaryCues.isNotEmpty()),
         timeline = subtitleTimeline,
     )
-    val subtitlePrimaryText = remember(
-        uiState,
-        subtitleFeatureEnabled,
-        subtitlePositionMs,
-        subtitleDisplayMode,
-        timingOffsetMs,
-    ) {
-        if (!subtitleFeatureEnabled) return@remember null
-        val success = uiState as? VideoPlaybackUiState.Success ?: return@remember null
-        if (success.subtitleOwnerBvid != success.info.bvid || success.subtitleOwnerCid != success.info.cid) {
-            return@remember null
-        }
-        if (!shouldRenderPrimarySubtitle(subtitleDisplayMode)) return@remember null
-        resolveSubtitleDisplayTextAt(success.subtitlePrimaryCues,
-            com.android.purebilibili.feature.video.subtitle.subtitlePositionForOffset(subtitlePositionMs, timingOffsetMs))
-    }
-    val subtitleSecondaryText = remember(
-        uiState,
-        subtitleFeatureEnabled,
-        subtitlePositionMs,
-        subtitleDisplayMode,
-        timingOffsetMs,
-    ) {
-        if (!subtitleFeatureEnabled) return@remember null
-        val success = uiState as? VideoPlaybackUiState.Success ?: return@remember null
-        if (success.subtitleOwnerBvid != success.info.bvid || success.subtitleOwnerCid != success.info.cid) {
-            return@remember null
-        }
-        if (!shouldRenderSecondarySubtitle(subtitleDisplayMode)) return@remember null
-        resolveSubtitleDisplayTextAt(success.subtitleSecondaryCues,
-            com.android.purebilibili.feature.video.subtitle.subtitlePositionForOffset(subtitlePositionMs, timingOffsetMs))
-    }
+    val ownerMatchesCurrentVideo = subtitleOwner.subtitleOwnerBvid == subtitleOwner.info.bvid &&
+        subtitleOwner.subtitleOwnerCid == subtitleOwner.info.cid
+    val (subtitlePrimaryTextState, subtitleSecondaryTextState) =
+        com.android.purebilibili.feature.video.subtitle.rememberSubtitleLineStates(
+            positionState = subtitlePositionState,
+            primaryCues = subtitleOwner.subtitlePrimaryCues,
+            secondaryCues = subtitleOwner.subtitleSecondaryCues,
+            displayMode = subtitleDisplayMode,
+            timeOffsetMs = timingOffsetMs,
+            enabled = subtitleFeatureEnabled && ownerMatchesCurrentVideo,
+        )
 
     var subtitleVerticalOffsetFraction by rememberSaveable(bvid) {
         mutableFloatStateOf(initialVerticalOffsetFraction)
@@ -454,55 +433,15 @@ private fun BoxScope.VideoSubtitleOverlayHost(
             ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
-            appearance == com.android.purebilibili.feature.video.ui.components.PlayerSubtitleAppearance()
-        ) {
-            val subtitleShadow = Shadow(
-                color = Color.Black.copy(alpha = 0.85f),
-                offset = Offset(0f, 1.5f),
-                blurRadius = 6f
-            )
-            val showPrimaryLine = !subtitlePrimaryText.isNullOrBlank()
-            val showSecondaryLine = !subtitleSecondaryText.isNullOrBlank()
-            val secondaryAsPrimaryLine = showSecondaryLine && !showPrimaryLine
-            AppText(
-                text = subtitleSecondaryText.orEmpty(),
-                color = Color.White.copy(alpha = if (showSecondaryLine) 0.88f else 0f),
-                fontSize = if (secondaryAsPrimaryLine) primaryTextSizeSp.sp else secondaryTextSizeSp.sp,
-                fontWeight = if (secondaryAsPrimaryLine) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 2,
-                textAlign = TextAlign.Center,
-                style = LocalTextStyle.current.copy(shadow = subtitleShadow),
-                modifier = Modifier.then(if (showSecondaryLine) Modifier else Modifier.height(0.dp))
-            )
-            AppText(
-                text = subtitlePrimaryText.orEmpty(),
-                color = Color.White.copy(alpha = if (showPrimaryLine) 1f else 0f),
-                fontSize = primaryTextSizeSp.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
-                textAlign = TextAlign.Center,
-                style = LocalTextStyle.current.copy(shadow = subtitleShadow),
-                modifier = Modifier.then(if (showPrimaryLine) Modifier else Modifier.height(0.dp))
-            )
-        } else {
-            val showPrimaryLine = !subtitlePrimaryText.isNullOrBlank()
-            val showSecondaryLine = !subtitleSecondaryText.isNullOrBlank()
-            val secondaryAsPrimaryLine = showSecondaryLine && !showPrimaryLine
-            if (showSecondaryLine) com.android.purebilibili.feature.video.subtitle.PiliStyledSubtitleText(
-                text = subtitleSecondaryText.orEmpty(),
-                baseFontSizeSp = if (secondaryAsPrimaryLine) primaryTextSizeSp else secondaryTextSizeSp,
-                appearance = appearance,
-                isFullscreen = isFullscreen,
-                color = Color(appearance.textColor).copy(alpha = 0.88f),
-            )
-            if (showPrimaryLine) com.android.purebilibili.feature.video.subtitle.PiliStyledSubtitleText(
-                text = subtitlePrimaryText.orEmpty(),
-                baseFontSizeSp = primaryTextSizeSp,
-                appearance = appearance,
-                isFullscreen = isFullscreen,
-            )
-        }
+        com.android.purebilibili.feature.video.subtitle.PiliDualSubtitleLines(
+            primaryTextProvider = { subtitlePrimaryTextState.value },
+            secondaryTextProvider = { subtitleSecondaryTextState.value },
+            appearance = appearance,
+            primaryTextSizeSp = primaryTextSizeSp,
+            secondaryTextSizeSp = secondaryTextSizeSp,
+            isFullscreen = isFullscreen,
+            useLocalTextStyleForGlass = true,
+        )
     }
 }
 

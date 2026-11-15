@@ -384,19 +384,68 @@ fun PiliExternalSubtitleOverlay(
     val primaryCues = track?.cues ?: session.acquiredCues[session.selectedTrackKey].orEmpty()
     val secondaryCues = session.acquiredCues[session.acquiredSecondaryTrackKey].orEmpty()
     val subtitleTimeline = remember(primaryCues, secondaryCues, session.timeOffsetMs) {
-        subtitlePositionTimeline(primaryCues, secondaryCues, session.timeOffsetMs)
+        subtitlePositionTimeline(
+            primaryCues,
+            secondaryCues,
+            session.timeOffsetMs,
+            endHoldMs = com.android.purebilibili.core.subtitle.SUBTITLE_GAP_HOLD_MS,
+        )
     }
-    val position by com.android.purebilibili.core.player.rememberPlaybackPosition(
+    val positionState = com.android.purebilibili.core.player.rememberPlaybackPosition(
         player = player,
         identity = session.identity,
         enabled = primaryCues.isNotEmpty() || secondaryCues.isNotEmpty(),
         timeline = subtitleTimeline,
     )
-    val effectivePosition = subtitlePositionForOffset(position, session.timeOffsetMs)
-    val text = if (shouldRenderPrimarySubtitle(mode)) resolveSubtitleTextAt(primaryCues, effectivePosition) else null
-    val secondaryText = if (shouldRenderSecondarySubtitle(mode))
-        resolveSubtitleTextAt(session.acquiredCues[session.acquiredSecondaryTrackKey].orEmpty(), effectivePosition) else null
+    val (primaryTextState, secondaryTextState) = rememberSubtitleLineStates(
+        positionState = positionState,
+        primaryCues = primaryCues,
+        secondaryCues = secondaryCues,
+        displayMode = mode,
+        timeOffsetMs = session.timeOffsetMs,
+    )
+    PiliExternalSubtitleLinesContent(
+        primaryTextProvider = { primaryTextState.value },
+        secondaryTextProvider = { secondaryTextState.value },
+        tools = tools,
+        isFullscreen = isFullscreen,
+        controlsVisible = controlsVisible,
+        bottomControlsHeightPx = bottomControlsHeightPx,
+        isPortrait = isPortrait,
+        persistentBottomOverlayHeightProvider = persistentBottomOverlayHeightProvider,
+        verticalOffsetProvider = { verticalOffset },
+        onVerticalOffsetChange = { verticalOffset = it },
+        onDragStateChange = { dragging = it },
+        onPersistVerticalOffset = {
+            scope.launch {
+                if (isPortrait) SettingsManager.setSubtitlePortraitVerticalOffsetFraction(context, verticalOffset)
+                else SettingsManager.setSubtitleVerticalOffsetFraction(context, verticalOffset)
+            }
+        },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun PiliExternalSubtitleLinesContent(
+    primaryTextProvider: () -> String?,
+    secondaryTextProvider: () -> String?,
+    tools: PiliSubtitleTools,
+    isFullscreen: Boolean,
+    controlsVisible: Boolean,
+    bottomControlsHeightPx: Int,
+    isPortrait: Boolean,
+    persistentBottomOverlayHeightProvider: () -> Int,
+    verticalOffsetProvider: () -> Float,
+    onVerticalOffsetChange: (Float) -> Unit,
+    onDragStateChange: (Boolean) -> Unit,
+    onPersistVerticalOffset: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val text = primaryTextProvider()
+    val secondaryText = secondaryTextProvider()
     if (text.isNullOrBlank() && secondaryText.isNullOrBlank()) return
+    val session = tools.session
     BoxWithConstraints(modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         val density = LocalDensity.current
         val heightPx = with(density) { maxHeight.toPx() }.coerceAtLeast(1f)
@@ -407,22 +456,21 @@ fun PiliExternalSubtitleOverlay(
                 navigationInsetPx, bottomControlsHeightPx, density.density,
                 persistentBottomOverlayHeightPx = persistentBottomOverlayHeightProvider(),
             )
-            IntOffset(0, (heightPx * verticalOffset).roundToInt() - bottomOffsetPx)
+            IntOffset(0, (heightPx * verticalOffsetProvider()).roundToInt() - bottomOffsetPx)
         }.padding(horizontal = tools.appearance.horizontalPadding.dp)
             .padding(bottom = tools.appearance.bottomPadding.dp)
             .then(if (tools.controls.positionLocked) Modifier else Modifier.pointerInput(session.identity, heightPx) {
                 detectDragGestures(
-                    onDragStart = { dragging = true },
+                    onDragStart = { onDragStateChange(true) },
                     onDragEnd = {
-                        dragging = false
-                        scope.launch {
-                            if (isPortrait) SettingsManager.setSubtitlePortraitVerticalOffsetFraction(context, verticalOffset)
-                            else SettingsManager.setSubtitleVerticalOffsetFraction(context, verticalOffset)
-                        }
+                        onDragStateChange(false)
+                        onPersistVerticalOffset()
                     },
-                    onDragCancel = { dragging = false },
+                    onDragCancel = { onDragStateChange(false) },
                     onDrag = { change, amount ->
-                        verticalOffset = normalizeSubtitleVerticalOffsetFraction(verticalOffset + amount.y / heightPx)
+                        onVerticalOffsetChange(
+                            normalizeSubtitleVerticalOffsetFraction(verticalOffsetProvider() + amount.y / heightPx)
+                        )
                         change.consume()
                     },
                 )
