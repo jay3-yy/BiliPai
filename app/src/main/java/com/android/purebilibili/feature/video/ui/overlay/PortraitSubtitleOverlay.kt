@@ -233,24 +233,21 @@ fun PortraitSubtitleHost(
             endHoldMs = SUBTITLE_GAP_HOLD_MS,
         )
     }
-    val positionMs by com.android.purebilibili.core.player.rememberPlaybackPosition(
+    val positionState = com.android.purebilibili.core.player.rememberPlaybackPosition(
         player = player,
         identity = pollingIdentity,
         enabled = overlayEnabled && subtitleSession.selectedTrackKey == null &&
             (primaryCueAvailable || secondaryCueAvailable),
         timeline = subtitleTimeline,
     )
-
-    val primaryText = if (shouldRenderPrimarySubtitle(displayMode)) {
-        resolveSubtitleDisplayTextAt(success.subtitlePrimaryCues, subtitlePositionForOffset(positionMs, subtitleSession.timeOffsetMs))
-    } else {
-        null
-    }
-    val secondaryText = if (shouldRenderSecondarySubtitle(displayMode)) {
-        resolveSubtitleDisplayTextAt(success.subtitleSecondaryCues, subtitlePositionForOffset(positionMs, subtitleSession.timeOffsetMs))
-    } else {
-        null
-    }
+    val (primaryTextState, secondaryTextState) =
+        com.android.purebilibili.feature.video.subtitle.rememberSubtitleLineStates(
+            positionState = positionState,
+            primaryCues = success.subtitlePrimaryCues,
+            secondaryCues = success.subtitleSecondaryCues,
+            displayMode = displayMode,
+            timeOffsetMs = subtitleSession.timeOffsetMs,
+        )
 
     val keepMounted = shouldKeepSubtitleOverlayMounted(
         overlayEnabled = overlayEnabled,
@@ -376,61 +373,14 @@ fun PortraitSubtitleHost(
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (glassLayout) {
-                    val shadow = Shadow(
-                        color = Color.Black.copy(alpha = 0.85f),
-                        offset = Offset(0f, 1.5f),
-                        blurRadius = 6f
-                    )
-                    val showPrimary = !primaryText.isNullOrBlank()
-                    val showSecondary = !secondaryText.isNullOrBlank()
-                    val secondaryAsPrimary = showSecondary && !showPrimary
-                    AppText(
-                        text = secondaryText.orEmpty(),
-                        color = Color.White.copy(alpha = if (showSecondary) 0.88f else 0f),
-                        fontSize = if (secondaryAsPrimary) {
-                            textSizeSpec.primarySp.sp
-                        } else {
-                            textSizeSpec.secondarySp.sp
-                        },
-                        fontWeight = if (secondaryAsPrimary) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center,
-                        style = androidx.compose.ui.text.TextStyle(shadow = shadow),
-                        modifier = Modifier.then(
-                            if (showSecondary) Modifier else Modifier.height(0.dp)
-                        )
-                    )
-                    AppText(
-                        text = primaryText.orEmpty(),
-                        color = Color.White.copy(alpha = if (showPrimary) 1f else 0f),
-                        fontSize = textSizeSpec.primarySp.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 2,
-                        textAlign = TextAlign.Center,
-                        style = androidx.compose.ui.text.TextStyle(shadow = shadow),
-                        modifier = Modifier.then(
-                            if (showPrimary) Modifier else Modifier.height(0.dp)
-                        )
-                    )
-                } else {
-                    val showPrimary = !primaryText.isNullOrBlank()
-                    val showSecondary = !secondaryText.isNullOrBlank()
-                    val secondaryAsPrimary = showSecondary && !showPrimary
-                    if (showSecondary) PiliStyledSubtitleText(
-                        text = secondaryText.orEmpty(),
-                        baseFontSizeSp = if (secondaryAsPrimary) textSizeSpec.primarySp else textSizeSpec.secondarySp,
-                        appearance = subtitleAppearance,
-                        isFullscreen = false,
-                        color = Color(subtitleAppearance.textColor).copy(alpha = 0.88f),
-                    )
-                    if (showPrimary) PiliStyledSubtitleText(
-                        text = primaryText.orEmpty(),
-                        baseFontSizeSp = textSizeSpec.primarySp,
-                        appearance = subtitleAppearance,
-                        isFullscreen = false,
-                    )
-                }
+                com.android.purebilibili.feature.video.subtitle.PiliDualSubtitleLines(
+                    primaryTextProvider = { primaryTextState.value },
+                    secondaryTextProvider = { secondaryTextState.value },
+                    appearance = subtitleAppearance,
+                    primaryTextSizeSp = textSizeSpec.primarySp,
+                    secondaryTextSizeSp = textSizeSpec.secondarySp,
+                    isFullscreen = false,
+                )
             }
         }
 

@@ -1,9 +1,10 @@
 package com.android.purebilibili.core.player
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -26,48 +27,47 @@ internal fun rememberPlaybackPosition(
     // 页面保留、退出前台与字幕关闭仍会撤销监听和定时等待。
     val active = LocalVisualWorkAllowed.current && enabled
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    // produceState 的 key 只重启生产协程；内容切换还需重建 State，避免首帧沿用旧位置。
-    return key(player, identity) {
-        produceState(
-            player?.currentPosition?.coerceAtLeast(0L) ?: 0L,
-            active, lifecycle, timeline,
-        ) {
-            value = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
-            if (player == null || !active) return@produceState
-            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                val wake = Channel<Unit>(Channel.CONFLATED)
-                val listener = object : Player.Listener {
-                    override fun onEvents(player: Player, events: Player.Events) {
-                        // 拖动、暂停/恢复、缓冲结束、倍速与媒体切换均立即重新取时。
-                        value = player.currentPosition.coerceAtLeast(0L)
-                        wake.trySend(Unit)
+    // 内容或播放器切换时重建 State，避免首帧沿用旧位置。
+    val positionState = remember(player, identity) {
+        mutableLongStateOf(player?.currentPosition?.coerceAtLeast(0L) ?: 0L)
+    }
+    LaunchedEffect(player, identity, active, lifecycle, timeline) {
+        positionState.longValue = player?.currentPosition?.coerceAtLeast(0L) ?: 0L
+        if (player == null || !active) return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            val wake = Channel<Unit>(Channel.CONFLATED)
+            val listener = object : Player.Listener {
+                override fun onEvents(player: Player, events: Player.Events) {
+                    // 拖动、暂停/恢复、缓冲结束、倍速与媒体切换均立即重新取时。
+                    positionState.longValue = player.currentPosition.coerceAtLeast(0L)
+                    wake.trySend(Unit)
+                }
+            }
+            player.addListener(listener)
+            val startPosition = player.currentPosition
+            var reportedAdvance = false
+            Logger.d("PlaybackClock", "start identity=$identity position=$startPosition playing=${player.isPlaying} state=${player.playbackState}")
+            try {
+                while (isActive) {
+                    val position = player.currentPosition.coerceAtLeast(0L)
+                    positionState.longValue = position
+                    if (!reportedAdvance && position > startPosition) {
+                        reportedAdvance = true
+                        Logger.d("PlaybackClock", "advancing identity=$identity position=$position")
+                    }
+                    if (player.isPlaying) {
+                        val timeout = timeline?.updateDelayMs(position, player.playbackParameters.speed) ?: 100L
+                        withTimeoutOrNull(timeout) { wake.receive() }
+                    } else {
+                        wake.receive()
                     }
                 }
-                player.addListener(listener)
-                val startPosition = player.currentPosition
-                var reportedAdvance = false
-                Logger.d("PlaybackClock", "start identity=$identity position=$startPosition playing=${player.isPlaying} state=${player.playbackState}")
-                try {
-                    while (isActive) {
-                        val position = player.currentPosition.coerceAtLeast(0L)
-                        value = position
-                        if (!reportedAdvance && position > startPosition) {
-                            reportedAdvance = true
-                            Logger.d("PlaybackClock", "advancing identity=$identity position=$position")
-                        }
-                        if (player.isPlaying) {
-                            val timeout = timeline?.updateDelayMs(position, player.playbackParameters.speed) ?: 100L
-                            withTimeoutOrNull(timeout) { wake.receive() }
-                        } else {
-                            wake.receive()
-                        }
-                    }
-                } finally {
-                    Logger.d("PlaybackClock", "stop identity=$identity position=${player.currentPosition} advanced=$reportedAdvance")
-                    player.removeListener(listener)
-                    wake.close()
-                }
+            } finally {
+                Logger.d("PlaybackClock", "stop identity=$identity position=${player.currentPosition} advanced=$reportedAdvance")
+                player.removeListener(listener)
+                wake.close()
             }
         }
     }
+    return positionState
 }
