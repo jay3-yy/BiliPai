@@ -530,6 +530,21 @@ internal fun applyAudioEventDebugInfo(
     return current.copy(lastAudioEvent = normalizedEvent)
 }
 
+private val PLAYBACK_HTTP_STATUS_REGEX = Regex("""Response code:\s*(\d{3})""")
+
+private fun resolvePlaybackHttpStatus(error: Throwable): Int? {
+    var current: Throwable? = error
+    repeat(8) {
+        val status = PLAYBACK_HTTP_STATUS_REGEX.find(current?.message.orEmpty())
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+        if (status != null) return status
+        current = current?.cause
+    }
+    return null
+}
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class VideoPlayerState(
     val context: Context,
@@ -1454,6 +1469,17 @@ fun rememberVideoPlayerState(
                 val currentState = viewModel.uiState.value
                 // A new load may still have the old media item's error attached.
                 if (currentState !is VideoPlaybackUiState.Success) return
+                val httpStatus = resolvePlaybackHttpStatus(error)
+                if (httpStatus == 403 && retryCountRef.count < maxRetries) {
+                    retryCountRef.count++
+                    cancelRecovery()
+                    com.android.purebilibili.core.util.Logger.d(
+                        "VideoPlayerState",
+                        "🔑 Playback URL rejected (HTTP 403), refreshing playurl (${retryCountRef.count}/$maxRetries)"
+                    )
+                    viewModel.retry()
+                    return
+                }
                 val hasCdnAlternatives = currentState.cdnCount > 1
                 val exoPlaybackError = error as? ExoPlaybackException
                 val isPremiumAudioFailure =

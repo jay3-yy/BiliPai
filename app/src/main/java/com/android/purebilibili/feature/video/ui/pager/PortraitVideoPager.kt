@@ -959,6 +959,8 @@ fun PortraitVideoPager(
         isLifecycleResumed = isLifecycleResumed,
         continueInBackgroundAudio = continueInBackgroundAudio
     )
+    val latestCurrentPlayingBvid by rememberUpdatedState(currentPlayingBvid)
+    val latestCurrentPlayingCid by rememberUpdatedState(currentPlayingCid)
     val latestPortraitPlaybackAllowed by rememberUpdatedState(isPortraitPlaybackAllowed)
 
     fun capturePortraitInactivitySnapshot() {
@@ -1049,6 +1051,16 @@ fun PortraitVideoPager(
                 isLoading = false
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    val bvid = latestCurrentPlayingBvid
+                    val mediaId = exoPlayer.currentMediaItem?.mediaId
+                    val matchingMedia = bvid != null && mediaId != null &&
+                        (mediaId == resolvePortraitMediaId(bvid, latestCurrentPlayingCid) ||
+                            (useSharedPlayer && mediaId == bvid))
+                    if (matchingMedia) {
+                        isLoading = false
+                    }
+                }
                 if (playbackState == Player.STATE_READY &&
                     pendingAutoPlayGeneration == activeLoadGeneration &&
                     listenerGeneration == activeLoadGeneration &&

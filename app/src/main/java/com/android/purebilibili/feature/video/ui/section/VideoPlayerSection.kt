@@ -5289,7 +5289,8 @@ private fun VideoPlayerSectionContent(
         }
 
         if (playerVisualWorkActive && uiState is VideoPlaybackUiState.Loading && !isInPipMode &&
-            !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition
+            !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition &&
+            !isFirstFrameRendered && !observedIsPlaying
         ) {
             Column(
                 modifier = Modifier.align(Alignment.Center),
@@ -5736,7 +5737,8 @@ private fun VideoPlayerSectionContent(
 
             // 起播反馈独立于控制栏透明度；暂停、离页、离屏或返回预览时停止。
             if (playerVisualWorkActive && !isFirstFrameRendered && isBuffering &&
-                playerState.player.playWhenReady && !keepCoverForManualStart &&
+                playerState.player.playWhenReady && !observedIsPlaying &&
+                !keepCoverForManualStart &&
                 !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition
             ) {
                 Column(

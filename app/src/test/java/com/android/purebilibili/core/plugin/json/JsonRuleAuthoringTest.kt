@@ -55,7 +55,7 @@ class JsonRuleAuthoringTest {
     }
 
     @Test fun localInstallationPersistsAndEditingPreservesDisabledState() = runTest {
-        val context = RuntimeEnvironment.getApplication<Application>()
+        val context = RuntimeEnvironment.getApplication()
         JsonPluginManager.initialize(context)
         try {
             JsonPluginManager.installFromSource(source)
