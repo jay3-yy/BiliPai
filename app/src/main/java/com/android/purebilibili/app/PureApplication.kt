@@ -676,6 +676,12 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     
     private fun releaseRebuildableMemoryCaches() {
         com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
+        // 颜色表容量已从 128 扩到 512（见 VideoCardCoverColorStore.MAX_CACHE_SIZE），此处的
+        // trimToSize(64) 语义随之从"砍到 128 的一半"变成"砍到 512 的 1/8"：
+        // 同样的调用在没有改一行回收代码的情况下变得更激进、更安全。
+        // 注意 LruCache.trimToSize 只即时淘汰到 64 条，容量上限仍然是 512，之后随使用自然回涨。
+        // 这是刻意的预期行为：回前台时缓存能重新长回来，命中率不会被后台一次清理永久拖低；
+        // 不要为了"清干净"把它改成 clear()/evictAll()，那会让每张封面都重走解码 + Palette 聚类。
         com.android.purebilibili.feature.home.components.cards.VideoCardCoverColorStore
             .trimToSize(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES)
         com.android.purebilibili.core.cache.PlayUrlCache.clear()
@@ -701,6 +707,9 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                     requestIdlePlaybackRelease = plan.requestIdlePlaybackRelease
                 )
         }
+        // 同 releaseRebuildableMemoryCaches：容量 512 已被扩过，trimToSize(64) 是"砍到 1/8"，
+        // 单次淘汰比例比容量 128 时代更大，回收更激进。淘汰到 64 之后上限仍是 512，
+        // 会随使用自然回涨 —— 预期行为，不要改成 clear()。
         com.android.purebilibili.feature.home.components.cards.VideoCardCoverColorStore
             .trimToSize(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES)
         com.android.purebilibili.core.cache.PlayUrlCache.clear()
