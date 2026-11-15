@@ -201,12 +201,12 @@
   },
   {
     "original": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_blue_snow_maid_dark_foreground.png",
-    "target": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_frameless_tilt_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_3487e0e91fdf6a8c.png",
     "sha256": "3487e0e91fdf6a8c8a082522c7f2bfdbbf1048bb4b1205b8b525b0829d70ca28"
   },
   {
     "original": "brand-motion/src/main/res/mipmap-night-xxxhdpi/ic_launcher_blue_snow_maid_foreground.png",
-    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_frameless_tilt_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_3487e0e91fdf6a8c.png",
     "sha256": "3487e0e91fdf6a8c8a082522c7f2bfdbbf1048bb4b1205b8b525b0829d70ca28"
   },
   {
@@ -681,12 +681,12 @@
   },
   {
     "original": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_blue_snow_maid_light_foreground.png",
-    "target": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_frameless_tilt_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_3487e0e91fdf6a8c.png",
     "sha256": "3487e0e91fdf6a8c8a082522c7f2bfdbbf1048bb4b1205b8b525b0829d70ca28"
   },
   {
     "original": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_blue_snow_maid_foreground.png",
-    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_frameless_tilt_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_3487e0e91fdf6a8c.png",
     "sha256": "3487e0e91fdf6a8c8a082522c7f2bfdbbf1048bb4b1205b8b525b0829d70ca28"
   },
   {
@@ -828,5 +828,145 @@
     "original": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_blue_snow_maid_front_dark_round.png",
     "target": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_frameless_front_dark_round.png",
     "sha256": "408ac6cdc80478cf23a5e82cc03ff3afd5b0cce6064c5830e4bd8378d9e53d88"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_blue_snow_maid_front_monochrome.png",
+    "target": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_0098e6c29000361f.png",
+    "sha256": "0098e6c29000361f63c49c8c3a063b0c0bfc51fcf388e069b35bed90baae8813"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_blue_snow_maid_monochrome.png",
+    "target": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_0098e6c29000361f.png",
+    "sha256": "0098e6c29000361f63c49c8c3a063b0c0bfc51fcf388e069b35bed90baae8813"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xhdpi/ic_launcher_blue_snow_maid_front_monochrome.png",
+    "target": "app/src/main/res/mipmap-xhdpi/ic_launcher_shared_0858191769d7e268.png",
+    "sha256": "0858191769d7e268e673190e4e57f58ed8fbb831934686c4ded6e3921d02f419"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xhdpi/ic_launcher_blue_snow_maid_monochrome.png",
+    "target": "app/src/main/res/mipmap-xhdpi/ic_launcher_shared_0858191769d7e268.png",
+    "sha256": "0858191769d7e268e673190e4e57f58ed8fbb831934686c4ded6e3921d02f419"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-hdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-hdpi/ic_launcher_shared_125d6e5bf7505e4c.png",
+    "sha256": "125d6e5bf7505e4cb4ee08bd86714aa1c9c85842ea951f91bee4d1ea48c5c94e"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-night-hdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-hdpi/ic_launcher_shared_125d6e5bf7505e4c.png",
+    "sha256": "125d6e5bf7505e4cb4ee08bd86714aa1c9c85842ea951f91bee4d1ea48c5c94e"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xxhdpi/ic_launcher_blue_snow_maid_front_monochrome.png",
+    "target": "app/src/main/res/mipmap-xxhdpi/ic_launcher_shared_22ce6532f267d5d4.png",
+    "sha256": "22ce6532f267d5d4e44b3dd87ea4cb73c2a63781d7fd8471d460c57a769389a5"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xxhdpi/ic_launcher_blue_snow_maid_monochrome.png",
+    "target": "app/src/main/res/mipmap-xxhdpi/ic_launcher_shared_22ce6532f267d5d4.png",
+    "sha256": "22ce6532f267d5d4e44b3dd87ea4cb73c2a63781d7fd8471d460c57a769389a5"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-night-xxhdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxhdpi/ic_launcher_shared_32bb7947c07c45c7.png",
+    "sha256": "32bb7947c07c45c7b590a7dbe2cbe21fec41713cf2a666b81228ea25713aecc9"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-xxhdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxhdpi/ic_launcher_shared_32bb7947c07c45c7.png",
+    "sha256": "32bb7947c07c45c7b590a7dbe2cbe21fec41713cf2a666b81228ea25713aecc9"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xxxhdpi/ic_launcher_frameless_tilt_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_3487e0e91fdf6a8c.png",
+    "sha256": "3487e0e91fdf6a8c8a082522c7f2bfdbbf1048bb4b1205b8b525b0829d70ca28"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_frameless_tilt_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xxxhdpi/ic_launcher_shared_3487e0e91fdf6a8c.png",
+    "sha256": "3487e0e91fdf6a8c8a082522c7f2bfdbbf1048bb4b1205b8b525b0829d70ca28"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-night-xhdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xhdpi/ic_launcher_shared_429648c36eb6f373.png",
+    "sha256": "429648c36eb6f3732341acba6abedfa5894bcb89c59ba197dbf6c92421e05e04"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-xhdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-xhdpi/ic_launcher_shared_429648c36eb6f373.png",
+    "sha256": "429648c36eb6f3732341acba6abedfa5894bcb89c59ba197dbf6c92421e05e04"
+  },
+  {
+    "original": "app/src/main/res/mipmap-night-xhdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-xhdpi/ic_launcher_shared_4ae1ed6f9ca6b0e2.png",
+    "sha256": "4ae1ed6f9ca6b0e26d4ad2b81b899eb9e88c3f866d661ebd54a39e8b36e81d48"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xhdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-xhdpi/ic_launcher_shared_4ae1ed6f9ca6b0e2.png",
+    "sha256": "4ae1ed6f9ca6b0e26d4ad2b81b899eb9e88c3f866d661ebd54a39e8b36e81d48"
+  },
+  {
+    "original": "app/src/main/res/mipmap-mdpi/ic_launcher_blue_snow_maid_front_monochrome.png",
+    "target": "app/src/main/res/mipmap-mdpi/ic_launcher_shared_53c92809be7d56d9.png",
+    "sha256": "53c92809be7d56d93da8276cc99fb3b1334a35843a0c9c3c74a68c746d12dfd3"
+  },
+  {
+    "original": "app/src/main/res/mipmap-mdpi/ic_launcher_blue_snow_maid_monochrome.png",
+    "target": "app/src/main/res/mipmap-mdpi/ic_launcher_shared_53c92809be7d56d9.png",
+    "sha256": "53c92809be7d56d93da8276cc99fb3b1334a35843a0c9c3c74a68c746d12dfd3"
+  },
+  {
+    "original": "app/src/main/res/mipmap-night-xxhdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-xxhdpi/ic_launcher_shared_558545616ddcaff6.png",
+    "sha256": "558545616ddcaff6b58a1c154f70baad247827b31377bf86f857ab7768fac83d"
+  },
+  {
+    "original": "app/src/main/res/mipmap-xxhdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-xxhdpi/ic_launcher_shared_558545616ddcaff6.png",
+    "sha256": "558545616ddcaff6b58a1c154f70baad247827b31377bf86f857ab7768fac83d"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-mdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-mdpi/ic_launcher_shared_881309c0a0bd46ba.png",
+    "sha256": "881309c0a0bd46baea73b065ace83a7a300a69455ed4d0c900c95c41ca6ae44b"
+  },
+  {
+    "original": "brand-motion/src/main/res/mipmap-night-mdpi/ic_launcher_blue_snow_maid_foreground.png",
+    "target": "brand-motion/src/main/res/mipmap-mdpi/ic_launcher_shared_881309c0a0bd46ba.png",
+    "sha256": "881309c0a0bd46baea73b065ace83a7a300a69455ed4d0c900c95c41ca6ae44b"
+  },
+  {
+    "original": "app/src/main/res/mipmap-mdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-mdpi/ic_launcher_shared_984ac7ded7a99ca5.png",
+    "sha256": "984ac7ded7a99ca523432dfee398aea965bfc227e2c8e08f1be5be2e739bfe73"
+  },
+  {
+    "original": "app/src/main/res/mipmap-night-mdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-mdpi/ic_launcher_shared_984ac7ded7a99ca5.png",
+    "sha256": "984ac7ded7a99ca523432dfee398aea965bfc227e2c8e08f1be5be2e739bfe73"
+  },
+  {
+    "original": "app/src/main/res/mipmap-hdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-hdpi/ic_launcher_shared_b9812c58e947110b.png",
+    "sha256": "b9812c58e947110bfcaca8b765653f88e078f0ea30bfa55cb673b6409aae825c"
+  },
+  {
+    "original": "app/src/main/res/mipmap-night-hdpi/ic_launcher_blue_snow_maid_front_foreground.png",
+    "target": "app/src/main/res/mipmap-hdpi/ic_launcher_shared_b9812c58e947110b.png",
+    "sha256": "b9812c58e947110bfcaca8b765653f88e078f0ea30bfa55cb673b6409aae825c"
+  },
+  {
+    "original": "app/src/main/res/mipmap-hdpi/ic_launcher_blue_snow_maid_front_monochrome.png",
+    "target": "app/src/main/res/mipmap-hdpi/ic_launcher_shared_ed49dd5c0da10c1e.png",
+    "sha256": "ed49dd5c0da10c1edbc31ce17508d72a59fe84cc0eb16bc2185944a539c83117"
+  },
+  {
+    "original": "app/src/main/res/mipmap-hdpi/ic_launcher_blue_snow_maid_monochrome.png",
+    "target": "app/src/main/res/mipmap-hdpi/ic_launcher_shared_ed49dd5c0da10c1e.png",
+    "sha256": "ed49dd5c0da10c1edbc31ce17508d72a59fe84cc0eb16bc2185944a539c83117"
   }
 ]
