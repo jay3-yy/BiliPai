@@ -28,8 +28,8 @@ internal const val PERFORMANCE_CAPTURE_SETTING_ID = "diagnostics.performance_cap
 internal const val PERFORMANCE_CAPTURE_TITLE = "性能专项测试"
 internal const val PERFORMANCE_CAPTURE_SECTION = "performance_diagnostics"
 internal const val PERFORMANCE_CAPTURE_SECTION_TITLE = "性能排查"
-private const val PERFORMANCE_MEASUREMENT_NOTES = "offsetMs 相对 startedMonotonicNs，使用不含深度休眠的单调时钟；elapsedMs 包含休眠。frames 为 UI 窗口帧统计，hwui 为 FrameMetrics 阶段统计，各自独立计数。UI 卡顿采用 JankStats 默认阈值。百分位为 1ms 桶上界，501 表示超过 500ms。CPU 以单核 100% 计。资源约每 5 秒采样，恢复前台时重置区间。前台窗口分别记录，最多 32 个窗口，每窗保留最近 40 次转场。窗口恢复到首个 UI 帧记录应用生命周期响应时间。转场 startReason、outcome 和 completeMotionBoundaries 标记观察边界。滚动尾段为最后位移后的 120ms。GPU 和帧截止指标由 API31+ 系统提供，缺失项为 null。droppedMetricCallbacks 记录采集回调丢失数。检查点按采样周期保存。播放器解码、缓冲和媒体丢帧不在采集范围内。"
-private const val PERFORMANCE_COVERAGE_NOTE = "页面排序使用 scroll/transition 分组；pageAtEnd 和 windowIdAtEnd 记录采样结束时的位置。"
+private const val PERFORMANCE_MEASUREMENT_NOTES = "offsetMs 相对 startedMonotonicNs，使用不含深度休眠的单调时钟；elapsedMs 包含休眠。API31+ 硬件窗口的 frames 与 hwui 同源，按原始 intended-vsync 去重；其他窗口的 UI 统计使用 JankStats。UI 卡顿采用截止时间两倍启发式，API31 以下沿用 JankStats 判定；≥100ms 长帧独立计数，不受截止时间放宽影响。uiFrameSource 标记每窗来源，duplicateHwuiCallbacks 记录重复回调。原始帧的 activeSignals 未采集时为 null。面板刷新率不代表应用提交帧率。百分位为 1ms 桶上界，501 表示超过 500ms。CPU 以单核 100% 计。资源约每 5 秒采样，恢复前台时重置区间。前台窗口分别记录，最多 32 个窗口，每窗保留最近 40 次转场。窗口恢复到首个 UI 帧记录应用生命周期响应时间。转场 startReason、outcome 和 completeMotionBoundaries 标记观察边界；转场时长包含手势停留，不等于页面加载耗时。导航排行只覆盖每窗保留的最近 40 次转场。滚动尾段为最后位移后的 120ms。GPU 和帧截止指标由 API31+ 系统提供，缺失项为 null。droppedMetricCallbacks 记录采集回调丢失数。检查点按采样周期保存。播放器解码、缓冲和媒体丢帧不在采集范围内。"
+private const val PERFORMANCE_COVERAGE_NOTE = "页面排序包含停留、滚动和切换，优先按 ≥100ms 长帧数排序；sceneRanking 保留各操作独立分布，navigationRanking 保留单次转场。pageAtEnd 和 windowIdAtEnd 仅记录采样结束时的位置。"
 private const val MAX_CAPTURE_MS = 15 * 60 * 1000L
 private val HWUI_UI_METRIC_IDS = intArrayOf(
     FrameMetrics.UNKNOWN_DELAY_DURATION, FrameMetrics.INPUT_HANDLING_DURATION,
@@ -38,6 +38,10 @@ private val HWUI_UI_METRIC_IDS = intArrayOf(
 )
 
 internal data class PerformanceCaptureStatus(val recording: Boolean = false, val message: String = "尚未开始采集")
+internal data class PerformanceWorkToken(
+    val sessionStartNs: Long, val startedNs: Long, val stage: String, val windowId: Int, val page: String,
+    val isMainThread: Boolean,
+)
 
 /** 用户主动开启的有界会话。只在 Activity RESUMED 时采样，不改变刷新率或视觉策略。 */
 internal object PerformanceCapture {
@@ -61,7 +65,8 @@ internal object PerformanceCapture {
         val navigation = PerformanceNavigationTracker(page)
         val ui = PerformanceFrameSummary()
         val hwui = PerformanceHwuiSummary()
-        var lastHwuiStartNs = 0L
+        val hwuiIdentity = PerformanceFrameIdentity()
+        val fallbackUiIdentity = PerformanceFrameIdentity()
         var hwuiAvailable: Boolean? = null
         var closed = false
         var pendingHandoff: WindowHandoff? = null
@@ -75,8 +80,51 @@ internal object PerformanceCapture {
         "video_detail:tab_swipe", "video_detail:intro_scroll", "video_detail:comment_scroll",
         "video_detail:player_swipe_collapse",
     )
+    private val navigationWorkStages = setOf("return_prepare", "player_create", "player_attach", "player_release", "playback_exit_cleanup")
+    private data class NavigationWork(val token: PerformanceWorkToken, val durationNs: Long)
+    private data class DataEvent(val timeNs: Long, val screen: String, val action: String, val windowId: Int, val page: String)
 
-    private data class SampleCounters(val frames: Long, val jankyFrames: Long, val deadlineFrames: Long, val missedDeadlines: Long)
+    fun recordScreenCommit(owner: Any, screen: String, navigationReady: Boolean) {
+        if (!status.value.recording) return
+        synchronized(this) {
+            val captured = recordingWindow(owner) ?: return
+            session?.screenCommits?.record(captured.id, screen, navigationReady)
+        }
+    }
+
+    /** 数据工作入口事件，不等同于 HTTP 请求；不保存查询词、账号或媒体身份。 */
+    fun recordDataEvent(screen: String, action: String) {
+        if (!status.value.recording) return
+        synchronized(this) {
+            val current = session?.takeIf { status.value.recording } ?: return
+            val window = registeredWindows.values.filter { it.resumed }.maxByOrNull { it.lastResumeOrder } ?: return
+            if (current.dataEvents.size == 100) current.dataEvents.removeFirst()
+            current.dataEvents.addLast(DataEvent(System.nanoTime(), screen, action, window.id, window.page))
+        }
+    }
+
+    /** 仅专项开启时测量离散的导航同步工作；不采集逐帧录制，也不保存媒体身份。 */
+    fun beginNavigationWork(stage: String): PerformanceWorkToken? {
+        if (!status.value.recording || stage !in navigationWorkStages) return null
+        return synchronized(this) {
+            val current = session?.takeIf { status.value.recording } ?: return@synchronized null
+            val window = registeredWindows.values.filter { it.resumed }.maxByOrNull { it.lastResumeOrder }
+                ?: return@synchronized null
+            PerformanceWorkToken(current.startedNanoTime, System.nanoTime(), stage, window.id, window.page,
+                android.os.Looper.myLooper() == android.os.Looper.getMainLooper())
+        }
+    }
+
+    fun finishNavigationWork(token: PerformanceWorkToken) {
+        val durationNs = System.nanoTime() - token.startedNs
+        synchronized(this) {
+            val current = session?.takeIf { status.value.recording && it.startedNanoTime == token.sessionStartNs } ?: return
+            if (current.navigationWork.size == 100) current.navigationWork.removeFirst()
+            current.navigationWork.addLast(NavigationWork(token, durationNs))
+        }
+    }
+
+    private data class SampleCounters(val frames: Long, val jankyFrames: Long, val longFrames: Long, val deadlineFrames: Long, val missedDeadlines: Long)
 
     private class Session(val environment: JSONObject) {
         val startedNanoTime = System.nanoTime()
@@ -96,6 +144,9 @@ internal object PerformanceCapture {
         val samples = JSONArray()
         val intervals = mutableListOf<PerformanceIntervalInsight>()
         val markers = JSONArray()
+        val navigationWork = ArrayDeque<NavigationWork>()
+        val screenCommits = PerformanceScreenCommitCounts()
+        val dataEvents = ArrayDeque<DataEvent>()
         val slowFrames = JSONArray()
         var foregroundMs = 0L
         var foregroundSinceMs: Long? = null
@@ -104,7 +155,7 @@ internal object PerformanceCapture {
         var stoppedNanoTime: Long? = null
     }
 
-    private fun Session.sampleCounters() = SampleCounters(total.frames, total.jankyFrames, hwui.deadlineAvailableFrames, hwui.missedDeadlines)
+    private fun Session.sampleCounters() = SampleCounters(total.frames, total.jankyFrames, total.longFrames100Ms, hwui.deadlineAvailableFrames, hwui.missedDeadlines)
 
     @Synchronized
     fun registerWindow(owner: Any, kind: String, initialRoute: String?, displaySnapshot: () -> JSONObject) {
@@ -165,32 +216,43 @@ internal object PerformanceCapture {
     fun onFrame(owner: Any, frame: FrameData) {
         val current = session ?: return
         val captured = recordingWindow(owner) ?: return
+        // API31+ 硬件窗口统一消费原始 FrameMetrics；JankStats 的起点可能被推至上一帧末尾，
+        // 因而不能用它重建原始帧身份或再累计一份 UI 数据。
+        if (Build.VERSION.SDK_INT >= 31 && captured.hwuiAvailable != false) return
         if (elapsed(current) >= MAX_CAPTURE_MS) {
             stop("time_limit")
             return
         }
         if (frame.frameStartNanos < current.startedNanoTime) return
-        val scene = captured.timeline.sceneAt(frame.frameStartNanos, frame.frameStartNanos + frame.frameDurationUiNanos)
+        if (!captured.fallbackUiIdentity.accept(frame.frameStartNanos)) return
+        recordUiFrame(current, captured, frame.frameStartNanos, frame.frameDurationUiNanos, frame.isJank,
+            frame.states.map { it.key }.filter { it in diagnosticSignalKeys })
+    }
+
+    private fun recordUiFrame(current: Session, captured: CapturedWindow, startNs: Long, durationNs: Long,
+        isJank: Boolean, activeSignals: List<String>? = null,
+    ) {
+        val scene = captured.timeline.sceneAt(startNs, startNs + durationNs)
         val windowSceneKey = "${captured.id}/${scene.key}"
         val sceneKey = if (windowSceneKey in current.scenes || current.scenes.size < 64) windowSceneKey else "other"
-        captured.pendingHandoff?.takeIf { frame.frameStartNanos >= it.resumedNs }?.let {
-            it.firstUiFrameNs = frame.frameStartNanos
+        captured.pendingHandoff?.takeIf { startNs >= it.resumedNs }?.let {
+            it.firstUiFrameNs = startNs
             it.outcome = "ui_frame_observed"
             captured.pendingHandoff = null
         }
-        captured.ui.add(frame.frameDurationUiNanos, frame.isJank)
-        captured.navigation.uiFrame(frame.frameStartNanos, frame.frameStartNanos + frame.frameDurationUiNanos, frame.frameDurationUiNanos, frame.isJank)
-        current.scenes.getOrPut(sceneKey) { PerformanceFrameSummary() }.add(frame.frameDurationUiNanos, frame.isJank)
-        current.total.add(frame.frameDurationUiNanos, frame.isJank)
+        captured.ui.add(durationNs, isJank)
+        captured.navigation.uiFrame(startNs, startNs + durationNs, durationNs, isJank)
+        current.scenes.getOrPut(sceneKey) { PerformanceFrameSummary() }.add(durationNs, isJank)
+        current.total.add(durationNs, isJank)
         val windowPage = "${captured.id}/${scene.page}"
         val pageKey = if (windowPage in current.pages || current.pages.size < 48) windowPage else "other"
         current.pages.getOrPut(pageKey) { PerformanceFrameSummary() }
-            .add(frame.frameDurationUiNanos, frame.isJank)
-        if (frame.frameDurationUiNanos >= 100_000_000L) {
+            .add(durationNs, isJank)
+        if (durationNs >= 100_000_000L) {
             if (current.slowFrames.length() == 100) current.slowFrames.remove(0)
-            current.slowFrames.put(JSONObject().put("offsetMs", (frame.frameStartNanos - current.startedNanoTime) / 1_000_000.0)
-                .put("windowId", captured.id).put("page", scene.page).put("interaction", scene.interaction).put("uiDurationMs", frame.frameDurationUiNanos / 1_000_000.0)
-                .put("activeSignals", JSONArray(frame.states.map { it.key }.filter { it in diagnosticSignalKeys })))
+            current.slowFrames.put(JSONObject().put("offsetMs", (startNs - current.startedNanoTime) / 1_000_000.0)
+                .put("windowId", captured.id).put("page", scene.page).put("interaction", scene.interaction).put("uiDurationMs", durationNs / 1_000_000.0)
+                .put("activeSignals", activeSignals?.let(::JSONArray) ?: JSONObject.NULL))
         }
     }
 
@@ -228,8 +290,7 @@ internal object PerformanceCapture {
         val captured = recordingWindow(owner) ?: return
         if (elapsed(current) >= MAX_CAPTURE_MS) { stop("time_limit"); return }
         val startNs = metrics.getMetric(FrameMetrics.INTENDED_VSYNC_TIMESTAMP)
-        if (startNs < current.startedNanoTime || startNs == captured.lastHwuiStartNs) return
-        captured.lastHwuiStartNs = startNs
+        if (startNs < current.startedNanoTime || !captured.hwuiIdentity.accept(startNs)) return
         val uiDuration = HWUI_UI_METRIC_IDS.sumOf { metrics.getMetric(it).coerceAtLeast(0) }
         val scene = captured.timeline.sceneAt(startNs, startNs + uiDuration)
         val windowSceneKey = "${captured.id}/${scene.key}"
@@ -239,6 +300,9 @@ internal object PerformanceCapture {
         current.hwuiScenes.getOrPut(key) { PerformanceHwuiSummary() }.add(metrics, droppedCallbacks)
         val total = metrics.getMetric(FrameMetrics.TOTAL_DURATION)
         val deadline = if (Build.VERSION.SDK_INT >= 31) metrics.getMetric(FrameMetrics.DEADLINE) else -1L
+        if (Build.VERSION.SDK_INT >= 31) {
+            recordUiFrame(current, captured, startNs, uiDuration, isPerformanceUiJank(uiDuration, deadline))
+        }
         val gpuDuration = if (Build.VERSION.SDK_INT >= 31) metrics.getMetric(FrameMetrics.GPU_DURATION) else -1L
         captured.navigation.hwuiFrame(startNs, startNs + uiDuration, total, metrics.getMetric(FrameMetrics.DRAW_DURATION), gpuDuration, deadline, droppedCallbacks)
         if (total >= 100_000_000 || (deadline >= 0 && total > deadline)) {
@@ -413,6 +477,7 @@ internal object PerformanceCapture {
                                     .put("sampleIntervalMs", now - previousSampleTime)
                                     .put("observedUiFrames", frameCounts.frames - previousCounters.frames)
                                     .put("jankyUiFrames", frameCounts.jankyFrames - previousCounters.jankyFrames)
+                                    .put("longUiFrames100Ms", frameCounts.longFrames - previousCounters.longFrames)
                                 current.nextResourceSampleAtMs = now + 5_000
                                 if (current.samples.length() < 180) {
                                     current.samples.put(sample)
@@ -424,6 +489,7 @@ internal object PerformanceCapture {
                                         sample.getDouble("processCpuPercentOneCore"),
                                         frameCounts.deadlineFrames - previousCounters.deadlineFrames,
                                         frameCounts.missedDeadlines - previousCounters.missedDeadlines,
+                                        longFrames100Ms = frameCounts.longFrames - previousCounters.longFrames,
                                     ))
                                 }
                                 previousNanoTime = sampleNanoTime
@@ -460,6 +526,7 @@ internal object PerformanceCapture {
 
     private fun PerformanceFrameSummary.json() = JSONObject().put("frames", frames)
         .put("jankyFrames", jankyFrames)
+        .put("longFrames100Ms", longFrames100Ms)
         .put("jankPercent", if (frames == 0L) JSONObject.NULL else jankyFrames * 100.0 / frames)
         .put("p50UiMsUpperBound", percentileUpperBoundMs(.50) ?: JSONObject.NULL)
         .put("p95UiMsUpperBound", percentileUpperBoundMs(.95) ?: JSONObject.NULL)
@@ -485,6 +552,7 @@ internal object PerformanceCapture {
         .put("startOffsetMs", startOffsetMs).put("endOffsetMs", endOffsetMs)
         .put("windowIdAtEnd", windowIdAtEnd ?: JSONObject.NULL).put("pageAtEnd", pageAtEnd ?: JSONObject.NULL)
         .put("uiFrames", frames).put("jankyUiFrames", jankyFrames).put("cpuPercentOneCore", cpuPercentOneCore)
+        .put("longUiFrames100Ms", longFrames100Ms ?: JSONObject.NULL)
         .put("hwuiDeadlineFrames", hwuiDeadlineFrames)
         .put("hwuiMissedDeadlines", if (hwuiDeadlineFrames == 0L) JSONObject.NULL else hwuiMissedDeadlines)
 
@@ -501,18 +569,24 @@ internal object PerformanceCapture {
         val scenes = current.scenes.mapValues { it.value.snapshot() }
         val hwui = current.hwui.snapshot()
         val hwuiScenes = current.hwuiScenes.mapValues { it.value.snapshot() }
+        val navigationInputs = mutableListOf<PerformanceNavigationInsight>()
         val windowReports = current.windows.values.map { captured ->
             val ui = captured.ui.snapshot()
             val hardware = captured.hwui.snapshot()
             val navigation = captured.navigation.snapshot()
+            navigationInputs += navigation.map { PerformanceNavigationInsight(captured.id, it) }
             val observedMotions = captured.navigation.observedMotions
             val id = captured.id
             val kind = captured.kind
             val closed = captured.closed
             val available = captured.hwuiAvailable
+            val duplicates = captured.hwuiIdentity.duplicateCallbacks
             val encodeWindow: () -> JSONObject = {
                 JSONObject().put("id", id).put("kind", kind).put("closed", closed)
                     .put("hwuiAvailable", available ?: JSONObject.NULL).put("frames", ui.json()).put("hwui", hardware.json())
+                    .put("uiFrameSource", if (available == true && Build.VERSION.SDK_INT >= 31) "raw_frame_metrics"
+                        else if (available != null) "jankstats" else JSONObject.NULL)
+                    .put("duplicateHwuiCallbacks", duplicates)
                     .put("observedNavigationMotions", observedMotions)
                     .put("navigation", JSONArray(navigation.map { it.json(startedNanoTime) }))
             }
@@ -525,6 +599,9 @@ internal object PerformanceCapture {
         val markers = current.markers.copyEntries()
         val slowFrames = current.slowFrames.copyEntries()
         val slowHwuiFrames = current.slowHwuiFrames.copyEntries()
+        val navigationWork = current.navigationWork.toList()
+        val screenCommits = current.screenCommits.snapshot()
+        val dataEvents = current.dataEvents.toList()
         val encode: () -> JSONObject = {
             val sceneInputs = scenes.mapNotNull { (key, value) ->
                 if (key == "other") null else {
@@ -538,17 +615,29 @@ internal object PerformanceCapture {
                     if (marker.isNull("windowId")) null else marker.getInt("windowId"))
             }
             val insights = buildPerformanceReportInsights(sceneInputs, intervals, markerInputs)
-            JSONObject().put("schema", 4).put("scope", "page_scroll_and_navigation").put("environment", environment)
+            val navigationRanking = rankPerformanceNavigation(navigationInputs)
+            val sceneRanking = sceneInputs.filter { it.frames.longFrames100Ms > 0 || it.frames.jankyFrames > 0 }
+                .sortedWith(compareByDescending<PerformanceSceneInput> { it.frames.longFrames100Ms }
+                    .thenByDescending { it.frames.jankyFrames }.thenByDescending { it.frames.maxDurationNanos })
+                .take(10)
+            JSONObject().put("schema", 5).put("scope", "page_scroll_and_navigation").put("environment", environment)
                 .put("startedWallMs", startedWallMs).put("startedMonotonicNs", startedNanoTime).put("elapsedMs", elapsedMs)
                 .put("foregroundMs", foregroundMs)
                 .put("stopReason", stopReason)
                 .put("measurementNotes", PERFORMANCE_MEASUREMENT_NOTES)
                 .put("analysis", JSONObject()
-                    .put("pageRankingMethod", "UI janky frames descending, then jank ratio, then max UI duration; scroll and transition only")
+                    .put("pageRankingMethod", "All interactions; UI frames >=100ms descending, then janky frames, jank ratio and max UI duration")
                     .put("coverageNote", PERFORMANCE_COVERAGE_NOTE)
                     .put("pageRanking", JSONArray(insights.pages.map {
                         JSONObject().put("windowId", it.windowId).put("page", it.page)
                             .put("interactions", JSONArray(it.interactions)).put("ui", it.frames.json())
+                    }))
+                    .put("sceneRanking", JSONArray(sceneRanking.map {
+                        JSONObject().put("windowId", it.windowId).put("page", it.page)
+                            .put("interaction", it.interaction).put("ui", it.frames.json())
+                    }))
+                    .put("navigationRanking", JSONArray(navigationRanking.map {
+                        it.record.json(startedNanoTime).put("windowId", it.windowId)
                     }))
                     .put("problemIntervals", JSONArray(insights.intervals.map { it.json() }))
                     .put("markedWindows", JSONArray(insights.markers.map {
@@ -556,7 +645,7 @@ internal object PerformanceCapture {
                             .put("markerWindowId", it.marker.windowId ?: JSONObject.NULL)
                             .put("overlappingIntervals", JSONArray(it.intervals.map { interval -> interval.json() }))
                     }))
-                    .put("summaryText", insights.summaryText))
+                    .put("summaryText", insights.summaryText + formatPerformanceNavigationSummary(navigationRanking.map { it.summaryRow() })))
                 .put("frames", total.json())
                 .put("scenes", JSONObject().apply { scenes.forEach { (key, value) -> put(key, value.json()) } })
                 .put("windows", JSONArray(windowReports.map { it() })).put("omittedWindows", omittedWindows)
@@ -569,6 +658,22 @@ internal object PerformanceCapture {
                 .put("hwui", hwui.json())
                 .put("hwuiScenes", JSONObject().apply { hwuiScenes.forEach { (key, value) -> put(key, value.json()) } })
                 .put("latest100SlowHwuiFrames", slowHwuiFrames)
+                .put("screenCommits", JSONArray(screenCommits.map { count ->
+                    JSONObject().put("windowId", count.windowId).put("screen", count.screen)
+                        .put("navigationReady", count.navigationReady).put("commits", count.commits)
+                }))
+                .put("latest100DataEvents", JSONArray(dataEvents.map { event ->
+                    JSONObject().put("offsetMs", (event.timeNs - startedNanoTime) / 1_000_000.0)
+                        .put("sourceScreen", event.screen).put("action", event.action)
+                        .put("windowIdAtEvent", event.windowId).put("pageAtEvent", event.page)
+                }))
+                .put("latest100NavigationWork", JSONArray(navigationWork.map { work ->
+                    JSONObject().put("stage", work.token.stage).put("windowIdAtStart", work.token.windowId)
+                        .put("pageAtStart", work.token.page)
+                        .put("isMainThread", work.token.isMainThread)
+                        .put("offsetMs", (work.token.startedNs - startedNanoTime) / 1_000_000.0)
+                        .put("durationMs", work.durationNs / 1_000_000.0)
+                }))
                 .put("pages", JSONObject().apply { pages.forEach { (key, value) -> put(key, value.json()) } })
                 .put("samples", samples).put("markers", markers)
                 .put("latest100SlowUiFrames", slowFrames)
@@ -586,18 +691,8 @@ internal object PerformanceCapture {
         fileMutex.lock()
         try {
             withContext(Dispatchers.IO) {
-                val report = snapshot()?.invoke()?.toString(2) ?: return@withContext
-                val file = reportFile(context)
-                file.parentFile!!.mkdirs()
-                val atomic = android.util.AtomicFile(file)
-                val stream = atomic.startWrite()
-                try {
-                    stream.write(report.toByteArray(Charsets.UTF_8))
-                    atomic.finishWrite(stream)
-                } catch (error: java.io.IOException) {
-                    atomic.failWrite(stream)
-                    throw error
-                }
+                val report = snapshot()?.invoke() ?: return@withContext
+                PerformanceHistoryStore(reportFile(context).parentFile!!).writeCheckpoint(report)
             }
         } finally {
             fileMutex.unlock()
@@ -605,6 +700,15 @@ internal object PerformanceCapture {
     }
 
     fun reportFile(context: Context) = File(context.filesDir, "performance/latest.json")
+
+    suspend fun readHistory(context: Context): List<PerformanceHistoryEntry> = withContext(Dispatchers.IO) {
+        fileMutex.lock()
+        try {
+            PerformanceHistoryStore(reportFile(context).parentFile!!).read()
+        } finally {
+            fileMutex.unlock()
+        }
+    }
 
     /** 读取已保存报告，不重新采样、不修改检查点；旧版无摘要时显式返回未知。 */
     suspend fun readPreview(context: Context): PerformanceReportPreview = withContext(Dispatchers.IO) {
@@ -637,8 +741,8 @@ internal object PerformanceCapture {
             val destination = File(directory, "bilipai-performance.json")
             val report = JSONObject(android.util.AtomicFile(source).readFully().toString(Charsets.UTF_8))
             savedPerformanceSummary(report)?.let { summary ->
-                report.getJSONObject("analysis").put("summaryText", summary).put("coverageNote", PERFORMANCE_COVERAGE_NOTE)
-                report.put("measurementNotes", PERFORMANCE_MEASUREMENT_NOTES)
+                // 历史报告保留采样时的算法与口径，不套用当前 schema 的测量说明。
+                report.getJSONObject("analysis").put("summaryText", summary)
             }
             destination.writeText(report.toString(2))
             destination

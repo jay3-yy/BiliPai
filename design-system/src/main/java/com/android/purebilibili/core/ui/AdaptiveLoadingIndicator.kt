@@ -1,8 +1,11 @@
 package com.android.purebilibili.core.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -49,48 +52,78 @@ fun AdaptiveLoadingIndicator(
         color
     }
 
-    when (visual) {
-        AdaptiveLoadingVisual.MATERIAL3_PAGE_CIRCULAR -> {
-            CircularProgressIndicator(
-                modifier = modifier.size(size ?: 40.dp),
-                color = resolvedColor,
-                strokeWidth = strokeWidth,
-            )
+    val animationGate = rememberDecorativeAnimationGate()
+    // All materials share the stop condition; retain each native size while hidden or
+    // motion is disabled, without leaving an indeterminate animation mounted.
+    Box(modifier.then(animationGate.modifier), propagateMinConstraints = true) {
+        val indicatorModifier = Modifier
+        if (!animationGate.active) {
+            val indicatorSize = size ?: when (visual) {
+                AdaptiveLoadingVisual.MATERIAL3_PAGE_CIRCULAR -> 40.dp
+                AdaptiveLoadingVisual.MATERIAL3_CIRCULAR -> 24.dp
+                AdaptiveLoadingVisual.MIUIX_INFINITE ->
+                    MiuixProgressIndicatorDefaults.DefaultInfiniteProgressIndicatorSize * 1.6f
+                AdaptiveLoadingVisual.MIUIX_CIRCULAR ->
+                    MiuixProgressIndicatorDefaults.DefaultCircularProgressIndicatorSize
+            }
+            androidx.compose.foundation.Canvas(indicatorModifier.size(indicatorSize)
+                .semantics { contentDescription = "加载中" }) {
+                val stroke = strokeWidth.toPx()
+                drawArc(
+                    color = resolvedColor,
+                    startAngle = -90f,
+                    sweepAngle = 270f,
+                    useCenter = false,
+                    topLeft = androidx.compose.ui.geometry.Offset(stroke / 2, stroke / 2),
+                    size = androidx.compose.ui.geometry.Size(this.size.width - stroke, this.size.height - stroke),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke),
+                )
+            }
+            return@Box
         }
+        when (visual) {
+            AdaptiveLoadingVisual.MATERIAL3_PAGE_CIRCULAR -> {
+                CircularProgressIndicator(
+                    modifier = indicatorModifier.size(size ?: 40.dp),
+                    color = resolvedColor,
+                    strokeWidth = strokeWidth,
+                )
+            }
 
-        AdaptiveLoadingVisual.MATERIAL3_CIRCULAR -> {
-            val indicatorSize = size ?: 24.dp
-            CircularProgressIndicator(
-                modifier = modifier.size(indicatorSize),
-                color = resolvedColor,
-                strokeWidth = strokeWidth,
-            )
-        }
+            AdaptiveLoadingVisual.MATERIAL3_CIRCULAR -> {
+                val indicatorSize = size ?: 24.dp
+                CircularProgressIndicator(
+                    modifier = indicatorModifier.size(indicatorSize),
+                    color = resolvedColor,
+                    strokeWidth = strokeWidth,
+                )
+            }
 
-        AdaptiveLoadingVisual.MIUIX_INFINITE -> {
-            val indicatorSize = size
-                ?: MiuixProgressIndicatorDefaults.DefaultInfiniteProgressIndicatorSize * 1.6f
-            MiuixInfiniteProgressIndicator(
-                modifier = modifier,
-                color = resolvedColor,
-                size = indicatorSize,
-            )
-        }
+            AdaptiveLoadingVisual.MIUIX_INFINITE -> {
+                val indicatorSize = size
+                    ?: MiuixProgressIndicatorDefaults.DefaultInfiniteProgressIndicatorSize * 1.6f
+                MiuixInfiniteProgressIndicator(
+                    modifier = indicatorModifier,
+                    color = resolvedColor,
+                    size = indicatorSize,
+                )
+            }
 
-        AdaptiveLoadingVisual.MIUIX_CIRCULAR -> {
-            val indicatorSize = size
-                ?: MiuixProgressIndicatorDefaults.DefaultCircularProgressIndicatorSize
-            MiuixCircularProgressIndicator(
-                modifier = modifier,
-                progress = null,
-                colors = MiuixProgressIndicatorDefaults.progressIndicatorColors(
-                    foregroundColor = resolvedColor,
-                ),
-                strokeWidth = strokeWidth.coerceAtLeast(
-                    MiuixProgressIndicatorDefaults.DefaultCircularProgressIndicatorStrokeWidth * 0.5f
-                ),
-                size = indicatorSize,
-            )
+            AdaptiveLoadingVisual.MIUIX_CIRCULAR -> {
+                val indicatorSize = size
+                    ?: MiuixProgressIndicatorDefaults.DefaultCircularProgressIndicatorSize
+                MiuixCircularProgressIndicator(
+                    modifier = indicatorModifier,
+                    progress = null,
+                    colors = MiuixProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = resolvedColor,
+                    ),
+                    strokeWidth = strokeWidth.coerceAtLeast(
+                        MiuixProgressIndicatorDefaults.DefaultCircularProgressIndicatorStrokeWidth * 0.5f
+                    ),
+                    size = indicatorSize,
+                )
+            }
         }
     }
 }

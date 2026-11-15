@@ -1,6 +1,7 @@
 package com.android.purebilibili.navigation
 
 import androidx.compose.foundation.pager.PagerState
+import androidx.compose.animation.core.snap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -8,8 +9,10 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -20,7 +23,8 @@ import kotlinx.coroutines.launch
 @Stable
 internal class MainBottomPagerState(
     val pagerState: PagerState,
-    private val coroutineScope: CoroutineScope
+    private val coroutineScope: CoroutineScope,
+    private val reduceMotion: () -> Boolean = { false },
 ) {
     var selectedPage by mutableIntStateOf(pagerState.currentPage)
         private set
@@ -51,7 +55,7 @@ internal class MainBottomPagerState(
 
     /**
      * MainPagerState 目标页切换：
-     * - 先更新 [selectedPage]（底栏指示器跟目标页），并让目标页先完成一次组合；
+     * - 先更新 [selectedPage]（底栏指示器跟目标页），目标页立即开始收集数据；
      * - 再驱动 Pager 到目标，远距离切换允许跳过中间页，指示器独立连续移动。
      */
     fun switchToPage(targetIndex: Int) {
@@ -66,13 +70,15 @@ internal class MainBottomPagerState(
         selectedPage = safeTargetIndex
         isNavigating = true
 
-        navJob = coroutineScope.launch {
+        // 先保存 Job 再启动；减少动态效果时切页可能同步完成，finally 仍须释放导航状态。
+        navJob = coroutineScope.launch(start = CoroutineStart.LAZY) {
             val myJob = coroutineContext.job
             try {
-                // 目标页此刻已成为转场参与者并开始组合。先让出一帧把它挂载 / 测量的成本
-                // 付掉，动画再启动，避免动画首帧与冷组合抢同一帧预算而掉帧。
-                awaitPagerTargetPagePrewarm()
-                animatePagerSelection(pagerState, safeTargetIndex)
+                // Pager 自身负责目标页的组合与远距离预跳，不在点击和反馈之间插入固定等待。
+                animatePagerSelection(
+                    pagerState, safeTargetIndex,
+                    animationSpec = if (reduceMotion()) snap() else null,
+                )
             } finally {
                 if (navJob == myJob) {
                     isNavigating = false
@@ -83,6 +89,7 @@ internal class MainBottomPagerState(
                 }
             }
         }
+        navJob?.start()
     }
 
     fun syncPage() {
@@ -95,12 +102,15 @@ internal class MainBottomPagerState(
 @Composable
 internal fun rememberMainBottomPagerState(
     pagerState: PagerState,
-    coroutineScope: CoroutineScope = rememberCoroutineScope()
+    coroutineScope: CoroutineScope = rememberCoroutineScope(),
+    reduceMotion: Boolean = false,
 ): MainBottomPagerState {
+    val latestReduceMotion = rememberUpdatedState(reduceMotion)
     return remember(pagerState, coroutineScope) {
         MainBottomPagerState(
             pagerState = pagerState,
-            coroutineScope = coroutineScope
+            coroutineScope = coroutineScope,
+            reduceMotion = { latestReduceMotion.value },
         )
     }
 }

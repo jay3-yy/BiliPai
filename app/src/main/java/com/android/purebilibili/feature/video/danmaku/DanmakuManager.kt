@@ -1076,6 +1076,11 @@ class DanmakuManager private constructor(
      *  批量更新弹幕设置（实时生效）
      */
     fun updateSettings(settings: DanmakuSettings) {
+        if (tapInteractionEnabled != settings.tapInteractionEnabled) {
+            tapInteractionEnabled = settings.tapInteractionEnabled
+            if (!tapInteractionEnabled) clearTapSelection()
+            applyDanmakuClickListener()
+        }
         updateSettings(
             opacity = settings.opacity,
             fontScale = settings.fontScale,
@@ -3001,6 +3006,7 @@ class DanmakuManager private constructor(
         source: androidx.compose.ui.layout.LayoutCoordinates?,
         position: androidx.compose.ui.geometry.Offset
     ): com.android.purebilibili.danmaku.engine.DanmakuClickCapture? {
+        if (!tapInteractionEnabled) return null
         val view = danmakuView ?: return null
         val listener = danmakuClickListener ?: return null
         if (source == null || !source.isAttached || !view.isShown || !isRenderingEnabled) return null
@@ -3017,12 +3023,15 @@ class DanmakuManager private constructor(
         return com.android.purebilibili.danmaku.engine.DanmakuClickCapture(
             confirm = {
                 if (danmakuView === view && danmakuClickListener === listener &&
-                    loadGeneration == generation && isRenderingEnabled
+                    loadGeneration == generation && isRenderingEnabled && tapInteractionEnabled
                 ) click() else click.cancel()
             },
             release = { click.cancel(); isTapSelectionActive = false },
         )
     }
+
+    var tapInteractionEnabled by mutableStateOf(true)
+        private set
 
     val tapSelectionOwner = Any()
 
@@ -3047,7 +3056,7 @@ class DanmakuManager private constructor(
 
     private fun applyDanmakuClickListener() {
         val callback = danmakuClickListener
-        if (callback == null) {
+        if (callback == null || !tapInteractionEnabled) {
             controller?.setOnItemClickListener(null)
             return
         }

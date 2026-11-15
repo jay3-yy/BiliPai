@@ -31,9 +31,11 @@ internal class PerformanceNavigationTracker(initialPage: String) {
     private var lastPhase: String? = null
     private var sequence = 0L
     private var pendingDestination = false
+    private var pageChangedAtNs = 0L
     private val records = ArrayDeque<Record>()
 
     fun pageChanged(value: String, timeNs: Long) {
+        pageChangedAtNs = timeNs
         val previous = running
         if (previous?.destinationAssigned == true) {
             // 同类型页面也可对应不同导航实例；新目的地中断旧运动，分别保留统计。
@@ -84,7 +86,9 @@ internal class PerformanceNavigationTracker(initialPage: String) {
     fun uiFrame(startNs: Long, endNs: Long, durationNs: Long, isJank: Boolean) {
         recordForFrame(startNs, endNs)?.ui?.add(durationNs, isJank)
         // 没有运动的目的地变化只更新基线，不伪造一段动画时长。
-        if (running == null) {
+        // 目的地已经发布时，迟到的旧页帧不能把新页提前提升为已落位基线。
+        // 无动画导航仍可由覆盖目的地变化时刻或其后的实际帧完成基线更新。
+        if (running == null && (!pendingDestination || endNs >= pageChangedAtNs)) {
             settledPage = page
             pendingDestination = false
         }

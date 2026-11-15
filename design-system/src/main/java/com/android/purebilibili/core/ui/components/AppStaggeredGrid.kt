@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState
 import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -43,12 +44,17 @@ fun AppLazyVerticalStaggeredGrid(
     content: LazyStaggeredGridScope.() -> Unit,
 ) {
     Box(modifier, propagateMinConstraints = true) {
-        LazyVerticalStaggeredGrid(
-            columns = columns, state = state, contentPadding = contentPadding,
-            reverseLayout = reverseLayout, verticalItemSpacing = verticalItemSpacing,
-            horizontalArrangement = horizontalArrangement, flingBehavior = flingBehavior,
-            userScrollEnabled = userScrollEnabled, overscrollEffect = overscrollEffect, content = content,
-        )
+        CompositionLocalProvider(
+            LocalListAuxiliaryWorkAllowed provides
+                (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
+        ) {
+            LazyVerticalStaggeredGrid(
+                columns = columns, state = state, contentPadding = contentPadding,
+                reverseLayout = reverseLayout, verticalItemSpacing = verticalItemSpacing,
+                horizontalArrangement = horizontalArrangement, flingBehavior = flingBehavior,
+                userScrollEnabled = userScrollEnabled, overscrollEffect = overscrollEffect, content = content,
+            )
+        }
         if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled) {
             val adapter = remember(state) { StaggeredGridScrollBarAdapter(state) }
             Box(Modifier.matchParentSize()) {

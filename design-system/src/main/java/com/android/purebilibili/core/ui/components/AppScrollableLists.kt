@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberOverscrollEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,12 +44,17 @@ fun AppLazyColumn(
     content: LazyListScope.() -> Unit,
 ) {
     Box(modifier, propagateMinConstraints = true) {
-        LazyColumn(
-            state = state, contentPadding = contentPadding, reverseLayout = reverseLayout,
-            verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment,
-            flingBehavior = flingBehavior, userScrollEnabled = userScrollEnabled,
-            overscrollEffect = overscrollEffect, content = content,
-        )
+        CompositionLocalProvider(
+            LocalListAuxiliaryWorkAllowed provides
+                (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
+        ) {
+            LazyColumn(
+                state = state, contentPadding = contentPadding, reverseLayout = reverseLayout,
+                verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment,
+                flingBehavior = flingBehavior, userScrollEnabled = userScrollEnabled,
+                overscrollEffect = overscrollEffect, content = content,
+            )
+        }
         if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled) {
             Box(Modifier.matchParentSize()) {
                 VerticalScrollBar(
@@ -77,12 +83,17 @@ fun AppLazyVerticalGrid(
     content: LazyGridScope.() -> Unit,
 ) {
     Box(modifier, propagateMinConstraints = true) {
-        LazyVerticalGrid(
-            columns = columns, state = state, contentPadding = contentPadding,
-            reverseLayout = reverseLayout, verticalArrangement = verticalArrangement,
-            horizontalArrangement = horizontalArrangement, flingBehavior = flingBehavior,
-            userScrollEnabled = userScrollEnabled, overscrollEffect = overscrollEffect, content = content,
-        )
+        CompositionLocalProvider(
+            LocalListAuxiliaryWorkAllowed provides
+                (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
+        ) {
+            LazyVerticalGrid(
+                columns = columns, state = state, contentPadding = contentPadding,
+                reverseLayout = reverseLayout, verticalArrangement = verticalArrangement,
+                horizontalArrangement = horizontalArrangement, flingBehavior = flingBehavior,
+                userScrollEnabled = userScrollEnabled, overscrollEffect = overscrollEffect, content = content,
+            )
+        }
         if (LocalAppUiStyle.current == AppUiStyle.MIUIX && userScrollEnabled) {
             Box(Modifier.matchParentSize()) {
                 VerticalScrollBar(

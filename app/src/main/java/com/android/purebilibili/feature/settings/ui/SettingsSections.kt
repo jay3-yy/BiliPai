@@ -168,6 +168,7 @@ internal data class SettingsRootCategoryActions(
     val onReplayOnboardingClick: () -> Unit,
     val onTipsClick: () -> Unit,
     val onKeyboardShortcutsClick: () -> Unit,
+    val onPerformanceHistoryClick: () -> Unit,
     val onOpenLinksClick: () -> Unit,
     val onPrivacyModeChange: (Boolean) -> Unit,
     val onSearchSuggestionsChange: (Boolean) -> Unit,
@@ -814,7 +815,7 @@ internal fun SettingsRootCategoryContent(
             SettingsRootCategory.SYSTEM_ABOUT -> {
                 SettingsRootCategoryEntranceSection {
                     SettingsDetailGroup(title = com.android.purebilibili.core.performance.PERFORMANCE_CAPTURE_SECTION_TITLE) {
-                        PerformanceCaptureSection()
+                        PerformanceCaptureSection(onOpenHistory = actions.onPerformanceHistoryClick)
                     }
                 }
                 SettingsRootCategoryEntranceSection {

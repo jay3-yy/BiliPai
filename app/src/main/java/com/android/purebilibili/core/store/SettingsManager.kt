@@ -1047,6 +1047,7 @@ internal fun resolveDanmakuSettingsScope(isLandscape: Boolean): DanmakuSettingsS
 }
 
 data class DanmakuSettings(
+    val tapInteractionEnabled: Boolean = true,
     val enabled: Boolean = true,
     val opacity: Float = DANMAKU_DEFAULT_OPACITY,
     val fontScale: Float = 1.0f,
@@ -1177,6 +1178,7 @@ data class PlayerInteractionSettings(
     val seekForwardSeconds: Int = 10,
     val seekBackwardSeconds: Int = 10,
     val fullscreenSwipeSeekEnabled: Boolean = true,
+    val swipeSeekSeconds: Int = 30,
     val fullscreenGestureReverse: Boolean = false,
     val hideVideoPageStatusBar: Boolean = false,
     /** 动态环境光开启后，是否在竖屏全屏上下留白显示光晕；保留原存储键与默认值。 */
@@ -1778,6 +1780,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("comment_avatar_push_enabled")
     private val KEY_COMMENT_MEMBER_DECORATIONS_ENABLED =
         booleanPreferencesKey("comment_member_decorations_enabled")
+    private val KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED =
+        booleanPreferencesKey("sub_reply_preview_likes_enabled")
     private val KEY_COMMENT_IP_LOCATION_ENABLED = booleanPreferencesKey("comment_ip_location_enabled")
     private val KEY_DETAILED_COMMENT_TIME_ENABLED =
         booleanPreferencesKey("detailed_comment_time_enabled")
@@ -2037,6 +2041,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             seekForwardSeconds = (preferences[KEY_SEEK_FORWARD_SECONDS] ?: 10).coerceIn(1, 60),
             seekBackwardSeconds = (preferences[KEY_SEEK_BACKWARD_SECONDS] ?: 10).coerceIn(1, 60),
             fullscreenSwipeSeekEnabled = preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] ?: true,
+            swipeSeekSeconds = (preferences[KEY_SWIPE_SEEK_SECONDS] ?: 30).coerceIn(1, 300),
             fullscreenGestureReverse = preferences[KEY_FULLSCREEN_GESTURE_REVERSE] ?: false,
             hideVideoPageStatusBar = preferences[KEY_HIDE_VIDEO_PAGE_STATUS_BAR] ?: false,
             portraitLetterboxAmbientHaze =
@@ -5145,6 +5150,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_DANMAKU_ALLOW_BOTTOM = booleanPreferencesKey("danmaku_allow_bottom")
     private val KEY_DANMAKU_ALLOW_COLORFUL = booleanPreferencesKey("danmaku_allow_colorful")
     private val KEY_DANMAKU_ALLOW_SPECIAL = booleanPreferencesKey("danmaku_allow_special")
+    private val KEY_DANMAKU_TAP_INTERACTION_ENABLED = booleanPreferencesKey("danmaku_tap_interaction_enabled")
     private val KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS =
         booleanPreferencesKey("danmaku_block_attention_commands")
     private val KEY_DANMAKU_SMART_OCCLUSION = booleanPreferencesKey("danmaku_smart_occlusion")
@@ -5424,6 +5430,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 defaultValue = true
             ),
             weightFilterLevel = (preferences[KEY_DANMAKU_WEIGHT_FILTER_LEVEL] ?: 0).coerceIn(0, 11),
+            tapInteractionEnabled = preferences[KEY_DANMAKU_TAP_INTERACTION_ENABLED] ?: true,
             hideInteractiveCommands = preferences[KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS] ?: false,
             blockAttentionCommands = preferences[KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS] ?: false,
             smartOcclusion = readScopedDanmakuPreference(
@@ -5911,6 +5918,14 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences ->
             preferences[keyDanmakuAllowSpecial(scope)] = value
         }
+    }
+
+    fun getDanmakuTapInteractionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { it[KEY_DANMAKU_TAP_INTERACTION_ENABLED] ?: true }
+        .distinctUntilChanged()
+
+    suspend fun setDanmakuTapInteractionEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[KEY_DANMAKU_TAP_INTERACTION_ENABLED] = enabled }
     }
 
     fun getDanmakuHideInteractiveCommands(context: Context): Flow<Boolean> =
@@ -6762,6 +6777,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     suspend fun setCommentMemberDecorationsEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_COMMENT_MEMBER_DECORATIONS_ENABLED] = enabled
+        }
+    }
+
+    fun getSubReplyPreviewLikesEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED] ?: true }
+
+    suspend fun setSubReplyPreviewLikesEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED] = enabled
         }
     }
 
@@ -7690,6 +7715,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_PORTRAIT_SWIPE_TO_FULLSCREEN = booleanPreferencesKey("portrait_swipe_to_fullscreen")
     private val KEY_CENTER_SWIPE_TO_FULLSCREEN = booleanPreferencesKey("center_swipe_to_fullscreen")
     private val KEY_FULLSCREEN_SWIPE_SEEK_ENABLED = booleanPreferencesKey("fullscreen_swipe_seek_enabled")
+    private val KEY_SWIPE_SEEK_SECONDS = intPreferencesKey("swipe_seek_seconds")
     private val KEY_FULLSCREEN_GESTURE_REVERSE = booleanPreferencesKey("fullscreen_gesture_reverse")
     private val KEY_HIDE_VIDEO_PAGE_STATUS_BAR = booleanPreferencesKey("hide_video_page_status_bar")
     private val KEY_PORTRAIT_LETTERBOX_AMBIENT_HAZE =
@@ -7824,7 +7850,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_CENTER_SWIPE_TO_FULLSCREEN] = value }
     }
 
-    // --- 横屏左右滑动精细调进度开关（默认开启） ---
+    // --- 固定秒数滑动调进度（默认开启） ---
     fun getFullscreenSwipeSeekEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] ?: true }
 
@@ -7832,6 +7858,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] = enabled
         }
+    }
+
+    fun getSwipeSeekSeconds(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { (it[KEY_SWIPE_SEEK_SECONDS] ?: 30).coerceIn(1, 300) }
+
+    suspend fun setSwipeSeekSeconds(context: Context, seconds: Int) {
+        context.settingsDataStore.edit { it[KEY_SWIPE_SEEK_SECONDS] = seconds.coerceIn(1, 300) }
     }
 
     private fun isLargeScreenOrFoldableConfiguration(context: Context): Boolean {
@@ -8989,6 +9022,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_PORTRAIT_SWIPE_TO_FULLSCREEN, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_CENTER_SWIPE_TO_FULLSCREEN, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_FULLSCREEN_SWIPE_SEEK_ENABLED, SettingsShareSection.GESTURE),
+            IntShareablePreferenceDefinition(KEY_SWIPE_SEEK_SECONDS, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_FULLSCREEN_GESTURE_REVERSE, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_AUTO_ENTER_FULLSCREEN, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_AUTO_EXIT_FULLSCREEN, SettingsShareSection.GESTURE),
@@ -9028,6 +9062,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_BOTTOM, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_COLORFUL, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_SPECIAL, SettingsShareSection.DANMAKU),
+            BooleanShareablePreferenceDefinition(KEY_DANMAKU_TAP_INTERACTION_ENABLED, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_SMART_OCCLUSION, SettingsShareSection.DANMAKU),
             StringShareablePreferenceDefinition(KEY_DANMAKU_BLOCK_RULES, SettingsShareSection.DANMAKU),

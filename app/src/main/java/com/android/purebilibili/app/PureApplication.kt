@@ -27,6 +27,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.profileinstaller.ProfileInstaller
 import com.android.purebilibili.BuildConfig
 import coil3.ImageLoader
+import com.android.purebilibili.core.ui.components.biliImagePlaceholders
 import coil3.SingletonImageLoader
 import coil3.gif.GifDecoder
 import coil3.gif.AnimatedImageDecoder
@@ -182,6 +183,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             )
             .build()
         return ImageLoader.Builder(this)
+            .biliImagePlaceholders(context)
             .components {
                 add(com.android.purebilibili.core.util.BiliImageQualityInterceptor())
                 // 共享网络客户端及 DNS 策略，保留 HTTP 缓存头语义。

@@ -23,6 +23,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.android.purebilibili.feature.bangumi.BangumiOverlayUnsupportedAction
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.data.model.response.VideoshotData
+import com.android.purebilibili.feature.bangumi.resolveBangumiQuickSeekTargetPosition
+import com.android.purebilibili.feature.video.ui.overlay.PlayerQuickSeekForwardButton
 import com.android.purebilibili.feature.bangumi.resolveBangumiOverlayQualityLabel
 import com.android.purebilibili.feature.bangumi.resolveBangumiOverlayShareTitle
 import com.android.purebilibili.feature.bangumi.resolveBangumiOverlaySwitchableQualityIds
@@ -161,6 +163,22 @@ internal fun BangumiPlayerOverlayHost(
         }
     }
 
+    val commitSeek: (Long) -> Unit = { position ->
+        seekHaptics.finish()
+        val result = commitPlaybackSeekInteraction(
+            state = seekSession.copy(playbackPositionMs = player.currentPosition),
+            player = player,
+            positionMs = position,
+        )
+        seekSession = result.state
+        seekPlayerFromUserAction(
+            player = player,
+            positionMs = result.committedPositionMs,
+            shouldResumePlaybackOverride = result.shouldResumePlayback,
+        )
+        danmakuManager.seekTo(result.committedPositionMs)
+    }
+
     VideoPlayerOverlay(
         state = VideoPlayerOverlayState(
             viewportWidthDpOverride = viewportWidthDp,
@@ -267,21 +285,7 @@ internal fun BangumiPlayerOverlayHost(
                 seekSession = cancelPlaybackSeekInteraction(seekSession)
                 danmakuManager.cancelSeekScrub()
             },
-            onSeekTo = { position ->
-                seekHaptics.finish()
-                val result = commitPlaybackSeekInteraction(
-                    state = seekSession.copy(playbackPositionMs = player.currentPosition),
-                    player = player,
-                    positionMs = position,
-                )
-                seekSession = result.state
-                seekPlayerFromUserAction(
-                    player = player,
-                    positionMs = result.committedPositionMs,
-                    shouldResumePlaybackOverride = result.shouldResumePlayback,
-                )
-                danmakuManager.seekTo(result.committedPositionMs)
-            },
+            onSeekTo = commitSeek,
             progressDisplayOverridePositionProvider = {
                 gestureSeekPositionProvider()
                     ?: seekSession.sliderPositionMs.takeIf { shouldUsePlaybackSeekSessionPosition(seekSession) }
@@ -379,5 +383,12 @@ internal fun BangumiPlayerOverlayHost(
             },
             onCoin = onCoin,
         ),
+        topBarExtraActions = if (isFullscreen && !features.isAudioOnly && !features.isInPipMode) {
+            {
+                PlayerQuickSeekForwardButton(onClick = {
+                    resolveBangumiQuickSeekTargetPosition(player.currentPosition, player.duration)?.let(commitSeek)
+                })
+            }
+        } else null,
     )
 }

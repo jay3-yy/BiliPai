@@ -630,6 +630,7 @@ fun SearchScreen(
     val backToTopButtonEnabled = rememberBackToTopButtonEnabled()
     val searchChromeSpec = remember(topChromePolicy) { resolveSearchChromeVisualSpec(topChromePolicy) }
     val searchState = viewModel.uiState.collectAsStateWithLifecycle()
+    com.android.purebilibili.core.performance.PerformanceScreenProbe("search")
     val searchQuery = remember(searchState) { derivedStateOf { searchState.value.query } }
     val state by rememberSearchScreenState(searchState)
     // The editable draft is authoritative. VM query is only its search/suggestion projection,
@@ -645,7 +646,7 @@ fun SearchScreen(
     val focusManager = LocalFocusManager.current
     val configuration = LocalConfiguration.current
     val windowSizeClass = LocalWindowSizeClass.current
-    var startupSettled by remember { mutableStateOf(false) }
+    val startupSettled by com.android.purebilibili.core.ui.animation.LocalAppNavigationEntranceReady.current
     var searchFieldFocused by remember { mutableStateOf(false) }
     var retainSearchImeAfterClear by remember { mutableStateOf(false) }
     var searchQueryClearedAtElapsedMs by remember { mutableLongStateOf(-1L) }
@@ -737,8 +738,7 @@ fun SearchScreen(
     val displayedSearchHint = state.defaultSearchHint.takeIf { searchHintEnabled }.orEmpty()
     val suggestedSearchKeyword = state.defaultSearchKeyword.takeIf { searchHintEnabled }.orEmpty()
     val scope = rememberCoroutineScope()
-    val savedSearchFilterTabOrder by SettingsManager
-        .getSearchFilterTabOrder(context)
+    val savedSearchFilterTabOrder by remember(context) { SettingsManager.getSearchFilterTabOrder(context) }
         .collectAsStateWithLifecycle(
             initialValue = defaultSearchFilterTabOrder.map { it.value }
         )
@@ -756,18 +756,16 @@ fun SearchScreen(
             widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
-    val cardAnimationEnabled by SettingsManager.getCardAnimationEnabled(context).collectAsStateWithLifecycle(initialValue = true)
-    val homeDurationStyle by SettingsManager
-        .getHomeDurationStyle(context)
+    val cardAnimationEnabled by remember(context) { SettingsManager.getCardAnimationEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
+    val homeDurationStyle by remember(context) { SettingsManager.getHomeDurationStyle(context) }
         .collectAsStateWithLifecycle(initialValue = HomeDurationStyle.OUTSIDE_COVER)
-    val compactVideoStatsOnCover by SettingsManager
-        .getCompactVideoStatsOnCover(context)
+    val compactVideoStatsOnCover by remember(context) { SettingsManager.getCompactVideoStatsOnCover(context) }
         .collectAsStateWithLifecycle(initialValue = false)
-    val showHotSection by SettingsManager.getSearchLandingSectionVisible(context, 0).collectAsStateWithLifecycle(initialValue = true)
-    val showHistorySection by SettingsManager.getSearchLandingSectionVisible(context, 1).collectAsStateWithLifecycle(initialValue = true)
-    val showDiscoverSection by SettingsManager.getSearchLandingSectionVisible(context, 2).collectAsStateWithLifecycle(initialValue = true)
-    val hotSearchEnabled by SettingsManager.getSearchHotSectionEnabled(context).collectAsStateWithLifecycle(initialValue = true)
-    val discoverSectionEnabled by SettingsManager.getSearchDiscoverSectionEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val showHotSection by remember(context) { SettingsManager.getSearchLandingSectionVisible(context, 0) }.collectAsStateWithLifecycle(initialValue = true)
+    val showHistorySection by remember(context) { SettingsManager.getSearchLandingSectionVisible(context, 1) }.collectAsStateWithLifecycle(initialValue = true)
+    val showDiscoverSection by remember(context) { SettingsManager.getSearchLandingSectionVisible(context, 2) }.collectAsStateWithLifecycle(initialValue = true)
+    val hotSearchEnabled by remember(context) { SettingsManager.getSearchHotSectionEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
+    val discoverSectionEnabled by remember(context) { SettingsManager.getSearchDiscoverSectionEnabled(context) }.collectAsStateWithLifecycle(initialValue = true)
     val appThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
     val androidNativeLiquidGlassEnabled = appThemeConfig.liquidGlassEnabled
     val effectiveLiquidGlassEnabled = rememberAppChromeLiquidGlassEnabled(
@@ -808,13 +806,11 @@ fun SearchScreen(
             tonalElevationDp = contentCardSurfaceSpec.tonalElevationDp.toInt(),
         )
     }
-    val cardTransitionEnabled by SettingsManager.getCardTransitionEnabled(context).collectAsStateWithLifecycle(initialValue = false)
-    val showOnlineCount by SettingsManager.getShowCardOnlineCount(context).collectAsStateWithLifecycle(initialValue = false)
-    val homeFeedCardStyle by SettingsManager
-        .getHomeFeedCardStyle(context)
+    val cardTransitionEnabled by remember(context) { SettingsManager.getCardTransitionEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
+    val showOnlineCount by remember(context) { SettingsManager.getShowCardOnlineCount(context) }.collectAsStateWithLifecycle(initialValue = false)
+    val homeFeedCardStyle by remember(context) { SettingsManager.getHomeFeedCardStyle(context) }
         .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
-    val homeSettings by SettingsManager
-        .getHomeSettings(context)
+    val homeSettings by remember(context) { SettingsManager.getHomeSettings(context) }
         .collectAsStateWithLifecycle(initialValue = HomeSettings())
     val searchContentWidth = resolveSearchContentWidth(
         isExpandedScreen = windowSizeClass.isExpandedScreen,
@@ -1058,6 +1054,8 @@ fun SearchScreen(
         useHeaderBlur = shouldUseSearchTopBarBlur
     )
     val dismissSearchKeyboardAndFocus = {
+        pendingLandingFocusRestore = false
+        retainSearchImeAfterClear = false
         keyboardController?.hide()
         focusManager.clearFocus(force = true)
         searchFieldFocused = false
@@ -1073,6 +1071,10 @@ fun SearchScreen(
         ) {
             retainSearchImeAfterClear = true
             searchQueryClearedAtElapsedMs = android.os.SystemClock.elapsedRealtime()
+        }
+        if (viewModel.uiState.value.showResults && query != viewModel.uiState.value.query) {
+            pendingLandingFocusRestore = searchFieldFocused
+            viewModel.exitResultsToLanding()
         }
         viewModel.onQueryChange(query)
     }
@@ -1098,14 +1100,18 @@ fun SearchScreen(
         retainSearchImeAfterClear = false
     }
     val submitSearch: (String) -> Unit = submitSearch@{ keyword ->
-        when (val action = resolveSearchSubmitAction(keyword)) {
-            SearchSubmitAction.Ignore -> return@submitSearch
+        val action = resolveSearchSubmitAction(keyword)
+        if (action == SearchSubmitAction.Ignore) return@submitSearch
+        if (!viewModel.uiState.value.showResults) restoreLandingFocusOnBack = searchFieldFocused
+        // 先结束编辑和待恢复任务，再切换内容，避免新位置的焦点通知反向恢复输入法。
+        dismissSearchKeyboardAndFocus()
+        when (action) {
+            SearchSubmitAction.Ignore -> Unit
             is SearchSubmitAction.OpenLink -> {
                 viewModel.dismissSuggestions()
                 onOpenSearchLink(action.url)
             }
             is SearchSubmitAction.OpenSearch -> {
-                if (!state.showResults) restoreLandingFocusOnBack = searchFieldFocused
                 if (searchInputState.text.toString() != action.keyword) {
                     searchInputState.setTextAndPlaceCursorAtEnd(action.keyword)
                 }
@@ -1114,7 +1120,6 @@ fun SearchScreen(
             is SearchSubmitAction.OpenNativeTarget -> {
                 viewModel.dismissSuggestions()
                 if (!onNavigateSearchTarget(action.target)) {
-                    if (!state.showResults) restoreLandingFocusOnBack = searchFieldFocused
                     val normalizedKeyword = keyword.trim()
                     if (searchInputState.text.toString() != normalizedKeyword) {
                         searchInputState.setTextAndPlaceCursorAtEnd(normalizedKeyword)
@@ -1123,7 +1128,6 @@ fun SearchScreen(
                 }
             }
         }
-        dismissSearchKeyboardAndFocus()
     }
 
     val handleSearchBack = {
@@ -1182,11 +1186,6 @@ fun SearchScreen(
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("SearchScreen")
     }
 
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(140)
-        startupSettled = true
-    }
-
     LaunchedEffect(state.searchType, searchTabs) {
         val targetPage = resolveSearchPagerPageForType(state.searchType, searchTabs)
         // Hard-settle only when the pager is fully idle. Mid-flight corrections would snap the
@@ -1209,9 +1208,9 @@ fun SearchScreen(
             }
     }
 
-    LaunchedEffect(startupSettled, state.showResults, state.hasQuery) {
-        if (shouldBootstrapSearchLandingData(
-                startupSettled = startupSettled,
+    LaunchedEffect(openedWithKeyword, state.showResults, state.hasQuery) {
+        // 数据加载与转场并行；带初始关键词的入口不启动无关的落地页请求。
+        if (!openedWithKeyword && shouldBootstrapSearchLandingData(
                 showResults = state.showResults,
                 query = searchState.value.query
             )
@@ -1238,13 +1237,13 @@ fun SearchScreen(
         onClearQuery = clearSearchQuery,
         onFocusChanged = { focused ->
             searchFieldFocused = focused
-            if (focused) {
-                autoFocusConsumed = true
-                if (state.showResults) {
-                    pendingLandingFocusRestore = true
-                    viewModel.exitResultsToLanding()
-                    viewModel.onQueryChange(searchInputState.text.toString())
-                }
+            if (focused) autoFocusConsumed = true
+        },
+        onEditRequested = {
+            if (viewModel.uiState.value.showResults) {
+                pendingLandingFocusRestore = true
+                viewModel.exitResultsToLanding()
+                viewModel.onQueryChange(searchInputState.text.toString())
             }
         },
         onEntryMotionFinished = onEntryMotionConsumed,
@@ -1271,6 +1270,7 @@ fun SearchScreen(
                 onSearch = callbacks.onSearch,
                 onClearQuery = callbacks.onClearQuery,
                 onFocusChanged = callbacks.onFocusChanged,
+                onEditRequested = callbacks.onEditRequested,
                 focusRequester = placement.focusRequester,
                 placeholder = placement.placeholder,
                 suggestedKeyword = placement.suggestedKeyword,
@@ -1741,12 +1741,14 @@ fun SearchScreen(
                     focusRequester = searchFocusRequester,
                     placeholder = displayedSearchHint.ifBlank { resolveSearchDefaultPlaceholder() },
                     suggestedKeyword = suggestedSearchKeyword,
-                    autoFocusEnabled = shouldAutoFocusSearchField(
-                        startupSettled = startupSettled,
-                        query = searchQuery.value,
-                        showResults = state.showResults,
-                        autoFocusConsumed = autoFocusConsumed
-                    ),
+                    autoFocusEnabled = backEnabled && !openedWithKeyword &&
+                        com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current &&
+                        shouldAutoFocusSearchField(
+                            startupSettled = startupSettled,
+                            query = searchQuery.value,
+                            showResults = state.showResults,
+                            autoFocusConsumed = autoFocusConsumed
+                        ),
                     reducedMotionBudget = effectiveSearchMotionBudget == SearchMotionBudget.REDUCED,
                     entryMotionSpec = entryMotionSpec,
                     entryMotionKey = entryMotionKey,
@@ -1839,6 +1841,7 @@ private class SearchTopBarCallbacks(
     val onSearch: (String) -> Unit,
     val onClearQuery: () -> Unit,
     val onFocusChanged: (Boolean) -> Unit,
+    val onEditRequested: () -> Unit,
     val onEntryMotionFinished: (Int) -> Unit,
     val onExitMotionFinished: (Int) -> Unit,
     val isScrollInProgressProvider: () -> Boolean,

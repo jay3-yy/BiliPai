@@ -126,7 +126,8 @@ class AppNavigationPlaybackPolicyTest {
             ScreenRoutes.Partition.route,
             "category/1",
             "season_series_detail/series/1/2/title/owner",
-            "space/123"
+            "space/123",
+            "chat/123/1?name=朋友",
         ).forEach { route ->
             assertTrue(isVideoCardReturnTargetRoute(route), "共享元素返回应支持来源路由：$route")
         }

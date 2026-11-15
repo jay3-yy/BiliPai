@@ -328,6 +328,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun ensureLandingBootstrap() {
         if (landingBootstrapStarted) return
         landingBootstrapStarted = true
+        com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("search", "landing_bootstrap_started")
         viewModelScope.launch {
             launch { loadDefaultSearchHintInternal() }
             launch { refreshHotSearchInternal() }
@@ -569,6 +570,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     fun search(keyword: String, updateDraft: Boolean = true) {
         val normalizedKeyword = keyword.trim()
         if (normalizedKeyword.isBlank()) return
+        com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("search", "query_submitted")
         ensureBlockedUpObserver()
 
         val context = getApplication<android.app.Application>()

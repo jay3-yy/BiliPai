@@ -311,17 +311,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             com.android.purebilibili.feature.message.ForegroundMessageSync.snapshot.collect { snapshot ->
                 if (snapshot != null && snapshot.identity == accountRequests.awaitCurrentIdentity()) {
-                    val displayed = com.android.purebilibili.core.store.MessageBadgeCleanState.resolve(
-                        snapshot.identity.mid ?: 0L, snapshot.unread.total,
-                    )
-                    _uiState.update { it.copy(messageUnreadCount = displayed) }
+                    applyForegroundMessageUnread(snapshot)
                 }
             }
         }
         viewModelScope.launch {
             MessageRepository.readEvents.collect {
                 messageUnreadRefreshJob?.cancel()
-                messageUnreadRefreshJob = accountRequests.launch { refreshMessageUnreadCount() }
+                refreshMessageUnreadInBackground(afterCurrentFetch = true)
             }
         }
         refreshUserInfoInBackground()
@@ -1071,6 +1068,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (shouldEmbedLivePageInHomeTopTab(category)) return
         if (_isRefreshing.value) return
         launchFeedRequest(category, popularSubCategory, HomeFeedRequestKind.REFRESH) {
+            com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("home", "feed_refresh_started")
             com.android.purebilibili.core.util.Logger.d(
                 "HomeFeed",
                 "refresh 触发 category=$category 实际列=$feedGridColumns " +
@@ -1296,15 +1294,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun refreshMessageUnreadInBackground() {
+    private fun applyForegroundMessageUnread(snapshot: com.android.purebilibili.feature.message.ForegroundMessageSnapshot) {
+        if (!accountRequests.isCurrent(snapshot.identity)) return
+        val displayed = com.android.purebilibili.core.store.MessageBadgeCleanState.resolve(
+            snapshot.identity.mid ?: 0L, snapshot.unread.total,
+        )
+        _uiState.update { it.copy(messageUnreadCount = displayed) }
+    }
+
+    private fun refreshMessageUnreadInBackground(afterCurrentFetch: Boolean = false) {
+        if (com.android.purebilibili.feature.message.ForegroundMessageSync.refreshRequests.request(
+                accountRequests.identity, afterCurrentFetch,
+            )
+        ) {
+            // 原始未读相同不会再次发布 StateFlow；本地清理状态仍须立即应用。
+            com.android.purebilibili.feature.message.ForegroundMessageSync.snapshot.value
+                ?.takeIf { it.identity == accountRequests.identity }
+                ?.let(::applyForegroundMessageUnread)
+            return
+        }
         if (messageUnreadRefreshJob?.isActive == true) return
         messageUnreadRefreshJob = accountRequests.launch {
             refreshMessageUnreadCount()
         }
     }
 
-    /** 回首页时重拉角标。 */
+    /** 回首页时刷新角标；前台同步运行时复用当前查询。 */
     fun refreshMessageUnread() {
+        com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("home", "unread_refresh_requested")
         refreshMessageUnreadInBackground()
     }
 

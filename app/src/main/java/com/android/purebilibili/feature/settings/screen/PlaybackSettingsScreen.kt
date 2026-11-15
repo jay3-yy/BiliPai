@@ -1334,6 +1334,8 @@ private fun PlaybackInteractionSettingsSection(
 ) {
     val playerConfiguration = rememberSettingsPlayerConfiguration()
     val scope = rememberCoroutineScope()
+    val danmakuTapInteractionEnabled by remember(context) { SettingsManager.getDanmakuTapInteractionEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = true)
     val hideInteractiveCommandDanmaku by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDanmakuHideInteractiveCommands(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val danmakuCloudSyncEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getDanmakuCloudSyncEnabled(context) }
@@ -1379,6 +1381,8 @@ private fun PlaybackInteractionSettingsSection(
         .collectAsStateWithLifecycle(initialValue = true)
     val commentAvatarPushEnabled by remember(context) { SettingsManager.getCommentAvatarPushEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
+    val subReplyPreviewLikesEnabled by remember(context) { SettingsManager.getSubReplyPreviewLikesEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = true)
     val commentMemberDecorationsEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getCommentMemberDecorationsEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val commentIpLocationEnabled by remember(context) { SettingsManager.getCommentIpLocationEnabled(context) }
@@ -1619,6 +1623,19 @@ SettingsItemAnchor("playback.subtitle_auto_preference") {
             )
         }
         } else {
+        SettingsItemAnchor("playback.danmaku_tap_interaction_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.DANMAKU_TAP),
+                title = playbackSettingTitle("playback.danmaku_tap_interaction_enabled"),
+                subtitle = "点击弹幕可悬停并打开点赞、复制等操作；关闭不影响弹幕显示",
+                checked = danmakuTapInteractionEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setDanmakuTapInteractionEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
+        AppPreferenceDivider()
         SettingsItemAnchor("playback.hide_interactive_command_danmaku") {
     AppSwitchPreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.INTERACTIVE_COMMANDS),
@@ -1929,6 +1946,19 @@ SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
                     checked = commentAvatarPushEnabled,
                     onCheckedChange = { enabled ->
                         scope.launch { SettingsManager.setCommentAvatarPushEnabled(context, enabled) }
+                    },
+                    iconTint = AppContentColors.secondaryText()
+                )
+            }
+        AppPreferenceDivider()
+            SettingsItemAnchor("playback.sub_reply_preview_likes_enabled") {
+                AppSwitchPreference(
+                    icon = rememberSettingsSemanticIcon(SettingsIconRole.SUB_REPLY_PREVIEW_LIKES),
+                    title = playbackSettingTitle("playback.sub_reply_preview_likes_enabled"),
+                    subtitle = "在楼中楼预览正文末尾显示点赞图标和数量，点击可点赞或取消",
+                    checked = subReplyPreviewLikesEnabled,
+                    onCheckedChange = { enabled ->
+                        scope.launch { SettingsManager.setSubReplyPreviewLikesEnabled(context, enabled) }
                     },
                     iconTint = AppContentColors.secondaryText()
                 )
@@ -2446,9 +2476,9 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.SWIPE_SEEK),
                 title = playbackSettingTitle("playback.fullscreen_swipe_seek_enabled"),
                 subtitle = if (fullscreenSwipeSeekEnabled) {
-                    "已开启，满屏宽度对应的跳转秒数由视频时长自动决定"
+                    "滑动一屏跳转 ${playerConfiguration.swipeSeekSeconds} 秒，不随视频时长变化"
                 } else {
-                    "已关闭，使用不限范围的拖动调节"
+                    "滑动幅度随视频总时长变化"
                 },
                 checked = fullscreenSwipeSeekEnabled,
                 onCheckedChange = {
@@ -2460,6 +2490,18 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
             )
         }
         AppPreferenceDivider()
+        SettingsItemAnchor("playback.swipe_seek_seconds") {
+            SettingsSingleChoicePreference(
+                title = playbackSettingTitle("playback.swipe_seek_seconds"),
+                subtitle = "固定模式下滑动一屏的跳转秒数，实际幅度同时受手势灵敏度影响",
+                enabled = fullscreenSwipeSeekEnabled,
+                options = listOf(5, 10, 15, 30, 60, 90, 120, 300).map { AppSegmentOption(it, "${it}秒") },
+                selectedValue = playerConfiguration.swipeSeekSeconds,
+                onSelectionChange = { seconds ->
+                    scope.launch { SettingsManager.setSwipeSeekSeconds(context, seconds) }
+                },
+            )
+        }
         AppPreferenceDivider()
         val autoRotateEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoRotateEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
         val landscapeHoldEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getLandscapeHoldEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)

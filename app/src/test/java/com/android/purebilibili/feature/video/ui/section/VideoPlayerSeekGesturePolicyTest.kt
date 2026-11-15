@@ -9,6 +9,31 @@ import kotlin.test.assertTrue
 class VideoPlayerSeekGesturePolicyTest {
 
     @Test
+    fun `fixed swipe seconds do not change with video length`() {
+        for (duration in listOf(600_000L, 7_200_000L)) {
+            assertEquals(15_000L, resolveHorizontalSeekDeltaMs(
+                400f, 800f, 1f, duration, fixedSeekEnabled = true, fixedSeekSeconds = 30,
+            ))
+            assertEquals(-30_000L, resolveHorizontalSeekDeltaMs(
+                -400f, 800f, 2f, duration, fixedSeekEnabled = true, fixedSeekSeconds = 30,
+            ))
+            assertEquals(45_000L, resolveHorizontalSeekDeltaMs(
+                400f, 800f, 1f, duration, fixedSeekEnabled = true, fixedSeekSeconds = 90,
+            ))
+        }
+    }
+
+    @Test
+    fun `switching off fixed mode restores duration scaling and short videos remain bounded`() {
+        val fixed = resolveHorizontalSeekDeltaMs(800f, 800f, 1f, 7_200_000L, true, 30)
+        val scaled = requireNotNull(resolveHorizontalSeekDeltaMs(800f, 800f, 1f, 7_200_000L, false, 30))
+        assertEquals(30_000L, fixed)
+        assertTrue(scaled > 300_000L)
+        assertEquals(10_000L, resolveHorizontalSeekDeltaMs(800f, 800f, 1f, 10_000L, true, 30))
+        assertEquals(-10_000L, resolveHorizontalSeekDeltaMs(-800f, 800f, 1f, 10_000L, true, 30))
+    }
+
+    @Test
     fun `player seek requires horizontal dominance over vertical drift`() {
         assertTrue(
             shouldEngageHorizontalPlayerSeek(

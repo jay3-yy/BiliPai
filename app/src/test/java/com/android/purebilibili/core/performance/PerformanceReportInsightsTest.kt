@@ -11,7 +11,7 @@ class PerformanceReportInsightsTest {
     }
 
     @Test
-    fun `page ranking merges interactions without mixing windows or idle work`() {
+    fun `page ranking includes idle jank without mixing windows`() {
         val scenes = listOf(
             PerformanceSceneInput(1, "home", "scroll", frames(10, 2)),
             PerformanceSceneInput(1, "home", "transition", frames(5, 3)),
@@ -19,11 +19,31 @@ class PerformanceReportInsightsTest {
             PerformanceSceneInput(1, "settings", "idle", frames(0, 20)),
         )
         val result = buildPerformanceReportInsights(scenes, emptyList(), emptyList())
-        assertEquals(listOf(1, 2), result.pages.map { it.windowId })
-        assertEquals(20L, result.pages.first().frames.frames)
-        assertEquals(5L, result.pages.first().frames.jankyFrames)
-        assertEquals(40, result.pages.first().frames.percentileUpperBoundMs(.95))
+        assertEquals(listOf("settings", "home", "home"), result.pages.map { it.page })
+        assertEquals(listOf(1, 1, 2), result.pages.map { it.windowId })
+        val home = result.pages[1]
+        assertEquals(20L, home.frames.frames)
+        assertEquals(5L, home.frames.jankyFrames)
+        assertEquals(40, home.frames.percentileUpperBoundMs(.95))
         assertEquals(2L, scenes.first().frames.jankyFrames)
+    }
+
+    @Test
+    fun `long frame remains ranked when system deadline reports no jank`() {
+        val video = PerformanceFrameSummary().apply {
+            repeat(1000) { add(3_000_000, false) }
+            add(186_151_614, false)
+        }
+        val interval = PerformanceIntervalInsight(0.0, 5_000.0, 1, "video", 1001, 0, 90.0, 1001, 0,
+            longFrames100Ms = 1)
+        val result = buildPerformanceReportInsights(
+            listOf(PerformanceSceneInput(1, "video", "idle", video)), listOf(interval), emptyList())
+        assertEquals("video", result.pages.single().page)
+        assertEquals(0L, result.pages.single().frames.jankyFrames)
+        assertEquals(1L, result.pages.single().frames.longFrames100Ms)
+        assertEquals(listOf(interval), result.intervals)
+        assertTrue(result.summaryText.contains("≥100ms 长帧：1 帧"))
+        assertTrue(result.summaryText.contains("页面停留"))
     }
 
     @Test

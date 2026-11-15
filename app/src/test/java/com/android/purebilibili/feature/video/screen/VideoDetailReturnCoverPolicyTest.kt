@@ -599,6 +599,51 @@ class VideoDetailReturnCoverPolicyTest {
     }
 
     @Test
+    fun committedCardReturn_expandsCollapsedViewportBeforeExitClockStarts() {
+        val expand = shouldExpandPlayerViewportForSharedReturn(
+            isExitTransitionInProgress = false,
+            isReturnGestureInProgress = false,
+            isCommittedCardReturn = true,
+        )
+        assertTrue(expand)
+        assertEquals(
+            0f,
+            resolvePlayerCollapseProgressForLayout(
+                manualOrCompactCollapseProgress = 1f,
+                expandForSharedReturn = expand,
+            ),
+            0.0001f,
+        )
+        assertFalse(
+            shouldExpandPlayerViewportForSharedReturn(
+                isExitTransitionInProgress = false,
+                isReturnGestureInProgress = false,
+                isCommittedCardReturn = true,
+                sharedReturnLikely = false,
+            )
+        )
+    }
+
+    @Test
+    fun retainedParent_keepsCollapsedViewportDuringChildReturn() {
+        val expand = shouldExpandPlayerViewportForSharedReturn(
+            isExitTransitionInProgress = true,
+            isReturnGestureInProgress = true,
+            isCommittedCardReturn = true,
+            keepLoadedContentForBackPreview = true,
+        )
+        assertFalse(expand)
+        assertEquals(
+            0.85f,
+            resolvePlayerCollapseProgressForLayout(
+                manualOrCompactCollapseProgress = 0.85f,
+                expandForSharedReturn = expand,
+            ),
+            0.0001f,
+        )
+    }
+
+    @Test
     fun expandPlayerViewportForSharedReturn_whenExitOrGesture() {
         assertTrue(
             shouldExpandPlayerViewportForSharedReturn(

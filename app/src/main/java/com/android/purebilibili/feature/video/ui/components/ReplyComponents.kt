@@ -1360,7 +1360,21 @@ fun ReplyItemView(
         hideSubPreview = hideSubPreview,
         lightweightMode = lightweightMode
     )
+    val previewLikesEnabled = com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled.current
     val preview = rememberReplyPreviewState(item = item, enabled = showSubPreview)
+    val previewReactions = com.android.purebilibili.feature.video.viewmodel.LocalReplyPreviewReactions.current
+    val reaction = previewReactions?.reaction(item, preview.account)
+    val effectiveIsLiked = reaction?.let { it.action == 1 } ?: isLiked
+    val effectiveIsHated = reaction?.let { it.action == 2 } ?: isHated
+    val reactionError: (String) -> Unit = { message ->
+        Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
+    }
+    val effectiveOnLikeClick = if (reaction != null && previewReactions != null) {
+        { previewReactions.react(item, preview.account, true, reactionError) }
+    } else onLikeClick
+    val effectiveOnHateClick = if (reaction != null && previewReactions != null) {
+        { previewReactions.react(item, preview.account, false, reactionError) }
+    } else onHateClick
     val collapsedSubReplyPreviewLimit = preview.collapsedLimit
     val previewReplies = preview.replies
     val previewRoot = remember(item, previewReplies) {
@@ -1424,13 +1438,11 @@ fun ReplyItemView(
             upAction = item.upAction
         )
     }
-    val displayLikeCount = remember(item.like, item.action, isLiked) {
-        resolveReplyDisplayLikeCount(
-            baseLikeCount = item.like,
-            initialAction = item.action,
-            isLiked = isLiked
-        )
-    }
+    val displayLikeCount = reaction?.likeCount ?: resolveReplyDisplayLikeCount(
+        baseLikeCount = item.like,
+        initialAction = item.action,
+        isLiked = effectiveIsLiked,
+    )
     val fansDetail = if (showResolvedIdentityDecorations) {
         item.member.fansDetail?.takeIf { it.medalName.isNotBlank() && it.level > 0 }
     } else {
@@ -1530,8 +1542,8 @@ fun ReplyItemView(
     var translatedMessage by remember(item.rpid) { mutableStateOf<String?>(null) }
     var isTranslating by remember(item.rpid) { mutableStateOf(false) }
     // [新增] 点踩折叠：已点踩的评论正文收起为一行，点击展开；取消点踩自动恢复
-    var hatedBodyExpanded by remember(item.rpid, isHated) { mutableStateOf(false) }
-    val collapseHatedBody = isHated && !hatedBodyExpanded
+    var hatedBodyExpanded by remember(item.rpid, effectiveIsHated) { mutableStateOf(false) }
+    val collapseHatedBody = effectiveIsHated && !hatedBodyExpanded
     var hatePromptHandled by remember(item.rpid) { mutableStateOf(false) }
     // 回复长按菜单沿用中等刚度回弹。
     val hateCollapseSpring: SpringSpec<androidx.compose.ui.unit.IntSize> = spring(
@@ -1657,6 +1669,7 @@ fun ReplyItemView(
 
     Box(
         modifier = modifier
+            .then(preview.visibilityModifier)
             .fillMaxWidth()
             .then(
                 if (avatarContentHeightPx != null) {
@@ -1908,9 +1921,9 @@ fun ReplyItemView(
                                     index,
                                     rect,
                                     resolveReplyPreviewTextContent(
-                                        item = item,
-                                        isLiked = isLiked,
-                                        onLikeClick = onLikeClick,
+                                        item = item.copy(like = displayLikeCount, action = if (effectiveIsLiked) 1 else 0),
+                                        isLiked = effectiveIsLiked,
+                                        onLikeClick = effectiveOnLikeClick,
                                         onReplyClick = onReplyClick,
                                         detailedTimeEnabled = detailedCommentTimeEnabled
                                     )
@@ -2027,14 +2040,14 @@ fun ReplyItemView(
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .appActionClickable(enabled = onLikeClick != null) { onLikeClick?.invoke() }
-                            .semantics { selected = isLiked }
+                            .appActionClickable(enabled = effectiveOnLikeClick != null) { effectiveOnLikeClick?.invoke() }
+                            .semantics { selected = effectiveIsLiked }
                             .padding(4.dp)
                     ) {
                         AppIcon(
                             imageVector = likeFilledIcon,
                             contentDescription = "Like",
-                            tint = if (isLiked) appearance.accentColor else appearance.actionTint,
+                            tint = if (effectiveIsLiked) appearance.accentColor else appearance.actionTint,
                             modifier = Modifier.size(16.dp)
                         )
                         if (displayLikeCount > 0) {
@@ -2042,7 +2055,7 @@ fun ReplyItemView(
                             AppText(
                                 text = FormatUtils.formatStat(displayLikeCount.toLong()),
                                 fontSize = VideoCommentTypographyTokens.actionCount,
-                                color = if (isLiked) appearance.accentColor else appearance.actionTint
+                                color = if (effectiveIsLiked) appearance.accentColor else appearance.actionTint
                             )
                         }
                     }
@@ -2050,13 +2063,13 @@ fun ReplyItemView(
                     Spacer(modifier = Modifier.width(8.dp))
                     Box(modifier = Modifier.height(32.dp)) {
                         AppIconButton(
-                            onClick = { onHateClick?.invoke() },
-                            enabled = onHateClick != null
+                            onClick = { effectiveOnHateClick?.invoke() },
+                            enabled = effectiveOnHateClick != null
                         ) {
                             AppIcon(
                                 imageVector = Icons.Filled.ThumbDown,
-                                contentDescription = if (isHated) "取消点踩" else "点踩评论",
-                                tint = if (isHated) AppContentColors.error() else appearance.actionTint,
+                                contentDescription = if (effectiveIsHated) "取消点踩" else "点踩评论",
+                                tint = if (effectiveIsHated) AppContentColors.error() else appearance.actionTint,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -2165,6 +2178,38 @@ fun ReplyItemView(
                                         resolveSubReplyPreviewContent(subReply.content)
                                     }
 
+                                    val subReaction = previewReactions?.reaction(subReply, preview.account)
+                                    val subLiked = (subReaction?.action ?: subReply.action) == 1
+                                    val subLikeCount = subReaction?.likeCount ?: subReply.like
+                                    val previewLikeColor = if (subLiked) appearance.accentColor else appearance.secondaryTextColor
+                                    val likeListener = remember(previewReactions, subReply, preview.account) {
+                                        LinkInteractionListener {
+                                            previewReactions?.react(subReply, preview.account, true, reactionError)
+                                        }
+                                    }
+                                    val likeSuffix = remember(previewLikesEnabled, subLiked, subLikeCount, likeListener) {
+                                        if (!previewLikesEnabled) null else buildAnnotatedString {
+                                            append("\u00a0")
+                                            withLink(LinkAnnotation.Clickable(
+                                                tag = "preview_like_${subReply.rpid}",
+                                                linkInteractionListener = likeListener,
+                                            )) {
+                                                appendInlineContent(
+                                                    COMMENT_INLINE_PREVIEW_LIKE_ID,
+                                                    "${if (subLiked) "取消点赞" else "点赞"}，${subLikeCount}赞",
+                                                )
+                                            }
+                                        }
+                                    }
+                                    val likeInlineContent = if (previewLikesEnabled) {
+                                        mapOf(COMMENT_INLINE_PREVIEW_LIKE_ID to rememberInlinePreviewLikeContent(
+                                            liked = subLiked,
+                                            count = subLikeCount,
+                                            tint = previewLikeColor,
+                                            fontSize = VideoCommentTypographyTokens.subReply,
+                                        ))
+                                    } else emptyMap()
+
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -2196,6 +2241,8 @@ fun ReplyItemView(
                                             onVoteClick = { openPreviewReply() },
                                             noteCvidStr = subReply.noteCvidStr,
                                             prefix = prefix,
+                                            suffix = likeSuffix,
+                                            suffixInlineContent = likeInlineContent,
                                             onPlainTextClick = openPreviewReply
                                         )
                                     }
@@ -2291,6 +2338,41 @@ fun ReplyItemView(
     }
 }
 
+private const val COMMENT_INLINE_PREVIEW_LIKE_ID = "comment_preview_like"
+
+@Composable
+private fun rememberInlinePreviewLikeContent(
+    liked: Boolean,
+    count: Int,
+    tint: Color,
+    fontSize: TextUnit,
+): InlineTextContent {
+    val outline = com.android.purebilibili.core.ui.rememberAppLikeIcon()
+    val filled = rememberAppLikeFilledIcon()
+    val icon = if (liked) filled else outline
+    val countText = FormatUtils.formatStat(count.toLong())
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
+    val countStyle = TextStyle(fontSize = fontSize * 0.85f, lineHeight = fontSize)
+    val textWidth = remember(textMeasurer, countText, countStyle) {
+        textMeasurer.measure(countText, countStyle, maxLines = 1).size.width
+    }
+    val width = with(density) { fontSize.toDp() + 4.dp + textWidth.toDp() }
+    val placeholderWidth = with(density) { width.toSp() }
+    return remember(icon, countText, tint, fontSize, placeholderWidth, density) {
+        InlineTextContent(
+            Placeholder(width = placeholderWidth, height = fontSize, placeholderVerticalAlign = PlaceholderVerticalAlign.Center)
+        ) {
+            // 图标和数字共同占据一个内联槽位，同一行垂直居中，也不会换行拆开。
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                AppIcon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(with(density) { fontSize.toDp() }))
+                Spacer(Modifier.width(4.dp))
+                AppText(countText, color = tint, style = countStyle, maxLines = 1, tapToCopyEnabled = false)
+            }
+        }
+    }
+}
+
 /**
  * 评论文本：普通文本继续走 RichCommentText；
  * 若整条评论是视频引用，则异步解析标题后替换为主题色标题。
@@ -2313,7 +2395,9 @@ internal fun ReplyMessageText(
     prefix: AnnotatedString? = null,
     lineHeight: TextUnit = fontSize * 1.5f,
     onPlainTextClick: (() -> Unit)? = null,
-    onLongPress: (() -> Unit)? = null
+    onLongPress: (() -> Unit)? = null,
+    suffix: AnnotatedString? = null,
+    suffixInlineContent: Map<String, InlineTextContent> = emptyMap(),
 ) {
     val videoReference = remember(text) { resolveReplyVideoReference(text) }
     var resolvedTitle by remember(videoReference?.bvid) {
@@ -2346,6 +2430,8 @@ internal fun ReplyMessageText(
             prefix = prefix,
             copyText = text.trim(),
             onLongPress = onLongPress,
+            suffix = suffix,
+            suffixInlineContent = suffixInlineContent,
         )
     } else {
         RichCommentText(
@@ -2366,6 +2452,8 @@ internal fun ReplyMessageText(
             prefix = prefix,
             onPlainTextClick = onPlainTextClick,
             onLongPress = onLongPress,
+            suffix = suffix,
+            suffixInlineContent = suffixInlineContent,
         )
     }
 }
@@ -2380,7 +2468,9 @@ internal fun ReplyVideoReferenceText(
     prefix: AnnotatedString? = null,
     copyText: String = text,
     lineHeight: TextUnit = fontSize * 1.5f,
-    onLongPress: (() -> Unit)? = null
+    onLongPress: (() -> Unit)? = null,
+    suffix: AnnotatedString? = null,
+    suffixInlineContent: Map<String, InlineTextContent> = emptyMap(),
 ) {
     val primaryColor = AppContentColors.accent()
     val latestOnUrlClick by rememberUpdatedState(onUrlClick)
@@ -2388,7 +2478,7 @@ internal fun ReplyVideoReferenceText(
     val linkListener = remember(url) {
         LinkInteractionListener { latestOnUrlClick?.invoke(url) }
     }
-    val annotatedString = remember(text, url, prefix, primaryColor, linkListener) {
+    val annotatedString = remember(text, url, prefix, suffix, primaryColor, linkListener) {
         buildAnnotatedString {
             if (prefix != null) {
                 append(prefix)
@@ -2398,6 +2488,7 @@ internal fun ReplyVideoReferenceText(
                     append(text)
                 }
             }
+            if (suffix != null) append(suffix)
         }
     }
     val upBadgeInlineContent = rememberInlineUpBadgeContent()
@@ -2410,7 +2501,8 @@ internal fun ReplyVideoReferenceText(
         topBadgeInlineContent,
         chargedBadgeInlineContent,
         personalVerifyInlineContent,
-        organizationVerifyInlineContent
+        organizationVerifyInlineContent,
+        suffixInlineContent,
     ) {
         mapOf(
             COMMENT_INLINE_UP_BADGE_ID to upBadgeInlineContent,
@@ -2418,7 +2510,7 @@ internal fun ReplyVideoReferenceText(
             COMMENT_INLINE_CHARGED_BADGE_ID to chargedBadgeInlineContent,
             COMMENT_INLINE_VERIFY_PERSONAL_BADGE_ID to personalVerifyInlineContent,
             COMMENT_INLINE_VERIFY_ORGANIZATION_BADGE_ID to organizationVerifyInlineContent
-        )
+        ) + suffixInlineContent
     }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var showTextSelectionSheet by remember(copyText) { mutableStateOf(false) }
@@ -2480,7 +2572,9 @@ fun RichCommentText(
     prefix: AnnotatedString? = null,
     lineHeight: TextUnit = fontSize * 1.5f,
     onPlainTextClick: (() -> Unit)? = null,
-    onLongPress: (() -> Unit)? = null
+    onLongPress: (() -> Unit)? = null,
+    suffix: AnnotatedString? = null,
+    suffixInlineContent: Map<String, InlineTextContent> = emptyMap(),
 ) {
     val context = LocalContext.current
     val timestampColor = AppContentColors.accent()
@@ -2515,6 +2609,7 @@ fun RichCommentText(
     val annotatedString = remember(
         text,
         prefix,
+        suffix,
         renderableEmoteKeys,
         content?.urls,
         content?.atNameToMid,
@@ -2542,7 +2637,12 @@ fun RichCommentText(
             timestampColor = timestampColor,
             urlColor = urlColor,
             linkListener = linkListener
-        )
+        ).let { body ->
+            if (suffix == null) body else buildAnnotatedString {
+                append(body)
+                append(suffix)
+            }
+        }
     }
 
     val upBadgeInlineContent = rememberInlineUpBadgeContent()
@@ -2560,7 +2660,8 @@ fun RichCommentText(
         topBadgeInlineContent,
         chargedBadgeInlineContent,
         personalVerifyInlineContent,
-        organizationVerifyInlineContent
+        organizationVerifyInlineContent,
+        suffixInlineContent,
     ) {
         buildMap {
             renderableEmoteKeys.forEach { key ->
@@ -2609,6 +2710,7 @@ fun RichCommentText(
             put(COMMENT_INLINE_CHARGED_BADGE_ID, chargedBadgeInlineContent)
             put(COMMENT_INLINE_VERIFY_PERSONAL_BADGE_ID, personalVerifyInlineContent)
             put(COMMENT_INLINE_VERIFY_ORGANIZATION_BADGE_ID, organizationVerifyInlineContent)
+            putAll(suffixInlineContent)
         }
     }
 

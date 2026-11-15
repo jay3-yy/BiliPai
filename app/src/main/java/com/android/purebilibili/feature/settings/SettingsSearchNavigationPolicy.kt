@@ -3,6 +3,9 @@ package com.android.purebilibili.feature.settings
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 
 internal fun resolveSettingsSearchNavigation(result: SettingsSearchResult): BiliPaiNavKey? {
+    if (result.settingId == com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_SETTING_ID) {
+        return BiliPaiNavKey.PerformanceHistory
+    }
     // 场景内具体条目已指定分类时，不再被通用入口映射到其他子页。
     if (isSceneSettingsSearchTarget(result.target)) {
         result.page?.let { return resolveSettingsCategoryNavKey(it) }

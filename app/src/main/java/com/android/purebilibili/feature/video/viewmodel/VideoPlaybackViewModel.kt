@@ -2444,6 +2444,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     
     @SuppressLint("UnsafeOptInUsageError")
     fun attachPlayer(player: ExoPlayer) {
+        com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork("player_attach") {
+            attachPlayerInternal(player)
+        }
+    }
+
+    @SuppressLint("UnsafeOptInUsageError")
+    private fun attachPlayerInternal(player: ExoPlayer) {
         val changed = exoPlayer !== player
         if (changed) playbackRecoveryGeneration++
         val previousPlayer = exoPlayer
@@ -3657,7 +3664,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             if (!shouldSkipPlayerPrepare && !_isInAudioMode.value &&
                                 preparedCid == playbackRequest.cid && playbackRequest.cid > 0L
                             ) withContext(Dispatchers.Main.immediate) {
-                                playbackPreparationAllowed.first { it }
+                                // 提前准备只是机会性工作：未到挂载阶段时不等待，避免播放地址
+                                // 的返回连带阻塞历史进度读取与最终媒体选择。正式起播仍会等待许可。
+                                if (!playbackPreparationAllowed.value) return@withContext
                                 if (currentLoadRequestToken == requestToken &&
                                     preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope()
                                 ) {
@@ -3736,6 +3745,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 when (loadResult) {
                     is PlaybackLoadResult.Success -> {
                         val result = loadResult.payload
+                        logVideoLoadStage(VideoLoadStage.PLAY_URL_READY, requestToken)
+                        // 数据计算可与入场重叠；绑定媒体身份、线路发布和播放器操作仍在
+                        // attachPlayer 之后执行。等待结束后再校验请求和账号，拒绝过期结果。
+                        if (!shouldSkipPlayerPrepare) {
+                            playbackPreparationAllowed.first { it }
+                        }
                         if (!shouldApplyVideoLoadResult(
                                 activeRequestToken = currentLoadRequestToken,
                                 resultRequestToken = requestToken,
@@ -3755,7 +3770,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                 result.info.bvid, result.info.cid, preserveStarted = shouldSkipPlayerPrepare
                             )
                         }
-                        logVideoLoadStage(VideoLoadStage.PLAY_URL_READY, requestToken)
                         Logger.d(
                             "PlayerVM",
                             "SUB_DBG loadVideo success: requested=${playbackRequest.bvid}/${playbackRequest.cid}, loaded=${result.info.bvid}/${result.info.cid}, token=$requestToken"
@@ -3785,7 +3799,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
                         // Play video
                         if (!shouldSkipPlayerPrepare) {
-                            playbackPreparationAllowed.first { it }
                             relatedPlaybackPreparedToken = requestToken
                             val prepared = provisionalPlayer
                             if (prepared != null && prepared === exoPlayer &&

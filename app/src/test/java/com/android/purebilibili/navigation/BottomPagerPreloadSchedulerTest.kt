@@ -148,5 +148,7 @@ class BottomPagerPreloadSchedulerTest {
         assertFalse(shouldAllowBottomPagerBackgroundWork(false, true, false))
         assertFalse(shouldAllowBottomPagerBackgroundWork(true, false, false))
         assertFalse(shouldAllowBottomPagerBackgroundWork(true, true, true))
+        // 空间/搜索返回时栈顶已是首页，但退出动画尚未结束。
+        assertFalse(shouldAllowBottomPagerBackgroundWork(true, true, false, isNavigationSettled = false))
     }
 }

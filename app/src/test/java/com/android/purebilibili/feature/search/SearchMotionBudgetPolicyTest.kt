@@ -110,39 +110,14 @@ class SearchMotionBudgetPolicyTest {
     }
 
     @Test
-    fun landingBootstrap_onlyRunsAfterStartupSettlesOnEmptyLandingState() {
-        assertFalse(
-            shouldBootstrapSearchLandingData(
-                startupSettled = false,
-                showResults = false,
-                query = ""
-            )
-        )
-        assertFalse(
-            shouldBootstrapSearchLandingData(
-                startupSettled = true,
-                showResults = true,
-                query = ""
-            )
-        )
-        assertFalse(
-            shouldBootstrapSearchLandingData(
-                startupSettled = true,
-                showResults = false,
-                query = "test"
-            )
-        )
-        assertTrue(
-            shouldBootstrapSearchLandingData(
-                startupSettled = true,
-                showResults = false,
-                query = ""
-            )
-        )
+    fun landingDataStartsForEmptyLandingWithoutWaitingForMotion() {
+        assertTrue(shouldBootstrapSearchLandingData(showResults = false, query = ""))
+        assertFalse(shouldBootstrapSearchLandingData(showResults = true, query = ""))
+        assertFalse(shouldBootstrapSearchLandingData(showResults = false, query = "test"))
     }
 
     @Test
-    fun autoFocus_isDisabledForSearchDestinationEntry() {
+    fun autoFocus_waitsForEntryAndOnlyStartsForAnEmptyDraft() {
         assertFalse(
             shouldAutoFocusSearchField(
                 startupSettled = false,
@@ -155,7 +130,7 @@ class SearchMotionBudgetPolicyTest {
                 query = "abc"
             )
         )
-        assertFalse(
+        assertTrue(
             shouldAutoFocusSearchField(
                 startupSettled = true,
                 query = ""

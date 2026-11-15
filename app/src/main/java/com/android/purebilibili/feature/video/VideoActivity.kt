@@ -25,6 +25,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.core.view.OneShotPreDrawListener
+import androidx.core.view.doOnPreDraw
 import androidx.metrics.performance.JankStats
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppThemeConfig
@@ -75,6 +77,21 @@ open class VideoActivity : ComponentActivity() {
         val lastBvid: String?,
     )
     private var officialReturnContentBinding: ReturnContentBinding? = null
+
+    private class ReturnViewportBinding(val owner: Any, val prepare: () -> Boolean)
+    private var officialReturnViewportBinding: ReturnViewportBinding? = null
+    private var pendingReturnViewportDraw: OneShotPreDrawListener? = null
+
+    internal val hasOfficialCardReturn: Boolean
+        get() = officialReturnMotionEnabled && intent.hasExtra(SystemVideoCardTransition.EXTRA_SESSION)
+
+    internal fun bindOfficialReturnViewport(owner: Any, prepare: () -> Boolean) {
+        officialReturnViewportBinding = ReturnViewportBinding(owner, prepare)
+    }
+
+    internal fun unbindOfficialReturnViewport(owner: Any) {
+        if (officialReturnViewportBinding?.owner === owner) officialReturnViewportBinding = null
+    }
 
     /** 仅由当前拥有页面的详情实例登记；finish 时重新读取，避免等待重组后才同步身份。 */
     internal fun bindOfficialReturnContent(owner: Any, routeBvid: String, readBvid: () -> String?) {
@@ -258,6 +275,11 @@ open class VideoActivity : ComponentActivity() {
             val cardFrostedGlassEnabled by SettingsManager
                 .getHomeCardFrostedGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = false)
+            val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
+                androidx.lifecycle.viewmodel.compose.viewModel()
+            val subReplyPreviewLikesEnabled by remember(this@VideoActivity) {
+                SettingsManager.getSubReplyPreviewLikesEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
             val commentIpLocationEnabled by remember(this@VideoActivity) {
                 SettingsManager.getCommentIpLocationEnabled(this@VideoActivity)
             }.collectAsStateWithLifecycle(initialValue = true)
@@ -364,6 +386,8 @@ open class VideoActivity : ComponentActivity() {
                         intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
                     ),
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
+                    com.android.purebilibili.feature.video.viewmodel.LocalReplyPreviewReactions provides replyPreviewReactions,
+                    com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                     com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
@@ -496,6 +520,22 @@ open class VideoActivity : ComponentActivity() {
     }
 
     override fun finish() {
+        if (pendingReturnViewportDraw != null) return
+        if (!isFinishing && window.decorView.isShown && hasOfficialCardReturn &&
+            officialReturnViewportBinding?.prepare?.invoke() == true
+        ) {
+            // 折叠视口先按现有返回状态展开并绘制，再让系统截取关闭窗口的画面。
+            // 不使用固定延时；顶部按钮与系统提交返回共用此入口。
+            val decor = window.decorView
+            pendingReturnViewportDraw = decor.doOnPreDraw {
+                decor.post {
+                    pendingReturnViewportDraw = null
+                    finish()
+                }
+            }
+            decor.invalidate()
+            return
+        }
         val preparingToFinish = !isFinishing
         if (preparingToFinish) {
             // 系统返回与页面返回共用此入口；关闭窗口前刷新同一来源实例的落点。
@@ -538,6 +578,9 @@ open class VideoActivity : ComponentActivity() {
     
     override fun onDestroy() {
         officialReturnContentBinding = null
+        officialReturnViewportBinding = null
+        pendingReturnViewportDraw?.removeListener()
+        pendingReturnViewportDraw = null
         if (!isChangingConfigurations) {
             VideoActivityLauncher.releaseParent(this)
             SystemVideoCardTransition.release(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))

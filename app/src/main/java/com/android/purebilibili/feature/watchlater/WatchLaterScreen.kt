@@ -839,7 +839,7 @@ fun WatchLaterScreen(
         )
     }
     val context = LocalContext.current
-    val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings(),
+    val homeSettings by remember(context) { SettingsManager.getHomeSettings(context) }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings(),
         context = kotlin.coroutines.EmptyCoroutineContext
     )
     val gridColumnPreference = rememberFeedGridColumnPreference(
@@ -1003,7 +1003,7 @@ fun WatchLaterScreen(
     val setBottomBarVisible = com.android.purebilibili.core.ui.LocalSetBottomBarVisible.current
     val bottomBarChromeScrollOffset = com.android.purebilibili.feature.home.LocalHomeScrollOffset.current
     val globalFeedScrollInProgress = com.android.purebilibili.feature.home.LocalHomeFeedScrollInProgress.current
-    val appNavigationSettings by SettingsManager.getAppNavigationSettings(context)
+    val appNavigationSettings by remember(context) { SettingsManager.getAppNavigationSettings(context) }
         .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.AppNavigationSettings())
     val shouldAutoHideBottomBar = com.android.purebilibili.core.ui.shouldAutoHideBottomBarOnScroll(
         visibilityMode = appNavigationSettings.bottomBarVisibilityMode,

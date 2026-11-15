@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
+import com.android.purebilibili.data.model.response.ViewInfo
 
 /**
  * Large-screen video geometry for the current application window.
@@ -46,14 +47,37 @@ internal fun resolvePhoneInlineVideoViewportHeightDp(
     windowWidthDp: Float,
     windowHeightDp: Float,
     isFoldableCoverWindow: Boolean,
+    videoAspectRatio: Float = PHONE_DETAIL_VIDEO_ASPECT_RATIO,
 ): Float {
-    val aspectHeight = windowWidthDp.coerceAtLeast(0f) / PHONE_DETAIL_VIDEO_ASPECT_RATIO
+    val aspectHeight = windowWidthDp.coerceAtLeast(0f) / videoAspectRatio
     if (!isFoldableCoverWindow || windowHeightDp <= 0f) return aspectHeight
     if (windowHeightDp >= FOLDABLE_COVER_COMPACT_HEIGHT_MAX_DP) return aspectHeight
     return minOf(
         aspectHeight,
         windowHeightDp * FOLDABLE_COVER_COMPACT_PLAYER_HEIGHT_FRACTION,
     )
+}
+
+/** 横向视频的内联外框随当前分 P 增高；竖向与超宽视频保留已有布局。 */
+internal fun resolvePhoneInlineVideoAspectRatio(
+    info: ViewInfo?,
+    bvid: String,
+    cid: Long,
+): Float {
+    if (info == null || info.bvid != bvid) return PHONE_DETAIL_VIDEO_ASPECT_RATIO
+    val targetCid = cid.takeIf { it > 0L } ?: info.cid
+    val pageDimension = info.pages.firstOrNull { it.cid == targetCid }?.dimension
+    // 顶层 dimension 描述首 P，不能在后续分 P 缺少尺寸时沿用首 P 的比例。
+    val dimension = pageDimension ?: info.dimension.takeIf {
+        if (info.pages.isEmpty()) targetCid == info.cid else targetCid == info.pages.first().cid
+    } ?: return PHONE_DETAIL_VIDEO_ASPECT_RATIO
+    if (dimension.width <= 0 || dimension.height <= 0) return PHONE_DETAIL_VIDEO_ASPECT_RATIO
+    val rotation = ((dimension.rotate % 360) + 360) % 360
+    val swap = rotation == 90 || rotation == 270
+    val width = if (swap) dimension.height else dimension.width
+    val height = if (swap) dimension.width else dimension.height
+    val ratio = width.toFloat() / height
+    return if (ratio in 1f..PHONE_DETAIL_VIDEO_ASPECT_RATIO) ratio else PHONE_DETAIL_VIDEO_ASPECT_RATIO
 }
 
 internal fun shouldUseLargeScreenVideoLayout(

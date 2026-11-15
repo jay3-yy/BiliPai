@@ -6,6 +6,18 @@ import kotlin.test.assertFalse
 
 class PerformanceNavigationTrackerTest {
     @Test
+    fun `late source frame between destination and motion callbacks does not rewrite the navigation origin`() {
+        val tracker = PerformanceNavigationTracker("home")
+        tracker.pageChanged("video", 100)
+        tracker.uiFrame(20, 80, 60, false)
+        tracker.motion(120, true, "push", null)
+        tracker.motion(200, false, "push", null)
+        val record = tracker.snapshot().single()
+        assertEquals("home", record.fromPage)
+        assertEquals("video", record.toPage)
+    }
+
+    @Test
     fun `destination and motion boundaries can arrive in either order`() {
         val destinationFirst = PerformanceNavigationTracker("home")
         destinationFirst.pageChanged("settings", 10)

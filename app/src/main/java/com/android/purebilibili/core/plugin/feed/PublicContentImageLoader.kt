@@ -2,6 +2,7 @@ package com.android.purebilibili.core.plugin.feed
 
 import android.content.Context
 import coil3.ImageLoader
+import com.android.purebilibili.core.ui.components.biliImagePlaceholders
 import coil3.disk.DiskCache
 import coil3.disk.directory
 import coil3.gif.AnimatedImageDecoder
@@ -19,6 +20,7 @@ internal object PublicContentImageLoader {
 
     fun get(context: Context): ImageLoader = instance ?: synchronized(this) {
         instance ?: ImageLoader.Builder(context.applicationContext)
+            .biliImagePlaceholders(context.applicationContext)
             .components {
                 add(OkHttpNetworkFetcherFactory(callFactory = { publicContentImageHttpClient }))
                 if (android.os.Build.VERSION.SDK_INT >= 28) add(AnimatedImageDecoder.Factory())

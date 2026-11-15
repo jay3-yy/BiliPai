@@ -287,9 +287,9 @@ fun CommonListScreen(
     // 平板端(Expanded)使用较大的最小宽度以避免卡片过小
     val context = LocalContext.current
     val density = LocalDensity.current
-    val showOnlineCount by SettingsManager.getShowCardOnlineCount(context).collectAsStateWithLifecycle(initialValue = false
+    val showOnlineCount by remember(context) { SettingsManager.getShowCardOnlineCount(context) }.collectAsStateWithLifecycle(initialValue = false
         )
-    val homeSettings by SettingsManager.getHomeSettings(context).collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings(),
+    val homeSettings by remember(context) { SettingsManager.getHomeSettings(context) }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings(),
         context = kotlin.coroutines.EmptyCoroutineContext
     )
     val gridColumnPreference = rememberFeedGridColumnPreference(
@@ -354,7 +354,7 @@ fun CommonListScreen(
     // 折叠选择属于历史页浏览状态，不随回顾 Lazy item 离开视口、搜索或批量管理而重置。
     var personalRecapExpanded by rememberSaveable(accountIdentity) { mutableStateOf(false) }
     val personalRecapEnabled: Boolean? = if (historyViewModel != null) {
-        SettingsManager.getSubscriptionRecapEnabled(LocalContext.current)
+        remember(context) { SettingsManager.getSubscriptionRecapEnabled(context) }
             .collectAsStateWithLifecycle(initialValue = null).value
     } else false
     val likedVideosViewModel = viewModel as? LikedVideosViewModel
@@ -518,7 +518,7 @@ fun CommonListScreen(
     // [Feature] BottomBar Scroll Hiding for CommonListScreen (History/Favorite)
     val setBottomBarVisible = com.android.purebilibili.core.ui.LocalSetBottomBarVisible.current
     val bottomBarChromeScrollOffset = LocalHomeScrollOffset.current
-    val appNavigationSettings by SettingsManager.getAppNavigationSettings(context)
+    val appNavigationSettings by remember(context) { SettingsManager.getAppNavigationSettings(context) }
         .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.AppNavigationSettings())
     val shouldAutoHideBottomBar = com.android.purebilibili.core.ui.shouldAutoHideBottomBarOnScroll(
         visibilityMode = appNavigationSettings.bottomBarVisibilityMode,
@@ -3011,8 +3011,7 @@ internal fun CommonListContent(
     val context = LocalContext.current
     val isHistoryPersonalList = resolveHistoryItem != null
     val isPersonalList = isHistoryPersonalList || isFavoritePersonalList
-    val homeFeedCardStyle by SettingsManager
-        .getHomeFeedCardStyle(context)
+    val homeFeedCardStyle by remember(context) { SettingsManager.getHomeFeedCardStyle(context) }
         .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
     val cardLayout = remember(homeFeedCardStyle) {
         com.android.purebilibili.feature.home.resolveHomeFeedCardLayout(homeFeedCardStyle)

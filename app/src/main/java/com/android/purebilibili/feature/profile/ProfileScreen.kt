@@ -482,7 +482,7 @@ private fun ProfileScreenContent(
     }
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isLoggedOut = state is ProfileUiState.LoggedOut
-    val privacyModeEnabled by SettingsManager.getPrivacyModeEnabled(context)
+    val privacyModeEnabled by remember(context) { SettingsManager.getPrivacyModeEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = SettingsManager.isPrivacyModeEnabledSync(context))
     val profileActionScope = androidx.compose.runtime.rememberCoroutineScope()
     val togglePrivacyMode: () -> Unit = {
@@ -999,7 +999,7 @@ private fun BoxScope.ProfileBackground(
     val hasSkinVideo = !skinVideoBackgroundPath.isNullOrBlank()
     val hasWallpaper = user.topPhoto.isNotEmpty() || hasSkinVideo
     val headerMotion = LocalProfileBackgroundMotion.current
-    val bgTransform by viewModel.getProfileBgTransform(isTablet).collectAsStateWithLifecycle(initialValue = ProfileWallpaperTransform())
+    val bgTransform by remember(viewModel, isTablet) { viewModel.getProfileBgTransform(isTablet) }.collectAsStateWithLifecycle(initialValue = ProfileWallpaperTransform())
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -1239,10 +1239,10 @@ private fun ProfileSpaceContent(
     var showAccountSexDialog by remember(user.mid) { mutableStateOf(false) }
     var showAdjustmentSheet by remember { mutableStateOf(false) }
     var tempSelectedUri by remember { mutableStateOf<Uri?>(null) }
-    val customBackgroundUri by viewModel.getProfileBgUri().collectAsStateWithLifecycle(initialValue = null
+    val customBackgroundUri by remember(viewModel) { viewModel.getProfileBgUri() }.collectAsStateWithLifecycle(initialValue = null
         )
     val context = LocalContext.current
-    val showProfileEditButton by SettingsManager.getShowProfileEditButton(context)
+    val showProfileEditButton by remember(context) { SettingsManager.getShowProfileEditButton(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = PickGalleryVisualMedia()
@@ -4042,7 +4042,7 @@ private fun MobileProfileContent(
     // [New] Adjustment Sheet State
     var showAdjustmentSheet by remember { mutableStateOf(false) }
     var tempSelectedUri by remember { mutableStateOf<Uri?>(null) }
-    val customBackgroundUri by viewModel.getProfileBgUri().collectAsStateWithLifecycle(initialValue = null
+    val customBackgroundUri by remember(viewModel) { viewModel.getProfileBgUri() }.collectAsStateWithLifecycle(initialValue = null
         )
 
     val photoPickerLauncher = rememberLauncherForActivityResult(

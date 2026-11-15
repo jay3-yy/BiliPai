@@ -315,20 +315,18 @@ fun DynamicScreen(
         )
     }
     //  [新增] 动态 Feed 布局模式（瀑布流 / 列表）
-    val dynamicFeedLayoutMode by SettingsManager.getDynamicFeedLayoutMode(context)
+    val dynamicFeedLayoutMode by remember(context) { SettingsManager.getDynamicFeedLayoutMode(context) }
         .collectAsStateWithLifecycle(initialValue = SettingsManager.DynamicFeedLayoutMode.WATERFALL)
 
-    val dynamicVisibleTabIds by SettingsManager.getDynamicTabVisibleTabs(context)
+    val dynamicVisibleTabIds by remember(context) { SettingsManager.getDynamicTabVisibleTabs(context) }
         .collectAsStateWithLifecycle(initialValue = defaultDynamicTabVisibleIds)
-    val dynamicTabOrder by SettingsManager.getDynamicTabOrder(context)
+    val dynamicTabOrder by remember(context) { SettingsManager.getDynamicTabOrder(context) }
         .collectAsStateWithLifecycle(initialValue = emptyList())
-    val dynamicTopBarCollapseOnScroll by SettingsManager
-        .getDynamicTopBarCollapseOnScroll(context)
+    val dynamicTopBarCollapseOnScroll by remember(context) { SettingsManager.getDynamicTopBarCollapseOnScroll(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     // Keep the restored inset while DataStore reconnects after returning from a child page.
     var restoredTopActionsCollapsed by rememberSaveable { mutableStateOf(false) }
-    val dynamicTopActionsCollapsed by SettingsManager
-        .getDynamicTopActionsCollapsed(context)
+    val dynamicTopActionsCollapsed by remember(context) { SettingsManager.getDynamicTopActionsCollapsed(context) }
         .collectAsStateWithLifecycle(initialValue = restoredTopActionsCollapsed)
     SideEffect { restoredTopActionsCollapsed = dynamicTopActionsCollapsed }
     val visibleTabs = remember(dynamicVisibleTabIds, dynamicTabOrder, authorFeedTabEnabled) {
@@ -451,7 +449,7 @@ fun DynamicScreen(
 
     val density = LocalDensity.current
     val statusBarHeight = WindowInsets.statusBars.getTop(density).let { with(density) { it.toDp() } }
-    val appNavigationSettings by SettingsManager.getAppNavigationSettings(context)
+    val appNavigationSettings by remember(context) { SettingsManager.getAppNavigationSettings(context) }
         .collectAsStateWithLifecycle(initialValue = AppNavigationSettings())
     val shouldAutoCollapseBottomBar = shouldAutoCollapseDynamicBottomBar(
         visibilityMode = appNavigationSettings.bottomBarVisibilityMode

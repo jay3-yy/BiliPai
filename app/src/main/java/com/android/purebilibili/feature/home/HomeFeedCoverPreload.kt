@@ -59,8 +59,8 @@ internal fun HomeFeedCoverPreload(
                 val sources = range.map { resolveHomeCoverImageSource(videos[it], false, requestSpec) }
                     .filter { it.url.isNotBlank() }
                     .distinctBy { it.cacheKey }
-                for (source in sources) {
-                    AppImageLoadPriority.prefetch(HOME_COVER_PRELOAD_SETTLE_MS) {
+                AppImageLoadPriority.prefetch(HOME_COVER_PRELOAD_SETTLE_MS) {
+                    for (source in sources) {
                         loader.execute(
                             ImageRequest.Builder(context)
                                 .data(source.url)

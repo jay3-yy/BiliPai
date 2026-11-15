@@ -32,6 +32,9 @@ val LocalPredictiveBackGestureEnabled = compositionLocalOf { true }
 /** 评论 IP 归属地显示开关，由应用根层收集偏好，默认开启。 */
 val LocalCommentIpLocationEnabled = compositionLocalOf { true }
 
+/** 楼中楼预览的正文末尾显示点赞数，根层统一订阅，默认开启。 */
+val LocalSubReplyPreviewLikesEnabled = compositionLocalOf { true }
+
 /** 评论详细时间开关，由应用根层收集偏好，避免每条评论各自订阅 DataStore。 */
 val LocalDetailedCommentTimeEnabled = compositionLocalOf { false }
 

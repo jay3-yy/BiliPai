@@ -442,6 +442,7 @@ private const val SEEK_RESUME_TRANSITION_GRACE_MS = 350L
 fun VideoPlayerOverlay(
     state: VideoPlayerOverlayState,
     actions: VideoPlayerOverlayActions,
+    topBarExtraActions: (@Composable () -> Unit)? = null,
 ) {
     // 横竖屏共用原生功能布局；玻璃材质在共享控件入口显式分支。
     // Keep the non-inline backdrop slot small. Capturing this screen's locals
@@ -451,7 +452,7 @@ fun VideoPlayerOverlay(
         com.android.purebilibili.core.ui.LocalAppThemeConfig provides config.copy(liquidGlassEnabled = config.playerGlassEnabled),
     ) {
         PlayerControlsBackdropHost(enabled = true, modifier = Modifier.fillMaxSize()) {
-            VideoPlayerOverlayContent(state, actions)
+            VideoPlayerOverlayContent(state, actions, topBarExtraActions)
         }
     }
 }
@@ -461,6 +462,7 @@ fun VideoPlayerOverlay(
 private fun VideoPlayerOverlayContent(
     state: VideoPlayerOverlayState,
     actions: VideoPlayerOverlayActions,
+    topBarExtraActions: (@Composable () -> Unit)?,
 ) {
     val autoHide = com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(4_000L)
     val levelGestureActive = LocalPlayerLevelGestureActive.current
@@ -1639,6 +1641,7 @@ private fun VideoPlayerOverlayContent(
             //  [修复] 使用 Box 分别定位顶部和底部控制栏
             Box(modifier = Modifier.fillMaxSize()) {
                 TopControlBar(
+                    extraActions = topBarExtraActions,
                     simplifiedPortrait = simplifiedPortraitChrome,
                     authorKey = bvid,
                     authorName = if (portraitFullscreenChrome) "" else videoOwnerName,

@@ -35,7 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -126,6 +126,7 @@ fun CommentSearchSheet(
     fullReplies: List<ReplyItem> = emptyList(),
     fullSearchState: FullCommentSearchUiState = FullCommentSearchUiState(),
     onLoadAllComments: () -> Unit = {},
+    onSearchConsumerChanged: (Any, Boolean) -> Unit = { _, _ -> },
     upMid: Long = 0L,
     onCommentClick: (ReplyItem) -> Unit,
     onSubReplyClick: (ReplyItem, Long) -> Unit = { _, _ -> },
@@ -138,11 +139,6 @@ fun CommentSearchSheet(
     var searchQuery by remember { mutableStateOf("") }
     var searchScope by remember { mutableStateOf(CommentSearchScope.ALL) }
     var sortMode by remember { mutableStateOf(CommentSearchSortMode.HOT) }
-
-    // 打开抽屉时自动补拉评论，失败后保留已取得的结果。
-    LaunchedEffect(Unit) {
-        onLoadAllComments()
-    }
 
     // 加载中和失败时也使用已补拉的部分结果；不丢弃已取得的楼中楼。
     val searchPool = if (fullSearchState.isReady || fullReplies.isNotEmpty()) fullReplies else replies
@@ -200,6 +196,13 @@ fun CommentSearchSheet(
             containerColor = MaterialTheme.colorScheme.surface,
             modifier = modifier,
         ) {
+            // 在弹层窗口内部判断焦点，宿主失焦不应暂停当前可见的搜索窗口。
+            val searchWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+            val searchWorkOwner = remember { Any() }
+            DisposableEffect(onSearchConsumerChanged, searchWorkOwner, searchWorkActive) {
+                onSearchConsumerChanged(searchWorkOwner, searchWorkActive)
+                onDispose { onSearchConsumerChanged(searchWorkOwner, false) }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

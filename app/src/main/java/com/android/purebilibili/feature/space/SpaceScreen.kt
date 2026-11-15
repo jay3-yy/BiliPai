@@ -350,6 +350,7 @@ fun SpaceScreen(
 ) {
     val context = LocalContext.current
     val fanIdentity by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
+    com.android.purebilibili.core.performance.PerformanceScreenProbe("space")
     val fanModel: FanManagementViewModel = viewModel(
         key = "fan_management_$mid",
         factory = viewModelFactory { initializer { FanManagementViewModel(mid) } },
@@ -382,8 +383,8 @@ fun SpaceScreen(
     }
     val dynamicInteractionViewModel: DynamicViewModel = viewModel()
     val loadedUiState by viewModel.uiState.collectAsStateWithLifecycle()
-    // 网络请求立即开始，首屏列表挂载等待页面或容器进场结束；返回不重新显示骨架。
-    val initialContentReady = com.android.purebilibili.core.ui.animation.rememberNavigationContentReady(
+    // 网络与列表挂载同导航并行；只有专属容器未就绪时暂留骨架，返回不重置已展示内容。
+    val initialContentReady = com.android.purebilibili.core.ui.animation.rememberEntryContentReady(
         entryKey = mid,
         contentReady = contentTransitionReady,
     )
@@ -503,8 +504,7 @@ fun SpaceScreen(
             )
     } == true
     val playedVideoBvid = targetBvid?.trim().orEmpty()
-    val playedVideoLocatePromptEnabled by com.android.purebilibili.core.store.SettingsManager
-        .getSpacePlayedVideoLocatePromptEnabled(context)
+    val playedVideoLocatePromptEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getSpacePlayedVideoLocatePromptEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     // The prompt is deliberately scoped to this visit. Persisting the dismissal made a second
     // visit to the same UP silently lose its locate entry.
@@ -1469,8 +1469,7 @@ private fun SpaceContent(
         maxWidth = adaptiveLayoutSpec.listContentMaxWidthDp.dp,
     )
     // 投稿网格跟随首页信息流设置（固定列数 / 卡宽预设 / 卡片风格），保证排版与首页 feed 一致。
-    val homeSettings by com.android.purebilibili.core.store.SettingsManager
-        .getHomeSettings(context)
+    val homeSettings by remember(context) { com.android.purebilibili.core.store.SettingsManager.getHomeSettings(context) }
         .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeSettings())
     val sharedTabsCoroutineScope = rememberCoroutineScope()
     // 外边距由卡片风格决定，不依赖各分页的网格列数；共享主栏与分页使用同一来源。

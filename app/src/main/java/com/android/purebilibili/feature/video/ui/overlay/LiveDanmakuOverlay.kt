@@ -88,6 +88,7 @@ fun LiveDanmakuOverlay(
     val latestReport by rememberUpdatedState(onReport)
     var inViewport by remember { mutableStateOf(false) }
     val renderingActive = active && inViewport
+    val effectiveInteractionEnabled = interactionEnabled && danmakuSettings.tapInteractionEnabled
     val latestRenderingActive by rememberUpdatedState(renderingActive)
     val sources = remember { IdentityHashMap<DanmakuItem, LiveDanmakuItem>() }
     var selection by remember { mutableStateOf<LiveOverlaySelection?>(null) }
@@ -168,7 +169,7 @@ fun LiveDanmakuOverlay(
         selection = null
     }
 
-    DisposableEffect(engine, renderView, renderingActive, interactionEnabled, isFullscreen, safeDisplayArea) {
+    DisposableEffect(engine, renderView, renderingActive, effectiveInteractionEnabled, isFullscreen, safeDisplayArea) {
         val currentEngine = engine
         val view = renderView
         dismissSelection()
@@ -178,7 +179,7 @@ fun LiveDanmakuOverlay(
             pendingItems.clear()
             pendingItemsBeforeStart.clear()
         }
-        if (renderingActive && interactionEnabled && currentEngine != null && view != null) {
+        if (renderingActive && effectiveInteractionEnabled && currentEngine != null && view != null) {
             currentEngine.setOnItemClickListener { rendered, rect, point ->
                 val source = sources[rendered]
                 if (source == null || source.isSystem) {
@@ -216,7 +217,7 @@ fun LiveDanmakuOverlay(
         }
     }
 
-    selection?.takeIf { renderingActive && interactionEnabled }?.let { selected ->
+    selection?.takeIf { renderingActive && effectiveInteractionEnabled }?.let { selected ->
         LiveDanmakuActionToolbar(
             item = selected.source,
             anchor = selected.anchor,

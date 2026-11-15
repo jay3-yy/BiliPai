@@ -9,6 +9,8 @@ internal class PerformanceFrameSummary {
         private set
     var jankyFrames = 0L
         private set
+    var longFrames100Ms = 0L
+        private set
     var totalDurationNanos = 0L
         private set
     var maxDurationNanos = 0L
@@ -20,6 +22,7 @@ internal class PerformanceFrameSummary {
         frames++
         totalDurationNanos += durationNanos
         if (isJank) jankyFrames++
+        if (durationNanos >= 100_000_000L) longFrames100Ms++
         maxDurationNanos = maxOf(maxDurationNanos, durationNanos)
     }
 
@@ -27,6 +30,7 @@ internal class PerformanceFrameSummary {
         histogram.indices.forEach { histogram[it] += other.histogram[it] }
         frames += other.frames
         jankyFrames += other.jankyFrames
+        longFrames100Ms += other.longFrames100Ms
         totalDurationNanos += other.totalDurationNanos
         maxDurationNanos = maxOf(maxDurationNanos, other.maxDurationNanos)
     }
@@ -36,6 +40,7 @@ internal class PerformanceFrameSummary {
         copy.frames = frames
         copy.totalDurationNanos = totalDurationNanos
         copy.jankyFrames = jankyFrames
+        copy.longFrames100Ms = longFrames100Ms
         copy.maxDurationNanos = maxDurationNanos
     }
 

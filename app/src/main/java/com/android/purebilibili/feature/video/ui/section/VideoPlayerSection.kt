@@ -261,6 +261,7 @@ import com.android.purebilibili.feature.video.playback.session.syncPlaybackSeekS
 import com.android.purebilibili.feature.video.playback.session.updatePlaybackSeekInteraction
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.hazeSourceCompat
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -364,6 +365,13 @@ private fun BoxScope.VideoSubtitleOverlayHost(
     }
 
     val navigationBottomInsetPx = WindowInsets.navigationBars.getBottom(density)
+    val defaultSubtitleAppearance = remember {
+        com.android.purebilibili.feature.video.ui.components.PlayerSubtitleAppearance()
+    }
+    val useDefaultGlassSubtitleInsets =
+        com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled &&
+            appearance.horizontalPadding == defaultSubtitleAppearance.horizontalPadding &&
+            appearance.bottomPadding == defaultSubtitleAppearance.bottomPadding
     Column(
         modifier = Modifier
             .align(Alignment.BottomCenter)
@@ -388,7 +396,9 @@ private fun BoxScope.VideoSubtitleOverlayHost(
                 )
             }
             .then(
-                if (com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) Modifier
+                // 玻璃默认间距只用于未调整边距的字幕；自定义边距按保存值参与布局。
+                // 原生 MD3/Miuix 继续使用既有的左右、底部边距，不继承玻璃尺寸。
+                if (useDefaultGlassSubtitleInsets) Modifier
                     .fillMaxWidth(0.9f)
                     .padding(horizontal = 10.dp)
                     .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -1360,31 +1370,36 @@ private fun VideoPlayerSectionContent(
     val latestShowControls = rememberUpdatedState(showControls)
     val latestSuppressTransientOverlays = rememberUpdatedState(suppressTransientOverlaysForTransition)
     val latestGestureVisible = rememberUpdatedState(isGestureVisible)
-    LaunchedEffect(playerState.player, bvid, currentSeekSessionCid, lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) {
-                val currentSession = sharedSeekSession
-                val shouldPollProgress = !latestSuppressTransientOverlays.value && shouldPollVideoPlayerProgress(
+    LaunchedEffect(playerState.player, bvid, currentSeekSessionCid, lifecycleOwner, playerVisualWorkActive) {
+        if (!playerVisualWorkActive) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            snapshotFlow {
+                val session = sharedSeekSession
+                val pending = session.pendingSeekPositionMs != null
+                val needed = !latestSuppressTransientOverlays.value && shouldPollVideoPlayerProgress(
                     controlsVisible = latestShowControls.value,
                     gestureVisible = latestGestureVisible.value,
-                    isSliderMoving = currentSession.isSliderMoving,
-                    hasPendingSeek = currentSession.pendingSeekPositionMs != null
+                    isSliderMoving = session.isSliderMoving,
+                    hasPendingSeek = pending,
                 )
-                if (shouldPollProgress) {
+                needed to pending
+            }.collectLatest { (needed, pending) ->
+                if (!needed) return@collectLatest
+                // A pending seek needs temporary recovery ticks even while paused. Ordinary
+                // paused controls wait for player events; hidden controls own no sampler.
+                com.android.purebilibili.feature.video.ui.overlay.observeVideoPlayerProgress(
+                    player = playerState.player,
+                    videoDuration = 0L,
+                    pollingIntervalMs = 200L,
+                    pollWhilePaused = pending,
+                ) { progress ->
                     sharedSeekSession = syncPlaybackSeekSession(
-                        state = currentSession,
-                        playbackPositionMs = if (playerState.player.playbackState == Player.STATE_ENDED &&
-                            playerState.player.duration > 0L
-                        ) {
-                            playerState.player.duration
-                        } else {
-                            playerState.player.currentPosition.coerceAtLeast(0L)
-                        },
+                        state = sharedSeekSession,
+                        playbackPositionMs = progress.current,
                         hasPlaybackResumedAfterPendingSeek = playerState.player.isPlaying,
                         playbackEnded = playerState.player.playbackState == Player.STATE_ENDED,
                     )
                 }
-                delay(200)
             }
         }
     }
@@ -2220,6 +2235,7 @@ private fun VideoPlayerSectionContent(
                 centerSwipeToFullscreenEnabled,
                 slideVolumeBrightnessEnabled,
                 fullscreenSwipeSeekEnabled,
+                playerInteractionSettings.swipeSeekSeconds,
                 gestureSensitivity,
                 fullscreenGestureReverse,
                 bottomGestureExclusionHeightDp,
@@ -2619,6 +2635,8 @@ private fun VideoPlayerSectionContent(
                                         containerWidthPx = size.width.toFloat(),
                                         gestureSensitivity = gestureSensitivity,
                                         durationMs = duration,
+                                        fixedSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
+                                        fixedSeekSeconds = playerInteractionSettings.swipeSeekSeconds,
                                     )
                                     if (seekDelta != null) {
                                         seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
@@ -4514,6 +4532,7 @@ private fun VideoPlayerSectionContent(
     )
 
     // 2. DanmakuView (使用 ByteDance DanmakuRenderEngine - 覆盖在 PlayerView 上方)
+    val danmakuRenderWorkActive = playerVisualWorkActive
     val shouldShowDanmakuLayer = danmakuHostActive && !suppressTransientOverlaysForTransition &&
         !forceCoverDuringReturnAnimation && shouldShowDanmakuLayers(
         isInPipMode = isInPipMode,
@@ -4574,7 +4593,7 @@ private fun VideoPlayerSectionContent(
                     manager = danmakuManager,
                     viewport = viewport,
                     useFullscreenTextSize = useFullscreenDanmakuBaseline,
-                    renderingPaused = suppressTransientOverlaysForTransition,
+                    renderingPaused = !shouldShowDanmakuLayer || !danmakuRenderWorkActive,
                     modifier = Modifier.fillMaxSize(),
                 )
                 // Above the passive renderer, below BAS links and interactive command danmaku.
@@ -4586,7 +4605,7 @@ private fun VideoPlayerSectionContent(
                     opacity = danmakuOpacity,
                     fontScale = danmakuFontScale,
                     fontWeight = danmakuFontWeight,
-                    renderingPaused = suppressTransientOverlaysForTransition,
+                    renderingPaused = !shouldShowDanmakuLayer || !danmakuRenderWorkActive,
                     modifier = Modifier.fillMaxSize()
                 )
                 com.android.purebilibili.feature.video.ui.overlay.BasDanmakuOverlay(
@@ -4596,7 +4615,7 @@ private fun VideoPlayerSectionContent(
                     opacity = danmakuOpacity,
                     fontScale = danmakuFontScale,
                     fontWeight = danmakuFontWeight,
-                    renderingPaused = suppressTransientOverlaysForTransition,
+                    renderingPaused = !shouldShowDanmakuLayer || !danmakuRenderWorkActive,
                     modifier = Modifier.fillMaxSize()
                 )
                 // 控件测量前使用共享高度种子，避免玻璃切换引起互动弹幕避让跳变。
@@ -4610,7 +4629,7 @@ private fun VideoPlayerSectionContent(
                         controlsReserveHeightPx = commandControlsReservePx,
                     ),
                     state = commandState,
-                    visible = shouldShowDanmakuLayer,
+                    visible = shouldShowDanmakuLayer && danmakuRenderWorkActive,
                     fontScale = danmakuFontScale,
                     items = visibleCommandDanmakuList,
                     player = playerState.player,
@@ -4770,7 +4789,7 @@ private fun VideoPlayerSectionContent(
                     )
                 }
                 // 3.1 高赞弹幕悬浮条：当前时间窗内点赞 Top-N，支持一键跟发
-                if (danmakuHotBarEnabled) {
+                if (danmakuHotBarEnabled && shouldShowDanmakuLayer && danmakuRenderWorkActive) {
                     val hotBarLikedDanmakuIds by actions.likedDanmakuIds
                         .collectAsStateWithLifecycle()
                     val hotBarCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L

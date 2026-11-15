@@ -276,6 +276,7 @@ class VideoCommentViewModel : ViewModel() {
     private val _fullSearchReplies = MutableStateFlow<List<ReplyItem>>(emptyList())
     val fullSearchReplies = _fullSearchReplies.asStateFlow()
     private var fullSearchJob: Job? = null
+    private val fullSearchWork = CommentSearchWorkGate()
 
     private var commentAccount = TokenManager.accountIdentity.value
 
@@ -420,6 +421,7 @@ class VideoCommentViewModel : ViewModel() {
         sentReplies = SentCommentReplyStores.forSubject(aid, commentType)
         _subReplyState.value = SubReplyUiState()
         loadComments()
+        if (fullSearchWork.hasConsumers) loadAllCommentsForSearch()
     }
     
     // [新增] 刷新当前登录用户 mid
@@ -624,6 +626,11 @@ class VideoCommentViewModel : ViewModel() {
 
     // --- [新增] 全量评论加载（供评论区搜索/充电评论过滤） ---
 
+    fun setFullCommentSearchConsumer(owner: Any, active: Boolean) {
+        fullSearchWork.updateConsumer(owner, active)
+        if (active) loadAllCommentsForSearch()
+    }
+
     fun loadAllCommentsForSearch() {
         val state = _fullSearchState.value
         if (state.isLoading || state.isReady && state.error == null) return
@@ -634,18 +641,22 @@ class VideoCommentViewModel : ViewModel() {
         fullSearchJob = viewModelScope.launch {
             val result = loadCommentSearchReplies(
                 loadMain = { page, continuation ->
-                    CommentRepository.getMobileCommentsForSubject(
-                        oid = subject.oid, type = subject.type, page = page,
-                        ps = VIDEO_COMMENT_PAGE_SIZE, mode = CommentGrpcRepository.MODE_TIME,
-                        continuation = continuation,
-                    )
+                    fullSearchWork.runRequest {
+                        CommentRepository.getMobileCommentsForSubject(
+                            oid = subject.oid, type = subject.type, page = page,
+                            ps = VIDEO_COMMENT_PAGE_SIZE, mode = CommentGrpcRepository.MODE_TIME,
+                            continuation = continuation,
+                        )
+                    }
                 },
                 loadThread = { rootId, offset ->
-                    CommentRepository.getMobileSortedSubCommentsForSubject(
-                        oid = subject.oid, type = subject.type, rootId = rootId,
-                        mode = CommentGrpcRepository.MODE_TIME, paginationOffset = offset,
-                        supplementLocations = false,
-                    )
+                    fullSearchWork.runRequest {
+                        CommentRepository.getMobileSortedSubCommentsForSubject(
+                            oid = subject.oid, type = subject.type, rootId = rootId,
+                            mode = CommentGrpcRepository.MODE_TIME, paginationOffset = offset,
+                            supplementLocations = false,
+                        )
+                    }
                 },
                 onProgress = { progress ->
                     if (currentSubject == subject) {

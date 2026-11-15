@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import coil3.request.crossfade
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -515,7 +516,11 @@ private fun SeekPreviewImage(
                 modifier = modifier.background(MediaContrastPalette.ControlSurface),
                 contentAlignment = Alignment.Center
             ) {
-                AppText(text = "...", color = Color.White, style = MaterialTheme.typography.bodySmall)
+                Image(
+                    painter = painter,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
         is AsyncImagePainter.State.Error -> {

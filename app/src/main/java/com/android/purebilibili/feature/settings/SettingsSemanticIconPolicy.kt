@@ -66,6 +66,7 @@ internal enum class SettingsIconRole {
     PERFORMANCE_MARK,
     PERFORMANCE_REPORT,
     PERFORMANCE_PREVIEW,
+    PERFORMANCE_HISTORY,
     FEED_API,
     REFRESH_COUNT,
     DYNAMIC_PREVIEW_TEXT,
@@ -114,6 +115,7 @@ internal enum class SettingsIconRole {
     COMMENT_IP_LOCATION,
     COMMENT_EXACT_TIME,
     COMMENT_AVATAR_PUSH,
+    SUB_REPLY_PREVIEW_LIKES,
     VERTICAL_RECOMMENDATIONS,
     COMPACT_PLAYER_CONTROLS,
     VIDEO_AMBIENT_LIGHT,
@@ -194,6 +196,7 @@ internal enum class SettingsIconRole {
     HOME_HERO_AUTOPLAY,
     AUTO_PLAY_NEXT,
     VIDEO_NOTE_COLLAPSE,
+    DANMAKU_TAP,
     INTERACTIVE_COMMANDS,
     PORTRAIT_SWIPE_FULLSCREEN,
     CENTER_SWIPE_FULLSCREEN,
@@ -346,6 +349,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.PERFORMANCE_MARK -> R.drawable.ic_settings_performance_mark_24
     SettingsIconRole.PERFORMANCE_CAPTURE -> R.drawable.ms_speed_24
     SettingsIconRole.PERFORMANCE_PREVIEW -> R.drawable.ms_find_in_page_24
+    SettingsIconRole.PERFORMANCE_HISTORY -> R.drawable.ic_settings_performance_history_24
     SettingsIconRole.PERFORMANCE_REPORT -> R.drawable.ms_share_24
     SettingsIconRole.DIAGNOSTICS -> R.drawable.ms_terminal_24
     SettingsIconRole.ABOUT_SUPPORT -> R.drawable.ms_info_24
@@ -438,6 +442,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.BLOCK_GOODS_REPLY -> R.drawable.ic_settings_block_goods_reply_24
     SettingsIconRole.COMMENT_IP_LOCATION -> R.drawable.ic_settings_comment_ip_location_24
     SettingsIconRole.COMMENT_EXACT_TIME -> R.drawable.ms_calendar_clock_24
+    SettingsIconRole.SUB_REPLY_PREVIEW_LIKES -> R.drawable.ic_settings_sub_reply_likes_24
     SettingsIconRole.COMMENT_AVATAR_PUSH -> R.drawable.ic_settings_comment_avatar_push_24
     SettingsIconRole.VERTICAL_RECOMMENDATIONS -> R.drawable.ms_view_stream_24
     SettingsIconRole.COMPACT_PLAYER_CONTROLS -> R.drawable.ms_collapse_content_24
@@ -519,6 +524,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.HOME_HERO_AUTOPLAY -> R.drawable.ms_smart_display_24
     SettingsIconRole.AUTO_PLAY_NEXT -> R.drawable.ms_playlist_play_24
     SettingsIconRole.VIDEO_NOTE_COLLAPSE -> R.drawable.ms_short_text_24
+    SettingsIconRole.DANMAKU_TAP -> R.drawable.ic_settings_danmaku_tap_24
     SettingsIconRole.INTERACTIVE_COMMANDS -> R.drawable.ms_comments_disabled_24
     SettingsIconRole.PORTRAIT_SWIPE_FULLSCREEN -> R.drawable.ms_swipe_up_24
     SettingsIconRole.CENTER_SWIPE_FULLSCREEN -> R.drawable.ms_swipe_24

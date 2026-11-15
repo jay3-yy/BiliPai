@@ -5,17 +5,22 @@ import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.core.plugin.BuiltinPluginIds
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorSegment
 import com.android.purebilibili.data.repository.SponsorBlockRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.android.purebilibili.core.ui.rememberVisualWorkActive
+import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
+import com.android.purebilibili.core.ui.components.LocalListAuxiliaryWorkAllowed
+import com.android.purebilibili.feature.home.components.cards.LocalHomeCardAuxiliaryWorkAllowed
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -43,25 +48,23 @@ internal object SponsorFeedBadgeStore {
     private data class CachedFeedBadge(val label: String?, val expiresAtMs: Long)
 
     private val cache = LinkedHashMap<String, CachedFeedBadge>()
-    private val inFlight = mutableMapOf<String, Deferred<String?>>()
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Optional badges are serialized. Waiting callers recheck the cache after acquiring
+    // the permit; cancellation leaves no independent request or stale in-flight owner.
+    private val requests = Mutex()
+
+    private fun cachedBadge(bvid: String): CachedFeedBadge? = synchronized(cache) {
+        cache[bvid]?.takeIf { it.expiresAtMs > android.os.SystemClock.elapsedRealtime() }?.also {
+            cache.remove(bvid)
+            cache[bvid] = it
+        }
+    }
 
     suspend fun badgeLabel(context: Context, bvid: String): String? {
-        val nowMs = android.os.SystemClock.elapsedRealtime()
-        synchronized(cache) {
-            cache[bvid]?.takeIf { it.expiresAtMs > nowMs }?.let { cached ->
-                cache.remove(bvid)
-                cache[bvid] = cached
-                return cached.label
-            }
-        }
-        val deferred = synchronized(inFlight) {
-            inFlight.getOrPut(bvid) { scope.async { queryBadgeLabel(context, bvid) } }
-        }
-        return try {
-            deferred.await()
-        } finally {
-            synchronized(inFlight) { inFlight.remove(bvid) }
+        cachedBadge(bvid)?.let { return it.label }
+        return requests.withLock {
+            // Another visible copy may have completed while this caller queued.
+            cachedBadge(bvid)?.let { return@withLock it.label }
+            queryBadgeLabel(context, bvid)
         }
     }
 
@@ -74,6 +77,7 @@ internal object SponsorFeedBadgeStore {
                 baseUrl = loadSponsorBlockConfig(context).serverBaseUrl,
             )
         )
+        currentCoroutineContext().ensureActive()
         synchronized(cache) {
             cache.remove(bvid)
             cache[bvid] = CachedFeedBadge(label, android.os.SystemClock.elapsedRealtime() + CACHE_TTL_MS)
@@ -92,7 +96,9 @@ internal object SponsorFeedBadgeStore {
 @Composable
 internal fun rememberSponsorFeedBadgeLabel(bvid: String): String? {
     val context = LocalContext.current
-    val badgeGateFlow = remember {
+    val workAllowed = rememberVisualWorkActive() && LocalPageImageLoadingAllowed.current &&
+        LocalListAuxiliaryWorkAllowed.current && LocalHomeCardAuxiliaryWorkAllowed.current
+    val badgeGateFlow = remember(context) {
         combine(
             PluginManager.pluginsFlow.map { plugins ->
                 plugins.any { it.plugin.id == BuiltinPluginIds.SPONSOR_BLOCK && it.enabled }
@@ -101,15 +107,17 @@ internal fun rememberSponsorFeedBadgeLabel(bvid: String): String? {
         ) { pluginEnabled, feedBadgeEnabled -> pluginEnabled && feedBadgeEnabled }
             .distinctUntilChanged()
     }
-    return produceState<String?>(initialValue = null, bvid) {
-        // 空降社区数据按 bvid 索引；番剧等 pgc 卡没有 BV 号，不参与查询。
-        if (!bvid.startsWith("BV")) return@produceState
-        badgeGateFlow.collectLatest { gateEnabled ->
-            value = if (gateEnabled) {
-                SponsorFeedBadgeStore.badgeLabel(context, bvid)
-            } else {
-                null
+    return key(bvid) {
+        produceState<String?>(initialValue = null, bvid, workAllowed, badgeGateFlow) {
+            if (!bvid.startsWith("BV")) return@produceState
+            badgeGateFlow.collectLatest { gateEnabled ->
+                if (!gateEnabled) {
+                    value = null
+                } else if (workAllowed) {
+                    delay(180L)
+                    value = SponsorFeedBadgeStore.badgeLabel(context, bvid)
+                }
             }
-        }
-    }.value
+        }.value
+    }
 }

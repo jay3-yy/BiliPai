@@ -1,12 +1,53 @@
 package com.android.purebilibili.feature.video.screen
 
 import com.android.purebilibili.core.store.TabletSecondaryDefaultTab
+import com.android.purebilibili.data.model.response.Dimension
+import com.android.purebilibili.data.model.response.Page
+import com.android.purebilibili.data.model.response.ViewInfo
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LargeScreenVideoLayoutPolicyTest {
+
+    @Test
+    fun phoneInlineHeightFitsCurrentPageWithoutCroppingFourByThreeVideo() {
+        val info = ViewInfo(
+            bvid = "video-a", cid = 1,
+            dimension = Dimension(1440, 1080),
+            pages = listOf(Page(cid = 1), Page(cid = 2, dimension = Dimension(1920, 1080))),
+        )
+        assertEquals(270f, resolvePhoneInlineVideoViewportHeightDp(
+            360f, 800f, false, resolvePhoneInlineVideoAspectRatio(info, "video-a", 1),
+        ), 0.01f)
+        assertEquals(202.5f, resolvePhoneInlineVideoViewportHeightDp(
+            360f, 800f, false, resolvePhoneInlineVideoAspectRatio(info, "video-a", 2),
+        ), 0.01f)
+    }
+
+    @Test
+    fun missingPageDimensionsAndDifferentVideoDoNotReusePreviousAspectRatio() {
+        val info = ViewInfo(
+            bvid = "video-a", cid = 1,
+            dimension = Dimension(1440, 1080),
+            pages = listOf(Page(cid = 1), Page(cid = 2)),
+        )
+        assertEquals(PHONE_DETAIL_VIDEO_ASPECT_RATIO, resolvePhoneInlineVideoAspectRatio(info, "video-b", 1))
+        assertEquals(PHONE_DETAIL_VIDEO_ASPECT_RATIO, resolvePhoneInlineVideoAspectRatio(info, "video-a", 2))
+        assertEquals(PHONE_DETAIL_VIDEO_ASPECT_RATIO, resolvePhoneInlineVideoAspectRatio(null, "video-a", 1))
+    }
+
+    @Test
+    fun rotatedLandscapeMetadataAndCoverHeightLimitAreRespected() {
+        val info = ViewInfo(bvid = "video-a", cid = 1, dimension = Dimension(1080, 1440, rotate = 90))
+        val ratio = resolvePhoneInlineVideoAspectRatio(info, "video-a", 1)
+        assertEquals(4f / 3f, ratio, 0.001f)
+        assertEquals(230f, resolvePhoneInlineVideoViewportHeightDp(672f, 460f, true, ratio), 0.01f)
+        assertEquals(PHONE_DETAIL_VIDEO_ASPECT_RATIO, resolvePhoneInlineVideoAspectRatio(
+            info.copy(dimension = Dimension(1080, 1920)), "video-a", 1,
+        ))
+    }
 
     @Test
     fun landscapeLayoutHidesIntroRelatedAndHonorsConfiguredDefaultTab() {

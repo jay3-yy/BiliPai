@@ -162,7 +162,8 @@ private fun PageAwareAsyncImageContent(
                         val resource = slot.hold(state.result.image, state.painter)
                         state.copy(painter = resource, result = state.result.copy(image = resource))
                     }
-                    is AsyncImagePainter.State.Loading -> state.copy(painter = retainedPainter)
+                    // 已解码封面优先，其次保留请求的缓存占位或全局 TV 占位。
+                    is AsyncImagePainter.State.Loading -> state.copy(painter = retainedPainter ?: state.painter)
                     is AsyncImagePainter.State.Error -> {
                         val resource = slot.hold(state.result.image, state.painter)
                         state.copy(painter = resource, result = state.result.copy(image = resource))

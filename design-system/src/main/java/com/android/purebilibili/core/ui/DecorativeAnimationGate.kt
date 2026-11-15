@@ -14,7 +14,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 
 /** Stops decorative loops on retained offscreen pages and behind unfocused windows. */
-internal class DecorativeAnimationGate {
+class DecorativeAnimationGate {
     var inViewport by mutableStateOf(false)
     var resumed by mutableStateOf(false)
     var allowed by mutableStateOf(false)
@@ -26,7 +26,7 @@ internal class DecorativeAnimationGate {
 }
 
 @Composable
-internal fun rememberDecorativeAnimationGate(
+fun rememberDecorativeAnimationGate(
     // 用户触发的有限动作可独立于卡片进场设置，仍遵守系统减弱动效与可见性。
     respectComponentMotion: Boolean = true,
     // 有限反馈由播放器显示静态完成姿态并计时，减少动态时仍需传递可见性。

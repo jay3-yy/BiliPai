@@ -75,11 +75,12 @@ internal fun VideoDetailPlayerSettingsOverlayAdapter(
     LaunchedEffect(danmakuManager, selectedDanmakuMenu.visible) {
         if (!selectedDanmakuMenu.visible) danmakuManager.clearTapSelection()
     }
-    LaunchedEffect(danmakuManager, selectedDanmakuMenu, danmakuManager.isTapSelectionActive) {
+    LaunchedEffect(danmakuManager, selectedDanmakuMenu, danmakuManager.isTapSelectionActive, danmakuManager.tapInteractionEnabled) {
         if (selectedDanmakuMenu.visible &&
             selectedDanmakuMenu.tapAnchor?.owner === danmakuManager.tapSelectionOwner
         ) {
-            if (selectedDanmakuMenu.expandedActions) danmakuManager.clearTapSelection()
+            if (!danmakuManager.tapInteractionEnabled) viewModel.hideDanmakuMenu()
+            else if (selectedDanmakuMenu.expandedActions) danmakuManager.clearTapSelection()
             else if (!danmakuManager.isTapSelectionActive) viewModel.hideDanmakuMenu()
         }
     }

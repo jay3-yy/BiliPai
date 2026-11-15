@@ -56,6 +56,13 @@ fun AdaptivePullToRefreshBox(
     allowContentScrollWhileRefreshing: Boolean = false,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    // 保留在 Pager/导航栈中的列表不能让不可见的刷新指示器继续提交帧。
+    // 门控绑定稳定外壳，切换容器时不卸载列表；原生可见状态的参数保持不变。
+    val refreshGate = rememberDecorativeAnimationGate(
+        respectComponentMotion = false,
+        respectSystemReduceMotion = false,
+    )
+    val reduceMotion = LocalSystemReduceMotion.current
     val contentHaptic = LocalHapticFeedback.current
     val refreshHaptic = rememberAppHapticFeedback(AppHapticScene.REFRESH)
     val layoutDirection = LocalLayoutDirection.current
@@ -81,42 +88,44 @@ fun AdaptivePullToRefreshBox(
                     )
                 }
             }
-            if (enabled && !(allowContentScrollWhileRefreshing && isRefreshing)) {
-                // The native container owns its drag/refresh animation scope. Discard that
-                // state with the container when player expansion temporarily disables refresh;
-                // otherwise a cancelled Pulling/RefreshComplete session can consume later
-                // comment drags. movableContent below still preserves the list and its offset.
-                val miuixState = rememberMiuixPullToRefreshState()
-                CompositionLocalProvider(LocalHapticFeedback provides refreshHaptic) {
-                    MiuixPullToRefresh(
-                        isRefreshing = isRefreshing,
-                        onRefresh = onRefresh,
-                        modifier = modifier,
-                        pullToRefreshState = miuixState,
-                        contentPadding = mergedContentPadding,
-                        color = AppSurfaceTokens.primary(),
-                        refreshTexts = resolveMiuixPullToRefreshTexts(),
-                        content = {
-                            CompositionLocalProvider(LocalHapticFeedback provides contentHaptic) {
-                                stableContent(contentAlignment, content)
-                            }
-                        },
-                    )
-                }
-            } else {
-                Box(modifier = modifier, contentAlignment = contentAlignment) {
-                    stableContent(contentAlignment, content)
-                    // 仅显式选择此策略的入口拆开加载提示和列表，避免原生刷新容器吞掉滚动。
-                    if (allowContentScrollWhileRefreshing && isRefreshing) {
-                        com.android.purebilibili.core.ui.components.AppText(
-                            text = "正在刷新…",
+            Box(modifier = modifier.then(refreshGate.modifier), contentAlignment = contentAlignment) {
+                if (enabled && refreshGate.active && !((allowContentScrollWhileRefreshing || reduceMotion) && isRefreshing)) {
+                    // The native container owns its drag/refresh animation scope. Discard that
+                    // state with the container when player expansion temporarily disables refresh;
+                    // otherwise a cancelled Pulling/RefreshComplete session can consume later
+                    // comment drags. movableContent below still preserves the list and its offset.
+                    val miuixState = rememberMiuixPullToRefreshState()
+                    CompositionLocalProvider(LocalHapticFeedback provides refreshHaptic) {
+                        MiuixPullToRefresh(
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            modifier = Modifier.fillMaxSize(),
+                            pullToRefreshState = miuixState,
+                            contentPadding = mergedContentPadding,
                             color = AppSurfaceTokens.primary(),
-                            style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
-                            tapToCopyEnabled = false,
-                            modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = indicatorTopInset + 8.dp),
+                            refreshTexts = resolveMiuixPullToRefreshTexts(),
+                            content = {
+                                CompositionLocalProvider(LocalHapticFeedback provides contentHaptic) {
+                                    stableContent(contentAlignment, content)
+                                }
+                            },
                         )
+                    }
+                } else {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = contentAlignment) {
+                        stableContent(contentAlignment, content)
+                        // 非阻塞刷新或减少动态效果时，静态提示与列表分开，避免保留旋转任务。
+                        if (refreshGate.active && (allowContentScrollWhileRefreshing || reduceMotion) && isRefreshing) {
+                            com.android.purebilibili.core.ui.components.AppText(
+                                text = "正在刷新…",
+                                color = AppSurfaceTokens.primary(),
+                                style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                                tapToCopyEnabled = false,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = indicatorTopInset + 8.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -126,11 +135,25 @@ fun AdaptivePullToRefreshBox(
                 ComfortablePullToRefreshBox(
                     isRefreshing = isRefreshing,
                     onRefresh = onRefresh,
-                    modifier = modifier,
+                    modifier = modifier.then(refreshGate.modifier),
                     state = state,
                     contentAlignment = contentAlignment,
-                    enabled = enabled,
-                    indicator = indicator,
+                    enabled = enabled && refreshGate.active,
+                    indicator = {
+                        if (refreshGate.active) {
+                            if (reduceMotion && isRefreshing) {
+                                com.android.purebilibili.core.ui.components.AppText(
+                                    text = "正在刷新…",
+                                    color = AppSurfaceTokens.primary(),
+                                    style = androidx.compose.material3.MaterialTheme.typography.labelMedium,
+                                    tapToCopyEnabled = false,
+                                    modifier = Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(top = indicatorTopInset + 8.dp),
+                                )
+                            } else indicator()
+                        }
+                    },
                     content = {
                         CompositionLocalProvider(LocalHapticFeedback provides contentHaptic) { content() }
                     },

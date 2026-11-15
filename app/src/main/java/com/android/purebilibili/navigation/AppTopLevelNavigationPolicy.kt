@@ -1,7 +1,5 @@
 package com.android.purebilibili.navigation
 
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.listSaver
 import com.android.purebilibili.feature.home.components.BottomNavItem
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.toLegacyRoute
@@ -39,41 +37,12 @@ internal const val BOTTOM_PAGER_MAX_PRELOAD_DISTANCE = BOTTOM_BAR_MAX_VISIBLE_IT
 internal const val BOTTOM_PAGER_PRELOAD_IDLE_MILLIS = 120L
 internal const val BOTTOM_PAGER_PRELOAD_INTERVAL_MILLIS = 16L
 
-/**
- * 点击底栏后先让出若干帧，让目标页在动画启动前完成首次组合与测量。
- *
- * 目标页在 selectedPage 更新后立刻成为转场参与者并开始组合；如果动画与这次冷组合抢
- * 同一帧预算，首帧就会超时，表现为切页动画掉帧。让出一帧即可把这笔成本提前付掉。
- * 只让一帧：更多会让底栏指示器的手感明显变迟钝。
- */
-internal const val BOTTOM_PAGER_TARGET_PREWARM_FRAMES = 1
-
-/**
- * 已预热栏目集合的跨重建保留策略。
- *
- * rememberSaveable 也会在进程死亡后恢复，不能把保存过的栏目当成仍在内存中的热页面。
- * 只保留同一进程中的挂载记录；跨进程恢复仍优先挂载当前页，再逐页预热。
- */
-private val bottomPagerProcessSession = "${System.currentTimeMillis()}:${System.nanoTime()}"
-
-internal fun bottomPagerPreloadedItemsSaver(processSession: String): Saver<Set<BottomNavItem>, Any> =
-    listSaver(
-        save = { items -> listOf(processSession) + items.map { it.name } },
-        restore = { names ->
-            if (names.firstOrNull() != processSession) emptySet() else {
-                names.drop(1).mapNotNull { name -> BottomNavItem.entries.firstOrNull { it.name == name } }
-                    .toSet()
-            }
-        }
-    )
-
-internal val BottomPagerPreloadedItemsSaver = bottomPagerPreloadedItemsSaver(bottomPagerProcessSession)
-
 internal fun shouldAllowBottomPagerBackgroundWork(
     isMainHostTop: Boolean,
     isCardTransitionIdle: Boolean,
     isPagerNavigating: Boolean,
-): Boolean = isMainHostTop && isCardTransitionIdle && !isPagerNavigating
+    isNavigationSettled: Boolean = true,
+): Boolean = isMainHostTop && isCardTransitionIdle && !isPagerNavigating && isNavigationSettled
 
 internal fun nextBottomPagerPreloadItem(
     visibleItems: List<BottomNavItem>,
@@ -287,16 +256,8 @@ internal fun resolveBottomPagerRenderBudget(isNavigating: Boolean): BottomPagerR
 internal fun shouldEnableBottomPagerUserScroll(): Boolean = false
 
 /**
- * BiliPai MainScreen composition:
- * `if (isCurrentPage || contentReady) XxxPager(...)`
- *
- * After an individual page is ready, its bottom-tab slot stays mounted so
- * [MainBottomPagerState.switchToPage] `animateScrollBy` far jumps
- * (rightmost → home) scroll across real pages instead of empty Boxes.
- * Story is intentionally excluded while inactive: mounting it creates a real media player and
- * playback loading session, which is not safe or useful as visual-only pager precomposition.
- *
- * Before ready, only mount start / selected / current to keep cold start light.
+ * 当前 MainHost 组合内已挂载的栏目继续保留；尚未挂载时只创建切页参与者。
+ * 竖屏流只在参与切页时挂载，避免离屏预热创建真实播放器与播放会话。
  */
 internal fun shouldComposeBottomPagerPage(
     item: BottomNavItem,

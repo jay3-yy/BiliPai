@@ -570,36 +570,6 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun bottomPagerPreloadedItemsSaver_survivesActivityRecreation() {
-        val items = setOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.PROFILE)
-        val saved = with(BottomPagerPreloadedItemsSaver) {
-            androidx.compose.runtime.saveable.SaverScope { true }.save(items)
-        }
-        assertEquals(items, saved?.let { BottomPagerPreloadedItemsSaver.restore(it) })
-    }
-
-    @Test
-    fun bottomPagerPreloadedItemsSaver_dropsUnknownTabNames() {
-        val saver = bottomPagerPreloadedItemsSaver("same-process")
-        assertEquals(
-            setOf(BottomNavItem.HOME),
-            saver.restore(listOf("same-process", "HOME", "NOT_A_TAB"))
-        )
-    }
-
-    @Test
-    fun bottomPagerPreloadedItemsSaver_dropsWarmthAfterProcessDeathAndLegacyRestore() {
-        val saver = bottomPagerPreloadedItemsSaver("old-process")
-        val saved = with(saver) {
-            androidx.compose.runtime.saveable.SaverScope { true }.save(
-                setOf(BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.PROFILE)
-            )
-        }
-        assertEquals(emptySet(), saved?.let { bottomPagerPreloadedItemsSaver("new-process").restore(it) })
-        assertEquals(emptySet(), saver.restore(listOf("HOME", "DYNAMIC", "PROFILE")))
-    }
-
-    @Test
     fun bottomPagerPreload_followsVisibleBottomBarCountAfterReady() {
         assertEquals(0, resolveBottomPagerBeyondViewportPageCount(pageCount = 4, contentReady = false))
         assertEquals(0, resolveBottomPagerBeyondViewportPageCount(pageCount = 1, contentReady = true))

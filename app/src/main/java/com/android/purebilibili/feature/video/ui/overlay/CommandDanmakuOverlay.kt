@@ -125,16 +125,17 @@ internal fun CommandDanmakuOverlay(
     isTripleSubmitting: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    if (!visible) return
+    if (!visible || items.isEmpty()) return
     val placementHeightPx = (viewport.heightPx - bottomInsetPx.coerceAtLeast(0)).coerceAtLeast(0)
     if (placementHeightPx == 0) return
     val currentPosition by produceState(
         initialValue = player.currentPosition, key1 = player,
     ) {
-        while (true) {
-            value = player.currentPosition
-            kotlinx.coroutines.delay(80)
-        }
+        observeVideoPlayerProgress(
+            player = player,
+            videoDuration = 0L,
+            pollingIntervalMs = 80L,
+        ) { value = it.current }
     }
     Box(modifier = modifier.fillMaxSize()) {
         val active = items.filter {

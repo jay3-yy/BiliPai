@@ -292,6 +292,7 @@ class SpaceViewModel(
             return
         }
 
+        com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("space", "detail_load_started")
         currentMid = mid
         currentSpaceAccount = TokenManager.accountIdentity.value
         currentPage = 1

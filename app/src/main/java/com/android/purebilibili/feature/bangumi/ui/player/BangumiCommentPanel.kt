@@ -293,6 +293,7 @@ internal fun BangumiCommentPanel(
             fullReplies = fullSearchReplies,
             fullSearchState = fullSearchState,
             onLoadAllComments = viewModel::loadAllCommentsForSearch,
+            onSearchConsumerChanged = viewModel::setFullCommentSearchConsumer,
             upMid = state.upMid,
             onCommentClick = onReplyClick,
             onSubReplyClick = viewModel::openSubReply,

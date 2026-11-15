@@ -8,21 +8,7 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.withFrameNanos
 import kotlin.math.abs
-
-/**
- * 让出若干帧，让即将成为动画目标的那一页先完成首次组合与测量。
- *
- * 目标页在 `selectedPage` 更新后立刻成为转场参与者并开始组合。若动画与这次冷组合抢
- * 同一帧预算，动画首帧就会超时——这正是「切回前台后点底栏掉帧」最直接的成因。
- * 提前让出 [BOTTOM_PAGER_TARGET_PREWARM_FRAMES] 帧即可把这笔成本付在动画之前。
- */
-internal suspend fun awaitPagerTargetPagePrewarm(
-    maxFrames: Int = BOTTOM_PAGER_TARGET_PREWARM_FRAMES,
-) {
-    repeat(maxFrames.coerceAtLeast(0)) { withFrameNanos { } }
-}
 
 /** A weak key keeps removed pagers collectible; sessions never hold their pager. */
 private val tabSelectionMotions = java.util.WeakHashMap<PagerState, androidx.compose.runtime.MutableState<TabSelectionMotion?>>()

@@ -540,9 +540,11 @@ internal fun shouldExpandPlayerViewportForSharedReturn(
     isReturnGestureInProgress: Boolean,
     isGestureRestoreInProgress: Boolean = false,
     sharedReturnLikely: Boolean = true,
+    isCommittedCardReturn: Boolean = false,
+    keepLoadedContentForBackPreview: Boolean = false,
 ): Boolean {
-    if (!sharedReturnLikely) return false
-    return isExitTransitionInProgress ||
+    if (!sharedReturnLikely || keepLoadedContentForBackPreview) return false
+    return isCommittedCardReturn || isExitTransitionInProgress ||
         isReturnGestureInProgress ||
         isGestureRestoreInProgress
 }

@@ -1610,10 +1610,18 @@ class MiniPlayerManager private constructor(private val context: Context) :
      * 后台/熄屏时 Compose 的 lifecycle-aware state collection 会暂停，不能依赖页面侧的
      * setVideoInfo 来刷新通知和当前媒体身份，否则播放器已换集而通知、返回目标仍停在旧视频。
      */
-    fun syncCurrentVideoInfo(state: VideoPlaybackUiState.Success, expectedPlayer: ExoPlayer) {
+    fun syncCurrentVideoInfo(
+        state: VideoPlaybackUiState.Success,
+        expectedPlayer: ExoPlayer,
+        forceMetadataRefresh: Boolean = false,
+    ) {
         // Covered pages may finish loading after another detail has reclaimed the session.
         if (player !== expectedPlayer) return
         val info = state.info
+        val previousInfo = cachedUiState?.info
+        val metadataChanged = previousInfo == null || previousInfo.bvid != info.bvid || previousInfo.cid != info.cid ||
+            previousInfo.title != info.title || previousInfo.owner.name != info.owner.name ||
+            previousInfo.pic != info.pic
         currentBvid = info.bvid
         currentAudioMediaId = null
         currentTitle = info.title
@@ -1627,11 +1635,17 @@ class MiniPlayerManager private constructor(private val context: Context) :
         currentRoomId = 0L
         currentLiveUname = ""
         liveRestoreFullscreen = false
-        updateMediaMetadata(
-            title = info.title,
-            artist = info.owner.name,
-            coverUrl = info.pic
-        )
+        // 推荐/队列变化仍需更新上一集、下一集能力，不受元数据去重限制。
+        updateMediaSession(expectedPlayer)
+        // 缓存始终跟随完整详情；附属数据更新不替换媒体项或取消进行中的通知封面加载。
+        // 新媒体源可能尚无元数据，即使详情未变也须补发。
+        val mediaMetadata = expectedPlayer.currentMediaItem?.mediaMetadata
+        if (forceMetadataRefresh || metadataChanged || mediaMetadata == null || mediaMetadata.title?.toString() != info.title ||
+            mediaMetadata.artist?.toString() != info.owner.name ||
+            (info.pic.isNotBlank() && mediaMetadata.artworkUri?.toString() != FormatUtils.fixImageUrl(info.pic))
+        ) {
+            updateMediaMetadata(title = info.title, artist = info.owner.name, coverUrl = info.pic)
+        }
     }
     
     //  [新增] 获取并清除缓存的 UI 状态
@@ -3330,11 +3344,11 @@ class MiniPlayerManager private constructor(private val context: Context) :
         }
         val metadata = metadataBuilder.build()
 
-        val newItem = currentItem.buildUpon()
-            .setMediaMetadata(metadata)
-            .build()
-
-        currentPlayer.replaceMediaItem(currentPlayer.currentMediaItemIndex, newItem)
+        // 播放/暂停仍刷新通知；媒体内容未变化时不再触发整条媒体项替换链路。
+        if (currentItem.mediaMetadata != metadata) {
+            val newItem = currentItem.buildUpon().setMediaMetadata(metadata).build()
+            currentPlayer.replaceMediaItem(currentPlayer.currentMediaItemIndex, newItem)
+        }
 
         // 异步加载封面并推送通知
         val shouldReloadArtwork = effectiveCoverUrl.isNotBlank() &&

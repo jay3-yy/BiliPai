@@ -139,6 +139,7 @@ fun TopControlBar(
     isFollowing: Boolean = false,
     followStatusKnown: Boolean = false,
     onFollowClick: () -> Unit = {},
+    extraActions: (@Composable () -> Unit)? = null,
 ) {
     val policy = resolveTopControlBarLayoutPolicy(
         isPortrait = isPortrait,
@@ -276,6 +277,7 @@ fun TopControlBar(
                         if (!simplifiedPortrait && showPipButton && onPipClick != null) {
                             HeaderIcon(Icons.Outlined.PictureInPicture, "画中画", onPipClick)
                         }
+                        if (!simplifiedPortrait) extraActions?.invoke()
                         if (onMoreClick != null) {
                             HeaderIcon(
                                 Icons.Outlined.MoreVert,
@@ -738,6 +740,13 @@ private fun HeaderIcon(
                 modifier = Modifier.size(iconSize.dp),
             )
         }
+    }
+}
+
+@Composable
+internal fun PlayerQuickSeekForwardButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    HeaderButton(description = "快进90秒", onClick = onClick, modifier = modifier) {
+        AppText(text = "+90s", color = Color.White, fontSize = 11.sp, maxLines = 1, tapToCopyEnabled = false)
     }
 }
 

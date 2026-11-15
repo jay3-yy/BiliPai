@@ -1854,6 +1854,7 @@ internal fun LandscapeCommentPanel(
     onUpClick: (Long) -> Unit,
     onSubReplyClick: (ReplyItem, Long) -> Unit,
     onCommentReplyClick: (ReplyItem) -> Unit,
+    onRootCommentClick: () -> Unit,
     onLoadMoreReplies: () -> Unit,
     onRefreshReplies: () -> Unit,
     onDeleteComment: (Long) -> Unit,
@@ -1949,98 +1950,119 @@ internal fun LandscapeCommentPanel(
                         }
                     }
                 }
-                if (threadContent != null) {
-                    Column(Modifier.fillMaxSize()) {
-                        panelHeader(Modifier)
-                        threadContent { images, index, rect, textContent ->
-                            previewImages = images
-                            previewInitialIndex = index
-                            previewSourceRect = rect
-                            previewTextContent = textContent
-                            showImagePreview = true
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        if (threadContent != null) {
+                            Column(Modifier.fillMaxSize()) {
+                                panelHeader(Modifier)
+                                threadContent { images, index, rect, textContent ->
+                                    previewImages = images
+                                    previewInitialIndex = index
+                                    previewSourceRect = rect
+                                    previewTextContent = textContent
+                                    showImagePreview = true
+                                }
+                            }
+                        } else {
+                            // 标题栏覆盖列表；排序与评论标题作为一个列表项随滚动移出、回顶出现。
+                            Box(Modifier.fillMaxSize()) {
+                                VideoCommentTab(
+                                    listState = listState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    upMid = info.owner.mid,
+                                    maxTimestampMs = info.pages.firstOrNull { it.cid == info.cid }?.duration?.times(1000L)
+                                        ?: info.pages.firstOrNull()?.duration?.times(1000L),
+                                    replies = replies,
+                                    pageControl = pageControl,
+                                    replyCount = replyCount,
+                                    emoteMap = emoteMap,
+                                    isRepliesLoading = isRepliesLoading,
+                                    isRepliesRefreshing = isRepliesRefreshing,
+                                    repliesError = repliesError,
+                                    isRepliesEnd = isRepliesEnd,
+                                    paginationPage = paginationPage,
+                                    voteCard = voteCard,
+                                    onUpClick = onUpClick,
+                                    onSubReplyClick = onSubReplyClick,
+                                    onCommentReplyClick = onCommentReplyClick,
+                                    onLoadMoreReplies = onLoadMoreReplies,
+                                    onRefreshReplies = onRefreshReplies,
+                                    onImagePreview = { images, index, rect, textContent ->
+                                        previewImages = images
+                                        previewInitialIndex = index
+                                        previewSourceRect = rect
+                                        previewTextContent = textContent
+                                        showImagePreview = true
+                                    },
+                                    onTimestampClick = onTimestampClick,
+                                    contentPadding = PaddingValues(bottom = 16.dp),
+                                    currentMid = currentMid,
+                                    showUpFlag = showUpFlag,
+                                    dissolvingIds = dissolvingIds,
+                                    onDeleteComment = onDeleteComment,
+                                    onDissolveStart = onDissolveStart,
+                                    onCommentLike = onCommentLike,
+                                    onCommentHate = onCommentHate,
+                                    likedComments = likedComments,
+                                    hatedComments = hatedComments,
+                                    sortMode = sortMode,
+                                    onSortModeChange = onSortModeChange,
+                                    onCommentUrlClick = onCommentUrlClick,
+                                    onReportComment = onReportComment,
+                                    onToggleTopComment = onToggleTopComment,
+                                    onCheckCommentFraud = onCheckCommentFraud,
+                                    showIdentityDecorations = showIdentityDecorations,
+                                    lightweightCommentRendering = false,
+                                    compactSortHeader = true,
+                                    showHeader = false,
+                                    floatingHeaderContentPaddingPx = panelHeaderHeightProvider,
+                                    scrollingHeader = {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            AppText(
+                                                text = "${sortMode.label}评论",
+                                                modifier = Modifier.weight(1f),
+                                                style = MaterialTheme.typography.titleSmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            CommentSortFilterBar(
+                                                sortMode = sortMode,
+                                                onSortModeChange = selectSortMode,
+                                                onSearchClick = { showCommentSearchSheet = true },
+                                            )
+                                        }
+                                    },
+                                )
+                                panelHeader(
+                                    Modifier
+                                        .onSizeChanged { panelHeaderHeightPx.floatValue = it.height.toFloat() }
+                                        .background(MaterialTheme.colorScheme.surface),
+                                )
+                            }
                         }
                     }
-                } else {
-                    // 标题栏覆盖列表；排序与评论标题作为一个列表项随滚动移出、回顶出现。
-                    Box(Modifier.fillMaxSize()) {
-                        VideoCommentTab(
-                            listState = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            upMid = info.owner.mid,
-                            maxTimestampMs = info.pages.firstOrNull { it.cid == info.cid }?.duration?.times(1000L)
-                                ?: info.pages.firstOrNull()?.duration?.times(1000L),
-                            replies = replies,
-                            pageControl = pageControl,
-                            replyCount = replyCount,
-                            emoteMap = emoteMap,
-                            isRepliesLoading = isRepliesLoading,
-                            isRepliesRefreshing = isRepliesRefreshing,
-                            repliesError = repliesError,
-                            isRepliesEnd = isRepliesEnd,
-                            paginationPage = paginationPage,
-                            voteCard = voteCard,
-                            onUpClick = onUpClick,
-                            onSubReplyClick = onSubReplyClick,
-                            onCommentReplyClick = onCommentReplyClick,
-                            onLoadMoreReplies = onLoadMoreReplies,
-                            onRefreshReplies = onRefreshReplies,
-                            onImagePreview = { images, index, rect, textContent ->
-                                previewImages = images
-                                previewInitialIndex = index
-                                previewSourceRect = rect
-                                previewTextContent = textContent
-                                showImagePreview = true
-                            },
-                            onTimestampClick = onTimestampClick,
-                            contentPadding = PaddingValues(bottom = 16.dp),
-                            currentMid = currentMid,
-                            showUpFlag = showUpFlag,
-                            dissolvingIds = dissolvingIds,
-                            onDeleteComment = onDeleteComment,
-                            onDissolveStart = onDissolveStart,
-                            onCommentLike = onCommentLike,
-                            onCommentHate = onCommentHate,
-                            likedComments = likedComments,
-                            hatedComments = hatedComments,
-                            sortMode = sortMode,
-                            onSortModeChange = onSortModeChange,
-                            onCommentUrlClick = onCommentUrlClick,
-                            onReportComment = onReportComment,
-                            onToggleTopComment = onToggleTopComment,
-                            onCheckCommentFraud = onCheckCommentFraud,
-                            showIdentityDecorations = showIdentityDecorations,
-                            lightweightCommentRendering = false,
-                            compactSortHeader = true,
-                            showHeader = false,
-                            floatingHeaderContentPaddingPx = panelHeaderHeightProvider,
-                            scrollingHeader = {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    AppText(
-                                        text = "${sortMode.label}评论",
-                                        modifier = Modifier.weight(1f),
-                                        style = MaterialTheme.typography.titleSmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    CommentSortFilterBar(
-                                        sortMode = sortMode,
-                                        onSortModeChange = selectSortMode,
-                                        onSearchClick = { showCommentSearchSheet = true },
-                                    )
-                                }
-                            },
-                        )
-                        panelHeader(
-                            Modifier
-                                .onSizeChanged { panelHeaderHeightPx.floatValue = it.height.toFloat() }
-                                .background(MaterialTheme.colorScheme.surface),
-                        )
+                    // 固定入口独占底部空间，列表最后一条评论不会被输入入口覆盖。
+                    // 子评论沿用线程自己的回复入口，避免把回复误发为顶层评论。
+                    if (threadContent == null) {
+                        AppHorizontalDivider()
+                        AppTextButton(
+                            onClick = onRootCommentClick,
+                            modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                        ) {
+                            com.android.purebilibili.feature.video.ui.components.CommentEntryBarContent(
+                                textColor = AppContentColors.secondaryText(),
+                                iconSize = 20.dp,
+                                iconSpacing = 8.dp,
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
                 }
             }

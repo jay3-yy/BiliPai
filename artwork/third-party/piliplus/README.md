@@ -37,3 +37,12 @@ License: GNU GPL v3; the source repository's license is included in `LICENSE`.
 `lib/pages/dynamics/widgets/author_panel.dart` 的装扮编号及 `lib/models/dynamics/result.dart` 的 fan 字段。
 字体用于评论和动态装扮编号、空间头衔数字；图标和图片分别用于对应入口，不替换原生材质。
 来源仓库及 GPL-3.0 许可证同上；这些资源沿用来源仓库的归档说明。
+
+## 图片加载占位
+
+`assets/images/loading.png` 原样复制为
+`app/src/main/res/drawable-nodpi/bili_image_placeholder.png`，用于全局图片加载、
+失败与空地址占位。来源版本为 `d635f20e22becbc6587c05c7a03671a4a9a3db9f`，
+对应上游 `lib/common/widgets/image/network_img_layer.dart` 的静态 TV 占位资源。
+保留透明背景与原始灰色像素，Android 绘制适配由本项目实现。
+来源仓库及本目录保留的 GPL-3.0 许可证同上。

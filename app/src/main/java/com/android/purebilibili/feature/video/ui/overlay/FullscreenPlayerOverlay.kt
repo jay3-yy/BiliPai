@@ -947,6 +947,8 @@ private fun FullscreenPlayerOverlayContent(
                                     containerWidthPx = screenWidth,
                                     gestureSensitivity = playerInteractionSettings.gestureSensitivity,
                                     durationMs = duration,
+                                    fixedSeekEnabled = playerInteractionSettings.fullscreenSwipeSeekEnabled,
+                                    fixedSeekSeconds = playerInteractionSettings.swipeSeekSeconds,
                                 )
                                 if (seekDelta != null) {
                                     seekPreviewPosition = (gestureSeekStartPosition + seekDelta).coerceIn(0L, duration)
