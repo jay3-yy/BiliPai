@@ -19,6 +19,7 @@ import com.android.purebilibili.core.util.homeCoverDecodePolicy
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled
 import com.android.purebilibili.feature.home.components.cards.warmHomeCardCoverTint
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -170,6 +171,9 @@ internal fun HomeFeedCoverPreload(
                     context = context,
                     loader = loader,
                     warmTint = warmTint,
+                    // 预热必须发射到**效果级**作用域，而不是消费者自己的作用域：后者会在
+                    // collect 的块体里等所有子协程结束，等于又变回同步等待。
+                    warmScope = this@coroutineScope,
                 )
             }
         }
@@ -244,6 +248,7 @@ private suspend fun consumeHomeCoverPreloadWindows(
     context: Context,
     loader: ImageLoader,
     warmTint: Boolean,
+    warmScope: CoroutineScope,
 ) {
     windowFlow.collect { window ->
         if (window.isEmpty) return@collect
@@ -257,6 +262,7 @@ private suspend fun consumeHomeCoverPreloadWindows(
             context = context,
             loader = loader,
             warmTint = warmTint,
+            warmScope = warmScope,
         )
         runHomeCoverPreloadPass(
             range = window.far,
@@ -268,6 +274,7 @@ private suspend fun consumeHomeCoverPreloadWindows(
             context = context,
             loader = loader,
             warmTint = warmTint,
+            warmScope = warmScope,
         )
     }
 }
@@ -281,6 +288,9 @@ private suspend fun consumeHomeCoverPreloadWindows(
  * @param warmTint 是否为近场封面顺手预热代表色（见 [warmHomeCardCoverTint]）。
  *   远场一律不预热：机会性预取提前算色，很可能在卡片进入可见区之前就被返回预热或卡片自己
  *   重算一遍，纯属白烧 CPU 与取色许可。
+ * @param warmScope 预热协程的宿主作用域（效果级）。预热**不得**在 pass 里被 await：
+ *   每张近场封面多付 90ms 静默 + 10~40ms 聚类，会让一个 4 张的近场 pass 拖长半秒，
+ *   把预取吞吐（"滑到有没有图"）回退掉。而预热只影响"颜色早到晚到"，可以晚。
  */
 private suspend fun runHomeCoverPreloadPass(
     range: IntRange?,
@@ -292,6 +302,7 @@ private suspend fun runHomeCoverPreloadPass(
     context: Context,
     loader: ImageLoader,
     warmTint: Boolean,
+    warmScope: CoroutineScope,
 ) {
     if (range == null) return
     for (index in range) {
@@ -315,10 +326,13 @@ private suspend fun runHomeCoverPreloadPass(
             // 若在这里无条件记账，弱网下失败的那张就被永久标记成"已预取"，回到它时仍是空白。
             if (result is SuccessResult) {
                 ledger.recordPrefetched(source.cacheKey)
-                // 封面刚进磁盘缓存，此刻取色命中的就是本地条目（零二次网络），
-                // 用户滑到这张卡时颜色已经在缓存里 —— 不再需要"卡片可见后才开始算"。
+                // 封面刚进磁盘缓存，此刻取色命中的就是本地条目（零二次网络）。
+                // 发射即走：预热只影响"颜色早到晚到"，而 pass 的推进直接决定"滑到有没有图"，
+                // 前者绝不允许拖慢后者。生命周期挂在效果作用域上，离开组合时随效果一起取消。
                 if (warmTint && lane == BackgroundLane.NEAR) {
-                    warmHomeCardCoverTint(context, source.cacheKey, source.url)
+                    warmScope.launch {
+                        warmHomeCardCoverTint(context, source.cacheKey, source.url)
+                    }
                 }
             }
         } finally {
