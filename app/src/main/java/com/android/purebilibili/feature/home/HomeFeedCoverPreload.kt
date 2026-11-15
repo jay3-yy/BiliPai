@@ -17,6 +17,8 @@ import com.android.purebilibili.core.util.BackgroundLane
 import com.android.purebilibili.core.util.backgroundImagePreload
 import com.android.purebilibili.core.util.homeCoverDecodePolicy
 import com.android.purebilibili.data.model.response.VideoItem
+import com.android.purebilibili.feature.home.components.cards.LocalHomeCardDynamicTintEnabled
+import com.android.purebilibili.feature.home.components.cards.warmHomeCardCoverTint
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -117,6 +119,9 @@ internal fun HomeFeedCoverPreload(
     val loader = imageLoader ?: context.imageLoader
     // ledger 放在效果之外：省流开关、旋转、数据刷新都会重建效果，但"已经预取过"是跨效果的既成事实。
     val ledger = remember { HomeCoverPrefetchLedger() }
+    // 跟随取色开关：关闭时预取不应顺手去算颜色（白烧 CPU）；它是 staticCompositionLocalOf，
+    // 因此必须进 LaunchedEffect 的 key —— 开关切换后由新效果接管，旧的 pass 立刻停下。
+    val warmTint = LocalHomeCardDynamicTintEnabled.current
 
     LaunchedEffect(
         context,
@@ -129,6 +134,7 @@ internal fun HomeFeedCoverPreload(
         isLowRamDevice,
         isMeteredNetwork,
         aheadCount,
+        warmTint,
     ) {
         // 兜底判断：调用方的 allowed 已含省流条件，这里再判一次，避免上游漏传时省流形同虚设。
         if (!allowed || isDataSaverActive || aheadCount <= 0) return@LaunchedEffect
@@ -163,6 +169,7 @@ internal fun HomeFeedCoverPreload(
                     inFlight = inFlight,
                     context = context,
                     loader = loader,
+                    warmTint = warmTint,
                 )
             }
         }
@@ -236,6 +243,7 @@ private suspend fun consumeHomeCoverPreloadWindows(
     inFlight: MutableSet<String>,
     context: Context,
     loader: ImageLoader,
+    warmTint: Boolean,
 ) {
     windowFlow.collect { window ->
         if (window.isEmpty) return@collect
@@ -248,6 +256,7 @@ private suspend fun consumeHomeCoverPreloadWindows(
             inFlight = inFlight,
             context = context,
             loader = loader,
+            warmTint = warmTint,
         )
         runHomeCoverPreloadPass(
             range = window.far,
@@ -258,6 +267,7 @@ private suspend fun consumeHomeCoverPreloadWindows(
             inFlight = inFlight,
             context = context,
             loader = loader,
+            warmTint = warmTint,
         )
     }
 }
@@ -267,6 +277,10 @@ private suspend fun consumeHomeCoverPreloadWindows(
  *
  * 串行是刻意的：NEAR 车道只有 1 路许可，并发提交只会让它们排队；串行反而能保证
  * "离可见区最近的那张先完成"。每张的 cacheKey 先查 ledger 再进 inFlight，重复项直接跳过。
+ *
+ * @param warmTint 是否为近场封面顺手预热代表色（见 [warmHomeCardCoverTint]）。
+ *   远场一律不预热：机会性预取提前算色，很可能在卡片进入可见区之前就被返回预热或卡片自己
+ *   重算一遍，纯属白烧 CPU 与取色许可。
  */
 private suspend fun runHomeCoverPreloadPass(
     range: IntRange?,
@@ -277,6 +291,7 @@ private suspend fun runHomeCoverPreloadPass(
     inFlight: MutableSet<String>,
     context: Context,
     loader: ImageLoader,
+    warmTint: Boolean,
 ) {
     if (range == null) return
     for (index in range) {
@@ -298,7 +313,14 @@ private suspend fun runHomeCoverPreloadPass(
             }
             // 只有真正成功才记账。`loader.execute` 失败时返回 ErrorResult 而**不抛异常**，
             // 若在这里无条件记账，弱网下失败的那张就被永久标记成"已预取"，回到它时仍是空白。
-            if (result is SuccessResult) ledger.recordPrefetched(source.cacheKey)
+            if (result is SuccessResult) {
+                ledger.recordPrefetched(source.cacheKey)
+                // 封面刚进磁盘缓存，此刻取色命中的就是本地条目（零二次网络），
+                // 用户滑到这张卡时颜色已经在缓存里 —— 不再需要"卡片可见后才开始算"。
+                if (warmTint && lane == BackgroundLane.NEAR) {
+                    warmHomeCardCoverTint(context, source.cacheKey, source.url)
+                }
+            }
         } finally {
             inFlight.remove(source.cacheKey)
         }
