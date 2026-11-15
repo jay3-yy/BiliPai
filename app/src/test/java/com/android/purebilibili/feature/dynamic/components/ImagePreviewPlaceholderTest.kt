@@ -2,7 +2,6 @@ package com.android.purebilibili.feature.dynamic.components
 
 import android.content.Context
 import android.graphics.Bitmap
-import androidx.test.core.app.ApplicationProvider
 import coil3.ImageLoader
 import coil3.asImage
 import coil3.memory.MemoryCache
@@ -14,6 +13,7 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
 class ImagePreviewPlaceholderTest {
     @Test
     fun previewReadsTheSourceQualityCacheAndRetainsItsDimensions() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val context: Context = RuntimeEnvironment.getApplication()
         val source = "https://i0.hdslb.com/bfs/archive/preview.jpg"
         val cache = MemoryCache.Builder().maxSizeBytes(1024 * 1024L).build()
         val loader = ImageLoader.Builder(context).memoryCache(cache).build()
