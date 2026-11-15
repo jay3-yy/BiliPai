@@ -12,7 +12,6 @@ import coil3.ImageLoader
 import coil3.imageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
-import com.android.purebilibili.core.util.AppImageLoadPriority
 import com.android.purebilibili.core.util.BackgroundLane
 import com.android.purebilibili.core.util.backgroundImagePreload
 import com.android.purebilibili.core.util.homeCoverDecodePolicy
@@ -22,7 +21,6 @@ import com.android.purebilibili.feature.home.components.cards.warmHomeCardCoverT
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -77,10 +75,10 @@ private data class HomeCoverPreloadSample(
  * 1. **效果身份稳定**。[LaunchedEffect] 的 key 里只有"换掉就该整体重来"的东西
  *    （loader、列表、尺寸、策略开关）；`visibleVideoRange` / `isScrolling` 这些**每帧都变**的
  *    状态只允许出现在 `snapshotFlow` 内部，否则滚动会不断取消并重建整个效果，预取永远走不出第一项。
- * 2. **生产 / 消费分离**。生产者把窗口写成 [MutableStateFlow]，消费者用 `collect`（**不是**
- *    `collectLatest`）消费；窗口更新只会让"下一轮 pass"用新窗口，绝不打断已经在飞的请求。
+ * 2. **生产 / 消费分离**。生产者把窗口写成 [MutableStateFlow]，两条车道独立消费最新窗口；
+ *    窗口更新不打断已经在飞的请求，尚未开始的旧窗口请求在放行前丢弃。
  * 3. **近场优先、远场机会性**。近场走 [BackgroundLane.NEAR]（滚动中也能推进），
- *    远场走 [BackgroundLane.FAR]（等 220ms 前台静默）。窗口再变，当前 pass 也跑完。
+ *    远场走 [BackgroundLane.FAR]（等 220ms 前台静默），远场等待不阻塞近场。
  * 4. **去重**。[HomeCoverPrefetchLedger] 记住已完成的 cacheKey，`inFlight` 挡住同一轮里的重复项，
  *    因此"窗口抖动"不会变成"重复请求"。
  *
@@ -164,17 +162,25 @@ internal fun HomeFeedCoverPreload(
             launch {
                 consumeHomeCoverPreloadWindows(
                     windowFlow = windowFlow,
-                    videos = videos,
-                    requestSpec = requestSpec,
-                    ledger = ledger,
-                    inFlight = inFlight,
-                    context = context,
-                    loader = loader,
-                    warmTint = warmTint,
-                    // 预热必须发射到**效果级**作用域，而不是消费者自己的作用域：后者会在
-                    // collect 的块体里等所有子协程结束，等于又变回同步等待。
-                    warmScope = this@coroutineScope,
-                )
+                    needsPreload = { index ->
+                        val source = resolveHomeCoverImageSource(videos[index], false, requestSpec)
+                        source.url.isNotBlank() && !ledger.isPrefetched(source.cacheKey)
+                    },
+                ) { lane, index, isCurrent ->
+                    preloadHomeCover(
+                        index = index,
+                        lane = lane,
+                        isCurrent = isCurrent,
+                        videos = videos,
+                        requestSpec = requestSpec,
+                        ledger = ledger,
+                        inFlight = inFlight,
+                        context = context,
+                        loader = loader,
+                        warmTint = warmTint,
+                        warmScope = this@coroutineScope,
+                    )
+                }
             }
         }
     }
@@ -232,69 +238,11 @@ private suspend fun produceHomeCoverPreloadWindows(
         }
 }
 
-/**
- * 消费者：拿到窗口后**先near 再 far**，两趟都串行跑完。
- *
- * 用 `collect` 而非 `collectLatest`：窗口更新意味着"接下来该铺哪几张"变了，不意味着
- * "已经发出去的请求该丢弃"。取消在途请求的代价是已下载字节全部作废，而且新一轮 pass 会从
- * 队首重排，慢速滑动时表现为预取永远只完成第一项。
- */
-private suspend fun consumeHomeCoverPreloadWindows(
-    windowFlow: Flow<HomeCoverPreloadWindow>,
-    videos: List<VideoItem>,
-    requestSpec: HomeCoverRequestSpec,
-    ledger: HomeCoverPrefetchLedger,
-    inFlight: MutableSet<String>,
-    context: Context,
-    loader: ImageLoader,
-    warmTint: Boolean,
-    warmScope: CoroutineScope,
-) {
-    windowFlow.collect { window ->
-        if (window.isEmpty) return@collect
-        runHomeCoverPreloadPass(
-            range = window.near,
-            lane = BackgroundLane.NEAR,
-            videos = videos,
-            requestSpec = requestSpec,
-            ledger = ledger,
-            inFlight = inFlight,
-            context = context,
-            loader = loader,
-            warmTint = warmTint,
-            warmScope = warmScope,
-        )
-        runHomeCoverPreloadPass(
-            range = window.far,
-            lane = BackgroundLane.FAR,
-            videos = videos,
-            requestSpec = requestSpec,
-            ledger = ledger,
-            inFlight = inFlight,
-            context = context,
-            loader = loader,
-            warmTint = warmTint,
-            warmScope = warmScope,
-        )
-    }
-}
-
-/**
- * 在 [lane] 上串行跑一趟预取。
- *
- * 串行是刻意的：NEAR 车道只有 1 路许可，并发提交只会让它们排队；串行反而能保证
- * "离可见区最近的那张先完成"。每张的 cacheKey 先查 ledger 再进 inFlight，重复项直接跳过。
- *
- * @param warmTint 是否为近场封面顺手预热代表色（见 [warmHomeCardCoverTint]）。
- *   远场一律不预热：机会性预取提前算色，很可能在卡片进入可见区之前就被返回预热或卡片自己
- *   重算一遍，纯属白烧 CPU 与取色许可。
- * @param warmScope 预热协程的宿主作用域（效果级）。预热**不得**在 pass 里被 await：
- *   每张近场封面多付 90ms 静默 + 10~40ms 聚类，会让一个 4 张的近场 pass 拖长半秒，
- *   把预取吞吐（"滑到有没有图"）回退掉。而预热只影响"颜色早到晚到"，可以晚。
- */
-private suspend fun runHomeCoverPreloadPass(
-    range: IntRange?,
+/** 调度器已复核窗口与许可；同键去重在开始加载时占位，避免远场等待阻塞近场。 */
+private suspend fun preloadHomeCover(
+    index: Int,
     lane: BackgroundLane,
+    isCurrent: () -> Boolean,
     videos: List<VideoItem>,
     requestSpec: HomeCoverRequestSpec,
     ledger: HomeCoverPrefetchLedger,
@@ -304,40 +252,29 @@ private suspend fun runHomeCoverPreloadPass(
     warmTint: Boolean,
     warmScope: CoroutineScope,
 ) {
-    if (range == null) return
-    for (index in range) {
-        val video = videos.getOrNull(index) ?: continue
-        val source = resolveHomeCoverImageSource(video, false, requestSpec)
-        if (source.url.isBlank()) continue
-        if (ledger.isPrefetched(source.cacheKey)) continue
-        // add 返回 false 说明同一 key 已经在别的 pass 里跑着，直接跳过。
-        if (!inFlight.add(source.cacheKey)) continue
-        try {
-            val result = AppImageLoadPriority.background(lane) {
-                loader.execute(
-                    buildHomeCoverPreloadRequest(
-                        context = context,
-                        source = source,
-                        requestSpec = requestSpec,
-                    ),
-                )
-            }
-            // 只有真正成功才记账。`loader.execute` 失败时返回 ErrorResult 而**不抛异常**，
-            // 若在这里无条件记账，弱网下失败的那张就被永久标记成"已预取"，回到它时仍是空白。
-            if (result is SuccessResult) {
-                ledger.recordPrefetched(source.cacheKey)
-                // 封面刚进磁盘缓存，此刻取色命中的就是本地条目（零二次网络）。
-                // 发射即走：预热只影响"颜色早到晚到"，而 pass 的推进直接决定"滑到有没有图"，
-                // 前者绝不允许拖慢后者。生命周期挂在效果作用域上，离开组合时随效果一起取消。
-                if (warmTint && lane == BackgroundLane.NEAR) {
-                    warmScope.launch {
-                        warmHomeCardCoverTint(context, source.cacheKey, source.url)
-                    }
+    val video = videos[index]
+    val source = resolveHomeCoverImageSource(video, false, requestSpec)
+    if (source.url.isBlank() || ledger.isPrefetched(source.cacheKey)) return
+    if (!inFlight.add(source.cacheKey)) return
+    try {
+        val result = loader.execute(
+            buildHomeCoverPreloadRequest(
+                context = context,
+                source = source,
+                requestSpec = requestSpec,
+            ),
+        )
+        if (result is SuccessResult) {
+            ledger.recordPrefetched(source.cacheKey)
+            // 取色挂在页面效果作用域，不阻塞下一张封面；过期窗口不再追加预热。
+            if (warmTint && lane == BackgroundLane.NEAR && isCurrent()) {
+                warmScope.launch {
+                    warmHomeCardCoverTint(context, source.cacheKey, source.url)
                 }
             }
-        } finally {
-            inFlight.remove(source.cacheKey)
         }
+    } finally {
+        inFlight.remove(source.cacheKey)
     }
 }
 

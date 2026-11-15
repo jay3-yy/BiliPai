@@ -1,11 +1,11 @@
 package com.android.purebilibili.core.util
 
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal val AppImageLoadPriority = ImageLoadPriority()
 
@@ -45,7 +45,9 @@ internal enum class BackgroundLane(val settleMillis: Long, val permits: Int) {
  * 又保证后台一旦有进展就能线性推进直至完成。
  */
 internal class ImageLoadPriority {
-    private val foregroundRequests = MutableStateFlow(0)
+    private data class ForegroundActivity(val active: Int = 0, val generation: Long = 0)
+
+    private val foregroundRequests = MutableStateFlow(ForegroundActivity())
 
     /** 车道 -> 许可。枚举常量数量固定，构造期一次性建表即可，无需并发容器。 */
     private val lanePermits: Map<BackgroundLane, Semaphore> =
@@ -58,11 +60,11 @@ internal class ImageLoadPriority {
      * [foregroundRequests] 永久卡在非零值上，否则后台车道将永远等不到静默。
      */
     suspend fun <T> foreground(load: suspend () -> T): T {
-        foregroundRequests.update { it + 1 }
+        foregroundRequests.update { it.copy(active = it.active + 1, generation = it.generation + 1) }
         return try {
             load()
         } finally {
-            foregroundRequests.update { it - 1 }
+            foregroundRequests.update { it.copy(active = it.active - 1) }
         }
     }
 
@@ -121,12 +123,14 @@ internal class ImageLoadPriority {
      * 静默期内又有前台请求到达，则回到"等待空闲"重新计时，直到完整撑过一个静默窗口。
      */
     private suspend fun awaitForegroundQuiet(settleMillis: Long) {
-        foregroundRequests.first { it == 0 }
-        if (settleMillis <= 0L) return
         while (true) {
-            delay(settleMillis)
-            if (foregroundRequests.value == 0) return
-            foregroundRequests.first { it == 0 }
+            val idle = foregroundRequests.first { it.active == 0 }
+            if (settleMillis <= 0L) return
+            // 即使短请求在等待期间已经结束，也必须重新等待完整静默窗口。
+            val interrupted = withTimeoutOrNull(settleMillis) {
+                foregroundRequests.first { it != idle }
+            }
+            if (interrupted == null) return
         }
     }
 }

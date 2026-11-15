@@ -17,86 +17,105 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class ImageLoadPriorityTest {
     @Test
-    fun visibleRequestsInterruptPrefetchAndItResumesAfterTheyFinish() = runTest {
+    fun foregroundArrivalDoesNotCancelStartedBackgroundLoad() = runTest {
         val priority = ImageLoadPriority()
+        val finish = CompletableDeferred<String>()
         var attempts = 0
-        var cancellations = 0
-        val finishPreload = CompletableDeferred<Unit>()
         val preload = async {
-            priority.prefetch {
+            priority.background(BackgroundLane.NEAR) {
                 attempts++
-                try {
-                    finishPreload.await()
-                    "cover"
-                } finally {
-                    if (!finishPreload.isCompleted) cancellations++
-                }
+                finish.await()
             }
         }
-        advanceTimeBy(360)
         runCurrent()
-        assertEquals(1, attempts)
         val visible = launch { priority.foreground { awaitCancellation() } }
         runCurrent()
-        assertEquals(1, cancellations)
-        advanceTimeBy(1000)
+        assertTrue(preload.isActive)
+        finish.complete("cover")
+        assertEquals("cover", preload.await())
         assertEquals(1, attempts)
         visible.cancelAndJoin()
-        advanceTimeBy(359)
-        runCurrent()
-        assertEquals(1, attempts)
-        advanceTimeBy(1)
-        runCurrent()
-        assertEquals(2, attempts)
-        finishPreload.complete(Unit)
-        assertEquals("cover", preload.await())
     }
 
     @Test
-    fun multipleVisibleRequestsMustAllFinishAndErrorsReleaseTheirBudget() = runTest {
+    fun shortForegroundBurstRestartsContinuousQuietWindow() = runTest {
+        val priority = ImageLoadPriority()
+        var started = false
+        val preload = launch { priority.background(BackgroundLane.FAR) { started = true } }
+        runCurrent()
+        advanceTimeBy(100)
+        // 开始和结束之间不让出线程，验证 StateFlow 合并通知后仍能识别短请求。
+        priority.foreground { Unit }
+        runCurrent()
+        advanceTimeBy(219)
+        runCurrent()
+        assertFalse(started)
+        advanceTimeBy(1)
+        runCurrent()
+        assertTrue(started)
+        preload.join()
+    }
+
+    @Test
+    fun localWorkAlsoRequiresContinuousQuiet() = runTest {
+        val priority = ImageLoadPriority()
+        var started = false
+        val work = launch { priority.backgroundLocalWork(90) { started = true } }
+        runCurrent()
+        advanceTimeBy(50)
+        priority.foreground { Unit }
+        runCurrent()
+        advanceTimeBy(89)
+        runCurrent()
+        assertFalse(started)
+        advanceTimeBy(1)
+        runCurrent()
+        assertTrue(started)
+        work.join()
+    }
+
+    @Test
+    fun allForegroundRequestsMustFinishAndFailuresReleaseCount() = runTest {
         val priority = ImageLoadPriority()
         val first = launch { priority.foreground { awaitCancellation() } }
         val second = launch { priority.foreground { awaitCancellation() } }
         runCurrent()
         var started = false
-        val preload = async { priority.prefetch { started = true } }
+        val preload = launch { priority.background(BackgroundLane.NEAR) { started = true } }
         first.cancelAndJoin()
-        advanceTimeBy(1000)
         runCurrent()
         assertFalse(started)
         second.cancelAndJoin()
+        preload.join()
+        assertTrue(started)
         try {
             priority.foreground<Unit> { error("Image decode failed") }
         } catch (_: IllegalStateException) {
-            // The failure must release the foreground count as cancellation does.
+            // 失败与取消都必须释放计数。
         }
-        advanceTimeBy(360)
-        runCurrent()
-        preload.await()
-        assertTrue(started)
+        assertEquals("cover", priority.background(BackgroundLane.NEAR) { "cover" })
     }
 
     @Test
-    fun preloadsAreSerialAndLeavingPageCancelsQueuedAndRunningWork() = runTest {
+    fun nearLaneIsSerialAndPageCancellationReleasesRunningAndQueuedWork() = runTest {
         val priority = ImageLoadPriority()
         var active = 0
         var queuedStarted = false
-        val running = launch {
-            priority.prefetch {
-                active++
-                try { awaitCancellation() } finally { active-- }
+        val page = launch {
+            launch {
+                priority.background(BackgroundLane.NEAR) {
+                    active++
+                    try { awaitCancellation() } finally { active-- }
+                }
             }
+            launch { priority.background(BackgroundLane.NEAR) { queuedStarted = true } }
         }
-        val queued = launch { priority.prefetch { queuedStarted = true } }
-        advanceTimeBy(360)
         runCurrent()
         assertEquals(1, active)
         assertFalse(queuedStarted)
-        queued.cancelAndJoin()
-        running.cancelAndJoin()
-        advanceTimeBy(1000)
+        page.cancelAndJoin()
         assertEquals(0, active)
         assertFalse(queuedStarted)
-        assertEquals("new page", priority.prefetch { "new page" })
+        assertEquals("new page", priority.background(BackgroundLane.NEAR) { "new page" })
     }
 }
