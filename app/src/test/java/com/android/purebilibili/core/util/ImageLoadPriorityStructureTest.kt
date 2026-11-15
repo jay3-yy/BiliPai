@@ -72,7 +72,7 @@ class ImageLoadPriorityStructureTest {
      * 必须去注释：类 KDoc 里**故意**写着旧实现用了 `transformLatest`，并在解释它为何有害。
      * 若直接对原文断言"不含 transformLatest"，就会把这段有价值的说明判成违规，逼着后人
      * 为了过测试去删注释——那正好丢掉了唯一能阻止回归的文档。
-     * 已知局限：正则不区分字符串字面量，本文件不含带 `//` 或 `/*` 的字符串，够用。
+     * 已知局限：正则不区分字符串字面量；被检查的文件没有把注释记号写进字符串，够用。
      */
     private fun code(): String = source()
         .replace(Regex("""/\*[\s\S]*?\*/"""), "")

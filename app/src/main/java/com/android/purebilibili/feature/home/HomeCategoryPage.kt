@@ -686,12 +686,19 @@ internal fun HomeCategoryPageContent(
     val cardScrolling = remember(gridState, pageScrollInProgress) {
         derivedStateOf { gridState.isScrollInProgress || pageScrollInProgress?.value == true }
     }
+    // 低端机 / 计费网络只在组合期解析一次（并在网络切换时刷新），不要放进滚动路径。
+    val coverPreloadDeviceProfile = rememberHomeCoverPreloadDeviceProfile()
     HomeFeedCoverPreload(
         videos = visibleGridVideos,
         visibleVideoRange = visibleVideoRange,
         isScrolling = cardScrolling,
+        gridState = gridState,
+        columns = gridColumns,
         requestSpec = coverRequestSpec,
         allowed = coverPreloadAllowed && pageImageWorkAllowed && visualWorkActive && !isDataSaverActive,
+        isDataSaverActive = isDataSaverActive,
+        isLowRamDevice = coverPreloadDeviceProfile.isLowRamDevice,
+        isMeteredNetwork = coverPreloadDeviceProfile.isMeteredNetwork,
         aheadCount = coverPreloadAheadCount,
     )
     val sharedTransitionScope = LocalSharedTransitionScope.current
