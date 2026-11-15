@@ -1451,6 +1451,8 @@ object CommentRepository {
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "操作失败" }))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1487,6 +1489,8 @@ object CommentRepository {
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "操作失败" }))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

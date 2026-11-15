@@ -7,8 +7,8 @@ data class SpaceOpusCollection(val id: Long, val title: String, val cover: Strin
 data class SpaceOpusPage(val items: List<SpaceArticleItem>, val next: String, val collections: List<SpaceOpusCollection>)
 
 object SpaceOpusApi {
-    fun load(mid: Long, next: String, filter: String): SpaceOpusPage = parseSpaceOpusReply(
-        BiliGrpcClient.request("/bilibili.app.dynamic.v2.Opus/OpusSpaceFlow", buildSpaceOpusRequest(mid, next, filter)),
+    suspend fun load(mid: Long, next: String, filter: String): SpaceOpusPage = parseSpaceOpusReply(
+        BiliGrpcClient.requestCancellable("/bilibili.app.dynamic.v2.Opus/OpusSpaceFlow", buildSpaceOpusRequest(mid, next, filter)),
     )
 }
 

@@ -4,9 +4,16 @@ import com.android.purebilibili.core.network.CoreDataLog
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.store.TokenManager
 import okhttp3.CookieJar
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import kotlinx.coroutines.suspendCancellableCoroutine
+import java.io.IOException
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import java.util.Base64
 import java.util.UUID
 
@@ -43,34 +50,16 @@ object BiliGrpcClient {
             .build()
     }
 
-    fun request(
+    /** 请求随调用方协程取消，取消关联覆盖响应体读取阶段。 */
+    suspend fun requestCancellable(
         path: String,
         message: ByteArray,
         profile: BiliGrpcProfile = BiliGrpcProfile.ANDROID_HD,
         baseUrl: String = "https://app.bilibili.com",
     ): ByteArray {
         val request = buildRequest(path, ProtoWire.frame(message).toRequestBody(grpcMediaType), profile, baseUrl)
-
         val client = if (profile.includeAccount) NetworkModule.okHttpClient else dynamicPreviewClient
-        client.newCall(request).execute().use { response ->
-            val body = response.body.bytes()
-            val trailers = runCatching { response.trailers() }.getOrNull()
-            val grpcStatus = response.header("grpc-status")
-                ?: trailers?.get("grpc-status")
-            val grpcMessage = response.header("grpc-message")
-                ?: trailers?.get("grpc-message")
-
-            // HTTP 200 with standard gRPC status (0 or absent on HTTP success) is considered valid
-            val isStatusOk = grpcStatus == null || grpcStatus == "0"
-            if (!response.isSuccessful || !isStatusOk) {
-                CoreDataLog.w(
-                    "BiliGrpc",
-                    "gRPC request failed: path=$path http=${response.code} grpc=$grpcStatus message=${grpcMessage.orEmpty()}"
-                )
-                throw BiliGrpcException(response.code, grpcStatus, grpcMessage)
-            }
-            return ProtoWire.unframe(body)
-        }
+        return client.newCall(request).awaitGrpcPayload(path)
     }
 
     internal fun buildRequest(
@@ -198,4 +187,41 @@ object BiliGrpcClient {
     internal fun encodeBase64(bytes: ByteArray): String {
         return Base64.getEncoder().encodeToString(bytes)
     }
+}
+
+internal suspend fun Call.awaitGrpcPayload(path: String): ByteArray = suspendCancellableCoroutine { continuation ->
+    continuation.invokeOnCancellation { cancel() }
+    enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            continuation.resumeWithException(e)
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            val payload = try {
+                response.use {
+                    if (!continuation.isActive) return
+                    decodeGrpcResponse(it, path)
+                }
+            } catch (error: Exception) {
+                continuation.resumeWithException(error)
+                return
+            }
+            continuation.resume(payload)
+        }
+    })
+}
+
+private fun decodeGrpcResponse(response: Response, path: String): ByteArray {
+    val body = response.body.bytes()
+    val trailers = runCatching { response.trailers() }.getOrNull()
+    val grpcStatus = response.header("grpc-status") ?: trailers?.get("grpc-status")
+    val grpcMessage = response.header("grpc-message") ?: trailers?.get("grpc-message")
+    if (!response.isSuccessful || grpcStatus != null && grpcStatus != "0") {
+        CoreDataLog.w(
+            "BiliGrpc",
+            "gRPC request failed: path=$path http=${response.code} grpc=$grpcStatus message=${grpcMessage.orEmpty()}"
+        )
+        throw BiliGrpcException(response.code, grpcStatus, grpcMessage)
+    }
+    return ProtoWire.unframe(body)
 }

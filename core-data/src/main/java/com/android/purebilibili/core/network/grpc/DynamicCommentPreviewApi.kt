@@ -21,7 +21,7 @@ object DynamicCommentPreviewApi {
 
     suspend fun loadSpace(hostMid: Long, beforeDynamicId: String = ""): Map<String, AppDynamicCommentPreview> =
         withContext(Dispatchers.IO) {
-            parseDynamicCommentPreviewReply(BiliGrpcClient.request(
+            parseDynamicCommentPreviewReply(BiliGrpcClient.requestCancellable(
                 PATH,
                 buildDynamicCommentPreviewRequest(hostMid, beforeDynamicId),
                 profile = BiliGrpcProfile.DYNAMIC_PREVIEW_GUEST,

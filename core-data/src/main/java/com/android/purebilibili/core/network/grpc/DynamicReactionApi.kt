@@ -32,7 +32,7 @@ object DynamicReactionApi {
             ProtoWire.int64(3, item.basic?.rid_str?.toLongOrNull() ?: 0L),
             ProtoWire.string(4, offset),
         )
-        val fields = ProtoWire.parseFields(BiliGrpcClient.request("/bilibili.app.dynamic.v2.Dynamic/ReactionList", request))
+        val fields = ProtoWire.parseFields(BiliGrpcClient.requestCancellable("/bilibili.app.dynamic.v2.Dynamic/ReactionList", request))
         fun text(number: Int) = fields.firstOrNull { it.number == number }?.let(ProtoWire::stringValue).orEmpty()
         val users = fields.filter { it.number == 2 }.mapNotNull { field ->
             val reaction = ProtoWire.parseFields(field.bytes)

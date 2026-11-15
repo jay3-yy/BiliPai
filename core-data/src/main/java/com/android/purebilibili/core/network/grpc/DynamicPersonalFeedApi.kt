@@ -35,7 +35,7 @@ object DynamicPersonalFeedApi {
     suspend fun load(hostUid: Long, offset: String = "", page: Int = 1): DynamicPersonalFeedPage =
         withContext(Dispatchers.IO) {
             check(!TokenManager.accessTokenCache.isNullOrBlank()) { "动态预加载需要 App 登录授权，网页 Cookie 不能替代" }
-            parseDynamicPersonalFeedReply(BiliGrpcClient.request(PATH, buildDynamicPersonalFeedRequest(hostUid, offset, page)))
+            parseDynamicPersonalFeedReply(BiliGrpcClient.requestCancellable(PATH, buildDynamicPersonalFeedRequest(hostUid, offset, page)))
         }
 }
 

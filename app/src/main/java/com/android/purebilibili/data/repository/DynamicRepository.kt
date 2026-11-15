@@ -489,6 +489,7 @@ object DynamicRepository {
             }
             Result.success(data.update_num.coerceAtLeast(0))
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             e.printStackTrace()
             Result.failure(e)
         }

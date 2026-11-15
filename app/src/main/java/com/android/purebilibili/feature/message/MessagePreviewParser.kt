@@ -1,5 +1,8 @@
 package com.android.purebilibili.feature.message
 
+import com.android.purebilibili.core.util.BilibiliNavigationTarget
+import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
+import com.android.purebilibili.core.util.IdUtils
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -10,7 +13,8 @@ data class MessageVideoCardPreview(
     val title: String,
     val bvid: String,
     val cover: String,
-    val duration: Long
+    val duration: Long,
+    val targetUrl: String = "",
 )
 
 enum class MessageCardKind(val label: String) {
@@ -64,7 +68,8 @@ object MessagePreviewParser {
                     title = it.title,
                     cover = it.cover,
                     bvid = it.bvid,
-                    duration = it.duration
+                    duration = it.duration,
+                    targetUrl = it.targetUrl,
                 )
             }
             12 -> parseArticleCard(json)
@@ -79,7 +84,8 @@ object MessagePreviewParser {
                 title = json.firstString("title", "headline").ifBlank { "分享内容" },
                 subtitle = json.firstString("desc", "author"),
                 cover = json.firstString("cover", "thumb"),
-                targetUrl = json.firstString("url", "jump_url", "jump_uri", "all_uri")
+                targetUrl = json.videoTargetUrl(),
+                bvid = if (resolveShareKind(json.int("source")) == MessageCardKind.Video) json.videoBvid() else "",
             )
             else -> null
         }
@@ -87,7 +93,7 @@ object MessagePreviewParser {
 
     fun parseVideoCard(content: String): MessageVideoCardPreview? {
         val json = parseJsonObject(content) ?: return null
-        val bvid = json.string("bvid")
+        val bvid = json.videoBvid()
         val cover = json.string("cover")
         val title = json.string("title").ifBlank {
             if (json.long("times") == 0L) "内容已失效" else "视频"
@@ -102,7 +108,8 @@ object MessagePreviewParser {
             title = title,
             bvid = bvid,
             cover = cover,
-            duration = duration
+            duration = duration,
+            targetUrl = json.videoTargetUrl(),
         )
     }
 
@@ -120,7 +127,7 @@ object MessagePreviewParser {
             subtitle = json.firstString("desc", "author"),
             cover = json.firstString("thumb", "cover", "pic"),
             targetUrl = json.firstString("url", "jump_url", "jump_uri", "all_uri"),
-            bvid = json.firstString("bvid")
+            bvid = if (kind == MessageCardKind.Video) json.videoBvid() else ""
         )
     }
 
@@ -139,6 +146,22 @@ object MessagePreviewParser {
             cover = cover,
             targetUrl = json.firstString("url", "jump_url", "jump_uri")
         )
+    }
+
+    private fun JsonObject.videoTargetUrl(): String =
+        firstString("url", "jump_url", "jump_uri", "all_uri")
+
+    // 视频消息可只携带数字 id；统一转成 BV，保证点击与转场使用同一内容身份。
+    private fun JsonObject.videoBvid(): String {
+        string("bvid").takeIf { it.isNotBlank() }?.let { return it }
+        val aid = long("aid").takeIf { it > 0L } ?: long("id").takeIf { it > 0L }
+        if (aid != null) return IdUtils.av2bv(aid)
+        val target = BilibiliNavigationTargetParser.parse(videoTargetUrl()) as? BilibiliNavigationTarget.Video
+            ?: return ""
+        return if (target.videoId.startsWith("BV")) target.videoId else {
+            target.videoId.removePrefix("av").removePrefix("AV").toLongOrNull()
+                ?.let(IdUtils::av2bv).orEmpty()
+        }
     }
 
     private fun resolveShareKind(source: Int): MessageCardKind {

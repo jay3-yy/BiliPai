@@ -21,7 +21,7 @@ internal object MessageShareGrpcRepository {
     suspend fun getShareTargets(size: Int = 5): Result<List<MessageShareTarget>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val response = BiliGrpcClient.request(
+                val response = BiliGrpcClient.requestCancellable(
                     path = SHARE_LIST_PATH,
                     message = ProtoWire.int32(1, size.coerceIn(1, 30)),
                 )
@@ -46,7 +46,7 @@ internal object MessageShareGrpcRepository {
             require(content.isNotBlank()) { "分享内容为空" }
             val senderUid = TokenManager.midCache?.takeIf { it > 0L }
                 ?: error("无法获取用户信息，请重新登录")
-            val response = BiliGrpcClient.request(
+            val response = BiliGrpcClient.requestCancellable(
                 path = SEND_MESSAGE_PATH,
                 message = buildDynamicShareSendRequest(
                     senderUid = senderUid,
