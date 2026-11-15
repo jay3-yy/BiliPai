@@ -923,11 +923,19 @@ internal fun ElegantVideoCard(
             com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
             !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current &&
             com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+        // 时长必须在进入效果**之前**基于当前 animation 值求值：放进 LaunchedEffect 里延迟读取
+        // 会读到动画已经推进后的值，把"晚到的首色"误判成"运行中变色"，又退回 350ms。
+        // 首帧就有色（缓存命中）的情况不经过这里的判断：Animatable 初值等于 targetTint，
+        // 下面 `value == targetTint` 会直接 return，天然 0ms。
+        val tintAnimationMillis = resolveCardTintAnimationMillis(
+            isFirstColorForCard = tintAnimation.value.alpha == 0f,
+            motionAllowed = tintMotionAllowed,
+        )
         // 许可变化也取消在途过渡；只更换 animationSpec 不会打断目标未变的旧动画。
         LaunchedEffect(tintAnimation, targetTint, tintMotionAllowed) {
             if (tintAnimation.value == targetTint) return@LaunchedEffect
-            if (tintMotionAllowed) tintAnimation.animateTo(targetTint, tween(durationMillis = 350))
-            else tintAnimation.snapTo(targetTint)
+            if (tintAnimationMillis <= 0) tintAnimation.snapTo(targetTint)
+            else tintAnimation.animateTo(targetTint, tween(durationMillis = tintAnimationMillis))
         }
         if (tintMotionAllowed) tintAnimation.value else targetTint
     } else Color.Transparent
@@ -1535,8 +1543,11 @@ internal fun ElegantVideoCard(
                     .build()
             }
             var loadedCoverCacheKey by remember(requestCoverCacheKey) { mutableStateOf<String?>(null) }
-            val coverWorkAllowed = LocalPageImageLoadingAllowed.current &&
-                LocalHomeCardAuxiliaryWorkAllowed.current
+            // 取色只受"图片工作是否允许"约束，不再叠加 180ms 的空闲门控：那个门控把取色
+            // 推迟到滚动停止之后才**开始**，叠加排队 + 聚类 + 渐入后就是用户感知的"延迟一段
+            // 时间才生效"。取色本身走 backgroundLocalWork，不占网络许可，滚动中跑也不抢带宽。
+            // 后面两个 cacheKey 相等判断是安全阀，去掉会取到上一张卡的颜色——比慢更难查。
+            val coverWorkAllowed = LocalPageImageLoadingAllowed.current
             if (coverTintState != null && coverTint == null && coverWorkAllowed &&
                 coverCacheKey == requestCoverCacheKey && loadedCoverCacheKey == requestCoverCacheKey
             ) {

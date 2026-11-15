@@ -64,18 +64,27 @@ class HomeCoverDecodeCacheTest {
         val image = Bitmap.createBitmap(800, 500, Bitmap.Config.ARGB_8888).asImage()
         requireNotNull(loader.memoryCache)[MemoryCache.Key(source.cacheKey)] = MemoryCache.Value(image)
         try {
-            rule.mainClock.autoAdvance = false
             val visible = mutableStateOf<IntRange?>(0..0)
+            // 近场预取在滚动中也照跑（T03 的核心行为），所以这里保持 scrolling = true。
             val scrolling = mutableStateOf(true)
             val videos = listOf(VideoItem(bvid = "BV_visible"), video)
             rule.setContent {
-                HomeFeedCoverPreload(videos, visible, scrolling, spec, true, 1, loader)
+                HomeFeedCoverPreload(
+                    videos = videos,
+                    visibleVideoRange = visible,
+                    isScrolling = scrolling,
+                    gridState = rememberHomeFeedGridState(regularLayout = true),
+                    columns = 1,
+                    requestSpec = spec,
+                    allowed = true,
+                    isDataSaverActive = false,
+                    isLowRamDevice = false,
+                    isMeteredNetwork = false,
+                    aheadCount = 1,
+                    imageLoader = loader,
+                )
             }
-            rule.mainClock.advanceTimeBy(400)
-            assertEquals(0, results.size)
-            rule.runOnIdle { scrolling.value = false }
-            rule.mainClock.advanceTimeBy(400)
-            rule.waitUntil { results.isNotEmpty() }
+            rule.waitUntil(5_000) { results.isNotEmpty() }
 
             val result = results.single() as SuccessResult
             assertEquals(DataSource.MEMORY_CACHE, result.dataSource)

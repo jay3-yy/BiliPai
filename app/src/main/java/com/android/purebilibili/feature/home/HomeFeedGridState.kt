@@ -9,6 +9,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Density
 import com.android.purebilibili.core.ui.rememberHomeStaggeredGridState
 
+/**
+ * 一次滚动采样：只有索引，不含任何像素偏移。
+ *
+ * 偏移量一旦进入采样，`LazyListState` 的每帧位移都会触发发射，预取就成了逐帧重算；
+ * 而预取只需要知道"现在看到哪几项"，行级精度足够。
+ *
+ * @property firstVisibleIndex 首个可见 lazy item 下标；空视口时为 0。
+ * @property lastVisibleIndex 最后一个可见 lazy item 下标；空视口时为 -1。
+ * @property visibleItemCount 当前可见 lazy item 数量（含 header 等非视频项）。
+ */
+internal data class HomeFeedScrollSample(
+    val firstVisibleIndex: Int,
+    val lastVisibleIndex: Int,
+    val visibleItemCount: Int,
+)
+
 /** Each layout retains its own saved viewport; an index is never transferred between layouts. */
 internal class HomeFeedGridState(
     val regular: LazyGridState,
@@ -37,6 +53,28 @@ internal class HomeFeedGridState(
         regular.layoutInfo.visibleItemsInfo.any { predicate(it.key) }
     } else {
         waterfall.layoutInfo.visibleItemsInfo.any { predicate(it.key) }
+    }
+
+    /**
+     * 采样当前视口的行级窗口，供预取泵在 `snapshotFlow` 里以**内容相等**去重。
+     *
+     * 刻意不读取 `firstVisibleItemScrollOffset`：只要读它，一次 fling 里每帧都会产生新样本，
+     * 与文件顶部"不为滚动新增逐帧收集"的约定冲突。索引只在跨行时变化，粒度正好够用。
+     */
+    fun scrollSample(): HomeFeedScrollSample = if (regularLayout) {
+        val visible = regular.layoutInfo.visibleItemsInfo
+        HomeFeedScrollSample(
+            firstVisibleIndex = regular.firstVisibleItemIndex,
+            lastVisibleIndex = visible.maxOfOrNull { it.index } ?: -1,
+            visibleItemCount = visible.size,
+        )
+    } else {
+        val visible = waterfall.layoutInfo.visibleItemsInfo
+        HomeFeedScrollSample(
+            firstVisibleIndex = waterfall.firstVisibleItemIndex,
+            lastVisibleIndex = visible.maxOfOrNull { it.index } ?: -1,
+            visibleItemCount = visible.size,
+        )
     }
 
     val viewportWidthPx: Int

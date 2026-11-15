@@ -12,7 +12,6 @@ import kotlinx.coroutines.delay
 internal val LocalHomeCardCoverLoadingAllowed = androidx.compose.runtime.compositionLocalOf<Boolean?> { null }
 
 internal const val HOME_CARD_AUXILIARY_WORK_SETTLE_MS = 180L
-internal const val HOME_COVER_PRELOAD_SETTLE_MS = 360L
 
 /** Visible covers resume immediately; optional work waits for a quiet page. */
 @Composable
