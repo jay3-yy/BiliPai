@@ -2022,6 +2022,24 @@ fun AppearanceSettingsContent(
                         }
 
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
+                        SettingsItemAnchor("appearance.refresh_locator_duration") {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.REFRESH_LOCATOR_DURATION),
+                                title = settingItemTitle("appearance.refresh_locator_duration"),
+                                subtitle = "首页与动态的定位按钮可拖动，松手后记住位置并重新计时",
+                                options = listOf(3, 5, 10, 30, 60, 0).map {
+                                    AppSegmentOption(it, if (it == 0) "不自动收起" else "$it 秒")
+                                },
+                                selectedValue = homeConfiguration.refreshLocatorDurationSeconds,
+                                onSelectionChange = { seconds ->
+                                    scope.launch {
+                                        SettingsManager.setRefreshLocatorDurationSeconds(context, seconds)
+                                    }
+                                },
+                            )
+                        }
+
+                        AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.home_refresh_undo_visible") {
                             AppSwitchPreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_REFRESH_UNDO),

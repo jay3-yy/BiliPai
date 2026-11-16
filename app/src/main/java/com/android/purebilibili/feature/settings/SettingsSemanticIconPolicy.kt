@@ -39,6 +39,7 @@ internal enum class SettingsIconRole {
     DARK_IMAGE_DIM,
     SCROLL_FEEDBACK,
     PLAYER_CONTROLS_TIMEOUT,
+    REFRESH_LOCATOR_DURATION,
     PLAYER_ADJUSTMENT_PERSISTENCE,
     PLAYER_ROTATION_SENSITIVITY,
     DYNAMIC_VISIBILITY_CHECK,
@@ -375,6 +376,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.PLAYER_ADJUSTMENT_PERSISTENCE -> R.drawable.ic_settings_player_adjustments_24
     SettingsIconRole.PLAYER_ROTATION_SENSITIVITY -> R.drawable.ic_settings_rotation_sensitivity_24
     SettingsIconRole.PLAYER_CONTROLS_TIMEOUT -> R.drawable.ic_settings_player_controls_timeout_24
+    SettingsIconRole.REFRESH_LOCATOR_DURATION -> R.drawable.ic_settings_refresh_locator_duration_24
     SettingsIconRole.DYNAMIC_VISIBILITY_CHECK -> R.drawable.ic_settings_dynamic_visibility_check_24
     SettingsIconRole.SCROLL_FEEDBACK -> R.drawable.ic_settings_scroll_feedback_24
     SettingsIconRole.RECOMMEND_RETENTION -> R.drawable.ic_settings_recommend_retention_24

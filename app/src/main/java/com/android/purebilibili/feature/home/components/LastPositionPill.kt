@@ -6,7 +6,9 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
@@ -19,9 +21,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -32,7 +40,11 @@ import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import kotlinx.coroutines.delay
-import kotlin.time.Duration.Companion.milliseconds
+import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.HomeSettings
+import com.android.purebilibili.core.store.SettingsManager
+import kotlin.math.roundToInt
 
 
 private const val CloseHitTargetSizeDp = 22
@@ -56,27 +68,59 @@ private const val TextCloseGapDp = 6
  */
 @Composable
 internal fun LastPositionPill(
-    refreshKey: Long,
+    refreshKey: Any,
     onDismiss: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    visible: Boolean = true,
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val loadedSettings by remember(context) { SettingsManager.getHomeSettings(context) }
+        .collectAsStateWithLifecycle<HomeSettings?>(initialValue = null)
+    val settings = loadedSettings ?: return
+    val position = remember {
+        RefreshLocatorDragPosition(settings.refreshLocatorPositionX, settings.refreshLocatorPositionY)
+    }
+    var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(settings.refreshLocatorPositionX, settings.refreshLocatorPositionY) {
+        if (!dragging) {
+            position.x = settings.refreshLocatorPositionX
+            position.y = settings.refreshLocatorPositionY
+        }
+    }
     val closeCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
-    var dissolving by remember(refreshKey) { mutableStateOf(false) }
+    var dissolving by rememberSaveable(refreshKey) { mutableStateOf(false) }
 
     // 首次创建即播放进入动画；消失交给调用方移除本组件完成。
     val visibility = remember { MutableTransitionState(false).apply { targetState = true } }
 
-    // 胶囊悬浮在内容之上，长时间停留会遮住标题；3 秒无操作自动收起。
-    LaunchedEffect(refreshKey) {
-        delay(3_000.milliseconds)
+    // 拖动时不自动收起，松手或取消后重新计算完整停留时间；0 表示由用户关闭。
+    LaunchedEffect(refreshKey, settings.refreshLocatorDurationSeconds, dragging, visible) {
+        if (!visible || dragging || dissolving || settings.refreshLocatorDurationSeconds == 0) return@LaunchedEffect
+        delay(settings.refreshLocatorDurationSeconds * 1_000L)
         dissolving = true
     }
 
+    // 调用方提供当前页面的内容区及底部避让；拖动只改变测量阶段的位置，三种材质共用。
     AnimatedVisibility(
         visibleState = visibility,
         enter = fadeIn() + scaleIn(initialScale = 0.92f),
-        modifier = modifier,
+        modifier = modifier
+            .fillMaxSize()
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                position.availableWidth = (constraints.maxWidth - placeable.width).coerceAtLeast(0)
+                position.availableHeight = (constraints.maxHeight - placeable.height).coerceAtLeast(0)
+                layout(constraints.maxWidth, constraints.maxHeight) {
+                    if (visible) {
+                        placeable.place(
+                            (position.availableWidth * position.x).roundToInt(),
+                            (position.availableHeight * position.y).roundToInt(),
+                        )
+                    }
+                }
+            },
     ) {
         DissolvableVideoCard(
             isDissolving = dissolving,
@@ -100,7 +144,29 @@ internal fun LastPositionPill(
                         onDismiss()
                     }
                 },
-                modifier = Modifier.heightIn(min = AppChromeSizeTokens.MinimumTouchTarget),
+                modifier = Modifier
+                    .heightIn(min = AppChromeSizeTokens.MinimumTouchTarget)
+                    .pointerInput(position, dissolving) {
+                        if (dissolving) return@pointerInput
+                        detectDragGestures(
+                            onDragStart = { dragging = true },
+                            onDragEnd = {
+                                dragging = false
+                                val x = position.x
+                                val y = position.y
+                                scope.launch { SettingsManager.setRefreshLocatorPosition(context, x, y) }
+                            },
+                            onDragCancel = { dragging = false },
+                        ) { change, delta ->
+                            change.consume()
+                            if (position.availableWidth > 0) {
+                                position.x = (position.x + delta.x / position.availableWidth).coerceIn(0f, 1f)
+                            }
+                            if (position.availableHeight > 0) {
+                                position.y = (position.y + delta.y / position.availableHeight).coerceIn(0f, 1f)
+                            }
+                        }
+                    },
             ) {
                 AppText("定位上次刷新")
                 Spacer(modifier = Modifier.width(TextCloseGapDp.dp))
@@ -121,4 +187,11 @@ internal fun LastPositionPill(
             }
         }
     }
+}
+
+private class RefreshLocatorDragPosition(initialX: Float, initialY: Float) {
+    var x by mutableFloatStateOf(initialX)
+    var y by mutableFloatStateOf(initialY)
+    var availableWidth = 0
+    var availableHeight = 0
 }

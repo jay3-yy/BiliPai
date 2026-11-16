@@ -718,6 +718,9 @@ data class HomeSettings(
     val homeHeroCarouselEnabled: Boolean = false,
     val homeHeroCarouselAutoplayEnabled: Boolean = false,
     val homeRefreshTipVisible: Boolean = true, // 推荐流刷新后在旧内容分界处显示提示
+    val refreshLocatorDurationSeconds: Int = 3, // 0 表示不自动收起
+    val refreshLocatorPositionX: Float = 1f,
+    val refreshLocatorPositionY: Float = 1f,
     val homeRefreshUndoVisible: Boolean = false, // 刷新后的撤销按钮默认隐藏
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,   // 卡片展开过渡按需开启
@@ -1724,6 +1727,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_HOME_WALLPAPER_EFFECT_SCOPE = intPreferencesKey("home_wallpaper_effect_scope")
     private val KEY_HOME_UP_BADGES_VISIBLE = booleanPreferencesKey("home_up_badges_visible")
     private val KEY_HOME_REFRESH_TIP_VISIBLE = booleanPreferencesKey("home_refresh_tip_visible")
+    private val KEY_REFRESH_LOCATOR_DURATION = intPreferencesKey("refresh_locator_duration_seconds")
+    private val KEY_REFRESH_LOCATOR_POSITION_X = floatPreferencesKey("refresh_locator_position_x")
+    private val KEY_REFRESH_LOCATOR_POSITION_Y = floatPreferencesKey("refresh_locator_position_y")
     private val KEY_HOME_REFRESH_UNDO_VISIBLE = booleanPreferencesKey("home_refresh_undo_visible")
     private val KEY_HOME_UP_AVATARS_VISIBLE = booleanPreferencesKey("home_up_avatars_visible")
     private val KEY_HOME_PUBLISH_TIME_VISIBLE = booleanPreferencesKey("home_publish_time_visible")
@@ -1945,6 +1951,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeHeroCarouselAutoplayEnabled =
                 preferences[KEY_HOME_HERO_CAROUSEL_AUTOPLAY_ENABLED] ?: false,
             homeRefreshTipVisible = preferences[KEY_HOME_REFRESH_TIP_VISIBLE] ?: true,
+            refreshLocatorDurationSeconds = preferences[KEY_REFRESH_LOCATOR_DURATION] ?: 3,
+            refreshLocatorPositionX = preferences[KEY_REFRESH_LOCATOR_POSITION_X] ?: 1f,
+            refreshLocatorPositionY = preferences[KEY_REFRESH_LOCATOR_POSITION_Y] ?: 1f,
             homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: false,
@@ -3900,6 +3909,18 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getHomeRefreshTipVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HOME_REFRESH_TIP_VISIBLE] ?: true }
+
+    suspend fun setRefreshLocatorDurationSeconds(context: Context, seconds: Int) {
+        require(seconds in listOf(0, 3, 5, 10, 30, 60))
+        context.settingsDataStore.edit { it[KEY_REFRESH_LOCATOR_DURATION] = seconds }
+    }
+
+    suspend fun setRefreshLocatorPosition(context: Context, x: Float, y: Float) {
+        context.settingsDataStore.edit {
+            it[KEY_REFRESH_LOCATOR_POSITION_X] = x
+            it[KEY_REFRESH_LOCATOR_POSITION_Y] = y
+        }
+    }
 
     fun getHomeRefreshUndoVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false }
@@ -8914,6 +8935,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             IntShareablePreferenceDefinition(ContentDisplayPreferences.springKey, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(ContentDisplayPreferences.keepRecommendKey, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_HOME_REFRESH_TIP_VISIBLE, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_REFRESH_LOCATOR_DURATION, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_REFRESH_UNDO_VISIBLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_UP_AVATARS_VISIBLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_PUBLISH_TIME_VISIBLE, SettingsShareSection.APPEARANCE),

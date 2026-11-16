@@ -178,7 +178,8 @@ internal fun VideoDetailInputOverlayAdapter(
         ?: CommentComposerDraft()
     VideoDetailCommentInputOverlayContent(
         snapshot = CommentInputSnapshot(
-            visible = showCommentInput,
+            // 竖屏全屏由当前 Pager 页持有输入框，底层详情不能同时弹出并争抢键盘焦点。
+            visible = showCommentInput && !isPortraitFullscreen,
             draftKey = draftKey,
             isSending = isSendingComment,
             replyToName = replyingToComment?.member?.uname,

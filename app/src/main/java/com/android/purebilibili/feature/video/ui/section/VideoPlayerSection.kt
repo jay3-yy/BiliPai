@@ -3834,6 +3834,9 @@ private fun VideoPlayerSectionContent(
                             PlayerView(ctx)
                         }
                         basePlayerView.apply {
+                            // Android 14 下同步 Compose 与 SurfaceView 的尺寸事务，避免分栏进入全屏后
+                            // 视频输出仍停留在旧栏位；TextureView 和其它系统版本不受此开关影响。
+                            setEnableComposeSurfaceSyncWorkaround(true)
                             playerViewRef = this
                             // 普通直出同步绑定 PlayerView；Anime4K 仅在输入 Surface 就绪后接管。
                             // 合集换片会替换 Player，不能等待后续 effect 才补绑，否则解码器可能无输出窗口。

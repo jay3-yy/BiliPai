@@ -245,7 +245,7 @@ class VideoDetailScreenPolicyTest {
 
 
     @Test
-    fun collectionVideoNavigationSwitchesInsideCurrentDetailOnlyForSameCollection() {
+    fun collectionNavigationKeepsCurrentVideoPartsAndSameCollectionInsideDetail() {
         val season = UgcSeason(
             sections = listOf(
                 UgcSection(
@@ -271,7 +271,7 @@ class VideoDetailScreenPolicyTest {
                 ugcSeason = season
             )
         )
-        assertFalse(
+        assertTrue(
             shouldSwitchCollectionVideoInsideCurrentDetailPage(
                 targetBvid = "BV1A",
                 currentBvid = "BV1A",

@@ -38,6 +38,7 @@ internal val settingsStaticDescriptionIndex: Map<String, String> = mapOf(
     "appearance.home_hero_carousel_autoplay_enabled" to "轮播视频出现在屏幕上时静音循环播放；默认只展示封面，点开后进入视频详情",
     "appearance.home_hero_carousel_enabled" to "推荐页顶部显示官方比例的视频封面轮播；推荐页直接显示普通视频流",
     "appearance.home_refresh_tip_visible" to "仅在保留旧推荐时显示上次刷新位置；关闭后只隐藏位置提示，不改变内容保留方式",
+    "appearance.refresh_locator_duration" to "设置首页与动态的定位上次刷新按钮停留时间，支持不自动收起；拖动按钮可调整并记住位置，松手后重新计时",
     "appearance.home_refresh_undo_visible" to "刷新推荐流后显示撤销按钮，可恢复刷新前的内容",
     "appearance.home_up_avatars_visible" to "首页视频卡片显示 UP 主头像；隐藏头像，为 UP 主名称留出更多空间",
     "appearance.home_up_badges_visible" to "首页和相关推荐显示 UP 标识；首页和相关推荐隐藏 UP 标识",

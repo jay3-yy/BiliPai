@@ -299,17 +299,19 @@ internal fun resolveVideoCommentSheetDragVisibilityProgress(
 internal fun resolveVideoCommentSheetPresentationProgress(
     hostVisibilityProgress: Float,
     dragVisibilityProgress: Float,
-    preferDragProgress: Boolean = false
+    preferDragProgress: Boolean = false,
+    predictiveBackProgress: Float = 0f,
 ): Float {
     val hostProgress = hostVisibilityProgress.coerceIn(0f, 1f)
     val dragProgress = dragVisibilityProgress.coerceIn(0f, 1f)
-    return when {
+    val presentationProgress = when {
         preferDragProgress -> dragProgress
         dragProgress <= 0.001f -> 0f
         // 关闭评论区时 drag 会跟随 host 淡出；避免 host * host 造成视频缩放回弹。
         dragProgress + 0.001f >= hostProgress -> hostProgress
         else -> (hostProgress * dragProgress).coerceIn(0f, 1f)
     }
+    return presentationProgress * (1f - predictiveBackProgress.coerceIn(0f, 1f))
 }
 
 internal fun resolveVideoCommentSheetHostOverlayVisual(
@@ -419,6 +421,34 @@ fun VideoCommentSheetHost(
         topReservedPx = topReservedPx
     )
     val motionSpec = rememberAppBottomSheetMotion()
+    val commentBackState = rememberNavigationEventState(NavigationEventInfo.None)
+    val backTransition = commentBackState.transitionState as? NavigationEventTransitionState.InProgress
+    val predictiveMotionEnabled = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current &&
+        com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
+        !com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion()
+    var mainBackClosing by remember { mutableStateOf(false) }
+    val latestOnDismiss by rememberUpdatedState(onDismiss)
+    val rawMainBackProgress = resolveVideoCommentPredictiveBackProgress(
+        inProgress = predictiveMotionEnabled && backTransition != null &&
+            hostContent == VideoCommentSheetHostContent.MAIN_LIST,
+        progress = backTransition?.latestEvent?.progress ?: 0f,
+    )
+    // 主评论与楼中楼共用返回分发；提交后先走完剩余位移，取消则从当前进度回弹。
+    val mainBackProgress = animateFloatAsState(
+        targetValue = if (mainBackClosing) 1f else rawMainBackProgress,
+        animationSpec = if (backTransition != null && !mainBackClosing) {
+            androidx.compose.animation.core.snap()
+        } else motionSpec.dragSettleSpec,
+        label = "comment_main_predictive_back",
+        finishedListener = { progress ->
+            if (mainBackClosing && hostVisible && progress >= 1f) latestOnDismiss()
+        },
+    )
+    LaunchedEffect(hostVisible, sheetVisibility.isIdle, sheetVisibility.currentState) {
+        if (!hostVisible && sheetVisibility.isIdle && !sheetVisibility.currentState) {
+            mainBackClosing = false
+        }
+    }
     val appearance = rememberVideoCommentAppearance()
     var isDraggingSheet by remember { mutableStateOf(false) }
     var isDismissDragSettling by remember { mutableStateOf(false) }
@@ -454,7 +484,8 @@ fun VideoCommentSheetHost(
     val mainSheetVisibilityProgress = resolveVideoCommentSheetPresentationProgress(
         hostVisibilityProgress = hostVisibilityProgress,
         dragVisibilityProgress = sheetDragVisibilityProgress,
-        preferDragProgress = isDraggingSheet || isDismissDragSettling
+        preferDragProgress = isDraggingSheet || isDismissDragSettling,
+        predictiveBackProgress = mainBackProgress.value,
     )
 
     SideEffect {
@@ -525,7 +556,6 @@ fun VideoCommentSheetHost(
         )
     }
 
-    val commentBackState = rememberNavigationEventState(NavigationEventInfo.None)
     var threadBackCompleted by remember { mutableStateOf(false) }
     val rawThreadBackProgress = resolveVideoCommentPredictiveBackProgress(
         inProgress = commentBackState.transitionState is NavigationEventTransitionState.InProgress &&
@@ -552,6 +582,7 @@ fun VideoCommentSheetHost(
         state = commentBackState,
         isBackEnabled = hostVisible,
         onBackCompleted = {
+            if (mainBackClosing) return@NavigationBackHandler
             when (
                 resolveVideoCommentPredictiveBackTarget(
                     subReplyVisible = subReplyState.visible,
@@ -564,7 +595,12 @@ fun VideoCommentSheetHost(
                     threadBackCompleted = rawThreadBackProgress > 0f
                     commentViewModel.closeSubReply()
                 }
-                VideoCommentPredictiveBackTarget.DISMISS_SHEET -> onDismiss()
+                VideoCommentPredictiveBackTarget.DISMISS_SHEET -> {
+                    if (rawMainBackProgress > 0f) {
+                        mainBackClosing = true
+                        if (rawMainBackProgress >= 1f) onDismiss()
+                    } else onDismiss()
+                }
             }
         },
     )
@@ -688,6 +724,9 @@ fun VideoCommentSheetHost(
                             mainSheetMeasuredHeightPx = size.height.toFloat()
                         }
                         .offset { IntOffset(x = 0, y = sheetDragOffsetPx.roundToInt()) }
+                        .graphicsLayer {
+                            translationY = size.height * mainBackProgress.value
+                        }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

@@ -8,6 +8,24 @@ import kotlin.test.assertTrue
 class VideoCommentSheetHostPolicyTest {
 
     @Test
+    fun `main sheet presentation follows back progress without expanding a partially open sheet`() {
+        fun presentation(backProgress: Float) = resolveVideoCommentSheetPresentationProgress(
+            hostVisibilityProgress = 1f,
+            dragVisibilityProgress = 1f,
+            predictiveBackProgress = backProgress,
+        )
+        assertEquals(1f, presentation(0f))
+        assertEquals(0.5f, presentation(0.5f))
+        assertEquals(0f, presentation(1f))
+        // 在评论面板尚未完全进入时返回，也不能令遮罩和视频缩放跳到完全展开。
+        assertEquals(0.25f, resolveVideoCommentSheetPresentationProgress(
+            hostVisibilityProgress = 0.5f,
+            dragVisibilityProgress = 1f,
+            predictiveBackProgress = 0.5f,
+        ))
+    }
+
+    @Test
     fun `predictive back pops conversation then thread then the sheet`() {
         assertEquals(
             VideoCommentPredictiveBackTarget.CLOSE_CONVERSATION,

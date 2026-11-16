@@ -3218,13 +3218,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     ) {
         if (bvid.isBlank()) return
         cancelSleepAfterCurrentForSwitch(bvid, cid)
-        playbackRecoveryGeneration++
-        // A full media load supersedes an in-place page switch. Without this, a slow page request
-        // can replace the player after navigation has already started loading another subject.
-        pageSwitchJob?.cancel()
-        pageSwitchJob = null
-        pendingPageSwitchCid = null
-        pageSwitchGeneration += 1L
         if (bvid != currentBvid || (cid > 0L && cid != currentCid)) {
             cancelPlaybackStallRecovery()
             playbackStallRecoveryFirstFrameRendered = false
@@ -3258,10 +3251,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             Logger.d("PlayerVM", " Already loading ${playbackRequest.bvid}, skip")
             return
         }
-        aiSummaryJob?.cancel()
-        videoshotJob?.cancel()
-        videoNoteJob?.cancel()
-        
         //  [修复] 更智能的重复检测：只有播放器真正在播放同一视频时才跳过
         // 如果播放器已停止、出错或处于空闲状态，应该重新加载
         val player = exoPlayer
@@ -3423,6 +3412,16 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             restoreSponsorPlaybackState(currentSuccess)
             return
         }
+
+        // 仅真正开始整片加载时取代分 P 切换；CID 提交后的页面同步不能取消切换任务。
+        playbackRecoveryGeneration++
+        pageSwitchJob?.cancel()
+        pageSwitchJob = null
+        pendingPageSwitchCid = null
+        pageSwitchGeneration += 1L
+        aiSummaryJob?.cancel()
+        videoshotJob?.cancel()
+        videoNoteJob?.cancel()
 
         // 如果播放器正在播放目标视频，但 UI 未加载（新 ViewModel），我们需要获取信息但跳过播放器重置
         val shouldSkipPlayerPrepare = !playbackRequest.force && isPlayerPlayingSameVideo
@@ -7920,7 +7919,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     private fun requestQuality(qualityId: Int, source: String) {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
-        if (current.isQualitySwitching) {
+        if (current.isQualitySwitching || pendingPageSwitchCid != null) {
             toast("正在切换中...", PlayerToastPresentation.CenteredHighlight)
             return
         }
@@ -8205,6 +8204,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     internal fun setPageIdentityCommitListener(listener: ((String, Long) -> Unit)?) {
         onPageIdentityCommitted = listener
     }
+
+    /** uiState 的筛选投影异步发布；旧分 P 快照不能再驱动加载或覆盖媒体缓存。 */
+    internal fun isCurrentPlaybackSnapshot(snapshot: VideoPlaybackUiState.Success): Boolean {
+        val committed = _uiState.value as? VideoPlaybackUiState.Success ?: return false
+        return committed.info.bvid == snapshot.info.bvid && committed.info.cid == snapshot.info.cid
+    }
     
     fun switchPage(
         pageIndex: Int,
@@ -8240,9 +8245,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             saveCurrentPosition()
         }
         _uiState.value = subtitleClearedState.copy(
-            isQualitySwitching = true,
+            // 取目标分 P 的播放地址期间保留当前画面，不进入整页加载或清晰度切换。
+            isQualitySwitching = false,
+            requestedQuality = null,
             partResumeNotice = null,
-            pendingPlaybackTransitionPositionMs = 0L
+            pendingPlaybackTransitionPositionMs = null
         )
         
         pageSwitchJob = viewModelScope.launch {
@@ -8358,10 +8365,17 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         // Automatic continuation and media controls also call switchPage directly.
                         // Notify the mounted detail screen for every successful switch, otherwise
                         // its internal-CID guard can reload the previous part after auto-advance.
-                        onPageIdentityCommitted?.invoke(targetBvid, page.cid)
                         currentCid = page.cid
                         aiSummaryJob?.cancel()
                         _uiState.value = switchedState
+                        _detailState.update { details ->
+                            details.copy(
+                                requestBvid = targetBvid,
+                                requestCid = page.cid,
+                                info = switchedState.info,
+                            )
+                        }
+                        onPageIdentityCommitted?.invoke(targetBvid, page.cid)
                         exoPlayer?.let { PlayerHistorySessions.forPlayer(it).bindMedia(targetBvid, page.cid) }
                         playResolvedPlayback(
                             videoUrl = cdnSelection.playUrl,
@@ -8373,6 +8387,14 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             cdnCacheKeysByUrl = cdnSelection.cdnCacheKeysByUrl
                         )
                         publishSubjectSnapshot(switchedState)
+                        appContext?.let { context ->
+                            exoPlayer?.let { player ->
+                                MiniPlayerManager.getInstance(context).syncCurrentVideoInfo(
+                                    switchedState,
+                                    expectedPlayer = player,
+                                )
+                            }
+                        }
                         monitorPlaybackTransitionPosition(restoredPosition.coerceAtLeast(0L))
                         startHeartbeat()
                         interactiveCurrentEdgeId = 0L

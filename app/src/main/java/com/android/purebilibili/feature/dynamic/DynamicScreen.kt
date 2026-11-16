@@ -1274,46 +1274,30 @@ fun DynamicScreen(
                     .align(Alignment.BottomEnd)
                     .padding(end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall, bottom = dynamicListBottomPadding + AppSpacingTokens.Medium),
             )
-            var oldContentLocatorDismissed by remember(oldContentDividerIndex) {
+            val locatorRefreshKey = "$displayedLogicalTab:${activePresentation.incrementalRefreshBoundaryKey}"
+            var oldContentLocatorDismissed by rememberSaveable(locatorRefreshKey) {
                 mutableStateOf(false)
             }
-            AnimatedVisibility(
-                visible = oldContentDividerIndex >= 0 && !oldContentLocatorDismissed,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
-                        bottom = dynamicListBottomPadding + AppSpacingTokens.Medium,
-                ),
-                enter = fadeIn() + scaleIn(initialScale = 0.92f),
-                exit = fadeOut() + scaleOut(targetScale = 0.92f),
-            ) {
-                // 与首页「撤销刷新」胶囊共用同一套悬浮样式（固定不透明，见 HomeOverlayPillButton）。
-                com.android.purebilibili.feature.home.components.HomeOverlayPillButton(
+            if (oldContentDividerIndex >= 0 && !oldContentLocatorDismissed) {
+                com.android.purebilibili.feature.home.components.LastPositionPill(
+                    refreshKey = locatorRefreshKey,
+                    visible = isCurrentPage,
+                    onDismiss = { oldContentLocatorDismissed = true },
                     onClick = {
                         val gridIndex = resolveDynamicRefreshDividerGridIndex(oldContentDividerIndex)
                         if (gridIndex >= 0) {
                             scope.launch { activeListState?.animateScrollToItem(gridIndex) }
                         }
                     },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                ) {
-                    AppText("定位上次刷新")
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .appActionClickable { oldContentLocatorDismissed = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        AppIcon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = "关闭",
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            start = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
+                            end = AppSpacingTokens.Large + AppSpacingTokens.ExtraSmall,
+                            top = statusBarHeight + AppSpacingTokens.Medium,
+                            bottom = dynamicListBottomPadding + AppSpacingTokens.Medium,
+                        ),
+                )
             }
         }
     }

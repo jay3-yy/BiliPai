@@ -1824,7 +1824,7 @@ private fun VideoPlayerOverlayContent(
                             simplifiedPortrait = simplifiedPortraitChrome,
                             danmakuEnabled = danmakuEnabled,
                             onDanmakuToggle = onDanmakuToggle,
-                            onDanmakuSettingsClick = { showDanmakuSettings = true },
+                            onSendDanmakuClick = onDanmakuInputClick,
                             menuRequest = portraitControlMenuRequest,
                             onMenuRequestConsumed = { portraitControlMenuRequest = null },
                             onActionBoundsChanged = { action, bounds -> actionAnchorBounds[action] = bounds },

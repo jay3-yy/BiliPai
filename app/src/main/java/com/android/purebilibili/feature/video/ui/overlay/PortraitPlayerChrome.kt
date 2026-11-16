@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.outlined.ClosedCaptionOff
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.runtime.*
@@ -26,7 +28,7 @@ import androidx.compose.ui.unit.constrainHeight
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
-import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuSettingsIcon
+import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuSendIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
@@ -158,16 +160,21 @@ internal fun PortraitPlaybackControls(
     qualityModifier: Modifier,
     danmakuEnabled: Boolean,
     onDanmakuToggle: () -> Unit,
-    onDanmakuSettingsClick: () -> Unit,
+    onSendDanmakuClick: () -> Unit,
+    subtitleControlState: SubtitleControlUiState,
+    onSubtitleClick: () -> Unit,
+    subtitleModifier: Modifier,
     modifier: Modifier = Modifier,
 ) {
     val glass = LocalPlayerControlGlassEnabled.current
+    val subtitleActive = subtitleControlState.trackAvailable && subtitleControlState.enabled
     val playback: @Composable () -> Unit = {
         PlayerControlGlassGroup(enabled = glass) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
-                        .size(48.dp)
+                        .width(40.dp)
+                        .height(48.dp)
                         .testTag("player_play_pause")
                         .clickable(
                             role = Role.Button,
@@ -187,7 +194,7 @@ internal fun PortraitPlaybackControls(
                     positionProvider = positionProvider,
                     durationProvider = durationProvider,
                     singleLine = true,
-                    modifier = Modifier.padding(end = 12.dp).testTag("player_time_viewport"),
+                    modifier = Modifier.padding(end = 4.dp).testTag("player_time_viewport"),
                 )
             }
         }
@@ -201,19 +208,37 @@ internal fun PortraitPlaybackControls(
                 NativeDanmakuToggleButton(
                     enabled = danmakuEnabled,
                     onToggle = onDanmakuToggle,
-                    activeTint = Color.White,
+                    activeTint = com.android.purebilibili.core.ui.AppContentColors.accent(),
                     inactiveTint = Color.White.copy(alpha = 0.6f),
                     modifier = Modifier
-                        .size(48.dp)
+                        .width(40.dp)
+                        .height(48.dp)
                         .testTag("player_danmaku_toggle"),
                 )
                 AppIconButton(
-                    onClick = onDanmakuSettingsClick,
+                    onClick = onSendDanmakuClick,
                     modifier = Modifier
-                        .size(48.dp)
-                        .testTag("player_danmaku_settings"),
+                        .width(40.dp)
+                        .height(48.dp)
+                        .testTag("player_send_danmaku"),
                 ) {
-                    PiliPlusDanmakuSettingsIcon(size = 22.dp, tint = Color.White)
+                    PiliPlusDanmakuSendIcon(size = 22.dp, tint = Color.White)
+                }
+                // 字幕入口常驻；轨道未就绪或不存在时由菜单说明，避免底栏入口忽隐忽现。
+                AppIconButton(
+                    onClick = onSubtitleClick,
+                    modifier = Modifier.width(40.dp).height(48.dp).then(subtitleModifier).semantics {
+                        stateDescription = if (subtitleActive) "字幕已开启" else "字幕已关闭"
+                    },
+                ) {
+                    AppIcon(
+                        imageVector = if (subtitleActive) Icons.Filled.ClosedCaption
+                            else Icons.Outlined.ClosedCaptionOff,
+                        contentDescription = "字幕",
+                        tint = if (subtitleActive) com.android.purebilibili.core.ui.AppContentColors.accent()
+                            else Color.White.copy(alpha = 0.6f),
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
                 PortraitPlaybackTextAction(
                     text = "${speed}×", description = "倍速", onClick = onSpeedClick,
@@ -237,19 +262,17 @@ internal fun PortraitPlaybackControls(
     ) { measurables, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val playbackGroup = measurables[0].measure(loose)
-        val toolsGroup = measurables[1].measure(loose)
-        val gap = 8.dp.roundToPx()
-        // 按当前时长、画质文案与字体的实测宽度换行，不缩小文字或触摸目标。
-        val stacked = playbackGroup.width + toolsGroup.width + gap > constraints.maxWidth
-        val height = constraints.constrainHeight(
-            if (stacked) playbackGroup.height + gap + toolsGroup.height
-            else maxOf(playbackGroup.height, toolsGroup.height),
-        )
+        val gap = 4.dp.roundToPx()
+        // 播放与时间固定，工具区使用剩余宽度并在窄窗口横向滚动，始终保持单行居中。
+        val toolsGroup = measurables[1].measure(loose.copy(
+            maxWidth = (constraints.maxWidth - playbackGroup.width - gap).coerceAtLeast(0),
+        ))
+        val height = constraints.constrainHeight(maxOf(playbackGroup.height, toolsGroup.height))
         layout(constraints.maxWidth, height) {
-            playbackGroup.placeRelative(0, if (stacked) 0 else (height - playbackGroup.height) / 2)
+            playbackGroup.placeRelative(0, (height - playbackGroup.height) / 2)
             toolsGroup.placeRelative(
                 constraints.maxWidth - toolsGroup.width,
-                if (stacked) playbackGroup.height + gap else (height - toolsGroup.height) / 2,
+                (height - toolsGroup.height) / 2,
             )
         }
     }
@@ -267,7 +290,7 @@ private fun PortraitPlaybackTextAction(
             .heightIn(min = 48.dp)
             .widthIn(min = 48.dp)
             .clickable(role = Role.Button, onClickLabel = description, onClick = appActionWithFeedback(onClick))
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 6.dp),
         contentAlignment = Alignment.Center,
     ) {
         AppText(

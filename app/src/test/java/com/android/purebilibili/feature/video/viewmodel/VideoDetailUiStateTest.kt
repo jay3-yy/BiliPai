@@ -111,4 +111,29 @@ class VideoDetailUiStateTest {
         assertNull(otherVideo.info)
         assertNull(otherPage.info)
     }
+
+    @Test
+    fun knownPartSwitchKeepsDescriptionAndSelectionDuringPlaybackHandoff() {
+        val multiPageInfo = info.copy(pages = listOf(
+            Page(cid = info.cid, page = 1, duration = 30L),
+            Page(cid = 456L, page = 2, duration = 90L),
+        ))
+        val multiPageDetails = details.copy(info = multiPageInfo)
+        val oldPlayback = VideoPlaybackUiState.Success(multiPageInfo, "old-part-stream")
+        val error = VideoPlaybackUiState.Error(VideoLoadError.PlayUrlEmpty)
+        // 页面先收到目标 CID 时，旧播放投影、加载及失败均不能让整份正文消失。
+        for (playback in listOf(oldPlayback, VideoPlaybackUiState.Loading.Initial, error)) {
+            val content = multiPageDetails.contentSnapshot(playback, info.bvid, 456L)
+            assertEquals(info.desc, content?.info?.desc)
+            assertEquals(456L, content?.info?.cid)
+            assertEquals(multiPageInfo.pages, content?.info?.pages)
+            assertEquals(90_000L, content?.videoDurationMs)
+            assertEquals("", content?.playUrl)
+        }
+        val restarted = multiPageDetails.forNewRequest(info.bvid, 456L, 2L, oldPlayback)
+        assertEquals(456L, restarted.info?.cid)
+        assertEquals(info.desc, restarted.info?.desc)
+        assertNull(multiPageDetails.contentSnapshot(oldPlayback, "BV1other", 456L))
+        assertNull(multiPageDetails.contentSnapshot(oldPlayback, info.bvid, 999L))
+    }
 }

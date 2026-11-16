@@ -331,9 +331,11 @@ internal fun shouldSwitchCollectionVideoInsideCurrentDetailPage(
     ugcSeason: UgcSeason?
 ): Boolean {
     val normalizedTargetBvid = targetBvid.trim()
-    if (normalizedTargetBvid.isBlank() || normalizedTargetBvid == currentBvid.trim()) {
+    if (normalizedTargetBvid.isBlank()) {
         return false
     }
+    // 合集内同一稿件的不同分 P 共用 BVID，也必须留在当前详情处理。
+    if (normalizedTargetBvid == currentBvid.trim()) return true
     return ugcSeason
         ?.sections
         .orEmpty()

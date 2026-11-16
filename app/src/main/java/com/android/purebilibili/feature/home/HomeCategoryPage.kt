@@ -910,6 +910,8 @@ internal fun HomeCategoryPageContent(
         if (oldContentGridItemIndex != null && !oldContentLocatorDismissed) {
             LastPositionPill(
                 refreshKey = oldContentLocatorRefreshKey,
+                // 内容可见性与后台任务门控分开，任务暂停不销毁按钮或重放入场。
+                visible = pageOnScreen,
                 onDismiss = { oldContentLocatorDismissed = true },
                 onClick = {
                     oldContentLocatorScope.launch {
@@ -919,6 +921,8 @@ internal fun HomeCategoryPageContent(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
+                        start = AppSpacingTokens.Large,
+                        top = contentPadding.calculateTopPadding() + AppSpacingTokens.Medium,
                         end = AppSpacingTokens.Large,
                         // 听视频小横条悬浮时上浮避让（与动态页 76dp 预留一致）；
                         // 整体抬高 120dp，避免胶囊压在底部卡片上

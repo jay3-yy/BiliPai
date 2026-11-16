@@ -225,7 +225,7 @@ fun BottomControlBar(
     onPlayPauseClick: () -> Unit = {},
     danmakuEnabled: Boolean = true,
     onDanmakuToggle: () -> Unit = {},
-    onDanmakuSettingsClick: () -> Unit = {},
+    onSendDanmakuClick: () -> Unit = {},
 ) {
     val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     // 玻璃时间和文字胶囊对齐圆形按钮；MD3、Miuix 保留原生 30dp 控件高度。
@@ -286,7 +286,7 @@ fun BottomControlBar(
                     .semantics { testTagsAsResourceId = true }
                     .windowInsetsPadding(playerControlHorizontalInsets(true, true))
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
             ) {
                 Box(modifier = Modifier.fillMaxWidth().height(40.dp)) {
                     PlayerControlProgressBar(
@@ -330,7 +330,10 @@ fun BottomControlBar(
                     qualityModifier = anchor(PlayerControlAnchor.QUALITY, "player_quality_action"),
                     danmakuEnabled = danmakuEnabled,
                     onDanmakuToggle = onDanmakuToggle,
-                    onDanmakuSettingsClick = onDanmakuSettingsClick,
+                    onSendDanmakuClick = onSendDanmakuClick,
+                    subtitleControlState = subtitleControlState,
+                    onSubtitleClick = { localMenu = PlayerControlAnchor.SUBTITLE },
+                    subtitleModifier = anchor(PlayerControlAnchor.SUBTITLE, "player_subtitle_action"),
                     modifier = Modifier.fillMaxWidth().testTag("player_control_row"),
                 )
             }
@@ -546,24 +549,32 @@ fun BottomControlBar(
             when (menu) {
                 PlayerControlAnchor.SUBTITLE -> {
                     val tracks = resolveSubtitlePanelTrackOptions(subtitleControlState.trackOptions)
-                    PlayerSelectionItem(
-                        index = 0, optionCount = tracks.size + 1,
-                        text = "关闭字幕", selected = !subtitleControlState.enabled,
-                        onClick = {
-                            localMenu = null
-                            subtitleControlCallbacks.onDisplayModeChange(SubtitleDisplayMode.OFF)
-                        },
-                    )
-                    tracks.forEachIndexed { index, track ->
+                    if (!subtitleControlState.trackAvailable) {
                         PlayerSelectionItem(
-                            index = index + 1, optionCount = tracks.size + 1,
-                            text = track.label, selected = subtitleControlState.enabled && track.selected,
+                            index = 0, optionCount = 1,
+                            text = "暂无可选字幕", selected = false, enabled = false,
+                            onClick = {},
+                        )
+                    } else {
+                        PlayerSelectionItem(
+                            index = 0, optionCount = tracks.size + 1,
+                            text = "关闭字幕", selected = !subtitleControlState.enabled,
                             onClick = {
                                 localMenu = null
-                                subtitleControlCallbacks.onTrackSelected(track.trackKey)
-                                subtitleControlCallbacks.onDisplayModeChange(SubtitleDisplayMode.PRIMARY_ONLY)
+                                subtitleControlCallbacks.onDisplayModeChange(SubtitleDisplayMode.OFF)
                             },
                         )
+                        tracks.forEachIndexed { index, track ->
+                            PlayerSelectionItem(
+                                index = index + 1, optionCount = tracks.size + 1,
+                                text = track.label, selected = subtitleControlState.enabled && track.selected,
+                                onClick = {
+                                    localMenu = null
+                                    subtitleControlCallbacks.onTrackSelected(track.trackKey)
+                                    subtitleControlCallbacks.onDisplayModeChange(SubtitleDisplayMode.PRIMARY_ONLY)
+                                },
+                            )
+                        }
                     }
                 }
                 PlayerControlAnchor.TRANSLATION -> {
