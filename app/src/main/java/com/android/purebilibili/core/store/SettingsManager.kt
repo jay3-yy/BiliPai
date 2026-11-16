@@ -660,7 +660,7 @@ enum class BottomBarLiquidGlassPreset(
 
     companion object {
         fun fromValue(value: Int): BottomBarLiquidGlassPreset =
-            entries.find { it.value == value } ?: CURRENT_TUNED
+            entries.find { it.value == value } ?: BILIPAI_TUNED
     }
 }
 
