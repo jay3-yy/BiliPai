@@ -578,7 +578,7 @@ enum class HomeFeedCardWidthPreset(
 enum class HomeFeedCardStyle(val value: Int, val label: String, val subtitle: String) {
     CURRENT(0, "16:9", "完整显示，接近投稿源图"),
     OFFICIAL(1, "4:3", "更高列表框，左右居中裁切"),
-    BILIPAI(2, "16:10", "默认信息流封面比例");
+    BILIPAI(2, "16:9", "默认信息流封面比例");
 
     companion object {
         fun fromValue(value: Int): HomeFeedCardStyle =

@@ -934,7 +934,7 @@
     <string name="appearance_home_duration_hidden">Hidden</string>
     <string name="appearance_home_card_ratio_current_label">16:9 (current ratio)</string>
     <string name="appearance_home_card_ratio_official_label">4:3 (official ratio)</string>
-    <string name="appearance_home_card_ratio_bilipai_label">16:10 (BiliPai default)</string>
+    <string name="appearance_home_card_ratio_bilipai_label">16:9 (BiliPai default)</string>
     <string name="animation_indicator_wobble_title">Liquid glass indicator recoil</string>
     <string name="animation_indicator_wobble_summary">Add squash and rebound when selecting a tab or releasing a drag. Applies only to liquid glass indicators; turning it off keeps normal movement and press feedback.</string>
     <string name="animation_settings_container_blur_summary">Blur the settings page behind container transitions in real time; requires Android 12 or later</string>
