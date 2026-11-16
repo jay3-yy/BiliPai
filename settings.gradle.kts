@@ -50,11 +50,19 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("https://jitpack.io") }
         maven {
-            url = uri("http://nexus.itgsa.com:5566/repository/sharedViewKit/")
-            isAllowInsecureProtocol = true
-            content { includeGroup("gsai.sdk") }
+            url = uri("https://jitpack.io")
+            content { includeGroupByRegex("com\\.github\\..*") }
+        }
+        // 专用依赖只查询对应仓库，避免在公共仓库和其他私服逐个探测。
+        exclusiveContent {
+            forRepository {
+                maven {
+                    url = uri("http://nexus.itgsa.com:5566/repository/sharedViewKit/")
+                    isAllowInsecureProtocol = true
+                }
+            }
+            filter { includeGroup("gsai.sdk") }
         }
         // GitHub Packages (compose-miuix-ui/miuix).
         // Authentication is required even for this public package. Keep credentials outside
@@ -63,20 +71,20 @@ dependencyResolutionManagement {
             .orElse(providers.environmentVariable("GITHUB_ACTOR"))
         val gprKey = providers.gradleProperty("gpr.key")
             .orElse(providers.environmentVariable("GITHUB_TOKEN"))
-        maven {
-            name = "GitHubPackagesMiuix"
-            url = uri("https://maven.pkg.github.com/compose-miuix-ui/miuix")
-            if (gprUser.isPresent && gprKey.isPresent) {
-                credentials {
-                    username = gprUser.get()
-                    password = gprKey.get()
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "GitHubPackagesMiuix"
+                    url = uri("https://maven.pkg.github.com/compose-miuix-ui/miuix")
+                    if (gprUser.isPresent && gprKey.isPresent) {
+                        credentials {
+                            username = gprUser.get()
+                            password = gprKey.get()
+                        }
+                    }
                 }
             }
-        }
-        // Cling Repo
-        maven { 
-            url = uri("http://4thline.org/m2") 
-            isAllowInsecureProtocol = true
+            filter { includeGroup("top.yukonga.miuix.kmp") }
         }
     }
 }
@@ -93,6 +101,7 @@ include(":network-core")
 include(":plugin-sdk")
 include(":design-system")
 include(":design-tokens")
+include(":material-icons")
 include(":brand-motion")
 include(":dolby-ffmpeg-decoder")
 include(":danmaku-engine")

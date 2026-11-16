@@ -211,8 +211,6 @@ import com.android.purebilibili.feature.video.policy.shouldTrackVideoDetailColla
 import com.android.purebilibili.feature.video.subtitle.resolveSubtitlePreferenceSession
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.core.ui.components.AppButton
-import io.github.alexzhirkevich.cupertino.icons.CupertinoIcons
-import io.github.alexzhirkevich.cupertino.icons.outlined.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.isActive

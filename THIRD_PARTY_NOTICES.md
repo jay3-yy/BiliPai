@@ -105,3 +105,13 @@ GPL-2.0-or-later; Nagram modifications by Nagram contributors, distributed under
 This Compose adaptation is distributed under this repository's [GPL-3.0 license](LICENSE).
 It uses BiliPai account data, colors, badges, editing and navigation actions.
 See [port details](docs/nagram-profile-header-port.md).
+
+## Curated Material vector icons
+
+`material-icons/src/main/kotlin/androidx/compose/material/icons/` contains an
+unchanged subset of `androidx.compose.material:material-icons-extended-android:1.7.8`
+source files, copyright The Android Open Source Project, licensed under Apache-2.0.
+The original copyright and license headers are preserved in each file. The full
+license is in `artwork/curated-icons/LICENSE`; archive and file SHA-256 hashes are
+recorded in `artwork/curated-icons/sources.json`. The base icon API remains supplied
+by the upstream `material-icons-core` dependency.

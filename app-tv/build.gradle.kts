@@ -52,7 +52,7 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
     // 与移动端同一图标源（卡片统计行 PlayCircleOutline/Subtitles 等），保证两端外观一致。
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(project(":material-icons"))
     // 与移动端同一版本的 Haze：毛玻璃面板（背模糊），RenderEffect 真实高斯模糊，低版本回退半透明。
     // TV 不引入 haze-blur-materials：其 HazeMaterials 依赖 material3 的 MaterialTheme。
     implementation("dev.chrisbanes.haze:haze:2.0.1")
