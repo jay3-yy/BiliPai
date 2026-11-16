@@ -870,30 +870,29 @@ internal fun HomeCategoryPageContent(
             }
         }
 
-        // Loading Indicator at bottom
+        // 三种材质及网格/瀑布流共用稳定的底部槽位，加载启停或结束不改变占位高度。
+        // 错误提示允许随文字和字体自然增高，保留完整信息与重试入口。
         val loadMoreError = categoryState.loadMoreError
-        if (loadMoreError != null) {
-            item(key = "load_more_error", fullLine = true) {
-                ListLoadError(
-                    message = "加载更多失败：$loadMoreError",
-                    onRetry = onRetryLoadMore,
-                    modifier = Modifier.fillMaxWidth().padding(AppSpacingTokens.Medium),
-                )
-            }
-        } else if (categoryState.isLoading || categoryState.hasMore) {
-             item(key = "load_more_status", fullLine = true) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(AppSpacingTokens.Large),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (categoryState.isLoading) {
-                        AdaptiveLoadingIndicator(
-                            size = AppSpacingTokens.ExtraLarge,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
+        item(key = "load_more_status", fullLine = true) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = AppSpacingTokens.ExtraLarge + AppSpacingTokens.Large * 2),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (loadMoreError != null) {
+                    ListLoadError(
+                        message = "加载更多失败：$loadMoreError",
+                        onRetry = onRetryLoadMore,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(AppSpacingTokens.Medium),
+                    )
+                } else if (categoryState.isLoading) {
+                    AdaptiveLoadingIndicator(
+                        size = AppSpacingTokens.ExtraLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                 }
             }
         }
