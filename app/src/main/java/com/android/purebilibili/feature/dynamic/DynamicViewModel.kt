@@ -5,6 +5,10 @@ import com.android.purebilibili.feature.comment.CommentPagingSession
 import com.android.purebilibili.feature.comment.CommentPageRequest
 import com.android.purebilibili.feature.dynamic.components.DynamicDisplayMode
 
+import com.android.purebilibili.feature.video.viewmodel.filteredSubReplies
+import com.android.purebilibili.core.filter.contentFiltered
+import com.android.purebilibili.feature.video.viewmodel.ReplyListProjection
+
 import android.app.Application
 import android.content.Context
 import android.net.Uri
@@ -187,7 +191,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var followStateObserverStarted: Boolean = false
 
     private val _uiState = MutableStateFlow(createDynamicStartupUiState())
-    val uiState: StateFlow<DynamicUiState> = _uiState.asStateFlow()
+    val uiState: StateFlow<DynamicUiState> = _uiState.filteredDynamicContent(viewModelScope)
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -1225,7 +1229,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     
     // 评论区单一状态源：所有字段一次发射，避免「评论已到但 loading 还没关」这类中间帧。
     private val _commentUiState = MutableStateFlow(DynamicCommentUiState())
-    internal val commentUiState: StateFlow<DynamicCommentUiState> = _commentUiState.asStateFlow()
+    private val commentRepliesProjection = ReplyListProjection()
+    internal val commentUiState: StateFlow<DynamicCommentUiState> = _commentUiState.contentFiltered(viewModelScope) { state, rules ->
+        state.copy(
+            comments = commentRepliesProjection.project(state.comments, rules).toImmutableList(),
+            pinnedReply = state.pinnedReply?.let {
+                com.android.purebilibili.data.repository.filterReplyForContent(it, rules)
+            },
+        )
+    }
 
     private val _dynamicCommentSortMode = MutableStateFlow(CommentSortMode.HOT)
     val dynamicCommentSortMode: StateFlow<CommentSortMode> = _dynamicCommentSortMode.asStateFlow()
@@ -1300,7 +1312,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     private var subReplyLoadRequestId = 0L
     private var activeSubReplyRootId = 0L
     private val _subReplyState = MutableStateFlow(SubReplyUiState())
-    val subReplyState: StateFlow<SubReplyUiState> = _subReplyState.asStateFlow()
+    val subReplyState: StateFlow<SubReplyUiState> = _subReplyState.filteredSubReplies(viewModelScope)
 
     private val _commentReplyTarget = MutableStateFlow<DynamicCommentComposerTarget?>(null)
     internal val commentReplyTarget: StateFlow<DynamicCommentComposerTarget?> = _commentReplyTarget.asStateFlow()
@@ -1738,7 +1750,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         updateCommentUiState { it.copy(pinnedReplyError = null) }
         pinnedReplyLoadJob = launchAccount {
             try {
-                val data = CommentRepository.getMobileSortedSubCommentsForSubject(
+                val data = CommentRepository.getMobileSortedSubCommentsForSubject(applyDisplayFilter = false,
                     oid = target.oid,
                     type = target.type,
                     rootId = rootId,
@@ -1849,7 +1861,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             "DynamicVM",
             "加载动态评论候选: oid=${target.oid}, type=${target.type}, dynamicId=$dynamicId, dynamicType=$dynamicType"
         )
-        val result = CommentRepository.getMobileCommentsForSubject(
+        val result = CommentRepository.getMobileCommentsForSubject(applyDisplayFilter = false,
             oid = target.oid,
             type = target.type,
             page = 1,
@@ -1977,7 +1989,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         )
         session = CommentPagingSession(
             initial = CommentPageRequest(state.nextPage, commentContinuation), mainList = true,
-            load = { request -> CommentRepository.getMobileCommentsForSubject(
+            load = { request -> CommentRepository.getMobileCommentsForSubject(applyDisplayFilter = false,
                 oid = target.oid, type = target.type, page = request.page, ps = DYNAMIC_COMMENT_PAGE_SIZE,
                 mode = sortMode.apiMode, continuation = request.continuation, fallbackOnMissingLocation = target.type != 11
             ).getOrThrow() },
@@ -2183,7 +2195,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         session = CommentPagingSession(
             initial = CommentPageRequest(page = page, offset = paginationOffset), mainList = false,
             load = { request ->
-                val data = CommentRepository.getMobileSortedSubCommentsForSubject(
+                val data = CommentRepository.getMobileSortedSubCommentsForSubject(applyDisplayFilter = false,
                     oid = oid, type = type, rootId = threadRootId, mode = sortMode.apiMode,
                     targetReplyId = targetReplyId.takeIf { request.page == 1 } ?: 0L, paginationOffset = request.offset
                 ).getOrThrow()
@@ -3350,13 +3362,6 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 onResult(false, error.message ?: "屏蔽失败")
                 return@launchAccount
             }
-            _uiState.value = mapDynamicTimelineItems(_uiState.value) { items ->
-                items.filterNot { it.modules.module_author?.mid == action.authorMid }
-            }.copy(
-                userItems = _uiState.value.userItems
-                    .filterNot { it.modules.module_author?.mid == action.authorMid }
-                    .toImmutableList(),
-            )
             onResult(result.localChanged, result.message)
         }
     }

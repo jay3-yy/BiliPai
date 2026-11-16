@@ -47,6 +47,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -223,6 +227,7 @@ class DanmakuManager private constructor(
     // 配置
     val config = DanmakuConfig()
     private var blockedRuleMatchers: List<DanmakuBlockRuleMatcher> = emptyList()
+    @Volatile private var sharedKeywords: List<String> = emptyList()
 
     init {
         startDanmakuPluginObserver()
@@ -404,11 +409,17 @@ class DanmakuManager private constructor(
     private fun startDanmakuPluginObserver() {
         pluginObserverJob?.cancel()
         pluginObserverJob = scope.launch {
-            PluginManager.danmakuPluginUpdateToken.collect { token ->
-                if (token <= 0L || token == lastDanmakuPluginUpdateToken) return@collect
+            combine(
+                PluginManager.danmakuPluginUpdateToken,
+                com.android.purebilibili.core.store.ContentFilterRules.current.map { rules ->
+                    rules?.effectiveDanmakuKeywords.orEmpty()
+                }.distinctUntilChanged(),
+            ) { token, keywords -> token to keywords }.collectLatest { (token, keywords) ->
+                if (token == lastDanmakuPluginUpdateToken && keywords == sharedKeywords) return@collectLatest
                 lastDanmakuPluginUpdateToken = token
+                sharedKeywords = keywords
 
-                if (isLoading || sourceDanmakuList == null) return@collect
+                if (isLoading || sourceDanmakuList == null) return@collectLatest
 
                 val expectedCid = cachedCid
                 val expectedGeneration = loadGeneration
@@ -421,7 +432,7 @@ class DanmakuManager private constructor(
                         expectedWindowGeneration = expectedWindowGeneration
                     )
                 }
-                if (rebuild == null) return@collect
+                if (rebuild == null) return@collectLatest
 
                 withContext(Dispatchers.Main.immediate) {
                     if (!isCurrentSegmentWindowRequest(
@@ -731,7 +742,7 @@ class DanmakuManager private constructor(
         if (!settings.allowSpecial) return emptyList()
         val nativePlugins = PluginManager.getEnabledDanmakuPlugins()
         val useJsonRules = JsonPluginManager.plugins.value.any { it.enabled && it.plugin.type == "danmaku" }
-        val hasPlugins = nativePlugins.isNotEmpty() || useJsonRules
+        val hasPlugins = nativePlugins.isNotEmpty() || useJsonRules || sharedKeywords.isNotEmpty()
         if (!hasPlugins && settings.allowColorful && blockedRuleMatchers.isEmpty() && config.weightFilterLevel <= 0) {
             return items
         }
@@ -786,7 +797,7 @@ class DanmakuManager private constructor(
     ): Pair<List<DanmakuItem>, List<AdvancedDanmakuData>> {
         val nativePlugins = PluginManager.getEnabledDanmakuPlugins()
         val useJsonRules = JsonPluginManager.plugins.value.any { it.enabled && it.plugin.type == "danmaku" }
-        if (nativePlugins.isEmpty() && !useJsonRules) {
+        if (nativePlugins.isEmpty() && !useJsonRules && sharedKeywords.isEmpty()) {
             return Pair(standardDanmakuList, advancedDanmakuList)
         }
 
@@ -985,6 +996,7 @@ class DanmakuManager private constructor(
         nativePlugins: List<DanmakuPluginApi>,
         useJsonRules: Boolean
     ): PluginDanmakuItem? {
+        if (sharedKeywords.any { item.content.contains(it, ignoreCase = true) }) return null
         var current = item
         nativePlugins.forEach { plugin ->
             val filtered = try {

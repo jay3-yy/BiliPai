@@ -78,6 +78,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 internal fun shouldRefreshLauncherIconForNightModeChange(
@@ -285,6 +286,18 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             return
         }
         Logger.init(this)
+        com.android.purebilibili.core.store.ContentFilterRules.prepareProcessCollector()
+        AppScope.ioScope.launch {
+            com.android.purebilibili.core.plugin.PluginManager.awaitPluginReady(
+                com.android.purebilibili.core.plugin.BuiltinPluginIds.FEED_FILTER,
+                awaitContentRules = false,
+            )
+            com.android.purebilibili.core.store.ContentFilterRules.collect(
+                this@PureApplication,
+                com.android.purebilibili.data.repository.BlockedUpRepository.getInstance(this@PureApplication)
+                    .getAllBlockedUps().map { users -> users.map { it.mid }.toSet() },
+            )
+        }
         // 评论仓库已下沉 core-data；手机端的发评后反诈旁路在此注入，共享层不感知其实现。
         com.android.purebilibili.data.repository.CommentRepository.onCommentPosted =
             { reply, oid, type, root, parent, message ->

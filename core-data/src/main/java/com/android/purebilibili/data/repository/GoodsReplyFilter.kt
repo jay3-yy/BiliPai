@@ -1,10 +1,14 @@
 package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.network.NetworkModule
-import com.android.purebilibili.core.store.ContentDisplaySettings
 import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.ReplyItem
 import kotlinx.serialization.json.contentOrNull
+import com.android.purebilibili.core.store.ContentFilterRules
+import com.android.purebilibili.core.store.ContentFilterScope
+import com.android.purebilibili.core.store.ContentFilterSnapshot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal fun isGoodsReply(reply: ReplyItem): Boolean =
     reply.content.message.contains("https://gaoneng.bilibili.com/tetris") ||
@@ -16,8 +20,30 @@ internal fun isGoodsReply(reply: ReplyItem): Boolean =
         }
 
 /** 只过滤展示内容，保留服务端总数、页码、来源和继续加载游标。 */
-internal fun filterGoodsReplies(data: ReplyData): ReplyData {
-    fun clean(reply: ReplyItem?): ReplyItem? = reply?.takeUnless(::isGoodsReply)?.let {
+internal fun filterGoodsReplies(data: ReplyData): ReplyData =
+    filterCommentReplies(data, emptyList(), blockGoods = true)
+
+fun filterReplyForContent(reply: ReplyItem, rules: ContentFilterSnapshot): ReplyItem? {
+    if (rules.blocksUser(reply.member.mid.toLongOrNull() ?: 0L) ||
+        rules.blocksText(reply.content.message, ContentFilterScope.COMMENT) ||
+        (rules.blockGoodsReplies && isGoodsReply(reply))) return null
+    val children = reply.replies ?: return reply
+    val filtered = children.mapNotNull { filterReplyForContent(it, rules) }
+    return if (filtered == children) reply else reply.copy(replies = filtered)
+}
+
+internal fun filterCommentReplies(
+    data: ReplyData,
+    keywords: List<String>,
+    blockGoods: Boolean = false,
+    blockedMids: Set<Long> = emptySet(),
+): ReplyData {
+    if (keywords.isEmpty() && !blockGoods && blockedMids.isEmpty()) return data
+    fun clean(reply: ReplyItem?): ReplyItem? = reply?.takeUnless { item ->
+        item.member.mid.toLongOrNull() in blockedMids || (blockGoods && isGoodsReply(item)) || keywords.any {
+            item.content.message.contains(it, ignoreCase = true)
+        }
+    }?.let {
         it.copy(replies = it.replies?.mapNotNull { child -> clean(child) })
     }
     return data.copy(
@@ -30,9 +56,17 @@ internal fun filterGoodsReplies(data: ReplyData): ReplyData {
     )
 }
 
-internal suspend fun filterGoodsRepliesIfEnabled(data: ReplyData): ReplyData {
+internal suspend fun filterCommentRepliesIfEnabled(data: ReplyData): ReplyData {
     val context = NetworkModule.appContext ?: return data
-    return if (ContentDisplaySettings.enabled(context, ContentDisplaySettings.BLOCK_GOODS_REPLY)) {
-        filterGoodsReplies(data)
-    } else data
+    val rules = ContentFilterRules.snapshot(context)
+    return withContext(Dispatchers.Default) {
+        filterCommentReplies(
+            data,
+            rules.keywords.takeIf {
+                rules.keywordFilteringEnabled && ContentFilterScope.COMMENT in rules.scopes
+            }.orEmpty(),
+            blockGoods = rules.blockGoodsReplies,
+            blockedMids = rules.blockedMids,
+        )
+    }
 }

@@ -216,7 +216,7 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         globalPrivacyMode = com.android.purebilibili.core.store.SettingsManager
             .isPrivacyModeEnabledSync(application),
     ))
-    val uiState = _uiState.asStateFlow()
+    val uiState = _uiState.filteredSearchContent(viewModelScope)
 
     private val searchDao = AppDatabase.getDatabase(application).searchHistoryDao()
     
@@ -230,11 +230,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     private val pagingGenerations = mutableMapOf<SearchType, Long>()
     private val pagingJobs = mutableMapOf<SearchType, Job>()
     private var activeSearchSessionId: Long = 0L
-    private var blockedUpObserverStarted = false
     private var landingBootstrapStarted = false
 
-    private val blockedUpRepository = com.android.purebilibili.data.repository.BlockedUpRepository(application)
-    private var blockedMids: Set<Long> = emptySet()
 
     init {
         loadHistory()
@@ -269,59 +266,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
                         }
                     }
                 }
-        }
-    }
-
-    private fun ensureBlockedUpObserver() {
-        if (blockedUpObserverStarted) return
-        blockedUpObserverStarted = true
-        viewModelScope.launch {
-            blockedUpRepository.getAllBlockedUps().collect { list ->
-                blockedMids = list.map { it.mid }.toSet()
-                val currentState = _uiState.value
-                val newVideos = currentState.searchResults.filter { it.owner.mid !in blockedMids }
-                val newUps = currentState.upResults.filter { it.mid !in blockedMids }
-                val newLives = currentState.liveResults.filter { it.uid !in blockedMids }
-                val newLiveUsers = currentState.liveUserResults.filter { it.uid !in blockedMids }
-
-                if (newVideos.size != currentState.searchResults.size ||
-                    newUps.size != currentState.upResults.size ||
-                    newLives.size != currentState.liveResults.size ||
-                    newLiveUsers.size != currentState.liveUserResults.size
-                ) {
-                    _uiState.update {
-                        it.copy(
-                            searchResults = newVideos,
-                            upResults = newUps,
-                            liveResults = newLives,
-                            liveUserResults = newLiveUsers,
-                            emptyStateReason = when (it.searchType) {
-                                SearchType.ALL -> resolveSearchEmptyStateReason(
-                                    rawResultCount = it.searchResults.size + it.upResults.size + it.bangumiResults.size,
-                                    visibleResultCount = newVideos.size + newUps.size + it.bangumiResults.size
-                                )
-                                SearchType.VIDEO -> resolveSearchEmptyStateReason(
-                                    rawResultCount = it.searchResults.size,
-                                    visibleResultCount = newVideos.size
-                                )
-                                SearchType.UP -> resolveSearchEmptyStateReason(
-                                    rawResultCount = it.upResults.size,
-                                    visibleResultCount = newUps.size
-                                )
-                                SearchType.LIVE -> resolveSearchEmptyStateReason(
-                                    rawResultCount = it.liveResults.size,
-                                    visibleResultCount = newLives.size
-                                )
-                                SearchType.LIVE_USER -> resolveSearchEmptyStateReason(
-                                    rawResultCount = it.liveUserResults.size,
-                                    visibleResultCount = newLiveUsers.size
-                                )
-                                else -> it.emptyStateReason
-                            }
-                        )
-                    }
-                }
-            }
         }
     }
 
@@ -571,7 +515,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val normalizedKeyword = keyword.trim()
         if (normalizedKeyword.isBlank()) return
         com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("search", "query_submitted")
-        ensureBlockedUpObserver()
 
         val context = getApplication<android.app.Application>()
         val easterEggEnabled = com.android.purebilibili.core.store.SettingsManager.isEasterEggEnabledSync(context)
@@ -657,7 +600,6 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun loadMoreResults() {
-        ensureBlockedUpObserver()
         val state = _uiState.value
         if (!state.isSearching && !state.isLoadingMore && state.submittedQuery.isNotBlank()) {
             pagingSessions[state.searchType]?.loadMore()
@@ -669,8 +611,8 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val keyword = filters.submittedQuery
         val empty = SearchResultPageUiState(query = keyword)
         suspend fun videos(items: List<VideoItem>): List<VideoItem> {
-            val native = items.filter { it.owner.mid !in blockedMids }
-            val builtin = com.android.purebilibili.core.plugin.PluginManager.filterFeedItems(native, feedKind = FeedKind.SEARCH)
+            val native = items
+            val builtin = com.android.purebilibili.core.plugin.PluginManager.filterFeedItemsBeforeContentProjection(native, feedKind = FeedKind.SEARCH)
             return com.android.purebilibili.feature.plugin.filterVideoTagMatches(
                 com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtin),
                 bvid = { it.bvid },
@@ -679,18 +621,18 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         }
         suspend fun ups(items: List<com.android.purebilibili.data.model.response.SearchUpItem>):
             List<com.android.purebilibili.data.model.response.SearchUpItem> {
-            val visibleUps = items.filter { it.mid !in blockedMids }
+            val visibleUps = items
             val nested = visibleUps.flatMap { it.res.orEmpty() }
             if (nested.isEmpty()) return visibleUps
             val visibleVideos = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
-                nested.filter { it.mid !in blockedMids },
+                nested,
                 bvid = { it.bvid },
                 asVideoItem = { it.toVideoItem() },
             )
             if (visibleVideos.size == nested.size) return visibleUps
             val allowed = visibleVideos.mapTo(hashSetOf()) { it.bvid }
             return visibleUps.map { up ->
-                up.copy(res = up.res?.filter { it.mid !in blockedMids && it.bvid in allowed })
+                up.copy(res = up.res?.filter { it.bvid in allowed })
             }
         }
         fun chunk(page: SearchResultPageUiState, info: SearchRepository.SearchPageInfo, rawCount: Int): SearchPageChunk {
@@ -745,11 +687,11 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
             }
             SearchType.LIVE -> {
                 val (items, info) = SearchRepository.searchLive(keyword = keyword, page = number, order = filters.liveOrder).getOrThrow()
-                chunk(empty.copy(liveResults = items.filter { it.uid !in blockedMids }), info, items.size)
+                chunk(empty.copy(liveResults = items), info, items.size)
             }
             SearchType.LIVE_USER -> {
                 val (items, info) = SearchRepository.searchLiveUser(keyword = keyword, page = number).getOrThrow()
-                chunk(empty.copy(liveUserResults = items.filter { it.uid !in blockedMids }), info, items.size)
+                chunk(empty.copy(liveUserResults = items), info, items.size)
             }
             SearchType.ARTICLE -> {
                 val (items, info) = SearchRepository.searchArticle(keyword = keyword, page = number, order = filters.articleOrder, categoryId = filters.articleCategory.value).getOrThrow()
@@ -770,12 +712,12 @@ class SearchViewModel(application: Application) : AndroidViewModel(application) 
         val last = chunks.lastOrNull()?.page ?: return SearchResultPageUiState()
         val pages = chunks.map { it.page }
         val merged = last.copy(
-            searchResults = pages.flatMap { it.searchResults }.distinctBy { it.bvid }.filter { it.owner.mid !in blockedMids },
-            upResults = pages.flatMap { it.upResults }.distinctBy { it.mid }.filter { it.mid !in blockedMids },
+            searchResults = pages.flatMap { it.searchResults }.distinctBy { it.bvid },
+            upResults = pages.flatMap { it.upResults }.distinctBy { it.mid },
             bangumiResults = pages.flatMap { it.bangumiResults }.distinctBy { it.seasonId },
             matchResults = pages.flatMap { it.matchResults }.distinctBy { it.id },
-            liveResults = pages.flatMap { it.liveResults }.distinctBy { it.roomid }.filter { it.uid !in blockedMids },
-            liveUserResults = pages.flatMap { it.liveUserResults }.distinctBy { it.uid }.filter { it.uid !in blockedMids },
+            liveResults = pages.flatMap { it.liveResults }.distinctBy { it.roomid },
+            liveUserResults = pages.flatMap { it.liveUserResults }.distinctBy { it.uid },
             articleResults = pages.flatMap { it.articleResults }.distinctBy { it.id },
             topicResults = pages.flatMap { it.topicResults }.distinctBy { it.topicId },
             photoResults = pages.flatMap { it.photoResults }.distinctBy { it.id },

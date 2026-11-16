@@ -69,18 +69,15 @@ class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
 
     private var config: DanmakuEnhanceConfig = DanmakuEnhanceConfig()
     private var filteredCount = 0
-    private var blockedKeywordsCache: List<String> = splitKeywords(config.blockedKeywords)
     private var blockedUsersCache: List<String> = splitKeywords(config.blockedUserIds)
     private var highlightKeywordsCache: List<String> = splitKeywords(config.highlightKeywords)
 
     private suspend fun loadConfig(context: Context) {
-        val jsonStr = PluginStore.getConfigJson(context, id)
-        if (jsonStr != null) {
-            try {
-                config = Json.decodeFromString<DanmakuEnhanceConfig>(jsonStr)
-            } catch (e: Exception) {
-                Logger.e(TAG, "Failed to decode config", e)
-            }
+        PluginStore.getConfigJson(context, id)?.let { config = Json.decodeFromString<DanmakuEnhanceConfig>(it) }
+        com.android.purebilibili.core.store.ContentFilterRules.migrateDanmakuKeywords(context, splitKeywords(config.blockedKeywords))
+        if (config.blockedKeywords.isNotEmpty()) {
+            config = config.copy(blockedKeywords = "")
+            PluginStore.setConfigJson(context, id, Json.encodeToString(config))
         }
         refreshKeywordCache()
     }
@@ -93,7 +90,6 @@ class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
     }
 
     private fun refreshKeywordCache() {
-        blockedKeywordsCache = splitKeywords(config.blockedKeywords)
         blockedUsersCache = splitKeywords(config.blockedUserIds)
         highlightKeywordsCache = splitKeywords(config.highlightKeywords)
     }
@@ -109,6 +105,9 @@ class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
         config = newConfig
         refreshKeywordCache()
         PluginStore.setConfigJson(context, id, Json.encodeToString(config))
+        com.android.purebilibili.core.store.ContentFilterRules.setDanmakuFilteringEnabled(
+            PluginManager.isEnabled(id) && config.enableFilter
+        )
         PluginManager.notifyDanmakuPluginsUpdated()
     }
 
@@ -127,27 +126,19 @@ class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
 
     override suspend fun onEnable() {
         filteredCount = 0
-        try {
-            loadConfig(PluginManager.getContext())
-        } catch (e: Exception) {
-            Logger.w(TAG, "Load danmaku plugin config failed on enable: ${e.message}")
-        }
+        loadConfig(PluginManager.getContext())
+        com.android.purebilibili.core.store.ContentFilterRules.setDanmakuFilteringEnabled(config.enableFilter)
         Logger.d(TAG, " 弹幕增强已启用")
     }
 
     override suspend fun onDisable() {
+        com.android.purebilibili.core.store.ContentFilterRules.setDanmakuFilteringEnabled(false)
         Logger.d(TAG, "🔴 弹幕增强已禁用，本次过滤了 $filteredCount 条弹幕")
         filteredCount = 0
     }
 
     override fun filterDanmaku(danmaku: DanmakuItem): DanmakuItem? {
         if (!config.enableFilter) return danmaku
-
-        if (blockedKeywordsCache.any { danmaku.content.contains(it, ignoreCase = true) }) {
-            filteredCount++
-            emitFilterHint()
-            return null
-        }
 
         if (isUserBlocked(danmaku.userId)) {
             filteredCount++
@@ -179,7 +170,6 @@ class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
         val scope = rememberCoroutineScope()
         var enableFilter by remember { mutableStateOf(config.enableFilter) }
         var enableHighlight by remember { mutableStateOf(config.enableHighlight) }
-        var blockedKeywords by remember { mutableStateOf(config.blockedKeywords) }
         var blockedUserIds by remember { mutableStateOf(config.blockedUserIds) }
         var highlightKeywords by remember { mutableStateOf(config.highlightKeywords) }
 
@@ -188,7 +178,6 @@ class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
             loadConfig(context)
             enableFilter = config.enableFilter
             enableHighlight = config.enableHighlight
-            blockedKeywords = config.blockedKeywords
             blockedUserIds = config.blockedUserIds
             highlightKeywords = config.highlightKeywords
         }
@@ -220,21 +209,7 @@ class DanmakuEnhancePlugin : BuiltinPlugin, DanmakuPluginApi {
 
             // 屏蔽关键词输入
             if (enableFilter) {
-                AppOutlinedTextField(
-                    value = blockedKeywords,
-                    onValueChange = { newValue ->
-                        blockedKeywords = newValue
-                        scope.launch {
-                            persistConfig(context, config.copy(blockedKeywords = newValue))
-                        }
-                    },
-                    label = { AppText("屏蔽关键词") },
-                    placeholder = { AppText("用逗号分隔，如：剧透,前方高能") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = false,
-                    maxLines = 3
-                )
-
+                SharedContentFilterPreferences()
                 Spacer(modifier = Modifier.height(8.dp))
 
                 AppOutlinedTextField(

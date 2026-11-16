@@ -7,6 +7,15 @@ import org.junit.Test
 
 class GoodsDynamicFilterTest {
     @Test
+    fun `manual user blocks include authors and forwarded originals`() {
+        val blocked = DynamicItem(modules = DynamicModules(module_author = DynamicAuthorModule(mid = 42)))
+        assertTrue(isDynamicFromBlockedUser(blocked, setOf(42)))
+        assertTrue(isDynamicFromBlockedUser(DynamicItem(orig = blocked), setOf(42)))
+        assertFalse(isDynamicFromBlockedUser(blocked, emptySet()))
+        assertFalse(isDynamicFromBlockedUser(DynamicItem(), setOf(42)))
+    }
+
+    @Test
     fun `goods cards and forwarded goods are filtered but ordinary posts are retained`() {
         val goods = DynamicItem(modules = DynamicModules(module_dynamic = DynamicContentModule(
             additional = DynamicAdditional(type = "ADDITIONAL_TYPE_GOODS")

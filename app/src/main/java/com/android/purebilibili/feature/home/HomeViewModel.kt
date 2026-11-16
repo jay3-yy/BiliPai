@@ -111,7 +111,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             popularCategoryStates = PopularSubCategory.entries.associateWith { CategoryContent() }.toImmutableMap()
         )
     )
-    val uiState = _uiState.asStateFlow()
+    val uiState = _uiState.filteredHomeContent(viewModelScope)
     private val _pendingMemoryRecovery = MutableStateFlow<HomeFeedMemorySnapshot?>(null)
     internal val pendingMemoryRecovery = _pendingMemoryRecovery.asStateFlow()
     val currentCategory = homeStateFlow { it.currentCategory }
@@ -154,7 +154,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val isRefreshing = _isRefreshing.asStateFlow()
 
     private fun <T> homeStateFlow(selector: (HomeUiState) -> T): StateFlow<T> {
-        return HomeStateProjection(_uiState, selector)
+        return HomeStateProjection(uiState, selector)
     }
 
     private var refreshIdx = 0
@@ -251,9 +251,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             blockedUpRepository.getAllBlockedUps().collect { list ->
                 blockedMids = list.map { it.mid }.toSet()
-                if (pendingNotInterestedRefilterBvids.isEmpty()) {
-                    reFilterAllContent()
-                }
             }
         }
         syncTodayWatchFeedbackFromStore()
@@ -330,12 +327,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val oldState = _uiState.value
         _uiState.value = oldState.mapHomeCategoryContent { category, subCategory, content ->
             content.copy(
-                videos = PluginManager.filterFeedItems(
-                    filterHomeFeedbackVideos(content.videos.filter { it.owner.mid !in blockedMids }),
+                videos = PluginManager.filterFeedItemsBeforeContentProjection(
+                    filterHomeFeedbackVideos(content.videos),
                     feedKind = category.toFeedKind(subCategory),
                 ).toImmutableList(),
-                liveRooms = content.liveRooms.filter { it.uid !in blockedMids }.toImmutableList(),
-                followedLiveRooms = content.followedLiveRooms.filter { it.uid !in blockedMids }.toImmutableList(),
+                liveRooms = content.liveRooms.toImmutableList(),
+                followedLiveRooms = content.followedLiveRooms.toImmutableList(),
             )
         }
         accountRequests.launch {
@@ -634,9 +631,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val validVideos = videos.filter {
             it.bvid.isNotBlank() && it.title.isNotBlank() && it.contentType !in setOf("bangumi", "picture")
         }
-        val blockedFiltered = validVideos.filter { it.owner.mid !in blockedMids }
+        val blockedFiltered = validVideos
         val feedbackFiltered = filterHomeFeedbackVideos(blockedFiltered)
-        val builtinFiltered = PluginManager.filterFeedItems(
+        val builtinFiltered = PluginManager.filterFeedItemsBeforeContentProjection(
             feedbackFiltered,
             feedKind = FeedKind.HOME_RECOMMEND
         )
@@ -716,8 +713,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         do {
             blocked = blockedMids
             videos = withContext(Dispatchers.Default) {
-                PluginManager.filterFeedItems(
-                    filterHomeFeedbackVideos(snapshot.videos.filter { it.owner.mid !in blocked }),
+                PluginManager.filterFeedItemsBeforeContentProjection(
+                    filterHomeFeedbackVideos(snapshot.videos),
                     feedKind = category.toFeedKind(subCategory),
                 ).toImmutableList()
             }
@@ -1437,7 +1434,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Default) {
                 prepareHomeFeedVideos(
                     videos = videos,
-                    blockedMids = blockedMids,
+                    blockedMids = emptySet(),
                     feedKind = currentCategory.toFeedKind(popularSubCategory),
                     feedbackFilter = ::filterHomeFeedbackVideos,
                 )
@@ -1651,7 +1648,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             merge = withContext(Dispatchers.Default) {
                 mergeHomeFollowFeed(
                     currentVideos = base,
-                    incomingVideos = mapHomeFollowDynamicItemsToVideos(feed.items, blocked),
+                    incomingVideos = mapHomeFollowDynamicItemsToVideos(feed.items, emptySet()),
                     isLoadMore = isLoadMore,
                     incrementalRefreshEnabled = incrementalRefresh,
                     usedUpdateBaseline = feed.usedUpdateBaseline,

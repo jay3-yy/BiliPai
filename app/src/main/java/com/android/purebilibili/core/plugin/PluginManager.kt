@@ -1,6 +1,8 @@
 // 文件路径: core/plugin/PluginManager.kt
 package com.android.purebilibili.core.plugin
 
+import com.android.purebilibili.core.filter.keepsVideo
+
 import android.content.Context
 import com.android.purebilibili.core.util.Logger
 import com.android.purebilibili.data.model.response.VideoItem
@@ -88,7 +90,10 @@ object PluginManager {
     }
 
     /** Wait until a built-in plugin has finished restoring its persisted configuration. */
-    suspend fun awaitPluginReady(pluginId: String) = registry.awaitPluginReady(pluginId)
+    suspend fun awaitPluginReady(pluginId: String, awaitContentRules: Boolean = true) {
+        registry.awaitPluginReady(pluginId)
+        if (awaitContentRules) com.android.purebilibili.core.store.ContentFilterRules.snapshot(appContext)
+    }
     
     /**
      * 启用/禁用插件
@@ -146,14 +151,16 @@ object PluginManager {
      */
     fun filterFeedItems(
         items: List<com.android.purebilibili.data.model.response.VideoItem>,
-        feedKind: FeedKind = FeedKind.GENERIC
+        feedKind: FeedKind = FeedKind.GENERIC,
+        applyContentRules: Boolean = true,
     ): List<com.android.purebilibili.data.model.response.VideoItem> {
         val feedPlugins = getEnabledFeedPlugins()
         val transformPlugins = getEnabledFeedTransformPlugins()
-        if (feedPlugins.isEmpty() && transformPlugins.isEmpty()) return items
+        val rules = com.android.purebilibili.core.store.ContentFilterRules.current.value.takeIf { applyContentRules }
 
         val filtered = items.filter { item ->
-            feedPlugins.all { plugin ->
+            rules?.keepsVideo(item, feedKind) != false &&
+                feedPlugins.all { plugin ->
                 try {
                     plugin.shouldShowItem(item, feedKind)
                 } catch (e: Exception) {
@@ -176,6 +183,12 @@ object PluginManager {
             Logger.e(TAG, " Feed transform plugin failed: ${plugin.name}", error)
         }
     }
+
+    /** 页面保留原始批次时，共享规则由其展示投影应用，解除屏蔽无需重新请求。 */
+    internal fun filterFeedItemsBeforeContentProjection(
+        items: List<com.android.purebilibili.data.model.response.VideoItem>,
+        feedKind: FeedKind = FeedKind.GENERIC,
+    ) = filterFeedItems(items, feedKind, applyContentRules = false)
     
     /**
      * 获取已启用插件数量

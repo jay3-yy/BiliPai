@@ -52,6 +52,7 @@ import com.android.purebilibili.core.ui.AppAlertDialog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -208,11 +209,13 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
     override suspend fun onEnable() {
         filteredCount = 0
         loadConfigSuspend()
+        com.android.purebilibili.core.store.ContentFilterRules.setAdFilteringEnabled(true)
         Logger.d(TAG, " 去广告增强v2.0已启用")
         Logger.d(TAG, " 拉黑UP主: ${config.blockedUpNames.size}个, 屏蔽关键词: ${config.blockedKeywords.size}个")
     }
 
     override suspend fun onDisable() {
+        com.android.purebilibili.core.store.ContentFilterRules.setAdFilteringEnabled(false)
         Logger.d(TAG, "🔴 去广告增强已禁用，本次过滤了 $filteredCount 条内容")
         filteredCount = 0
     }
@@ -281,21 +284,6 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
             }
         }
 
-        // 5️⃣ 检测自定义屏蔽关键词
-        if (config.blockedKeywords.isNotEmpty()) {
-            for (keyword in config.blockedKeywords) {
-                if (keyword.isNotBlank() && title.contains(keyword, ignoreCase = true)) {
-                    filteredCount++
-                    recordFilteredItem(
-                        item = item,
-                        reasonType = AdFilterReasonType.CUSTOM_KEYWORD,
-                        matchedText = keyword
-                    )
-                    Logger.d(TAG, "🚫 自定义屏蔽: $title (关键词: $keyword)")
-                    return false
-                }
-            }
-        }
 
         // 6️⃣ 过滤低质量视频（播放量过低）
         if (config.filterLowQuality && viewCount > 0 && viewCount < config.minViewCount) {
@@ -396,48 +384,28 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         }.joinToString("")
     }
 
-    //  公开方法：添加UP主到拉黑列表
-    fun blockUploader(name: String, mid: Long) {
-        if (name.isNotBlank() && !config.blockedUpNames.contains(name)) {
-            config = config.copy(blockedUpNames = config.blockedUpNames + name)
-        }
-        if (mid > 0 && !config.blockedUpMids.contains(mid)) {
-            config = config.copy(blockedUpMids = config.blockedUpMids + mid)
-        }
-        saveConfig()
-        Logger.d(TAG, "➕ 已拉黑UP主: $name (MID: $mid)")
+    suspend fun blockUploader(name: String, mid: Long) {
+        com.android.purebilibili.data.repository.BlockedUpRepository.getInstance(PluginManager.getContext())
+            .blockUp(mid, name, "")
     }
 
-    //  公开方法：移除UP主拉黑
-    fun unblockUploader(name: String, mid: Long) {
-        config = config.copy(
-            blockedUpNames = config.blockedUpNames - name,
-            blockedUpMids = config.blockedUpMids - mid
-        )
-        saveConfig()
-        Logger.d(TAG, "➖ 已解除拉黑: $name (MID: $mid)")
-    }
-
-    private fun saveConfig() {
-        ioScope.launch {
-            try {
-                val context = PluginManager.getContext()
-                PluginStore.setConfigJson(context, id, Json.encodeToString(config))
-            } catch (e: Exception) {
-                Logger.e(TAG, "保存配置失败", e)
-            }
-        }
+    suspend fun unblockUploader(name: String, mid: Long) {
+        com.android.purebilibili.data.repository.BlockedUpRepository.getInstance(PluginManager.getContext())
+            .unblockUp(mid)
     }
 
     private suspend fun loadConfigSuspend() {
-        try {
-            val context = PluginManager.getContext()
-            val jsonStr = PluginStore.getConfigJson(context, id)
-            if (jsonStr != null) {
-                config = Json.decodeFromString<AdFilterConfig>(jsonStr)
-            }
-        } catch (e: Exception) {
-            Logger.e(TAG, "加载配置失败", e)
+        val context = PluginManager.getContext()
+        PluginStore.getConfigJson(context, id)?.let { config = Json.decodeFromString<AdFilterConfig>(it) }
+        com.android.purebilibili.core.store.ContentFilterRules.migrateAdKeywords(context, config.blockedKeywords)
+        val users = com.android.purebilibili.data.repository.BlockedUpRepository.getInstance(context)
+        val existing = users.getAllBlockedUps().first().mapTo(hashSetOf()) { it.mid }
+        config.blockedUpMids.forEach { mid ->
+            if (mid > 0L && mid !in existing) users.blockUp(mid, "UID:$mid", "")
+        }
+        if (config.blockedKeywords.isNotEmpty() || config.blockedUpMids.isNotEmpty()) {
+            config = config.copy(blockedKeywords = emptyList(), blockedUpMids = emptyList())
+            PluginStore.setConfigJson(context, id, Json.encodeToString(config))
         }
     }
 
@@ -477,17 +445,14 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         var filterClickbait by remember { mutableStateOf(config.filterClickbait) }
         var filterLowQuality by remember { mutableStateOf(config.filterLowQuality) }
         var blockedUpNames by remember { mutableStateOf(config.blockedUpNames) }
-        var blockedKeywords by remember { mutableStateOf(config.blockedKeywords) }
         var blockedTagKeywords by remember { mutableStateOf(config.blockedTagKeywords) }
         var upListExpanded by remember { mutableStateOf(false) }
-        var keywordListExpanded by remember { mutableStateOf(false) }
         var tagKeywordListExpanded by remember { mutableStateOf(false) }
         var insightRecords by remember { mutableStateOf<List<AdFilterRecord>>(emptyList()) }
         var cachedUpProfiles by remember { mutableStateOf<List<AdFilterUpProfile>>(emptyList()) }
 
         // 输入对话框状态
         var showAddUpDialog by remember { mutableStateOf(false) }
-        var showAddKeywordDialog by remember { mutableStateOf(false) }
         var showAddTagKeywordDialog by remember { mutableStateOf(false) }
         var inputText by remember { mutableStateOf("") }
         fun persistConfig(updatedConfig: AdFilterConfig) {
@@ -502,7 +467,6 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
             filterClickbait = config.filterClickbait
             filterLowQuality = config.filterLowQuality
             blockedUpNames = config.blockedUpNames
-            blockedKeywords = config.blockedKeywords
             blockedTagKeywords = config.blockedTagKeywords
             insightRecords = AdFilterInsightStore.readRecords(context)
             cachedUpProfiles = AdFilterInsightStore.readUpProfiles(context)
@@ -600,23 +564,8 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            AdFilterCustomListSection(
-                title = "自定义屏蔽关键词",
-                items = blockedKeywords,
-                emptyText = "暂无自定义屏蔽词",
-                expanded = keywordListExpanded,
-                icon = Icons.Outlined.Tag,
-                itemIconTint = AppContentColors.error(),
-                addButtonText = "添加屏蔽关键词",
-                onExpandedChange = { keywordListExpanded = it },
-                onAddClick = { showAddKeywordDialog = true },
-                onRemove = { keyword ->
-                    blockedKeywords = removeAdFilterCustomListItem(blockedKeywords, keyword)
-                    persistConfig(config.copy(blockedKeywords = blockedKeywords))
-                }
-            )
+            SharedContentFilterPreferences()
 
-            Spacer(modifier = Modifier.height(16.dp))
             AdFilterCustomListSection(
                 title = "视频标签屏蔽词",
                 items = blockedTagKeywords,
@@ -682,22 +631,20 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
             )
         }
 
-        // 标题词与标签词独立保存，共用输入界面。
-        if (showAddKeywordDialog || showAddTagKeywordDialog) {
-            val addingTagKeyword = showAddTagKeywordDialog
+        // 标签词编辑不影响统一管理的标题屏蔽词。
+        if (showAddTagKeywordDialog) {
             fun dismissKeywordDialog() {
-                showAddKeywordDialog = false
                 showAddTagKeywordDialog = false
                 inputText = ""
             }
             AppAlertDialog(
                 onDismissRequest = ::dismissKeywordDialog,
-                title = { AppText(if (addingTagKeyword) "添加标签屏蔽词" else "添加屏蔽关键词") },
+                title = { AppText("添加标签屏蔽词") },
                 text = {
                     AppOutlinedTextField(
                         value = inputText,
                         onValueChange = { inputText = it },
-                        label = { AppText(if (addingTagKeyword) "视频标签关键词" else "标题关键词") },
+                        label = { AppText("视频标签关键词") },
                         placeholder = { AppText("输入要屏蔽的关键词") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
@@ -707,15 +654,10 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
                     AppTextButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
-                                if (addingTagKeyword) {
-                                    val keyword = inputText.trim()
-                                    if (blockedTagKeywords.none { it.equals(keyword, ignoreCase = true) }) {
-                                        blockedTagKeywords = blockedTagKeywords + keyword
-                                        persistConfig(config.copy(blockedTagKeywords = blockedTagKeywords))
-                                    }
-                                } else {
-                                    blockedKeywords = blockedKeywords + inputText.trim()
-                                    persistConfig(config.copy(blockedKeywords = blockedKeywords))
+                                val keyword = inputText.trim()
+                                if (blockedTagKeywords.none { it.equals(keyword, ignoreCase = true) }) {
+                                    blockedTagKeywords = blockedTagKeywords + keyword
+                                    persistConfig(config.copy(blockedTagKeywords = blockedTagKeywords))
                                 }
                             }
                             dismissKeywordDialog()

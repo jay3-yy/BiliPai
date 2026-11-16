@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.viewmodel
 
+import com.android.purebilibili.core.filter.contentFiltered
+
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -233,7 +235,7 @@ class VideoCommentViewModel : ViewModel() {
     // 竖屏全屏面板可卸载重建，位置跟随评论 ViewModel 存活，不与详情/横屏共用滚动对象。
     internal val fullscreenCommentScrollMemory = CommentScrollMemory()
     private val _commentState = MutableStateFlow(CommentUiState())
-    val commentState = _commentState.asStateFlow()
+    val commentState = _commentState.filteredComments(viewModelScope)
 
     private val pendingReactions = mutableSetOf<Pair<Long, Long>>()
     private val pendingDeletes = mutableSetOf<Pair<Long, Long>>()
@@ -258,7 +260,7 @@ class VideoCommentViewModel : ViewModel() {
     private var subReplySession = 0L
     private var activeSubReplyRootId = 0L
     private val _subReplyState = MutableStateFlow(SubReplyUiState())
-    val subReplyState = _subReplyState.asStateFlow()
+    val subReplyState = _subReplyState.filteredSubReplies(viewModelScope)
 
     // [新增] 评论反诈检测事件流（one-shot event）
     private val _fraudEvent = MutableSharedFlow<CommentFraudStatus>(extraBufferCapacity = 1)
@@ -274,7 +276,10 @@ class VideoCommentViewModel : ViewModel() {
     private val _fullSearchState = MutableStateFlow(FullCommentSearchUiState())
     val fullSearchState = _fullSearchState.asStateFlow()
     private val _fullSearchReplies = MutableStateFlow<List<ReplyItem>>(emptyList())
-    val fullSearchReplies = _fullSearchReplies.asStateFlow()
+    private val fullSearchRepliesProjection = ReplyListProjection()
+    val fullSearchReplies = _fullSearchReplies.contentFiltered(viewModelScope) { replies, rules ->
+        fullSearchRepliesProjection.project(replies, rules)
+    }
     private var fullSearchJob: Job? = null
     private val fullSearchWork = CommentSearchWorkGate()
 
@@ -524,7 +529,7 @@ class VideoCommentViewModel : ViewModel() {
             initial = CommentPageRequest(pageToLoad, if (pageToLoad == 1) null else currentState.mainListContinuation),
             mainList = true,
             load = { request ->
-                CommentRepository.getMobileCommentsForSubject(
+                CommentRepository.getMobileCommentsForSubject(applyDisplayFilter = false,
                     oid = requestSubject.oid, type = requestSubject.type, page = request.page,
                     ps = VIDEO_COMMENT_PAGE_SIZE, mode = currentState.sortMode.apiMode,
                     continuation = request.continuation, fallbackOnMissingLocation = requestSubject.type == 1,
@@ -642,7 +647,7 @@ class VideoCommentViewModel : ViewModel() {
             val result = loadCommentSearchReplies(
                 loadMain = { page, continuation ->
                     fullSearchWork.runRequest {
-                        CommentRepository.getMobileCommentsForSubject(
+                        CommentRepository.getMobileCommentsForSubject(applyDisplayFilter = false,
                             oid = subject.oid, type = subject.type, page = page,
                             ps = VIDEO_COMMENT_PAGE_SIZE, mode = CommentGrpcRepository.MODE_TIME,
                             continuation = continuation,
@@ -651,7 +656,7 @@ class VideoCommentViewModel : ViewModel() {
                 },
                 loadThread = { rootId, offset ->
                     fullSearchWork.runRequest {
-                        CommentRepository.getMobileSortedSubCommentsForSubject(
+                        CommentRepository.getMobileSortedSubCommentsForSubject(applyDisplayFilter = false,
                             oid = subject.oid, type = subject.type, rootId = rootId,
                             mode = CommentGrpcRepository.MODE_TIME, paginationOffset = offset,
                             supplementLocations = false,
@@ -994,7 +999,7 @@ class VideoCommentViewModel : ViewModel() {
             sourceFactory = {
                 var resolvedRoot = seedRoot
                 subReplyPagingSource(initialRequest = SubReplyPageRequest(page, paginationOffset)) { request ->
-                    val data = CommentRepository.getMobileSortedSubCommentsForSubject(
+                    val data = CommentRepository.getMobileSortedSubCommentsForSubject(applyDisplayFilter = false,
                         oid = subject.oid, type = subject.type, rootId = threadRootId, mode = sortMode.apiMode,
                         targetReplyId = targetReplyId.takeIf { request.page == 1 } ?: 0L,
                         paginationOffset = request.offset
@@ -1093,7 +1098,7 @@ class VideoCommentViewModel : ViewModel() {
         lateinit var session: CommentPagingSession
         session = CommentPagingSession(
             initial = CommentPageRequest(page = page, offset = paginationOffset), mainList = false,
-            load = { request -> CommentRepository.getDialogCommentsForSubject(
+            load = { request -> CommentRepository.getDialogCommentsForSubject(applyDisplayFilter = false,
                 oid = subject.oid, type = subject.type, rootId = rootId, dialogId = dialogId,
                 page = request.page, paginationOffset = request.offset
             ).getOrThrow() },

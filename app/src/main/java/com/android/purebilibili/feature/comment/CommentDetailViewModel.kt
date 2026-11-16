@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.comment
 
+import com.android.purebilibili.feature.video.viewmodel.filteredSubReplies
+
 import android.net.Uri
 import androidx.paging.LoadState
 import androidx.paging.PagingConfig
@@ -44,7 +46,7 @@ data class CommentDetailFraudResult(
 
 class CommentDetailViewModel : ViewModel() {
     private val _subReplyState = MutableStateFlow(SubReplyUiState())
-    val subReplyState = _subReplyState.asStateFlow()
+    val subReplyState = _subReplyState.filteredSubReplies(viewModelScope)
 
     private val _likedComments = MutableStateFlow<Set<Long>>(emptySet())
     val likedComments = _likedComments.asStateFlow()
@@ -273,7 +275,7 @@ class CommentDetailViewModel : ViewModel() {
             sourceFactory = {
                 var resolvedRoot = seedRoot
                 subReplyPagingSource { request ->
-                    val data = CommentRepository.getMobileSortedSubCommentsForSubject(
+                    val data = CommentRepository.getMobileSortedSubCommentsForSubject(applyDisplayFilter = false,
                         oid = oid, type = type, rootId = threadRootId, mode = sortMode.apiMode,
                         paginationOffset = request.offset,
                         targetReplyId = store.remoteTargetReplyId(rootId, target).takeIf { request.page == 1 } ?: 0L
@@ -428,7 +430,7 @@ class CommentDetailViewModel : ViewModel() {
         session = CommentPagingSession(
             initial = CommentPageRequest(page = page, offset = null), mainList = false,
             load = { request ->
-                CommentRepository.getDialogCommentsForSubject(
+                CommentRepository.getDialogCommentsForSubject(applyDisplayFilter = false,
                     oid = oid, type = type, rootId = rootId, dialogId = dialogId,
                     page = request.page, paginationOffset = request.offset
                 ).getOrThrow()

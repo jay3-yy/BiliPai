@@ -91,7 +91,7 @@ internal suspend fun prepareHomeFeedVideos(
     val validVideos = videos.filter { it.bvid.isNotEmpty() && it.title.isNotEmpty() }
     val blockedFiltered = validVideos.filter { video -> video.owner.mid !in blockedMids }
     val feedbackFiltered = feedbackFilter(blockedFiltered)
-    val builtinFiltered = PluginManager.filterFeedItems(feedbackFiltered, feedKind = feedKind)
+    val builtinFiltered = PluginManager.filterFeedItemsBeforeContentProjection(feedbackFiltered, feedKind = feedKind)
     val filteredVideos = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
         com.android.purebilibili.core.plugin.json.JsonPluginManager.filterVideos(builtinFiltered),
         bvid = { it.bvid },

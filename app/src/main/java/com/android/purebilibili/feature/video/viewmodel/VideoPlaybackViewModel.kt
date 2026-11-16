@@ -2,6 +2,8 @@
 //  [重构] 简化版 VideoPlaybackViewModel - 使用 UseCase 层
 package com.android.purebilibili.feature.video.viewmodel
 
+import com.android.purebilibili.core.filter.contentFiltered
+
 import android.app.Application
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -82,6 +84,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -1480,19 +1483,32 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             }
         }
     }
-    val uiState: StateFlow<VideoPlaybackUiState> = combine(_uiState, sponsorVideoLabels) { state, labels ->
-        if (state is VideoPlaybackUiState.Success) {
-            val label = labels[state.info.bvid to state.info.cid].orEmpty()
-            if (state.sponsorVideoLabel == label) state else state.copy(sponsorVideoLabel = label)
-        } else {
-            state
+    private val relatedUiProjection = com.android.purebilibili.core.filter.ContentListProjection<RelatedVideo>()
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<VideoPlaybackUiState> = combine(
+        _uiState, sponsorVideoLabels, com.android.purebilibili.core.store.ContentFilterRules.current
+    ) { state, labels, rules -> Triple(state, labels, rules) }.mapLatest { (state, labels, rules) ->
+        withContext(Dispatchers.Default) {
+            if (state is VideoPlaybackUiState.Success) {
+                val label = labels[state.info.bvid to state.info.cid].orEmpty()
+                val related = if (rules == null) emptyList() else relatedUiProjection.filter(state.related, rules) {
+                    !rules.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED)
+                }
+                if (state.sponsorVideoLabel == label && related === state.related) state
+                else state.copy(sponsorVideoLabel = label, related = related)
+            } else state
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value)
 
     private val _subjectSnapshot = MutableStateFlow<VideoSubjectSnapshot?>(null)
     val subjectSnapshot = _subjectSnapshot.asStateFlow()
     private val _detailState = MutableStateFlow(VideoDetailUiState())
-    val detailState = _detailState.asStateFlow()
+    private val relatedDetailProjection = com.android.purebilibili.core.filter.ContentListProjection<RelatedVideo>()
+    val detailState = _detailState.contentFiltered(viewModelScope) { state, rules ->
+        state.copy(related = relatedDetailProjection.filter(state.related, rules) {
+            !rules.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED)
+        })
+    }
     private val playbackPreparationAllowed = MutableStateFlow(true)
     private val relatedPublicationAllowed = MutableStateFlow(true)
     private val videoUiWorkConsumers = MutableStateFlow<Map<Any, VideoUiWorkConsumer>>(emptyMap())
@@ -8777,10 +8793,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     return@repeat
                 }
                 // Tag metadata is opt-in ancillary work, not part of the related API's timeout.
-                val related = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+                val related = filterRelatedVideoRecommendations(
                     result.getOrDefault(emptyList()),
-                    bvid = { it.bvid },
-                    asVideoItem = { it.toVideoItem() },
                 )
                 val loadState = if (result.isSuccess) VideoPlaybackUiState.RelatedLoadState.READY
                     else VideoPlaybackUiState.RelatedLoadState.FAILED
@@ -8805,7 +8819,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 val latest = _uiState.value as? VideoPlaybackUiState.Success ?: return@launch
                 if (latest.info.bvid == bvid &&
                     currentLoadRequestToken == requestToken && result.isSuccess
-                ) updatePlaylist(latest.info, related)
+                ) {
+                    val rules = com.android.purebilibili.core.store.ContentFilterRules.current.value
+                    updatePlaylist(latest.info, related.filter {
+                        rules?.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED) != true
+                    })
+                }
                 return@launch
             }
         }
@@ -9777,10 +9796,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         startPositionMs: Long,
         playWhenReady: Boolean = true,
         cdnFallbackState: PlaybackCdnFallbackState = PlaybackCdnFallbackState.Inactive,
-        cdnCacheKeysByUrl: Map<String, String> = emptyMap()
+        cdnCacheKeysByUrl: Map<String, String> = emptyMap(),
+        mediaCid: Long = currentCid
     ) {
         exoPlayer?.let {
-            PlayerHistorySessions.forPlayer(it).bindMedia(currentBvid, currentCid, preserveStarted = true)
+            PlayerHistorySessions.forPlayer(it).bindMedia(currentBvid, mediaCid, preserveStarted = true)
         }
         playbackRecoveryGeneration++
         cancelPlaybackStallRecovery()

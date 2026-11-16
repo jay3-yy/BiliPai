@@ -113,6 +113,7 @@ internal enum class SettingsIconRole {
     BLOCK_GOODS_DYNAMIC,
     BLOCK_GOODS_REPLY,
     COMMENT_IP_LOCATION,
+    COMMENT_BLOCKED_KEYWORDS,
     COMMENT_EXACT_TIME,
     COMMENT_AVATAR_PUSH,
     SUB_REPLY_PREVIEW_LIKES,
@@ -443,6 +444,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.COMMENT_IP_LOCATION -> R.drawable.ic_settings_comment_ip_location_24
     SettingsIconRole.COMMENT_EXACT_TIME -> R.drawable.ms_calendar_clock_24
     SettingsIconRole.SUB_REPLY_PREVIEW_LIKES -> R.drawable.ic_settings_sub_reply_likes_24
+    SettingsIconRole.COMMENT_BLOCKED_KEYWORDS -> R.drawable.ic_settings_comment_keywords_24
     SettingsIconRole.COMMENT_AVATAR_PUSH -> R.drawable.ic_settings_comment_avatar_push_24
     SettingsIconRole.VERTICAL_RECOMMENDATIONS -> R.drawable.ms_view_stream_24
     SettingsIconRole.COMPACT_PLAYER_CONTROLS -> R.drawable.ms_collapse_content_24
