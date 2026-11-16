@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
@@ -25,6 +26,7 @@ class ConfirmedPlaybackDataTest {
         val playData = PlayUrlData(quality = 80)
         val history = PlayerInfoData(lastPlayCid = info.cid, lastPlayTime = 0L)
         val stages = mutableListOf<Pair<PlaybackDataLoadStage, Long>>()
+        var preparedAt: Long? = null
         val result = loadConfirmedPlaybackData(
             info = info,
             loadPlayData = { delay(100); playData },
@@ -34,10 +36,16 @@ class ConfirmedPlaybackDataTest {
                 history
             },
             onStage = { stages += it to testScheduler.currentTime },
+            onPlaybackDataReady = { confirmedCid, readyData ->
+                assertEquals(info.cid, confirmedCid)
+                assertSame(playData, readyData)
+                preparedAt = testScheduler.currentTime
+            },
         ).getOrThrow()
 
         // 串行读取需要 400ms；这里验证调度依赖，不代表实际网络性能。
         assertEquals(300L, testScheduler.currentTime)
+        assertEquals(100L, preparedAt)
         assertSame(playData, result.playData)
         assertSame(history, result.history)
         assertEquals(0L, result.history?.resumePositionMs(info.cid))
@@ -68,6 +76,7 @@ class ConfirmedPlaybackDataTest {
     fun missingPlayUrlCancelsUnfinishedHistory() = runTest {
         val historyStarted = CompletableDeferred<Unit>()
         var historyCancelled = false
+        var preparationStarted = false
         val result = loadConfirmedPlaybackData(
             info = info,
             loadPlayData = { historyStarted.await(); null },
@@ -79,10 +88,12 @@ class ConfirmedPlaybackDataTest {
                     historyCancelled = true
                 }
             },
+            onPlaybackDataReady = { _, _ -> preparationStarted = true },
         )
 
         assertTrue(result.isFailure)
         assertTrue(historyCancelled)
+        assertFalse(preparationStarted)
     }
 
     @Test

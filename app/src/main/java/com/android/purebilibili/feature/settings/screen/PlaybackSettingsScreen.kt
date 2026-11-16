@@ -216,7 +216,7 @@ fun PlaybackSettingsContent(
     val videoCodecPreference = playbackPreferences.videoCodecPreference
     val videoSecondCodecPreference = playbackPreferences.videoSecondCodecPreference
     val playbackCdnPreferenceValue by remember(context) { SettingsManager.getPlaybackCdnPreference(context) }
-        .collectAsStateWithLifecycle(initialValue = PlaybackCdnPreference.BASE_URL.storageValue)
+        .collectAsStateWithLifecycle(initialValue = PlaybackCdnPreference.DEFAULT.storageValue)
     val playbackCdnPreference = remember(playbackCdnPreferenceValue) {
         PlaybackCdnPreference.fromStorageValue(playbackCdnPreferenceValue)
     }

@@ -1653,8 +1653,8 @@ fun rememberVideoPlayerState(
         }
     }
 
-    // 网络请求与播放器绑定分开，进场门控只约束媒体准备。
-    // 门控开放前先 attachPlayer，保证 prepare 使用当前播放器。
+    // 玻璃与原生路径共用：活跃会话提前绑定并允许暂停准备，入场只约束正式播放。
+    // 先绑定再开放准备许可，保证缓冲使用当前播放器。
     SideEffect {
         viewModel.setRelatedPublicationAllowed(relatedPublicationAllowed)
     }
@@ -1662,10 +1662,11 @@ fun rememberVideoPlayerState(
         onDispose { viewModel.setRelatedPublicationAllowed(true) }
     }
     DisposableEffect(viewModel, player, entryTransitionFinished, playbackSessionActive) {
-        if (playbackSessionActive && (entryTransitionFinished || reuseFromMiniPlayerAtEntry)) {
+        if (playbackSessionActive) {
             viewModel.attachPlayer(player)
         }
-        viewModel.setPlaybackPreparationAllowed(entryTransitionFinished)
+        viewModel.setPlaybackPreparationAllowed(playbackSessionActive)
+        viewModel.setPlaybackStartAllowed(playbackSessionActive && entryTransitionFinished)
         if (!playbackSessionActive && !miniPlayerManager.isPlayerManaged(player)) {
             viewModel.cancelPendingVideoLoad()
         }
@@ -1703,12 +1704,8 @@ fun rememberVideoPlayerState(
         } == true
         if (resumeSameRemoteItem && remoteResume != null) player.setPlaybackSpeed(remoteResume.speed)
 
-        // 冷启动进场：仅 attach/prepare 等待 morph 门控，网络请求立即启动。
-        // 小窗复用则立即 attach，保证 live morph 能带上已在播的 surface。
-        // 1️⃣ 首先绑定 player
-        if (entryTransitionFinished || reuseFromMiniPlayerAtEntry) {
-            viewModel.attachPlayer(player)
-        }
+        // 当前会话可在进场期间绑定和暂停准备；正式播放仍等待入场许可。
+        viewModel.attachPlayer(player)
         Logger.d(
             "VideoPlayerState",
             "SUB_DBG attach player + decide restore/load: request=$bvid/$cid, reuse=$reuseFromMiniPlayerAtEntry, entryFinished=$entryTransitionFinished"

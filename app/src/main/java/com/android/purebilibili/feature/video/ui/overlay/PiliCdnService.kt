@@ -45,6 +45,11 @@ internal fun selectPiliCdnUrl(urls: List<String>, service: PiliCdnService): Stri
     val candidates = urls.filter { it.isNotBlank() }
     require(candidates.isNotEmpty()) { "当前媒体没有可用播放地址" }
     if (service == PiliCdnService.BASE) return candidates.first()
+    if (service == PiliCdnService.BACKUP) {
+        return candidates.firstOrNull {
+            !com.android.purebilibili.feature.plugin.isRiskyCdnUrl(it)
+        } ?: candidates.first()
+    }
     var mcdnTf: String? = null
     var mcdnUpgcxcode: String? = null
     for (url in candidates) {

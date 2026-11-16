@@ -530,9 +530,7 @@ class VideoPlaybackUseCase(
                                 cid = bootstrapCid,
                                 targetQuality = defaultQuality,
                                 audioLang = audioLang
-                            ).also { data ->
-                                if (cid > 0L && data != null) onPlaybackDataReady(cid, data)
-                            }
+                            )
                         }
 
                         infoDeferred.await().fold(
@@ -555,6 +553,7 @@ class VideoPlaybackUseCase(
                                     },
                                     loadHistory = ::loadPlaybackHistory,
                                     onStage = onDataLoadStage,
+                                    onPlaybackDataReady = onPlaybackDataReady,
                                 )
                             },
                             onFailure = { error ->
@@ -584,6 +583,7 @@ class VideoPlaybackUseCase(
                                     },
                                     loadHistory = ::loadPlaybackHistory,
                                     onStage = onDataLoadStage,
+                                    onPlaybackDataReady = onPlaybackDataReady,
                                 )
                             },
                             onFailure = { Result.failure(it) }

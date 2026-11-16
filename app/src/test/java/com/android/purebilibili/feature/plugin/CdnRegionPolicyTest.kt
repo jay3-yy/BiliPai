@@ -442,15 +442,56 @@ class CdnRegionPolicyTest {
     }
 
     @Test
-    fun `backup preference promotes returned backup without discarding base`() {
+    fun `default preference promotes signed regular backup without rewriting tracks`() {
         val original = buildPlaybackCdnCandidates(
-            videoUrls = listOf("https://base.bilivideo.com/v", "https://backup.bilivideo.com/v"),
+            videoUrls = listOf(
+                "https://a.mcdn.bilivideo.cn/v?sign=a%2Fb",
+                "https://backup.bilivideo.com/v?sign=c%2Fd",
+            ),
+            audioUrls = listOf(
+                "https://a.mcdn.bilivideo.cn/a?sign=e%2Ff",
+                "https://backup.bilivideo.com/a?sign=g%2Fh",
+            ),
+        )
+
+        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.fromStorageValue(null))
+
+        assertEquals(listOf(original[1], original[0]), preferred)
+    }
+
+    @Test
+    fun `backup preference preserves regular primary and stable server order`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://z.bilivideo.com/v", "https://a.bilivideo.com/v"),
             audioUrls = emptyList(),
         )
 
-        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.BACKUP_URL)
+        assertEquals(original, applyPlaybackCdnPreference(original, PlaybackCdnPreference.BACKUP_URL))
+        assertEquals(original, applyPlaybackCdnPreference(original, PlaybackCdnPreference.fromStorageValue("base_url")))
+    }
 
-        assertEquals("backup.bilivideo.com", hostFromCdnUrl(preferred.first().videoUrl))
-        assertEquals("base.bilivideo.com", hostFromCdnUrl(preferred.last().videoUrl))
+    @Test
+    fun `backup preference retains all risky signed candidates when no regular route exists`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://1.2.3.4/v1/resource/a?sign=a", "https://a.mcdn.bilivideo.cn/v?sign=b"),
+            audioUrls = emptyList(),
+        )
+
+        assertEquals(original, applyPlaybackCdnPreference(original, PlaybackCdnPreference.BACKUP_URL))
+    }
+
+    @Test
+    fun `backup preference does not rotate plugin health ranking`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://a.bilivideo.com/v", "https://b.bilivideo.com/v"),
+            audioUrls = emptyList(),
+        )
+        val ranked = sortSafeSignedPlaybackCandidates(
+            original,
+            mapOf("a.bilivideo.com" to CdnCandidateHealth(playbackErrorCount = 2)),
+        )
+
+        assertEquals(original[1], ranked.first())
+        assertEquals(ranked, applyPlaybackCdnPreference(ranked, PlaybackCdnPreference.BACKUP_URL, pluginApplied = true))
     }
 }

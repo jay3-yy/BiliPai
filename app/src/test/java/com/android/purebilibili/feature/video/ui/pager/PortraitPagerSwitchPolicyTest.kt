@@ -1,6 +1,8 @@
 package com.android.purebilibili.feature.video.ui.pager
 
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.geometry.Size
+import androidx.media3.ui.AspectRatioFrameLayout
+import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
 import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.Stat
@@ -269,7 +271,8 @@ class PortraitPagerSwitchPolicyTest {
                 isLoading = true,
                 isCurrentPage = true,
                 isPlayerReadyForThisVideo = true,
-                hasRenderedFirstFrame = false
+                hasRenderedFirstFrame = false,
+                hasRenderedSurfaceFrame = false,
             )
         )
 
@@ -278,7 +281,8 @@ class PortraitPagerSwitchPolicyTest {
                 isLoading = false,
                 isCurrentPage = false,
                 isPlayerReadyForThisVideo = true,
-                hasRenderedFirstFrame = false
+                hasRenderedFirstFrame = true,
+                hasRenderedSurfaceFrame = true,
             )
         )
 
@@ -287,7 +291,8 @@ class PortraitPagerSwitchPolicyTest {
                 isLoading = false,
                 isCurrentPage = true,
                 isPlayerReadyForThisVideo = false,
-                hasRenderedFirstFrame = false
+                hasRenderedFirstFrame = true,
+                hasRenderedSurfaceFrame = true,
             )
         )
 
@@ -296,7 +301,18 @@ class PortraitPagerSwitchPolicyTest {
                 isLoading = false,
                 isCurrentPage = true,
                 isPlayerReadyForThisVideo = true,
-                hasRenderedFirstFrame = false
+                hasRenderedFirstFrame = false,
+                hasRenderedSurfaceFrame = true,
+            )
+        )
+
+        assertTrue(
+            shouldShowPortraitCover(
+                isLoading = false,
+                isCurrentPage = true,
+                isPlayerReadyForThisVideo = true,
+                hasRenderedFirstFrame = true,
+                hasRenderedSurfaceFrame = false,
             )
         )
 
@@ -305,61 +321,38 @@ class PortraitPagerSwitchPolicyTest {
                 isLoading = true,
                 isCurrentPage = true,
                 isPlayerReadyForThisVideo = true,
-                hasRenderedFirstFrame = true
+                hasRenderedFirstFrame = true,
+                hasRenderedSurfaceFrame = true,
             )
         )
     }
 
     @Test
-    fun portraitCover_usesVideoViewportSizingBeforeFirstFrame() {
-        assertTrue(
-            shouldUseViewportBoundPortraitCover(
-                isCurrentPage = true,
-                isPlayerReadyForThisVideo = true,
-                hasRenderedFirstFrame = false
-            )
+    fun portraitCoverMatchesVideoFitCropAndStretchInsideFixedViewport() {
+        val viewport = Size(320f, 180f)
+        val videoAspect = 9f / 16f
+        assertEquals(
+            Size(101.25f, 180f),
+            resolvePortraitCoverImageSize(viewport, videoAspect, AspectRatioFrameLayout.RESIZE_MODE_FIT),
         )
-        assertFalse(
-            shouldUseViewportBoundPortraitCover(
-                isCurrentPage = true,
-                isPlayerReadyForThisVideo = true,
-                hasRenderedFirstFrame = true
-            )
-        )
+        val crop = resolvePortraitCoverImageSize(viewport, videoAspect, AspectRatioFrameLayout.RESIZE_MODE_ZOOM)
+        assertEquals(320f, crop.width, 0.001f)
+        assertEquals(320f / videoAspect, crop.height, 0.001f)
+        assertEquals(viewport, resolvePortraitCoverImageSize(viewport, videoAspect, AspectRatioFrameLayout.RESIZE_MODE_FILL))
     }
 
     @Test
-    fun portraitCover_fillsVerticalViewportButKeepsLandscapeCoverComplete() {
-        assertEquals(
-            ContentScale.Crop,
-            resolvePortraitCoverContentScale(isVerticalVideo = true)
-        )
-        assertEquals(
-            ContentScale.Fit,
-            resolvePortraitCoverContentScale(isVerticalVideo = false)
-        )
-    }
-
-    @Test
-    fun portraitCover_usesStableFallbackAspectBeforeFirstFrame() {
-        assertEquals(
-            9f / 16f,
-            resolvePortraitCoverViewportAspect(
-                currentVideoAspect = 16f / 9f,
-                hasRenderedFirstFrame = false
+    fun unloadedPortraitPageKeepsItsKnownAspectAcrossMaterials() {
+        for (glass in listOf(false, true)) {
+            val viewport = resolvePortraitPlayerViewportSize(
+                containerWidth = 1080, containerHeight = 2400,
+                currentVideoAspect = 9f / 16f, fillContainer = false,
+                aspectRatio = VideoAspectRatio.FIT,
+                videoWidth = 0, videoHeight = 0,
+                liquidGlassEnabled = glass,
             )
-        )
-    }
-
-    @Test
-    fun portraitCover_usesRuntimeAspectAfterFirstFrame() {
-        assertEquals(
-            16f / 9f,
-            resolvePortraitCoverViewportAspect(
-                currentVideoAspect = 16f / 9f,
-                hasRenderedFirstFrame = true
-            )
-        )
+            assertEquals(PortraitVideoViewportSize(1080, 1920), viewport)
+        }
     }
 
     @Test

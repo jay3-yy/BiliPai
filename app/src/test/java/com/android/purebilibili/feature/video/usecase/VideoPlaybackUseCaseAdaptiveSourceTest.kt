@@ -18,6 +18,33 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class VideoPlaybackUseCaseAdaptiveSourceTest {
+    @Test
+    fun `locked startup manifest uses the selected codec and bitrate track`() {
+        val highHevc = DashVideo(id = 80, codecs = "hev1", bandwidth = 8_000_000, baseUrl = "https://example.com/hevc-high.m4s")
+        val lowHevc = highHevc.copy(bandwidth = 1_000_000, baseUrl = "https://example.com/hevc-low.m4s")
+        val avc = highHevc.copy(codecs = "avc1", bandwidth = 2_000_000, baseUrl = "https://example.com/avc.m4s")
+        val data = PlayUrlData(quality = 80, dash = Dash(video = listOf(highHevc, avc, lowHevc)))
+        val useCase = VideoPlaybackUseCase(videoTrackFilter = { it })
+
+        for ((preference, expected) in listOf("hev1" to lowHevc, "avc1" to avc)) {
+            val selection = useCase.resolvePlaybackSelection(
+                playUrlData = data,
+                targetQuality = 80,
+                videoCodecPreference = preference,
+                isHevcSupported = true,
+                isAv1Supported = false,
+                isDolbyAudioSupported = false,
+                isDolbyAudioSoftwareDecoded = false,
+                allowPremiumApiOnlyQualities = false,
+                lockSelectedQuality = true,
+            )
+
+            assertNotNull(selection)
+            assertEquals(expected.baseUrl, selection.videoUrl)
+            assertEquals(listOf(expected), selection.adaptiveDashSource?.videoTracks)
+        }
+    }
+
 
     @Test
     fun `unsupported dash does not bypass capability checks while empty dash keeps legacy url playback`() {

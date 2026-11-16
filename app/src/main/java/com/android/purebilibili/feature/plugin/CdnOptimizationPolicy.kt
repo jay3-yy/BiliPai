@@ -17,7 +17,7 @@ enum class CdnOptimizationProfile {
 data class CdnAuthorizedCandidate(
     val url: String,
     val host: String = hostFromCdnUrl(url),
-    val risky: Boolean = isRiskyCdnHost(host)
+    val risky: Boolean = isRiskyCdnUrl(url)
 )
 
 data class CdnByteRange(
@@ -63,7 +63,6 @@ internal fun sortAuthorizedCdnCandidates(
         compareByDescending<CdnAuthorizedCandidate> { it.host.equals(normalizedPin, ignoreCase = true) }
             .thenBy { it.risky }
             .thenByDescending { scoreCdnCandidate(healthByHost[it.host]) }
-            .thenBy { it.url }
     )
 }
 
@@ -72,12 +71,16 @@ internal fun sortSafeSignedPlaybackCandidates(
     healthByHost: Map<String, CdnCandidateHealth>,
     pinnedHost: String? = null
 ): List<PlaybackCdnCandidate> {
-    val order = sortAuthorizedCdnCandidates(
-        candidates = candidates.map { CdnAuthorizedCandidate(it.videoUrl) },
-        healthByHost = healthByHost,
-        pinnedHost = pinnedHost
-    ).map { it.url }
-    return order.mapNotNull { url -> candidates.firstOrNull { it.videoUrl == url } }
+    val normalizedPin = pinnedHost?.lowercase()?.takeIf { it.isNotBlank() }
+    return candidates.sortedWith(
+        compareByDescending<PlaybackCdnCandidate> {
+            hostFromCdnUrl(it.videoUrl).equals(normalizedPin, ignoreCase = true)
+        }.thenBy {
+            isRiskyCdnUrl(it.videoUrl) || it.audioUrl?.let(::isRiskyCdnUrl) == true
+        }.thenByDescending {
+            scoreCdnCandidate(healthByHost[hostFromCdnUrl(it.videoUrl)])
+        }
+    )
 }
 
 internal fun buildPlaybackCdnCacheKeys(candidates: List<PlaybackCdnCandidate>): Map<String, String> {
@@ -92,6 +95,11 @@ internal fun buildPlaybackCdnCacheKeys(candidates: List<PlaybackCdnCandidate>): 
         }
     }
 }
+
+/** 常规镜像也可能通过 os=mcdn 标记资源来源，只看域名会漏判。 */
+internal fun isRiskyCdnUrl(url: String): Boolean =
+    isRiskyCdnHost(hostFromCdnUrl(url)) ||
+        URI(url).rawQuery.orEmpty().split('&').any { it == "os=mcdn" }
 
 internal fun isRiskyCdnHost(host: String): Boolean {
     val normalized = host.lowercase()

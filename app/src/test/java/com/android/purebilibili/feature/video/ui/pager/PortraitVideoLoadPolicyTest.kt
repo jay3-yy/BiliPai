@@ -17,6 +17,90 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PortraitVideoLoadPolicyTest {
+    @Test
+    fun portraitHardwarePreferenceSkipsSoftwareOnlyAv1AtTheSameQuality() {
+        val av1 = DashVideo(id = 80, codecs = "av01", baseUrl = "https://example.com/av1.m4s")
+        val hevc = DashVideo(id = 80, codecs = "hev1", baseUrl = "https://example.com/hevc.m4s")
+        val urls = resolvePortraitPlaybackStreamUrls(
+            playData = PlayUrlData(quality = 80, dash = Dash(video = listOf(av1, hevc))),
+            targetQuality = 80,
+            preferCodec = "av01",
+            isHevcSupported = true,
+            isAv1Supported = true,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false,
+            videoTrackFilter = { tracks ->
+                com.android.purebilibili.core.util.selectPlayableVideoTracks(tracks, preferHardware = true) { track ->
+                    com.android.purebilibili.core.util.VideoTrackDecoderSupport(
+                        supported = true, hardware = track == hevc, software = track == av1,
+                    )
+                }
+            },
+        )
+
+        assertEquals(hevc.baseUrl, urls?.videoUrl)
+        assertEquals(80, urls?.videoQualityId)
+    }
+
+    @Test
+    fun unsupportedPortraitDashCannotBypassCapabilityFilteringThroughLegacyUrl() {
+        val urls = resolvePortraitPlaybackStreamUrls(
+            playData = PlayUrlData(
+                quality = 80,
+                dash = Dash(video = listOf(DashVideo(id = 80, codecs = "hev1", baseUrl = "https://example.com/video.m4s"))),
+                durl = listOf(Durl(url = "https://example.com/legacy.mp4")),
+            ),
+            targetQuality = 80,
+            isHevcSupported = true,
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false,
+            videoTrackFilter = { emptyList() },
+        )
+
+        assertNull(urls)
+    }
+
+    @Test
+    fun portraitQualityIdentityFollowsTheActuallySupportedTrack() {
+        val unsupported = DashVideo(id = 80, codecs = "hev1", baseUrl = "https://example.com/1080.m4s")
+        val supported = DashVideo(id = 64, codecs = "avc1", baseUrl = "https://example.com/720.m4s")
+        val urls = resolvePortraitPlaybackStreamUrls(
+            playData = PlayUrlData(quality = 80, dash = Dash(video = listOf(unsupported, supported))),
+            targetQuality = 80,
+            isHevcSupported = true,
+            isAv1Supported = false,
+            isDolbyAudioSupported = false,
+            isDolbyAudioSoftwareDecoded = false,
+            videoTrackFilter = { tracks -> tracks.filter { it == supported } },
+        )
+
+        assertEquals(supported.baseUrl, urls?.videoUrl)
+        assertEquals(64, urls?.videoQualityId)
+    }
+
+    @Test
+    fun portraitSourcesApplySavedCdnPreferenceBeforePlayerPreparation() {
+        val baseVideo = "https://a.mcdn.bilivideo.cn/upgcxcode/v.m4s?sign=a%2Fb"
+        val backupVideo = "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/v.m4s?sign=c%2Fd"
+        val baseAudio = "https://a.mcdn.bilivideo.cn/upgcxcode/a.m4s?sign=e%2Ff"
+        val backupAudio = "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/a.m4s?sign=g%2Fh"
+        val videos = listOf(DashVideo(id = 80, baseUrl = baseVideo, backupUrl = listOf(backupVideo)))
+        val audios = listOf(DashAudio(id = 30280, baseUrl = baseAudio, backupUrl = listOf(backupAudio)))
+        val streams = PortraitPlaybackStreamUrls(backupVideo, backupAudio)
+        val defaults = resolvePortraitPlaybackCdnUrls(streams, videos, audios, 80, cdnPlugin = null)
+
+        assertEquals(backupVideo, defaults.videoUrl)
+        assertEquals(backupAudio, defaults.audioUrl)
+
+        val manual = resolvePortraitPlaybackCdnUrls(
+            streams, videos, audios, 80, cdnPlugin = null,
+            preference = com.android.purebilibili.feature.plugin.PlaybackCdnPreference.HW,
+        )
+        assertEquals("upos-sz-mirrorhw.bilivideo.com", java.net.URI(manual.videoUrl).host)
+        assertEquals("upos-sz-mirrorhw.bilivideo.com", java.net.URI(manual.audioUrl).host)
+    }
+
 
     @Test
     fun enrichPortraitPageItemWithLoadedInfo_fillsOwnerFromDetail() {

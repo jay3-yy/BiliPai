@@ -5,6 +5,7 @@ import com.android.purebilibili.core.player.policy.PlaybackQualityMode
 import com.android.purebilibili.data.model.response.Dash
 import com.android.purebilibili.data.model.response.DashAudio
 import com.android.purebilibili.data.model.response.DashVideo
+import com.android.purebilibili.data.model.response.getBestVideo
 import com.android.purebilibili.feature.video.playback.audio.AUDIO_QUALITY_AUTO
 import com.android.purebilibili.feature.video.playback.audio.AudioStreamKind
 import com.android.purebilibili.feature.video.playback.audio.collectAudioStreamCandidates
@@ -54,9 +55,6 @@ fun buildAdaptiveDashTrackSet(
     isAv1Supported: Boolean,
     isDolbyAudioSupported: Boolean = true
 ): AdaptiveDashTrackSet {
-    val preferredCodec = normalizeCodecFamilyKey(preferredVideoCodec)
-    val secondaryCodec = normalizeCodecFamilyKey(secondaryVideoCodec)
-
     val supportedVideos = dash.video
         .filter { it.getValidUrl().isNotBlank() }
         .filter { video ->
@@ -81,23 +79,25 @@ fun buildAdaptiveDashTrackSet(
         .groupBy { it.id }
         .values
         .flatMap { videosAtQuality ->
-            val preferredVideos = preferredCodec?.let { codec ->
-                videosAtQuality.filter { normalizeCodecFamilyKey(it.codecs) == codec }
-            }.orEmpty()
-            val secondaryVideos = secondaryCodec?.let { codec ->
-                videosAtQuality.filter { normalizeCodecFamilyKey(it.codecs) == codec }
-            }.orEmpty()
-
-            when {
-                preferredVideos.isNotEmpty() -> preferredVideos
-                secondaryVideos.isNotEmpty() -> secondaryVideos
-                else -> videosAtQuality
+            // 与直接地址共用编码、次选编码和码率选择，避免清单再次选到另一条轨道。
+            val selected = Dash(video = videosAtQuality).getBestVideo(
+                targetQn = videosAtQuality.first().id,
+                preferCodec = preferredVideoCodec,
+                secondPreferCodec = secondaryVideoCodec,
+                isHevcSupported = isHevcSupported,
+                isAv1Supported = isAv1Supported,
+            ) ?: return@flatMap emptyList()
+            if (mode is PlaybackQualityMode.LOCKED) {
+                listOf(selected)
+            } else {
+                // 自动画质保留同编码的多个码率，仍可随带宽自适应。
+                val selectedCodec = normalizeCodecFamilyKey(selected.codecs)
+                videosAtQuality.filter { normalizeCodecFamilyKey(it.codecs) == selectedCodec }
             }
         }
 
     val sortedVideos = codecSelectedVideos.sortedWith(
         compareByDescending<DashVideo> { it.id }
-            .thenByDescending { scoreCodecPreference(it.codecs, preferredCodec, secondaryCodec) }
             .thenByDescending { it.bandwidth }
     )
 
@@ -118,16 +118,4 @@ fun buildAdaptiveDashTrackSet(
         videoTracks = sortedVideos,
         audioTracks = sortedAudios
     )
-}
-
-private fun scoreCodecPreference(
-    codecs: String,
-    preferredCodec: String?,
-    secondaryCodec: String?
-): Int {
-    return when (normalizeCodecFamilyKey(codecs)) {
-        preferredCodec -> 2
-        secondaryCodec -> 1
-        else -> 0
-    }
 }

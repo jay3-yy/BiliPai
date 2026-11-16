@@ -150,9 +150,9 @@ fun rememberPiliPlayerMenuSession(
     }
     val currentAmplification by rememberUpdatedState(amplification)
     val storedCdnService by remember(context) { PiliPlayerMenuStore.cdnService(context) }
-        .collectAsStateWithLifecycle(initialValue = "BASE")
+        .collectAsStateWithLifecycle(initialValue = "BACKUP")
     val cdnService = remember(storedCdnService) {
-        PiliCdnService.entries.firstOrNull { it.name == storedCdnService } ?: PiliCdnService.BASE
+        PiliCdnService.entries.firstOrNull { it.name == storedCdnService } ?: PiliCdnService.BACKUP
     }
     val cdnLabels = remember { PiliCdnService.entries.map { it.label } }
     val sourceKey = remember(videoUrl) { runCatching { java.net.URI(videoUrl).rawPath }.getOrNull().orEmpty() }
@@ -172,13 +172,8 @@ fun rememberPiliPlayerMenuSession(
         if (replacement != null) replacement(bvid, cid, video, audio)
         else if (player != null) replacePiliPlayerSources(context, player, video, audio)
     }
-    LaunchedEffect(player, bvid, cid, sourceKey, audioSourceKey, cdnService) {
-        if (cdnService != PiliCdnService.BASE) {
-            runCatching { applyCdn(cdnService) }.onFailure {
-                Toast.makeText(context, it.message ?: "CDN 地址替换失败", Toast.LENGTH_LONG).show()
-            }
-        }
-    }
+    // 起播选线由加载链路完成，菜单挂载不再替换播放源、重复 prepare。
+    // 只有用户主动选择线路时才调用 applyCdn。
 
     DisposableEffect(player) {
         fun releaseGainEffect() {

@@ -161,7 +161,9 @@ import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.plugin.PluginManager
 import com.android.purebilibili.core.store.DanmakuSettings
 import com.android.purebilibili.core.util.NetworkUtils
+import com.android.purebilibili.core.util.VideoTrackCapabilities
 import com.android.purebilibili.plugin.sdk.PlaybackCdnPlugin
+import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
 import com.android.purebilibili.core.store.DanmakuSettingsScope
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.core.store.PortraitDanmakuDisplayAreaMode
@@ -595,6 +597,9 @@ fun PortraitVideoPager(
     val portraitMediaSourceFactory = remember(context) {
         buildPortraitCachedMediaSourceFactory(context)
     }
+    val portraitCdnPreferenceValue by remember(context) { SettingsManager.getPlaybackCdnPreference(context) }
+        .collectAsStateWithLifecycle(initialValue = PlaybackCdnPreference.DEFAULT.storageValue)
+    val portraitCdnPreference = PlaybackCdnPreference.fromStorageValue(portraitCdnPreferenceValue)
     val portraitPlaybackCdnPlugin = remember {
         PluginManager.getEnabledPlugins(PlaybackCdnPlugin::class).firstOrNull()
     }
@@ -843,6 +848,8 @@ fun PortraitVideoPager(
     LaunchedEffect(exoPlayer, playbackCompletionBehavior) {
         exoPlayer.repeatMode = resolvePlaybackCompletionRepeatMode(playbackCompletionBehavior)
     }
+    val portraitPreferredCodec by viewModel.videoCodecPreference.collectAsStateWithLifecycle()
+    val portraitSecondPreferredCodec by viewModel.videoSecondCodecPreference.collectAsStateWithLifecycle()
     val wifiPreloadQueue = remember(exoPlayer, portraitMediaSourceFactory, portraitPlaybackCdnPlugin) {
         PortraitWifiPreloadQueue(context.applicationContext, exoPlayer, portraitMediaSourceFactory, portraitPlaybackCdnPlugin)
     }
@@ -1222,7 +1229,8 @@ fun PortraitVideoPager(
             requestedAudioQuality = audioQuality,
             targetVideoQuality = resolvePortraitPlaybackTargetQuality(portraitSelectedQuality),
             mediaId = resolvePortraitMediaId(activeBvid, currentPlayingCid),
-            cdnPlugin = portraitPlaybackCdnPlugin
+            cdnPlugin = portraitPlaybackCdnPlugin,
+            preference = portraitCdnPreference,
         )
             ?: return false
         portraitCurrentVideoUrl = result.videoUrl
@@ -1268,6 +1276,8 @@ fun PortraitVideoPager(
             )
         }
         val targetAudioLanguage = if (forceReload) portraitAudioLanguage else null
+        val targetCodec = viewModel.videoCodecPreference.value
+        val targetSecondCodec = viewModel.videoSecondCodecPreference.value
 
         if (!latestPortraitPlaybackAllowed) {
             pendingAutoPlayGeneration = -1
@@ -1318,10 +1328,11 @@ fun PortraitVideoPager(
         val plannedPositionMs = seekResumeMs ?: if (applyInitialSeekOnFirstPage && !hasConsumedInitialSeek) {
             entryStartPositionMs
         } else 0L
-        val preparedPlayback = if (!forceReload && portraitWifiAvailable && targetAudioLanguage == null &&
-            viewModel.videoCodecPreference.value == "hev1" &&
-            viewModel.videoSecondCodecPreference.value == "avc1") {
-            wifiPreloadQueue.claim(playbackIdentity, targetQuality, targetAudioQuality, exoPlayer.playbackParameters.speed)
+        val preparedPlayback = if (!forceReload && portraitWifiAvailable && targetAudioLanguage == null) {
+            wifiPreloadQueue.claim(
+                playbackIdentity, targetQuality, targetAudioQuality, exoPlayer.playbackParameters.speed,
+                targetCodec, targetSecondCodec, portraitCdnPreference,
+            )
         } else null
         if (preparedPlayback == null) wifiPreloadQueue.clear(force = true)
 
@@ -1385,17 +1396,28 @@ fun PortraitVideoPager(
                                 currentPlayingBvid = currentPlayingBvid
                             )
                         ) return@fold
-                        val streamUrls = resolvePortraitPlaybackStreamUrls(
-                            playData = playData,
-                            targetQuality = targetQuality,
-                            requestedAudioQuality = targetAudioQuality,
-                            playbackSpeed = exoPlayer.playbackParameters.speed,
-                            preferCodec = viewModel.videoCodecPreference.value,
-                            secondPreferCodec = viewModel.videoSecondCodecPreference.value,
-                        ) ?: run {
+                        val selectionSpeed = exoPlayer.playbackParameters.speed
+                        val streamUrls = withContext(Dispatchers.Default) {
+                            resolvePortraitPlaybackStreamUrls(
+                                playData = playData,
+                                targetQuality = targetQuality,
+                                requestedAudioQuality = targetAudioQuality,
+                                playbackSpeed = selectionSpeed,
+                                preferCodec = targetCodec,
+                                secondPreferCodec = targetSecondCodec,
+                                videoTrackFilter = { VideoTrackCapabilities.filterForPlayback(context, it) },
+                            )
+                        } ?: run {
                                 failPlayback("没有可播放的视频流，请重试")
                                 return@fold
                             }
+                        if (!shouldApplyLoadResult(
+                                requestGeneration = requestGeneration,
+                                activeGeneration = activeLoadGeneration,
+                                expectedBvid = bvid,
+                                currentPlayingBvid = currentPlayingBvid,
+                            )
+                        ) return@fold
                         val resolvedUrls = resolvePortraitPlaybackCdnUrls(
                             streamUrls = streamUrls,
                             cachedDashVideos = playData.dash?.video.orEmpty(),
@@ -1404,7 +1426,8 @@ fun PortraitVideoPager(
                                 ?.map { it.track }
                                 .orEmpty(),
                             targetQuality = targetQuality,
-                            cdnPlugin = portraitPlaybackCdnPlugin
+                            cdnPlugin = portraitPlaybackCdnPlugin,
+                            preference = portraitCdnPreference,
                         )
                         val dashVideoIds = playData.playableVideoQualityIds()
                         portraitSwitchableQualityIds = dashVideoIds
@@ -1415,7 +1438,7 @@ fun PortraitVideoPager(
                         if (availableQualityIds.isNotEmpty()) {
                             portraitAvailableQualityIds = availableQualityIds
                         }
-                        portraitDisplayedQuality = resolvePortraitDisplayedQualityId(
+                        portraitDisplayedQuality = streamUrls.videoQualityId ?: resolvePortraitDisplayedQualityId(
                             requestedQuality = targetQuality,
                             returnedQuality = playData.quality,
                             dashVideoIds = dashVideoIds
@@ -1565,7 +1588,8 @@ fun PortraitVideoPager(
 
     LaunchedEffect(
         exoPlayer, wifiPreloadQueue, portraitWifiAvailable, isPortraitPlaybackAllowed,
-        portraitSelectedQuality, portraitRequestedAudioQuality, portraitPreloadSpeed, activeLoadGeneration, isLoading
+        portraitSelectedQuality, portraitRequestedAudioQuality, portraitPreloadSpeed, activeLoadGeneration, isLoading,
+        portraitPreferredCodec, portraitSecondPreferredCodec, portraitCdnPreference,
     ) {
         if (!portraitWifiAvailable || !isPortraitPlaybackAllowed || portraitSelectedQuality <= 0 || isLoading) {
             wifiPreloadQueue.clear()
@@ -1585,7 +1609,13 @@ fun PortraitVideoPager(
             }
             wifiPreloadQueue.warm(
                 target, resolvePortraitPlaybackTargetQuality(portraitSelectedQuality),
-                portraitRequestedAudioQuality, portraitPreloadSpeed
+                portraitRequestedAudioQuality, portraitPreloadSpeed,
+                portraitPreferredCodec, portraitSecondPreferredCodec, portraitCdnPreference,
+                onPreparedInfo = { info ->
+                    resolveAspectRatioFromDimension(info.dimension)?.let { aspect ->
+                        knownVideoAspectRatios[info.bvid] = aspect
+                    }
+                },
             )
         }
     }
@@ -1625,7 +1655,8 @@ fun PortraitVideoPager(
     // One effect owns the entire prefetch window, including cancellation of obsolete tasks.
     LaunchedEffect(
         pagerState, pageItems, portraitSelectedQuality, portraitRequestedAudioQuality,
-        prefetchVideoEnabled, portraitWifiAvailable, isPortraitPlaybackAllowed, portraitPlaybackCdnPlugin
+        prefetchVideoEnabled, portraitWifiAvailable, isPortraitPlaybackAllowed, portraitPlaybackCdnPlugin, portraitCdnPreference,
+        portraitPreferredCodec, portraitSecondPreferredCodec,
     ) {
         if (portraitSelectedQuality <= 0 || !isPortraitPlaybackAllowed) return@LaunchedEffect
         if (!portraitWifiAvailable && !prefetchVideoEnabled) return@LaunchedEffect
@@ -1679,7 +1710,10 @@ fun PortraitVideoPager(
                             val streamUrls = resolvePortraitPlaybackStreamUrls(
                                 playData = playData,
                                 targetQuality = targetQuality,
-                                requestedAudioQuality = portraitRequestedAudioQuality
+                                requestedAudioQuality = portraitRequestedAudioQuality,
+                                preferCodec = portraitPreferredCodec,
+                                secondPreferCodec = portraitSecondPreferredCodec,
+                                videoTrackFilter = { VideoTrackCapabilities.filterForPlayback(context, it) },
                             ) ?: return@launch
                             val resolvedUrls = resolvePortraitPlaybackCdnUrls(
                                 streamUrls = streamUrls,
@@ -1687,7 +1721,8 @@ fun PortraitVideoPager(
                                 cachedDashAudios = playData.dash
                                     ?.let(::collectAudioStreamCandidates)?.map { it.track }.orEmpty(),
                                 targetQuality = targetQuality,
-                                cdnPlugin = portraitPlaybackCdnPlugin
+                                cdnPlugin = portraitPlaybackCdnPlugin,
+                                preference = portraitCdnPreference,
                             )
                             prefetchPortraitPlaybackHead(context, resolvedUrls)
                         } catch (error: CancellationException) {
@@ -2377,6 +2412,9 @@ private fun VideoPageItem(
     val pipDanmakuVisible = !(isInPipMode && pipNoDanmakuEnabled)
     val currentAudioQuality = requestedAudioQuality
     val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
+    var renderedSurfaceFrame by remember(bvid, currentPlayingCid, enhancement.pipelineActive) {
+        mutableStateOf(false)
+    }
     val itemAid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid
     val currentUiState = viewModel.uiState.collectAsStateWithLifecycle().value
     val currentSuccess = currentUiState as? VideoPlaybackUiState.Success
@@ -2445,7 +2483,12 @@ private fun VideoPageItem(
         mutableFloatStateOf(
             resolvePortraitInitialVideoAspectRatio(
                 itemBvid = bvid,
-                currentPlayingBvid = currentPlayingBvid,
+                currentPlayingBvid = currentPlayingBvid.takeIf {
+                    shouldSkipPortraitReloadForCurrentMedia(
+                        currentPlayingBvid, bvid, exoPlayer.currentMediaItem?.mediaId,
+                        currentPlayingCid, currentPlayingCid,
+                    )
+                },
                 playerVideoWidth = exoPlayer.videoSize.width,
                 playerVideoHeight = exoPlayer.videoSize.height,
                 knownVideoAspectRatio = knownVideoAspectRatio
@@ -2453,7 +2496,7 @@ private fun VideoPageItem(
         )
     }
     
-    DisposableEffect(exoPlayer) {
+    DisposableEffect(exoPlayer, bvid, isCurrentPage, currentPlayingBvid, currentPlayingCid, knownVideoAspectRatio) {
         fun updateAwakeState() {
             keepPortraitPagerAwake = shouldKeepVideoPlaybackAwake(
                 playWhenReady = exoPlayer.playWhenReady,
@@ -2477,7 +2520,11 @@ private fun VideoPageItem(
 
 
             override fun onVideoSizeChanged(videoSize: VideoSize) {
-                if (videoSize.width > 0 && videoSize.height > 0) {
+                if (isCurrentPage && shouldSkipPortraitReloadForCurrentMedia(
+                        currentPlayingBvid, bvid, exoPlayer.currentMediaItem?.mediaId,
+                        currentPlayingCid, currentPlayingCid,
+                    ) && videoSize.width > 0 && videoSize.height > 0
+                ) {
                     currentVideoAspect = resolvePortraitRuntimeVideoAspectRatio(
                         knownVideoAspectRatio = knownVideoAspectRatio,
                         playerVideoWidth = videoSize.width,
@@ -2495,6 +2542,11 @@ private fun VideoPageItem(
 
     // [逻辑] 只有当播放器正在播放当前视频时，才显示 PlayerView
     val isPlayerReadyForThisVideo = bvid == currentPlayingBvid
+    val pageVideoSize = if (isCurrentPage && shouldSkipPortraitReloadForCurrentMedia(
+            currentPlayingBvid, bvid, exoPlayer.currentMediaItem?.mediaId,
+            currentPlayingCid, currentPlayingCid,
+        )
+    ) exoPlayer.videoSize else VideoSize.UNKNOWN
     val shouldKeepPortraitPagerItemAwake = isPortraitPlaybackAllowed &&
         keepPortraitPagerAwake &&
         isPlayerReadyForThisVideo
@@ -3418,10 +3470,10 @@ private fun VideoPageItem(
                 modifier = mediaLayerModifier,
                 fillContainer = portraitPagerFillContainer,
                 aspectRatio = aspectRatio,
-                videoWidth = exoPlayer.videoSize.width,
-                videoHeight = exoPlayer.videoSize.height,
+                videoWidth = pageVideoSize.width,
+                videoHeight = pageVideoSize.height,
             ) {
-                key(currentPlayingBvid, bvid, preferTexture) {
+                key(currentPlayingBvid, currentPlayingCid, bvid, preferTexture) {
                     Box(
                         modifier = viewportTransformModifier
                     ) {
@@ -3432,7 +3484,17 @@ private fun VideoPageItem(
                             keepScreenOn = shouldKeepPortraitPagerItemAwake,
                             flippedHorizontal = portraitFlippedHorizontal && !surfaceHdrRequired,
                             flippedVertical = portraitFlippedVertical && !surfaceHdrRequired,
-                            onPlayerViewChanged = { playerViewRef = it },
+                            onPlayerViewChanged = { view ->
+                                if (playerViewRef !== view) renderedSurfaceFrame = false
+                                playerViewRef = view
+                            },
+                            onFirstFrameRendered = {
+                                if (shouldSkipPortraitReloadForCurrentMedia(
+                                        currentPlayingBvid, bvid, exoPlayer.currentMediaItem?.mediaId,
+                                        currentPlayingCid, currentPlayingCid,
+                                    )
+                                ) renderedSurfaceFrame = true
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
 
@@ -3486,24 +3548,26 @@ private fun VideoPageItem(
             }
         }
 
-        // 封面图 (在加载中、未匹配到视频、或未开始播放时显示)
+        // Decoder readiness alone is insufficient for enhanced GL output. Hand off only
+        // after this page's actual output has drawn the matching video's first frame.
         val showCover = !isPlayerSurfaceReady || shouldShowPortraitCover(
             isLoading = isLoading,
             isCurrentPage = isCurrentPage,
             isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
-            hasRenderedFirstFrame = hasRenderedFirstFrame
+            hasRenderedFirstFrame = hasRenderedFirstFrame,
+            hasRenderedSurfaceFrame = renderedSurfaceFrame,
         )
         
         if (showCover) {
             PortraitVideoCoverLayer(
                 cover = cover,
                 currentVideoAspect = currentVideoAspect,
-                useViewportBoundCover = shouldUseViewportBoundPortraitCover(
-                    isCurrentPage = isCurrentPage,
-                    isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
-                    hasRenderedFirstFrame = hasRenderedFirstFrame,
-                ),
-                hasKnownVideoAspect = hasRenderedFirstFrame || knownVideoAspectRatio != null,
+                viewportAspect = portraitPagerViewportAspect,
+                fillContainer = portraitPagerFillContainer,
+                aspectRatio = aspectRatio,
+                resizeMode = portraitPagerResizeMode,
+                videoWidth = pageVideoSize.width,
+                videoHeight = pageVideoSize.height,
                 showBuffering = isLoading && isCurrentPage && !portraitOverlayVisible,
                 modifier = mediaLayerModifier,
             )
@@ -4957,7 +5021,9 @@ internal fun resolvePortraitPlayerViewportSize(
     videoHeight: Int,
     liquidGlassEnabled: Boolean,
 ): PortraitVideoViewportSize {
-    return if (aspectRatio != null && !liquidGlassEnabled) {
+    // Without decoded dimensions, retain the current item's known aspect. The native
+    // viewport helper otherwise defaults to landscape and moves the poster at first frame.
+    return if (aspectRatio != null && !liquidGlassEnabled && videoWidth > 0 && videoHeight > 0) {
         com.android.purebilibili.feature.video.ui.components.resolveVideoViewportLayout(
             containerWidth = containerWidth,
             containerHeight = containerHeight,

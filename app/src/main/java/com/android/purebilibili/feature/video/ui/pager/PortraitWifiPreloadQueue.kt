@@ -14,7 +14,9 @@ import com.android.purebilibili.core.util.NetworkUtils
 import com.android.purebilibili.data.model.response.PlayUrlData
 import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.core.util.VideoTrackCapabilities
 import com.android.purebilibili.plugin.sdk.PlaybackCdnPlugin
+import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
 import com.android.purebilibili.feature.video.playback.audio.collectAudioStreamCandidates
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +56,9 @@ internal data class PortraitPreparedPlayback(
     val quality: Int,
     val audioQuality: Int,
     val speed: Float,
+    val preferCodec: String,
+    val secondPreferCodec: String,
+    val cdnPreference: PlaybackCdnPreference,
 )
 
 /** The calling effect owns warm() and its cancellation. All player operations stay on Main. */
@@ -70,7 +75,16 @@ internal class PortraitWifiPreloadQueue(
     private var claimedMediaId: String? = null
     private var closed = false
 
-    suspend fun warm(identity: PortraitPagePlaybackIdentity, quality: Int, audioQuality: Int, speed: Float) {
+    suspend fun warm(
+        identity: PortraitPagePlaybackIdentity,
+        quality: Int,
+        audioQuality: Int,
+        speed: Float,
+        preferCodec: String,
+        secondPreferCodec: String,
+        cdnPreference: PlaybackCdnPreference,
+        onPreparedInfo: (ViewInfo) -> Unit,
+    ) {
         if (closed || !NetworkUtils.isWifi(context) || NetworkUtils.isMobileData(context) || player.mediaItemCount != 1) return
         val currentMediaId = player.currentMediaItem?.mediaId ?: return
         var owned: PortraitPreparedPlayback? = null
@@ -78,15 +92,19 @@ internal class PortraitWifiPreloadQueue(
             val (info, data) = withContext(Dispatchers.IO) {
                 VideoRepository.getPortraitPlaybackDetails(identity.bvid, identity.aid, identity.cid, quality)
             }.getOrNull() ?: return
+            val streams = withContext(Dispatchers.Default) {
+                resolvePortraitPlaybackStreamUrls(
+                    data, quality, requestedAudioQuality = audioQuality, playbackSpeed = speed,
+                    preferCodec = preferCodec, secondPreferCodec = secondPreferCodec,
+                    videoTrackFilter = { VideoTrackCapabilities.filterForPlayback(context, it) },
+                )
+            } ?: return
             if (!NetworkUtils.isWifi(context) || NetworkUtils.isMobileData(context) ||
                 player.currentMediaItem?.mediaId != currentMediaId || player.mediaItemCount != 1
             ) return
-            val streams = resolvePortraitPlaybackStreamUrls(
-                data, quality, requestedAudioQuality = audioQuality, playbackSpeed = speed
-            ) ?: return
             val urls = resolvePortraitPlaybackCdnUrls(
                 streams, data.dash?.video.orEmpty(),
-                data.dash?.let(::collectAudioStreamCandidates)?.map { it.track }.orEmpty(), quality, cdnPlugin
+                data.dash?.let(::collectAudioStreamCandidates)?.map { it.track }.orEmpty(), quality, cdnPlugin, cdnPreference,
             )
             val mediaId = resolvePortraitMediaId(identity.bvid, info.cid.takeIf { it > 0L } ?: identity.cid)
             val video = factory.createMediaSource(MediaItem.Builder().setUri(urls.videoUrl).setMediaId(mediaId).build())
@@ -95,12 +113,15 @@ internal class PortraitWifiPreloadQueue(
                     MediaItem.Builder().setUri(audio).setMediaId("audio_$mediaId").build()
                 ))
             } ?: video
-            owned = PortraitPreparedPlayback(info, data, mediaId, source, quality, audioQuality, speed)
+            owned = PortraitPreparedPlayback(
+                info, data, mediaId, source, quality, audioQuality, speed, preferCodec, secondPreferCodec, cdnPreference,
+            )
             // Buffer the next item without letting the internal playlist advance ahead of the UI.
             player.setPauseAtEndOfMediaItems(true)
             player.setPreloadConfiguration(ExoPlayer.PreloadConfiguration(3_000_000L))
             player.addMediaSource(source)
             prepared = owned
+            onPreparedInfo(info)
             awaitCancellation()
         } catch (error: CancellationException) {
             throw error
@@ -111,12 +132,22 @@ internal class PortraitWifiPreloadQueue(
         }
     }
 
-    fun claim(identity: PortraitPagePlaybackIdentity, quality: Int, audioQuality: Int, speed: Float): PortraitPreparedPlayback? {
+    fun claim(
+        identity: PortraitPagePlaybackIdentity,
+        quality: Int,
+        audioQuality: Int,
+        speed: Float,
+        preferCodec: String,
+        secondPreferCodec: String,
+        cdnPreference: PlaybackCdnPreference,
+    ): PortraitPreparedPlayback? {
         if (closed) return null
         val candidate = prepared ?: return null
         if (candidate.mediaId.substringBefore('#') != identity.bvid ||
             (identity.cid > 0L && candidate.info.cid != identity.cid) ||
             candidate.quality != quality || candidate.audioQuality != audioQuality || candidate.speed != speed ||
+            candidate.preferCodec != preferCodec || candidate.secondPreferCodec != secondPreferCodec ||
+            candidate.cdnPreference != cdnPreference ||
             player.playerError != null || indexOf(candidate.mediaId) < 0
         ) return null
         claimedMediaId = candidate.mediaId

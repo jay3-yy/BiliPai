@@ -2317,9 +2317,12 @@ internal fun VideoDetailScreenStateHolder(
         }
     }
     // Real first-frame state survives detail disposal while the mini player owns this media.
-    val hasRenderedFirstFrameForReturn by playerState.hasRenderedFirstFrame.collectAsStateWithLifecycle(
+    val playerHasRenderedFirstFrame by playerState.hasRenderedFirstFrame.collectAsStateWithLifecycle(
         lifecycle = lifecycleOwner.lifecycle,
     )
+    // 玻璃与原生共用：进度确认前的暂停预备帧不能揭开封面或作为返回画面。
+    val hasRenderedFirstFrameForReturn = playerHasRenderedFirstFrame &&
+        uiState is VideoPlaybackUiState.Success
     val entryFirstFrameReveal = rememberVideoDetailFirstFrameReveal(
         bvid = currentBvid,
         cid = playbackTargetCid,

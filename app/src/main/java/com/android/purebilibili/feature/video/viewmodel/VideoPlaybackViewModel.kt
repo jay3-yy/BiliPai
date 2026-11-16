@@ -485,27 +485,10 @@ internal fun buildPlaybackCdnFallbackState(
             )
         )
     }
-    // 回退时优先挑非 PCDN 的候选：首次选线（preferredDashUrl）已经排除 PCDN，
-    // 但这里的候选取自原始响应，可能把 mountaintoys 之类的 PCDN 地址捡回来。
-    val nonPcdn = candidates.filterNot {
-        com.android.purebilibili.feature.plugin.isRiskyCdnHost(it.videoUrl)
-    }
-    // 整批都是 PCDN 时不能直接用它回退（这些域名常常解析失败），
-    // 和 preferredDashUrl 一样换成常规 CDN：upgcxcode 路径与签名跨 host 通用。
-    val orderedCandidates = if (nonPcdn.isNotEmpty()) {
-        nonPcdn + candidates.filter { it !in nonPcdn }
-    } else {
-        val selectedHost = hostOf(selectedVideoUrl)
-        candidates.map { candidate ->
-            candidate.copy(
-                videoUrl = rewriteToDefaultCdnHost(candidate.videoUrl, selectedHost),
-                audioUrl = candidate.audioUrl
-                    ?.takeIf { com.android.purebilibili.feature.plugin.isRiskyCdnHost(it) }
-                    ?.let { url -> rewriteToDefaultCdnHost(url, selectedHost) }
-                    ?: candidate.audioUrl,
-            )
-        }
-    }
+    // 回退同样只重排已有候选，不把原签名拼接到未下发的 host。
+    val orderedCandidates = com.android.purebilibili.feature.plugin.sortSafeSignedPlaybackCandidates(
+        candidates, emptyMap()
+    )
     val firstFallback = orderedCandidates.firstOrNull { candidate ->
         candidate.videoUrl != selectedVideoUrl || candidate.audioUrl != selectedAudioUrl
     }
@@ -520,26 +503,6 @@ internal fun buildPlaybackCdnFallbackState(
     )
 }
 
-/** 把 URL 的 host 换成常规 CDN，保留原路径与签名参数。 */
-private fun rewriteToDefaultCdnHost(url: String, avoidHost: String? = null): String {
-    val path = url.substringAfter("://", "").substringAfter("/", "")
-    if (path.isEmpty()) return url
-    // 避开已经用过的线路（例如设置里选的就是阿里云），否则回退等于原地重试
-    val host = DEFAULT_FALLBACK_CDN_HOSTS.firstOrNull { host ->
-        avoidHost == null || !host.contains(avoidHost, ignoreCase = true)
-    } ?: DEFAULT_FALLBACK_CDN_HOSTS.first()
-    return "$host/$path"
-}
-
-private fun hostOf(url: String): String =
-    url.substringAfter("://", "").substringBefore("/").substringBefore(":")
-
-private val DEFAULT_FALLBACK_CDN_HOSTS = listOf(
-    "https://upos-sz-mirrorali.bilivideo.com",
-    "https://upos-sz-mirrorcos.bilivideo.com",
-    "https://upos-sz-mirrorhw.bilivideo.com",
-)
-
 internal fun buildPlaybackAudioUrlCandidates(
     audioUrl: String?,
     cachedDashAudios: List<DashAudio>
@@ -548,19 +511,18 @@ internal fun buildPlaybackAudioUrlCandidates(
         ?.takeIf { it.isNotBlank() }
         ?.let { selectedUrl ->
             cachedDashAudios.firstOrNull { audio ->
-                audio.getValidUrl() == selectedUrl ||
+                audio.baseUrl == selectedUrl || audio.getValidUrl() == selectedUrl ||
                     audio.backupUrl.orEmpty().any { backupUrl -> backupUrl == selectedUrl }
             }
         }
 
-    return buildList {
-        audioUrl?.takeIf { it.isNotBlank() }?.let(::add)
-        selectedAudio
-            ?.backupUrl
-            .orEmpty()
-            .filter { it.isNotBlank() }
-            .let(::addAll)
-    }.distinct()
+    return if (selectedAudio != null) {
+        // 使用所选音轨的原始签名地址，避免携带 getValidUrl 的合成 host。
+        (listOf(selectedAudio.baseUrl) + selectedAudio.backupUrl.orEmpty())
+            .filter { it.isNotBlank() }.distinct()
+    } else {
+        listOfNotNull(audioUrl?.takeIf { it.isNotBlank() })
+    }
 }
 
 internal fun buildPlaybackVideoUrlCandidates(
@@ -570,21 +532,18 @@ internal fun buildPlaybackVideoUrlCandidates(
 ): List<String> {
     val selectedVideo = cachedDashVideos.firstOrNull { video ->
         video.id == quality && (
-            video.baseUrl == videoUrl ||
+            video.baseUrl == videoUrl || video.getValidUrl() == videoUrl ||
                 video.backupUrl.orEmpty().any { backupUrl -> backupUrl == videoUrl }
             )
     }
 
-    return buildList {
-        if (videoUrl.isNotBlank()) {
-            add(videoUrl)
-        }
-        selectedVideo
-            ?.backupUrl
-            .orEmpty()
-            .filter { it.isNotBlank() }
-            .let(::addAll)
-    }.distinct()
+    return if (selectedVideo != null) {
+        // 编码与画质已经选定，只展开该轨道的原始地址。
+        (listOf(selectedVideo.baseUrl) + selectedVideo.backupUrl.orEmpty())
+            .filter { it.isNotBlank() }.distinct()
+    } else {
+        listOf(videoUrl).filter { it.isNotBlank() }
+    }
 }
 
 internal fun shouldFallbackFromCdnRewrite(
@@ -1425,7 +1384,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val playbackCdnPreference = SettingsManager
         .getPlaybackCdnPreference(application.applicationContext)
         .map { PlaybackCdnPreference.fromStorageValue(it) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackCdnPreference.BASE_URL)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackCdnPreference.DEFAULT)
 
     // HDR auto-upgrade state
     private val attemptedUpgradeKeys = mutableSetOf<String>()
@@ -1510,6 +1469,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         })
     }
     private val playbackPreparationAllowed = MutableStateFlow(true)
+    private val playbackStartAllowed = MutableStateFlow(true)
     private val relatedPublicationAllowed = MutableStateFlow(true)
     private val videoUiWorkConsumers = MutableStateFlow<Map<Any, VideoUiWorkConsumer>>(emptyMap())
 
@@ -1560,6 +1520,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     fun setPlaybackPreparationAllowed(allowed: Boolean) {
         playbackPreparationAllowed.value = allowed
+    }
+
+    fun setPlaybackStartAllowed(allowed: Boolean) {
+        playbackStartAllowed.value = allowed
     }
 
     fun setRelatedPublicationAllowed(allowed: Boolean) {
@@ -3565,6 +3529,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             if (canStartDataLoad && playbackRequest.bvid.startsWith("BV", ignoreCase = true)) {
                 loadRelatedVideosForRequest(playbackRequest.bvid, requestToken, primaryLoad)
             }
+            var provisionalCid = 0L
             var provisionalPlayer: ExoPlayer? = null
             var provisionalMediaItem: androidx.media3.common.MediaItem? = null
             var provisionalVideoUrl: String? = null
@@ -3672,13 +3637,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     // videoInfoDeferred publishes as soon as metadata arrives.
                     videoInfoLoader = { videoInfoDeferred.await() },
                     onPlaybackDataReady = { preparedCid, data ->
-                        // 仅显式分 P 可以提前准备；静音暂停等待详情确认，不提前播放。
-                        if (!shouldSkipPlayerPrepare && !_isInAudioMode.value &&
-                            preparedCid == playbackRequest.cid && playbackRequest.cid > 0L
+                        // 详情已确认当前分 P；暂停准备与进度读取、入场重叠，不提前播放。
+                        if (!shouldSkipPlayerPrepare && !_isInAudioMode.value && preparedCid > 0L
                         ) withContext(Dispatchers.Main.immediate) provisional@{
-                            // 提前准备只是机会性工作：未到挂载阶段时不等待，避免播放地址
-                            // 的返回连带阻塞历史进度读取与最终媒体选择。正式起播仍会等待许可。
-                            if (!playbackPreparationAllowed.value) return@provisional
+                            playbackPreparationAllowed.first { it }
                             if (currentLoadRequestToken == requestToken &&
                                 preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope()
                             ) {
@@ -3713,14 +3675,18 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                         cachedDashAudios = selection.cachedDashAudios,
                                         adaptiveDashSource = selection.adaptiveDashSource,
                                     )
+                                    provisionalCid = preparedCid
                                     provisionalPlayer = player
                                     provisionalVideoUrl = cdn.playUrl
                                     provisionalAudioUrl = cdn.audioUrl
                                     provisionalSource = cdn.adaptiveDashSource
                                     playResolvedPlayback(cdn.playUrl, cdn.audioUrl, cdn.adaptiveDashSource,
-                                        requestedStartPositionMs, playWhenReady = false,
-                                        cdnCacheKeysByUrl = cdn.cdnCacheKeysByUrl)
+                                        if (playbackRequest.ignoreSavedProgress) 0L else requestedStartPositionMs,
+                                        playWhenReady = false,
+                                        cdnCacheKeysByUrl = cdn.cdnCacheKeysByUrl,
+                                        mediaCid = preparedCid)
                                     provisionalMediaItem = player.currentMediaItem
+                                    logVideoLoadStage(VideoLoadStage.PLAYER_PREBUFFER_REQUESTED, requestToken)
                                 }
                             }
                         }
@@ -3761,11 +3727,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     is PlaybackLoadResult.Success -> {
                         val result = loadResult.payload
                         logVideoLoadStage(VideoLoadStage.PLAYBACK_DATA_READY, requestToken)
-                        // 数据计算可与入场重叠；绑定媒体身份、线路发布和播放器操作仍在
-                        // attachPlayer 之后执行。等待结束后再校验请求和账号，拒绝过期结果。
+                        // 媒体已经暂停准备；进度确认后仍等待入场许可，避免转场中出声。
+                        // 许可开放后再校验请求和账号，拒绝过期结果。
                         if (!shouldSkipPlayerPrepare) {
-                            playbackPreparationAllowed.first { it }
-                            // 与 PLAYBACK_DATA_READY 的差值只表示数据就绪后等待许可的时间。
+                            playbackStartAllowed.first { it }
+                            // 与 PLAYBACK_DATA_READY 的差值表示数据就绪后等待起播许可的时间。
                             logVideoLoadStage(VideoLoadStage.ENTRY_PREPARATION_RELEASED, requestToken)
                         }
                         if (!shouldApplyVideoLoadResult(
@@ -3819,13 +3785,22 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             relatedPlaybackPreparedToken = requestToken
                             val prepared = provisionalPlayer
                             if (prepared != null && prepared === exoPlayer &&
-                                result.info.cid == playbackRequest.cid &&
+                                result.info.cid == provisionalCid &&
                                 preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope() &&
                                 provisionalVideoUrl == cdnSelection.playUrl && provisionalAudioUrl == cdnSelection.audioUrl &&
                                 provisionalSource == cdnSelection.adaptiveDashSource &&
+                                prepared.currentMediaItem === provisionalMediaItem &&
                                 prepared.playerError == null && prepared.mediaItemCount > 0
                             ) {
-                                prepared.seekTo(startPos)
+                                if (prepared.currentPosition != startPos) {
+                                    com.android.purebilibili.feature.video.playback.session.PlaybackFirstFrameTracker
+                                        .resetForStartupSeek(prepared)
+                                    prepared.seekTo(startPos)
+                                }
+                                armPlaybackCdnFallback(
+                                    cdnSelection.fallbackState,
+                                    activeLoadAutoPlay ?: shouldAutoPlay,
+                                )
                                 prepared.playWhenReady = activeLoadAutoPlay ?: shouldAutoPlay
                             } else playResolvedPlayback(
                                 videoUrl = cdnSelection.playUrl,

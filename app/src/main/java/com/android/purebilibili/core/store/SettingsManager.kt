@@ -8192,7 +8192,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getPlaybackCdnPreference(context: Context): Flow<String> =
         context.settingsDataStore.data.map { preferences ->
-            preferences[KEY_PLAYBACK_CDN_PREFERENCE] ?: "base_url"
+            preferences[KEY_PLAYBACK_CDN_PREFERENCE]
+                ?: com.android.purebilibili.feature.plugin.PlaybackCdnPreference.DEFAULT.storageValue
         }
 
     suspend fun setPlaybackCdnPreference(context: Context, preference: String) {

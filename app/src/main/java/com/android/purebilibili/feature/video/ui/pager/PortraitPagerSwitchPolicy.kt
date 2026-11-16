@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.ui.pager
 
-import androidx.compose.ui.layout.ContentScale
 import com.android.purebilibili.data.model.response.Page
 import com.android.purebilibili.data.model.response.RelatedVideo
 import com.android.purebilibili.data.model.response.VideoItem
@@ -82,33 +81,13 @@ internal fun shouldShowPortraitCover(
     isLoading: Boolean,
     isCurrentPage: Boolean,
     isPlayerReadyForThisVideo: Boolean,
-    hasRenderedFirstFrame: Boolean
+    hasRenderedFirstFrame: Boolean,
+    hasRenderedSurfaceFrame: Boolean,
 ): Boolean {
     if (!isCurrentPage) return true
     // 首帧出现后不因缓冲重新盖回封面，避免播放中画面跳变。
     if (isLoading && !hasRenderedFirstFrame) return true
-    return !isPlayerReadyForThisVideo || !hasRenderedFirstFrame
-}
-
-internal fun shouldUseViewportBoundPortraitCover(
-    isCurrentPage: Boolean,
-    isPlayerReadyForThisVideo: Boolean,
-    hasRenderedFirstFrame: Boolean
-): Boolean {
-    if (!isCurrentPage) return true
-    if (!isPlayerReadyForThisVideo) return true
-    if (!hasRenderedFirstFrame) return true
-    return false
-}
-
-internal fun resolvePortraitCoverContentScale(isVerticalVideo: Boolean = false): ContentScale =
-    if (isVerticalVideo) ContentScale.Crop else ContentScale.Fit
-
-internal fun resolvePortraitCoverViewportAspect(
-    currentVideoAspect: Float,
-    hasRenderedFirstFrame: Boolean
-): Float {
-    return if (hasRenderedFirstFrame) currentVideoAspect else 9f / 16f
+    return !isPlayerReadyForThisVideo || !hasRenderedFirstFrame || !hasRenderedSurfaceFrame
 }
 
 internal fun shouldShowPortraitPauseIcon(

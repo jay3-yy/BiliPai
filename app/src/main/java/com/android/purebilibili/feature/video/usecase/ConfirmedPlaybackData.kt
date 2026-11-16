@@ -26,6 +26,7 @@ internal suspend fun loadConfirmedPlaybackData(
     loadPlayData: suspend () -> PlayUrlData?,
     loadHistory: suspend (ViewInfo) -> PlayerInfoData?,
     onStage: (PlaybackDataLoadStage) -> Unit = {},
+    onPlaybackDataReady: suspend (Long, PlayUrlData) -> Unit = { _, _ -> },
 ): Result<ConfirmedPlaybackData> = coroutineScope {
     val historyDeferred = async {
         onStage(PlaybackDataLoadStage.HISTORY_REQUEST_STARTED)
@@ -39,6 +40,8 @@ internal suspend fun loadConfirmedPlaybackData(
         Result.failure(Exception("无法获取播放地址"))
     } else {
         onStage(PlaybackDataLoadStage.PLAY_URL_READY)
+        // 分 P 已由详情确认；媒体可暂停准备，正式起播仍等待独立观看记录账号的进度。
+        onPlaybackDataReady(info.cid, playData)
         Result.success(ConfirmedPlaybackData(info, playData, historyDeferred.await()))
     }
 }

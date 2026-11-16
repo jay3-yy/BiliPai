@@ -18,6 +18,10 @@ import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.getBestVideo
 import com.android.purebilibili.data.repository.playableVideoQualityIds
 import com.android.purebilibili.plugin.sdk.PlaybackCdnPlugin
+import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
+import com.android.purebilibili.feature.plugin.applyPlaybackCdnPreference
+import com.android.purebilibili.feature.plugin.buildPlaybackCdnCandidates
+import com.android.purebilibili.feature.video.viewmodel.buildPlaybackVideoUrlCandidates
 import com.android.purebilibili.feature.video.playback.audio.AudioSelectionDecision
 import com.android.purebilibili.feature.video.playback.audio.resolveAudioStreamSelection
 import com.android.purebilibili.feature.video.viewmodel.buildPlaybackAudioUrlCandidates
@@ -45,7 +49,8 @@ internal data class PortraitPagePlaybackIdentity(
 internal data class PortraitPlaybackStreamUrls(
     val videoUrl: String,
     val audioUrl: String?,
-    val audioSelection: AudioSelectionDecision? = null
+    val audioSelection: AudioSelectionDecision? = null,
+    val videoQualityId: Int? = null,
 )
 
 /**
@@ -268,14 +273,17 @@ internal fun resolvePortraitPlaybackStreamUrls(
     playbackSpeed: Float = 1.0f,
     preferCodec: String = "hev1",
     secondPreferCodec: String = "avc1",
+    videoTrackFilter: (List<DashVideo>) -> List<DashVideo> = { it },
 ): PortraitPlaybackStreamUrls? {
     val dash = playData.dash
     if (dash != null) {
-        val dashVideo = dash.getBestVideo(
+        val playableVideos = videoTrackFilter(dash.video)
+        if (dash.video.isNotEmpty() && playableVideos.isEmpty()) return null
+        val dashVideo = dash.copy(video = playableVideos).getBestVideo(
             targetQn = resolvePortraitDisplayedQualityId(
                 requestedQuality = targetQuality,
                 returnedQuality = playData.quality,
-                dashVideoIds = playData.playableVideoQualityIds()
+                dashVideoIds = playableVideos.filter { it.getValidUrl().isNotBlank() }.map { it.id }
             ),
             isHevcSupported = isHevcSupported,
             isAv1Supported = isAv1Supported,
@@ -297,7 +305,8 @@ internal fun resolvePortraitPlaybackStreamUrls(
         return PortraitPlaybackStreamUrls(
             videoUrl = videoUrl,
             audioUrl = audioUrl,
-            audioSelection = audioSelection
+            audioSelection = audioSelection,
+            videoQualityId = dashVideo?.id,
         )
     }
 
@@ -314,7 +323,8 @@ internal fun resolvePortraitPlaybackCdnUrls(
     cachedDashVideos: List<DashVideo>,
     cachedDashAudios: List<DashAudio>,
     targetQuality: Int = PORTRAIT_PLAYBACK_TARGET_QUALITY,
-    cdnPlugin: PlaybackCdnPlugin?
+    cdnPlugin: PlaybackCdnPlugin?,
+    preference: PlaybackCdnPreference = PlaybackCdnPreference.DEFAULT,
 ): PortraitPlaybackStreamUrls {
     // Discovery can select a different quality (or codec) than the preference.
     // Only take backups from that exact URL's track, never from the requested tier.
@@ -323,25 +333,25 @@ internal fun resolvePortraitPlaybackCdnUrls(
     } ?: cachedDashVideos.find {
         it.getValidUrl() == streamUrls.videoUrl || streamUrls.videoUrl in it.backupUrl.orEmpty()
     }
-    val rawVideoUrls = buildList {
-        add(streamUrls.videoUrl)
-        selectedTrack?.backupUrl
-            .orEmpty()
-            .filter { it.isNotBlank() }
-            .let(::addAll)
-    }.distinct()
+    val rawVideoUrls = buildPlaybackVideoUrlCandidates(
+        videoUrl = streamUrls.videoUrl,
+        quality = selectedTrack?.id ?: targetQuality,
+        cachedDashVideos = cachedDashVideos,
+    )
 
     val rawAudioUrls = buildPlaybackAudioUrlCandidates(
         audioUrl = streamUrls.audioUrl,
         cachedDashAudios = cachedDashAudios
     )
     val rewrite = cdnPlugin?.rewritePlaybackCandidates(rawVideoUrls, rawAudioUrls)
-    return PortraitPlaybackStreamUrls(
-        videoUrl = rewrite?.videoUrls?.firstOrNull()?.takeIf { it.isNotBlank() }
-            ?: streamUrls.videoUrl,
-        audioUrl = rewrite?.audioUrls?.firstOrNull()?.takeIf { it.isNotBlank() }
-            ?: streamUrls.audioUrl,
-        audioSelection = streamUrls.audioSelection
+    val selected = applyPlaybackCdnPreference(
+        candidates = rewrite?.candidates ?: buildPlaybackCdnCandidates(rawVideoUrls, rawAudioUrls),
+        preference = preference,
+        pluginApplied = rewrite != null,
+    ).firstOrNull()
+    return streamUrls.copy(
+        videoUrl = selected?.videoUrl ?: streamUrls.videoUrl,
+        audioUrl = selected?.audioUrl ?: streamUrls.audioUrl,
     )
 }
 

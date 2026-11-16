@@ -80,6 +80,10 @@ class PiliPlayerMenuPolicyTest {
         assertEquals(backup.replace("upos-sz-mirrorhw.bilivideo.com", "upos-sz-mirrorcos.bilivideo.com"),
             selectPiliCdnUrl(listOf(base, backup), PiliCdnService.COS))
     }
+    @Test fun backupSelectionPreservesAllRiskySignedUrlWhenNoRegularMirrorExists() {
+        val source = "https://1.2.3.4:4483/v1/resource/abc?sign=x%2Fy"
+        assertEquals(source, selectPiliCdnUrl(listOf(source), PiliCdnService.BACKUP))
+    }
     @Test fun mcdnOnlySourceUsesReferenceProxyRatherThanInventedMirrorPath() {
         val source = "https://1.2.3.4:4483/v1/resource/abc?sign=x"
         assertTrue(selectPiliCdnUrl(listOf(source), PiliCdnService.HW)

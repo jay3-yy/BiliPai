@@ -63,8 +63,10 @@ enum class PlaybackCdnPreference(
     HK_BCACHE("hk_bcache", "hk_bcache（Bilibili海外）", "cn-hk-eq-bcache-01.bilivideo.com");
 
     companion object {
+        val DEFAULT = BACKUP_URL
+
         fun fromStorageValue(value: String?): PlaybackCdnPreference =
-            entries.firstOrNull { it.storageValue == value } ?: BASE_URL
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
     }
 }
 
@@ -89,22 +91,15 @@ internal fun applyPlaybackCdnPreference(
         return (listOf(preferred) + rest).distinctBy { it.videoUrl to it.audioUrl }
     }
 
-    // ② 插件（CDN 智能选线）已开启：尊重插件给出的顺序，不再额外过滤。
-    //    插件内部已用 risky 标记把 PCDN 排到最后，再过滤等于推翻它的判断。
-    if (pluginApplied) {
-        return if (preference == PlaybackCdnPreference.BACKUP_URL) {
-            candidates.drop(1) + candidates.take(1)
-        } else {
-            candidates
-        }
-    }
+    // 插件已按健康记录排序，不能再轮换首项推翻选线结果。
+    if (pluginApplied) return candidates
 
-    // ③ 插件没开：排除 PCDN，整批都是 PCDN 时换 host 兜底。
-    val usable = excludePcdnCandidates(candidates)
+    // 默认优先接口返回的常规签名地址，保持同级候选的原顺序。
+    // 备用策略不改写 host；全为高风险地址时保留原候选供播放层回退。
     if (preference == PlaybackCdnPreference.BACKUP_URL) {
-        return usable.drop(1) + usable.take(1)
+        return sortSafeSignedPlaybackCandidates(candidates, emptyMap())
     }
-    return usable
+    return excludePcdnCandidates(candidates)
 }
 
 /**

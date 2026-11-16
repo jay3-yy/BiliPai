@@ -14,6 +14,26 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class AdaptiveDashTrackPolicyTest {
+    @Test
+    fun `auto mode uses the same fallback codec while retaining its adaptive bitrates`() {
+        val avc = DashVideo(id = 80, codecs = "avc1", bandwidth = 8_000_000, baseUrl = "https://example.com/avc.m4s")
+        val lowAv1 = avc.copy(codecs = "av01", bandwidth = 1_000_000, baseUrl = "https://example.com/av1-low.m4s")
+        val highAv1 = lowAv1.copy(bandwidth = 2_000_000, baseUrl = "https://example.com/av1-high.m4s")
+        val result = buildAdaptiveDashTrackSet(
+            dash = Dash(video = listOf(avc, highAv1, lowAv1)),
+            mode = PlaybackQualityMode.AUTO,
+            autoQualityCap = 80,
+            preferredAudioQuality = -1,
+            preferredVideoCodec = "hev1",
+            secondaryVideoCodec = "vp09",
+            isHevcSupported = true,
+            isAv1Supported = true,
+            isDolbyAudioSupported = false,
+        )
+
+        assertEquals(listOf(highAv1, lowAv1), result.videoTracks)
+    }
+
 
     private val dash = Dash(
         video = listOf(

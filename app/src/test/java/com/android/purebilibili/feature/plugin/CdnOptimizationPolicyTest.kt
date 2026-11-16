@@ -9,6 +9,27 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class CdnOptimizationPolicyTest {
+    @Test
+    fun `paired ranking defers risky audio and mcdn query even on regular video hosts`() {
+        val candidates = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://a.bilivideo.com/v?sign=a",
+                "https://b.bilivideo.com/v?os=mcdn&sign=b",
+                "https://c.bilivideo.com/v?sign=c%2Fd",
+            ),
+            audioUrls = listOf(
+                "https://audio.mcdn.bilivideo.cn/a?sign=d",
+                "https://b.bilivideo.com/a?sign=e",
+                "https://c.bilivideo.com/a?sign=f%2Fg",
+            ),
+        )
+
+        assertEquals(
+            listOf(candidates[2], candidates[0], candidates[1]),
+            sortSafeSignedPlaybackCandidates(candidates, emptyMap()),
+        )
+    }
+
 
     @Test
     fun `safe candidates preserve signed urls and defer risky hosts`() {
