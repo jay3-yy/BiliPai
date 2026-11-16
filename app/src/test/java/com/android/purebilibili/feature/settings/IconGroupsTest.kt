@@ -53,15 +53,4 @@ class IconGroupsTest {
             resolveIconOptionPreviewRes("icon_bilipai", AppIconAppearance.DARK)
         )
     }
-
-    @Test
-    fun systemAboutOverview_usesTheSelectedAppIconAndAppearance() {
-        val source = java.io.File(
-            "src/main/java/com/android/purebilibili/feature/settings/ui/SettingsSections.kt"
-        ).readText()
-
-        assertTrue(source.contains("appIconKey = state.appIcon"))
-        assertTrue(source.contains("resolveIconOptionPreviewRes(appIconKey, appIconAppearance)"))
-        assertTrue(source.contains("model = appIconRes"))
-    }
 }

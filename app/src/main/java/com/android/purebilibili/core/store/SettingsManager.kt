@@ -6978,10 +6978,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_AUTO_CHECK_APP_UPDATE] = value }
     }
 
-    // --- 更新检测渠道 (默认正式版) ---
+    // --- 更新检测渠道（默认测试版，保留用户已保存的选择）---
     fun getAppUpdateChannel(context: Context): Flow<AppUpdateChannel> = context.settingsDataStore.data
         .map { preferences ->
-            AppUpdateChannel.fromValue(preferences[KEY_APP_UPDATE_CHANNEL] ?: AppUpdateChannel.STABLE.value)
+            AppUpdateChannel.fromValue(preferences[KEY_APP_UPDATE_CHANNEL] ?: AppUpdateChannel.BETA.value)
         }
 
     suspend fun setAppUpdateChannel(context: Context, channel: AppUpdateChannel) {
@@ -8712,6 +8712,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val shareableSettingDefinitions: List<ShareablePreferenceDefinition> by lazy {
         listOf(
             StringShareablePreferenceDefinition(KEY_THEME_SELECTION, SettingsShareSection.APPEARANCE),
+            StringShareablePreferenceDefinition(AboutAppearanceStore.modeKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(AboutAppearanceStore.topColorKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(AboutAppearanceStore.bottomColorKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(AboutAppearanceStore.glowColorKey, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_THEME_MODE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_DARK_SCHEDULE_ENABLED, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_DARK_SCHEDULE_START, SettingsShareSection.APPEARANCE),

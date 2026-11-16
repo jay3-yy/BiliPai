@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
@@ -53,7 +52,7 @@ internal fun DonationPreviewContainer(
     preview: @Composable (qrModifier: Modifier) -> Unit,
 ) {
     val anchors = remember { DonationQrAnchors() }
-    val painter = painterResource(R.drawable.author_qr)
+    val painter = painterResource(donationQrResource())
     val compactBlur = remember { BlurRenderEffectCache() }
     val previewBlur = remember { BlurRenderEffectCache() }
     val textBlurEnabled = LocalComponentMotionEnabled.current &&

@@ -140,6 +140,8 @@ internal fun SettingsPageScaffold(
     topBarBlurEnabled: Boolean? = null,
     externalContentHandlesTopPadding: Boolean = false,
     topBarStyle: AppTopBarStyle = AppTopBarStyle.CENTERED,
+    // 显式整页背景可延伸到系统栏；未提供时保留 MD3 / Miuix 原生及玻璃默认底色。
+    pageBackgroundModifier: Modifier? = null,
     actions: @Composable RowScope.() -> Unit = {},
     header: (@Composable () -> Unit)? = null,
     lazyListContent: (LazyListScope.() -> Unit)? = null,
@@ -213,8 +215,9 @@ internal fun SettingsPageScaffold(
                     backdrop = backdrop,
                     enabled = progressiveBlurEnabled,
                     headerBlurActive = hazeReady,
-                    surfaceColor = pageContainerColor,
-                    fadeEnabled = fadeActive,
+                    surfaceColor = if (pageBackgroundModifier == null) pageContainerColor else Color.Transparent,
+                    fadeEnabled = fadeActive && pageBackgroundModifier == null,
+                    opaqueBackgroundFallback = pageBackgroundModifier == null,
                 ) {
                     AppTopBar(
                         title = title,
@@ -225,8 +228,9 @@ internal fun SettingsPageScaffold(
                                     surfaceType = BlurSurfaceType.HEADER,
                                 )
                                 .background(
-                                    pageContainerColor
-                                        .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
+                                    if (pageBackgroundModifier == null) {
+                                        pageContainerColor.copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
+                                    } else Color.Transparent
                                 )
                         } else Modifier,
                         navigationIcon = {
@@ -248,11 +252,14 @@ internal fun SettingsPageScaffold(
                         actions = actions,
                         colors = TopAppBarDefaults.topAppBarColors(
                             // 原生 Miuix 同样遵循顶部特效开关；不透明底色会遮住已绘制的渐进模糊。
-                            containerColor = if (!topBarBlurActive) {
+                            containerColor = if (!topBarBlurActive && pageBackgroundModifier == null) {
                                 pageContainerColor
                             } else {
                                 Color.Transparent
                             },
+                            scrolledContainerColor = if (pageBackgroundModifier == null) {
+                                TopAppBarDefaults.topAppBarColors().scrolledContainerColor
+                            } else Color.Transparent,
                             titleContentColor = AppContentColors.primaryText(),
                             navigationIconContentColor = AppContentColors.primaryText(),
                             actionIconContentColor = AppContentColors.primaryText(),
@@ -262,7 +269,7 @@ internal fun SettingsPageScaffold(
                     )
                 }
             },
-            containerColor = pageContainerColor,
+            containerColor = if (pageBackgroundModifier == null) pageContainerColor else Color.Transparent,
             contentWindowInsets = WindowInsets(0.dp),
         ) { padding ->
             val scrollModifier = Modifier
@@ -273,7 +280,10 @@ internal fun SettingsPageScaffold(
                         com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed.current
                     ) Modifier.hazeSourceCompat(hazeState) else Modifier
                 )
-                .globalWallpaperAwareBackground(pageContainerColor)
+                .then(
+                    if (pageBackgroundModifier == null) Modifier.globalWallpaperAwareBackground(pageContainerColor)
+                    else pageBackgroundModifier
+                )
 
             val windowSizeClass = LocalWindowSizeClass.current
             val isExpandedScreen = windowSizeClass.isExpandedScreen

@@ -8,7 +8,6 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -20,7 +19,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +44,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun DonateDialog(onDismiss: () -> Unit) {
     val context = LocalContext.current
+    val qrResource = donationQrResource()
     val scope = rememberCoroutineScope()
     var saving by remember { mutableStateOf(false) }
     var saved by rememberSaveable { mutableStateOf(false) }
@@ -64,7 +63,7 @@ fun DonateDialog(onDismiss: () -> Unit) {
         error = null
         scope.launch {
             try {
-                if (saveDonationQrToGallery(context)) saved = true
+                if (saveDonationQrToGallery(context, qrResource)) saved = true
                 else error = R.string.settings_donate_save_failed
             } finally {
                 saving = false
@@ -215,21 +214,21 @@ internal fun DonationCardContent(
 private fun DonationQr(onEnlarge: () -> Unit, onLongPress: () -> Unit, modifier: Modifier = Modifier, imageModifier: Modifier = Modifier) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Image(
-            painter = painterResource(R.drawable.author_qr),
+            painter = painterResource(donationQrResource()),
             contentDescription = stringResource(R.string.settings_donate_qr_description),
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                // 过渡层包住完整图片装饰；原图已有底色，不另绘制固定白色底板。
+                .then(imageModifier)
                 .clip(AppShapes.container(ContainerLevel.Card))
-                .background(Color.White)
                 .combinedClickable(
                     onClickLabel = stringResource(R.string.settings_donate_enlarge),
                     onClick = onEnlarge,
                     onLongClickLabel = stringResource(R.string.settings_donate_save),
                     onLongClick = onLongPress,
-                )
-                .then(imageModifier),
+                ),
         )
         Spacer(Modifier.height(8.dp))
         AppTextButton(onClick = onEnlarge) {
@@ -310,7 +309,7 @@ private fun DonationQrPreview(onBack: () -> Unit, onLongPress: () -> Unit, image
             AppTextButton(onClick = onBack) { AppText(stringResource(R.string.common_back)) }
         }
         Image(
-            painter = painterResource(R.drawable.author_qr),
+            painter = painterResource(donationQrResource()),
             contentDescription = stringResource(R.string.settings_donate_qr_description),
             contentScale = ContentScale.Fit,
             modifier = Modifier
