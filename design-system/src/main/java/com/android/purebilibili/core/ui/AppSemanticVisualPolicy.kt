@@ -70,6 +70,9 @@ val LocalAppIconStyle = staticCompositionLocalOf {
     AppIconStyle.AUTO
 }
 
+/** 仅覆盖单色线性偏好图标；未指定时保留当前主题的原生颜色。 */
+val LocalAppLineIconColor = staticCompositionLocalOf { Color.Unspecified }
+
 /** 解析当前生效的图标呈现样式(处理 AUTO 跟随运行时主题)。 */
 @Composable
 fun rememberResolvedAppIconStyle(): AppIconStyle {

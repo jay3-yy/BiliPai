@@ -57,7 +57,6 @@ import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppText
-import com.android.purebilibili.core.ui.components.AppTextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -171,7 +170,6 @@ internal fun MiuixAboutOverview(
     appIconRes: Int,
     versionHint: String?,
     onVersionClick: () -> Unit,
-    onCustomizeBackground: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val copyVersion = rememberClipboardCopyHandler()
@@ -222,9 +220,6 @@ internal fun MiuixAboutOverview(
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
-                }
-                AppTextButton(onClick = onCustomizeBackground) {
-                    AppText("自定义背景", tapToCopyEnabled = false)
                 }
             }
         }

@@ -155,7 +155,9 @@ fun AppPreferenceLeadingIcon(
         return
     }
     if (!useColorfulPreferenceIcons()) {
-        val nativeTint = if (style == AppIconStyle.MD3_STANDARD) MaterialTheme.colorScheme.onSurfaceVariant else tint
+        val nativeTint = if (style == AppIconStyle.MD3_STANDARD) com.android.purebilibili.core.ui.LocalAppLineIconColor.current.let {
+            if (it == Color.Unspecified) MaterialTheme.colorScheme.onSurfaceVariant else it
+        } else tint
         if (imageVector != null) AppIcon(imageVector, contentDescription, modifier.size(nativeSize), nativeTint)
         else if (painter != null) AppIcon(painter, contentDescription, modifier.size(nativeSize), nativeTint)
         return

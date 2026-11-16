@@ -797,6 +797,7 @@ data class AppThemeSettings(
     val appScreenshotCaptureMode: AppScreenshotCaptureMode =
         AppScreenshotCaptureMode.FULL_WINDOW,
     val appIconStyle: AppIconStyle = AppIconStyle.AUTO,
+    val appLineIconColor: Int? = null,
     val appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     val singleChoicePresentation: AppSingleChoicePresentation =
         AppSingleChoicePresentation.WINDOW_POPUP,
@@ -1524,6 +1525,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_APP_ICON = androidx.datastore.preferences.core.stringPreferencesKey("app_icon_key")
     private val KEY_APP_ICON_APPEARANCE = intPreferencesKey("app_icon_appearance")
     private val KEY_APP_ICON_STYLE = stringPreferencesKey("app_icon_style")
+    private val KEY_APP_LINE_ICON_COLOR = intPreferencesKey("app_line_icon_color")
     private val KEY_APP_LIST_ITEM_STYLE = stringPreferencesKey("app_list_item_style")
     //  [新增] 底部栏样式 (true=悬浮, false=贴底)
     private val KEY_BOTTOM_BAR_FLOATING = booleanPreferencesKey("bottom_bar_floating")
@@ -2475,6 +2477,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_SINGLE_CHOICE_PRESENTATION]
             ),
             appIconStyle = resolveAppIconStylePreference(preferences[KEY_APP_ICON_STYLE]),
+            appLineIconColor = preferences[KEY_APP_LINE_ICON_COLOR],
             appListItemStyle = resolveAppListItemStylePreference(preferences[KEY_APP_LIST_ITEM_STYLE])
         )
     }
@@ -2591,6 +2594,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             editSettings = { this[KEY_APP_ICON_STYLE] = style.name },
             editPrefs = { putString("app_icon_style", style.name) },
         )
+    }
+
+    fun getAppLineIconColor(context: Context): Flow<Int?> =
+        context.settingsDataStore.data.map { it[KEY_APP_LINE_ICON_COLOR] }.distinctUntilChanged()
+
+    suspend fun setAppLineIconColor(context: Context, color: Int?) {
+        context.settingsDataStore.edit {
+            if (color == null) it.remove(KEY_APP_LINE_ICON_COLOR)
+            else it[KEY_APP_LINE_ICON_COLOR] = color
+        }
     }
 
     suspend fun setAppListItemStyle(context: Context, style: AppListItemStyle) {
@@ -8750,6 +8763,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             StringShareablePreferenceDefinition(KEY_APP_ICON, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_APP_ICON_APPEARANCE, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_APP_ICON_STYLE, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_APP_LINE_ICON_COLOR, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_APP_LIST_ITEM_STYLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_FLOATING, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(

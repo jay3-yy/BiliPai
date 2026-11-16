@@ -694,6 +694,11 @@ fun AppearanceSettingsContent(
 
                         AppPreferenceDivider()
 
+                        if (com.android.purebilibili.core.ui.rememberResolvedAppIconStyle() == AppIconStyle.MD3_STANDARD) {
+                            LineIconColorPreference()
+                            AppPreferenceDivider()
+                        }
+
                         SettingsItemAnchor("appearance.single_choice_presentation") {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.CHOICE_MENU_STYLE),

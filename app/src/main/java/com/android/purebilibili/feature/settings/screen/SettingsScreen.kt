@@ -1288,6 +1288,13 @@ private fun MobileSettingsNavLayout(
                 onAboutHeaderAppearanceClick = onCustomizeBackground,
             )
         }
+    } else if (
+        destination is SettingsNavDestination.Category &&
+        canonicalSettingsRootCategory(destination.category) == SettingsRootCategory.SYSTEM_ABOUT
+    ) {
+        MaterialAboutAppearanceHost { onCustomizeShape ->
+            SettingsPage(onAboutHeaderAppearanceClick = onCustomizeShape)
+        }
     } else {
         SettingsPage()
     }

@@ -877,6 +877,7 @@ fun PureBiliBiliTheme(
     appFontWeightPreset: AppFontWeightPreset = AppFontWeightPreset.FOLLOW_THEME,
     appFontFileName: String = "",
     appIconStyle: AppIconStyle = AppIconStyle.AUTO,
+    appLineIconColor: Int? = null,
     appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     liquidGlassEnabled: Boolean = true,
     themeTransitionEnabled: Boolean = true,
@@ -1097,8 +1098,8 @@ fun PureBiliBiliTheme(
         }
     }
 
-    val wallpaperPreviewSchemes = remember(dynamicLightBaseScheme, dynamicDarkBaseScheme) {
     val platformOverscrollFactory = androidx.compose.foundation.rememberPlatformOverscrollFactory()
+    val wallpaperPreviewSchemes = remember(dynamicLightBaseScheme, dynamicDarkBaseScheme) {
         ThemeWallpaperPreviewSchemes(dynamicLightBaseScheme, dynamicDarkBaseScheme)
     }
     CompositionLocalProvider(
@@ -1108,6 +1109,7 @@ fun PureBiliBiliTheme(
         LocalWallpaperColorCompatibility provides wallpaperCompatibility,
         LocalBaseThemeRoleOverrides provides baseThemeRoleOverrides,
         com.android.purebilibili.core.ui.LocalLiquidControlThemeColor provides animatedPalette.liquidAccent,
+        com.android.purebilibili.core.ui.LocalAppLineIconColor provides (appLineIconColor?.let { Color(it) } ?: Color.Unspecified),
         LocalAppIconStyle provides resolveAppIconStyle(
             iconStyle = appIconStyle,
             uiStyle = uiStyle

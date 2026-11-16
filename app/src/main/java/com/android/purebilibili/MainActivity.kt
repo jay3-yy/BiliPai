@@ -1697,6 +1697,7 @@ class MainActivity : AppCompatActivity() {
                 appFontWeightPreset = appFontWeightPreset,
                 appFontFileName = appFontFileName,
                 appIconStyle = appThemeSettings.appIconStyle,
+                appLineIconColor = appThemeSettings.appLineIconColor,
                 appListItemStyle = appThemeSettings.appListItemStyle,
             ) {
                 ProvideAppThemeConfig(config = appThemeConfig) {

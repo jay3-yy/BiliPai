@@ -320,6 +320,7 @@ open class VideoActivity : ComponentActivity() {
                 appFontWeightPreset = themeSettings.appFontWeightPreset,
                 appFontFileName = themeSettings.appFontFileName,
                 appIconStyle = themeSettings.appIconStyle,
+                appLineIconColor = themeSettings.appLineIconColor,
                 appListItemStyle = themeSettings.appListItemStyle,
                 liquidGlassEnabled = liquidGlassEnabled,
                 themeTransitionEnabled = uiEntranceAnimationEnabled,

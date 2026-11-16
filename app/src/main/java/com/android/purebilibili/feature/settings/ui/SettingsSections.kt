@@ -842,7 +842,7 @@ private fun SettingsAboutCategoryContent(
             }
         }
     }
-    val about: @Composable (() -> Unit) -> Unit = { onHeaderAppearanceClick ->
+    val about: @Composable () -> Unit = {
         AboutSection(
             versionName = state.versionName,
             appIconKey = state.appIcon,
@@ -872,7 +872,6 @@ private fun SettingsAboutCategoryContent(
             buildFingerprintSubtitle = state.buildFingerprintSubtitle,
             versionClickCount = state.versionClickCount,
             versionClickThreshold = state.versionClickThreshold,
-            onHeaderAppearanceClick = onHeaderAppearanceClick,
             afterOverview = {
                 AboutCommunitySection(
                     onTelegramClick = actions.onTelegramClick,
@@ -897,19 +896,37 @@ private fun SettingsAboutCategoryContent(
         }
     }
     val pageContent: @Composable (() -> Unit) -> Unit = { onHeaderAppearanceClick ->
-        about(onHeaderAppearanceClick)
+        about()
         help()
         SettingsDetailGroup(title = "协议与隐私") {
             SettingsCardGroup { agreement() }
         }
         diagnostics()
         performance()
+        SettingsDetailGroup(title = "页面外观") {
+            SettingsCardGroup {
+                SettingClickableItem(
+                    icon = rememberSettingsSemanticIcon(
+                        if (LocalAppUiStyle.current == AppUiStyle.MIUIX) SettingsIconRole.APPEARANCE
+                        else SettingsIconRole.ABOUT_CARD_SHAPE,
+                    ),
+                    title = if (LocalAppUiStyle.current == AppUiStyle.MIUIX) "自定义背景" else "自定义卡片形状",
+                    subtitle = if (LocalAppUiStyle.current == AppUiStyle.MIUIX) "调整关于页渐变与柔光" else "调整关于页卡片的四角形状",
+                    onClick = onHeaderAppearanceClick,
+                )
+                if (LocalAppUiStyle.current != AppUiStyle.MIUIX) {
+                    SettingsAdaptiveDivider()
+                    SettingClickableItem(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.APPEARANCE),
+                        title = "主题与配色",
+                        onClick = actions.onAppearanceClick,
+                    )
+                }
+            }
+        }
         Spacer(Modifier.height(24.dp))
     }
-    pageContent(
-        if (LocalAppUiStyle.current == AppUiStyle.MIUIX) onHeaderAppearanceClick
-        else actions.onAppearanceClick
-    )
+    pageContent(onHeaderAppearanceClick)
 }
 
 @Composable
@@ -1932,7 +1949,6 @@ fun AboutSection(
     versionClickCount: Int = 0,
     versionClickThreshold: Int = EasterEggs.VERSION_EASTER_EGG_THRESHOLD,
     afterOverview: (@Composable () -> Unit)? = null,
-    onHeaderAppearanceClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val appIconAppearance by SettingsManager.getAppIconAppearance(context)
@@ -2024,7 +2040,6 @@ fun AboutSection(
             appIconRes = appIconRes,
             versionHint = versionHint,
             onVersionClick = onVersionClick,
-            onCustomizeBackground = onHeaderAppearanceClick,
             modifier = Modifier.fillMaxWidth(),
         )
     } else {
@@ -2033,7 +2048,6 @@ fun AboutSection(
             appIconRes = appIconRes,
             versionHint = versionHint,
             onVersionClick = onVersionClick,
-            onThemeSettingsClick = onHeaderAppearanceClick,
             modifier = Modifier.fillMaxWidth(),
         )
     }

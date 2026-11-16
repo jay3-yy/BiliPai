@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,7 +26,6 @@ import androidx.compose.ui.unit.sp
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.components.AppText
-import com.android.purebilibili.core.ui.components.AppTextButton
 
 /** MD3 首屏使用主题色角色和字阶；原生与玻璃共用几何，不使用 Miuix 渐变参数。 */
 @Composable
@@ -36,7 +34,6 @@ internal fun MaterialAboutOverview(
     appIconRes: Int,
     versionHint: String?,
     onVersionClick: () -> Unit,
-    onThemeSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
@@ -44,7 +41,7 @@ internal fun MaterialAboutOverview(
     Column(modifier = modifier) {
         Surface(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            shape = RoundedCornerShape(topStart = 48.dp, topEnd = 20.dp, bottomEnd = 48.dp, bottomStart = 20.dp),
+            shape = LocalAboutCardShape.current.toShape(),
             color = colors.primaryContainer,
             contentColor = colors.onPrimaryContainer,
         ) {
@@ -124,9 +121,6 @@ internal fun MaterialAboutOverview(
                                 )
                             }
                         }
-                    }
-                    AppTextButton(onClick = onThemeSettingsClick) {
-                        AppText("主题与配色", color = colors.onPrimaryContainer, tapToCopyEnabled = false)
                     }
                 }
             }

@@ -358,11 +358,12 @@ internal fun resolveAdaptivePreferenceIconContentColor(
     containerColor: Color,
     colorScheme: ColorScheme,
     iconStyle: AppIconStyle = AppIconStyle.AUTO,
+    lineIconColor: Color = Color.Unspecified,
 ): Color {
-    if (containerColor == Color.Unspecified) return colorScheme.onSurfaceVariant
+    if (containerColor == Color.Unspecified && iconStyle != AppIconStyle.MD3_STANDARD) return colorScheme.onSurfaceVariant
     return when (iconStyle) {
         AppIconStyle.THEME_CONTAINER -> colorScheme.onPrimaryContainer
-        AppIconStyle.MD3_STANDARD -> colorScheme.onSurfaceVariant
+        AppIconStyle.MD3_STANDARD -> if (lineIconColor == Color.Unspecified) colorScheme.onSurfaceVariant else lineIconColor
         AppIconStyle.AUTO, AppIconStyle.SOFT_COLORFUL, AppIconStyle.VIVID_COLORFUL -> {
             val opaqueContainer = containerColor.copy(alpha = 1f)
             when {
@@ -447,9 +448,11 @@ fun rememberAdaptivePreferenceIconTint(
 ): Color {
     val iconStyle = rememberResolvedAppIconStyle()
     val colorScheme = MaterialTheme.colorScheme
-    return remember(iconTint, iconStyle, colorScheme) {
+    val lineIconColor = com.android.purebilibili.core.ui.LocalAppLineIconColor.current
+    return remember(iconTint, iconStyle, colorScheme, lineIconColor) {
         when (iconStyle) {
             AppIconStyle.THEME_CONTAINER -> colorScheme.primary
+            AppIconStyle.MD3_STANDARD -> if (lineIconColor == Color.Unspecified) colorScheme.onSurfaceVariant else lineIconColor
             else -> colorScheme.onSurfaceVariant
         }
     }
@@ -462,8 +465,9 @@ fun rememberAdaptivePreferenceIconContentColor(
     if (useColorfulPreferenceIcons()) return Color.White
     val colorScheme = MaterialTheme.colorScheme
     val iconStyle = rememberResolvedAppIconStyle()
-    return remember(containerColor, colorScheme, iconStyle) {
-        resolveAdaptivePreferenceIconContentColor(containerColor, colorScheme, iconStyle)
+    val lineIconColor = com.android.purebilibili.core.ui.LocalAppLineIconColor.current
+    return remember(containerColor, colorScheme, iconStyle, lineIconColor) {
+        resolveAdaptivePreferenceIconContentColor(containerColor, colorScheme, iconStyle, lineIconColor)
     }
 }
 
