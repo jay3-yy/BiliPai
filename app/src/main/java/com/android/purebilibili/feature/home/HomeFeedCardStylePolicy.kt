@@ -20,8 +20,8 @@ internal data class HomeFeedCardLayout(
 /** 4:3 更高列表框。CDN 16:9 源图会左右裁。 */
 internal const val HOME_FEED_OFFICIAL_COVER_ASPECT_RATIO = 4f / 3f
 
-/** 默认信息流使用 16:9，与标准封面源图同比例。 */
-internal const val HOME_FEED_BILIPAI_COVER_ASPECT_RATIO = 16f / 9f
+/** 16:10，介于 16:9 与 4:3 之间。 */
+internal const val HOME_FEED_BILIPAI_COVER_ASPECT_RATIO = 16f / 10f
 
 /** 与投稿/CDN 源同比例，标准封面几乎不裁。 */
 internal const val HOME_FEED_FULL_COVER_ASPECT_RATIO = 16f / 9f

@@ -37,18 +37,18 @@ class HomeFeedCardStylePolicyTest {
     }
 
     @Test
-    fun biliPaiStyle_usesStandardSixteenByNineCover() {
+    fun biliPaiStyle_usesSixteenByTenBetweenFullAndTall() {
         val layout = resolveHomeFeedCardLayout(HomeFeedCardStyle.BILIPAI)
 
         assertEquals(HOME_FEED_BILIPAI_COVER_ASPECT_RATIO, layout.coverAspectRatio, 0.0001f)
-        assertEquals(16f / 9f, resolveHomeFeedCoverAspectRatio(HomeFeedCardStyle.BILIPAI), 0.0001f)
+        assertEquals(16f / 10f, resolveHomeFeedCoverAspectRatio(HomeFeedCardStyle.BILIPAI), 0.0001f)
         assertEquals(6, layout.outerPaddingDp)
         assertEquals(6, layout.itemSpacingDp)
         assertEquals(6, layout.verticalItemSpacingDp)
         assertEquals(8, layout.storyCardHorizontalPaddingDp)
         assertEquals(true, layout.compactMetadata)
-        assertEquals("16:9", HomeFeedCardStyle.BILIPAI.label)
-        assertTrue(HomeFeedCardStyle.BILIPAI.subtitle.contains("信息流"))
+        assertEquals("16:10", HomeFeedCardStyle.BILIPAI.label)
+        assertTrue(HomeFeedCardStyle.BILIPAI.subtitle.contains("封面"))
         assertEquals(2, HomeFeedCardStyle.BILIPAI.value)
         assertEquals(HomeFeedCardStyle.BILIPAI, HomeFeedCardStyle.fromValue(2))
     }
@@ -58,7 +58,7 @@ class HomeFeedCardStylePolicyTest {
         val cases = listOf(
             HomeFeedCardStyle.CURRENT to 16f / 9f,
             HomeFeedCardStyle.OFFICIAL to 4f / 3f,
-            HomeFeedCardStyle.BILIPAI to 16f / 9f,
+            HomeFeedCardStyle.BILIPAI to 16f / 10f,
         )
         cases.forEach { (style, ratio) ->
             com.android.purebilibili.core.util.WindowWidthSizeClass.entries.forEach { width ->

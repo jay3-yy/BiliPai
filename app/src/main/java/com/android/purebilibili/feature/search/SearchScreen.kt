@@ -809,7 +809,7 @@ fun SearchScreen(
     val cardTransitionEnabled by remember(context) { SettingsManager.getCardTransitionEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
     val showOnlineCount by remember(context) { SettingsManager.getShowCardOnlineCount(context) }.collectAsStateWithLifecycle(initialValue = false)
     val homeFeedCardStyle by remember(context) { SettingsManager.getHomeFeedCardStyle(context) }
-        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
+        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.CURRENT)
     val homeSettings by remember(context) { SettingsManager.getHomeSettings(context) }
         .collectAsStateWithLifecycle(initialValue = HomeSettings())
     val searchContentWidth = resolveSearchContentWidth(

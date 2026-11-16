@@ -824,7 +824,7 @@
     <string name="home_settings_card_ratio_title">Card cover ratio</string>
     <string name="home_settings_card_ratio_current">Show the full image, close to the uploaded source.</string>
     <string name="home_settings_card_ratio_official">Use a taller card and crop the sides around the center.</string>
-    <string name="home_settings_card_ratio_bilipai">Default feed cover ratio.</string>
+    <string name="home_settings_card_ratio_bilipai">Between the full-width and tall cover ratios.</string>
     <string name="home_settings_card_ratio_sync">(Applies to video cards on Home, Search, Related, History, Favorites, and Watch Later.)</string>
     <string name="home_settings_search_full_card_title">Show full titles</string>
     <string name="home_settings_search_card_ratio_title">Card cover ratio</string>
@@ -932,9 +932,9 @@
     <string name="appearance_home_duration_outside">Outside cover</string>
     <string name="appearance_home_duration_overlay">Overlay, no background</string>
     <string name="appearance_home_duration_hidden">Hidden</string>
-    <string name="appearance_home_card_ratio_current_label">16:9 (current ratio)</string>
+    <string name="appearance_home_card_ratio_current_label">16:9 (default)</string>
     <string name="appearance_home_card_ratio_official_label">4:3 (official ratio)</string>
-    <string name="appearance_home_card_ratio_bilipai_label">16:9 (BiliPai default)</string>
+    <string name="appearance_home_card_ratio_bilipai_label">16:10</string>
     <string name="animation_indicator_wobble_title">Liquid glass indicator recoil</string>
     <string name="animation_indicator_wobble_summary">Add squash and rebound when selecting a tab or releasing a drag. Applies only to liquid glass indicators; turning it off keeps normal movement and press feedback.</string>
     <string name="animation_settings_container_blur_summary">Blur the settings page behind container transitions in real time; requires Android 12 or later</string>

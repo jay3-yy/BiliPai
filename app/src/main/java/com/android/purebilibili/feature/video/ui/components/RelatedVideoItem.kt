@@ -179,7 +179,7 @@ internal fun rememberRelatedVideoCardLayout(): HomeFeedCardLayout {
     val context = LocalContext.current
     val homeFeedCardStyle by SettingsManager
         .getHomeFeedCardStyle(context)
-        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
+        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.CURRENT)
     return remember(homeFeedCardStyle) {
         resolveHomeFeedCardLayout(homeFeedCardStyle)
     }

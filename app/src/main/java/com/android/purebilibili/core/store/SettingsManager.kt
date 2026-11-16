@@ -578,11 +578,11 @@ enum class HomeFeedCardWidthPreset(
 enum class HomeFeedCardStyle(val value: Int, val label: String, val subtitle: String) {
     CURRENT(0, "16:9", "完整显示，接近投稿源图"),
     OFFICIAL(1, "4:3", "更高列表框，左右居中裁切"),
-    BILIPAI(2, "16:9", "默认信息流封面比例");
+    BILIPAI(2, "16:10", "介于完整封面与高封面之间");
 
     companion object {
         fun fromValue(value: Int): HomeFeedCardStyle =
-            entries.find { it.value == value } ?: BILIPAI
+            entries.find { it.value == value } ?: CURRENT
     }
 }
 
@@ -660,7 +660,7 @@ enum class BottomBarLiquidGlassPreset(
 
     companion object {
         fun fromValue(value: Int): BottomBarLiquidGlassPreset =
-            entries.find { it.value == value } ?: BILIPAI_TUNED
+            entries.find { it.value == value } ?: CURRENT_TUNED
     }
 }
 
@@ -714,7 +714,7 @@ data class HomeSettings(
     val gridColumnsSharedAcrossPages: Boolean = true,
     val pinchToChangeGridColumnsEnabled: Boolean = true, // [新增] 双指缩放切换网格列数
     val homeFeedCardWidthPreset: HomeFeedCardWidthPreset = HomeFeedCardWidthPreset.AUTO,
-    val homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
+    val homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.CURRENT,
     val homeHeroCarouselEnabled: Boolean = false,
     val homeHeroCarouselAutoplayEnabled: Boolean = false,
     val homeRefreshTipVisible: Boolean = true, // 推荐流刷新后在旧内容分界处显示提示
@@ -1945,7 +1945,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_HOME_FEED_CARD_WIDTH_PRESET] ?: HomeFeedCardWidthPreset.AUTO.value
             ),
             homeFeedCardStyle = HomeFeedCardStyle.fromValue(
-                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.BILIPAI.value
+                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.CURRENT.value
             ),
             homeHeroCarouselEnabled = preferences[KEY_HOME_HERO_CAROUSEL_ENABLED] ?: false,
             homeHeroCarouselAutoplayEnabled =
@@ -3497,7 +3497,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getHomeFeedCardStyle(context: Context): Flow<HomeFeedCardStyle> =
         context.settingsDataStore.data.map { preferences ->
             HomeFeedCardStyle.fromValue(
-                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.BILIPAI.value
+                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.CURRENT.value
             )
         }
 

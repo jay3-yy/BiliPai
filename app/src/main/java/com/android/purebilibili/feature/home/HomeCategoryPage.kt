@@ -234,7 +234,7 @@ internal fun HomeCategoryPageContent(
     showUpAvatars: Boolean = true,
     showPublishTime: Boolean = true,
     homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
-    homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
+    homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.CURRENT,
     showFullVideoCardContent: Boolean = false,
     homeHeroCarouselEnabled: Boolean = true,
     homeHeroCarouselAutoplayEnabled: Boolean = false,

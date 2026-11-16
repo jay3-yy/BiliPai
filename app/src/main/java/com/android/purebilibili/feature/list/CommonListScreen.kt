@@ -2994,7 +2994,7 @@ internal fun CommonListContent(
     val isHistoryPersonalList = resolveHistoryItem != null
     val isPersonalList = isHistoryPersonalList || isFavoritePersonalList
     val homeFeedCardStyle by remember(context) { SettingsManager.getHomeFeedCardStyle(context) }
-        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.BILIPAI)
+        .collectAsStateWithLifecycle(initialValue = HomeFeedCardStyle.CURRENT)
     val cardLayout = remember(homeFeedCardStyle) {
         com.android.purebilibili.feature.home.resolveHomeFeedCardLayout(homeFeedCardStyle)
     }

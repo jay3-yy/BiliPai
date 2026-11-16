@@ -613,7 +613,7 @@ fun HomeScreen(
     }.collectAsStateWithLifecycle(initialValue = false)
     val homeFeedCardStyle by remember(context) {
         SettingsManager.getHomeFeedCardStyle(context)
-    }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeFeedCardStyle.BILIPAI,
+    }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeFeedCardStyle.CURRENT,
             context = kotlin.coroutines.EmptyCoroutineContext)
     val topChromePolicy = rememberAppTopChromePolicy()
     val pullRefreshProfile = rememberAppPullRefreshProfile()
