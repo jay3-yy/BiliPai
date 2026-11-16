@@ -6,6 +6,11 @@ import com.android.purebilibili.core.store.HomeSettings
 import com.android.purebilibili.core.store.resolveHomeCardFrostedGlassEnabled
 import androidx.palette.graphics.Palette
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import com.materialkolor.hct.Hct
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -425,4 +430,158 @@ class VideoCardAdaptiveTintPolicyTest {
         assertEquals(defaultOnSurfaceVariant, colors.subtitleColor)
         assertEquals(false, colors.isDarkSurface)
     }
+
+    @Test
+    fun wallpaperTintKeepsThemeTextReadableAcrossLightDarkAndGlassModes() {
+        for (dark in listOf(false, true)) {
+            val base = if (dark) Color(0xFF1C1B1F) else Color(0xFFF7F2FA)
+            val title = if (dark) Color(0xFFE6E1E5) else Color(0xFF1D1B20)
+            val subtitle = if (dark) Color(0xFFCAC4D0) else Color(0xFF49454F)
+            for (glass in listOf(false, true)) {
+                for (wallpaper in listOf(Color.Black, Color.White, Color.Blue, Color.Cyan, Color.Gray, Color(0xFFFF8800))) {
+                    val palette = WallpaperPalette(wallpaper, wallpaper)
+                    val spec = resolveVideoCardAmbientDrawSpec(
+                        wallpaperPalette = palette,
+                        yFraction = 0.5f,
+                        coverTint = Color.Red,
+                        isDarkTheme = dark,
+                        defaultContainerColor = base,
+                        defaultBorderColor = Color.Gray,
+                        frostedGlassEnabled = glass,
+                    )
+                    val surface = spec.containerColor.compositeOver(wallpaper)
+                    val content = resolveVideoCardAdaptiveContentColors(
+                        wallpaperPalette = palette,
+                        coverTint = Color.Red,
+                        wallpaperTintEnabled = true,
+                        isDarkTheme = dark,
+                        defaultOnSurface = title,
+                        defaultOnSurfaceVariant = subtitle,
+                        wallpaperSurfaceToned = true,
+                    )
+                    assertEquals(title, content.titleColor)
+                    assertEquals(subtitle, content.subtitleColor)
+                    for (text in listOf(content.titleColor, content.subtitleColor)) {
+                        val bright = maxOf(text.luminance(), surface.luminance())
+                        val dim = minOf(text.luminance(), surface.luminance())
+                        assertTrue((bright + 0.05f) / (dim + 0.05f) >= 4.5f,
+                            "Unreadable wallpaper tint: dark=$dark, glass=$glass, wallpaper=$wallpaper")
+                    }
+                    assertEquals(0f, spec.coverGlowAlpha)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun pendingWallpaperPaletteUsesTheSameNeutralPlateAsTheLoadedSurface() {
+        val base = Color(0xFFF7F2FA)
+        val pending = resolveVideoCardAmbientDrawSpec(
+            wallpaperPalette = null,
+            yFraction = 0.5f,
+            coverTint = Color.Red,
+            wallpaperTintEnabled = true,
+            isDarkTheme = false,
+            defaultContainerColor = base,
+            defaultBorderColor = Color.Gray,
+        )
+        val loaded = resolveVideoCardAmbientDrawSpec(
+            wallpaperPalette = WallpaperPalette(base, base),
+            yFraction = 0.5f,
+            coverTint = Color.Red,
+            wallpaperTintEnabled = true,
+            isDarkTheme = false,
+            defaultContainerColor = base,
+            defaultBorderColor = Color.Gray,
+        )
+        assertEquals(loaded.containerColor, pending.containerColor)
+        assertEquals(0f, pending.coverGlowAlpha)
+    }
+
+    @Test
+    fun wallpaperSurfaceRetainsSourceHueWithoutColoringNeutralWallpaper() {
+        for (base in listOf(Color(0xFFF7F2FA), Color(0xFF1C1B1F))) {
+            for (wallpaper in listOf(Color.Red, Color.Green, Color.Blue, Color.Cyan, Color(0xFFFF8800))) {
+                for (glass in listOf(false, true)) {
+                    val surface = resolveWallpaperCardTint(wallpaper, base, glass)
+                    val sourceHue = Hct.fromInt(wallpaper.toArgb()).hue
+                    val surfaceHue = Hct.fromInt(surface.copy(alpha = 1f).toArgb()).hue
+                    val delta = abs(sourceHue - surfaceHue)
+                    assertTrue(minOf(delta, 360.0 - delta) < 5.0,
+                        "Wallpaper hue changed: wallpaper=$wallpaper, surface=$surface")
+                    if (!glass) assertEquals(1f, surface.alpha)
+                }
+            }
+            val neutral = resolveWallpaperCardTint(Color.Gray, base, false)
+            assertTrue(Hct.fromInt(neutral.toArgb()).chroma < 5.0)
+        }
+    }
+
+    @Test
+    fun glassOpacityRespondsToSubtitleContrastInsteadOfUsingOneFixedPlate() {
+        val base = Color(0xFFF7F2FA)
+        val standard = resolveWallpaperCardTint(
+            wallpaperColor = Color.Blue,
+            defaultContainerColor = base,
+            frostedGlassEnabled = true,
+            titleColor = Color.Black,
+            subtitleColor = Color(0xFF49454F),
+        )
+        val demanding = resolveWallpaperCardTint(
+            wallpaperColor = Color.Blue,
+            defaultContainerColor = base,
+            frostedGlassEnabled = true,
+            titleColor = Color.Black,
+            subtitleColor = Color(0xFF666666),
+        )
+        assertTrue(demanding.alpha > standard.alpha)
+        for (backdrop in listOf(Color.Black, Color.White)) {
+            val surface = demanding.compositeOver(backdrop)
+            val contrast = (surface.luminance() + 0.05f) / (Color(0xFF666666).luminance() + 0.05f)
+            assertTrue(contrast >= 4.5f)
+        }
+    }
+
+    @Test
+    fun precomputedWallpaperSurfacePalettePreservesScrollColorChangesAndReadableInterpolation() {
+        val raw = WallpaperPalette(Color.Blue, Color.Red)
+        val title = Color(0xFF1D1B20)
+        val subtitle = Color(0xFF49454F)
+        val surfacePalette = resolveWallpaperCardSurfacePalette(
+            palette = raw,
+            defaultContainerColor = Color(0xFFF7F2FA),
+            titleColor = title,
+            subtitleColor = subtitle,
+            frostedGlassEnabled = true,
+            isDataSaverActive = false,
+        )
+        assertTrue(surfacePalette.topColor != surfacePalette.bottomColor)
+        assertEquals(surfacePalette.topColor, interpolateWallpaperColor(surfacePalette, 0f))
+        assertEquals(surfacePalette.bottomColor, interpolateWallpaperColor(surfacePalette, 1f))
+        for (position in listOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
+            val plate = interpolateWallpaperColor(surfacePalette, position)
+            for (backdrop in listOf(Color.Black, Color.White)) {
+                val surface = plate.compositeOver(backdrop)
+                for (text in listOf(title, subtitle)) {
+                    val contrast = (surface.luminance() + 0.05f) / (text.luminance() + 0.05f)
+                    assertTrue(contrast >= 4.5f)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun darkWallpaperSurfacesUseSubduedColorInsteadOfDenseWarmPanels() {
+        for (wallpaper in listOf(Color(0xFFFF8800), Color.Red, Color.Blue, Color.Green)) {
+            for (glass in listOf(false, true)) {
+                val light = resolveWallpaperCardTint(wallpaper, Color(0xFFF7F2FA), glass)
+                val dark = resolveWallpaperCardTint(wallpaper, Color(0xFF1C1B1F), glass)
+                val lightChroma = Hct.fromInt(light.copy(alpha = 1f).toArgb()).chroma
+                val darkChroma = Hct.fromInt(dark.copy(alpha = 1f).toArgb()).chroma
+                assertTrue(darkChroma < lightChroma,
+                    "Dark wallpaper surface should be less saturated: wallpaper=$wallpaper, glass=$glass")
+            }
+        }
+    }
+
 }

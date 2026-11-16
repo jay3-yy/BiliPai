@@ -39,6 +39,12 @@ fun BackdropEffectScope.lens(
     if (!isRuntimeShaderSupported()) return
     if (refractionHeight <= 0f || refractionAmount <= 0f) return
 
+    val lensWidth = outlineBounds?.width ?: size.width
+    val lensHeight = outlineBounds?.height ?: size.height
+    // 折射带不能穿过短边中心，避免紧凑胶囊的上下法线在中线突变。
+    val effectiveRefractionHeight = resolveLiquidLensRefractionHeight(refractionHeight, lensWidth, lensHeight)
+    if (effectiveRefractionHeight <= 0f) return
+
     if (padding < refractionAmount) {
         padding = refractionAmount
     }
@@ -90,10 +96,10 @@ fun BackdropEffectScope.lens(
         // Round outwards so the lens never loses its requested sampling reach.
         padding = ceil(padding / sf) * sf
     }
-    val scaledSizeW = (outlineBounds?.width ?: size.width) / sf
-    val scaledSizeH = (outlineBounds?.height ?: size.height) / sf
+    val scaledSizeW = lensWidth / sf
+    val scaledSizeH = lensHeight / sf
     val scaledPadding = padding / sf
-    val scaledRefractionHeight = refractionHeight / sf
+    val scaledRefractionHeight = effectiveRefractionHeight / sf
     val scaledRefractionAmount = refractionAmount / sf
     val offsetX = -scaledPadding - (outlineBounds?.left ?: 0f) / sf
     val offsetY = -scaledPadding - (outlineBounds?.top ?: 0f) / sf
@@ -172,12 +178,24 @@ float sdRoundedRect(float2 coord, float2 halfSize, float radius) {
 
 float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {
     float2 cornerCoord = abs(coord) - (halfSize - float2(radius));
-    if (cornerCoord.x >= 0.0 || cornerCoord.y >= 0.0) {
+    if (cornerCoord.x > 0.0 || cornerCoord.y > 0.0) {
         return sign(coord) * normalize(max(cornerCoord, 0.0));
     } else {
         float gradX = step(cornerCoord.y, cornerCoord.x);
         return sign(coord) * float2(gradX, 1.0 - gradX);
     }
+}
+
+float2 refractionGradient(float2 coord, float2 halfSize, float radius, float depth) {
+    float2 grad = gradSdRoundedRect(coord, halfSize, radius);
+    if (depth > 0.0) {
+        float centerLength = length(coord);
+        if (centerLength > 0.0) grad += depth * coord / centerLength;
+    }
+    float gradLength = length(grad);
+    // 中心及轮廓连接点的零梯度保持原位采样，不能归一化为无效坐标。
+    if (gradLength == 0.0) return float2(0.0);
+    return grad / gradLength;
 }
 """
 
@@ -210,7 +228,7 @@ half4 main(float2 coord) {
 
     float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;
     float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
-    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));
+    float2 grad = refractionGradient(centeredCoord, halfSize, gradRadius, depthEffect);
 
     float2 refractedCoord = coord + d * grad;
     return content.eval(refractedCoord);
@@ -249,7 +267,7 @@ half4 main(float2 coord) {
 
     float d = circleMap(1.0 - -sd / refractionHeight) * refractionAmount;
     float gradRadius = min(radius * 1.5, min(halfSize.x, halfSize.y));
-    float2 grad = normalize(gradSdRoundedRect(centeredCoord, halfSize, gradRadius) + depthEffect * normalize(centeredCoord));
+    float2 grad = refractionGradient(centeredCoord, halfSize, gradRadius, depthEffect);
 
     float2 refractedCoord = coord + d * grad;
     // 普通透镜保留原光谱权重；dock 指示器只在选定轴超出轨道的区域色散。

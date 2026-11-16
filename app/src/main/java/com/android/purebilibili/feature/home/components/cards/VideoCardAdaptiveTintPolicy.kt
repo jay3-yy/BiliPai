@@ -134,6 +134,7 @@ fun resolveVideoCardAmbientDrawSpec(
     isDataSaverActive: Boolean = false,
     frostedGlassEnabled: Boolean = true,
     dynamicTintEnabled: Boolean = true,
+    wallpaperSurfacePalette: WallpaperPalette? = null,
 ): VideoCardAmbientDrawSpec {
     if (!dynamicTintEnabled) {
         return VideoCardAmbientDrawSpec(
@@ -162,14 +163,26 @@ fun resolveVideoCardAmbientDrawSpec(
         isDataSaverActive = isDataSaverActive
     )
 
-    // 1. 壁纸色彩联动（图一）：直接采用壁纸取色插值后的真实色彩，杜绝与白色容器底色混合稀释
-    val baseColor = if (wallpaperTintEnabled && wallpaperPalette != null) {
+    // 壁纸联动保留原色的色相，以主题容器约束明度，避免整块高饱和信息面板。
+    val baseColor = if (wallpaperTintEnabled && wallpaperSurfacePalette != null) {
+        interpolateWallpaperColor(wallpaperSurfacePalette, yFraction)
+    } else if (wallpaperTintEnabled && wallpaperPalette != null) {
         val rawWallpaperColor = interpolateWallpaperColor(wallpaperPalette, yFraction)
-        rawWallpaperColor.copy(alpha = glassTransparency)
+        resolveWallpaperCardTint(
+            wallpaperColor = rawWallpaperColor,
+            defaultContainerColor = defaultContainerColor,
+            frostedGlassEnabled = frostedGlassEnabled,
+            isDataSaverActive = isDataSaverActive,
+        )
     } else if (wallpaperTintEnabled) {
         // Wallpaper is enabled but still loading: hold a neutral glass surface instead of
         // flashing the previous cover's color while the backdrop/palette catches up.
-        defaultContainerColor.copy(alpha = glassTransparency)
+        resolveWallpaperCardTint(
+            wallpaperColor = defaultContainerColor,
+            defaultContainerColor = defaultContainerColor,
+            frostedGlassEnabled = frostedGlassEnabled,
+            isDataSaverActive = isDataSaverActive,
+        )
     } else if (hasValidCoverTint) {
         val blendFraction = if (isDarkTheme) 0.85f else 0.75f
         lerp(defaultContainerColor, coverTint!!, blendFraction).copy(alpha = glassTransparency)
@@ -191,7 +204,9 @@ fun resolveVideoCardAmbientDrawSpec(
         val baseBorder = Color.White.copy(alpha = borderAlpha)
         lerp(baseBorder, coverTint!!, borderBlendFraction).copy(alpha = borderAlpha)
     } else {
-        if (isDarkTheme) Color.White.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.40f)
+        if (isDarkTheme) {
+            Color.White.copy(alpha = if (wallpaperTintEnabled) 0.12f else 0.25f)
+        } else Color.White.copy(alpha = 0.40f)
     }
 
     return VideoCardAmbientDrawSpec(
@@ -225,6 +240,8 @@ fun resolveVideoCardAdaptiveContentColors(
     homeCardDynamicTintEnabled: Boolean = true,
     wallpaperYFraction: Float = 0.5f,
     wallpaperGlassAlpha: Float = 0f,
+    // 已按主题容器调色的卡片不再用壁纸原色决定文字；其他透壁纸表面保留自适应判断。
+    wallpaperSurfaceToned: Boolean = false,
 ): VideoCardAdaptiveContentColors {
     if (!homeCardDynamicTintEnabled) {
         return VideoCardAdaptiveContentColors(
@@ -237,7 +254,7 @@ fun resolveVideoCardAdaptiveContentColors(
     val isDarkSurface = if (isDarkTheme) {
         true
     } else {
-        val hasDarkWallpaper = wallpaperTintEnabled &&
+        val hasDarkWallpaper = !wallpaperSurfaceToned && wallpaperTintEnabled &&
             wallpaperPalette != null &&
             run {
                 // 与容器同一来源的局部取色色值，而不是整张壁纸的主导色：
