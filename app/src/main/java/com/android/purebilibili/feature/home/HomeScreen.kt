@@ -472,16 +472,18 @@ fun HomeScreen(
                     val isAtTop = gridState == null ||
                         (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0)
 
+                    val shouldRefresh = request == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
+                        (request == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH && isAtTop)
                     if (!isAtTop) {
                         val listState = requireNotNull(gridState)
                         // 底栏/重选回顶直达：单次 scrollToItem 是原子操作，
                         // 无两段式 preJump+animate 的中间态，任何距离都不掉帧。
                         listState.scrollToItem(0)
                         if (!requestIsCurrent()) return@withScrollToTopLock
-                        listState.notifyAppScrollToTop()
+                        // 纯回顶反馈当前内容；回顶并刷新不能先在旧卡片上播放完成反馈。
+                        // 刷新期间的位移交给刷新容器，在结果提交后完成原生收回。
+                        if (!shouldRefresh && !isRefreshing) listState.notifyAppScrollToTop()
                     }
-                    val shouldRefresh = request == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
-                        (request == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH && isAtTop)
                     if (shouldRefresh && requestIsCurrent()) {
                         viewModel.refresh(
                             activeCategory,
