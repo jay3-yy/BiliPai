@@ -416,6 +416,14 @@ private class ExternalPagerIndicatorFollowGate {
     var previousExternalPosition: Float? = null
 }
 
+internal fun shouldStartFloatingDockPagerSelectionFeedback(
+    targetIndex: Int,
+    tapTargetIndex: Int?,
+    dragOwnedTargetIndex: Int?,
+    isDragging: Boolean,
+): Boolean = !isDragging &&
+    targetIndex != tapTargetIndex && targetIndex != dragOwnedTargetIndex
+
 @Composable
 fun RowScope.FloatingBottomBarItem(
     onClick: () -> Unit,
@@ -825,6 +833,12 @@ fun FloatingBottomBar(
                 )
             },
             onDragStarted = { point ->
+                // 页面跟随在绘制阶段读取最新位置，协程镜像可能晚一帧；抓取时对齐同一落点。
+                if (externalPagerMotionEffectsLatest && glassTapTarget == null &&
+                    pagerFollowGate.ownedTargetIndex == null
+                ) {
+                    indicatorPositionLatest?.invoke()?.let { snapTo(it) }
+                }
                 if (isLiquidGlassMode) {
                     gestureHaptics.start(targetValue, safeTabsCount, touchSlopPx / tabWidthPx.coerceAtLeast(1f))
                     indicatorHighlightFromDrag = true
@@ -937,7 +951,14 @@ fun FloatingBottomBar(
                 pagerTargetPositionLatest?.invoke()?.roundToInt()?.coerceIn(0, maxTabIndex)
             } else null
         }.collect { target ->
-            if (target != null && glassTapTarget != target && !dampedDragAnimation.isDragging) {
+            // 松手触发的同目标切页仍由拖动吸附负责，不再启动一次点按膨胀。
+            if (target != null && shouldStartFloatingDockPagerSelectionFeedback(
+                    targetIndex = target,
+                    tapTargetIndex = glassTapTarget,
+                    dragOwnedTargetIndex = pagerFollowGate.ownedTargetIndex,
+                    isDragging = dampedDragAnimation.isDragging,
+                )
+            ) {
                 selectionTapFeedback(target)
             }
         }

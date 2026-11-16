@@ -9,6 +9,39 @@ import kotlin.test.assertTrue
 
 class FloatingBottomBarPagerFollowPolicyTest {
     @Test
+    fun `pager acknowledgement of drag selection does not restart tap feedback`() {
+        val dragTarget = resolveIndicatorOwnedTargetOnDragStop(
+            targetIndex = 2, selectedIndex = 0, hasExternalPagerPosition = true,
+            indicatorPosition = 1.6f,
+        )
+        assertFalse(shouldStartFloatingDockPagerSelectionFeedback(
+            targetIndex = 2, tapTargetIndex = null, dragOwnedTargetIndex = dragTarget,
+            isDragging = false,
+        ))
+        // A distinct programmatic destination must still interrupt the old drag settle.
+        assertTrue(shouldStartFloatingDockPagerSelectionFeedback(
+            targetIndex = 1, tapTargetIndex = null, dragOwnedTargetIndex = dragTarget,
+            isDragging = false,
+        ))
+    }
+
+    @Test
+    fun `existing tap and active pointer keep their feedback ownership`() {
+        assertFalse(shouldStartFloatingDockPagerSelectionFeedback(
+            targetIndex = 2, tapTargetIndex = 2, dragOwnedTargetIndex = null,
+            isDragging = false,
+        ))
+        assertFalse(shouldStartFloatingDockPagerSelectionFeedback(
+            targetIndex = 2, tapTargetIndex = null, dragOwnedTargetIndex = null,
+            isDragging = true,
+        ))
+        assertTrue(shouldStartFloatingDockPagerSelectionFeedback(
+            targetIndex = 2, tapTargetIndex = null, dragOwnedTargetIndex = null,
+            isDragging = false,
+        ))
+    }
+
+    @Test
     fun `returning to the selected tab retains ownership until local absorption finishes`() {
         val target = resolveIndicatorOwnedTargetOnDragStop(
             targetIndex = 1, selectedIndex = 1, hasExternalPagerPosition = true,

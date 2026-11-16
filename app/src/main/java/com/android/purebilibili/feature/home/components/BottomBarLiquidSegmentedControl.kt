@@ -28,11 +28,9 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppText
@@ -46,7 +44,7 @@ import com.android.purebilibili.core.ui.components.rememberMeasuredTabMinWidth
 import com.android.purebilibili.core.ui.components.resolveLiquidGlassTabSlotHorizontalPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -56,6 +54,9 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.zIndex
@@ -69,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.rememberAppSemanticVisualPolicy
@@ -80,6 +82,7 @@ import com.android.purebilibili.core.ui.animation.DampedDragAnimationState
 import com.android.purebilibili.core.ui.animation.DampedDragTrackingMode
 import com.android.purebilibili.feature.home.components.miuix.inspectDragGestures
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 import com.android.purebilibili.core.ui.blur.currentUnifiedBlurIntensity
 import com.android.purebilibili.core.ui.blur.shouldAllowHomeChromeLiquidGlass
 import com.android.purebilibili.core.ui.motion.BottomBarMotionProfile
@@ -668,24 +671,29 @@ internal fun AndroidNativeUnderlinedSegmentedControl(
     val selectedTextColor = selectedTextColorOverride ?: AppContentColors.accent()
     val unselectedTextColor = unselectedTextColorOverride
         ?: resolveLiquidSegmentedControlUnselectedTextColor(AppContentColors.primaryText(), enabled)
-    val underlineShape = CircleShape
     val density = LocalDensity.current
     val measuredLabelWidths: SnapshotStateList<Float> = remember(items) {
         List(itemCount) { 0f }.toMutableStateList()
     }
-    val animatedSelectedIndex by animateFloatAsState(
+    val animatedSelectedIndex = animateFloatAsState(
         targetValue = safeSelectedIndex.toFloat(),
         animationSpec = tween(durationMillis = 250, easing = EaseOut),
         label = "nativeUnderlinePosition",
     )
-    val indicatorPosition = resolveSegmentedControlIndicatorPosition(
-        internalPosition = animatedSelectedIndex,
-        externalPosition = indicatorPositionProvider?.invoke(),
-        itemCount = itemCount
-    )
-
-    SideEffect {
-        onIndicatorPositionChanged?.invoke(indicatorPosition)
+    val latestPositionProvider = rememberUpdatedState(indicatorPositionProvider)
+    val latestPositionChanged = rememberUpdatedState(onIndicatorPositionChanged)
+    val currentPosition = remember(animatedSelectedIndex, itemCount) {
+        {
+            resolveSegmentedControlIndicatorPosition(
+                internalPosition = animatedSelectedIndex.value,
+                externalPosition = latestPositionProvider.value?.invoke(),
+                itemCount = itemCount,
+            )
+        }
+    }
+    LaunchedEffect(currentPosition) {
+        snapshotFlow { currentPosition() }
+            .collect { latestPositionChanged.value?.invoke(it) }
     }
 
     BoxWithConstraints(
@@ -700,11 +708,6 @@ internal fun AndroidNativeUnderlinedSegmentedControl(
             .height(height)
     ) {
         val segmentWidth = maxWidth / itemCount
-        val underlineGeometry = resolveNativeUnderlineGeometry(
-            indicatorPosition = indicatorPosition,
-            segmentWidthDp = segmentWidth.value,
-            labelWidthsDp = measuredLabelWidths,
-        )
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
@@ -745,12 +748,28 @@ internal fun AndroidNativeUnderlinedSegmentedControl(
         }
         Box(
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .offset(x = underlineGeometry.offsetDp.dp)
-                .width(underlineGeometry.widthDp.dp)
-                .height(AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2)
-                .clip(underlineShape)
-                .background(selectedTextColor)
+                .matchParentSize()
+                .drawBehind {
+                    // 原生下划线独立消费逐帧位置，文字与点击区域不随动画重组。
+                    val geometry = resolveNativeUnderlineGeometry(
+                        indicatorPosition = currentPosition(),
+                        segmentWidthDp = segmentWidth.value,
+                        labelWidthsDp = measuredLabelWidths,
+                    )
+                    val widthPx = geometry.widthDp.dp.roundToPx().toFloat()
+                    val offsetPx = geometry.offsetDp.dp.roundToPx().toFloat()
+                    val thickness = (AppSpacingTokens.ExtraSmall - AppSpacingTokens.Micro / 2)
+                        .roundToPx().toFloat()
+                    drawRoundRect(
+                        color = selectedTextColor,
+                        topLeft = Offset(
+                            if (layoutDirection == LayoutDirection.Rtl) size.width - offsetPx - widthPx else offsetPx,
+                            size.height - thickness,
+                        ),
+                        size = Size(widthPx, thickness),
+                        cornerRadius = CornerRadius(thickness / 2f),
+                    )
+                }
         )
     }
 }

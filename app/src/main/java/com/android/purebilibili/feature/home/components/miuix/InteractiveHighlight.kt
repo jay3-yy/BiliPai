@@ -9,8 +9,7 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -59,20 +58,26 @@ class InteractiveHighlight(
 
     private val highlight = com.android.purebilibili.core.ui.components.AppPressHighlight()
 
-    val modifier: Modifier = Modifier.drawWithContent {
-        drawContent()
-        drawHighlight()
+    val modifier: Modifier = Modifier.drawWithCache {
+        val pill = createClipPath(size)
+        onDrawWithContent {
+            drawContent()
+            drawHighlight(pill)
+        }
     }
 
     /** 玻璃捕获层先照亮材质，再绘制选中内容，避免加亮混合改变图标与文字的主题色。 */
-    val backgroundModifier: Modifier = Modifier.drawBehind {
-        drawHighlight()
+    val backgroundModifier: Modifier = Modifier.drawWithCache {
+        val pill = createClipPath(size)
+        onDrawBehind { drawHighlight(pill) }
     }
 
-    private fun DrawScope.drawHighlight() {
-        val pill = Path().apply {
-            addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(size.minDimension / 2f)))
-        }
+    // 轮廓只随绘制尺寸重建；按压进度和指尖位置仍在绘制阶段读取。
+    private fun createClipPath(size: Size): Path = Path().apply {
+        addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(size.minDimension / 2f)))
+    }
+
+    private fun DrawScope.drawHighlight(pill: Path) {
         clipPath(pill) {
             highlight.draw(
                 this,

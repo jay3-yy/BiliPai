@@ -123,9 +123,7 @@ class DampedDragAnimation(
                 // band; it must never be adopted halfway through by the liquid indicator.
                 gestureAccepted = canDrag(down.position)
                 if (gestureAccepted) {
-                    isDragging = true
-                    onDragStarted(down.position)
-                    press()
+                    beginDrag(down.position)
                 }
             },
             onDragEnd = {
@@ -164,9 +162,7 @@ class DampedDragAnimation(
             onDragStart = { position ->
                 gestureAccepted = canDrag(position)
                 if (gestureAccepted) {
-                    isDragging = true
-                    onDragStarted(position)
-                    press()
+                    beginDrag(position)
                 }
             },
             onDragEnd = {
@@ -191,6 +187,14 @@ class DampedDragAnimation(
                 onDrag(size, dragAmount)
             },
         )
+    }
+
+    internal fun beginDrag(position: Offset) {
+        isDragging = true
+        // 重新抓取从眼前位置接手，停止旧目标的位移；普通拖动与长按拖动共用。
+        snapTo(value)
+        onDragStarted(position)
+        press()
     }
 
     fun press() {
