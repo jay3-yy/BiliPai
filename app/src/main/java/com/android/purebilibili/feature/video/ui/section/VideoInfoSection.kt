@@ -786,7 +786,8 @@ fun VideoTitleWithDesc(
                     }
                 }
                 if (inlineDeclarations) {
-                    Spacer(Modifier.height(8.dp))
+                    // 声明紧跟统计信息，各材质共用与独立声明区一致的行间距。
+                    Spacer(Modifier.height(3.dp))
                     if (argueMsg.isNotBlank()) VideoArgueMsgRow(argueMsg = argueMsg)
                     if (argueMsg.isNotBlank() && noReprint) Spacer(Modifier.height(2.dp))
                     if (noReprint) VideoArgueMsgRow(argueMsg = "未经作者授权，请勿转载")

@@ -192,7 +192,7 @@ import com.android.purebilibili.feature.video.player.ExternalPlaylistSource
 import com.android.purebilibili.feature.video.player.PlayMode
 import com.android.purebilibili.feature.video.player.PlaylistManager
 import com.android.purebilibili.feature.video.player.PlaylistSession
-import com.android.purebilibili.core.util.resolveScrollToTopPlan
+import com.android.purebilibili.core.util.animateScrollToTop
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 
@@ -788,26 +788,8 @@ fun CommonListScreen(
 
     suspend fun scrollCommonListToTop() {
         when (val scrollState = activeCommonListScrollState()) {
-            is CommonListScrollState.Grid -> {
-                val currentIndex = scrollState.state.firstVisibleItemIndex
-                val plan = resolveScrollToTopPlan(currentIndex)
-                plan.preJumpIndex?.let { preJump ->
-                    if (currentIndex > preJump) {
-                        scrollState.state.scrollToItem(preJump)
-                    }
-                }
-                scrollState.state.animateScrollToItem(plan.animateTargetIndex)
-            }
-            is CommonListScrollState.List -> {
-                val currentIndex = scrollState.state.firstVisibleItemIndex
-                val plan = resolveScrollToTopPlan(currentIndex)
-                plan.preJumpIndex?.let { preJump ->
-                    if (currentIndex > preJump) {
-                        scrollState.state.scrollToItem(preJump)
-                    }
-                }
-                scrollState.state.animateScrollToItem(plan.animateTargetIndex)
-            }
+            is CommonListScrollState.Grid -> scrollState.state.animateScrollToTop()
+            is CommonListScrollState.List -> scrollState.state.animateScrollToTop()
         }
     }
 

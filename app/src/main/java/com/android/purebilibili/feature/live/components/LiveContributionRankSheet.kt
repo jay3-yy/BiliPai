@@ -1,4 +1,6 @@
 package com.android.purebilibili.feature.live.components
+
+import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
@@ -76,7 +78,7 @@ fun LiveContributionRankSheet(
                 options = rankTypes.mapIndexed { index, type -> AppSegmentOption(index, type.title) },
                 selectedValue = pager.tabSelectedPage,
                 onSelectionChange = { index -> scope.launch {
-                    if (index == pager.currentPage) listStates[index].animateScrollToItem(0)
+                    if (index == pager.currentPage) listStates[index].animateScrollToTop()
                     else com.android.purebilibili.navigation.animatePagerSelection(pager, index)
                 } },
                 indicatorPositionProvider = { pager.tabIndicatorPosition },

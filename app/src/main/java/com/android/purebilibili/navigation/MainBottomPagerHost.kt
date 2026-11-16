@@ -1,23 +1,27 @@
 package com.android.purebilibili.navigation
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.rememberLifecycleOwner
-import com.android.purebilibili.core.ui.components.AppHorizontalPager
+import com.android.purebilibili.core.ui.motion.AppTabIndicatorMotion
+import com.android.purebilibili.core.ui.motion.iosMorphTween
 import com.android.purebilibili.feature.home.components.BottomNavItem
 
 /**
- * 只创建当前页和切页参与者，不在空闲时挂载全部离屏页面树。
- * 页面数据和可保存状态由外层的 ViewModel / SaveableStateHolder 保留。
- * 玻璃、MD3 和 Miuix 共用此生命周期，不改变各自的材质与布局参数。
+ * 点击底栏时直接过渡两端内容，不通过分页预跳创建中间栏目。
+ * 已退出的页面在转场结束后卸载；数据和可保存状态由外层保留。
+ * 玻璃、MD3 和 Miuix 共用此切页边界，页面尺寸不参与动画。
  */
 @Composable
 internal fun MainBottomPagerHost(
@@ -26,50 +30,44 @@ internal fun MainBottomPagerHost(
     modifier: Modifier = Modifier,
     content: @Composable (page: Int, item: BottomNavItem) -> Unit,
 ) {
-    val pager = state.pagerState
-    AppHorizontalPager(
-        modifier = modifier,
-        state = pager,
-        key = { resolveBottomPagerLayoutKey(it, visibleItems) },
-        beyondViewportPageCount = 0,
-        userScrollEnabled = shouldEnableBottomPagerUserScroll(),
+    state.transition.AnimatedContent(
+        modifier = modifier.clipToBounds(),
+        contentKey = { resolveBottomPagerLayoutKey(it, visibleItems) },
+        transitionSpec = {
+            val direction = if (targetState > initialState) {
+                AnimatedContentTransitionScope.SlideDirection.Start
+            } else {
+                AnimatedContentTransitionScope.SlideDirection.End
+            }
+            val transform = if (state.reduceMotion) {
+                EnterTransition.None togetherWith ExitTransition.None
+            } else {
+                slideIntoContainer(direction, iosMorphTween(AppTabIndicatorMotion.DurationMillis)) togetherWith
+                    slideOutOfContainer(direction, iosMorphTween(AppTabIndicatorMotion.DurationMillis))
+            }
+            transform.using(null)
+        },
     ) { page ->
         val item = visibleItems.getOrNull(page)
-        // 只订阅进入/离开视口的边界，不让切页的逐帧偏移驱动整页重组。
-        val composePage by remember(page, state) {
-            derivedStateOf {
-                shouldComposeBottomPagerPage(
-                    page, pager.currentPage, state.selectedPage, state.isNavigating,
-                    state.navigationStartPage, pager.currentPageOffsetFraction,
-                )
+        Box(Modifier.fillMaxSize()) {
+            if (item != null) {
+                BottomPagerPageLifecycle(state, page) { content(page, item) }
             }
-        }
-        if (item != null && composePage) {
-            BottomPagerPageLifecycle(state, page) { content(page, item) }
-        } else {
-            Box(Modifier.fillMaxSize())
         }
     }
 }
 
-/** 目标页立即订阅数据；切页中仍露出的来源页保持 STARTED。 */
+/** 目标页立即订阅数据；仍在退出的页面保持 STARTED，落位后只保留目标页。 */
 @Composable
 internal fun BottomPagerPageLifecycle(
     state: MainBottomPagerState,
     page: Int,
     content: @Composable () -> Unit,
 ) {
-    val maxLifecycle by remember(state, page) {
-        derivedStateOf {
-            val pager = state.pagerState
-            val visible = kotlin.math.abs(page - pager.currentPage - pager.currentPageOffsetFraction) < 1f
-            when {
-                page == state.selectedPage && !state.isNavigating && !pager.isScrollInProgress ->
-                    Lifecycle.State.RESUMED
-                page == state.selectedPage || visible -> Lifecycle.State.STARTED
-                else -> Lifecycle.State.CREATED
-            }
-        }
+    val maxLifecycle = if (page == state.selectedPage && !state.isNavigating) {
+        Lifecycle.State.RESUMED
+    } else {
+        Lifecycle.State.STARTED
     }
     val owner = rememberLifecycleOwner(maxLifecycle = maxLifecycle)
     CompositionLocalProvider(LocalLifecycleOwner provides owner, content = content)

@@ -92,6 +92,40 @@ class PageAwareAsyncImageTest {
     }
 
     @Test
+    fun pagePermissionDefersLoadingAndPreservesDecodedCoverOnExit() {
+        val allowed = mutableStateOf(false)
+        val image = mutableStateOf(solidBitmap(android.graphics.Color.RED))
+        val successes = AtomicInteger()
+        composeRule.setContent {
+            CompositionLocalProvider(LocalPageImageLoadingAllowed provides allowed.value) {
+                PageAwareAsyncImage(
+                    model = image.value,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp).background(Color.Gray).testTag("page-image"),
+                    onSuccess = { successes.incrementAndGet() },
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(0, successes.get())
+        assertPixel(Color.Gray)
+        composeRule.runOnIdle { allowed.value = true }
+        composeRule.waitUntil(5_000) { successes.get() == 1 }
+        composeRule.runOnIdle { allowed.value = false }
+        composeRule.waitForIdle()
+        assertPixel(Color.Red)
+        assertEquals(1, successes.get())
+        // 屏外内容身份变化时不能重用上一张图，也不能启动新加载。
+        composeRule.runOnIdle { image.value = solidBitmap(android.graphics.Color.BLUE) }
+        composeRule.waitForIdle()
+        assertPixel(Color.Gray)
+        assertEquals(1, successes.get())
+        composeRule.runOnIdle { allowed.value = true }
+        composeRule.waitUntil(5_000) { successes.get() == 2 }
+        assertPixel(Color.Blue)
+    }
+
+    @Test
     fun decodedHomeBitmapSurvivesTransitionPauseWithoutRestartingRequest() {
         val allowed = mutableStateOf(true)
         val image = mutableStateOf(solidBitmap(android.graphics.Color.RED))

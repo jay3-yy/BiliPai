@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.feature.video.ui.components.commentSectionNotice
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
@@ -1726,7 +1728,7 @@ private fun CinemaRelatedPane(
             visible = backToTopButtonEnabled && showBackToTop,
             onClick = {
                 scope.launch {
-                    listState.animateScrollToItem(0)
+                    listState.animateScrollToTop()
                 }
             },
             modifier = Modifier

@@ -211,7 +211,7 @@ internal fun resolveBottomPagerSaveableStateKey(item: BottomNavItem): String {
 }
 
 internal fun resolveBottomPagerLayoutKey(page: Int, visibleItems: List<BottomNavItem>): String {
-    // 设置缩减底栏时，Pager 的旧布局/预取仍可能查询已移除的页。
+    // 设置缩减底栏时，退出中的内容仍可能持有已移除的槽位。
     // 临时空槽必须有独立键，不能复用首页键造成重复。
     return visibleItems.getOrNull(page)?.let(::resolveBottomPagerSaveableStateKey)
         ?: "bottom:removed-slot:$page"
@@ -229,19 +229,6 @@ internal fun resolveBottomPagerRenderBudget(isNavigating: Boolean): BottomPagerR
         deferProfileImmersiveBackground = isNavigating
     )
 }
-
-internal fun shouldEnableBottomPagerUserScroll(): Boolean = false
-
-/** 视口内页面、目标页及仍在切页的来源页拥有真实内容，其余页不保留组合树。 */
-internal fun shouldComposeBottomPagerPage(
-    page: Int,
-    currentPage: Int,
-    selectedPage: Int,
-    isNavigating: Boolean,
-    navigationStartPage: Int,
-    currentPageOffsetFraction: Float = 0f,
-): Boolean = kotlin.math.abs(page - currentPage - currentPageOffsetFraction) < 1f || page == selectedPage ||
-    (isNavigating && page == navigationStartPage)
 
 internal fun shouldBypassNavigationDebounceForRoute(targetRoute: String): Boolean {
     return BottomNavItem.entries.any { item -> item.route == targetRoute }

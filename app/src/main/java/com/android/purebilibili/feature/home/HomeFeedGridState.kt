@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Density
+import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
+import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.ui.rememberHomeStaggeredGridState
 
 /**
@@ -105,6 +107,17 @@ internal class HomeFeedGridState(
     suspend fun animateScrollToItem(index: Int, scrollOffset: Int = 0) {
         if (regularLayout) regular.animateScrollToItem(index, scrollOffset)
         else waterfall.animateScrollToItem(index, scrollOffset)
+    }
+
+    /** Route return actions to the same native state that owns the rendered grid and feedback. */
+    suspend fun animateScrollToTop(fast: Boolean = false) {
+        if (regularLayout) regular.animateScrollToTop(fast)
+        else waterfall.animateScrollToTop(fast)
+    }
+
+    fun notifyAppScrollToTop() {
+        if (regularLayout) regular.notifyAppScrollToTop()
+        else waterfall.notifyAppScrollToTop()
     }
 }
 

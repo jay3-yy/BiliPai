@@ -619,7 +619,7 @@ private fun BangumiIndexContent(
                     miuixBackdrop = tabBackdrop,
                     onSelectionChange = {
                         if (it == category) {
-                            scope.launch { gridState.animateScrollToItem(0) }
+                            scope.launch { gridState.animateScrollToTop() }
                         } else {
                             onCategorySelected(it)
                         }

@@ -204,6 +204,7 @@ val LocalHomeFeedScrollInProgress = compositionLocalOf { mutableStateOf(false) }
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
+    homeTopTabSettings: com.android.purebilibili.core.store.HomeTopTabSettings,
     onVideoClick: (HomeVideoClickRequest) -> Unit,
     onCompanionVideoClick: (HomeVideoClickRequest) -> Unit = {},
     availableFeedWidth: Dp? = null,
@@ -315,8 +316,6 @@ fun HomeScreen(
         mutableStateOf<com.android.purebilibili.feature.video.share.VideoSharePayload?>(null)
     }
     val coroutineScope = rememberCoroutineScope() // 用于双击回顶动画
-    var homeBackToTopSquishActive by remember { mutableStateOf(false) }
-    var homeBackToTopSquishGeneration by remember { mutableIntStateOf(0) }
     val headerSettleMotionSpec = AppMotionTokens.emphasizedSpec<Float>()
     val globalScrollOffset = LocalHomeScrollOffset.current
     val globalFeedScrollInProgress = LocalHomeFeedScrollInProgress.current
@@ -325,30 +324,11 @@ fun HomeScreen(
     var homeNavigationRevision by remember { mutableLongStateOf(0L) }
     val returnState = rememberHomeReturnState()
 
-    fun triggerHomeBackToTopCardSquish() {
-        val generation = homeBackToTopSquishGeneration + 1
-        homeBackToTopSquishGeneration = generation
-        homeBackToTopSquishActive = true
-        coroutineScope.launch {
-            delay(105L)
-            if (homeBackToTopSquishGeneration == generation) {
-                homeBackToTopSquishActive = false
-            }
-        }
-    }
-
     // [新增] 监听全局回顶事件
     val scrollChannel = LocalHomeScrollChannel.current
     val latestHomeScrollCategory by rememberUpdatedState(currentCategory)
     val latestHomeScrollPopularSubCategory by rememberUpdatedState(popularSubCategory)
 
-    val resolvedHomeTopTabSettings by remember(context) {
-        SettingsManager.getHomeTopTabSettings(context)
-    }.collectAsStateWithLifecycle(
-        initialValue = null,
-        context = kotlin.coroutines.EmptyCoroutineContext,
-    )
-    val homeTopTabSettings = resolvedHomeTopTabSettings ?: return
     // 顶部标签顺序和可见项交给设置页控制；默认仍是六项。
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 HomeHeader
@@ -498,7 +478,7 @@ fun HomeScreen(
                         // 无两段式 preJump+animate 的中间态，任何距离都不掉帧。
                         listState.scrollToItem(0)
                         if (!requestIsCurrent()) return@withScrollToTopLock
-                        triggerHomeBackToTopCardSquish()
+                        listState.notifyAppScrollToTop()
                     }
                     val shouldRefresh = request == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
                         (request == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH && isAtTop)
@@ -2190,8 +2170,6 @@ fun HomeScreen(
                                          // 刷新数据换位时不再同时启动整屏卡片 placement spring。
                                          cardAnimationEnabled = cardAnimationEnabled && !isPageRefreshing,
                                          cardMotionTier = cardMotionTier,
-                                         backToTopSquishActive = homeBackToTopSquishActive &&
-                                             category == latestHomeScrollCategory,
                                          cardTransitionEnabled = cardTransitionEnabled,
                                          isReturningFromVideoDetail = isReturningFromVideoDetail,
                                          isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
@@ -2245,7 +2223,7 @@ fun HomeScreen(
                                          oldContentLocatorRefreshKey = refreshNewItemsKey,
                                          onOldContentDividerClick = {
                                              coroutineScope.launch {
-                                                 contentGridState.animateScrollToItem(0)
+                                                 contentGridState.animateScrollToTop()
                                              }
                                              viewModel.refresh(category)
                                          },

@@ -1,8 +1,8 @@
 package com.android.purebilibili.core.ui.transition
 
+import androidx.compose.animation.core.FloatSpringSpec
 import kotlin.math.atan
-import kotlin.math.exp
-import kotlin.math.sin
+import kotlin.math.roundToLong
 import kotlin.math.sqrt
 
 internal const val VIDEO_CARD_LANDING_DAMPING = 0.80f
@@ -19,7 +19,12 @@ internal class VideoCardLandingMotion(
         val dampedOmega = omega * sqrt(1f - dampingRatio * dampingRatio)
         val decay = dampingRatio * omega
         val peakTime = atan(dampedOmega / decay) / dampedOmega
-        exp(-decay * peakTime) * sin(dampedOmega * peakTime) / dampedOmega
+        FloatSpringSpec(dampingRatio = dampingRatio, stiffness = stiffness).getValueFromNanos(
+            playTimeNanos = (peakTime * 1_000f).roundToLong() * 1_000_000L,
+            initialValue = 0f,
+            targetValue = 0f,
+            initialVelocity = 1f,
+        )
     }
 }
 

@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.profile
 
+import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
+import com.android.purebilibili.core.ui.components.rememberAppScrollToTopFeedbackModifier
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.core.util.responsiveContentWidth
 
 import com.android.purebilibili.navigation.tabIndicatorPosition
@@ -510,9 +514,6 @@ private fun ProfileScreenContent(
         (skinProfileBackgroundPath != null || !skinVideoBackgroundPath.isNullOrBlank() ||
             (state as? ProfileUiState.Success)?.user?.topPhoto?.isNotEmpty() == true)
     val shouldControlSystemBars = isLoggedOut || isImmersiveMobileProfile
-    var handledAccountSessionRefreshGeneration by remember(viewModel) {
-        mutableIntStateOf(0)
-    }
     val lightStatusBars = resolveProfileLightStatusBars(
         isImmersive = shouldControlSystemBars,
         useSplitLayout = windowSizeClass.shouldUseSplitLayout,
@@ -578,19 +579,11 @@ private fun ProfileScreenContent(
         onDispose { viewModel.setProfilePageActive(false) }
     }
 
-    LaunchedEffect(viewModel, profileDataWorkActive, accountSessionRefreshGeneration) {
-        if (profileDataWorkActive) {
-            val force = shouldForceProfileLoadForAccountSessionRefresh(
-                isCurrentPage = isCurrentPage,
-                accountSessionRefreshGeneration = accountSessionRefreshGeneration,
-                handledAccountSessionRefreshGeneration = handledAccountSessionRefreshGeneration
-            )
-            viewModel.loadProfile(force = force)
-            if (force) {
-                handledAccountSessionRefreshGeneration = accountSessionRefreshGeneration
-            }
-        }
-    }
+    ProfilePageLoadEffect(
+        isActive = profileDataWorkActive,
+        accountSessionRefreshGeneration = accountSessionRefreshGeneration,
+        onLoad = viewModel::loadProfile,
+    )
 
     LaunchedEffect(Unit) {
         //  [埋点] 页面浏览追踪
@@ -1556,6 +1549,7 @@ private fun ProfileSpaceContent(
                 Column(
                     modifier = Modifier
                         .widthIn(min = 300.dp, max = 360.dp)
+                        .then(rememberAppScrollToTopFeedbackModifier(tabletRailScrollState))
                         .verticalScroll(tabletRailScrollState),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -6053,12 +6047,13 @@ private fun ObserveProfileScrollToTop(
         if (requestId <= 0) return@LaunchedEffect
         listState?.let { state ->
             if (state.firstVisibleItemIndex > 0 || state.firstVisibleItemScrollOffset > 0) {
-                state.animateScrollToItem(0)
+                state.animateScrollToTop()
             }
         }
         scrollState?.let { state ->
             if (state.value > 0) {
                 state.animateScrollTo(0)
+                state.notifyAppScrollToTop()
             }
         }
     }

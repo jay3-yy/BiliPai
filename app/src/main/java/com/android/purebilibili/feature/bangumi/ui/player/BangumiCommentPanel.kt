@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.bangumi.ui.player
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -283,7 +285,7 @@ internal fun BangumiCommentPanel(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 20.dp, bottom = bottomPadding),
-                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                onClick = { scope.launch { listState.animateScrollToTop() } },
             )
         }
     }

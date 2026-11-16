@@ -1,6 +1,8 @@
 // 文件路径: feature/watchlater/WatchLaterScreen.kt
 package com.android.purebilibili.feature.watchlater
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.util.responsiveContentWidth
 
@@ -994,7 +996,7 @@ fun WatchLaterScreen(
     LaunchedEffect(scrollToTopChannel) {
         scrollToTopChannel?.receiveAsFlow()?.collect {
             if (gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0) {
-                gridState.animateScrollToItem(0)
+                gridState.animateScrollToTop()
             }
         }
     }

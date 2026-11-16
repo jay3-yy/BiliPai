@@ -1,6 +1,8 @@
 // 文件路径: feature/video/screen/VideoContentSection.kt
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.feature.video.ui.components.commentSectionNotice
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
@@ -1237,9 +1239,9 @@ internal fun VideoContentSection(
             onClick = {
                 scope.launch {
                     if (pagerState.currentPage == 0) {
-                        introListState.animateScrollToItem(0)
+                        introListState.animateScrollToTop()
                     } else {
-                        commentListState.animateScrollToItem(0)
+                        commentListState.animateScrollToTop()
                     }
                     commentHeaderCollapsePx = 0f
                 }

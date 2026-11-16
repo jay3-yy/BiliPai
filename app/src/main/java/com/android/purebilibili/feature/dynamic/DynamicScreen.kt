@@ -422,7 +422,7 @@ fun DynamicScreen(
         scope.launch {
             when (resolveDynamicTabReselectAction(displayedTabIndex, visibleIndex)) {
                 DynamicTabReselectAction.SCROLL_TO_TOP -> {
-                    activeListState?.animateScrollToItem(0)
+                    activeListState?.animateScrollToTop()
                 }
                 DynamicTabReselectAction.SWITCH_TAB -> {
                     // Reuse the shared pager-follow deformation: tap switching now drives the
@@ -1560,7 +1560,26 @@ internal fun DynamicList(
     // Discard old-owner item animations, lane measurements and remembered card state together.
     // Refreshes within the same owner keep animateItem and prepend anchoring unchanged.
     key(selectedUserId.takeIf { isSelectedUserTabActive }) {
+    val visibleKeyCache = remember(listState) {
+        com.android.purebilibili.feature.home.HomeVisibleItemKeyCache()
+    }
+    val visibleKeys = remember(listState, visibleKeyCache) {
+        derivedStateOf {
+            visibleKeyCache.keys(listState.layoutInfo.visibleItemsInfo) { it.key }
+        }
+    }
     val dynamicCard: @Composable (com.android.purebilibili.data.model.response.DynamicItem) -> Unit = { item ->
+        val itemKey = "dynamic_${dynamicFeedItemKey(item)}"
+        val inViewport by remember(visibleKeys, itemKey) {
+            derivedStateOf { itemKey in visibleKeys.value }
+        }
+        // 预组合只准备卡片布局；屏外图片和 GIF 暂停，回到视口时沿用原缓存身份。
+        // 继承导航图片许可，三种材质共用，不改变转场中可见页面的首屏加载时机。
+        val imageLoadingAllowed =
+            com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed.current && inViewport
+        CompositionLocalProvider(
+            com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed provides imageLoadingAllowed,
+        ) {
         DynamicCardV2(
             item = item,
             gifImageLoader = gifImageLoader,
@@ -1599,6 +1618,7 @@ internal fun DynamicList(
                 likeOverride = likeOverrides[item.id_str],
             ),
         )
+        }
     }
     val showSkeleton = filteredItems.isEmpty() && activeLoading
     val dynamicGridKeys = remember(filteredItems) {

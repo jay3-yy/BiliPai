@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.animation.DissolvableVideoCard
 import com.android.purebilibili.core.ui.animation.DissolveAnimationPreset
@@ -59,6 +61,7 @@ internal fun LastPositionPill(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val closeCoordinates = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     var dissolving by remember(refreshKey) { mutableStateOf(false) }
 
     // 首次创建即播放进入动画；消失交给调用方移除本组件完成。
@@ -83,8 +86,12 @@ internal fun LastPositionPill(
             collapseAfterDissolve = false,
             publishGlobalDissolveState = false,
             keepInvisibleAfterDissolve = true,
-            // 关闭按钮在右侧，粒子自右向左消散更符合直觉。
+            // 自动收起与手动关闭共用关闭按钮中心。
             reverseSweep = true,
+            originInWindow = {
+                closeCoordinates[0]?.takeIf { it.isAttached }?.boundsInWindow()?.center
+                    ?.let { android.graphics.PointF(it.x, it.y) }
+            },
         ) {
             HomeOverlayPillButton(
                 onClick = {
@@ -100,6 +107,7 @@ internal fun LastPositionPill(
                 Box(
                     modifier = Modifier
                         .size(CloseHitTargetSizeDp.dp)
+                        .onGloballyPositioned { closeCoordinates[0] = it }
                         .clip(CircleShape)
                         .clickable(enabled = !dissolving) { dissolving = true },
                     contentAlignment = Alignment.Center

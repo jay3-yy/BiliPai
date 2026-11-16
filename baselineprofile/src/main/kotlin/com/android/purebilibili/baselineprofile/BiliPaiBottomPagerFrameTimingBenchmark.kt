@@ -51,17 +51,10 @@ class BiliPaiBottomPagerFrameTimingBenchmark {
         }
 
     private fun MacrobenchmarkScope.clickBottomTab(label: String) {
-        val byDesc = device.wait(Until.findObject(By.desc(label)), 2_000)
-        if (byDesc != null) {
-            byDesc.click()
-            device.waitForIdle()
-            return
-        }
-
-        val byText = device.wait(Until.findObject(By.text(label)), 2_000)
-        if (byText != null) {
-            byText.click()
-            device.waitForIdle()
-        }
+        val tab = device.wait(Until.findObject(By.desc(label)), 2_000)
+            ?: device.wait(Until.findObject(By.text(label)), 2_000)
+            ?: error("未找到底栏栏目：$label，切页场景未完成")
+        tab.click()
+        device.waitForIdle()
     }
 }

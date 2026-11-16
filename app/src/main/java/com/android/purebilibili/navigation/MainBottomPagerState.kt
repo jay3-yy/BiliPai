@@ -1,116 +1,83 @@
 package com.android.purebilibili.navigation
 
-import androidx.compose.foundation.pager.PagerState
+import androidx.compose.animation.core.MutableTransitionState
+import androidx.compose.animation.core.Transition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.job
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.android.purebilibili.core.ui.motion.AppTabIndicatorMotion
+import com.android.purebilibili.core.ui.motion.iosMorphTween
 
-/**
- * 底栏 HorizontalPager 状态。点击指示器与内容翻页分别连续运动。
- */
+/** 底栏内容与指示器共用转场；远距离切换只交换两端页面，不穿过中间栏目。 */
 @Stable
 internal class MainBottomPagerState(
-    val pagerState: PagerState,
-    private val coroutineScope: CoroutineScope,
-    private val reduceMotion: () -> Boolean = { false },
+    private val transitionState: MutableTransitionState<Int>,
+    val transition: Transition<Int>,
+    private val indicatorPositionState: State<Float>,
+    private val pageCount: State<Int>,
+    private val reduceMotionState: State<Boolean>,
 ) {
-    var selectedPage by mutableIntStateOf(pagerState.currentPage)
-        private set
+    private var lastSettledPage by mutableIntStateOf(transitionState.currentState)
+    val selectedPage: Int get() = transitionState.targetState
+    // Transition 中途改向时 currentState 会变成上一个目标，它不一定真正落位过。
+    val settledPage: Int get() = if (transitionState.isIdle) transitionState.currentState else lastSettledPage
+    val isNavigating: Boolean get() = !transitionState.isIdle
+    val isScrollInProgress: Boolean get() = isNavigating
+    val reduceMotion: Boolean get() = reduceMotionState.value
+    val indicatorPosition: Float get() = indicatorPositionState.value
 
-    var isNavigating by mutableStateOf(false)
-        private set
-
-    var navigationStartPage by mutableIntStateOf(pagerState.currentPage)
-        private set
-
-    /** Continuous position shared by the pager and the bottom-bar indicator. */
-    val indicatorPosition: Float
-        get() = pagerState.tabIndicatorPosition
-
-    /** True for both user-driven and programmatic pager movement. */
-    val isScrollInProgress: Boolean
-        get() = pagerState.isScrollInProgress
-
-    /** Stable adapters for UI components that observe values from snapshotFlow. */
     val indicatorPositionProvider: () -> Float = { indicatorPosition }
     val scrollInProgressProvider: () -> Boolean = { isScrollInProgress }
     val programmaticNavigationProvider: () -> Boolean = { isNavigating }
-    val targetPositionProvider: () -> Float = {
-        (if (isNavigating) selectedPage else pagerState.targetPage).toFloat()
+    val targetPositionProvider: () -> Float = { selectedPage.toFloat() }
+
+    fun recordSettledPage() {
+        if (transitionState.isIdle) lastSettledPage = transitionState.currentState
     }
 
-    private var navJob: Job? = null
-
-    /**
-     * MainPagerState 目标页切换：
-     * - 先更新 [selectedPage]（底栏指示器跟目标页），目标页立即开始收集数据；
-     * - 再驱动 Pager 到目标，远距离切换允许跳过中间页，指示器独立连续移动。
-     */
     fun switchToPage(targetIndex: Int) {
-        val lastPage = pagerState.pageCount - 1
+        val lastPage = pageCount.value - 1
         if (lastPage < 0) return
-        val safeTargetIndex = targetIndex.coerceIn(0, lastPage)
-        if (safeTargetIndex == selectedPage) return
-
-        navJob?.cancel()
-
-        navigationStartPage = pagerState.currentPage
-        selectedPage = safeTargetIndex
-        isNavigating = true
-
-        // 先保存 Job 再启动；减少动态效果时切页可能同步完成，finally 仍须释放导航状态。
-        navJob = coroutineScope.launch(start = CoroutineStart.LAZY) {
-            val myJob = coroutineContext.job
-            try {
-                // Pager 自身负责目标页的组合与远距离预跳，不在点击和反馈之间插入固定等待。
-                animatePagerSelection(
-                    pagerState, safeTargetIndex,
-                    animationSpec = if (reduceMotion()) snap() else null,
-                )
-            } finally {
-                if (navJob == myJob) {
-                    isNavigating = false
-                    if (pagerState.currentPage != safeTargetIndex) {
-                        selectedPage = pagerState.currentPage
-                    }
-                    navigationStartPage = pagerState.currentPage
-                }
-            }
-        }
-        navJob?.start()
-    }
-
-    fun syncPage() {
-        if (!isNavigating && selectedPage != pagerState.currentPage) {
-            selectedPage = pagerState.currentPage
-        }
+        // Transition 从正在显示的位置改向；连续点击不取消旧协程再跳回 Pager 的预跳位置。
+        transitionState.targetState = targetIndex.coerceIn(0, lastPage)
     }
 }
 
 @Composable
 internal fun rememberMainBottomPagerState(
-    pagerState: PagerState,
-    coroutineScope: CoroutineScope = rememberCoroutineScope(),
+    pageCount: Int,
+    initialPage: Int = 0,
     reduceMotion: Boolean = false,
 ): MainBottomPagerState {
+    val transitionState = rememberSaveable(
+        saver = Saver<MutableTransitionState<Int>, Int>(
+            save = { it.targetState },
+            restore = { MutableTransitionState(it) },
+        ),
+    ) { MutableTransitionState(initialPage) }
+    val transition = rememberTransition(transitionState, label = "bottom-tab")
+    val indicatorPosition = transition.animateFloat(
+        transitionSpec = {
+            if (reduceMotion) snap() else iosMorphTween(AppTabIndicatorMotion.DurationMillis)
+        },
+        label = "bottom-tab-indicator",
+    ) { it.toFloat() }
+    val latestPageCount = rememberUpdatedState(pageCount)
     val latestReduceMotion = rememberUpdatedState(reduceMotion)
-    return remember(pagerState, coroutineScope) {
-        MainBottomPagerState(
-            pagerState = pagerState,
-            coroutineScope = coroutineScope,
-            reduceMotion = { latestReduceMotion.value },
-        )
+    val state = remember(transitionState, transition, indicatorPosition) {
+        MainBottomPagerState(transitionState, transition, indicatorPosition, latestPageCount, latestReduceMotion)
     }
+    SideEffect { state.recordSettledPage() }
+    return state
 }

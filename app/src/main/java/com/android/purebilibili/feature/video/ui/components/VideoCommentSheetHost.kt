@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.core.ui.AppContentColors
 
 import android.os.Build
@@ -1110,7 +1112,7 @@ internal fun VideoCommentMainList(
                         // 回顶时通知父级(竖屏详情)恢复被评论区压缩的播放器。
                         onBackToTop()
                         scope.launch {
-                            listState.animateScrollToItem(0)
+                            listState.animateScrollToTop()
                         }
                     }
                 )

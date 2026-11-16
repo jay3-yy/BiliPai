@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.ui.popup
 
+import androidx.compose.animation.core.FloatSpringSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -8,14 +9,13 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.android.purebilibili.core.ui.components.AppGlassMenuPlacement
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
-import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.math.roundToLong
 import kotlin.math.roundToInt
 import kotlin.math.sign
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 internal data class AppGlassPopupFrame(
@@ -57,12 +57,15 @@ internal object AppGlassPopupMotion {
     private val glyphIn = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
     private val easeInOut = AppMotionEasing.IosEaseInOut
 
-    private fun spring(t: Float, stiffness: Float, ratio: Float): Float {
-        val omega = sqrt(stiffness)
-        val damped = omega * sqrt(1f - ratio * ratio)
-        return 1f - exp(-ratio * omega * t) *
-            (cos(damped * t) + ratio * omega / damped * sin(damped * t))
-    }
+    private val openingSpring = FloatSpringSpec(dampingRatio = 0.754f, stiffness = 400f)
+    private val closingSpring = FloatSpringSpec(dampingRatio = 0.8f, stiffness = 165f)
+
+    private fun FloatSpringSpec.progress(seconds: Float): Float = getValueFromNanos(
+        playTimeNanos = (seconds * 1_000f).roundToLong() * 1_000_000L,
+        initialValue = 0f,
+        targetValue = 1f,
+        initialVelocity = 0f,
+    )
 
     private fun cornerBlend(time: Float, start: Float, end: Float): Float {
         val t = ((time - start) / (end - start)).coerceIn(0f, 1f)
@@ -92,7 +95,7 @@ internal object AppGlassPopupMotion {
         if (card.isEmpty || time >= OpenSeconds) return AppGlassPopupFrame(card,
             radius.coerceIn(0f, max(0f, card.minDimension / 2f)), 1f, 1f, 0f)
         val t = time.coerceAtLeast(0f)
-        val progress = spring(t, 400f, 0.754f)
+        val progress = openingSpring.progress(t)
         val reveal = progress.coerceIn(0f, 1f)
         if (anchor.isEmpty) {
             val scale = 0.9f + 0.1f * progress
@@ -207,7 +210,7 @@ internal object AppGlassPopupMotion {
         }
         val t = time.coerceAtLeast(0f)
         val ringing = 1f - easeIn.transform(((t - 0.4f) / 0.1f).coerceIn(0f, 1f))
-        val progress = 1f + (spring(t, 165f, 0.8f) - 1f) * ringing
+        val progress = 1f + (closingSpring.progress(t) - 1f) * ringing
         val from = start.rect
         val away = (from.center.y - anchor.center.y).sign
         val dip = min(0.21f * kotlin.math.abs(from.center.y - anchor.center.y), 22f * density) * pulse(t, 0.072f, 2.4f)

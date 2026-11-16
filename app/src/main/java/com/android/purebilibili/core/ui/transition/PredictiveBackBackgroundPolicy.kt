@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
@@ -37,6 +38,28 @@ internal data class PredictiveBackBackgroundState(
 
 internal val LocalPredictiveBackBackgroundState = compositionLocalOf {
     PredictiveBackBackgroundState()
+}
+
+/** 栈顶和返回目标更新只改变 provider 的读取结果，不重建所有导航入口的内容包装。 */
+@Composable
+internal fun rememberPredictiveBackBackgroundState(
+    progressProvider: () -> Float,
+    targetKey: BiliPaiNavKey?,
+    motionTier: MotionTier,
+    isLightBackground: Boolean,
+): PredictiveBackBackgroundState {
+    val progress = rememberUpdatedState(progressProvider)
+    val target = rememberUpdatedState(targetKey)
+    val tier = rememberUpdatedState(motionTier)
+    val light = rememberUpdatedState(isLightBackground)
+    return remember {
+        PredictiveBackBackgroundState(
+            progressProvider = { progress.value() },
+            targetKeyProvider = { target.value },
+            motionTierProvider = { tier.value },
+            isLightBackgroundProvider = { light.value },
+        )
+    }
 }
 
 /**

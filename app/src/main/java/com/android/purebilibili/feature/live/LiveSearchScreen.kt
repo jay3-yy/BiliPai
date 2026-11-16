@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.components.appCountedTabOption
@@ -240,7 +242,7 @@ fun LiveSearchScreen(
                         onSelectionChange = { target ->
                             scope.launch {
                                 if (pager.currentPage == target) {
-                                    if (target == 0) liveGrid.animateScrollToItem(0) else userList.animateScrollToItem(0)
+                                    if (target == 0) liveGrid.animateScrollToTop() else userList.animateScrollToTop()
                                 } else animatePagerSelection(pager, target)
                             }
                         },

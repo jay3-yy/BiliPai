@@ -614,13 +614,13 @@ class AppTopLevelNavigationPolicyTest {
     }
 
     @Test
-    fun bottomPagerLayoutKeys_allowOldLayoutQueriesAfterSettingsRemoveTab() {
+    fun bottomPagerLayoutKeys_keepRemovedOutgoingSlotDistinct() {
         val before = listOf(
             BottomNavItem.HOME, BottomNavItem.DYNAMIC, BottomNavItem.HISTORY,
             BottomNavItem.PROFILE, BottomNavItem.SETTINGS
         )
         val after = before.dropLast(1)
-        // 旧布局仍查询五页，新配置已经只剩四页。
+        // 退出内容仍引用第五个槽位，新配置已经只剩四页。
         val keys = before.indices.map { resolveBottomPagerLayoutKey(it, after) }
         assertEquals(keys.size, keys.toSet().size)
         after.forEachIndexed { index, item ->
@@ -632,11 +632,6 @@ class AppTopLevelNavigationPolicyTest {
             resolveBottomPagerSaveableStateKey(BottomNavItem.SETTINGS),
             resolveBottomPagerLayoutKey(4, before)
         )
-    }
-
-    @Test
-    fun bottomPagerUserScroll_isDisabledToAvoidAccidentalTabSwitch() {
-        assertFalse(shouldEnableBottomPagerUserScroll())
     }
 
     @Test
@@ -727,48 +722,4 @@ class AppTopLevelNavigationPolicyTest {
         assertTrue(shouldPreserveProfileStackForShortcut(ScreenRoutes.Following.createRoute(123L)))
     }
 
-    @Test
-    fun bottomPagerFarJump_composesOnlySourceCurrentAndTarget() {
-        val composedPages = (0..4).filter { page ->
-            shouldComposeBottomPagerPage(
-                page = page,
-                currentPage = 2,
-                selectedPage = 4,
-                isNavigating = true,
-                navigationStartPage = 0,
-            )
-        }
-        assertEquals(listOf(0, 2, 4), composedPages)
-    }
-
-    @Test
-    fun bottomPagerSettled_dropsInactivePagesIncludingPreviousNavigationSource() {
-        val composedPages = (0..4).filter { page ->
-            shouldComposeBottomPagerPage(
-                page = page,
-                currentPage = 4,
-                selectedPage = 4,
-                isNavigating = false,
-                navigationStartPage = 0,
-            )
-        }
-        assertEquals(listOf(4), composedPages)
-    }
-
-    @Test
-    fun bottomPagerFarJump_keepsPartiallyVisibleIntermediatePageRealInBothDirections() {
-        for ((offset, expected) in listOf(0.25f to listOf(0, 2, 3, 4), -0.25f to listOf(0, 1, 2, 4))) {
-            val composedPages = (0..4).filter { page ->
-                shouldComposeBottomPagerPage(
-                    page = page,
-                    currentPage = 2,
-                    selectedPage = 4,
-                    isNavigating = true,
-                    navigationStartPage = 0,
-                    currentPageOffsetFraction = offset,
-                )
-            }
-            assertEquals(expected, composedPages)
-        }
-    }
 }

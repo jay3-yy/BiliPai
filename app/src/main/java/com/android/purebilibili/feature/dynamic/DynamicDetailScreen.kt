@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.core.ui.AppShapes
@@ -384,7 +386,7 @@ fun DynamicDetailScreen(
                 val showCommentsInPlace: () -> Unit = {
                     detailScrollScope.launch {
                         if (useSplitLayout) {
-                            commentListState.animateScrollToItem(0)
+                            commentListState.animateScrollToTop()
                         } else {
                             detailListState.animateScrollToItem(1)
                         }

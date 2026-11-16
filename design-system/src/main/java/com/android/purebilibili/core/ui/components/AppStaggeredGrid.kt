@@ -49,6 +49,10 @@ fun AppLazyVerticalStaggeredGrid(
                 (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
         ) {
             LazyVerticalStaggeredGrid(
+                modifier = rememberAppScrollToTopFeedbackModifier(
+                    state = state, overscrollEffect = overscrollEffect,
+                    enabled = userScrollEnabled, reverseLayout = reverseLayout,
+                ),
                 columns = columns, state = state, contentPadding = contentPadding,
                 reverseLayout = reverseLayout, verticalItemSpacing = verticalItemSpacing,
                 horizontalArrangement = horizontalArrangement, flingBehavior = flingBehavior,

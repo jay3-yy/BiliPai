@@ -15,12 +15,10 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
-import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.layout
@@ -514,6 +512,13 @@ fun AppNavigation(
             initialValue = null,
             context = kotlin.coroutines.EmptyCoroutineContext,
         )
+    // 由宿主持有标签配置，底栏切回首页时首帧直接复用当前真实值。
+    val resolvedHomeTopTabSettings by remember(context) { SettingsManager.getHomeTopTabSettings(context) }
+        .collectAsStateWithLifecycle<com.android.purebilibili.core.store.HomeTopTabSettings?>(
+            initialValue = null,
+            context = kotlin.coroutines.EmptyCoroutineContext,
+        )
+    val homeTopTabSettings = resolvedHomeTopTabSettings ?: return
     val homeSettings = resolvedHomeSettings ?: return
     val effectiveHomeSettings = remember(homeSettings) {
         resolveEffectiveHomeSettings(
@@ -731,7 +736,7 @@ fun AppNavigation(
             BiliPaiProgrammaticBackDispatcher()
         }
         var predictiveBackCancelRecoveryGeneration by remember { mutableIntStateOf(0) }
-        var accountSessionRefreshGeneration by remember { mutableIntStateOf(0) }
+        var accountSessionRefreshGeneration by rememberSaveable { mutableIntStateOf(0) }
         val currentNavigation3Key = navigation3BackStack.lastOrNull()
         val currentRoute = currentNavigation3Key?.toLegacyRoute()
         com.android.purebilibili.feature.message.ForegroundMessageSyncHost(
@@ -869,34 +874,27 @@ fun AppNavigation(
         val visibleBottomBarRoutes = remember(visibleBottomBarItems) {
             visibleBottomBarItems.map { it.route }.toSet()
         }
-        val bottomPagerState = key(memoryRecovery.snapshot?.savedAtMs) {
-            rememberPagerState(
+        val mainBottomPagerState = key(memoryRecovery.snapshot?.savedAtMs) {
+            rememberMainBottomPagerState(
+                pageCount = visibleBottomBarItems.size,
                 initialPage = visibleBottomBarItems.indexOfFirst { it.route == recoveredNavigation?.bottomRoute }
                     .coerceAtLeast(0),
-                pageCount = { visibleBottomBarItems.size.coerceAtLeast(1) },
+                reduceMotion = systemReduceMotion,
             )
         }
         com.android.purebilibili.navigation3.RegisterFairMemoryNavigationState(
             activity = hostActivity,
             backStack = navigation3BackStack,
-            bottomRoute = visibleBottomBarItems.getOrNull(bottomPagerState.settledPage)?.route.orEmpty(),
+            bottomRoute = visibleBottomBarItems.getOrNull(mainBottomPagerState.settledPage)?.route.orEmpty(),
         ) {
             com.android.purebilibili.core.lifecycle.FairMemoryNavigationState(
                 backStack = navigation3BackStack.toList(),
-                bottomRoute = visibleBottomBarItems.getOrNull(bottomPagerState.settledPage)?.route.orEmpty(),
+                bottomRoute = visibleBottomBarItems.getOrNull(mainBottomPagerState.settledPage)?.route.orEmpty(),
             )
         }
-        val bottomPagerDragged = bottomPagerState.interactionSource.collectIsDraggedAsState()
-        val bottomPagerDraggingProvider = remember(bottomPagerDragged) { { bottomPagerDragged.value } }
+        val bottomPagerDraggingProvider = remember { { false } }
         val bottomPagerSaveableStateHolder = key(memoryRecovery.snapshot?.savedAtMs) {
             rememberSaveableStateHolder()
-        }
-        val mainBottomPagerState = rememberMainBottomPagerState(bottomPagerState, reduceMotion = systemReduceMotion)
-        // Observe intermediate pages inside effects: traversing a tab boundary must not
-        // recompose the navigation root and rebuild the surrounding transition content.
-        LaunchedEffect(bottomPagerState, mainBottomPagerState) {
-            snapshotFlow { bottomPagerState.currentPage to mainBottomPagerState.isNavigating }
-                .collect { mainBottomPagerState.syncPage() }
         }
         LaunchedEffect(visibleBottomBarItems, mainBottomPagerState.selectedPage) {
             val lastPage = visibleBottomBarItems.lastIndex
@@ -2323,7 +2321,7 @@ fun AppNavigation(
         fun bottomPagerBackgroundWorkAllowedNow() = shouldAllowBottomPagerBackgroundWork(
             isMainHostTop = navigation3BackStack.lastOrNull() == BiliPaiNavKey.MainHost,
             isCardTransitionIdle = cardTransitionIdleNow || cardTransitionTimedOut,
-            isPagerNavigating = mainBottomPagerState.isNavigating || bottomPagerState.isScrollInProgress,
+            isPagerNavigating = mainBottomPagerState.isNavigating,
             isNavigationSettled = mainHostNavigationReady.value?.value == true,
         )
         val bottomPagerBackgroundWorkAllowed = bottomPagerBackgroundWorkAllowedNow()
@@ -2876,11 +2874,16 @@ fun AppNavigation(
                         shouldUseHostOwnedVideoCardTransitionSnapshot(
                             backgroundState.sourceRouteProvider()
                         )
-                    val shouldApplyPredictiveBlur = shouldApplyPredictiveBackBlurToRoute(
-                        entryKey = key,
-                        targetBackKey = predictiveBackState.targetKeyProvider(),
-                        videoCardBackgroundApplied = shouldApplyBackground,
-                    )
+                    // 只订阅本入口是否成为返回背景，不随无关返回目标的切换更新整页包装。
+                    val shouldApplyPredictiveBlur by remember(key, predictiveBackState, shouldApplyBackground) {
+                        derivedStateOf {
+                            shouldApplyPredictiveBackBlurToRoute(
+                                entryKey = key,
+                                targetBackKey = predictiveBackState.targetKeyProvider(),
+                                videoCardBackgroundApplied = shouldApplyBackground,
+                            )
+                        }
+                    }
                     val routeModifier = Modifier
                         .fillMaxSize()
                         .let { baseModifier ->
@@ -3264,6 +3267,7 @@ fun AppNavigation(
                 fun RenderHomeEntryContent(key: BiliPaiNavKey, isBottomPagerPageActive: Boolean, isBottomPagerPageVisibleDuringNavigation: Boolean) {
                     HomeScreen(
                         viewModel = homeViewModel,
+                        homeTopTabSettings = homeTopTabSettings,
                         availableFeedWidth = companionFeedWidth,
                         onWeeklySeriesClick = { pushNavigation3Key(BiliPaiNavKey.WeeklySeries()) },
                         onVideoClick = { request -> navigateToHomeVideoInNavigation3(request) },
@@ -5739,21 +5743,16 @@ fun AppNavigation(
                                         val pageLifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
                                         // Visible transition participants retain their covers;
                                         // inactive pages still use the normal background work budget.
-                                        val pageVisibleDuringNavigation =
-                                            (mainBottomPagerState.isNavigating &&
-                                                (page == mainBottomPagerState.navigationStartPage ||
-                                                    page == mainBottomPagerState.selectedPage ||
-                                                    page == bottomPagerState.currentPage)) ||
-                                                (mainHostStillExposed &&
-                                                    currentNavigation3Key == BiliPaiNavKey.Settings &&
-                                                    page == bottomPagerState.currentPage)
-                                        // 图片加载只看页面是否真的在屏幕上。
-                                        // 之前挂着 bottomPagerBackgroundWorkAllowed（转场时钟 + pager 导航），
-                                        // 那个门一旦卡住，整页封面就一个都不加载。
+                                        // 此处只会挂载转场两端及被连续点击中断的退出页。
+                                        val pageVisibleDuringNavigation = mainBottomPagerState.isNavigating ||
+                                            (mainHostStillExposed && currentNavigation3Key == BiliPaiNavKey.Settings &&
+                                                page == mainBottomPagerState.settledPage)
+                                        // 目标页立即加载；退出页复用已解码图片静态绘制，避免 GIF、
+                                        // 未完成请求和连续切页残留的退出页与目标页争用转场帧。
+                                        // 仅依赖目标页身份，不等待转场时钟或后台工作预算恢复。
                                         val pageImageLoadingAllowed =
                                             com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed.current &&
-                                                (page == bottomPagerState.settledPage ||
-                                                    pageVisibleDuringNavigation)
+                                                page == mainBottomPagerState.selectedPage
                                         val pageKey = bottomPagerNavKeyForItem(slotItem)
                                         bottomPagerSaveableStateHolder.SaveableStateProvider(
                                             resolveBottomPagerSaveableStateKey(slotItem)
@@ -5765,10 +5764,6 @@ fun AppNavigation(
                                                 LocalAppWindowAdaptiveInfo provides (
                                                     if (slotItem == BottomNavItem.HOME) appWindowAdaptiveInfo else sourcePaneAdaptiveInfo
                                                 ),
-                                                com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed provides
-                                                    com.android.purebilibili.core.ui.blur.rememberPagerChromeBackdropRecordingAllowed(
-                                                        bottomPagerState, page,
-                                                    ),
                                                 LocalGlobalWallpaperBackdropVisible provides (
                                                     globalWallpaperEnabled && shouldRenderGlobalHomeWallpaperBackdrop(
                                                         effectScope = effectiveHomeSettings.homeWallpaperEffectScope,
@@ -5776,7 +5771,7 @@ fun AppNavigation(
                                                     )
                                                 ),
                                                 com.android.purebilibili.core.ui.LocalVisualWorkAllowed provides (
-                                                    page == bottomPagerState.settledPage &&
+                                                    page == mainBottomPagerState.settledPage &&
                                                         bottomPagerBackgroundWorkAllowed && feedPaneVisible
                                                 ),
                                                 LocalVideoCardSharedElementSourceRoute provides pageKey.toLegacyRoute(),
@@ -5785,9 +5780,8 @@ fun AppNavigation(
                                                 ),
                                             ) {
                                                 MainHostTabBackScope(
-                                                    enabled = page == bottomPagerState.settledPage &&
+                                                    enabled = page == mainBottomPagerState.settledPage &&
                                                         page == mainBottomPagerState.selectedPage &&
-                                                        !bottomPagerState.isScrollInProgress &&
                                                         !mainBottomPagerState.isNavigating,
                                                 ) {
                                                     RenderNavigationContent(
@@ -5934,7 +5928,7 @@ fun AppNavigation(
                                 key,
                                 isBottomPagerPageActive,
                                 isFeedEntrySelected = !isBottomPagerHosted ||
-                                    visibleBottomBarItems.getOrNull(bottomPagerState.settledPage) == BottomNavItem.STORY,
+                                    visibleBottomBarItems.getOrNull(mainBottomPagerState.settledPage) == BottomNavItem.STORY,
                             )
                         BiliPaiNavEntryContentRole.AUDIO_MODE ->
                             RenderAudioModeEntryContent(key)

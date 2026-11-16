@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.ui.components
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.HapticType
 
@@ -126,7 +128,7 @@ fun PlayerEpisodeMenu(
                 PanelAction(if (isSubscribed) Icons.Default.NotificationsOff else Icons.Default.NotificationsActive,
                     if (isSubscribed) "取消订阅" else "订阅") { onSubscriptionChange(!isSubscribed) }
             }
-            PanelAction(Icons.Default.VerticalAlignTop, "跳至顶部") { scope.launch { listState.animateScrollToItem(0) } }
+            PanelAction(Icons.Default.VerticalAlignTop, "跳至顶部") { scope.launch { listState.animateScrollToTop() } }
             PanelAction(Icons.Default.VerticalAlignBottom, "跳至底部") { scope.launch { if (entries.isNotEmpty()) listState.animateScrollToItem(entries.lastIndex) } }
             PanelAction(Icons.Default.MyLocation, "跳至当前") {
                 if (content.currentSectionIndex >= 0) {

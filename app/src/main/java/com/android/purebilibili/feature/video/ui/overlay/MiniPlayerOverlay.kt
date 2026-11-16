@@ -338,6 +338,7 @@ private fun MiniPlayerSessionOverlay(
 
     val sessionId = miniPlayerManager.miniPlayerSessionId
     val dismissScope = rememberCoroutineScope()
+    val closeCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val cardCoordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
     val playerViewRef = remember { arrayOfNulls<PlayerView>(1) }
     var dismissing by remember { mutableStateOf(false) }
@@ -358,8 +359,12 @@ private fun MiniPlayerSessionOverlay(
         }
     }
 
-    fun dismissMiniPlayer() {
+    fun dismissMiniPlayer(fromCloseButton: Boolean = false) {
         if (dismissing) return
+        val origin = if (fromCloseButton) {
+            closeCoordinates[0]?.takeIf { it.isAttached }?.boundsInWindow()?.center
+                ?.let { android.graphics.PointF(it.x, it.y) }
+        } else null
         dismissing = true
         moreExpanded = false
         showControls = false
@@ -418,6 +423,7 @@ private fun MiniPlayerSessionOverlay(
                         window = window,
                         bitmap = bitmap,
                         windowBounds = android.graphics.RectF(snapshot.windowBounds),
+                        originInWindow = origin,
                         onFirstFrame = {
                             contentHidden = true
                             playerViewRef[0]?.visibility = android.view.View.INVISIBLE
@@ -923,7 +929,10 @@ private fun MiniPlayerSessionOverlay(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (controlLayout.showCloseButton) {
-                            AppIconButton(onClick = { dismissMiniPlayer() }, modifier = Modifier.size(48.dp)) {
+                            AppIconButton(
+                                onClick = { dismissMiniPlayer(fromCloseButton = true) },
+                                modifier = Modifier.size(48.dp).onGloballyPositioned { closeCoordinates[0] = it },
+                            ) {
                                 AppIcon(clearIcon, "关闭小窗", tint = Color.White, modifier = Modifier.size(24.dp))
                             }
                         }

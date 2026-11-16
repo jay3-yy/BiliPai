@@ -69,7 +69,10 @@ internal object HomeMemoryRecoveryRuntime {
 @Composable
 internal fun rememberHomeMemoryRecoveryReady(viewModel: HomeViewModel): Boolean {
     val ownsHome = LocalActivity.current is MainActivity
-    var ready by remember(viewModel) { mutableStateOf(false) }
+    // 没有待恢复快照时无需每次重新挂载都先返回空内容。
+    var ready by remember(viewModel, ownsHome) {
+        mutableStateOf(!ownsHome || HomeMemoryRecoveryRuntime.pending.value == null)
+    }
     LaunchedEffect(viewModel, ownsHome) {
         // 视频宿主不能取走主首页的数据；它晚于主页读到快照时也要通知已挂载的首页。
         HomeMemoryRecoveryRuntime.pending.collect { transfer ->
