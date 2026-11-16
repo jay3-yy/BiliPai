@@ -3426,7 +3426,8 @@ object NetworkModule {
 
     val okHttpClient: OkHttpClient by lazy {
         val builder = OkHttpClient.Builder()
-            .addInterceptor(TransientGetRetryInterceptor)
+            // 连接恢复由 OkHttp 处理，避免超时后再次完整重放请求。
+            .eventListenerFactory { NetworkFailureEventListener() }
             .addInterceptor(ResponseCompressionInterceptor)
             .protocols(resolveSharedNetworkProtocols())
             .proxySelector(buildAppProxySelector())
@@ -3668,6 +3669,7 @@ object NetworkModule {
     // 当登录用户遭遇风控 (-351) 时，可以尝试以游客身份获取视频
     val guestOkHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .eventListenerFactory { NetworkFailureEventListener() }
             .addInterceptor(ResponseCompressionInterceptor)
             // Guest requests use the same platform ECH support without debug IP fallback.
             .dns(buildAppDns(allowHardcodedIpFallback = false))
