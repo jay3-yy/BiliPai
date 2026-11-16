@@ -1637,7 +1637,8 @@ fun HomeHeader(
     )
 
     // 状态栏高度
-    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 首页在沉浸播放页下仍保留状态栏占位，返回时顶栏、列表和卡片落点不随可见性跳动。
+    val statusBarHeight = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
 
     val appThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
     val progressiveTopBlurEnabled = appThemeConfig.progressiveTopBlurEnabled

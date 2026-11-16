@@ -21,17 +21,6 @@ class HomeMotionAndFeedPerformanceStructureTest {
     }
 
     @Test
-    fun bottomPager_preloadsOnlyAdjacentPage() {
-        val source = sourceFile("navigation/AppNavigation.kt")
-
-        assertTrue(
-            source.contains(
-                ").coerceAtMost(BOTTOM_PAGER_MAX_PRELOAD_DISTANCE)"
-            )
-        )
-    }
-
-    @Test
     fun homeFeed_compactStatsFollowTheAppearanceSettingWithoutInfoBadgeHaze() {
         val source = sourceFile("feature/home/HomeScreen.kt")
 

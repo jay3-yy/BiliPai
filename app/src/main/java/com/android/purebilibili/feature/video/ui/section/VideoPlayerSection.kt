@@ -289,7 +289,7 @@ private fun BoxScope.VideoSubtitleOverlayHost(
     isFullscreen: Boolean,
     controlsVisible: Boolean,
     endDrawerReservedWidthProvider: () -> Dp,
-    playerViewportSize: IntSize,
+    playerViewportSizeState: State<IntSize>,
     bottomControlsHeightPx: Int,
     persistentBottomOverlayHeightProvider: () -> Int = { 0 },
 ) {
@@ -302,6 +302,8 @@ private fun BoxScope.VideoSubtitleOverlayHost(
                 suppressOverlay = suppressSubtitleOverlay,
             )
     if (!keepSubtitleOverlayMounted) return
+    // 实测视口只影响字幕定位，尺寸到达时不让调用方重组播放器与其他覆盖层。
+    val playerViewportSize = playerViewportSizeState.value
 
     val context = LocalContext.current
     val subtitleOwner = uiState as VideoPlaybackUiState.Success
@@ -1124,7 +1126,7 @@ private fun VideoPlayerSectionContent(
         mutableStateOf(INITIAL_PLAYER_CHROME_AUTO_HIDE_HANDLED)
     }
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
-    var measuredPlayerViewportSize by remember(bvid) { mutableStateOf(IntSize.Zero) }
+    val measuredPlayerViewportSize = remember(bvid) { mutableStateOf(IntSize.Zero) }
     var measuredBottomControlsHeightPx by remember(bvid) { mutableIntStateOf(0) }
     var persistentChapterBarHeightPx by remember(bvid) { mutableIntStateOf(0) }
     val ambientPresentation = LocalAmbientPresentation.current
@@ -3804,14 +3806,18 @@ private fun VideoPlayerSectionContent(
                         cancelPlayerViewViewportRefresh(playerView)
                         return@LaunchedEffect
                     }
-                    schedulePlayerViewViewportRefresh(
-                        playerView = playerView,
-                        resizeMode = targetResizeMode,
-                        expectedWidth = measuredPlayerViewportSize.width,
-                        expectedHeight = measuredPlayerViewportSize.height,
-                        videoWidth = playerVideoSize.width,
-                        videoHeight = playerVideoSize.height,
-                    )
+                    // 尺寸由布局回调发布，只在副作用中观察；不要把实测尺寸作为
+                    // 组合阶段的 effect key，让 PlayerView 每次测量后再重组整块播放视口。
+                    snapshotFlow { measuredPlayerViewportSize.value }.collect { viewportSize ->
+                        schedulePlayerViewViewportRefresh(
+                            playerView = playerView,
+                            resizeMode = targetResizeMode,
+                            expectedWidth = viewportSize.width,
+                            expectedHeight = viewportSize.height,
+                            videoWidth = playerVideoSize.width,
+                            videoHeight = playerVideoSize.height,
+                        )
+                    }
                 }
 
                 // Keep the viewport and cover mounted while the persisted surface choice loads.
@@ -3932,7 +3938,7 @@ private fun VideoPlayerSectionContent(
                             )
                         }
                         sizeModifier
-                            .onSizeChanged { measuredPlayerViewportSize = it }
+                            .onSizeChanged { measuredPlayerViewportSize.value = it }
                             .graphicsLayer {
                                 scaleX = if (effectiveFlippedHorizontal) -scale else scale
                                 scaleY = if (effectiveFlippedVertical) -scale else scale
@@ -5014,7 +5020,7 @@ private fun VideoPlayerSectionContent(
                 isFullscreen = isFullscreen,
                 controlsVisible = showControls && !tabletopPlayback,
                 endDrawerReservedWidthProvider = endDrawerReservedWidthProvider,
-                playerViewportSize = measuredPlayerViewportSize,
+                playerViewportSizeState = measuredPlayerViewportSize,
                 bottomControlsHeightPx = if (tabletopPlayback) 0 else measuredBottomControlsHeightPx,
                 persistentBottomOverlayHeightProvider = { if (tabletopPlayback) 0 else persistentChapterBarHeightPx },
             )
@@ -5312,7 +5318,7 @@ private fun VideoPlayerSectionContent(
                     //  [关键] 传入设置状态和调试信息
                     insightMode = playerInsightMode,
                     debugInfo = debugInfo,
-                    playerViewportSize = measuredPlayerViewportSize,
+                    playerViewportSize = measuredPlayerViewportSize.value,
                     viewportWidthDpOverride = uiLayoutWidthDp,
                     diagnosticEvents = diagnosticEvents,
                     pendingUserAction = pendingUserAction,

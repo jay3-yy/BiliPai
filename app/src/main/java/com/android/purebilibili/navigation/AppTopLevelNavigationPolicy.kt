@@ -29,27 +29,12 @@ internal data class BottomPagerRenderBudget(
 
 internal const val BOTTOM_TAB_RENDER_BUDGET_HOLD_MILLIS = 220L
 internal const val BOTTOM_BAR_MAX_VISIBLE_ITEMS = 5
-// 底栏最多有 5 个栏目；保留其余页的轻量布局槽，内容按各页预加载许可创建。
-internal const val BOTTOM_PAGER_MAX_PRELOAD_DISTANCE = BOTTOM_BAR_MAX_VISIBLE_ITEMS - 1
-// 预热会创建真实组合树、状态收集与 ViewModel，并非没有成本的占位。
-// 数据与图片另有页面活跃门控；后台挂载还必须等待帧完成后的消息队列空闲机会，
-// 并在提交前重新检查交互状态。时间间隔本身不能证明这一帧有足够预算。
-internal const val BOTTOM_PAGER_PRELOAD_IDLE_MILLIS = 120L
-internal const val BOTTOM_PAGER_PRELOAD_INTERVAL_MILLIS = 16L
-
 internal fun shouldAllowBottomPagerBackgroundWork(
     isMainHostTop: Boolean,
     isCardTransitionIdle: Boolean,
     isPagerNavigating: Boolean,
     isNavigationSettled: Boolean = true,
 ): Boolean = isMainHostTop && isCardTransitionIdle && !isPagerNavigating && isNavigationSettled
-
-internal fun nextBottomPagerPreloadItem(
-    visibleItems: List<BottomNavItem>,
-    preloadedItems: Set<BottomNavItem>,
-): BottomNavItem? = visibleItems.firstOrNull {
-    it != BottomNavItem.STORY && it !in preloadedItems
-}
 
 internal fun resolveTopLevelNavigationAction(
     currentRoute: String?,
@@ -237,14 +222,6 @@ internal fun resolveBottomPagerNavigationDurationMillis(pageDistance: Int): Int 
     return distance * 100 + 100
 }
 
-internal fun resolveBottomPagerBeyondViewportPageCount(
-    pageCount: Int,
-    contentReady: Boolean
-): Int {
-    if (!contentReady) return 0
-    return pageCount.coerceIn(1, BOTTOM_BAR_MAX_VISIBLE_ITEMS) - 1
-}
-
 internal fun resolveBottomPagerRenderBudget(isNavigating: Boolean): BottomPagerRenderBudget {
     return BottomPagerRenderBudget(
         isTransitionRunning = isNavigating,
@@ -255,30 +232,16 @@ internal fun resolveBottomPagerRenderBudget(isNavigating: Boolean): BottomPagerR
 
 internal fun shouldEnableBottomPagerUserScroll(): Boolean = false
 
-/**
- * 当前 MainHost 组合内已挂载的栏目继续保留；尚未挂载时只创建切页参与者。
- * 竖屏流只在参与切页时挂载，避免离屏预热创建真实播放器与播放会话。
- */
+/** 视口内页面、目标页及仍在切页的来源页拥有真实内容，其余页不保留组合树。 */
 internal fun shouldComposeBottomPagerPage(
-    item: BottomNavItem,
     page: Int,
     currentPage: Int,
     selectedPage: Int,
     isNavigating: Boolean,
     navigationStartPage: Int,
-    contentReady: Boolean
-): Boolean {
-    val isTransitionParticipant = page == currentPage ||
-        page == selectedPage ||
-        page == navigationStartPage
-    if (item == BottomNavItem.STORY) {
-        return isTransitionParticipant
-    }
-    if (contentReady) {
-        return true
-    }
-    return isTransitionParticipant
-}
+    currentPageOffsetFraction: Float = 0f,
+): Boolean = kotlin.math.abs(page - currentPage - currentPageOffsetFraction) < 1f || page == selectedPage ||
+    (isNavigating && page == navigationStartPage)
 
 internal fun shouldBypassNavigationDebounceForRoute(targetRoute: String): Boolean {
     return BottomNavItem.entries.any { item -> item.route == targetRoute }

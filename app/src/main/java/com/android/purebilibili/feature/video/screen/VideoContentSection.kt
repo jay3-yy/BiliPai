@@ -1160,7 +1160,8 @@ internal fun VideoContentSection(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .wrapContentHeight(unbounded = tabBarMaxHeightPx > 0f)
+                    // 首帧就按自然高度测量，实测高度只用于布局占位，不再反向改变测量约束。
+                    .wrapContentHeight(unbounded = true)
                     .onSizeChanged { size ->
                         val measured = size.height.toFloat()
                         if (measured > 0f &&

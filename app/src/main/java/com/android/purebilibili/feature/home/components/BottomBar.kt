@@ -2649,10 +2649,11 @@ private fun MaterialBottomBar(
                 tonalElevation = AppSpacingTokens.None,
                 // 贴底原生栏只由组件消费系统导航区；常规字阶收紧内容行，大字体保留原生行高。
                 // 悬浮玻璃、Miuix 与皮肤导航在各自入口处理，不借此改变它们的几何。
-                windowInsets = WindowInsets.navigationBars,
+                // 来源页底栏保持系统导航区占位，玻璃与原生路径均不随沉浸状态移动。
+                windowInsets = WindowInsets.navigationBarsIgnoringVisibility,
                 modifier = if (uiSkinDecoration == null) {
                     val rowHeight = (64f + 16f * (LocalDensity.current.fontScale - 1f).coerceIn(0f, 1f)).dp
-                    Modifier.height(rowHeight + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+                    Modifier.height(rowHeight + WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding())
                 } else Modifier,
             ) {
                 bottomBarVisibleItems.forEach { item ->
@@ -3021,7 +3022,7 @@ private fun OfficialMd3FloatingBottomBar(
                 start = AppSpacingTokens.Large,
                 end = AppSpacingTokens.Large,
                 bottom = AppSpacingTokens.Large +
-                    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                    WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding(),
             ),
         contentAlignment = Alignment.BottomCenter,
     ) {
@@ -3249,6 +3250,11 @@ private fun MiuixBottomBar(
         AppPlatformNavigationBar(
             modifier = Modifier
                 .fillMaxWidth()
+                // 原生组件继续处理可见导航区与桌面标题栏，仅补齐沉浸时隐藏的导航区。
+                .padding(
+                    bottom = WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding() -
+                        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                )
                 .then(
                     if (uiSkinDecoration != null) {
                         Modifier.heightIn(min = resolveBottomBarSkinDockHeight())
@@ -3401,7 +3407,7 @@ internal fun IllustratedSkinBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(if (includeNavigationInset) Modifier.navigationBarsPadding() else Modifier)
+                    .then(if (includeNavigationInset) Modifier.windowInsetsPadding(WindowInsets.navigationBarsIgnoringVisibility) else Modifier)
                     .height(resolveBottomBarSkinDockHeight())
                     .selectableGroup(),
             ) {
@@ -4046,7 +4052,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                 .fillMaxWidth()
                 .padding(
                     bottom = if (embeddedDock) 0.dp else AppSpacingTokens.ExtraLarge +
-                        WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
                 )
         ) {
             val searchLayoutState = rememberBiliPaiBottomBarSearchLayoutState(

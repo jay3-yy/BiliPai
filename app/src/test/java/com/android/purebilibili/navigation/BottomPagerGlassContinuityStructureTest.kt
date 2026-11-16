@@ -2,17 +2,10 @@ package com.android.purebilibili.navigation
 
 import java.io.File
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BottomPagerGlassContinuityStructureTest {
-    @Test
-    fun bottomPager_preloadsEveryOtherVisiblePage() {
-        assertEquals(4, BOTTOM_PAGER_MAX_PRELOAD_DISTANCE)
-        assertEquals(4, resolveBottomPagerBeyondViewportPageCount(pageCount = 5, contentReady = true))
-    }
-
     @Test
     fun bottomBar_keepsLiquidGlassMountedDuringPageSwitch() {
         val source = sourceFile("navigation/AppNavigation.kt")

@@ -1121,7 +1121,8 @@ fun HomeScreen(
         )
     }
     //  [修复] 动态计算内容顶部边距，防止被头部遮挡
-    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 首页在沉浸播放页下仍保留状态栏占位，返回时顶栏、列表和卡片落点不随可见性跳动。
+    val statusBarHeight = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val homeStartupElapsedAt = remember { SystemClock.elapsedRealtime() }
 
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -1382,10 +1383,16 @@ fun HomeScreen(
     val collapseSearchOnScroll = headerCollapseMode.collapseSearch
     val collapseTabsOnScroll = headerCollapseMode.collapseTabs
     val isAnyHeaderCollapseEnabled = headerCollapseMode.hasAnyCollapse
-    // 模式变化立即清理旧偏移，始终显示不依赖下一次滚动才能恢复。
+    var appliedHeaderCollapseMode by rememberSaveable {
+        mutableStateOf(homeSettings.homeHeaderCollapseMode)
+    }
+    // 只在模式真正改变时清理偏移；切换底部栏目后重新挂载应保留已保存的折叠位置。
     LaunchedEffect(headerCollapseMode) {
-        headerScrollState.setOffsetImmediately(0f)
-        headerScrollState.tabsCollapsed = false
+        if (appliedHeaderCollapseMode != homeSettings.homeHeaderCollapseMode) {
+            headerScrollState.setOffsetImmediately(0f)
+            headerScrollState.tabsCollapsed = false
+            appliedHeaderCollapseMode = homeSettings.homeHeaderCollapseMode
+        }
     }
     val headerAutoCollapseDistancePx = if (isAnyHeaderCollapseEnabled) {
         searchCollapseDistancePx

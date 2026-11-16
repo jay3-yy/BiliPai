@@ -43,7 +43,6 @@ internal class NavEntry<K : NavKey>(
      */
     private class Registration<K : NavKey>(
         val key: K,
-        val metadata: Map<String, Any>,
         val content: @Composable (K) -> Unit,
     )
 
@@ -53,13 +52,15 @@ internal class NavEntry<K : NavKey>(
      * under the same [contentKey]: instance identity must stay stable for `movableContentOf`,
      * so the reconciler reuses the old instance and swaps the registration.
      */
-    private var registration: Registration<K> by mutableStateOf(Registration(key, metadata, content))
+    private var registration: Registration<K> by mutableStateOf(Registration(key, content))
 
     /** The navigation key this entry currently renders (refreshed by [adoptFrom]). */
     val key: K get() = registration.key
 
     /** Arbitrary per-entry data (per-route transition / swipe overrides live here). */
-    val metadata: Map<String, Any> get() = registration.metadata
+    // 转场和手势元数据由宿主消费，不使只读取页面内容的组合失效。
+    var metadata: Map<String, Any> by mutableStateOf(metadata)
+        private set
 
     /**
      * Adopts the registration payload of a freshly built [other] entry with the same [contentKey],
@@ -73,9 +74,10 @@ internal class NavEntry<K : NavKey>(
         @Suppress("UNCHECKED_CAST")
         val incoming = (other as NavEntry<K>).registration
         val current = registration
-        if (current.key != incoming.key || current.content !== incoming.content || current.metadata != incoming.metadata) {
+        if (current.key != incoming.key || current.content !== incoming.content) {
             registration = incoming
         }
+        metadata = other.metadata
     }
 
     /**

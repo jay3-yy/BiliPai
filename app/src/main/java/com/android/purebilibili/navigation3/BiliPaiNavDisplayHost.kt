@@ -886,10 +886,15 @@ internal fun BiliPaiNavDisplayHost(
         val latestNavEntryContent by rememberUpdatedState(content)
         val stableNavEntryContent: @Composable (BiliPaiNavKey) -> Unit =
             remember { { key: BiliPaiNavKey -> latestNavEntryContent(key) } }
+        // 返回能力只让返回处理器失效；返回事件执行时读取最新动作。
+        // 不以每次 push/pop 的栈快照重建所有入口的内容包装函数。
+        val latestEntryBack = rememberUpdatedState(performBack)
+        val stableEntryBack = remember { { latestEntryBack.value() } }
+        val entryBackEnabled = rememberUpdatedState(interceptPredictiveBack)
         // 内容 lambda 以前只作为 NavDisplay 的尾部字面量存在：宿主任何一次无关重组
         //（曝光边界、设置流、窗口焦点……）都会生成新实例，令 entryProvider 与全部
         // NavEntry 连带重建、所有在场 entry 的宿主跟着重组。这里按真实输入 remember，
-        // 只有导航栈 / 转场对象 / 提供给 entry 的可见性等输入真正变化时才重建。
+        // 转场对象及内容实际使用的配置变化时才重建；栈变化由下方注册表处理。
         val navEntryContent: @Composable (BiliPaiNavKey) -> Unit = remember(
             stableOnOpenCardContainer,
             liveContainerEnabled,
@@ -905,9 +910,9 @@ internal fun BiliPaiNavDisplayHost(
             miuixCardTransitionState,
             predictiveBackBackgroundState,
             videoCardTransitionEnabled,
-            performBack,
-            interceptPredictiveBack,
-            stackSnapshot,
+            stableEntryBack,
+            entryBackEnabled,
+            backStack,
             sourceMetadata,
             clickToPlayEnabled,
             dynamicImagePreviewTextVisible,
@@ -930,13 +935,13 @@ internal fun BiliPaiNavDisplayHost(
                 SideEffect { retainedCardTransition = entryCardTransitionState }
                 // Freeze this per entry so popping the key cannot remove its backing during exit.
                 val opaqueVideoChild = remember(key) {
-                    shouldUseOpaqueVideoChildBackground(key, stackSnapshot)
+                    shouldUseOpaqueVideoChildBackground(key, backStack)
                 }
                 // 每个直播 entry 固定表面类型，返回动画或目录清理时不重新绑定播放器。
                 val liveContainerEntry = remember(key) { liveContainerTransitions.containsKey(key) }
                 BiliPaiMiuixNavEntry(
-                    interceptPredictiveBack = interceptPredictiveBack,
-                    onBack = performBack,
+                    interceptPredictiveBack = entryBackEnabled,
+                    onBack = stableEntryBack,
                 ) {
                     CompositionLocalProvider(
                         com.android.purebilibili.core.ui.LocalNativeCardNavigate provides stableOnOpenCardContainer,
@@ -1035,14 +1040,14 @@ internal fun BiliPaiNavDisplayHost(
 
 @Composable
 private fun BiliPaiMiuixNavEntry(
-    interceptPredictiveBack: Boolean,
+    interceptPredictiveBack: androidx.compose.runtime.State<Boolean>,
     onBack: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
     NavigationBackHandler(
         state = navigationEventState,
-        isBackEnabled = interceptPredictiveBack,
+        isBackEnabled = interceptPredictiveBack.value,
         onBackCompleted = onBack,
     )
     val performanceOwner = remember { Any() }

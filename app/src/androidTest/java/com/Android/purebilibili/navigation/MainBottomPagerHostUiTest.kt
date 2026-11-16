@@ -40,7 +40,7 @@ class MainBottomPagerHostUiTest {
         rule.setContent {
             val pager = rememberPagerState { tabs.size }
             navigation = rememberMainBottomPagerState(pager, reduceMotion = true)
-            MainBottomPagerHost(navigation, tabs, preloadAllowed = { false }, modifier = Modifier.fillMaxSize()) { page, _ ->
+            MainBottomPagerHost(navigation, tabs, modifier = Modifier.fillMaxSize()) { page, _ ->
                 val value by data[page].collectAsStateWithLifecycle()
                 SideEffect { displayed[page] = value }
                 BasicText("$page:$value")
@@ -71,7 +71,7 @@ class MainBottomPagerHostUiTest {
             val pager = rememberPagerState { tabs.size }
             navigation = rememberMainBottomPagerState(pager, reduceMotion = true)
             if (showHost) {
-                MainBottomPagerHost(navigation, tabs, preloadAllowed = { false }, modifier = Modifier.fillMaxSize()) { _, item ->
+                MainBottomPagerHost(navigation, tabs, modifier = Modifier.fillMaxSize()) { _, item ->
                     holder.SaveableStateProvider(item.name) {
                         var draft by rememberSaveable { mutableIntStateOf(0) }
                         DisposableEffect(item) {
@@ -87,11 +87,23 @@ class MainBottomPagerHostUiTest {
                 }
             }
         }
-        rule.runOnIdle { navigation.switchToPage(1) }
-        rule.waitUntil { !navigation.isNavigating && BottomNavItem.DYNAMIC in mounted }
+        rule.runOnIdle {
+            assertEquals(setOf(BottomNavItem.HOME), mounted)
+            navigation.switchToPage(1)
+        }
+        rule.waitUntil { !navigation.isNavigating && mounted == setOf(BottomNavItem.DYNAMIC) }
         rule.runOnIdle { editDraft() }
-        rule.runOnIdle { assertEquals(1, drafts[BottomNavItem.DYNAMIC]) }
-        rule.runOnIdle { showHost = false }
+        rule.runOnIdle {
+            assertEquals(1, drafts[BottomNavItem.DYNAMIC])
+            navigation.switchToPage(0)
+        }
+        rule.waitUntil { !navigation.isNavigating && mounted == setOf(BottomNavItem.HOME) }
+        rule.runOnIdle { navigation.switchToPage(1) }
+        rule.waitUntil { !navigation.isNavigating && mounted == setOf(BottomNavItem.DYNAMIC) }
+        rule.runOnIdle {
+            assertEquals(1, drafts[BottomNavItem.DYNAMIC])
+            showHost = false
+        }
         rule.runOnIdle { assertTrue(mounted.isEmpty()) }
         rule.runOnIdle { showHost = true }
         rule.waitUntil { BottomNavItem.DYNAMIC in mounted }
@@ -117,7 +129,7 @@ class MainBottomPagerHostUiTest {
             CompositionLocalProvider(LocalLifecycleOwner provides parent) {
                 val pager = rememberPagerState { tabs.size }
                 navigation = rememberMainBottomPagerState(pager)
-                MainBottomPagerHost(navigation, tabs, preloadAllowed = { false }, modifier = Modifier.fillMaxSize()) { page, _ ->
+                MainBottomPagerHost(navigation, tabs, modifier = Modifier.fillMaxSize()) { page, _ ->
                     val value by subscriptions[page].collectAsStateWithLifecycle()
                     BasicText("$page:$value")
                 }

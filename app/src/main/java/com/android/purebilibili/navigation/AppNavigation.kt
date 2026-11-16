@@ -19,7 +19,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.layout.onSizeChanged
@@ -1260,7 +1260,7 @@ fun AppNavigation(
             if (tryOpenCompanionVideoDetail(key)) return
             pushResolvedNavigation3KeyDirect(com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key))
         }
-        fun pushNavigation3Key(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
+        fun pushNavigation3KeyImpl(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)?) {
             val target = key.toPrivacyNavigationTarget()
             if (
                 shouldRequirePrivacyAuthentication(
@@ -1288,8 +1288,15 @@ fun AppNavigation(
                 pushNavigation3KeyDirect(key)
             }
         }
+        // 页面只捕获下面的 State 容器，导航事件触发时才读取最新实现。
+        // 不把当前路由、返回会话和认证状态展开到每个页面的点击 lambda 捕获中；
+        // 导航状态变化不会仅因事件回调换实例就使保留页面失去跳过重组的机会。
+        val latestPushNavigation3Key = rememberUpdatedState(::pushNavigation3KeyImpl)
+        fun pushNavigation3Key(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
+            latestPushNavigation3Key.value(key, beforeNavigation)
+        }
         /** 直播、番剧等窗口可承接目标：系统一镜到底优先，未启动窗口时保持原窗口内导航。 */
-        fun navigateToSystemCardWindowOrPush(key: BiliPaiNavKey) {
+        fun navigateToSystemCardWindowOrPushImpl(key: BiliPaiNavKey) {
             if (tryOpenCompanionVideoDetail(key)) return
             val resolvedKey = com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(key)
             fun commitInApp() {
@@ -1332,6 +1339,10 @@ fun AppNavigation(
                     commitInApp()
                 }
             }
+        }
+        val latestOpenSystemCard = rememberUpdatedState(::navigateToSystemCardWindowOrPushImpl)
+        fun navigateToSystemCardWindowOrPush(key: BiliPaiNavKey) {
+            latestOpenSystemCard.value(key)
         }
         fun replaceNavigation3TopWithKey(key: BiliPaiNavKey) {
             if (initialVideoRoute != null && navigation3BackStack.size == 1) {
@@ -1387,11 +1398,15 @@ fun AppNavigation(
          * key 版统一导航入口：防抖判定 → 底栏 tab 拦截（切 Pager 页）→ 否则 push key。
          * legacyRoute 只用于防抖 bypass 与底栏页匹配两个判定，与字符串路由版逐字等价。
          */
-        fun pushNavigation3Target(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
+        fun pushNavigation3TargetImpl(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)?) {
             val legacyRoute = key.toLegacyRoute()
             if (!canNavigate(shouldBypassNavigationDebounceForRoute(legacyRoute))) return
             if (requestBottomPagerPageForRoute(legacyRoute, beforeNavigation)) return
             pushNavigation3Key(key, beforeNavigation)
+        }
+        val latestPushNavigation3Target = rememberUpdatedState(::pushNavigation3TargetImpl)
+        fun pushNavigation3Target(key: BiliPaiNavKey, beforeNavigation: (() -> Unit)? = null) {
+            latestPushNavigation3Target.value(key, beforeNavigation)
         }
         fun pushNavigation3Route(route: String, beforeNavigation: (() -> Unit)? = null) {
             pushNavigation3Target(legacyRouteToBiliPaiNavKey(route), beforeNavigation)
@@ -1566,22 +1581,22 @@ fun AppNavigation(
                 commitInAppVideoNavigation()
             }
         }
-        fun navigateToVideoInNavigation3(
+        fun navigateToVideoInNavigation3Impl(
             bvid: String,
-            cid: Long = 0L,
-            coverUrl: String = "",
+            cid: Long,
+            coverUrl: String,
             // 从全屏播放中 push 新详情页时，把全屏意图带到新路由，避免中途掉出全屏。
-            fullscreen: Boolean = false,
-            startAudio: Boolean = false,
-            autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
-            resumePositionMs: Long = 0L,
-            initialVertical: Boolean = false,
-            directPortraitEntry: Boolean = false,
-            sourceRoute: String? = null,
-            skipPortraitStoryResolution: Boolean = false,
-            useRecordedCardSource: Boolean = true,
-            pendingTransitionSession: VideoCardTransitionSession? = null,
-            title: String = "",
+            fullscreen: Boolean,
+            startAudio: Boolean,
+            autoPortrait: Boolean,
+            resumePositionMs: Long,
+            initialVertical: Boolean,
+            directPortraitEntry: Boolean,
+            sourceRoute: String?,
+            skipPortraitStoryResolution: Boolean,
+            useRecordedCardSource: Boolean,
+            pendingTransitionSession: VideoCardTransitionSession?,
+            title: String,
         ) {
             val navigationRequest = videoNavigationRequests.begin(
                 navigation3BackStack, navigation3ReturnSession.sourceGeneration,
@@ -1632,7 +1647,7 @@ fun AppNavigation(
                             navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
                         )
                     ) return@launch
-                    navigateToVideoInNavigation3(
+                    navigateToVideoInNavigation3Impl(
                         bvid = bvid,
                         cid = cid,
                         coverUrl = coverUrl,
@@ -1687,7 +1702,31 @@ fun AppNavigation(
                 pendingTransitionSession = transitionSession,
             )
         }
-        fun navigateToHomeVideoInNavigation3(request: HomeVideoClickRequest) {
+        val latestNavigateToVideo = rememberUpdatedState(::navigateToVideoInNavigation3Impl)
+        fun navigateToVideoInNavigation3(
+            bvid: String,
+            cid: Long = 0L,
+            coverUrl: String = "",
+            // 从全屏播放中 push 新详情页时，把全屏意图带到新路由，避免中途掉出全屏。
+            fullscreen: Boolean = false,
+            startAudio: Boolean = false,
+            autoPortrait: Boolean = shouldAutoEnterPortraitForStandardVideoNavigation(),
+            resumePositionMs: Long = 0L,
+            initialVertical: Boolean = false,
+            directPortraitEntry: Boolean = false,
+            sourceRoute: String? = null,
+            skipPortraitStoryResolution: Boolean = false,
+            useRecordedCardSource: Boolean = true,
+            pendingTransitionSession: VideoCardTransitionSession? = null,
+            title: String = "",
+        ) {
+            latestNavigateToVideo.value(
+                bvid, cid, coverUrl, fullscreen, startAudio, autoPortrait,
+                resumePositionMs, initialVertical, directPortraitEntry, sourceRoute,
+                skipPortraitStoryResolution, useRecordedCardSource, pendingTransitionSession, title,
+            )
+        }
+        fun navigateToHomeVideoInNavigation3Impl(request: HomeVideoClickRequest) {
             when (val target = resolveHomeNavigationTarget(request)) {
                 is HomeNavigationTarget.Video -> {
                     val intent = resolveHomeVideoNavigationIntent(request)
@@ -1719,6 +1758,10 @@ fun AppNavigation(
                 }
                 null -> Unit
             }
+        }
+        val latestNavigateToHomeVideo = rememberUpdatedState(::navigateToHomeVideoInNavigation3Impl)
+        fun navigateToHomeVideoInNavigation3(request: HomeVideoClickRequest) {
+            latestNavigateToHomeVideo.value(request)
         }
         val navigation3SourceMetadata = currentNavigation3SourceMetadata()
             .relativeToHost(
@@ -1978,7 +2021,8 @@ fun AppNavigation(
             !driveBottomBarByProgress &&
             (bottomBarVisibilityState.currentState || bottomBarVisibilityState.targetState)
         val bottomBarContentPadding = rememberAppBottomBarContentPadding(
-            navigationBarsBottom = WindowInsets.navigationBars
+            // 与底部导航共用稳定占位，竖屏沉浸切换不改变来源页的内容高度。
+            navigationBarsBottom = WindowInsets.navigationBarsIgnoringVisibility
                 .asPaddingValues()
                 .calculateBottomPadding(),
             reserveBottomBar = bottomBarReservesSpace && !useSideNavigation,
@@ -2203,7 +2247,7 @@ fun AppNavigation(
                 submitSearchKeywordInNavigation3(keyword)
             }
         }
-        fun openDynamicContentLinkInNavigation3(rawLink: String) {
+        fun openDynamicContentLinkInNavigation3Impl(rawLink: String) {
             // Rich text also contains app/search schemes. Preserve their existing
             // system handler when the native HTTP link resolver cannot handle them.
             if (resolveBilibiliLinkNavigationAction(rawLink) == BilibiliLinkNavigationAction.None) {
@@ -2211,6 +2255,10 @@ fun AppNavigation(
             } else {
                 openBilibiliLinkInNavigation3(rawLink)
             }
+        }
+        val latestOpenDynamicContentLink = rememberUpdatedState(::openDynamicContentLinkInNavigation3Impl)
+        fun openDynamicContentLinkInNavigation3(rawLink: String) {
+            latestOpenDynamicContentLink.value(rawLink)
         }
         fun openMessageLinkInNavigation3(rawLink: String) {
             dispatchMessageLinkNavigation(
@@ -2782,7 +2830,8 @@ fun AppNavigation(
                         visibleBottomBarRoutes = visibleBottomBarRoutes,
                         useSideNavigation = useSideNavigation,
                         shouldHideBottomBarOnTablet = isTabletLayout && route == ScreenRoutes.Settings.route,
-                        shouldDeferReveal = shouldDeferBottomBarReveal
+                        // 返回时延后露出的是根层导航栏，来源页自身的可见性和布局保持不变。
+                        shouldDeferReveal = false
                     )
                 }
 
@@ -5649,7 +5698,7 @@ fun AppNavigation(
                                     if (mainHostNavigationReady.value === entranceReady) mainHostNavigationReady.value = null
                                 }
                             }
-                            // 装饰性工作与后台预热等待导航落位；目标页的数据收集由独立生命周期控制。
+                            // 装饰性工作等待导航落位；目标页的数据收集由独立生命周期控制。
                             // 图片曝光仍走独立可见性门控；玻璃、MD3 与 Miuix 共用此工作边界。
                             val mainHostTransitionScope =
                                 top.yukonga.miuix.kmp.nav.core.LocalNavTransitionScope.current
@@ -5659,8 +5708,21 @@ fun AppNavigation(
                             val mainHostStillExposed by remember(mainHostTransitionScope) {
                                 derivedStateOf { mainHostTransitionScope.relativeDepth < 1f }
                             }
+                            // MainHost 的布局属于底部当前页，不属于覆盖它的详情页。
+                            // 底栏暂时退场或延后露出时仍保留来源页占位，避免首页及离屏
+                            // 切页参与者一起重组、重新测量；玻璃、MD3、Miuix 沿用各自尺寸。
+                            val mainHostBottomBarVisible = resolveMainHostBottomBarVisible()
+                            val mainHostBottomBarContentPadding = rememberAppBottomBarContentPadding(
+                                navigationBarsBottom = WindowInsets.navigationBarsIgnoringVisibility
+                                    .asPaddingValues()
+                                    .calculateBottomPadding(),
+                                reserveBottomBar = mainHostBottomBarVisible,
+                                isBottomBarFloating = isBottomBarFloating,
+                                hasUiSkinDecoration = bottomBarUiSkinDecoration != null,
+                            )
                             CompositionLocalProvider(
-                                LocalBottomBarVisible provides resolveMainHostBottomBarVisible()
+                                LocalBottomBarVisible provides mainHostBottomBarVisible,
+                                LocalBottomBarContentPadding provides mainHostBottomBarContentPadding,
                             ) {
                                 // MainHost 已由 NavDisplay entry 外层的
                                 // VideoCardTransitionBackgroundRouteContent 持有唯一冻结层。
@@ -5673,10 +5735,6 @@ fun AppNavigation(
                                         modifier = Modifier.fillMaxSize(),
                                         state = mainBottomPagerState,
                                         visibleItems = visibleBottomBarItems,
-                                        preloadAllowed = {
-                                            bottomPagerBackgroundWorkAllowedNow() &&
-                                                !homeFeedScrollInProgressState.value
-                                        },
                                     ) { page, slotItem ->
                                         val pageLifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
                                         // Visible transition participants retain their covers;
