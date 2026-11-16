@@ -3,6 +3,10 @@ package com.android.purebilibili.feature.video.viewmodel
 internal enum class VideoLoadStage {
     DETAILS_READY,
     PLAY_URL_READY,
+    HISTORY_REQUEST_STARTED,
+    HISTORY_REQUEST_FINISHED,
+    PLAYBACK_DATA_READY,
+    ENTRY_PREPARATION_RELEASED,
     PLAYER_PREPARE_REQUESTED,
     FIRST_FRAME,
     RELATED_REQUEST_STARTED,

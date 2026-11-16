@@ -107,6 +107,7 @@ import com.android.purebilibili.feature.video.playback.loader.PlaybackRequest
 import com.android.purebilibili.feature.video.playback.loader.PlaybackLoadConfig
 import com.android.purebilibili.feature.video.playback.loader.PlaybackLoadResult
 import com.android.purebilibili.feature.video.playback.loader.PlaybackLoader
+import com.android.purebilibili.feature.video.playback.loader.readPlaybackLoadPreferences
 import com.android.purebilibili.core.player.dash.AdaptiveDashPlaybackSource
 import com.android.purebilibili.feature.video.playback.audio.AudioFallbackReason
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
@@ -1940,9 +1941,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         return inPageInitiatedPlaybackIdentity?.first
     }
 
-    /** 当前详情播放会话的实时身份，包含不更换导航键的选集和自动连播。 */
-    internal fun peekWindowReturnBvid(): String? = currentBvid.takeIf { it.isNotBlank() }
-
     private fun markInPageInitiatedPlayback(bvid: String, cid: Long) {
         inPageInitiatedPlaybackIdentity = bvid to cid
     }
@@ -3560,45 +3558,35 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             val preparationAccount = com.android.purebilibili.data.repository.videoPlaybackAccountScope()
             
             try {
+                val loadPreferences = appContext?.let { readPlaybackLoadPreferences(it) }
                 val isLoggedIn = com.android.purebilibili.data.repository.VideoRepository.isPlaybackLoggedIn()
-                var storedQualityForWarning = 64
-                var autoHighestQualityEnabledForLoad = false
-                val defaultQuality = appContext?.let { context ->
-                    val storedQuality = NetworkUtils.getDefaultQualityId(context)
-                    val autoHighestEnabled = com.android.purebilibili.core.store.SettingsManager
-                        .getAutoHighestQualitySync(context)
-                    storedQualityForWarning = storedQuality
-                    autoHighestQualityEnabledForLoad = autoHighestEnabled
+                val storedQualityForWarning = loadPreferences?.storedQuality ?: 64
+                val autoHighestQualityEnabledForLoad = loadPreferences?.autoHighestQuality ?: false
+                val defaultQuality = loadPreferences?.let { preferences ->
                     // 首帧前只读取当前账号缓存；实际可用画质由取流结果决定。
                     val effectiveVip = VideoRepository.isPlaybackVip()
                     com.android.purebilibili.core.util.resolvePlaybackDefaultQualityId(
-                        storedQuality = storedQuality,
-                        autoHighestEnabled = autoHighestEnabled,
+                        storedQuality = preferences.storedQuality,
+                        autoHighestEnabled = preferences.autoHighestQuality,
                         isLoggedIn = isLoggedIn,
                         isVip = effectiveVip
                     )
                 } ?: 64
                 //  [新增] 获取音频/视频偏好
-                val audioQualityPreference = appContext?.let { context ->
+                val audioQualityPreference = loadPreferences?.let { preferences ->
                     resolveRequestedAudioQuality(
-                        defaultAudioQuality = com.android.purebilibili.core.store.player.PlayerSettingsStore
-                            .getCachedDefaultAudioQuality(context),
-                        rememberedAudioQuality = com.android.purebilibili.core.store.player.PlayerSettingsStore
-                            .getCachedLastSelectedAudioQuality(context)
+                        defaultAudioQuality = preferences.defaultAudioQuality,
+                        rememberedAudioQuality = preferences.lastSelectedAudioQuality,
                     )
                 } ?: -1
-                val settingsCodecPreference = appContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getVideoCodecSync(it)
-                } ?: HEVC_CODEC_KEY
+                val settingsCodecPreference = loadPreferences?.videoCodec ?: HEVC_CODEC_KEY
                 val sessionBlockedCodecs = playbackSessionStore.state.value.blockedVideoCodecs
                 val videoCodecPreference = resolveEffectiveVideoCodecPreference(
                     requestCodecOverride = playbackRequest.videoCodecOverride,
                     settingsCodecPreference = settingsCodecPreference,
                     sessionBlockedCodecs = sessionBlockedCodecs
                 )
-                val settingsSecondCodecPreference = appContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getVideoSecondCodecSync(it)
-                } ?: AVC_CODEC_KEY
+                val settingsSecondCodecPreference = loadPreferences?.secondVideoCodec ?: AVC_CODEC_KEY
                 val videoSecondCodecPreference = resolveEffectiveVideoSecondCodecPreference(
                     requestCodecOverride = playbackRequest.videoCodecOverride,
                     settingsSecondCodecPreference = settingsSecondCodecPreference
@@ -3606,9 +3594,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 
                 // [Added] Determine auto-play behavior
                 // If autoPlay arg is present, use it. Otherwise reset to "Click to Play" setting
-                val shouldAutoPlay = playbackRequest.autoPlay ?: appContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(it)
-                } ?: true
+                val shouldAutoPlay = playbackRequest.autoPlay ?: loadPreferences?.clickToPlay ?: true
                 
                 Logger.d(
                     "VideoPlaybackViewModel",
@@ -3618,10 +3604,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             // 📉 [省流量] 省流量模式逻辑：
             // - ALWAYS: 任何网络都限制 480P
             // - MOBILE_ONLY: 仅移动数据时限制 480P（WiFi不受限）
-            val isOnMobileNetwork = appContext?.let { NetworkUtils.isMobileData(it) } ?: false
-            val dataSaverMode = appContext?.let { 
-                com.android.purebilibili.core.store.SettingsManager.getDataSaverModeSync(it) 
-            } ?: com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY
+            val isOnMobileNetwork = loadPreferences?.isOnMobileNetwork ?: false
+            val dataSaverMode = loadPreferences?.dataSaverMode
+                ?: com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY
             
             //  判断是否应该限制画质
             val shouldLimitQuality = when (dataSaverMode) {
@@ -3639,79 +3624,93 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             
                 val capabilityContext = appContext
                 val loadQuality = finalQuality
-                val playbackSpeed = exoPlayer?.playbackParameters?.speed ?: capabilityContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getPreferredPlaybackSpeedSync(it)
-                }
-                val loadConfig = withContext(Dispatchers.Default) {
-                    PlaybackLoadConfig(
-                        defaultQuality = loadQuality,
-                        audioQualityPreference = audioQualityPreference,
-                        videoCodecPreference = videoCodecPreference,
-                        videoSecondCodecPreference = videoSecondCodecPreference,
-                        playWhenReady = shouldAutoPlay,
-                        isAv1Supported = resolveEffectiveAv1Support(
+                val playbackSpeed = exoPlayer?.playbackParameters?.speed ?: loadPreferences?.preferredPlaybackSpeed
+                // 设备/显示能力仅在当前请求内共享，提前准备与正式选流使用同一份结果。
+                val (isAv1Supported, isHdrSupported, isDolbyVisionSupported) = withContext(Dispatchers.Default) {
+                    Triple(
+                        resolveEffectiveAv1Support(
                             deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
-                            sessionBlockedCodecs = sessionBlockedCodecs
+                            sessionBlockedCodecs = sessionBlockedCodecs,
                         ),
-                        isHdrSupported = com.android.purebilibili.core.util.MediaUtils
-                            .isHdrSupported(capabilityContext),
-                        isDolbyVisionSupported = com.android.purebilibili.core.util.MediaUtils
-                            .isDolbyVisionSupported(capabilityContext),
-                        // videoInfoDeferred publishes as soon as metadata arrives.
-                        videoInfoLoader = { videoInfoDeferred.await() },
-                        onPlaybackDataReady = { preparedCid, data ->
-                            // 仅显式分 P 可以提前准备；静音暂停等待详情确认，不提前播放。
-                            if (!shouldSkipPlayerPrepare && !_isInAudioMode.value &&
-                                preparedCid == playbackRequest.cid && playbackRequest.cid > 0L
-                            ) withContext(Dispatchers.Main.immediate) {
-                                // 提前准备只是机会性工作：未到挂载阶段时不等待，避免播放地址
-                                // 的返回连带阻塞历史进度读取与最终媒体选择。正式起播仍会等待许可。
-                                if (!playbackPreparationAllowed.value) return@withContext
-                                if (currentLoadRequestToken == requestToken &&
-                                    preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope()
-                                ) {
+                        com.android.purebilibili.core.util.MediaUtils.isHdrSupported(capabilityContext),
+                        com.android.purebilibili.core.util.MediaUtils.isDolbyVisionSupported(capabilityContext),
+                    )
+                }
+                val loadConfig = PlaybackLoadConfig(
+                    defaultQuality = loadQuality,
+                    audioQualityPreference = audioQualityPreference,
+                    videoCodecPreference = videoCodecPreference,
+                    videoSecondCodecPreference = videoSecondCodecPreference,
+                    playWhenReady = shouldAutoPlay,
+                    isAv1Supported = isAv1Supported,
+                    isHdrSupported = isHdrSupported,
+                    isDolbyVisionSupported = isDolbyVisionSupported,
+                    onDataLoadStage = { stage ->
+                        val timelineStage = when (stage) {
+                            PlaybackDataLoadStage.PLAY_URL_READY -> VideoLoadStage.PLAY_URL_READY
+                            PlaybackDataLoadStage.HISTORY_REQUEST_STARTED -> VideoLoadStage.HISTORY_REQUEST_STARTED
+                            PlaybackDataLoadStage.HISTORY_REQUEST_FINISHED -> VideoLoadStage.HISTORY_REQUEST_FINISHED
+                        }
+                        logVideoLoadStage(timelineStage, requestToken)
+                    },
+                    // videoInfoDeferred publishes as soon as metadata arrives.
+                    videoInfoLoader = { videoInfoDeferred.await() },
+                    onPlaybackDataReady = { preparedCid, data ->
+                        // 仅显式分 P 可以提前准备；静音暂停等待详情确认，不提前播放。
+                        if (!shouldSkipPlayerPrepare && !_isInAudioMode.value &&
+                            preparedCid == playbackRequest.cid && playbackRequest.cid > 0L
+                        ) withContext(Dispatchers.Main.immediate) provisional@{
+                            // 提前准备只是机会性工作：未到挂载阶段时不等待，避免播放地址
+                            // 的返回连带阻塞历史进度读取与最终媒体选择。正式起播仍会等待许可。
+                            if (!playbackPreparationAllowed.value) return@provisional
+                            if (currentLoadRequestToken == requestToken &&
+                                preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope()
+                            ) {
+                                val selection = withContext(Dispatchers.Default) {
                                     val target = if (loadQuality >= 127) playbackUseCase.resolveAutoHighestTargetQuality(
                                         data.dash?.video.orEmpty().map { it.id },
-                                        com.android.purebilibili.core.util.MediaUtils.isHdrSupported(capabilityContext),
-                                        com.android.purebilibili.core.util.MediaUtils.isDolbyVisionSupported(capabilityContext),
+                                        isHdrSupported,
+                                        isDolbyVisionSupported,
                                     ) else loadQuality
-                                    val selection = playbackUseCase.resolvePlaybackSelection(
+                                    playbackUseCase.resolvePlaybackSelection(
                                         playUrlData = data,
                                         targetQuality = target,
                                         audioQualityPreference = audioQualityPreference,
                                         playbackSpeed = playbackSpeed ?: 1f,
                                         videoCodecPreference = videoCodecPreference,
                                         videoSecondCodecPreference = videoSecondCodecPreference,
-                                        isAv1Supported = resolveEffectiveAv1Support(
-                                            deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
-                                            sessionBlockedCodecs = sessionBlockedCodecs,
-                                        ),
+                                        isAv1Supported = isAv1Supported,
                                         lockSelectedQuality = true,
                                     )
-                                    val player = exoPlayer
-                                    if (selection != null && player != null) {
-                                        val cdn = resolvePlaybackCdnCandidateSelection(
-                                            videoUrl = selection.videoUrl, audioUrl = selection.audioUrl,
-                                            quality = selection.actualQuality,
-                                            cachedDashVideos = selection.cachedDashVideos,
-                                            cachedDashAudios = selection.cachedDashAudios,
-                                            adaptiveDashSource = selection.adaptiveDashSource,
-                                        )
-                                        provisionalPlayer = player
-                                        provisionalVideoUrl = cdn.playUrl
-                                        provisionalAudioUrl = cdn.audioUrl
-                                        provisionalSource = cdn.adaptiveDashSource
-                                        playResolvedPlayback(cdn.playUrl, cdn.audioUrl, cdn.adaptiveDashSource,
-                                            requestedStartPositionMs, playWhenReady = false,
-                                            cdnCacheKeysByUrl = cdn.cdnCacheKeysByUrl)
-                                        provisionalMediaItem = player.currentMediaItem
-                                    }
+                                }
+                                // 后台计算期间可能离页、切片或切账号；仅当前请求仍允许准备时绑定媒体。
+                                if (!playbackPreparationAllowed.value || shouldSkipPlayerPrepare ||
+                                    _isInAudioMode.value || currentLoadRequestToken != requestToken ||
+                                    preparationAccount != com.android.purebilibili.data.repository.videoPlaybackAccountScope()
+                                ) return@provisional
+                                val player = exoPlayer
+                                if (selection != null && player != null) {
+                                    val cdn = resolvePlaybackCdnCandidateSelection(
+                                        videoUrl = selection.videoUrl, audioUrl = selection.audioUrl,
+                                        quality = selection.actualQuality,
+                                        cachedDashVideos = selection.cachedDashVideos,
+                                        cachedDashAudios = selection.cachedDashAudios,
+                                        adaptiveDashSource = selection.adaptiveDashSource,
+                                    )
+                                    provisionalPlayer = player
+                                    provisionalVideoUrl = cdn.playUrl
+                                    provisionalAudioUrl = cdn.audioUrl
+                                    provisionalSource = cdn.adaptiveDashSource
+                                    playResolvedPlayback(cdn.playUrl, cdn.audioUrl, cdn.adaptiveDashSource,
+                                        requestedStartPositionMs, playWhenReady = false,
+                                        cdnCacheKeysByUrl = cdn.cdnCacheKeysByUrl)
+                                    provisionalMediaItem = player.currentMediaItem
                                 }
                             }
-                        },
-                        playbackSpeed = playbackSpeed
-                    )
-                }
+                        }
+                    },
+                    playbackSpeed = playbackSpeed
+                )
                 // 🛡️ [修复] 增加超时保护，防止加载无限挂起
                 val initialLoadResult = kotlinx.coroutines.withTimeout(15000L) {
                     playbackLoader.load(
@@ -3745,11 +3744,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 when (loadResult) {
                     is PlaybackLoadResult.Success -> {
                         val result = loadResult.payload
-                        logVideoLoadStage(VideoLoadStage.PLAY_URL_READY, requestToken)
+                        logVideoLoadStage(VideoLoadStage.PLAYBACK_DATA_READY, requestToken)
                         // 数据计算可与入场重叠；绑定媒体身份、线路发布和播放器操作仍在
                         // attachPlayer 之后执行。等待结束后再校验请求和账号，拒绝过期结果。
                         if (!shouldSkipPlayerPrepare) {
                             playbackPreparationAllowed.first { it }
+                            // 与 PLAYBACK_DATA_READY 的差值只表示数据就绪后等待许可的时间。
+                            logVideoLoadStage(VideoLoadStage.ENTRY_PREPARATION_RELEASED, requestToken)
                         }
                         if (!shouldApplyVideoLoadResult(
                                 activeRequestToken = currentLoadRequestToken,

@@ -237,12 +237,4 @@ class VideoPlaybackUseCaseAdaptiveSourceTest {
             )
         )
     }
-
-    @Test
-    fun `local dash manifest file name is stable and uses mpd suffix`() {
-        val fileName = resolveLocalDashManifestFileName("<MPD>same</MPD>")
-
-        assertEquals(fileName, resolveLocalDashManifestFileName("<MPD>same</MPD>"))
-        assertTrue(fileName.endsWith(".mpd"))
-    }
 }

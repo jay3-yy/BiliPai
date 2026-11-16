@@ -706,12 +706,6 @@ fun AppNavigation(
         }
         androidx.compose.runtime.SideEffect {
             (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)?.let { activity ->
-                activity.updateOfficialReturnContent(
-                    when (val current = navigation3BackStack.lastOrNull()) {
-                        is BiliPaiNavKey.VideoDetail -> current.bvid
-                        else -> com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(current)
-                    },
-                )
                 activity.updateOfficialRootPredictiveBack(initialVideoRoute != null && navigation3BackStack.size == 1)
             }
         }

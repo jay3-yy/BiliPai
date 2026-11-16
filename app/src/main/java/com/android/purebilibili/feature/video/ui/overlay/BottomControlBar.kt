@@ -223,6 +223,9 @@ fun BottomControlBar(
     showPlayPauseButton: Boolean = false,
     isPlaying: Boolean = false,
     onPlayPauseClick: () -> Unit = {},
+    danmakuEnabled: Boolean = true,
+    onDanmakuToggle: () -> Unit = {},
+    onDanmakuSettingsClick: () -> Unit = {},
 ) {
     val glass = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     // 玻璃时间和文字胶囊对齐圆形按钮；MD3、Miuix 保留原生 30dp 控件高度。
@@ -319,6 +322,9 @@ fun BottomControlBar(
                 onQualityClick = onQualityClick,
                 speedModifier = anchor(PlayerControlAnchor.SPEED, "player_speed_action"),
                 qualityModifier = anchor(PlayerControlAnchor.QUALITY, "player_quality_action"),
+                danmakuEnabled = danmakuEnabled,
+                onDanmakuToggle = onDanmakuToggle,
+                onDanmakuSettingsClick = onDanmakuSettingsClick,
                 modifier = Modifier.fillMaxWidth().testTag("player_control_row"),
             )
         }
@@ -515,6 +521,9 @@ fun BottomControlBar(
         }
     }
     localMenu?.let { menu ->
+        // 竖屏内嵌字幕仍有实际 CC 按钮，定位与玻璃过渡均使用该按钮。
+        // 只有竖屏全屏从更多菜单打开、没有对应按钮时才保持居中。
+        val useControlAnchor = !simplifiedPortrait || bounds[menu] != null
         PlayerSelectionPopup(
             title = when (menu) {
                 PlayerControlAnchor.SUBTITLE -> "字幕"
@@ -522,9 +531,9 @@ fun BottomControlBar(
                 else -> "超分辨率"
             },
             showTitle = false,
-            placement = if (simplifiedPortrait) PlayerListPopupPlacement.CENTER else PlayerListPopupPlacement.ANCHOR_END,
+            placement = if (useControlAnchor) PlayerListPopupPlacement.ANCHOR_END else PlayerListPopupPlacement.CENTER,
             anchorBounds = bounds[menu],
-            source = if (simplifiedPortrait) null else menuSources[menu],
+            source = if (useControlAnchor) menuSources[menu] else null,
             onDismissRequest = { localMenu = null },
         ) {
             when (menu) {

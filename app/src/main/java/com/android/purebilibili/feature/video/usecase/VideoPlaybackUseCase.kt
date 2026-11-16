@@ -4,13 +4,13 @@
 package com.android.purebilibili.feature.video.usecase
 
 import android.content.Context
-import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MediaSource
+import androidx.media3.exoplayer.dash.DefaultDashChunkSource
 import androidx.media3.exoplayer.dash.DashMediaSource
 import com.android.purebilibili.core.cooldown.CooldownStatus
 import com.android.purebilibili.core.cooldown.PlaybackCooldownManager
@@ -22,6 +22,8 @@ import com.android.purebilibili.data.model.VideoLoadError
 import com.android.purebilibili.data.model.response.*
 import com.android.purebilibili.core.player.dash.AdaptiveDashPlaybackSource
 import com.android.purebilibili.core.player.dash.buildLocalDashManifest
+import com.android.purebilibili.feature.video.playback.dash.IN_MEMORY_DASH_MANIFEST_URI
+import com.android.purebilibili.feature.video.playback.dash.createInMemoryDashManifestDataSourceFactory
 import com.android.purebilibili.feature.video.playback.audio.AudioFallbackReason
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
 import com.android.purebilibili.feature.video.playback.audio.collectAudioStreamCandidates
@@ -41,8 +43,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.security.MessageDigest
 
 /**
  * Video Playback UseCase
@@ -227,12 +227,6 @@ internal fun shouldUseAdaptiveDashPlayback(
 private fun SegmentBase?.hasCompleteDashByteRanges(): Boolean {
     return this?.initialization?.isNotBlank() == true &&
         this.indexRange?.isNotBlank() == true
-}
-
-internal fun resolveLocalDashManifestFileName(manifest: String): String {
-    val digest = MessageDigest.getInstance("SHA-256").digest(manifest.toByteArray())
-    val key = digest.take(12).joinToString(separator = "") { byte -> "%02x".format(byte) }
-    return "local_dash_$key.mpd"
 }
 
 internal fun shouldPreparePlayerBeforeExplicitPlay(
@@ -442,6 +436,12 @@ class VideoPlaybackUseCase(
         com.android.purebilibili.core.player.PlayerVolumeController.applyPreferredVolume(player)
     }
     
+    private suspend fun loadPlaybackHistory(info: ViewInfo): PlayerInfoData? =
+        com.android.purebilibili.data.repository.HistoryRepository
+            .getPlaybackHistory(info.bvid, info.cid)
+            .onFailure { Logger.w("VideoPlaybackUseCase", "播放历史读取失败", it) }
+            .getOrNull()
+
     /**
      * Load video data
      * 
@@ -467,7 +467,8 @@ class VideoPlaybackUseCase(
         onVideoInfo: (ViewInfo) -> Unit = {},
         videoInfoLoader: (suspend () -> Result<ViewInfo>)? = null,
         onPlaybackDataReady: suspend (Long, PlayUrlData) -> Unit = { _, _ -> },
-        playbackSpeedOverride: Float? = null
+        playbackSpeedOverride: Float? = null,
+        onDataLoadStage: (PlaybackDataLoadStage) -> Unit = {},
     ): VideoLoadResult {
         try {
             //  [风控冷却] 检查是否处于冷却期
@@ -537,22 +538,24 @@ class VideoPlaybackUseCase(
                         infoDeferred.await().fold(
                             onSuccess = { info ->
                                 onVideoInfo(info)
-                                val playData = if (info.cid == bootstrapCid) {
-                                    playUrlDeferred.await()
-                                } else {
-                                    playUrlDeferred.cancel()
-                                    VideoRepository.getInitialPlayUrlData(
-                                        bvid = info.bvid,
-                                        cid = info.cid,
-                                        targetQuality = defaultQuality,
-                                        audioLang = audioLang
-                                    )
-                                }
-                                if (playData == null) {
-                                    Result.failure(Exception("无法获取播放地址"))
-                                } else {
-                                    Result.success(info to playData)
-                                }
+                                loadConfirmedPlaybackData(
+                                    info = info,
+                                    loadPlayData = {
+                                        if (info.cid == bootstrapCid) {
+                                            playUrlDeferred.await()
+                                        } else {
+                                            playUrlDeferred.cancel()
+                                            VideoRepository.getInitialPlayUrlData(
+                                                bvid = info.bvid,
+                                                cid = info.cid,
+                                                targetQuality = defaultQuality,
+                                                audioLang = audioLang
+                                            )
+                                        }
+                                    },
+                                    loadHistory = ::loadPlaybackHistory,
+                                    onStage = onDataLoadStage,
+                                )
                             },
                             onFailure = { error ->
                                 playUrlDeferred.cancel()
@@ -569,14 +572,19 @@ class VideoPlaybackUseCase(
                         )).fold(
                             onSuccess = { info ->
                                 onVideoInfo(info)
-                                val playData = VideoRepository.getInitialPlayUrlData(
-                                    bvid = info.bvid,
-                                    cid = info.cid,
-                                    targetQuality = defaultQuality,
-                                    audioLang = audioLang
+                                loadConfirmedPlaybackData(
+                                    info = info,
+                                    loadPlayData = {
+                                        VideoRepository.getInitialPlayUrlData(
+                                            bvid = info.bvid,
+                                            cid = info.cid,
+                                            targetQuality = defaultQuality,
+                                            audioLang = audioLang
+                                        )
+                                    },
+                                    loadHistory = ::loadPlaybackHistory,
+                                    onStage = onDataLoadStage,
                                 )
-                                if (playData == null) Result.failure(Exception("无法获取播放地址"))
-                                else Result.success(info to playData)
                             },
                             onFailure = { Result.failure(it) }
                         )
@@ -589,11 +597,7 @@ class VideoPlaybackUseCase(
             }
             
             return detailResult.fold(
-                onSuccess = { (info, playData) ->
-                    val history = com.android.purebilibili.data.repository.HistoryRepository
-                        .getPlaybackHistory(info.bvid, info.cid)
-                        .onFailure { Logger.w("VideoPlaybackUseCase", "播放历史读取失败", it) }
-                        .getOrNull()
+                onSuccess = { (info, playData, history) ->
                     val isLogin = com.android.purebilibili.data.repository.VideoRepository.isPlaybackLoggedIn()
                     var isVip = com.android.purebilibili.data.repository.VideoRepository.isPlaybackVip()
                     if (isLogin && !isVip && com.android.purebilibili.data.repository.shouldRefreshVipStatusOnVideoLoad()) {
@@ -1313,7 +1317,6 @@ class VideoPlaybackUseCase(
     ): MediaSource? {
         val source = adaptiveDashSource ?: return null
         val context = appContext ?: NetworkModule.appContext ?: return null
-        val manifestUri = writeAdaptiveDashManifest(context, source.manifest) ?: return null
         val headers = mapOf(
             "Referer" to "https://www.bilibili.com",
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -1330,10 +1333,14 @@ class VideoPlaybackUseCase(
             )
         )
         val mediaItem = MediaItem.Builder()
-            .setUri(manifestUri)
+            .setUri(IN_MEMORY_DASH_MANIFEST_URI)
             .setMimeType(MimeTypes.APPLICATION_MPD)
             .build()
-        return DashMediaSource.Factory(dataSourceFactory).createMediaSource(mediaItem)
+        // 清单从内存加载；分片仍使用原有 CDN 优化与缓存，不在起播线程读写清单文件。
+        return DashMediaSource.Factory(
+            DefaultDashChunkSource.Factory(dataSourceFactory),
+            createInMemoryDashManifestDataSourceFactory(source.manifest),
+        ).createMediaSource(mediaItem)
     }
 
     private fun buildCachedPlaybackDataSourceFactory(
@@ -1353,19 +1360,6 @@ class VideoPlaybackUseCase(
         return PlayerSettingsCache.isDashSegmentRequestsEnabled(context)
     }
 
-    private fun writeAdaptiveDashManifest(context: Context, manifest: String): Uri? {
-        return runCatching {
-            val manifestDir = File(context.cacheDir, "dash_manifests").apply { mkdirs() }
-            val manifestFile = File(manifestDir, resolveLocalDashManifestFileName(manifest))
-            if (!manifestFile.exists() || manifestFile.readText() != manifest) {
-                manifestFile.writeText(manifest)
-            }
-            Uri.fromFile(manifestFile)
-        }.onFailure { error ->
-            Logger.w("VideoPlaybackUseCase", " Failed to cache adaptive DASH manifest: ${error.message}")
-        }.getOrNull()
-    }
-    
     private fun getValidVideoUrl(dashVideo: DashVideo?, playData: PlayUrlData): String {
         return dashVideo?.getValidUrl()?.takeIf { it.isNotEmpty() }
             ?: playData.dash?.video?.firstOrNull()?.baseUrl?.takeIf { it.isNotEmpty() }

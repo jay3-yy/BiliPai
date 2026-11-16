@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.constrainHeight
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.feature.video.ui.components.NativeDanmakuToggleButton
+import com.android.purebilibili.feature.video.ui.components.PiliPlusDanmakuSettingsIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
@@ -153,6 +156,9 @@ internal fun PortraitPlaybackControls(
     onQualityClick: () -> Unit,
     speedModifier: Modifier,
     qualityModifier: Modifier,
+    danmakuEnabled: Boolean,
+    onDanmakuToggle: () -> Unit,
+    onDanmakuSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val glass = LocalPlayerControlGlassEnabled.current
@@ -192,6 +198,23 @@ internal fun PortraitPlaybackControls(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                NativeDanmakuToggleButton(
+                    enabled = danmakuEnabled,
+                    onToggle = onDanmakuToggle,
+                    activeTint = Color.White,
+                    inactiveTint = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("player_danmaku_toggle"),
+                )
+                AppIconButton(
+                    onClick = onDanmakuSettingsClick,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("player_danmaku_settings"),
+                ) {
+                    PiliPlusDanmakuSettingsIcon(size = 22.dp, tint = Color.White)
+                }
                 PortraitPlaybackTextAction(
                     text = "${speed}×", description = "倍速", onClick = onSpeedClick,
                     modifier = speedModifier,

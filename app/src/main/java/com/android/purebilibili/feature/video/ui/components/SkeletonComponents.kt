@@ -36,7 +36,7 @@ import com.android.purebilibili.core.ui.ContainerLevel
 internal val LocalVideoDetailLoadingTitle = staticCompositionLocalOf { "" }
 
 private val LocalVideoSkeletonPulse = staticCompositionLocalOf<androidx.compose.runtime.State<Float>?> { null }
-private val LocalVideoSkeletonAnimationAllowed = staticCompositionLocalOf { true }
+internal val LocalVideoSkeletonAnimationAllowed = staticCompositionLocalOf { true }
 
 // 基础 Shimmer 容器
 @Composable

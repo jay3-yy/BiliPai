@@ -25,8 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.core.view.OneShotPreDrawListener
-import androidx.core.view.doOnPreDraw
 import androidx.metrics.performance.JankStats
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppThemeConfig
@@ -69,58 +67,20 @@ open class VideoActivity : ComponentActivity() {
     private var officialReturnMotionEnabled = true
     private var officialReturnBlurEnabled = true
     private var officialRootPredictiveBack = false
-    private var officialReturnBvid: String? = null
-    private class ReturnContentBinding(
-        val owner: Any,
-        val routeBvid: String,
-        val readBvid: () -> String?,
-        val lastBvid: String?,
-    )
-    private var officialReturnContentBinding: ReturnContentBinding? = null
+    private var officialCardReturnAtRoot = false
+    private var officialReturnToSource = true
 
-    private class ReturnViewportBinding(val owner: Any, val prepare: () -> Boolean)
-    private var officialReturnViewportBinding: ReturnViewportBinding? = null
-    private var pendingReturnViewportDraw: OneShotPreDrawListener? = null
+    internal val usesOfficialCardReturnAtRoot: Boolean
+        get() = officialCardReturnAtRoot && officialReturnMotionEnabled &&
+            intent.hasExtra(SystemVideoCardTransition.EXTRA_SESSION)
 
-    internal val hasOfficialCardReturn: Boolean
-        get() = officialReturnMotionEnabled && intent.hasExtra(SystemVideoCardTransition.EXTRA_SESSION)
-
-    internal fun bindOfficialReturnViewport(owner: Any, prepare: () -> Boolean) {
-        officialReturnViewportBinding = ReturnViewportBinding(owner, prepare)
-    }
-
-    internal fun unbindOfficialReturnViewport(owner: Any) {
-        if (officialReturnViewportBinding?.owner === owner) officialReturnViewportBinding = null
-    }
-
-    /** 仅由当前拥有页面的详情实例登记；finish 时重新读取，避免等待重组后才同步身份。 */
-    internal fun bindOfficialReturnContent(owner: Any, routeBvid: String, readBvid: () -> String?) {
-        val previous = officialReturnContentBinding
-        val current = readBvid()
-        officialReturnContentBinding = ReturnContentBinding(owner, routeBvid, readBvid, current)
-        if (previous == null || previous.owner !== owner || previous.routeBvid != routeBvid || previous.lastBvid != current) {
-            refreshOfficialReturn("playback_content_changed")
-        }
-    }
-
-    internal fun unbindOfficialReturnContent(owner: Any) {
-        if (officialReturnContentBinding?.owner === owner) officialReturnContentBinding = null
-    }
-
-    private fun currentOfficialReturnBvid(): String? {
-        if (!playbackWindowActive) return null
-        val binding = officialReturnContentBinding
-        return if (binding != null && binding.routeBvid == officialReturnBvid) binding.readBvid()
-        else officialReturnBvid
-    }
-
-    internal fun updateOfficialReturnContent(bvid: String?) {
-        if (officialReturnBvid == bvid) return
-        officialReturnBvid = bvid
-        refreshOfficialReturn("content_changed")
+    /** 从嵌套窗口直接跳首页时，首页不是打开本窗口的来源。 */
+    internal fun discardOfficialCardReturn() {
+        officialReturnToSource = false
     }
 
     internal fun updateOfficialRootPredictiveBack(atRoot: Boolean) {
+        officialCardReturnAtRoot = atRoot
         // 仅标准系统转场尝试跨 Activity 预测返回；旧圆角协议沿用自身返回。
         val enabled = atRoot && Build.VERSION.SDK_INT >= 35 &&
             intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)?.startsWith("sdk:") == true
@@ -139,7 +99,7 @@ open class VideoActivity : ComponentActivity() {
     private fun refreshOfficialReturn(reason: String, preparingToFinish: Boolean = false) =
         SystemVideoCardTransition.refreshReturn(
             this, officialReturnMotionEnabled, officialReturnBlurEnabled, reason,
-            currentVideoBvid = currentOfficialReturnBvid(),
+            returnToSource = officialReturnToSource,
             preparingToFinish = preparingToFinish,
             preferSystemPredictiveBack = officialRootPredictiveBack,
         )
@@ -203,12 +163,6 @@ open class VideoActivity : ComponentActivity() {
             return
         }
         bindPerformanceCapture(kind = "detail", initialRoute = request.toInitialRoute())
-        officialReturnBvid = if (request.initialRoute.isBlank()) request.bvid else {
-            com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(
-                com.android.purebilibili.navigation3.legacyRouteToBiliPaiNavKey(request.initialRoute),
-            )
-        }
-
         updateStateFromConfig(resources.configuration)
 
         setContent {
@@ -442,7 +396,7 @@ open class VideoActivity : ComponentActivity() {
                         if (SystemVideoCardTransition.returnsDirectlyToHome(this@VideoActivity)) {
                             finish()
                         } else {
-                            updateOfficialReturnContent(null)
+                            discardOfficialCardReturn()
                             intent.removeExtra("video_parent_is_video")
                             startActivity(Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -494,8 +448,8 @@ open class VideoActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshOfficialReturn("on_resume")
         playbackWindowActive = true
+        refreshOfficialReturn("on_resume")
         resumedVideoWindow = java.lang.ref.WeakReference(this)
         val mini = MiniPlayerManager.getInstance(this)
         mini.clearUserLeaveHint()
@@ -520,22 +474,7 @@ open class VideoActivity : ComponentActivity() {
     }
 
     override fun finish() {
-        if (pendingReturnViewportDraw != null) return
-        if (!isFinishing && window.decorView.isShown && hasOfficialCardReturn &&
-            officialReturnViewportBinding?.prepare?.invoke() == true
-        ) {
-            // 折叠视口先按现有返回状态展开并绘制，再让系统截取关闭窗口的画面。
-            // 不使用固定延时；顶部按钮与系统提交返回共用此入口。
-            val decor = window.decorView
-            pendingReturnViewportDraw = decor.doOnPreDraw {
-                decor.post {
-                    pendingReturnViewportDraw = null
-                    finish()
-                }
-            }
-            decor.invalidate()
-            return
-        }
+        // 窗口直接从当前画面退场，不先展开折叠视口或切换封面。
         val preparingToFinish = !isFinishing
         if (preparingToFinish) {
             // 系统返回与页面返回共用此入口；关闭窗口前刷新同一来源实例的落点。
@@ -577,10 +516,6 @@ open class VideoActivity : ComponentActivity() {
     }
     
     override fun onDestroy() {
-        officialReturnContentBinding = null
-        officialReturnViewportBinding = null
-        pendingReturnViewportDraw?.removeListener()
-        pendingReturnViewportDraw = null
         if (!isChangingConfigurations) {
             VideoActivityLauncher.releaseParent(this)
             SystemVideoCardTransition.release(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))

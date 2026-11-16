@@ -11,7 +11,7 @@ import android.view.PixelCopy
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.lifecycle.Lifecycle
-import com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor
+import androidx.window.layout.WindowMetricsCalculator
 import com.android.purebilibili.core.ui.transition.resolveVideoCardSourceClipRadiusPx
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.Logger
@@ -42,7 +42,7 @@ internal data class SystemVideoCardCapability(
 )
 
 /** 系统窗口转场调度：标准协议优先，再尝试旧无缝、OneShot 与圆角窗口协议；不可用时回退普通页面转场。
- * 只保存本次来源的弱锚点与卡片像素，不以 bvid 查找替代实例。主线程访问。
+ * 启动时校验来源卡片，返回沿用本次窗口已提交的卡片像素与落点。主线程访问。
  */
 internal object SystemVideoCardTransition {
     const val EXTRA_SESSION = "official_video_card_session"
@@ -54,28 +54,23 @@ internal object SystemVideoCardTransition {
         val densityDpi: Int,
     )
 
-    private fun windowGeometry(activity: Activity): WindowGeometry? {
-        val decor = activity.window.decorView
-        if (!decor.isAttachedToWindow || decor.width <= 0 || decor.height <= 0) return null
-        val display = decor.display ?: return null
-        val location = IntArray(2)
-        decor.getLocationOnScreen(location)
+    private fun windowGeometry(activity: Activity): WindowGeometry {
+        // 后台来源窗口不依赖 DecorView 是否仍有布局或附着到显示设备。
+        @Suppress("DEPRECATION")
+        val display = activity.windowManager.defaultDisplay
+        // 校验真实窗口边界；播放时系统栏显隐不等于窗口缩放或分屏变化。
+        val windowBounds = WindowMetricsCalculator.getOrCreate().computeCurrentWindowMetrics(activity).bounds
         return WindowGeometry(
-            Rect(location[0], location[1], location[0] + decor.width, location[1] + decor.height),
+            Rect(windowBounds),
             display.displayId, display.rotation, activity.resources.configuration.densityDpi,
         )
     }
 
     private class Session(
-        val openingBvid: String,
         val sourceRoute: String?,
         val sourceActivity: WeakReference<ComponentActivity>,
         val sourceWindow: WindowGeometry,
-        val anchor: VideoCardSourceAnchor,
         val thumbnail: Bitmap,
-        val windowCoordinates: Boolean,
-        // 打开时完整录制的截图在整个往返期间保留，不依赖落位后是否还持有源图层。
-        val hasCompleteSourcePixels: Boolean,
         val canRefreshBitmap: Boolean,
         val canConfigureBlur: Boolean,
         val canConfigureBackgroundScale: Boolean,
@@ -86,7 +81,6 @@ internal object SystemVideoCardTransition {
         val oplusSdkWindow: Boolean,
         val openingBounds: Rect,
         val openingRadius: Float,
-        val coverCornerDp: Float?,
         val openingSeed: VideoDetailOpeningSeed?,
     ) {
         val requestedAtMs = SystemClock.uptimeMillis()
@@ -159,7 +153,7 @@ internal object SystemVideoCardTransition {
         }
         val anchor = source.sourceAnchor ?: return rejected("source_anchor_missing")
         if (!anchor.belongsToWindow(activity.window.decorView)) return rejected("source_window_mismatch")
-        val sourceWindow = windowGeometry(activity) ?: return rejected("source_window_unavailable")
+        val sourceWindow = windowGeometry(activity)
         val owner = source.sourcePixelOwner ?: return rejected("pixel_owner_missing")
         if (!CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("pixel_owner_expired")
         val capability = deviceCapability(activity)
@@ -212,13 +206,10 @@ internal object SystemVideoCardTransition {
         }
         val token = prefix + UUID.randomUUID()
         val session = Session(
-            // 内容卡使用来源身份；非视频窗口的播放请求没有视频编号。
-            openingBvid = source.bvid,
             sourceRoute = source.sourceRoute,
             sourceActivity = WeakReference(activity),
             sourceWindow = sourceWindow,
-            anchor, thumbnail, windowCoordinates,
-            hasCompleteSourcePixels = layer != null,
+            thumbnail = thumbnail,
             canRefreshBitmap = extras?.containsKey(ViewAnimationExtras.EXTRA_BITMAP) == true,
             canConfigureBlur = canConfigureBlur,
             canConfigureBackgroundScale = canConfigureBackgroundScale,
@@ -229,7 +220,6 @@ internal object SystemVideoCardTransition {
             oplusSdkWindow = capability.oplusSdkWindow,
             openingBounds = Rect(bounds),
             openingRadius = radius,
-            coverCornerDp = source.sourceChromeSnapshot?.coverPresentation?.cornerRadiusDp,
             openingSeed = videoDetailOpeningSeed(thumbnail, source),
         )
         // 启动请求成功不等于系统实际播放；分别记录打开、返回的启动、取消与结束。
@@ -321,98 +311,52 @@ internal object SystemVideoCardTransition {
         motionEnabled: Boolean,
         realtimeBlurEnabled: Boolean,
         reason: String,
-        currentVideoBvid: String?,
+        returnToSource: Boolean,
         preparingToFinish: Boolean = false,
         preferSystemPredictiveBack: Boolean = false,
     ) {
         val token = activity.intent.getStringExtra(EXTRA_SESSION) ?: return
+        // 打开配置由系统保留到关闭；播放和窗口恢复不重复覆盖返回参数。
+        if (!preparingToFinish) return
         val session = sessions[token]
-        val sameContent = session != null && session.openingBvid == currentVideoBvid
         val source = session?.sourceActivity?.get()
+        // 回卡属于本次窗口会话，不属于详情当前标签、滚动位置或正在播放的视频。
+        // 系统已持有打开时的落点；后台来源卡片是否仍参与 Compose 测量不影响往返。
         val sameWindow = session != null && source != null && !source.isFinishing && !source.isDestroyed &&
-            session.anchor.belongsToWindow(source.window.decorView) &&
             windowGeometry(source) == session.sourceWindow && windowGeometry(activity) == session.sourceWindow
-        val sourceAvailable = sameContent && sameWindow
-        // 返回仍复用打开截图；窗口、原实例或截图尺寸变化后均不能提交旧像素落点。
-        val currentBounds = if (sourceAvailable && session != null) {
-            session.anchor.bounds(session.windowCoordinates, allowPartial = session.hasCompleteSourcePixels)
-        } else null
-        val bounds = if (session != null) currentBounds?.takeIf {
-            it.width() == session.openingBounds.width() && it.height() == session.openingBounds.height()
-        } else null
+        val sourceAvailable = returnToSource && sameWindow
+        val bounds = session?.openingBounds?.takeIf { sourceAvailable }
+        if (!sourceAvailable) {
+            Logger.w("SystemVideoCardTransition", "返回窗口来源不可用: reason=$reason returnToSource=$returnToSource sameWindow=$sameWindow")
+        }
         if (token.startsWith("vivo:")) {
-            if (!preparingToFinish || session == null) return
-            // 完整录制截图可收回部分可见的原卡片；不把新实例或旧尺寸当作返回目标。
-            val returnBounds = bounds
-            val sameShape = returnBounds != null &&
-                returnBounds.width() == session.openingBounds.width() &&
-                returnBounds.height() == session.openingBounds.height() &&
-                session.anchor.radiusPx()?.let { anchorRadius ->
-                    resolveVideoCardSourceClipRadiusPx(
-                        anchorRadius, session.coverCornerDp, activity.resources.displayMetrics.density,
-                    ) == session.openingRadius
-                } == true
-            session.vivoOpening?.prepareReturn(session.thumbnail,
-                returnBounds.takeIf { sameShape }, session.openingRadius, motionEnabled, realtimeBlurEnabled)
+            session?.vivoOpening?.prepareReturn(
+                session.thumbnail, bounds, session.openingRadius, motionEnabled, realtimeBlurEnabled,
+            )
             return
         }
-        if (session == null && token.startsWith("rounded:")) return
         if (token.startsWith("oplus:")) {
-            if (!preparingToFinish) return
-            // 旧协议不更新截图尺寸和圆角；位置更新只交给已确认消费偏移的分支。
-            val sameShape = session != null && bounds != null &&
-                bounds.width() == session.openingBounds.width() && bounds.height() == session.openingBounds.height() &&
-                session.anchor.radiusPx()?.let { anchorRadius ->
-                    resolveVideoCardSourceClipRadiusPx(
-                        anchorRadius, session.coverCornerDp, activity.resources.displayMetrics.density,
-                    ) == session.openingRadius
-                } == true
-            Logger.i("SystemVideoCardTransition", "session=$token protocol=oplus prepare_return " +
-                "motion=$motionEnabled sameShape=$sameShape bounds=$bounds " +
-                "positionOffsetSupported=${session?.oplusOpening?.supportsPositionOffset}")
-            OplusVideoCardTransition.prepareReturn(activity, session?.oplusOpening,
-                session?.openingBounds, bounds, motionEnabled && sameShape)
+            OplusVideoCardTransition.prepareReturn(
+                activity, session?.oplusOpening, session?.openingBounds, bounds, motionEnabled && sourceAvailable,
+            )
             return
         }
-        if (session?.roundedSource != null) {
-            // 返回更新会把系统共享转场数据切换为关闭方向。onResume 早于打开转场
-            // ready，不能在恢复、设置变化或配置变化时写入；仅在 finish 前刷新。
-            if (!preparingToFinish) return
-            // 旧协议只支持更新坐标，不能更新圆角；尺寸或圆角改变时不缩向过期几何。
-            val sameShape = bounds != null &&
-                bounds.width() == session.openingBounds.width() &&
-                bounds.height() == session.openingBounds.height() &&
-                resolveVideoCardSourceClipRadiusPx(
-                    requireNotNull(session.anchor.radiusPx()),
-                    session.coverCornerDp,
-                    activity.resources.displayMetrics.density,
-                ) == session.openingRadius
-            session.roundedSource.get()?.let { source ->
-                Logger.i("SystemVideoCardTransition", "session=$token protocol=rounded prepare_return " +
-                    "motion=$motionEnabled sameShape=$sameShape bounds=$bounds")
-                RoundedVideoCardTransition.refreshReturn(source, bounds, motionEnabled && sameShape)
+        if (token.startsWith("rounded:")) {
+            session?.roundedSource?.get()?.let { source ->
+                RoundedVideoCardTransition.refreshReturn(source, bounds, motionEnabled && sourceAvailable)
             }
             return
         }
-        // onResume、内容绑定和设置变更不得提前写入此门面的跳过返回标记。
-        if (session?.oplusSdkWindow == true && !preparingToFinish) return
         val capability = deviceCapability(activity)
         if (!capability.available || capability.roundedWindow || capability.oplusWindow || capability.vivoWindow) return
-        val currentRadius = if (session != null && bounds != null) {
-            session.anchor.radiusPx()?.let { anchorRadius ->
-                resolveVideoCardSourceClipRadiusPx(
-                    anchorRadius, session.coverCornerDp, activity.resources.displayMetrics.density,
-                )
-            }
-        } else null
+        val currentRadius = session?.openingRadius?.takeIf { sourceAvailable }
         val oplusSdkWindow = session?.oplusSdkWindow ?: capability.oplusSdkWindow
         val plan = resolveOfficialVideoCardReturnPlan(
             metadata = capability.backAnimMetadata,
             oplusSdkWindow = oplusSdkWindow,
             preparingToFinish = preparingToFinish,
             motionEnabled = motionEnabled,
-            sourceAvailable = session != null && bounds != null && currentRadius != null,
-            sourceRadiusUnchanged = session != null && currentRadius == session.openingRadius,
+            sourceAvailable = sourceAvailable,
             preferSystemPredictiveBack = preferSystemPredictiveBack,
         ) ?: return
         val config = ViewAnimationConfig()
@@ -432,7 +376,7 @@ internal object SystemVideoCardTransition {
         }
         Logger.d("SystemVideoCardTransition", "session=$token 更新返回配置: reason=$reason openingEvent=${session?.openingEvent} " +
             "lifecycle=${activity.lifecycle.currentState} finishing=${activity.isFinishing} " +
-            "motion=$motionEnabled sameContent=$sameContent sameWindow=$sameWindow bounds=$bounds " +
+            "motion=$motionEnabled returnToSource=$returnToSource sameWindow=$sameWindow bounds=$bounds " +
             "oplusSdk=$oplusSdkWindow plan=$plan keys=${bundle.keySet()}")
         com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork(
             "official_return_override", detail = { "reason=$reason session=$token" },

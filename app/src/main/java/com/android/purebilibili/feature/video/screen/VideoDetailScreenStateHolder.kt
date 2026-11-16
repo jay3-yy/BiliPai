@@ -1895,9 +1895,21 @@ internal fun VideoDetailScreenStateHolder(
         coverTakeoverBeforeBackDelayMillis,
         topBarActionHandler,
         detailShellSharedBoundsEnabled,
+        activity,
     ) {
         action@{ action: VideoDetailTopBarAction ->
             if (isActuallyLeaving) return@action
+            // 系统窗口回卡保留当前视口、播放帧和系统栏，关闭后的播放清理由窗口负责。
+            // 仅根详情使用此路径；详情内部导航仍由页面共享转场处理。
+            if ((activity as? com.android.purebilibili.feature.video.VideoActivity)
+                    ?.usesOfficialCardReturnAtRoot == true
+            ) {
+                when (action) {
+                    VideoDetailTopBarAction.BACK -> latestOnBack()
+                    VideoDetailTopBarAction.HOME -> latestOnHomeClick()
+                }
+                return@action
+            }
             isActuallyLeaving = true // 标记确实是用户通过点击或返回键离开
             isScreenActive = false  // 标记页面正在退出
             latestOnMarkReturningFromDetail()
@@ -2197,22 +2209,6 @@ internal fun VideoDetailScreenStateHolder(
     var hasDeferredPortraitRestoreAfterExternalNavigation by rememberSaveable { mutableStateOf(false) }
     var pendingMainReloadBvidAfterPortrait by rememberSaveable { mutableStateOf<String?>(null) }
     var portraitPendingSelectionBvid by rememberSaveable { mutableStateOf<String?>(null) }
-    val systemReturnContentOwner = remember { Any() }
-    val systemReturnActivity = activity as? com.android.purebilibili.feature.video.VideoActivity
-    androidx.compose.runtime.SideEffect {
-        if (isOrientationOwner) {
-            systemReturnActivity?.bindOfficialReturnContent(systemReturnContentOwner, bvid) {
-                if (isPortraitFullscreen) {
-                    portraitPendingSelectionBvid ?: viewModel.peekWindowReturnBvid() ?: currentBvid
-                } else {
-                    viewModel.peekWindowReturnBvid() ?: currentBvid
-                }
-            }
-        }
-    }
-    DisposableEffect(systemReturnActivity, systemReturnContentOwner, isOrientationOwner) {
-        onDispose { systemReturnActivity?.unbindOfficialReturnContent(systemReturnContentOwner) }
-    }
     // 返回 morph 中栈已 pop 时 isVisible=false，仍须保活 surface，避免壳缩前半段黑掉。
     val playbackSessionActiveForMorph = shouldKeepPlaybackSessionActiveForSharedReturnMorph(
         isVisible = isPlaybackSessionActive,
@@ -4210,7 +4206,10 @@ internal fun VideoDetailScreenStateHolder(
                                 predictiveBackCancelRecoveryGeneration = predictiveBackCancelRecoveryGeneration,
                                 liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
                                 isPlayerSurfaceReady = isPlayerSurfaceReady,
-                                paneControlsEnabled = isTransitionFinished,
+                                // 两种材质共用首次挂载阶段；不改变原有分栏尺寸与样式。
+                                primaryContentReady = isTransitionFinished,
+                                commentsContentReady = entryCommentsReady,
+                                relatedContentReady = entryRelatedReady,
                                 videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                                 videoNoteEnabled = videoNoteEnabled,
                                 videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
@@ -4282,7 +4281,9 @@ internal fun VideoDetailScreenStateHolder(
                             predictiveBackCancelRecoveryGeneration = predictiveBackCancelRecoveryGeneration,
                             liveSurfaceCardTransitionEnabled = liveSurfaceCardTransitionEnabled,
                             isPlayerSurfaceReady = isPlayerSurfaceReady,
-                            paneControlsEnabled = isTransitionFinished,
+                            primaryContentReady = isTransitionFinished,
+                            commentsContentReady = entryCommentsReady,
+                            relatedContentReady = entryRelatedReady,
                             videoAiSummaryEntryEnabled = videoAiSummaryEntryEnabled,
                             videoNoteEnabled = videoNoteEnabled,
                             videoNoteDefaultCollapsed = videoNoteDefaultCollapsed,
@@ -4610,7 +4611,7 @@ internal fun VideoDetailScreenStateHolder(
                                 .nestedScroll(nestedScrollConnection)
                         ) {
 
-                        // 下滑折叠后返回：布局必须先展开完整封面，否则 Crop 只显示一截。
+                        // 页面内共享返回展开完整封面；系统窗口返回保留当前收缩视口。
                         // 读手势/phase 用 derivedStateOf，预测返回首帧就能展开，不依赖整页重组。
                         val miuixReturnState =
                             com.android.purebilibili.core.ui.transition
@@ -4620,7 +4621,6 @@ internal fun VideoDetailScreenStateHolder(
                             isCommittedCardReturn,
                             keepLoadedContentForBackPreview,
                             isOrientationOwner,
-                            systemReturnActivity,
                             detailShellSharedBoundsEnabled,
                             sharedBoundsActive,
                             liveReturnMorph,
@@ -4654,9 +4654,7 @@ internal fun VideoDetailScreenStateHolder(
                                         entryOwnsMiuixCardTransition &&
                                             videoCardDepthBackgroundState
                                                 .isGestureRestoreInProgressProvider(),
-                                    sharedReturnLikely = (isOrientationOwner &&
-                                        systemReturnActivity?.hasOfficialCardReturn == true) ||
-                                        detailShellSharedBoundsEnabled ||
+                                    sharedReturnLikely = detailShellSharedBoundsEnabled ||
                                         sharedBoundsActive ||
                                         liveReturnMorph ||
                                         (entryOwnsMiuixCardTransition &&
@@ -4677,20 +4675,6 @@ internal fun VideoDetailScreenStateHolder(
                             ),
                         )
                         val layoutCollapseProgress = collapseMotion.progress
-                        // 窗口转场没有页面内的 exit/gesture 时钟；提交返回时复用已有离开态。
-                        // 只由当前详情登记，所有材质共用折叠进度，不改原生与玻璃的布局参数。
-                        SideEffect {
-                            if (isOrientationOwner) {
-                                systemReturnActivity?.bindOfficialReturnViewport(systemReturnContentOwner) {
-                                    val collapsed = layoutCollapseProgress.value > 0f
-                                    if (collapsed) isActuallyLeaving = true
-                                    collapsed
-                                }
-                            }
-                        }
-                        DisposableEffect(systemReturnActivity, systemReturnContentOwner, isOrientationOwner) {
-                            onDispose { systemReturnActivity?.unbindOfficialReturnViewport(systemReturnContentOwner) }
-                        }
                         val commentPullToRefreshEnabled by remember(layoutCollapseProgress) {
                             derivedStateOf { shouldEnableCommentPullToRefresh(layoutCollapseProgress.value) }
                         }
@@ -5532,6 +5516,8 @@ internal fun VideoDetailScreenStateHolder(
                                                 motionSpec = motionSpec,
                                                 hazeState = hazeState,
                                                 relatedContentReady = entryRelatedReady,
+                                                // 屏外评论页跟随评论阶段，当前选中的评论页照常显示。
+                                                commentPagePreloadReady = entryCommentsReady,
                                                 isTransitionFinished = isTransitionFinished ||
                                                     keepLoadedContentForBackPreview ||
                                                     suppressEnterFadeAfterBackPreview,

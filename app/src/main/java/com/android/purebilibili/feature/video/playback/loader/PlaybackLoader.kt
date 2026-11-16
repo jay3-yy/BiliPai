@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.playback.loader
 
+import com.android.purebilibili.feature.video.usecase.PlaybackDataLoadStage
 import com.android.purebilibili.feature.video.usecase.VideoLoadResult
 import com.android.purebilibili.feature.video.usecase.VideoPlaybackUseCase
 import com.android.purebilibili.data.model.response.ViewInfo
@@ -17,6 +18,7 @@ internal data class PlaybackLoadConfig(
     val videoInfoLoader: (suspend () -> Result<ViewInfo>)? = null,
     val playbackSpeed: Float? = null,
     val onPlaybackDataReady: suspend (Long, com.android.purebilibili.data.model.response.PlayUrlData) -> Unit = { _, _ -> },
+    val onDataLoadStage: (PlaybackDataLoadStage) -> Unit = {},
 )
 
 internal class PlaybackLoader(
@@ -55,7 +57,8 @@ internal class PlaybackLoader(
                     onVideoInfo = config.onVideoInfo,
                     videoInfoLoader = config.videoInfoLoader,
                     onPlaybackDataReady = config.onPlaybackDataReady,
-                    playbackSpeedOverride = config.playbackSpeed
+                    playbackSpeedOverride = config.playbackSpeed,
+                    onDataLoadStage = config.onDataLoadStage
                 )
             }
         }

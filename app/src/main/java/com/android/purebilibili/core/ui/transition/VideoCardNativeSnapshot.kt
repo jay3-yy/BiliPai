@@ -204,7 +204,8 @@ internal fun Modifier.recordNativeVideoCardLayer(
             exposure = exposure,
             isReturnGestureInProgress = isSharedMorphSourceCard && sourceReturnGesture.value,
         )
-        if (shouldRecordNativeVideoCardLayer(exposure, isSharedMorphSourceCard) && !freezeProvider()) {
+        val frozen = freezeProvider()
+        if (shouldRecordNativeVideoCardLayer(exposure, isSharedMorphSourceCard) && !frozen) {
             layer.record {
                 this@drawWithContent.drawContent()
             }
@@ -216,7 +217,11 @@ internal fun Modifier.recordNativeVideoCardLayer(
             isCoveredLatch = coverLatch.covered,
         )
         if (!hide) {
-            if (isNativeVideoCardLayerDrawable(layer.size.width, layer.size.height)) {
+            // 系统窗口转场已经持有独立位图，列表恢复直接画当前内容。
+            // 冻结的统计/时长子图层不再回放，避免恢复首帧依赖已被重绘或释放的子节点。
+            if (frozen && !isSharedMorphSourceCard) {
+                drawContent()
+            } else if (isNativeVideoCardLayerDrawable(layer.size.width, layer.size.height)) {
                 drawLayer(layer)
             } else {
                 drawContent()

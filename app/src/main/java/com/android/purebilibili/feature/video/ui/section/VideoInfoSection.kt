@@ -613,10 +613,29 @@ fun VideoTitleWithDesc(
             }
         }
 
+        // 视频荣誉徽标(全站排行榜/每周必看/入站必刷/热门):可点击跳转对应榜单页
+        val honorChips = info.honorReply?.honor.orEmpty().mapNotNull { honor ->
+            resolveVideoHonorChipText(
+                type = honor.type,
+                honorName = honor.honorName,
+                descContent = honor.desc?.content,
+                weeklyRecommendNum = honor.weeklyRecommendNum
+            )?.let { text ->
+                val jumpUrl = resolveVideoHonorJumpUrl(
+                    type = honor.type,
+                    honorUrl = honor.honorUrl,
+                    weeklyRecommendNum = honor.weeklyRecommendNum,
+                    honorText = "${honor.honorName} ${honor.desc?.content.orEmpty()}"
+                ) ?: return@mapNotNull null
+                Triple(honor, text, jumpUrl)
+            }
+        }
+
         val argueMsg = info.argueInfo?.argueMsg.orEmpty()
         val noReprint = info.rights.noReprint == 1
+        // 各材质及展开状态共用：无标签时声明紧跟统计文字，不被右侧工具按钮撑开。
         val inlineDeclarations = argueMsgShown && (argueMsg.isNotBlank() || noReprint) &&
-            !expanded && videoBadges.isEmpty() && info.honorReply?.honor.isNullOrEmpty()
+            videoBadges.isEmpty() && honorChips.isEmpty()
 
         // 各材质共用：在线人数紧跟发布时间，作为同一组参与流式测量。
         // AI/笔记独立占据统计区右侧，不能覆盖文字；窄窗口可将时间与人数整组换行。
@@ -767,7 +786,7 @@ fun VideoTitleWithDesc(
                     }
                 }
                 if (inlineDeclarations) {
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(8.dp))
                     if (argueMsg.isNotBlank()) VideoArgueMsgRow(argueMsg = argueMsg)
                     if (argueMsg.isNotBlank() && noReprint) Spacer(Modifier.height(2.dp))
                     if (noReprint) VideoArgueMsgRow(argueMsg = "未经作者授权，请勿转载")
@@ -778,23 +797,6 @@ fun VideoTitleWithDesc(
             }
         }
 
-        // 视频荣誉徽标(全站排行榜/每周必看/入站必刷/热门):可点击跳转对应榜单页
-        val honorChips = info.honorReply?.honor.orEmpty().mapNotNull { honor ->
-            resolveVideoHonorChipText(
-                type = honor.type,
-                honorName = honor.honorName,
-                descContent = honor.desc?.content,
-                weeklyRecommendNum = honor.weeklyRecommendNum
-            )?.let { text ->
-                val jumpUrl = resolveVideoHonorJumpUrl(
-                    type = honor.type,
-                    honorUrl = honor.honorUrl,
-                    weeklyRecommendNum = honor.weeklyRecommendNum,
-                    honorText = "${honor.honorName} ${honor.desc?.content.orEmpty()}"
-                ) ?: return@mapNotNull null
-                Triple(honor, text, jumpUrl)
-            }
-        }
         // 内容属性与榜单荣誉共用流式标签区，空间不足时自动换行。
         // UP 主声明与禁止转载以非交互项并入同一流式行，避免各自独占整行。
         val showDeclarationRows = !inlineDeclarations && argueMsgShown && (argueMsg.isNotBlank() || noReprint)
