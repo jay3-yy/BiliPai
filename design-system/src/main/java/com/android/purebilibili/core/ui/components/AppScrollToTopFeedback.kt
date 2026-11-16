@@ -5,6 +5,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.OverscrollEffect
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -24,6 +25,10 @@ import java.util.IdentityHashMap
 // Main-thread UI bridge: registration lasts only as long as the rendered scroll container.
 // Scroll state remains the identity; no page names or separately stored scroll positions.
 private val scrollToTopFeedback = IdentityHashMap<ScrollableState, () -> Unit>()
+
+/** A parent gesture can own content displacement until its native settlement finishes. */
+val LocalAppScrollToTopFeedbackAllowed = compositionLocalOf { true }
+
 
 /** Call after an explicit return to top, only if the content was previously scrolled. */
 fun ScrollableState.notifyAppScrollToTop() {
@@ -48,7 +53,7 @@ fun rememberAppScrollToTopFeedbackModifier(
     val offset = remember(state, density) { Animatable(0f, visibilityThreshold = 0.1f * density) }
     val requests = remember(state) { MutableSharedFlow<Unit>(extraBufferCapacity = 1) }
     val latestEffect = rememberUpdatedState(overscrollEffect)
-    val latestEnabled = rememberUpdatedState(enabled)
+    val latestEnabled = rememberUpdatedState(enabled && LocalAppScrollToTopFeedbackAllowed.current)
     val velocity = 180f * density * if (reverseLayout) -1f else 1f
 
     DisposableEffect(state, gate, requests, offset) {

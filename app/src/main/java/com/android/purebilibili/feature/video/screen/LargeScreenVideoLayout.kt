@@ -400,6 +400,8 @@ internal fun LargeScreenVideoLayout(
                                     likeCount = engagementState.likeCount
                                         .takeIf { engagementState.likeStatusKnown }?.toLong(),
                                     commentCount = success.info.stat.reply.toLong(),
+                                    coinCount = success.info.stat.coin.toLong(),
+                                    shareCount = success.info.stat.share.toLong(),
                                     favoriteCount = engagementState.favoriteCount
                                         .takeIf { engagementState.likeStatusKnown }?.toLong(),
                                     onLike = engagementActions.toggleLike,

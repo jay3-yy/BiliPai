@@ -5468,6 +5468,8 @@ private fun VideoPlayerSectionContent(
                     engagementCountsKnown = uiState.info.bvid == bvid,
                     likeCount = displayedEngagement.info.stat.like.toLong(),
                     favoriteCount = displayedEngagement.info.stat.favorite.toLong(),
+                    totalCoinCount = displayedEngagement.info.stat.coin.toLong(),
+                    shareCount = displayedEngagement.info.stat.share.toLong(),
                     coinCount = uiState.coinCount,
                     pages = uiState.info.pages,
                     currentPageIndex = currentPageIndex,

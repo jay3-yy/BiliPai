@@ -26,6 +26,7 @@ class ScrollToTopFeedbackUiTest {
     @get:Rule val rule = createComposeRule()
     private val active = mutableStateOf(true)
     private val reduced = mutableStateOf(false)
+    private val parentOwnsDisplacement = mutableStateOf(false)
     private val state = LazyListState(firstVisibleItemIndex = 8)
     private lateinit var scope: CoroutineScope
 
@@ -35,6 +36,7 @@ class ScrollToTopFeedbackUiTest {
             CompositionLocalProvider(
                 LocalVisualWorkAllowed provides active.value,
                 LocalSystemReduceMotion provides reduced.value,
+                LocalAppScrollToTopFeedbackAllowed provides !parentOwnsDisplacement.value,
             ) {
                 Column {
                     Box(Modifier.width(200.dp).height(40.dp).testTag("fixed-header"))
@@ -91,6 +93,23 @@ class ScrollToTopFeedbackUiTest {
         assertTrue("Settling content must not receive another outward impulse", after in 0f..before)
         advance(1_000)
         assertEquals(top("viewport"), top("item-0"), 0.1f)
+    }
+
+    @Test
+    fun parentRefreshDiscardsReturnPulseWithoutReplayingItAfterRelease() {
+        showList()
+        rule.runOnIdle { parentOwnsDisplacement.value = true }
+        advance(32)
+        returnToTop()
+        advance(80)
+        assertEquals(top("viewport"), top("item-0"), 0.1f)
+        rule.runOnIdle { parentOwnsDisplacement.value = false }
+        advance(80)
+        assertEquals(top("viewport"), top("item-0"), 0.1f)
+        // A subsequent explicit return still receives feedback after native motion has ended.
+        rule.runOnIdle { state.notifyAppScrollToTop() }
+        advance(64)
+        assertTrue(top("item-0") > top("viewport"))
     }
 
     @Test

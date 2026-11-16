@@ -4164,6 +4164,8 @@ private fun VideoPageItem(
                 engagementCountsKnown = portraitDetailInfo?.bvid == bvid,
                 likeCount = pageEngagementState.likeCount.toLong(),
                 favoriteCount = pageEngagementState.favoriteCount.toLong(),
+                totalCoinCount = portraitDetailInfo?.stat?.coin?.toLong() ?: 0L,
+                shareCount = portraitDetailInfo?.stat?.share?.toLong() ?: 0L,
                 coinCount = pageEngagementState.coinCount,
                 anime4kAvailable = enhancement.available,
                 anime4kEnabled = enhancement.enabled,

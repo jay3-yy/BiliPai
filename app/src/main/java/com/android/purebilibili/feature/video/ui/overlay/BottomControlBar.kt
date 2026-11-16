@@ -274,59 +274,66 @@ fun BottomControlBar(
     val density = LocalDensity.current
     // 竖屏全屏使用独立布局；内嵌与横屏保留原有参数、槽位与菜单行为。
     if (isFullscreen && simplifiedPortrait) {
-        Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .semantics { testTagsAsResourceId = true }
-                .windowInsetsPadding(playerControlHorizontalInsets(true, true))
-                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+        // 竖屏底部始终使用原生控件；顶部与弹出菜单保留各自的玻璃配置。
+        val portraitControlsTheme = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
+        CompositionLocalProvider(
+            com.android.purebilibili.core.ui.LocalAppThemeConfig provides portraitControlsTheme.copy(liquidGlassEnabled = false),
+            LocalPlayerControlGlassEnabled provides false,
         ) {
-            Box(modifier = Modifier.fillMaxWidth().height(40.dp)) {
-                PlayerControlProgressBar(
-                    progressProvider = progressProvider,
-                    displayPositionProvider = displayPosition,
-                    isSeekScrubbing = isSeekScrubbing,
-                    layoutPolicy = progressLayout.copy(
-                        trackHeightDp = if (isSeekScrubbing) 5f else 2f,
-                        thumbIdleSizeDp = 0,
-                        thumbDraggingSizeDp = 12,
-                    ),
-                    seekAreaHeight = 40.dp,
-                    horizontalSeekOnly = true,
-                    onSeek = onSeek,
-                    onSeekStart = onSeekStart,
-                    onSeekDragStart = onSeekDragStart,
-                    onSeekDragUpdate = onSeekDragUpdate,
-                    onSeekDragCancel = onSeekDragCancel,
-                    videoshotData = videoshotData,
-                    viewPoints = if (showViewPoints) viewPoints else emptyList(),
-                    sponsorMarkers = sponsorMarkers,
-                    pbpRidgeSamples = if (heatmapEnabled) pbpRidgeSamples else emptyList(),
-                    currentChapterProvider = { null },
-                    onChapterClick = onChapterClick,
-                    modifier = Modifier
-                        .align(androidx.compose.ui.Alignment.BottomCenter)
-                        .testTag("player_progress")
-                        .wrapContentHeight(androidx.compose.ui.Alignment.Bottom, unbounded = isSeekScrubbing),
+            Column(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .semantics { testTagsAsResourceId = true }
+                    .windowInsetsPadding(playerControlHorizontalInsets(true, true))
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+            ) {
+                Box(modifier = Modifier.fillMaxWidth().height(40.dp)) {
+                    PlayerControlProgressBar(
+                        progressProvider = progressProvider,
+                        displayPositionProvider = displayPosition,
+                        isSeekScrubbing = isSeekScrubbing,
+                        layoutPolicy = progressLayout.copy(
+                            trackHeightDp = if (isSeekScrubbing) 5f else 2f,
+                            thumbIdleSizeDp = 0,
+                            thumbDraggingSizeDp = 12,
+                        ),
+                        seekAreaHeight = 40.dp,
+                        horizontalSeekOnly = true,
+                        onSeek = onSeek,
+                        onSeekStart = onSeekStart,
+                        onSeekDragStart = onSeekDragStart,
+                        onSeekDragUpdate = onSeekDragUpdate,
+                        onSeekDragCancel = onSeekDragCancel,
+                        videoshotData = videoshotData,
+                        viewPoints = if (showViewPoints) viewPoints else emptyList(),
+                        sponsorMarkers = sponsorMarkers,
+                        pbpRidgeSamples = if (heatmapEnabled) pbpRidgeSamples else emptyList(),
+                        currentChapterProvider = { null },
+                        onChapterClick = onChapterClick,
+                        modifier = Modifier
+                            .align(androidx.compose.ui.Alignment.BottomCenter)
+                            .testTag("player_progress")
+                            .wrapContentHeight(androidx.compose.ui.Alignment.Bottom, unbounded = isSeekScrubbing),
+                    )
+                }
+                PortraitPlaybackControls(
+                    isPlaying = isPlaying,
+                    onPlayPause = onPlayPauseClick,
+                    positionProvider = displayPosition,
+                    durationProvider = { progressProvider().duration },
+                    speed = currentSpeed,
+                    quality = currentQualityLabel,
+                    onSpeedClick = onSpeedClick,
+                    onQualityClick = onQualityClick,
+                    speedModifier = anchor(PlayerControlAnchor.SPEED, "player_speed_action"),
+                    qualityModifier = anchor(PlayerControlAnchor.QUALITY, "player_quality_action"),
+                    danmakuEnabled = danmakuEnabled,
+                    onDanmakuToggle = onDanmakuToggle,
+                    onDanmakuSettingsClick = onDanmakuSettingsClick,
+                    modifier = Modifier.fillMaxWidth().testTag("player_control_row"),
                 )
             }
-            PortraitPlaybackControls(
-                isPlaying = isPlaying,
-                onPlayPause = onPlayPauseClick,
-                positionProvider = displayPosition,
-                durationProvider = { progressProvider().duration },
-                speed = currentSpeed,
-                quality = currentQualityLabel,
-                onSpeedClick = onSpeedClick,
-                onQualityClick = onQualityClick,
-                speedModifier = anchor(PlayerControlAnchor.SPEED, "player_speed_action"),
-                qualityModifier = anchor(PlayerControlAnchor.QUALITY, "player_quality_action"),
-                danmakuEnabled = danmakuEnabled,
-                onDanmakuToggle = onDanmakuToggle,
-                onDanmakuSettingsClick = onDanmakuSettingsClick,
-                modifier = Modifier.fillMaxWidth().testTag("player_control_row"),
-            )
         }
     } else {
         // Reference player chrome uses fixed 13sp labels; menus still respect system font scaling.

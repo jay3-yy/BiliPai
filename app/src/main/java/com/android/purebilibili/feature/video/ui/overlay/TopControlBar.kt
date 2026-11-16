@@ -496,6 +496,8 @@ internal fun PortraitEngagementRail(
     likeCount: Long?,
     commentCount: Long?,
     favoriteCount: Long?,
+    coinCount: Long?,
+    shareCount: Long?,
     onLike: () -> Unit,
     onTriple: () -> Unit,
     onCoin: () -> Unit,
@@ -506,57 +508,54 @@ internal fun PortraitEngagementRail(
     modifier: Modifier = Modifier,
     shareMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
 ) {
-    val glassDock = LocalPlayerControlGlassEnabled.current
-    val visibleCounts = rememberVisibleFullscreenCounts()
     val triplePress = rememberPiliHeaderTriplePressState()
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
     val likeClick = { haptic(HapticType.LIGHT); onLike() }
     val gesture = if (likeStatusKnown) {
         piliHeaderLikeGesture(triplePress, isLiked && isCoined && isFavorited, likeClick, onTriple)
     } else null
-    // 玻璃专属：整列共用一个外壳；原生直接展示图标与计数，不绘制圆形背景。
+    // 竖屏互动栏始终直接展示图标与下方计数，不跟随横屏数量或玻璃设置。
     Box(modifier = modifier) {
-        PlayerControlGlassGroup(enabled = glassDock) {
-            Column(
-                modifier = Modifier
-                    .width(64.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = if (glassDock) 8.dp else 0.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (glassDock) 4.dp else 8.dp),
-            ) {
-                Box(Modifier.likeBurstAnchor()) {
-                    PortraitRailAction(
-                        icon = if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                        label = "点赞", onClick = onLike,
-                        active = likeStatusKnown && isLiked,
-                        gestureModifier = gesture, progress = triplePress.progress,
-                        count = likeCount.takeIf { com.android.purebilibili.core.store.FullscreenActionCount.LIKE in visibleCounts },
-                        reserveCountSpace = com.android.purebilibili.core.store.FullscreenActionCount.LIKE in visibleCounts,
-                    )
-                }
+        Column(
+            modifier = Modifier
+                .width(64.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.likeBurstAnchor()) {
                 PortraitRailAction(
-                    icon = Icons.Outlined.Forum, label = "评论", onClick = onComment,
-                    count = commentCount.takeIf { com.android.purebilibili.core.store.FullscreenActionCount.COMMENT in visibleCounts },
-                    reserveCountSpace = com.android.purebilibili.core.store.FullscreenActionCount.COMMENT in visibleCounts,
-                )
-                PortraitRailAction(
-                    icon = AppIcons.BiliCoin, label = "投币", onClick = onCoin,
-                    active = isCoined, progress = triplePress.progress,
-                )
-                PortraitRailAction(
-                    icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                    label = "收藏", onClick = onFavorite, active = isFavorited,
-                    onLongClick = onQuickFavorite, modifier = Modifier.favoriteFolderMenuSource(),
-                    progress = triplePress.progress,
-                    count = favoriteCount.takeIf { com.android.purebilibili.core.store.FullscreenActionCount.FAVORITE in visibleCounts },
-                    reserveCountSpace = com.android.purebilibili.core.store.FullscreenActionCount.FAVORITE in visibleCounts,
-                )
-                PortraitRailAction(
-                    icon = Icons.Outlined.Share, label = "分享", onClick = onShare,
-                    modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShare) } ?: Modifier,
+                    icon = if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                    label = "点赞", onClick = onLike,
+                    active = likeStatusKnown && isLiked,
+                    gestureModifier = gesture, progress = triplePress.progress,
+                    count = likeCount,
+                    reserveCountSpace = true,
                 )
             }
+            PortraitRailAction(
+                icon = Icons.Outlined.Forum, label = "评论", onClick = onComment,
+                count = commentCount,
+                reserveCountSpace = true,
+            )
+            PortraitRailAction(
+                icon = AppIcons.BiliCoin, label = "投币", onClick = onCoin,
+                active = isCoined, progress = triplePress.progress,
+                count = coinCount, reserveCountSpace = true,
+            )
+            PortraitRailAction(
+                icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                label = "收藏", onClick = onFavorite, active = isFavorited,
+                onLongClick = onQuickFavorite, modifier = Modifier.favoriteFolderMenuSource(),
+                progress = triplePress.progress,
+                count = favoriteCount,
+                reserveCountSpace = true,
+            )
+            PortraitRailAction(
+                icon = Icons.Outlined.Share, label = "分享", onClick = onShare,
+                count = shareCount, reserveCountSpace = true,
+                modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShare) } ?: Modifier,
+            )
         }
     }
 }
