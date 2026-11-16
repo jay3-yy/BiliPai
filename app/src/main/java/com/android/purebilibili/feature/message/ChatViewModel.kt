@@ -196,9 +196,9 @@ class ChatViewModel(
                         videoPreviews = videoPreviewCache.toMap(),
                     )
                 }
-                // ack 边界用会话 max_seqno，历史页的 seqno 可能不够。
-                val readSeqno = maxOf(data.max_seqno, resolveChatReadSeqno(data.messages.orEmpty()) ?: 0L)
-                if (readSeqno > 0L) markAsRead(readSeqno)
+                resolveChatReadSeqno(data.messages.orEmpty(), data.max_seqno)?.let { readSeqno ->
+                    markAsRead(readSeqno)
+                }
                 scanAndLoadVideoPreviews(incoming)
             } catch (e: CancellationException) {
                 throw e

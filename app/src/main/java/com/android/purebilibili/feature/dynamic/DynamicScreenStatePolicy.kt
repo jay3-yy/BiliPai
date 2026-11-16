@@ -102,17 +102,9 @@ internal fun resolveDynamicListTopPaddingExtraDp(
     }
 }
 
-internal fun shouldShowDynamicUpPanel(selectedTab: Int): Boolean {
-    // 番剧是官方内容流，不提供关注作者筛选；此边界覆盖横条、侧栏和抽屉。
-    return selectedTab != 2
-}
-
-internal fun shouldShowDynamicHorizontalUserList(
-    isHorizontalMode: Boolean,
-    selectedTab: Int
-): Boolean {
-    return isHorizontalMode && shouldShowDynamicUpPanel(selectedTab)
-}
+/** 关注入口在所有分类保留；番剧不套用作者筛选，选择作者时转到全部动态。 */
+internal fun resolveDynamicAuthorSelectionTab(selectedTab: Int): Int =
+    if (selectedTab == 2) 0 else selectedTab
 
 internal fun shouldCollapseDynamicHorizontalUserList(
     firstVisibleItemIndex: Int,

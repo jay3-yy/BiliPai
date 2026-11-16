@@ -758,6 +758,8 @@ object CommentRepository {
             } else {
                 Result.failure(CommentReadException(response.code, response.message))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

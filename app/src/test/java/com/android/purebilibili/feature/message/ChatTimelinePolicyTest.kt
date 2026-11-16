@@ -10,10 +10,12 @@ class ChatTimelinePolicyTest {
     @Test
     fun readCursorIgnoresNewConversationTipAndUsesActualMessages() {
         val tip = PrivateMessageItem(msg_type = 18, msg_source = 18, msg_seqno = 100)
-        assertNull(resolveChatReadSeqno(emptyList()))
-        assertNull(resolveChatReadSeqno(listOf(tip)))
-        assertNull(resolveChatReadSeqno(listOf(PrivateMessageItem(msg_seqno = 0))))
+        assertNull(resolveChatReadSeqno(emptyList(), sessionMaxSeqno = 100))
+        assertNull(resolveChatReadSeqno(listOf(tip), sessionMaxSeqno = 100))
+        assertNull(resolveChatReadSeqno(listOf(PrivateMessageItem(msg_seqno = 0)), sessionMaxSeqno = 100))
         assertEquals(12L, resolveChatReadSeqno(listOf(message(12), tip, message(10))))
+        assertEquals(20L, resolveChatReadSeqno(listOf(message(12), tip), sessionMaxSeqno = 20))
+        assertEquals(12L, resolveChatReadSeqno(listOf(message(12)), sessionMaxSeqno = 10))
         assertEquals(13L, resolveChatReadSeqno(listOf(PrivateMessageItem(msg_type = 18, msg_source = 1, msg_seqno = 13))))
     }
 

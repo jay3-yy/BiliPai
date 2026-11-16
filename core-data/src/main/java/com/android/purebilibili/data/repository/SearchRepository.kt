@@ -130,16 +130,10 @@ object SearchRepository {
             val videos = categories.firstOrNull { it.result_type == "video" }
                 ?.data.orEmpty()
                 .mapNotNull { runCatching { searchJson.decodeFromJsonElement<SearchVideoItem>(it).toVideoItem() }.getOrNull() }
-            val featuredUps = categories.filter { it.result_type == "bili_user" }
+            // 综合页只展示接口返回的用户卡片，不从用户分类追加匹配项。
+            val ups = categories.filter { it.result_type == "bili_user" }
                 .flatMap { it.data.orEmpty() }
                 .map { searchJson.decodeFromJsonElement<SearchUpItem>(it).cleanupFields() }
-            val ups = resolveSearchAllUpPreview(
-                page = page,
-                userResultCount = response.data?.pageinfo?.get("bili_user")?.numResults ?: 0,
-                featuredUsers = featuredUps
-            ) {
-                searchUp(keyword = keyword).getOrThrow().first
-            }
             val bangumi = categories.filter { it.result_type == "media_bangumi" || it.result_type == "media_ft" }
                 .flatMap { it.data.orEmpty() }
                 .mapNotNull { runCatching { searchJson.decodeFromJsonElement<com.android.purebilibili.data.model.response.BangumiSearchItem>(it) }.getOrNull() }

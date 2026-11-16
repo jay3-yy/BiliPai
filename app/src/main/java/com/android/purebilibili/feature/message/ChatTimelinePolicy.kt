@@ -9,12 +9,18 @@ internal fun chatMessageKey(message: PrivateMessageItem): String = when {
 }
 
 /** 仅以实际消息推进已读；新会话的系统提示不代表可确认的消息。 */
-internal fun resolveChatReadSeqno(messages: List<PrivateMessageItem>): Long? =
-    messages.asSequence()
+internal fun resolveChatReadSeqno(
+    messages: List<PrivateMessageItem>,
+    sessionMaxSeqno: Long = 0L,
+): Long? {
+    val messageSeqno = messages.asSequence()
         .filterNot { it.msg_type == 18 && it.msg_source == 18 }
         .map { it.msg_seqno }
         .filter { it > 0L }
-        .maxOrNull()
+        .maxOrNull() ?: return null
+    // 会话最大序号只能扩展真实消息的已读边界，不能让空会话或系统提示触发上报。
+    return maxOf(messageSeqno, sessionMaxSeqno)
+}
 
 /** Retains loaded history, updates overlaps, and orders messages by their server sequence. */
 internal fun mergeChatMessages(

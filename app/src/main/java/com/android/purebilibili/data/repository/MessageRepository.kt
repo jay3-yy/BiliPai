@@ -430,7 +430,7 @@ object MessageRepository {
                 ?.data
                 ?.max_seqno
                 ?: 0L
-        }.getOrDefault(0L)
+        }.onFailure { if (it is CancellationException) throw it }.getOrDefault(0L)
     }
 
     suspend fun getSessionControlInfo(
