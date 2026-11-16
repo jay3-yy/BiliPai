@@ -21,3 +21,20 @@ internal fun resolveReturnAnimationSuppressionDurationMs(
     if (!cardAnimationEnabled) return 220L
     return if (isTabletLayout) 220L else 240L
 }
+
+/** 首页可见期间，返回保护窗门控持续超过任何合法返回动画时长后的强制恢复期限。 */
+internal const val HOME_STALE_RETURN_GATE_RECOVERY_MS = 2_000L
+
+/**
+ * 返回动画保护窗与卡片转场 settle 都依赖导航系统发布最终 Idle 才清除；
+ * 独立播放窗口、画中画或 NavDisplay settle 丢失时（issue #1131），
+ * 这些瞬态门控会一直挂着，把已挂载分类的数据收集冻结成“下拉刷新无新内容”。
+ * 首页可见期间门控持续超过恢复期限即强制按已恢复处理。
+ */
+internal fun shouldForceRecoverStaleReturnGate(
+    homeVisible: Boolean,
+    gateActive: Boolean,
+    gateStartedAtMs: Long,
+    nowMs: Long,
+    timeoutMs: Long = HOME_STALE_RETURN_GATE_RECOVERY_MS,
+): Boolean = homeVisible && gateActive && gateStartedAtMs > 0L && nowMs - gateStartedAtMs >= timeoutMs

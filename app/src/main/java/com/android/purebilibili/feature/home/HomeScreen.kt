@@ -592,9 +592,16 @@ fun HomeScreen(
             )
         }
     }
+    // 返回保护窗丢失最终 Idle 通知时（独立播放窗口/画中画/NavDisplay settle 丢失），
+    // 看门狗在超过任何合法返回动画时长后强制恢复数据收集，避免刷新结果被永久冻结。
+    val staleReturnGateRecovered = rememberStaleReturnGateRecovered(
+        homeVisible = isTopLevelActive,
+        gateActive = isReturningFromVideoDetail || deferHomeHeavyWork,
+    )
     // Retained home must not issue scroll/chrome/image work while another page or morph owns the UI.
     val homeFeedUpdatesAllowed = isTopLevelActive &&
-        !isReturningFromVideoDetail && !deferHomeHeavyWork
+        (!isReturningFromVideoDetail || staleReturnGateRecovered) &&
+        (!deferHomeHeavyWork || staleReturnGateRecovered)
     // Data may be needed to restore a pending scroll anchor. Only navigation freezes
     // displayed feed data; pager synchronization and anchor recovery gate work below.
     val homeFeedWorkAllowed = homeFeedUpdatesAllowed &&
