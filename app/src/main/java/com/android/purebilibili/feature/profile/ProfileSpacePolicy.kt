@@ -88,6 +88,8 @@ enum class ProfileContributionContentState {
 
 data class ProfileSpaceUiState(
     val selectedTab: ProfileSpaceMainTab = ProfileSpaceMainTab.HOME,
+    val loadingTabs: Set<ProfileSpaceMainTab> = emptySet(),
+    val contentErrors: Map<ProfileSpaceMainTab, String> = emptyMap(),
     val isLoading: Boolean = false,
     val favoriteFolders: List<FavFolder> = emptyList(),
     val bangumiItems: List<FollowBangumiItem> = emptyList(),
@@ -105,6 +107,16 @@ data class ProfileSpaceUiState(
     val signSaveMessage: String? = null,
     val isSavingSign: Boolean = false
 )
+
+/** 主页保留可见预览所需数据，其他标签只加载当前内容。 */
+internal fun resolveProfileContentLoadTargets(space: ProfileSpaceUiState): Set<ProfileSpaceMainTab> =
+    if (space.selectedTab == ProfileSpaceMainTab.HOME) {
+        buildSet {
+            if (space.contributionVideos.isEmpty()) add(ProfileSpaceMainTab.CONTRIBUTION)
+            add(ProfileSpaceMainTab.FAVORITE)
+            add(ProfileSpaceMainTab.BANGUMI)
+        }
+    } else setOf(space.selectedTab)
 
 data class ProfileFavoritePreviewCoverTarget(
     val mediaId: Long,

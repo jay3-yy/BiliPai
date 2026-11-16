@@ -26,13 +26,17 @@ class SpaceHeaderPresentationPolicyTest {
     }
 
     @Test
-    fun `header metrics fall back to zero for missing stats`() {
+    fun `header metrics distinguish missing stats from real zero`() {
         val metrics = resolveSpaceHeaderMetricItems(
             relationStat = null,
             upStat = null
         )
 
-        assertEquals(listOf(0L, 0L, 0L), metrics.map { it.value })
+        assertEquals(listOf(null, null, null), metrics.map { it.value })
+        val zero = resolveSpaceHeaderMetricItems(RelationStatData(), UpStatData())
+        assertEquals(listOf(0L, 0L, 0L), zero.map { it.value })
+        val partial = resolveSpaceHeaderMetricItems(RelationStatData(follower = 12), null)
+        assertEquals(listOf(12L, 0L, null), partial.map { it.value })
     }
 
     @Test

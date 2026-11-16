@@ -30,6 +30,46 @@ import kotlin.test.assertTrue
 class SpaceLoadPolicyTest {
 
     @Test
+    fun `aggregate tab metadata does not mark unrequested page content as loaded`() {
+        val seed = requireNotNull(resolveSpaceInitialSeedFromAggregate(SpaceAggregateData(
+            card = SpaceAggregateCard(mid = "42", name = "UP", face = "face"),
+        )))
+        for (tab in listOf(SpaceMainTab.HOME, SpaceMainTab.BANGUMI, SpaceMainTab.CHEESE)) {
+            val state = buildInitialSpaceSuccessState(seed, selectedMainTab = tab)
+            assertFalse(state.tabShellState.tabStates.getValue(tab).hasLoaded)
+            assertFalse(isSpacePrimaryContentReady(state))
+        }
+    }
+
+    @Test
+    fun `late user card fills missing visuals without replacing current identity or relation`() {
+        val user = SpaceUserInfo(mid = 2, name = "当前UP", isFollowed = true, relationStatus = -10)
+        val merged = mergeSpaceUserCardVisuals(user, SpaceUserCardVisuals(
+            largePhoto = "https://example.com/banner.jpg", ipLocation = "上海",
+        ))
+        assertEquals(user.mid, merged.mid)
+        assertEquals(user.name, merged.name)
+        assertTrue(merged.isFollowed)
+        assertEquals(-10, merged.relationStatus)
+        assertEquals("https://example.com/banner.jpg", merged.topPhoto)
+        assertEquals("上海", merged.ipLocation)
+        assertEquals(listOf(SpaceTagItem(type = "location", title = "IP属地：上海")), merged.spaceTags)
+    }
+
+    @Test
+    fun `late user card preserves existing banner location and tags`() {
+        val user = SpaceUserInfo(
+            mid = 1, topPhoto = "https://example.com/current.jpg", ipLocation = "北京",
+            spaceTags = listOf(SpaceTagItem(type = "location", title = "IP属地：北京"),
+                SpaceTagItem(type = "real_name", title = "已实名认证")),
+        )
+        assertEquals(user, mergeSpaceUserCardVisuals(user, SpaceUserCardVisuals(
+            largePhoto = "https://example.com/old.jpg", ipLocation = "上海",
+        )))
+        assertEquals(user, mergeSpaceUserCardVisuals(user, SpaceUserCardVisuals()))
+    }
+
+    @Test
     fun `aggregate video target falls back to bilibili video deep link when bvid is absent`() {
         assertEquals(
             "av2001",

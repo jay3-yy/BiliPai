@@ -135,7 +135,11 @@ fun DownloadListScreen(
         exportTreeUri = downloadExportTreeUri
     )
 
-    LaunchedEffect(context) {
+    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    val hasIncompleteTasks = taskList.any { !it.isComplete }
+    val hasDownloadingTasks = taskList.any { it.status == DownloadStatus.DOWNLOADING }
+    LaunchedEffect(context, pageWorkActive, hasIncompleteTasks) {
+        if (!pageWorkActive || !hasIncompleteTasks) return@LaunchedEffect
         while (true) {
             isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
             delay(1_500L)
@@ -145,8 +149,14 @@ fun DownloadListScreen(
     // Keep one sampling loop alive across progress emissions and reset each task's baseline independently.
     var downloadSpeedsByTask by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     val latestTasks by rememberUpdatedState(tasks)
-    LaunchedEffect(Unit) {
-        var previousSamples = emptyMap<String, Long>()
+    LaunchedEffect(pageWorkActive, hasDownloadingTasks) {
+        if (!pageWorkActive || !hasDownloadingTasks) {
+            downloadSpeedsByTask = emptyMap()
+            return@LaunchedEffect
+        }
+        var previousSamples = latestTasks.values
+            .filter { it.status == DownloadStatus.DOWNLOADING }
+            .associate { task -> task.id to task.assets.sumOf { it.downloadedBytes.coerceAtLeast(0L) } }
         while (true) {
             delay(1_000L)
             val samples = latestTasks.values

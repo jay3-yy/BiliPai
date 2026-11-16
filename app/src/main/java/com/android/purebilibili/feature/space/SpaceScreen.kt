@@ -390,8 +390,15 @@ fun SpaceScreen(
     )
     val uiState = if (initialContentReady) loadedUiState else SpaceUiState.Loading
     val spaceVisualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    LaunchedEffect(mid, initialContentReady, loadedUiState is SpaceUiState.Success, spaceVisualWorkActive) {
-        if (initialContentReady && loadedUiState is SpaceUiState.Success && spaceVisualWorkActive) {
+    val visibleSuccess = (loadedUiState as? SpaceUiState.Success)?.takeIf { it.userInfo.mid == mid }
+    val primaryContentReady = visibleSuccess?.let(::isSpacePrimaryContentReady) == true
+    LaunchedEffect(mid, initialContentReady, visibleSuccess?.tabShellState?.selectedTab, visibleSuccess?.selectedContributionTabId, spaceVisualWorkActive) {
+        if (initialContentReady && visibleSuccess != null && spaceVisualWorkActive) {
+            viewModel.loadVisibleSpaceContent()
+        }
+    }
+    LaunchedEffect(mid, initialContentReady, visibleSuccess?.tabShellState?.selectedTab, visibleSuccess?.selectedContributionTabId, primaryContentReady, spaceVisualWorkActive) {
+        if (initialContentReady && visibleSuccess != null && spaceVisualWorkActive) {
             viewModel.loadVisibleSpaceSupplemental()
         }
     }
@@ -953,7 +960,6 @@ fun SpaceScreen(
                             onSelectSortOrder = viewModel::selectSortOrder,
                             contributionVideoLayoutMode = contributionVideoLayoutMode,
                             onLoadMoreVideos = viewModel::loadMoreVideos,
-                            onLoadHome = viewModel::loadSpaceHome,
                             onCollectionPreview = viewModel::loadCollectionPreview,
                             onLoadDynamic = { viewModel.loadSpaceDynamic(refresh = true) },
                             onLoadMoreDynamic = { viewModel.loadSpaceDynamic(refresh = false) },
@@ -1037,6 +1043,7 @@ fun SpaceScreen(
                             pinContentTabs = pinContentTabs,
                             contributionGridStateFor = contributionGridStateFor,
                             isInitialLoading = isLoadingSpace,
+                            spaceContentActive = initialContentReady && spaceVisualWorkActive,
                         )
                         }
 
@@ -1402,7 +1409,6 @@ private fun SpaceContent(
     onSelectSortOrder: (VideoSortOrder) -> Unit = {},
     contributionVideoLayoutMode: SpaceContributionVideoLayoutMode,
     onLoadMoreVideos: () -> Unit,
-    onLoadHome: () -> Unit,
     onCollectionPreview: (SpaceCollectionPreviewKey) -> Unit,
     onLoadDynamic: () -> Unit,
     onLoadMoreDynamic: () -> Unit,
@@ -1454,6 +1460,7 @@ private fun SpaceContent(
      * 原地替换，网格不重建、滚动锚点不丢。
      */
     isInitialLoading: Boolean = false,
+    spaceContentActive: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1491,7 +1498,7 @@ private fun SpaceContent(
     ObserveSpaceCollectionPreviews(
         gridState = gridState,
         targets = collectionPreviewKeys,
-        active = !isInitialLoading && selectedMainTab == SpaceMainTab.COLLECTIONS &&
+        active = spaceContentActive && !isInitialLoading && selectedMainTab == SpaceMainTab.COLLECTIONS &&
             com.android.purebilibili.core.ui.rememberVisualWorkActive(),
         onVisible = onCollectionPreview,
     )
@@ -1614,20 +1621,14 @@ private fun SpaceContent(
         )
         onVideoClick(bvid, playbackTarget.cid, playbackTarget.resumePositionMs)
     }
-    // 首屏骨架阶段不触发「主页 Tab」加载：此时 state 是占位值（mid = 0）。真实数据
-    // 到达后 isInitialLoading 转 false，effect 会以真实 mid 重新触发一次，语义不变。
-    LaunchedEffect(state.userInfo.mid, isInitialLoading) {
-        if (!isInitialLoading) onLoadHome()
-    }
-
     val bangumiTabState = state.tabShellState.tabStates[SpaceMainTab.BANGUMI] ?: SpaceTabContentState()
     val cheeseTabState = state.tabShellState.tabStates[SpaceMainTab.CHEESE] ?: SpaceTabContentState()
     var highlightedLocateBvid by remember { mutableStateOf<String?>(null) }
     var isLocateHighlightVisible by remember { mutableStateOf(false) }
 
-    LaunchedEffect(selectedMainTab, state.hasLoadedDynamicsOnce, state.isLoadingDynamics) {
+    LaunchedEffect(selectedMainTab, state.hasLoadedDynamicsOnce, state.isLoadingDynamics, spaceContentActive) {
         if (
-            selectedMainTab == SpaceMainTab.DYNAMIC &&
+            spaceContentActive && selectedMainTab == SpaceMainTab.DYNAMIC &&
             shouldRequestInitialSpaceDynamicLoad(
                 hasLoadedOnce = state.hasLoadedDynamicsOnce,
                 isLoading = state.isLoadingDynamics
@@ -1637,20 +1638,20 @@ private fun SpaceContent(
         }
     }
 
-    LaunchedEffect(selectedMainTab, bangumiTabState.hasLoaded, state.isLoadingBangumi) {
-        if (selectedMainTab == SpaceMainTab.BANGUMI && !bangumiTabState.hasLoaded && !state.isLoadingBangumi) {
+    LaunchedEffect(selectedMainTab, bangumiTabState.hasLoaded, state.isLoadingBangumi, spaceContentActive) {
+        if (spaceContentActive && selectedMainTab == SpaceMainTab.BANGUMI && !bangumiTabState.hasLoaded && !state.isLoadingBangumi) {
             onLoadBangumi()
         }
     }
 
-    LaunchedEffect(selectedMainTab, cheeseTabState.hasLoaded, state.isLoadingCheese) {
-        if (selectedMainTab == SpaceMainTab.CHEESE && !cheeseTabState.hasLoaded && !state.isLoadingCheese) {
+    LaunchedEffect(selectedMainTab, cheeseTabState.hasLoaded, state.isLoadingCheese, spaceContentActive) {
+        if (spaceContentActive && selectedMainTab == SpaceMainTab.CHEESE && !cheeseTabState.hasLoaded && !state.isLoadingCheese) {
             onLoadCheese()
         }
     }
 
-    LaunchedEffect(shouldLoadMoreVideos) {
-        if (shouldLoadMoreVideos) {
+    LaunchedEffect(shouldLoadMoreVideos, spaceContentActive) {
+        if (spaceContentActive && shouldLoadMoreVideos) {
             onLoadMoreVideos()
         }
     }
@@ -1781,8 +1782,9 @@ private fun SpaceContent(
             ),
         ) { page ->
         val primaryTab = displayedMainTabs[page].tab
-        val isPageActive = page == selectedPage
-        val pageTab = if (isPageActive) selectedMainTab else primaryTab
+        val isSelectedPage = page == selectedPage
+        val isPageActive = spaceContentActive && isSelectedPage
+        val pageTab = if (isSelectedPage) selectedMainTab else primaryTab
         val state = state.copy(
             tabShellState = state.tabShellState.withSelectedTab(pageTab),
             isSearchMode = state.isSearchMode && isPageActive,
@@ -5988,7 +5990,7 @@ private fun SpaceHeaderRelationActions(
 @Composable
 private fun SpaceHeaderStat(
     label: String,
-    value: Long,
+    value: Long?,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
 ) {
@@ -6000,7 +6002,7 @@ private fun SpaceHeaderStat(
                 onLongClick = {
                     android.widget.Toast.makeText(
                         context,
-                        "$label: $value",
+                        "$label: ${value ?: "—"}",
                         android.widget.Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -6008,7 +6010,7 @@ private fun SpaceHeaderStat(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AppText(
-            text = FormatUtils.formatStat(value),
+            text = value?.let { FormatUtils.formatStat(it) } ?: "—",
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
             color = AppContentColors.primaryText(),
             maxLines = 1,

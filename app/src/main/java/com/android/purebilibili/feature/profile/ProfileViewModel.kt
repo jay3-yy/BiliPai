@@ -108,9 +108,56 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     private val accountRequests = AccountScopedRequests(viewModelScope)
     private var profileLoadJob: Job? = null
     private var isProfilePageActive = false
+    private var contentReadyGeneration = -1L
+    private var aggregateReadyGeneration = -1L
+    private val requestedContent = mutableSetOf<ProfileSpaceMainTab>()
+    private val contentJobs = mutableMapOf<ProfileSpaceMainTab, Job>()
 
     fun setProfilePageActive(active: Boolean) {
         isProfilePageActive = active
+        if (active) loadVisibleProfileContent()
+    }
+
+    private fun resetProfileContentRequests() {
+        contentReadyGeneration = -1L
+        aggregateReadyGeneration = -1L
+        contentJobs.values.forEach { it.cancel() }
+        contentJobs.clear()
+        requestedContent.clear()
+    }
+
+    private fun loadVisibleProfileContent() {
+        if (!isProfilePageActive || contentReadyGeneration != profileLoadGeneration) return
+        val current = _uiState.value as? ProfileUiState.Success ?: return
+        if (current.space.selectedTab == ProfileSpaceMainTab.HOME && aggregateReadyGeneration != profileLoadGeneration) return
+        resolveProfileContentLoadTargets(current.space).forEach(::requestProfileContent)
+    }
+
+    private fun requestProfileContent(tab: ProfileSpaceMainTab) {
+        val current = _uiState.value as? ProfileUiState.Success ?: return
+        if (!requestedContent.add(tab)) return
+        val generation = profileLoadGeneration
+        val mid = current.user.mid
+        updateProfileSuccess(generation, mid) { it.copy(space = it.space.copy(loadingTabs = it.space.loadingTabs + tab, contentErrors = it.space.contentErrors - tab)) }
+        contentJobs[tab] = accountRequests.launch {
+            try {
+                when (tab) {
+                    ProfileSpaceMainTab.CONTRIBUTION -> loadProfileContributions(generation, mid, currentProfileWbiImg)
+                    ProfileSpaceMainTab.FAVORITE -> loadProfileFavoriteFolders(generation, mid)
+                    ProfileSpaceMainTab.BANGUMI -> loadProfileBangumi(generation, mid)
+                    ProfileSpaceMainTab.DYNAMIC -> loadProfileDynamics(generation, mid)
+                    ProfileSpaceMainTab.HOME -> Unit
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateProfileSuccess(generation, mid) {
+                    it.copy(space = it.space.copy(contentErrors = it.space.contentErrors + (tab to (e.message ?: "加载失败"))))
+                }
+            } finally {
+                updateProfileSuccess(generation, mid) { it.copy(space = it.space.copy(loadingTabs = it.space.loadingTabs - tab)) }
+            }
+        }
     }
 
     private fun isCurrentProfileLoad(generation: Long): Boolean =
@@ -120,6 +167,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         refreshSavedAccounts()
         accountRequests.observe {
             profileLoadGeneration += 1L
+            resetProfileContentRequests()
             hasLoadedProfileOnce = false
             isProfileLoadInFlight = false
             currentProfileWbiImg = null
@@ -222,6 +270,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         profileLoadJob?.cancel()
         isProfileLoadInFlight = true
         val generation = ++profileLoadGeneration
+        resetProfileContentRequests()
         val requestedMid = TokenManager.midCache
         val current = _uiState.value as? ProfileUiState.Success
         _uiState.value = if (current != null && current.user.mid == requestedMid) {
@@ -261,6 +310,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             }
             showProfileIdentity(generation, data, customBgUri)
             currentProfileWbiImg = data.wbi_img
+            contentReadyGeneration = generation
+            loadVisibleProfileContent()
             profileRequestOrNull { persistProfileSession(generation, data) }
             currentCoroutineContext().ensureActive()
             if (!isCurrentProfileLoad(generation)) return
@@ -310,10 +361,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             space = cached?.space?.copy(
                 isLoading = true,
                 message = null,
-                contributionLoadState = ProfileContributionLoadState.LOADING
+                contributionLoadState = ProfileContributionLoadState.IDLE,
+                loadingTabs = emptySet(),
+                contentErrors = emptyMap()
             ) ?: ProfileSpaceUiState(
                 isLoading = true,
-                contributionLoadState = ProfileContributionLoadState.LOADING
+                contributionLoadState = ProfileContributionLoadState.IDLE
             ),
             editableAccount = cached?.editableAccount
                 ?: resolveProfileEditableAccountState(account = null, user = user)
@@ -342,11 +395,13 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
                     launch { loadProfileStats(generation, mid) },
                     launch { loadProfileAccount(generation, mid) },
                     launch { loadProfileSpaceInfo(generation, mid, wbiImg) },
-                    launch { loadProfileAggregate(generation, mid) },
-                    launch { loadProfileContributions(generation, mid, wbiImg) },
-                    launch { loadProfileFavoriteFolders(generation, mid) },
-                    launch { loadProfileBangumi(generation, mid) },
-                    launch { loadProfileDynamics(generation, mid) }
+                    launch {
+                        loadProfileAggregate(generation, mid)
+                        if (isCurrentProfileLoad(generation)) {
+                            aggregateReadyGeneration = generation
+                            loadVisibleProfileContent()
+                        }
+                    }
                 ).joinAll()
             }
         } finally {
@@ -453,16 +508,12 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun retryProfileContributions() {
+    fun retrySelectedProfileContent() {
         val current = _uiState.value as? ProfileUiState.Success ?: return
-        val generation = profileLoadGeneration
-        accountRequests.launch {
-            loadProfileContributions(
-                generation = generation,
-                mid = current.user.mid,
-                wbiImg = currentProfileWbiImg
-            )
-        }
+        val tab = current.space.selectedTab
+        contentJobs[tab]?.cancel()
+        requestedContent.remove(tab)
+        requestProfileContent(tab)
     }
 
     private suspend fun fetchProfileContributionVideos(
@@ -491,7 +542,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
     }
 
     private suspend fun loadProfileFavoriteFolders(generation: Long, mid: Long) {
-        val folders = FavoriteRepository.getFavFolders(mid).getOrNull() ?: return
+        val folders = FavoriteRepository.getFavFolders(mid).getOrThrow()
         currentCoroutineContext().ensureActive()
         if (!isCurrentProfileLoad(generation)) return
         var mergedFolders = emptyList<FavFolder>()
@@ -555,16 +606,17 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             page = 1,
             pageSize = 12,
             vmid = mid
-        ).getOrNull()?.list ?: return
+        ).getOrThrow().list.orEmpty()
         updateProfileSuccess(generation, mid) { current ->
             current.copy(space = mergeProfileBangumiState(current.space, items))
         }
     }
 
     private suspend fun loadProfileDynamics(generation: Long, mid: Long) {
-        val items = profileRequestOrNull {
-            NetworkModule.spaceApi.getSpaceDynamic(mid).data?.items?.let { com.android.purebilibili.data.repository.filterGoodsSpaceDynamics(it) }
-        } ?: return
+        val response = NetworkModule.spaceApi.getSpaceDynamic(mid)
+        check(response.code == 0) { response.message.ifBlank { "动态加载失败" } }
+        val data = checkNotNull(response.data) { "动态响应不完整" }
+        val items = com.android.purebilibili.data.repository.filterGoodsSpaceDynamics(data.items)
         updateProfileSuccess(generation, mid) { current ->
             current.copy(space = mergeProfileDynamicState(current.space, items))
         }
@@ -687,6 +739,7 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
         val current = _uiState.value as? ProfileUiState.Success ?: return
         if (current.space.selectedTab == tab) return
         _uiState.value = current.copy(space = current.space.copy(selectedTab = tab))
+        loadVisibleProfileContent()
     }
 
     fun clearProfileSpaceMessage() {
