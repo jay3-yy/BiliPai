@@ -2694,8 +2694,18 @@ internal fun VideoDetailScreenStateHolder(
 
     // 📱 [优化] 综合合并路由初值、API 信息与 PlayerState 维度，确保第 0 帧即可识别竖屏
     val isVerticalFromPlayer by playerState.isVerticalVideo.collectAsStateWithLifecycle()
-    val isVerticalFromInfo = (uiState as? VideoPlaybackUiState.Success)?.info?.dimension?.isVertical == true
-    val isVerticalVideo = initialVerticalFromRoute || isVerticalFromPlayer || isVerticalFromInfo
+    val infoDimension = (uiState as? VideoPlaybackUiState.Success)?.info?.dimension
+    val isVerticalFromInfo = infoDimension?.isVertical == true
+    val hasLandscapeInfo = !initialVerticalFromRoute &&
+        infoDimension != null &&
+        infoDimension.width > 0 &&
+        infoDimension.height > 0 &&
+        !infoDimension.isVertical
+    val isVerticalVideo = when {
+        hasLandscapeInfo -> false
+        initialVerticalFromRoute || isVerticalFromInfo -> true
+        else -> isVerticalFromPlayer
+    }
     val continuousFullscreenTransitionEnabled = transitionEnabled &&
         isOrientationDrivenFullscreen &&
         orientationPolicyDevice &&
