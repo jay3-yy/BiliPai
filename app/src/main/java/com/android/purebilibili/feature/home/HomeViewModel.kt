@@ -1720,6 +1720,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         name = navData.uname,
                         mid = navData.mid,
                         level = navData.level_info.current_level,
+                        isSeniorMember = navData.is_senior_member == 1,
                         currentLevelMinExp = navData.level_info.current_min ?: 0,
                         currentLevelExp = navData.level_info.current_exp ?: 0,
                         nextLevelExp = navData.level_info.next_exp ?: 0,

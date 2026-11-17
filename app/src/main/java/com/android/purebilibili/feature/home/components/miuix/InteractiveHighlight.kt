@@ -110,6 +110,15 @@ class InteractiveHighlight(
             positionAnimation.animateTo(startPosition, positionAnimationSpec)
         }
     }
+
+    /** 不可见时直接清理手势高光，不启动回程动画。 */
+    suspend fun cancel() {
+        pressJob?.cancel()
+        positionJob?.cancel()
+        pressProgressAnimation.snapTo(0f)
+        requestedPosition = startPosition
+        positionAnimation.snapTo(startPosition)
+    }
     /** Compatibility observer for side rails without an indicator feedback callback. */
     val gestureModifier: Modifier = Modifier.pointerInput(this) {
         inspectDragGestures(

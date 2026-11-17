@@ -89,12 +89,13 @@ fun HomeBangumiTabPage(
     var channelTabsVisible by remember { mutableStateOf(true) }
     var lastScrollIndex by remember { mutableStateOf(0) }
     var lastScrollOffset by remember { mutableStateOf(0) }
+    val homeTopPadding = contentPadding.calculateTopPadding()
+    val visibleChannelHeight = if (channelTabsVisible) channelHeight else 0.dp
     Box(
         modifier = Modifier
             .fillMaxSize()
             .padding(
                 start = contentPadding.calculateStartPadding(layoutDirection),
-                top = contentPadding.calculateTopPadding(),
                 end = contentPadding.calculateEndPadding(layoutDirection),
             )
     ) {
@@ -103,8 +104,8 @@ fun HomeBangumiTabPage(
                 .then(chromeSource?.modifier ?: Modifier)
                 .globalWallpaperAwareBackground(MaterialTheme.colorScheme.background),
         ) {
-            // Keep scrolling posters out of the channel header in both display and capture.
-            Box(Modifier.fillMaxSize().padding(top = channelHeight).clipToBounds()) {
+            // 顶部避让放进列表，让内容滚动到首页顶栏下方参与渐进模糊与纯色模糊采样。
+            Box(Modifier.fillMaxSize().clipToBounds()) {
                 BangumiHubContent(
                     state = state,
                     channelPagerState = channelPager,
@@ -143,7 +144,8 @@ fun HomeBangumiTabPage(
                     },
                     scrollToTopRequestId = scrollToTopRequestId,
                     listBottomPadding = contentPadding.calculateBottomPadding(),
-                    listTopPadding = 0.dp,
+                    // 频道栏收起后撤销其占位，不保留上次测量的完整高度。
+                    listTopPadding = homeTopPadding + visibleChannelHeight,
                     tabBackdrop = null,
                     onHomeScrollChanged = { index, offset ->
                         channelTabsVisible = if (index == 0 && offset < 100) {
@@ -169,6 +171,7 @@ fun HomeBangumiTabPage(
         }
         AnimatedVisibility(
             visible = channelTabsVisible,
+            modifier = Modifier.padding(top = homeTopPadding),
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {

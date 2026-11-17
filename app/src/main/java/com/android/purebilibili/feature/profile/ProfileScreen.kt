@@ -2358,7 +2358,7 @@ private fun ProfileSpaceHeader(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    UserLevelBadge(level = user.level)
+                    UserLevelBadge(level = user.level, isSeniorMember = user.isSeniorMember)
                     if (user.isVip) com.android.purebilibili.core.ui.components.UserVipBadge(label = user.vipLabel, compact = true)
                 }
                 AppText("UID ${user.mid}", color = secondaryColor, style = MaterialTheme.typography.bodySmall)
@@ -4869,7 +4869,7 @@ fun UserInfoText(user: UserState, centered: Boolean = false, forceWhite: Boolean
     )
     Spacer(modifier = Modifier.height(8.dp)) // Increased spacing
     Row(verticalAlignment = Alignment.CenterVertically) {
-        LevelTag(level = user.level)
+        LevelTag(level = user.level, isSeniorMember = user.isSeniorMember)
         Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
         if (user.isVip) {
             // Theme soft pill (same as space header / side drawer), not brand primary pink.
@@ -4894,8 +4894,8 @@ private data class ProfileWallpaperActionItem(
 )
 
 @Composable
-fun LevelTag(level: Int) {
-    UserLevelBadge(level = level)
+fun LevelTag(level: Int, isSeniorMember: Boolean = false) {
+    UserLevelBadge(level = level, isSeniorMember = isSeniorMember)
 }
 
 @Composable

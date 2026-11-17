@@ -1913,11 +1913,6 @@ fun HomeHeader(
 
     // 顶栏与嵌入页使用连续偏移，避免慢拖时按固定 dp 阶梯跳动。
     val currentHeaderOffsetProvider by rememberUpdatedState(headerOffsetProvider)
-    val headerOffset by remember {
-        derivedStateOf {
-            currentHeaderOffsetProvider()
-        }
-    }
 
     val hideTopTabs = homeSettings?.hideTopTabs == true
     val bottomBarSearchEnabled = homeSettings?.isBottomBarSearchEnabled == true &&
@@ -1951,23 +1946,28 @@ fun HomeHeader(
     val searchCollapseDistancePx = with(density) { searchCollapseDistanceDp.toPx() }
     val tabRowHeightPx = with(density) { tabRowHeightDp.toPx() }
 
+    // 订阅布局结果：收缩关闭或进度钳制后，原始偏移变化不再触发顶栏重组。
     val scrollLayout = remember(
-        headerOffset,
         searchBarHeightPx,
         searchCollapseDistancePx,
         tabRowHeightPx,
         isHeaderCollapseEnabled
     ) {
-        resolveHomeHeaderScrollLayout(
-            headerOffsetPx = headerOffset,
-            searchBarHeightPx = searchBarHeightPx,
-            searchCollapseDistancePx = searchCollapseDistancePx,
-            tabRowHeightPx = tabRowHeightPx,
-            isHeaderCollapseEnabled = isHeaderCollapseEnabled,
-        )
+        derivedStateOf(structuralEqualityPolicy()) {
+            resolveHomeHeaderScrollLayout(
+                headerOffsetPx = currentHeaderOffsetProvider(),
+                searchBarHeightPx = searchBarHeightPx,
+                searchCollapseDistancePx = searchCollapseDistancePx,
+                tabRowHeightPx = tabRowHeightPx,
+                isHeaderCollapseEnabled = isHeaderCollapseEnabled,
+            )
+        }
     }
-    val currentSearchHeight = with(density) { scrollLayout.searchBarHeightPx.toDp() }
-    val expandedTabHeight = with(density) { scrollLayout.tabRowHeightPx.toDp() }
+    val expandedTabHeight by remember(scrollLayout, density) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            with(density) { scrollLayout.value.tabRowHeightPx.toDp() }
+        }
+    }
     val currentTabHeight by animateDpAsState(
         targetValue = if (hideTopTabs) {
             AppSpacingTokens.None
@@ -1985,25 +1985,10 @@ fun HomeHeader(
         animationSpec = AppMotionTokens.standardSpec(),
         label = "currentTabHeight"
     )
-    val tabAlpha = scrollLayout.tabAlpha
-    val searchRevealFraction = if (searchBarHeightPx > 0f) {
-        (scrollLayout.searchBarHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
-    } else {
-        0f
+    val tabAlpha by remember(scrollLayout) {
+        derivedStateOf(structuralEqualityPolicy()) { scrollLayout.value.tabAlpha }
     }
-    // 裁剪留在固定外层；只移动完整高度的行，避免搜索控件被父约束压扁。
-    val searchContentTranslationProvider = rememberUpdatedState {
-        resolveHomeTopSearchContentTranslationYPx(
-            searchRevealFraction = searchRevealFraction,
-            searchBarHeightPx = searchBarHeightPx,
-        )
-    }
-    val integratedCollapsedTopBar = shouldUseIntegratedCollapsedHomeTopBar(
-        searchRevealFraction = searchRevealFraction,
-        presentation = topChromePolicy.tabPresentation,
-    )
-    // 收缩进度的实时读取口：布局/绘制阶段用它复算连续几何，逐帧只触发重排不触发重组。
-    // 组合期只允许经它派生「阈值布尔」，与 scrollLayout 的 fraction 同式同源。
+    // 布局/绘制直接读取实时进度；模糊层几何仍由上面的 scrollLayout 驱动。
     val revealFractionProvider: () -> Float = remember(
         searchBarHeightPx,
         searchCollapseDistancePx,
@@ -2021,6 +2006,25 @@ fun HomeHeader(
             }
         }
         provider
+    }
+    // 裁剪留在固定外层；平移直接在图层阶段读取，不经组合发布每帧的快照闭包。
+    val searchContentTranslationProvider: () -> Float = remember(searchBarHeightPx, revealFractionProvider) {
+        {
+            resolveHomeTopSearchContentTranslationYPx(
+                searchRevealFraction = revealFractionProvider(),
+                searchBarHeightPx = searchBarHeightPx,
+            )
+        }
+    }
+    val integratedCollapsedTopBar by remember(
+        searchBarHeightPx, revealFractionProvider, topChromePolicy.tabPresentation,
+    ) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            shouldUseIntegratedCollapsedHomeTopBar(
+                searchRevealFraction = if (searchBarHeightPx > 0f) revealFractionProvider() else 0f,
+                presentation = topChromePolicy.tabPresentation,
+            )
+        }
     }
     // 阈值布尔：仅在跨过边界的一帧重组，不再随连续进度逐帧重组。
     val searchRowRevealed by remember(revealFractionProvider) {
@@ -2044,9 +2048,6 @@ fun HomeHeader(
         collapsedIntoStatusBar = integratedCollapsedTopBar
     )
     val searchToTabsSpacing = topSearchMetrics.tabsSpacing
-    val currentSearchToTabsSpacing = searchToTabsSpacing * searchRevealFraction
-    val currentUnifiedDividerBottomSpacing = AppSpacingTokens.ExtraSmall * searchRevealFraction
-
     val tabHorizontalPadding by animateDpAsState(
         targetValue = resolveHomeTopTabHorizontalPadding(
             isTabFloating = isTabFloating,
@@ -2080,7 +2081,6 @@ fun HomeHeader(
         animationSpec = AppMotionTokens.standardSpec(),
         label = "tabShadowElevation"
     )
-    val effectiveTabShadowElevation = if (interactionBudget == HomeInteractionMotionBudget.REDUCED) AppSpacingTokens.None else tabShadowElevation
     val tabOverlayAlpha = resolveHomeTopTabOverlayAlpha(
         materialMode = effectiveTabMaterialMode,
         isTabFloating = isTabFloating,
@@ -2183,15 +2183,6 @@ fun HomeHeader(
         hasOuterChromeSurface = wrapTopTabDockHasOuterChrome,
         edgeToEdge = integratedCollapsedTopBar
     )
-    val currentTabToSearchSpacing = if (hideTopTabs) {
-        AppSpacingTokens.None
-    } else {
-        currentSearchToTabsSpacing + if (drawTopSearchDivider) {
-            AppSpacingTokens.Micro / 2 + currentUnifiedDividerBottomSpacing
-        } else {
-            AppSpacingTokens.None
-        }
-    }
     val isProgressiveBlurRequested = progressiveTopBlurEnabled
     val isProgressiveBlurEligible = shouldUseBiliPaiProgressiveTopBlur(
         enabled = isProgressiveBlurRequested && !isHeaderBlurEnabled,
@@ -2214,27 +2205,11 @@ fun HomeHeader(
         readabilityBand = wallpaperTopReadability,
     )
 
-    val pinnedChromeLayout = resolveHomeTopPinnedChromeLayout(
-        statusBarHeight = statusBarHeight,
-        visibleSearchHeight = currentSearchHeight,
-        tabRowHeight = currentTabHeight,
-        searchToTabsSpacing = currentTabToSearchSpacing,
-        renderMode = if (isProgressiveBlurRequested || isProgressiveFadeActive) HomeTopChromeRenderMode.BLUR else effectiveContinuousSlabRenderMode,
-        // 连续背景始终覆盖顶部 Dock；独立轨道只负责自身材质与前景可读性。
-        includeTabInBlur = true,
-    )
     val progressiveBlurBottomExtension = resolveProgressiveTopBlurBottomExtension(
         // 背景首次录制就绪前也保留有效特效的几何范围，避免渐隐高度随后跳变。
         enabled = isProgressiveBlurEligible ||
             (!isGlassEnabled && !topChromeLiquidGlassEnabled && isProgressiveFadeActive),
         endFraction = if (isProgressiveBlurEligible) liquidGlassTuning.progressiveBlurEndFraction else 1f,
-    )
-    val baseContinuousSlabHeight = pinnedChromeLayout.blurHeight + progressiveBlurBottomExtension
-    val pinnedChromeContentHeight = pinnedChromeLayout.tabTop + currentTabHeight
-    val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
-        currentTabHeightDp = currentTabHeight.value,
-        tabAlpha = tabAlpha,
-        tabContentAlpha = tabContentAlpha
     )
     val tabBorderAlpha = if (isTabFloating) tabChromeStyle.borderAlpha else 0f
     val topLayoutOrder = homeSettings?.homeTopLayoutOrder ?: HomeTopLayoutOrder.SEARCH_THEN_TABS
@@ -2245,19 +2220,6 @@ fun HomeHeader(
     val panelVerticalInset = if (embedTopTabsInUnifiedPanel && renderUnifiedTopPanelChrome) {
         unifiedPanelInnerPadding
     } else 0.dp
-    val protectionTabTop = statusBarHeight + panelVerticalInset +
-        (if (topLayoutOrder == HomeTopLayoutOrder.SEARCH_THEN_TABS) {
-            currentSearchHeight + currentTabToSearchSpacing
-        } else 0.dp) + (if (embedTopTabsInUnifiedPanel) 0.dp else tabVerticalOffset)
-    val protectionTabBottom = protectionTabTop + currentTabHeight
-    val protectionContentBottom = maxOf(
-        pinnedChromeContentHeight + panelVerticalInset * 2,
-        protectionTabBottom,
-    )
-    val continuousSlabHeight = if (nativeProgressiveLayout) {
-        maxOf(baseContinuousSlabHeight, protectionContentBottom + 32.dp)
-    } else baseContinuousSlabHeight
-    val protectionHeight = maxOf(continuousSlabHeight, protectionContentBottom + 32.dp)
     // 布局阶段实时复算的组合间距与 pinned 内容高度：与组合期 scrollLayout /
     // resolveHomeTopPinnedChromeLayout 同式同源，逐帧变化只触发重排，子树不再重组。
     val searchToTabsSpacingProvider: () -> Dp = remember(
@@ -2302,26 +2264,164 @@ fun HomeHeader(
             ).tabTop + currentTabHeight
         }
     }
-    val tabProtectionVisibility = if (!hideTopTabs && expandedTabHeight > 0.dp) {
-        (tabAlpha * tabContentAlpha * (currentTabHeight / expandedTabHeight).coerceIn(0f, 1f)).coerceIn(0f, 1f)
-    } else 0f
-    // 只有非玻璃渐进顶栏限制模糊清晰端，分类保护另由遮罩承担；玻璃继续使用原始参数。
-    // 不依赖分类显隐插值，收起分类或交换搜索/分类顺序后仍在实际控件底部归零。
-    val continuousSlabTuning = if (nativeProgressiveLayout) {
-        val gradient = homeTopReadabilityBlurGradient(
-            gradient = ProgressiveBlur.Top.copy(
-                startFraction = liquidGlassTuning.progressiveBlurStartFraction,
-                endFraction = liquidGlassTuning.progressiveBlurEndFraction,
-                curve = liquidGlassTuning.progressiveBlurCurve,
-            ),
-            contentBottomFraction = (protectionContentBottom / continuousSlabHeight).coerceIn(0f, 1f),
+    // 连续材质几何只使该组合范围失效；前景标签、搜索框不订阅搜索收缩高度。
+    val materialLayers: @Composable () -> Unit = {
+        val tabProtectionVisibility = if (!hideTopTabs && expandedTabHeight > 0.dp) {
+            (tabAlpha * tabContentAlpha * (currentTabHeight / expandedTabHeight).coerceIn(0f, 1f)).coerceIn(0f, 1f)
+        } else 0f
+        val currentSearchHeight = with(density) { scrollLayout.value.searchBarHeightPx.toDp() }
+        val searchRevealFraction = if (searchBarHeightPx > 0f) {
+            (scrollLayout.value.searchBarHeightPx / searchBarHeightPx).coerceIn(0f, 1f)
+        } else 0f
+        val currentSearchToTabsSpacing = searchToTabsSpacing * searchRevealFraction
+        val currentUnifiedDividerBottomSpacing = AppSpacingTokens.ExtraSmall * searchRevealFraction
+
+        val currentTabToSearchSpacing = if (hideTopTabs) {
+            AppSpacingTokens.None
+        } else {
+            currentSearchToTabsSpacing + if (drawTopSearchDivider) {
+                AppSpacingTokens.Micro / 2 + currentUnifiedDividerBottomSpacing
+            } else {
+                AppSpacingTokens.None
+            }
+        }
+        val pinnedChromeLayout = resolveHomeTopPinnedChromeLayout(
+            statusBarHeight = statusBarHeight,
+            visibleSearchHeight = currentSearchHeight,
+            tabRowHeight = currentTabHeight,
+            searchToTabsSpacing = currentTabToSearchSpacing,
+            renderMode = if (isProgressiveBlurRequested || isProgressiveFadeActive) HomeTopChromeRenderMode.BLUR else effectiveContinuousSlabRenderMode,
+            // 连续背景始终覆盖顶部 Dock；独立轨道只负责自身材质与前景可读性。
+            includeTabInBlur = true,
         )
-        liquidGlassTuning.copy(
-            progressiveBlurStartFraction = gradient.startFraction,
-            progressiveBlurEndFraction = gradient.endFraction,
+        val baseContinuousSlabHeight = pinnedChromeLayout.blurHeight + progressiveBlurBottomExtension
+        val pinnedChromeContentHeight = pinnedChromeLayout.tabTop + currentTabHeight
+        val protectionTabTop = statusBarHeight + panelVerticalInset +
+            (if (topLayoutOrder == HomeTopLayoutOrder.SEARCH_THEN_TABS) {
+                currentSearchHeight + currentTabToSearchSpacing
+            } else 0.dp) + (if (embedTopTabsInUnifiedPanel) 0.dp else tabVerticalOffset)
+        val protectionTabBottom = protectionTabTop + currentTabHeight
+        val protectionContentBottom = maxOf(
+            pinnedChromeContentHeight + panelVerticalInset * 2,
+            protectionTabBottom,
         )
-    } else liquidGlassTuning
+        val continuousSlabHeight = if (nativeProgressiveLayout) {
+            maxOf(baseContinuousSlabHeight, protectionContentBottom + 32.dp)
+        } else baseContinuousSlabHeight
+        val protectionHeight = maxOf(continuousSlabHeight, protectionContentBottom + 32.dp)
+        // 只有非玻璃渐进顶栏限制模糊清晰端，分类保护另由遮罩承担；玻璃继续使用原始参数。
+        // 不依赖分类显隐插值，收起分类或交换搜索/分类顺序后仍在实际控件底部归零。
+        val continuousSlabTuning = if (nativeProgressiveLayout) {
+            val gradient = homeTopReadabilityBlurGradient(
+                gradient = ProgressiveBlur.Top.copy(
+                    startFraction = liquidGlassTuning.progressiveBlurStartFraction,
+                    endFraction = liquidGlassTuning.progressiveBlurEndFraction,
+                    curve = liquidGlassTuning.progressiveBlurCurve,
+                ),
+                contentBottomFraction = (protectionContentBottom / continuousSlabHeight).coerceIn(0f, 1f),
+            )
+            liquidGlassTuning.copy(
+                progressiveBlurStartFraction = gradient.startFraction,
+                progressiveBlurEndFraction = gradient.endFraction,
+            )
+        } else liquidGlassTuning
+        val shouldRenderContinuousSlab = effectiveContinuousSlabRenderMode != HomeTopChromeRenderMode.PLAIN ||
+            isProgressiveBlurActive ||
+            isProgressiveFadeActive
+        if (shouldRenderContinuousSlab) {
+            val protectedFraction = if (wallpaperTopReadability != null) 0.65f else 0f
+            val fadeBrush = if ((isProgressiveFadeActive || wallpaperProtectionActive) &&
+                topFadeSurfaceColor.alpha > 0.001f
+            ) {
+                remember(topFadeSurfaceColor, protectedFraction) {
+                    Brush.verticalGradient(
+                        colorStops = ProgressiveFadeDefaults.createStops(
+                            topFadeSurfaceColor, protectedFraction,
+                        ).toTypedArray(),
+                    )
+                }
+            } else null
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(continuousSlabHeight)
+                    .homeTopChromeSurface(
+                        renderMode = if (isProgressiveBlurActive || isProgressiveFadeActive) HomeTopChromeRenderMode.BLUR else effectiveContinuousSlabRenderMode,
+                        shape = resolveHomeTopContinuousSlabShape(),
+                        surfaceColor = resolveHomeTopContinuousSlabSurfaceColor(
+                            baseColor = headerChromeColors.containerColor,
+                            blurAlpha = backgroundAlpha,
+                            usesNativeContainerTreatment = usesNativeContainerTreatment,
+                            renderMode = effectiveContinuousSlabRenderMode
+                        ),
+                        hazeState = hazeState,
+                        miuixBackdrop = miuixBackdrop,
+                        liquidStyle = liquidStyle,
+                        liquidGlassTuning = continuousSlabTuning,
+                        liquidGlassPreset = bottomBarLiquidGlassPreset,
+                        motionTier = motionTier,
+                        isScrolling = topChromeMotionPolicy.isScrolling,
+                        isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
+                        forceLowBlurBudget = forceLowBlurBudget,
+                        useProgressiveTopBlur = isProgressiveBlurRequested,
+                        useProgressiveTopFade = isProgressiveFadeActive,
+                    )
+                    // 渐隐复用连续顶栏的实际绘制边界，不再单独测量一层遮罩。
+                    .then(if (fadeBrush != null) Modifier.background(fadeBrush) else Modifier),
+            )
+        }
+        val nativeTopProtectionAlpha = resolveHomeNativeTopProtectionAlpha(
+            liquidGlassActive = isGlassEnabled || topChromeLiquidGlassEnabled,
+            blurActive = isHeaderBlurEnabled || isProgressiveBlurActive,
+            progressiveChromeActive = isProgressiveBlurActive || isProgressiveFadeActive,
+            contentRevealFraction = if (isProgressiveBlurActive || isProgressiveFadeActive) {
+                maxOf(
+                    searchRevealFraction,
+                    if (expandedTabHeight > 0.dp) {
+                        (currentTabHeight / expandedTabHeight).coerceIn(0f, 1f)
+                    } else 0f,
+                )
+            } else 1f,
+        )
+        // 非玻璃渐进顶栏按控件位置保护分类文字，尾部渐隐；普通磨砂与无特效仍用原来的实色遮罩。
+        if (nativeTopProtectionAlpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (nativeProgressiveProtection) {
+                            Modifier.height(protectionHeight)
+                        } else {
+                            Modifier.homeHeaderDeferredHeight(pinnedChromeContentHeightProvider)
+                        }
+                    )
+                    .then(
+                        if (nativeProgressiveProtection) {
+                            Modifier.homeTopReadabilityProtection(
+                                color = MaterialTheme.colorScheme.background,
+                                contentBottom = protectionContentBottom,
+                                tabTop = protectionTabTop,
+                                tabBottom = protectionTabBottom,
+                                baseAlpha = nativeTopProtectionAlpha,
+                                tabVisibility = tabProtectionVisibility,
+                            )
+                        } else {
+                            Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = nativeTopProtectionAlpha))
+                        }
+                    )
+            )
+        }
+    }
     val topTabsContent: @Composable (Dp) -> Unit = { maxDockWidth ->
+        // 标签动画仅由标签与保护材质消费，不让每帧值回到整个顶栏的组合范围。
+        val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
+            currentTabHeightDp = currentTabHeight.value,
+            tabAlpha = tabAlpha,
+            tabContentAlpha = tabContentAlpha,
+        )
+        val effectiveTabShadowElevation = if (interactionBudget == HomeInteractionMotionBudget.REDUCED) {
+            AppSpacingTokens.None
+        } else tabShadowElevation
         val renderTabs: @Composable () -> Unit = {
         Box(modifier = Modifier.fillMaxWidth()) {
             uiSkinDecoration?.topTabBackgroundImagePath?.let { tabBackground ->
@@ -2539,92 +2639,7 @@ fun HomeHeader(
             containerWidthDp = maxWidth,
             chromePolicy = topChromePolicy
         )
-        val shouldRenderContinuousSlab = effectiveContinuousSlabRenderMode != HomeTopChromeRenderMode.PLAIN ||
-            isProgressiveBlurActive ||
-            isProgressiveFadeActive
-        if (shouldRenderContinuousSlab) {
-            val protectedFraction = if (wallpaperTopReadability != null) 0.65f else 0f
-            val fadeBrush = if ((isProgressiveFadeActive || wallpaperProtectionActive) &&
-                topFadeSurfaceColor.alpha > 0.001f
-            ) {
-                remember(topFadeSurfaceColor, protectedFraction) {
-                    Brush.verticalGradient(
-                        colorStops = ProgressiveFadeDefaults.createStops(
-                            topFadeSurfaceColor, protectedFraction,
-                        ).toTypedArray(),
-                    )
-                }
-            } else null
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(continuousSlabHeight)
-                    .homeTopChromeSurface(
-                        renderMode = if (isProgressiveBlurActive || isProgressiveFadeActive) HomeTopChromeRenderMode.BLUR else effectiveContinuousSlabRenderMode,
-                        shape = resolveHomeTopContinuousSlabShape(),
-                        surfaceColor = resolveHomeTopContinuousSlabSurfaceColor(
-                            baseColor = headerChromeColors.containerColor,
-                            blurAlpha = backgroundAlpha,
-                            usesNativeContainerTreatment = usesNativeContainerTreatment,
-                            renderMode = effectiveContinuousSlabRenderMode
-                        ),
-                        hazeState = hazeState,
-                        miuixBackdrop = miuixBackdrop,
-                        liquidStyle = liquidStyle,
-                        liquidGlassTuning = continuousSlabTuning,
-                        liquidGlassPreset = bottomBarLiquidGlassPreset,
-                        motionTier = motionTier,
-                        isScrolling = topChromeMotionPolicy.isScrolling,
-                        isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
-                        forceLowBlurBudget = forceLowBlurBudget,
-                        useProgressiveTopBlur = isProgressiveBlurRequested,
-                        useProgressiveTopFade = isProgressiveFadeActive,
-                    )
-                    // 渐隐复用连续顶栏的实际绘制边界，不再单独测量一层遮罩。
-                    .then(if (fadeBrush != null) Modifier.background(fadeBrush) else Modifier),
-            )
-        }
-        val nativeTopProtectionAlpha = resolveHomeNativeTopProtectionAlpha(
-            liquidGlassActive = isGlassEnabled || topChromeLiquidGlassEnabled,
-            blurActive = isHeaderBlurEnabled || isProgressiveBlurActive,
-            progressiveChromeActive = isProgressiveBlurActive || isProgressiveFadeActive,
-            contentRevealFraction = if (isProgressiveBlurActive || isProgressiveFadeActive) {
-                maxOf(
-                    searchRevealFraction,
-                    if (expandedTabHeight > 0.dp) {
-                        (currentTabHeight / expandedTabHeight).coerceIn(0f, 1f)
-                    } else 0f,
-                )
-            } else 1f,
-        )
-        // 非玻璃渐进顶栏按控件位置保护分类文字，尾部渐隐；普通磨砂与无特效仍用原来的实色遮罩。
-        if (nativeTopProtectionAlpha > 0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (nativeProgressiveProtection) {
-                            Modifier.height(protectionHeight)
-                        } else {
-                            Modifier.homeHeaderDeferredHeight(pinnedChromeContentHeightProvider)
-                        }
-                    )
-                    .then(
-                        if (nativeProgressiveProtection) {
-                            Modifier.homeTopReadabilityProtection(
-                                color = MaterialTheme.colorScheme.background,
-                                contentBottom = protectionContentBottom,
-                                tabTop = protectionTabTop,
-                                tabBottom = protectionTabBottom,
-                                baseAlpha = nativeTopProtectionAlpha,
-                                tabVisibility = tabProtectionVisibility,
-                            )
-                        } else {
-                            Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = nativeTopProtectionAlpha))
-                        }
-                    )
-            )
-        }
+        materialLayers()
         // The skin head artwork belongs to the complete pinned header, not only the
         // search/tabs panel. Drawing it here lets the same crop continue behind the
         // transparent status bar while the controls remain layered above it.
@@ -2813,7 +2828,7 @@ fun HomeHeader(
                                 .wrapContentHeight(align = Alignment.Top, unbounded = true)
                                 .height(searchBarHeightDp)
                                 .graphicsLayer {
-                                    translationY = searchContentTranslationProvider.value()
+                                    translationY = searchContentTranslationProvider()
                                 }
                                 .padding(
                                     horizontal = if (embedTopTabsInUnifiedPanel) {

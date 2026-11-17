@@ -316,7 +316,7 @@ fun MineSideDrawer(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 if (user.level > 0) {
-                                    UserLevelBadge(level = user.level)
+                                    UserLevelBadge(level = user.level, isSeniorMember = user.isSeniorMember)
                                 }
                                 if (user.isVip) {
                                     UserVipBadge(

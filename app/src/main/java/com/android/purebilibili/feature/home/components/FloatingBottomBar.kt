@@ -578,9 +578,11 @@ fun FloatingBottomBar(
     val isInDark = resolveBottomBarDarkTheme(AppSurfaceTokens.background())
     val materialBlur = rememberMaterialBackdropBlur(liquidGlassTuning)
     val isLiquidGlassMode = mode == FloatingBottomBarMode.LiquidGlass
-    val gravityGate = if (isLiquidGlassMode) {
-        com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
-    } else null
+    val gravityGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate(
+        respectComponentMotion = isLiquidGlassMode,
+        // 原生拖动是功能输入；减少动态效果仅停掉边缘滚动帧任务，仍可直接选中标签。
+        respectSystemReduceMotion = isLiquidGlassMode,
+    )
     val parentGlass = com.android.purebilibili.core.ui.blur.LocalAppGlassContainer.current
         .takeIf { isLiquidGlassMode && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled }
     val materialBackdrop = if (parentGlass != null) parentGlass.backdrop else backdrop
@@ -801,6 +803,7 @@ fun FloatingBottomBar(
         isLiquidGlassMode,
         gestureHaptics,
         interactiveHighlight,
+        gravityGate,
     ) {
         DampedDragAnimation(
             animationScope = animationScope,
@@ -812,7 +815,7 @@ fun FloatingBottomBar(
             trackingMode = dragTrackingMode,
             useMiuixIndicatorMotion = isLiquidGlassMode,
             canDrag = { offset ->
-                if (!interactionEnabled) return@DampedDragAnimation false
+                if (!interactionEnabled || !gravityGate.active) return@DampedDragAnimation false
                 val animation = holder.instance ?: return@DampedDragAnimation true
                 if (tabWidthPx == 0f) return@DampedDragAnimation false
 
@@ -998,8 +1001,25 @@ fun FloatingBottomBar(
         // field keeps press bloom in sync without recreating the pointerInput owner.
         dampedDragAnimation.pressedScale = pressedScale
     }
-    // 玻璃拖拽的逐帧任务跟随可见性；原生菜单仍保留原有边缘滚动行为。
-    val dragEdgeScrollActive = !isLiquidGlassMode || (enabled && gravityGate?.active == true)
+    // 玻璃与原生共用门控；被遮挡、失焦或退到后台时不保留拖拽帧任务。
+    val dragInteractionActive = enabled && gravityGate.active
+    val dragEdgeScrollActive = dragInteractionActive && !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
+    LaunchedEffect(dampedDragAnimation, dragInteractionActive) {
+        if (!dragInteractionActive) {
+            val wasDragging = dampedDragAnimation.isDragging
+            dampedDragAnimation.cancelDrag()
+            if (wasDragging) {
+                gestureHaptics.finish()
+                indicatorHighlightFromDrag = false
+                interactiveHighlight?.cancel()
+                pagerFollowGate.ownedTargetIndex = null
+                pagerFollowGate.previousExternalPosition = null
+                onIndicatorDragStateChangedLatest.value?.invoke(false)
+                offsetJobHolder.job?.cancel()
+                offsetAnimation.snapTo(0f)
+            }
+        }
+    }
     LaunchedEffect(dampedDragAnimation, dragScrollState, density, dragEdgeScrollActive) {
         if (!dragEdgeScrollActive) return@LaunchedEffect
         val scroll = dragScrollState ?: return@LaunchedEffect
@@ -1358,7 +1378,7 @@ fun FloatingBottomBar(
     } else false
     val baseHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(
         extraDegrees = -45f,
-        active = enabled && drawShell && parentGlass == null && materialBackdrop != null && gravityGate?.active == true,
+        active = enabled && drawShell && parentGlass == null && materialBackdrop != null && gravityGate.active,
     ) else null
     val pillHighlight = if (isLiquidGlassMode) rememberBiliPaiGravityHighlight(
         extraDegrees = 90f,
@@ -1366,7 +1386,7 @@ fun FloatingBottomBar(
             indicatorWidthDp = fittedIndicatorWidth.value,
             indicatorHeightDp = fittedIndicatorHeight.value,
         ).dp,
-        active = enabled && materialBackdrop != null && indicatorHighlightVisible && gravityGate?.active == true,
+        active = enabled && materialBackdrop != null && indicatorHighlightVisible && gravityGate.active,
     ) else null
 
     val combinedBackdrop = if (materialBackdrop != null && tabsBackdrop != null) {
@@ -1377,7 +1397,7 @@ fun FloatingBottomBar(
 
     Box(
         modifier = modifier
-            .then(gravityGate?.modifier ?: Modifier)
+            .then(gravityGate.modifier)
             .trackLiquidGlassAdaptiveReadability(
                 state = adaptiveReadabilityState,
                 enabled = adaptiveReadabilityEnabled,
@@ -1647,6 +1667,9 @@ fun FloatingBottomBar(
                             .fillMaxSize()
                             // 捕获层的触摸高光只照亮背景，不覆盖选中图标和文字。
                             .then(interactiveHighlight?.backgroundModifier ?: Modifier)
+                            // 玻璃背景或高光刷新时复用文字指令，内容自身失效仍实时更新。
+                            // 保留徽标溢出，不把文字行强制栅格化为离屏纹理。
+                            .graphicsLayer { clip = false }
                             .padding(horizontal = horizontalPadding),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

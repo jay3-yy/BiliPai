@@ -67,7 +67,6 @@ class BangumiLiquidGlassStructureTest {
         assertTrue(!screenSource.contains("TopAppBarScrollBehavior"))
         assertTrue(homeTabSource.contains("AppLiquidAwareTabRow("))
         assertTrue(!homeTabSource.contains("categoryTabsVisible"))
-        assertTrue(!homeTabSource.contains("AnimatedVisibility("))
     }
 
     @Test

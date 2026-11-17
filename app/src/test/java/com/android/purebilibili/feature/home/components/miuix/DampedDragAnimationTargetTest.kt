@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import androidx.compose.runtime.BroadcastFrameClock
 import androidx.compose.ui.geometry.Offset
@@ -15,6 +16,39 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DampedDragAnimationTargetTest {
+
+    @Test
+    fun `hiding during a drag clears feedback without committing and allows a new drag`() = runTest {
+        for (glass in listOf(false, true)) {
+            val clock = BroadcastFrameClock()
+            withContext(clock) {
+                var commits = 0
+                val animation = createAnimation(this, useMiuixIndicatorMotion = glass, onStopped = { commits++ })
+                animation.beginDrag(Offset.Zero)
+                animation.updateValue(1.5f)
+                repeat(5) { frame ->
+                    testScheduler.runCurrent()
+                    clock.sendFrame(frame * 16_000_000L)
+                    testScheduler.runCurrent()
+                }
+                animation.cancelDrag()
+                assertFalse(animation.isDragging)
+                assertEquals(0, commits)
+                repeat(5) { frame ->
+                    testScheduler.runCurrent()
+                    clock.sendFrame((frame + 5) * 16_000_000L)
+                    testScheduler.runCurrent()
+                    assertEquals(0f, animation.pressProgress)
+                    assertEquals(1f, animation.scaleX)
+                    assertEquals(1f, animation.scaleY)
+                    assertEquals(0f, animation.velocity)
+                }
+                animation.beginDrag(Offset.Zero)
+                assertTrue(animation.isDragging)
+                animation.cancelDrag()
+            }
+        }
+    }
 
     @Test
     fun `regrabbing a moving indicator holds its visible position and reverses from there`() = runTest {
@@ -85,6 +119,7 @@ class DampedDragAnimationTargetTest {
         range: ClosedFloatingPointRange<Float> = 0f..2f,
         useMiuixIndicatorMotion: Boolean = false,
         trackingMode: DampedDragTrackingMode = DampedDragTrackingMode.SPRING,
+        onStopped: () -> Unit = {},
     ) =
         DampedDragAnimation(
             animationScope = scope,
@@ -96,7 +131,7 @@ class DampedDragAnimationTargetTest {
             useMiuixIndicatorMotion = useMiuixIndicatorMotion,
             trackingMode = trackingMode,
             onDragStarted = {},
-            onDragStopped = {},
+            onDragStopped = { onStopped() },
             onDrag = { _, _ -> },
         )
 
