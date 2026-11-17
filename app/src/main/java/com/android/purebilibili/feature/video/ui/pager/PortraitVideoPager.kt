@@ -2412,9 +2412,6 @@ private fun VideoPageItem(
     val pipDanmakuVisible = !(isInPipMode && pipNoDanmakuEnabled)
     val currentAudioQuality = requestedAudioQuality
     val bvid = if (item is ViewInfo) item.bvid else (item as RelatedVideo).bvid
-    var renderedSurfaceFrame by remember(bvid, currentPlayingCid, enhancement.pipelineActive) {
-        mutableStateOf(false)
-    }
     val itemAid = if (item is ViewInfo) item.aid else (item as RelatedVideo).aid
     val currentUiState = viewModel.uiState.collectAsStateWithLifecycle().value
     val currentSuccess = currentUiState as? VideoPlaybackUiState.Success
@@ -2987,12 +2984,6 @@ private fun VideoPageItem(
     ) {
         onPortraitCleanScreenChange(false)
     }
-    com.android.purebilibili.core.ui.performance.VideoPlaybackRefreshRateEffect(
-        player = exoPlayer,
-        eligible = isCurrentPage && isPortraitPlaybackAllowed && isPlayerReadyForThisVideo &&
-            !isLoading && !isInPipMode && !danmakuEnabled && !portraitOverlayVisible &&
-            !controlsOverlayOpen && !controlsPointerPressed && !isLongPressing && !seekSliderMoving,
-    )
     val autoHidePortraitControls = shouldAutoHidePortraitControls(
         isCurrentPage = isCurrentPage,
         playbackActive = controlsLifecycleResumed && isPortraitPlaybackAllowed &&
@@ -3484,17 +3475,7 @@ private fun VideoPageItem(
                             keepScreenOn = shouldKeepPortraitPagerItemAwake,
                             flippedHorizontal = portraitFlippedHorizontal && !surfaceHdrRequired,
                             flippedVertical = portraitFlippedVertical && !surfaceHdrRequired,
-                            onPlayerViewChanged = { view ->
-                                if (playerViewRef !== view) renderedSurfaceFrame = false
-                                playerViewRef = view
-                            },
-                            onFirstFrameRendered = {
-                                if (shouldSkipPortraitReloadForCurrentMedia(
-                                        currentPlayingBvid, bvid, exoPlayer.currentMediaItem?.mediaId,
-                                        currentPlayingCid, currentPlayingCid,
-                                    )
-                                ) renderedSurfaceFrame = true
-                            },
+                            onPlayerViewChanged = { view -> playerViewRef = view },
                             modifier = Modifier.fillMaxSize(),
                         )
 
@@ -3554,8 +3535,9 @@ private fun VideoPageItem(
             isLoading = isLoading,
             isCurrentPage = isCurrentPage,
             isPlayerReadyForThisVideo = isPlayerReadyForThisVideo,
-            hasRenderedFirstFrame = hasRenderedFirstFrame,
-            hasRenderedSurfaceFrame = renderedSurfaceFrame,
+            // 当前输出已经出画时，不再依赖另一个监听器的首帧事件到达顺序。
+            hasRenderedFirstFrame = hasRenderedFirstFrame || enhancement.hasRenderedOutputFrame,
+            hasRenderedSurfaceFrame = enhancement.hasRenderedOutputFrame,
         )
         
         if (showCover) {

@@ -181,9 +181,12 @@ internal class AmbientFrameController(
                         }
                         continue
                     } else {
-                        sample.getPixels(pixels, 0, w, 0, 0, w, h)
-                        val raw = sample.copy(Bitmap.Config.ARGB_8888, false) ?: continue
                         val analyzed = withContext(Dispatchers.Default) {
+                            // source 的复用缓冲在本轮处理完成前不会再次采样。
+                            // 像素读取、快照复制和分析在同一 worker 顺序执行。
+                            sample.getPixels(pixels, 0, w, 0, 0, w, h)
+                            val raw = sample.copy(Bitmap.Config.ARGB_8888, false)
+                                ?: return@withContext null
                             val crop = analyzer.analyze(pixels, w, h, started)
                             val glow = if (config.glow) {
                                 // HardwareBufferRenderer 仅 API 34+ 可用；失败或低版本回退 CPU 内核。
@@ -198,11 +201,12 @@ internal class AmbientFrameController(
                             } else {
                                 raw
                             }
-                            crop to glow
-                        }
-                        val result = analyzed.second
+                            Triple(raw, crop, glow)
+                        } ?: continue
+                        val raw = analyzed.first
+                        val result = analyzed.third
                         val contentBounds = capturedBounds?.let { bounds ->
-                            val crop = analyzed.first
+                            val crop = analyzed.second
                             androidx.compose.ui.geometry.Rect(
                                 bounds.left + bounds.width * crop.left / w,
                                 bounds.top + bounds.height * crop.top / h,

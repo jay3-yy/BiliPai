@@ -1248,6 +1248,11 @@ private fun VideoPlayerSectionContent(
     val anime4kSurfaceReady = shouldUseAnime4kPipeline && anime4kInputSurface != null
     val anime4kFrameVisible = anime4kSurfaceReady && anime4kDisplayedFirstFrame
     val shouldBindDirectPlayerView = shouldBindInlinePlayerView && !anime4kSurfaceReady
+    com.android.purebilibili.core.ui.performance.VideoSurfaceFrameRateEffect(
+        player = playerState.player,
+        surfaceView = anime4kSurfaceViewRef,
+        active = anime4kSurfaceReady && shouldBindInlinePlayerView,
+    )
     // In-page collection switches replace the player/router while reusing the same PlayerView.
     // Key the effect by the router so the new player always receives the existing video surface.
     LaunchedEffect(
@@ -2949,14 +2954,6 @@ private fun VideoPlayerSectionContent(
                 lifecycle = lifecycleOwner.lifecycle
             )
         val danmakuEnabled = danmakuSettings.enabled
-        com.android.purebilibili.core.ui.performance.VideoPlaybackRefreshRateEffect(
-            player = playerState.player,
-            eligible = !danmakuEnabled && danmakuHostActive && hostLifecycleStarted &&
-                uiState is VideoPlaybackUiState.Success && !isInPipMode && !isAudioOnly &&
-                !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition &&
-                !showControls && !isGestureVisible && !isLongPressing &&
-                !sharedSeekSession.isSliderMoving && !landscapeCommentPanelVisible && !danmakuComposerVisible,
-        )
         val danmakuOpacity = danmakuSettings.opacity
         val danmakuFontScale = danmakuSettings.fontScale
         val danmakuFontWeight = danmakuSettings.fontWeight
