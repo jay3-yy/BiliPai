@@ -88,52 +88,40 @@ class HomeReturnAnimationPolicyTest {
     }
 
     @Test
-    fun staleReturnGate_recoversOnlyAfterTimeoutWhileHomeVisible() {
-        // 门控未挂起或首页不可见时永不强制恢复。
+    fun staleGate_recoversOnlyAfterTimeoutWithoutReturnGesture() {
+        // 门控未挂起或手势进行中时永不强制恢复：用户按住预测性返回可以远超期限。
         assertFalse(
-            shouldForceRecoverStaleReturnGate(
-                homeVisible = true,
-                gateActive = false,
-                gateStartedAtMs = 1_000L,
-                nowMs = 9_999L,
-            )
+            shouldRecoverStaleHomeGate(active = false, elapsedMs = 9_999L, gestureInProgress = false)
         )
         assertFalse(
-            shouldForceRecoverStaleReturnGate(
-                homeVisible = false,
-                gateActive = true,
-                gateStartedAtMs = 1_000L,
-                nowMs = 9_999L,
-            )
+            shouldRecoverStaleHomeGate(active = true, elapsedMs = 9_999L, gestureInProgress = true)
         )
-        // 超时前保持门控（正常返回动画时长内不受影响）。
+        // 恢复期限内保持门控：任何合法返回动画（含平板 buffer）都短于该值。
         assertFalse(
-            shouldForceRecoverStaleReturnGate(
-                homeVisible = true,
-                gateActive = true,
-                gateStartedAtMs = 1_000L,
-                nowMs = 2_999L,
-            )
+            shouldRecoverStaleHomeGate(active = true, elapsedMs = 1_999L, gestureInProgress = false)
         )
-        // 超过恢复期限即强制恢复。
+        // 期限到达即判定失联，恢复门控。
         assertTrue(
-            shouldForceRecoverStaleReturnGate(
-                homeVisible = true,
-                gateActive = true,
-                gateStartedAtMs = 1_000L,
-                nowMs = 3_000L,
-            )
+            shouldRecoverStaleHomeGate(active = true, elapsedMs = 2_000L, gestureInProgress = false)
         )
     }
 
     @Test
-    fun staleReturnGate_ignoresUnarmedGateTimestamp() {
+    fun staleGate_honorsExplicitTimeout() {
         assertFalse(
-            shouldForceRecoverStaleReturnGate(
-                homeVisible = true,
-                gateActive = true,
-                gateStartedAtMs = 0L,
-                nowMs = 60_000L,
+            shouldRecoverStaleHomeGate(
+                active = true,
+                elapsedMs = 499L,
+                gestureInProgress = false,
+                timeoutMs = 500L,
+            )
+        )
+        assertTrue(
+            shouldRecoverStaleHomeGate(
+                active = true,
+                elapsedMs = 500L,
+                gestureInProgress = false,
+                timeoutMs = 500L,
             )
         )
     }

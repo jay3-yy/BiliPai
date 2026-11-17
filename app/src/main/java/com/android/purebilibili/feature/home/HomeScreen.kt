@@ -574,16 +574,36 @@ fun HomeScreen(
             )
         }
     }
-    // 返回保护窗丢失最终 Idle 通知时（独立播放窗口/画中画/NavDisplay settle 丢失），
-    // 看门狗在超过任何合法返回动画时长后强制恢复数据收集，避免刷新结果被永久冻结。
-    val staleReturnGateRecovered = rememberStaleReturnGateRecovered(
-        homeVisible = isTopLevelActive,
-        gateActive = isReturningFromVideoDetail || deferHomeHeavyWork,
+    val videoCardReturnGestureInProgress =
+        videoCardTransitionBackgroundState.isReturnGestureInProgressProvider()
+    // 返回保护窗与卡片转场门控都依赖导航系统发布最终 Idle 才清除；通知链丢失时
+    // （独立播放窗口、画中画、NavDisplay settle 丢失，issue #1131）门控会一直挂着，
+    // 把已挂载分类的数据收集冻结成「下拉刷新无新内容」。两个门控各自独立计时：
+    // 首页在顶层且没有进行中的返回手势时累计，超过任何合法返回动画时长后按已恢复处理。
+    val staleGatePaused = !isTopLevelActive || videoCardReturnGestureInProgress
+    val staleReturnGateRecovered = rememberStaleGateRecovered(
+        active = isReturningFromVideoDetail,
+        paused = staleGatePaused,
     )
+    val staleDeferGateRecovered = rememberStaleGateRecovered(
+        active = deferHomeHeavyWork,
+        paused = staleGatePaused,
+    )
+    // 只放开首页收集不够：导航层、卡片动画和底栏读的是同一个返回标记。超时确认通知链
+    // 已断后直接清源头，让所有消费者一起恢复；正常返回动画（含用户按住的预测性返回）
+    // 远短于恢复期限或处于暂停状态，不会触发。
+    LaunchedEffect(staleReturnGateRecovered) {
+        if (!staleReturnGateRecovered) return@LaunchedEffect
+        com.android.purebilibili.core.util.Logger.w(
+            "HomeReturnGate",
+            "返回标记 ${HOME_STALE_RETURN_GATE_RECOVERY_MS}ms 内未收到 Idle，强制清除",
+        )
+        onVideoDetailReturnAnimationConsumed()
+    }
     // Retained home must not issue scroll/chrome/image work while another page or morph owns the UI.
     val homeFeedUpdatesAllowed = isTopLevelActive &&
         (!isReturningFromVideoDetail || staleReturnGateRecovered) &&
-        (!deferHomeHeavyWork || staleReturnGateRecovered)
+        (!deferHomeHeavyWork || staleDeferGateRecovered)
     // Data may be needed to restore a pending scroll anchor. Only navigation freezes
     // displayed feed data; pager synchronization and anchor recovery gate work below.
     val homeFeedWorkAllowed = homeFeedUpdatesAllowed &&
@@ -594,8 +614,6 @@ fun HomeScreen(
         .collectAsStateWithLifecycle()
     val homeCoverPreloadAllowed = homeFeedWorkAllowed && homeVisualWorkActive &&
         com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed.current
-    val videoCardReturnGestureInProgress =
-        videoCardTransitionBackgroundState.isReturnGestureInProgressProvider()
     var settledShowHomeUpAvatars by rememberSaveable {
         mutableStateOf(homeSettings.showHomeUpAvatars)
     }

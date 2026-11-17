@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.home
 
+import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -50,36 +51,30 @@ internal fun StateFlow<CategoryContent>.collectHomeChromeContentReady(
 }
 
 /**
- * 返回保护窗（返回动画标记 / 卡片转场 settle）丢失最终 Idle 通知时的看门狗。
- * 门控本应在几百毫秒的返回动画内清除；独立播放窗口、画中画或 NavDisplay settle
- * 丢失时（issue #1131）会一直挂着，把已挂载分类的数据收集冻结成“下拉刷新无新
- * 内容”。首页可见期间门控持续超过 [HOME_STALE_RETURN_GATE_RECOVERY_MS] 即强制
- * 视为已恢复；门控清除或首页离开时计时重置。
+ * 单个瞬态门控的看门狗：门控持续超过 [HOME_STALE_RETURN_GATE_RECOVERY_MS] 且没有
+ * 进行中的返回手势时，强制按已恢复处理。
+ *
+ * 每个门控独立计时，互不继承对方的恢复结果，否则一个卡住的标记会连带跳过另一个
+ * 门控下一次合法保护窗。门控清除时 [active] 变化会同步重置，避免多放行一帧；
+ * [paused]（手势进行中或首页不在顶层）期间不计时，恢复计时从暂停结束重新累计。
  */
 @Composable
-internal fun rememberStaleReturnGateRecovered(
-    homeVisible: Boolean,
-    gateActive: Boolean,
+internal fun rememberStaleGateRecovered(
+    active: Boolean,
+    paused: Boolean,
 ): Boolean {
-    var gateStartedAtMs by remember { mutableStateOf(0L) }
-    var recovered by remember { mutableStateOf(false) }
-    LaunchedEffect(homeVisible, gateActive) {
-        if (homeVisible && gateActive) {
-            gateStartedAtMs = System.currentTimeMillis()
-            recovered = false
-            delay(HOME_STALE_RETURN_GATE_RECOVERY_MS)
-            if (shouldForceRecoverStaleReturnGate(
-                    homeVisible = homeVisible,
-                    gateActive = gateActive,
-                    gateStartedAtMs = gateStartedAtMs,
-                    nowMs = System.currentTimeMillis(),
-                )
-            ) {
-                recovered = true
-            }
-        } else {
-            gateStartedAtMs = 0L
-            recovered = false
+    var recovered by remember(active) { mutableStateOf(false) }
+    LaunchedEffect(active, paused) {
+        if (!active || paused) return@LaunchedEffect
+        val armedAtMs = SystemClock.elapsedRealtime()
+        delay(HOME_STALE_RETURN_GATE_RECOVERY_MS)
+        if (shouldRecoverStaleHomeGate(
+                active = active,
+                elapsedMs = SystemClock.elapsedRealtime() - armedAtMs,
+                gestureInProgress = paused,
+            )
+        ) {
+            recovered = true
         }
     }
     return recovered
