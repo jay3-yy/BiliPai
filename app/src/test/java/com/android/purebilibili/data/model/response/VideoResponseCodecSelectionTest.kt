@@ -81,6 +81,23 @@ class VideoResponseCodecSelectionTest {
     }
 
     @Test
+    fun `getValidUrl skips a bcache url on a nonstandard port when a regular backup exists`() {
+        val video = DashVideo(
+            id = 80,
+            baseUrl = "https://upos-sz-mirrorali.bilivideo.com:8082/v1/resource/abc?os=bcache&sign=a",
+            backupUrl = listOf(
+                "https://cn-example-cm-01-01.bilivideo.com/upgcxcode/abc/video.m4s?os=bcache&sign=b"
+            ),
+            codecs = "avc1"
+        )
+
+        assertEquals(
+            "https://cn-example-cm-01-01.bilivideo.com/upgcxcode/abc/video.m4s?os=bcache&sign=b",
+            video.getValidUrl()
+        )
+    }
+
+    @Test
     fun `getBestVideo keeps codec preference ahead of bitrate when codecs differ`() {
         val dash = Dash(
             video = listOf(

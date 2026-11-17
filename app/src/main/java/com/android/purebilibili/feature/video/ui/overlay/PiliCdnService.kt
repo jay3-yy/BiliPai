@@ -36,19 +36,35 @@ private fun replaceCdnHost(url: String, host: String, forceHttps: Boolean = fals
     val uri = URI(url)
     val prefixEnd = url.indexOf("://") + 3
     val authorityEnd = prefixEnd + uri.rawAuthority.length
-    val port = if (forceHttps) ":443" else if (uri.port >= 0) ":${uri.port}" else ""
-    val result = url.replaceRange(prefixEnd, authorityEnd, host + port)
+    val result = url.replaceRange(prefixEnd, authorityEnd, host)
     return if (forceHttps) "https" + result.substring(result.indexOf(':')) else result
 }
 
 internal fun selectPiliCdnUrl(urls: List<String>, service: PiliCdnService): String {
     val candidates = urls.filter { it.isNotBlank() }
     require(candidates.isNotEmpty()) { "当前媒体没有可用播放地址" }
-    if (service == PiliCdnService.BASE) return candidates.first()
-    if (service == PiliCdnService.BACKUP) {
+    if (service == PiliCdnService.BASE) {
         return candidates.firstOrNull {
             !com.android.purebilibili.feature.plugin.isRiskyCdnUrl(it)
         } ?: candidates.first()
+    }
+    if (service == PiliCdnService.BACKUP) {
+        val normalized = com.android.purebilibili.feature.plugin
+            .normalizePlaybackCdnCandidates(
+                candidates.map { url ->
+                    com.android.purebilibili.plugin.sdk.PlaybackCdnCandidate(
+                        videoUrl = url,
+                        audioUrl = null,
+                        source = com.android.purebilibili.plugin.sdk.PlaybackCdnCandidateSource.ORIGINAL,
+                    )
+                }
+            )
+            .map { it.videoUrl }
+        return candidates.firstOrNull {
+            !com.android.purebilibili.feature.plugin.isRiskyCdnUrl(it)
+        } ?: normalized.firstOrNull {
+            !com.android.purebilibili.feature.plugin.isRiskyCdnUrl(it)
+        } ?: normalized.first()
     }
     var mcdnTf: String? = null
     var mcdnUpgcxcode: String? = null
@@ -63,7 +79,12 @@ internal fun selectPiliCdnUrl(urls: List<String>, service: PiliCdnService): Stri
             else return if (service == PiliCdnService.BACKUP) url else replaceCdnHost(url, requireNotNull(service.host))
         }
         if (mcdnPattern.containsMatchIn(url)) { mcdnTf = url; continue }
-        if (url.contains("/upgcxcode/")) { mcdnUpgcxcode = url; continue }
+        if (url.contains("/upgcxcode/") &&
+            com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(url)
+        ) {
+            mcdnUpgcxcode = url
+            continue
+        }
         if (uri.host?.endsWith("szbdyd.com") == true) {
             return replaceCdnHost(url, query["xy_usource"] ?: service.host ?: requireNotNull(PiliCdnService.ALI.host), true)
         }

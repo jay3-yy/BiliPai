@@ -8,6 +8,7 @@ import com.android.purebilibili.data.model.VideoDecodeFormat
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.net.URI
 
 // --- 播放地址 Response (参考 PiliPala url.dart) ---
 @Serializable
@@ -332,8 +333,11 @@ internal fun isPcdnUrl(url: String): Boolean {
     if (lower.contains("szbdyd.com")) return true
     // 已知的第三方 PCDN 域名（B 站会动态下发，逐个补齐）
     pcdnHostSuffixes.forEach { if (lower.contains(it)) return true }
-    val host = lower.substringAfter("://", "").substringBefore("/").substringBefore(":")
-    return host.matches(Regex("^\\d{1,3}(?:\\.\\d{1,3}){3}$"))
+    val uri = runCatching { URI(url) }.getOrNull()
+    val host = uri?.host ?: url.substringAfter("://", "").substringBefore("/").substringBefore(":")
+    if (host.matches(Regex("^\\d{1,3}(?:\\.\\d{1,3}){3}$"))) return true
+    // 常规镜像也可能下发 :8082/:4483 的 bcache 地址；这些端口在部分网络不可达。
+    return uri?.port?.let { it != -1 && it != 80 && it != 443 } == true
 }
 
 /**
@@ -364,6 +368,8 @@ internal fun preferredDashUrl(baseUrl: String, backupUrl: List<String>?): String
     val pcdnUrl = candidates.firstOrNull() ?: return ""
     val path = pcdnUrl.substringAfter("://", "").substringAfter("/", "")
     if (path.isEmpty()) return pcdnUrl
+    // /v1/resource 是 PCDN/BCache 专用路径，换 host 也不能保证可用。
+    if (path.startsWith("v1/resource")) return pcdnUrl
     return "https://${fallbackCdnHosts.first()}/$path"
 }
 
