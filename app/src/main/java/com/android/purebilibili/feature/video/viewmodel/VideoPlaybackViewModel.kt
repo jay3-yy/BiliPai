@@ -485,9 +485,10 @@ internal fun buildPlaybackCdnFallbackState(
             )
         )
     }
-    // 回退同样只重排已有候选，不把原签名拼接到未下发的 host。
+    // 回退时同样只重排/补全已有候选，不把原签名拼接到未下发的 host。
     val orderedCandidates = com.android.purebilibili.feature.plugin.sortSafeSignedPlaybackCandidates(
-        candidates, emptyMap()
+        com.android.purebilibili.feature.plugin.normalizePlaybackCdnCandidates(candidates),
+        emptyMap()
     )
     val firstFallback = orderedCandidates.firstOrNull { candidate ->
         candidate.videoUrl != selectedVideoUrl || candidate.audioUrl != selectedAudioUrl
@@ -516,12 +517,19 @@ internal fun buildPlaybackAudioUrlCandidates(
             }
         }
 
-    return if (selectedAudio != null) {
+    val raw = if (selectedAudio != null) {
         // 使用所选音轨的原始签名地址，避免携带 getValidUrl 的合成 host。
         (listOf(selectedAudio.baseUrl) + selectedAudio.backupUrl.orEmpty())
             .filter { it.isNotBlank() }.distinct()
     } else {
         listOfNotNull(audioUrl?.takeIf { it.isNotBlank() })
+    }
+    // 原始候选全是 PCDN 路径时，把 getValidUrl 选出的可换 host 地址放到前面。
+    return if (raw.any { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) {
+        raw
+    } else {
+        (listOfNotNull(audioUrl?.takeIf { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) + raw)
+            .distinct()
     }
 }
 
@@ -537,12 +545,19 @@ internal fun buildPlaybackVideoUrlCandidates(
             )
     }
 
-    return if (selectedVideo != null) {
+    val raw = if (selectedVideo != null) {
         // 编码与画质已经选定，只展开该轨道的原始地址。
         (listOf(selectedVideo.baseUrl) + selectedVideo.backupUrl.orEmpty())
             .filter { it.isNotBlank() }.distinct()
     } else {
         listOf(videoUrl).filter { it.isNotBlank() }
+    }
+    // 原始候选全是 PCDN 路径时，把 getValidUrl 选出的可换 host 地址放到前面。
+    return if (raw.any { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) {
+        raw
+    } else {
+        (listOfNotNull(videoUrl.takeIf { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) + raw)
+            .distinct()
     }
 }
 

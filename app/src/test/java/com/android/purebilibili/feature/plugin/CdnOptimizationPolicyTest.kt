@@ -58,6 +58,25 @@ class CdnOptimizationPolicyTest {
     }
 
     @Test
+    fun `nonstandard cdn port or mcdn query is risky even on a regular mirror host`() {
+        assertTrue(
+            isRiskyCdnUrl(
+                "https://upos-sz-mirrorali.bilivideo.com:8082/v1/resource/upgcxcode/a.m4s?os=bcache&sign=a"
+            )
+        )
+        assertTrue(
+            isRiskyCdnUrl(
+                "https://upos-sz-mirrorali.bilivideo.com:4483/upgcxcode/a.m4s?os=mcdn&sign=b"
+            )
+        )
+        assertFalse(
+            isRiskyCdnUrl(
+                "https://cn-example-cm-01-01.bilivideo.com/upgcxcode/a.m4s?os=bcache&sign=c"
+            )
+        )
+    }
+
+    @Test
     fun `prefetch window requires safe buffer and grows in bounded steps`() {
         assertEquals(0, resolveCdnPrefetchSegmentCount(14_999L))
         assertEquals(3, resolveCdnPrefetchSegmentCount(15_000L))

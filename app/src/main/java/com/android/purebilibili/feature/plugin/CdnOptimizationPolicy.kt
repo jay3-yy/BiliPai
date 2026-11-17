@@ -97,9 +97,18 @@ internal fun buildPlaybackCdnCacheKeys(candidates: List<PlaybackCdnCandidate>): 
 }
 
 /** 常规镜像也可能通过 os=mcdn 标记资源来源，只看域名会漏判。 */
-internal fun isRiskyCdnUrl(url: String): Boolean =
-    isRiskyCdnHost(hostFromCdnUrl(url)) ||
-        URI(url).rawQuery.orEmpty().split('&').any { it == "os=mcdn" }
+internal fun isRiskyCdnUrl(url: String): Boolean {
+    val uri = runCatching { URI(url) }.getOrNull() ?: return true
+    return isRiskyCdnHost(uri.host.orEmpty()) ||
+        uri.rawQuery.orEmpty().split('&').any { it == "os=mcdn" } ||
+        (uri.port != -1 && uri.port != 80 && uri.port != 443)
+}
+
+/** /upgcxcode 可跨 host 复用签名；/v1/resource 是 PCDN/BCache 专用路径。 */
+internal fun isHostPortableCdnUrl(url: String): Boolean {
+    val path = runCatching { URI(url).rawPath.orEmpty() }.getOrDefault("")
+    return path.startsWith("/upgcxcode/") && !path.startsWith("/v1/resource/")
+}
 
 internal fun isRiskyCdnHost(host: String): Boolean {
     val normalized = host.lowercase()

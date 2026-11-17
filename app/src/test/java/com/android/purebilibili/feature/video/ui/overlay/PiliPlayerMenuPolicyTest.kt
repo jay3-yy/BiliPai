@@ -75,12 +75,12 @@ class PiliPlayerMenuPolicyTest {
     @Test fun backupSearchSkipsMcdnBaseAndFindsActualMirrorBackup() {
         val base = "https://1.2.3.4:4483/v1/resource/abc?sign=x"
         val backup = "https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/abc/video.m4s?sign=y"
-        assertEquals(base, selectPiliCdnUrl(listOf(base, backup), PiliCdnService.BASE))
+        assertEquals(backup, selectPiliCdnUrl(listOf(base, backup), PiliCdnService.BASE))
         assertEquals(backup, selectPiliCdnUrl(listOf(base, backup), PiliCdnService.BACKUP))
         assertEquals(backup.replace("upos-sz-mirrorhw.bilivideo.com", "upos-sz-mirrorcos.bilivideo.com"),
             selectPiliCdnUrl(listOf(base, backup), PiliCdnService.COS))
     }
-    @Test fun backupSelectionPreservesAllRiskySignedUrlWhenNoRegularMirrorExists() {
+    @Test fun backupSelectionKeepsResourcePathWhenNoPortableMirrorExists() {
         val source = "https://1.2.3.4:4483/v1/resource/abc?sign=x%2Fy"
         assertEquals(source, selectPiliCdnUrl(listOf(source), PiliCdnService.BACKUP))
     }
