@@ -6,7 +6,7 @@ import com.android.purebilibili.data.model.response.UpStatData
 
 internal data class SpaceHeaderMetricItem(
     val label: String,
-    val value: Long
+    val value: Long?
 )
 
 internal fun resolveSpaceHeaderMetricItems(
@@ -14,9 +14,9 @@ internal fun resolveSpaceHeaderMetricItems(
     upStat: UpStatData?
 ): List<SpaceHeaderMetricItem> {
     return listOf(
-        SpaceHeaderMetricItem("粉丝", relationStat?.follower?.toLong() ?: 0L),
-        SpaceHeaderMetricItem("关注", relationStat?.following?.toLong() ?: 0L),
-        SpaceHeaderMetricItem("获赞", upStat?.likes ?: 0L)
+        SpaceHeaderMetricItem("粉丝", relationStat?.follower?.toLong()),
+        SpaceHeaderMetricItem("关注", relationStat?.following?.toLong()),
+        SpaceHeaderMetricItem("获赞", upStat?.likes)
     )
 }
 

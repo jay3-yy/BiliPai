@@ -5,9 +5,6 @@ import androidx.compose.foundation.layout.offset
 import com.android.purebilibili.core.ui.AppContentColors
 
 import com.android.purebilibili.core.ui.components.AppButton
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -44,7 +41,6 @@ import com.android.purebilibili.core.ui.rememberVisualWorkActive
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalConfiguration
@@ -218,7 +214,6 @@ internal fun HomeCategoryPageContent(
     displayMode: Int,
     cardAnimationEnabled: Boolean,
     cardMotionTier: MotionTier = MotionTier.Normal,
-    backToTopSquishActive: Boolean = false,
     cardTransitionEnabled: Boolean,
     isReturningFromVideoDetail: Boolean = false,
     pageScrollInProgress: State<Boolean>? = null,
@@ -239,7 +234,7 @@ internal fun HomeCategoryPageContent(
     showUpAvatars: Boolean = true,
     showPublishTime: Boolean = true,
     homeDurationStyle: HomeDurationStyle = HomeDurationStyle.OUTSIDE_COVER,
-    homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
+    homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.CURRENT,
     showFullVideoCardContent: Boolean = false,
     homeHeroCarouselEnabled: Boolean = true,
     homeHeroCarouselAutoplayEnabled: Boolean = false,
@@ -508,47 +503,6 @@ internal fun HomeCategoryPageContent(
         val isNativeNonVideoCard = video.contentType in setOf("bangumi", "picture") ||
             (video.dynamicId.isNotBlank() && !video.bvid.startsWith("BV", ignoreCase = true))
         val isDissolving = video.bvid in dissolvingVideos
-        // Disabled motion has no animation state or graphics layer; enabled cards keep
-        // their spring mounted through the complete return to the resting scale.
-        val cardSquishModifier = if (cardAnimationEnabled && componentMotionEnabled &&
-            !reduceMotion && visualWorkActive && isActive && cardVisible
-        ) {
-            val squishAmount = when (cardMotionTier) {
-                MotionTier.Reduced -> 0.004f
-                MotionTier.Normal -> 0.008f
-                MotionTier.Enhanced -> 0.009f
-            }
-            val squishActive = cardVisible && isActive && backToTopSquishActive
-            val cardSquishScaleX = animateFloatAsState(
-                targetValue = if (squishActive) 1f + squishAmount else 1f,
-                animationSpec = spring(
-                    dampingRatio = if (squishActive) {
-                        Spring.DampingRatioNoBouncy
-                    } else {
-                        0.64f
-                    },
-                    stiffness = Spring.StiffnessMedium,
-                ),
-                label = "home_back_to_top_card_squish_x",
-            )
-            val cardSquishScaleY = animateFloatAsState(
-                targetValue = if (squishActive) 1f - squishAmount else 1f,
-                animationSpec = spring(
-                    dampingRatio = if (squishActive) {
-                        Spring.DampingRatioNoBouncy
-                    } else {
-                        0.64f
-                    },
-                    stiffness = Spring.StiffnessMedium,
-                ),
-                label = "home_back_to_top_card_squish_y",
-            )
-            Modifier.graphicsLayer {
-                scaleX = cardSquishScaleX.value
-                scaleY = cardSquishScaleY.value
-            }
-        } else Modifier
-
         MaybeDissolvableVideoCard(
             isDissolving = isDissolving,
             onDissolveComplete = { onDissolveComplete(video.bvid) },
@@ -563,7 +517,6 @@ internal fun HomeCategoryPageContent(
             preserveContentLayerWhenIdle = cardTransitionEnabled,
             propagateMinConstraints = gridState.regularLayout,
             modifier = itemModifier
-                .then(cardSquishModifier)
                 .then(if (index == 0) firstGridItemModifier else Modifier)
         ) {
             CompositionLocalProvider(
@@ -686,12 +639,19 @@ internal fun HomeCategoryPageContent(
     val cardScrolling = remember(gridState, pageScrollInProgress) {
         derivedStateOf { gridState.isScrollInProgress || pageScrollInProgress?.value == true }
     }
+    // 低端机 / 计费网络只在组合期解析一次（并在网络切换时刷新），不要放进滚动路径。
+    val coverPreloadDeviceProfile = rememberHomeCoverPreloadDeviceProfile()
     HomeFeedCoverPreload(
         videos = visibleGridVideos,
         visibleVideoRange = visibleVideoRange,
         isScrolling = cardScrolling,
+        gridState = gridState,
+        columns = gridColumns,
         requestSpec = coverRequestSpec,
         allowed = coverPreloadAllowed && pageImageWorkAllowed && visualWorkActive && !isDataSaverActive,
+        isDataSaverActive = isDataSaverActive,
+        isLowRamDevice = coverPreloadDeviceProfile.isLowRamDevice,
+        isMeteredNetwork = coverPreloadDeviceProfile.isMeteredNetwork,
         aheadCount = coverPreloadAheadCount,
     )
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -910,30 +870,29 @@ internal fun HomeCategoryPageContent(
             }
         }
 
-        // Loading Indicator at bottom
+        // 三种材质及网格/瀑布流共用稳定的底部槽位，加载启停或结束不改变占位高度。
+        // 错误提示允许随文字和字体自然增高，保留完整信息与重试入口。
         val loadMoreError = categoryState.loadMoreError
-        if (loadMoreError != null) {
-            item(key = "load_more_error", fullLine = true) {
-                ListLoadError(
-                    message = "加载更多失败：$loadMoreError",
-                    onRetry = onRetryLoadMore,
-                    modifier = Modifier.fillMaxWidth().padding(AppSpacingTokens.Medium),
-                )
-            }
-        } else if (categoryState.isLoading || categoryState.hasMore) {
-             item(key = "load_more_status", fullLine = true) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(AppSpacingTokens.Large),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (categoryState.isLoading) {
-                        AdaptiveLoadingIndicator(
-                            size = AppSpacingTokens.ExtraLarge,
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                    }
+        item(key = "load_more_status", fullLine = true) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = AppSpacingTokens.ExtraLarge + AppSpacingTokens.Large * 2),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (loadMoreError != null) {
+                    ListLoadError(
+                        message = "加载更多失败：$loadMoreError",
+                        onRetry = onRetryLoadMore,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(AppSpacingTokens.Medium),
+                    )
+                } else if (categoryState.isLoading) {
+                    AdaptiveLoadingIndicator(
+                        size = AppSpacingTokens.ExtraLarge,
+                        color = MaterialTheme.colorScheme.secondary,
+                    )
                 }
             }
         }
@@ -950,6 +909,8 @@ internal fun HomeCategoryPageContent(
         if (oldContentGridItemIndex != null && !oldContentLocatorDismissed) {
             LastPositionPill(
                 refreshKey = oldContentLocatorRefreshKey,
+                // 内容可见性与后台任务门控分开，任务暂停不销毁按钮或重放入场。
+                visible = pageOnScreen,
                 onDismiss = { oldContentLocatorDismissed = true },
                 onClick = {
                     oldContentLocatorScope.launch {
@@ -959,6 +920,8 @@ internal fun HomeCategoryPageContent(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
+                        start = AppSpacingTokens.Large,
+                        top = contentPadding.calculateTopPadding() + AppSpacingTokens.Medium,
                         end = AppSpacingTokens.Large,
                         // 听视频小横条悬浮时上浮避让（与动态页 76dp 预留一致）；
                         // 整体抬高 120dp，避免胶囊压在底部卡片上

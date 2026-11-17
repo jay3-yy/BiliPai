@@ -7,6 +7,18 @@ import kotlin.test.assertTrue
 class SettingsSearchPolicyTest {
 
     @Test
+    fun realtimeDataQueriesFindPlaybackInformationControl() {
+        listOf("实时数据", "关闭实时数据", "隐藏实时数据").forEach { query ->
+            val result = resolveSettingsSearchResults(query).first()
+
+            assertEquals("playback.player_insight_mode", result.settingId)
+            assertEquals("显示播放信息", result.title)
+            assertEquals(SettingsSearchFocusIds.PLAYBACK_DEBUG, result.focusId)
+            assertEquals(SettingsRootCategory.PLAYER_DIAGNOSTICS, result.page)
+        }
+    }
+
+    @Test
     fun dynamicCommentPreviewTitleAndAliasesOpenHomeCategory() {
         listOf("显示动态评论提示", "动态评论摘要", "动态评论预览", "相关评论").forEach { query ->
             val result = resolveSettingsSearchResults(query)

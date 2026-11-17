@@ -5,7 +5,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import com.android.purebilibili.R
+import androidx.annotation.DrawableRes
 import com.android.purebilibili.core.util.Logger
 import java.io.File
 import kotlinx.coroutines.CancellationException
@@ -15,7 +15,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /** 赞赏码直接写入相册，保留原始 JPEG 字节；不受普通图片的自定义目录影响。 */
-internal suspend fun saveDonationQrToGallery(context: Context): Boolean = withContext(Dispatchers.IO) {
+internal suspend fun saveDonationQrToGallery(context: Context, @DrawableRes qrResource: Int): Boolean = withContext(Dispatchers.IO) {
     val resolver = context.contentResolver
     var target: android.net.Uri? = null
     var completed = false
@@ -40,7 +40,7 @@ internal suspend fun saveDonationQrToGallery(context: Context): Boolean = withCo
             ?: return@withContext false
         target = uri
         val output = resolver.openOutputStream(uri) ?: return@withContext false
-        output.use { sink -> context.resources.openRawResource(R.drawable.author_qr).use { it.copyTo(sink) } }
+        output.use { sink -> context.resources.openRawResource(qrResource).use { it.copyTo(sink) } }
         currentCoroutineContext().ensureActive()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val published = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }

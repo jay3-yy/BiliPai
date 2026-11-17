@@ -21,6 +21,7 @@ internal enum class SettingsIconRole {
     DIAGNOSTICS,
     ABOUT_SUPPORT,
     APPEARANCE,
+    ABOUT_CARD_SHAPE,
     ANIMATION,
     PLAYBACK,
     BOTTOM_BAR,
@@ -38,6 +39,7 @@ internal enum class SettingsIconRole {
     DARK_IMAGE_DIM,
     SCROLL_FEEDBACK,
     PLAYER_CONTROLS_TIMEOUT,
+    REFRESH_LOCATOR_DURATION,
     PLAYER_ADJUSTMENT_PERSISTENCE,
     PLAYER_ROTATION_SENSITIVITY,
     DYNAMIC_VISIBILITY_CHECK,
@@ -66,6 +68,7 @@ internal enum class SettingsIconRole {
     PERFORMANCE_MARK,
     PERFORMANCE_REPORT,
     PERFORMANCE_PREVIEW,
+    PERFORMANCE_HISTORY,
     FEED_API,
     REFRESH_COUNT,
     DYNAMIC_PREVIEW_TEXT,
@@ -111,9 +114,11 @@ internal enum class SettingsIconRole {
     MEMBER_SHOP,
     BLOCK_GOODS_DYNAMIC,
     BLOCK_GOODS_REPLY,
+    COMMENT_BLOCKED_KEYWORDS,
     COMMENT_IP_LOCATION,
     COMMENT_EXACT_TIME,
     COMMENT_AVATAR_PUSH,
+    SUB_REPLY_PREVIEW_LIKES,
     VERTICAL_RECOMMENDATIONS,
     COMPACT_PLAYER_CONTROLS,
     VIDEO_AMBIENT_LIGHT,
@@ -138,6 +143,7 @@ internal enum class SettingsIconRole {
     CARD_TRANSITION_ANIMATION,
     LIVE_SURFACE_TRANSITION,
     PREDICTIVE_BACK,
+    PREDICTIVE_BACK_GESTURE,
     MIUIX_TRANSITION_BLUR,
     TOP_DOCK_GLASS,
     HOME_SEARCH_GLASS,
@@ -194,6 +200,7 @@ internal enum class SettingsIconRole {
     HOME_HERO_AUTOPLAY,
     AUTO_PLAY_NEXT,
     VIDEO_NOTE_COLLAPSE,
+    DANMAKU_TAP,
     INTERACTIVE_COMMANDS,
     PORTRAIT_SWIPE_FULLSCREEN,
     CENTER_SWIPE_FULLSCREEN,
@@ -285,6 +292,7 @@ internal enum class SettingsIconRole {
     UI_STYLE,
     LIST_ITEM_STYLE,
     ICON_STYLE,
+    LINE_ICON_COLOR,
     CHOICE_MENU_STYLE,
     THEME_MODE,
     DARK_THEME_STYLE,
@@ -346,9 +354,11 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.PERFORMANCE_MARK -> R.drawable.ic_settings_performance_mark_24
     SettingsIconRole.PERFORMANCE_CAPTURE -> R.drawable.ms_speed_24
     SettingsIconRole.PERFORMANCE_PREVIEW -> R.drawable.ms_find_in_page_24
+    SettingsIconRole.PERFORMANCE_HISTORY -> R.drawable.ic_settings_performance_history_24
     SettingsIconRole.PERFORMANCE_REPORT -> R.drawable.ms_share_24
     SettingsIconRole.DIAGNOSTICS -> R.drawable.ms_terminal_24
     SettingsIconRole.ABOUT_SUPPORT -> R.drawable.ms_info_24
+    SettingsIconRole.ABOUT_CARD_SHAPE -> R.drawable.ic_settings_about_card_shape_24
     SettingsIconRole.APPEARANCE -> R.drawable.ms_palette_24
     SettingsIconRole.ANIMATION -> R.drawable.ms_animation_24
     SettingsIconRole.PLAYBACK -> R.drawable.ms_play_circle_24
@@ -367,6 +377,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.PLAYER_ADJUSTMENT_PERSISTENCE -> R.drawable.ic_settings_player_adjustments_24
     SettingsIconRole.PLAYER_ROTATION_SENSITIVITY -> R.drawable.ic_settings_rotation_sensitivity_24
     SettingsIconRole.PLAYER_CONTROLS_TIMEOUT -> R.drawable.ic_settings_player_controls_timeout_24
+    SettingsIconRole.REFRESH_LOCATOR_DURATION -> R.drawable.ic_settings_refresh_locator_duration_24
     SettingsIconRole.DYNAMIC_VISIBILITY_CHECK -> R.drawable.ic_settings_dynamic_visibility_check_24
     SettingsIconRole.SCROLL_FEEDBACK -> R.drawable.ic_settings_scroll_feedback_24
     SettingsIconRole.RECOMMEND_RETENTION -> R.drawable.ic_settings_recommend_retention_24
@@ -436,8 +447,10 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.DYNAMIC_CONTENT_NOTICE -> R.drawable.ic_settings_dynamic_warning_24
     SettingsIconRole.BLOCK_GOODS_DYNAMIC -> R.drawable.ic_settings_block_goods_dynamic_24
     SettingsIconRole.BLOCK_GOODS_REPLY -> R.drawable.ic_settings_block_goods_reply_24
+    SettingsIconRole.COMMENT_BLOCKED_KEYWORDS -> R.drawable.ic_settings_comment_keywords_24
     SettingsIconRole.COMMENT_IP_LOCATION -> R.drawable.ic_settings_comment_ip_location_24
     SettingsIconRole.COMMENT_EXACT_TIME -> R.drawable.ms_calendar_clock_24
+    SettingsIconRole.SUB_REPLY_PREVIEW_LIKES -> R.drawable.ic_settings_sub_reply_likes_24
     SettingsIconRole.COMMENT_AVATAR_PUSH -> R.drawable.ic_settings_comment_avatar_push_24
     SettingsIconRole.VERTICAL_RECOMMENDATIONS -> R.drawable.ms_view_stream_24
     SettingsIconRole.COMPACT_PLAYER_CONTROLS -> R.drawable.ms_collapse_content_24
@@ -463,6 +476,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.CARD_TRANSITION_ANIMATION -> R.drawable.ms_sync_alt_24
     SettingsIconRole.LIVE_SURFACE_TRANSITION -> R.drawable.ms_movie_24
     SettingsIconRole.PREDICTIVE_BACK -> R.drawable.ms_arrow_back_24
+    SettingsIconRole.PREDICTIVE_BACK_GESTURE -> R.drawable.ic_settings_predictive_back_24
     SettingsIconRole.MIUIX_TRANSITION_BLUR -> R.drawable.ms_gradient_24
     SettingsIconRole.TOP_DOCK_GLASS -> R.drawable.ms_layers_24
     SettingsIconRole.HOME_SEARCH_GLASS -> R.drawable.ms_manage_search_24
@@ -519,6 +533,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.HOME_HERO_AUTOPLAY -> R.drawable.ms_smart_display_24
     SettingsIconRole.AUTO_PLAY_NEXT -> R.drawable.ms_playlist_play_24
     SettingsIconRole.VIDEO_NOTE_COLLAPSE -> R.drawable.ms_short_text_24
+    SettingsIconRole.DANMAKU_TAP -> R.drawable.ic_settings_danmaku_tap_24
     SettingsIconRole.INTERACTIVE_COMMANDS -> R.drawable.ms_comments_disabled_24
     SettingsIconRole.PORTRAIT_SWIPE_FULLSCREEN -> R.drawable.ms_swipe_up_24
     SettingsIconRole.CENTER_SWIPE_FULLSCREEN -> R.drawable.ms_swipe_24
@@ -609,6 +624,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.TRANSITION_MODE -> R.drawable.ic_settings_transition_mode_24
     SettingsIconRole.UI_STYLE -> R.drawable.ms_view_carousel_24
     SettingsIconRole.LIST_ITEM_STYLE -> R.drawable.ms_view_stream_24
+    SettingsIconRole.LINE_ICON_COLOR -> R.drawable.ic_settings_line_icon_color_24
     SettingsIconRole.ICON_STYLE -> R.drawable.ms_apps_24
     SettingsIconRole.CHOICE_MENU_STYLE -> R.drawable.ms_dialogs_24
     SettingsIconRole.THEME_MODE -> R.drawable.ms_light_mode_24

@@ -14,7 +14,7 @@ data class VideoDetailUiState(
     val isLoggedIn: Boolean = false,
     val isVip: Boolean = false
 ) {
-    /** 同一内容重建播放请求时保留已到达的正文；换视频或分 P 时清空。 */
+    /** 同一稿件保留正文；已知分 P 复用详情，只更新选中的 CID。 */
     fun forNewRequest(
         bvid: String,
         cid: Long,
@@ -47,16 +47,23 @@ data class VideoDetailUiState(
         if (playback != null) return playback
         if (requestBvid != bvid) return null
         val detail = info ?: return null
-        // 未指定分 P 的请求解析出 CID 后仍属于同一次详情，不能退回骨架。
-        if (cid > 0L && requestCid != cid && detail.cid != cid) return null
+        // 简介、评论及选集属于稿件。切换到详情已包含的分 P 时，即使播放投影
+        // 尚未到达，也保留正文并选中目标 CID；字幕、AI 等分 P 数据不沿用旧快照。
+        val selectedDetail = if (cid > 0L && detail.pages.any { it.cid == cid }) {
+            detail.copy(cid = cid)
+        } else {
+            // 未指定分 P 的请求解析出 CID 后仍属于同一次详情。
+            if (cid > 0L && requestCid != cid && detail.cid != cid) return null
+            detail
+        }
         return VideoPlaybackUiState.Success(
-            info = detail,
+            info = selectedDetail,
             playUrl = "",
             related = related,
             relatedLoadState = relatedLoadState,
             isLoggedIn = isLoggedIn,
             isVip = isVip,
-            videoDurationMs = resolveVideoLoadDurationMs(0L, detail)
+            videoDurationMs = resolveVideoLoadDurationMs(0L, selectedDetail)
         )
     }
 }

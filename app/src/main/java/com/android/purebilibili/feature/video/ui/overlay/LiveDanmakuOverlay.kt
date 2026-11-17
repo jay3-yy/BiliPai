@@ -47,6 +47,8 @@ import com.android.purebilibili.feature.video.danmaku.shouldBlockDanmakuByRules
 import com.android.purebilibili.feature.video.danmaku.shouldDisplayStandardDanmaku
 import java.util.ArrayDeque
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.isActive
 
@@ -88,6 +90,7 @@ fun LiveDanmakuOverlay(
     val latestReport by rememberUpdatedState(onReport)
     var inViewport by remember { mutableStateOf(false) }
     val renderingActive = active && inViewport
+    val effectiveInteractionEnabled = interactionEnabled && danmakuSettings.tapInteractionEnabled
     val latestRenderingActive by rememberUpdatedState(renderingActive)
     val sources = remember { IdentityHashMap<DanmakuItem, LiveDanmakuItem>() }
     var selection by remember { mutableStateOf<LiveOverlaySelection?>(null) }
@@ -168,7 +171,7 @@ fun LiveDanmakuOverlay(
         selection = null
     }
 
-    DisposableEffect(engine, renderView, renderingActive, interactionEnabled, isFullscreen, safeDisplayArea) {
+    DisposableEffect(engine, renderView, renderingActive, effectiveInteractionEnabled, isFullscreen, safeDisplayArea) {
         val currentEngine = engine
         val view = renderView
         dismissSelection()
@@ -178,7 +181,7 @@ fun LiveDanmakuOverlay(
             pendingItems.clear()
             pendingItemsBeforeStart.clear()
         }
-        if (renderingActive && interactionEnabled && currentEngine != null && view != null) {
+        if (renderingActive && effectiveInteractionEnabled && currentEngine != null && view != null) {
             currentEngine.setOnItemClickListener { rendered, rect, point ->
                 val source = sources[rendered]
                 if (source == null || source.isSystem) {
@@ -216,7 +219,7 @@ fun LiveDanmakuOverlay(
         }
     }
 
-    selection?.takeIf { renderingActive && interactionEnabled }?.let { selected ->
+    selection?.takeIf { renderingActive && effectiveInteractionEnabled }?.let { selected ->
         LiveDanmakuActionToolbar(
             item = selected.source,
             anchor = selected.anchor,
@@ -244,20 +247,27 @@ fun LiveDanmakuOverlay(
                 }
 
                 if (pendingItems.isNotEmpty()) {
-                    // 文字消息直接组装为有界批次，不发起图片加载。
+                    // 排队及引擎提交留在主线程；表情测量与基础光栅化在后台串行完成。
                     val pendingBatch = ArrayList<PendingLiveDanmakuItem>(pendingItems.size)
                     while (pendingItems.isNotEmpty()) pendingBatch.add(pendingItems.removeFirst())
                     val currentTextSize = latestTextSizePx
-                    val batch = pendingBatch.map { pending ->
-                        createLiveDanmakuItem(
-                            item = pending.item,
-                            currentTime = pending.queuedAtTime,
-                            staticDanmakuToScroll = settings.staticDanmakuToScroll,
-                            textSizePx = currentTextSize,
-                            onUpdate = { currentEngine.invalidate() },
-                            context = context,
-                        )
+                    val imageRequests = mutableListOf<() -> Unit>()
+                    val batch = withContext(Dispatchers.Default) {
+                        pendingBatch.map { pending ->
+                            createLiveDanmakuItem(
+                                item = pending.item,
+                                currentTime = pending.queuedAtTime,
+                                staticDanmakuToScroll = settings.staticDanmakuToScroll,
+                                textSizePx = currentTextSize,
+                                onUpdate = { currentEngine.invalidate() },
+                                context = context,
+                                deferredImageRequests = imageRequests,
+                            )
+                        }
                     }
+                    if (!latestRenderingActive || engine !== currentEngine) return@LaunchedEffect
+                    // 图片回调只能在基础位图绘制完成后启动，仍由主线程更新引擎。
+                    imageRequests.forEach { it() }
                     // 排队时间较久的消息以当前时间入场，避免使用已过期的时间戳。
                     val readyTime = SystemClock.elapsedRealtime() - startTime + 50L
                     batch.forEachIndexed { index, it ->
@@ -356,6 +366,7 @@ private fun createLiveDanmakuItem(
     textSizePx: Float,
     onUpdate: () -> Unit,
     context: android.content.Context,
+    deferredImageRequests: MutableList<() -> Unit>,
 ): DanmakuItem {
     val layerType = resolveDanmakuRenderLayerType(item.mode, staticDanmakuToScroll)
     val textColor = if (item.color == 0) AndroidColor.WHITE else (0xFF000000 or item.color.toLong()).toInt()
@@ -400,6 +411,7 @@ private fun createLiveDanmakuItem(
                 }
             },
             onUpdate = onUpdate,
+            deferredImageRequests = deferredImageRequests,
         )
         bitmapItem.isSelf = item.isSelf
         return bitmapItem

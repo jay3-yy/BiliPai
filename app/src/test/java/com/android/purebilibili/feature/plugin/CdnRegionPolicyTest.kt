@@ -425,12 +425,12 @@ class CdnRegionPolicyTest {
     fun `global playback cdn preference rewrites paired tracks and preserves fallbacks`() {
         val original = buildPlaybackCdnCandidates(
             videoUrls = listOf(
-                "https://upos-sz-mirrorali.bilivideo.com/video.m4s?deadline=1",
-                "https://upos-sz-mirrorcos.bilivideo.com/video.m4s?deadline=1",
+                "https://upos-sz-mirrorali.bilivideo.com/upgcxcode/1/2/video.m4s?deadline=1",
+                "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/1/2/video.m4s?deadline=1",
             ),
             audioUrls = listOf(
-                "https://upos-sz-mirrorali.bilivideo.com/audio.m4s?deadline=1",
-                "https://upos-sz-mirrorcos.bilivideo.com/audio.m4s?deadline=1",
+                "https://upos-sz-mirrorali.bilivideo.com/upgcxcode/1/2/audio.m4s?deadline=1",
+                "https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/1/2/audio.m4s?deadline=1",
             ),
         )
 
@@ -442,15 +442,108 @@ class CdnRegionPolicyTest {
     }
 
     @Test
-    fun `backup preference promotes returned backup without discarding base`() {
+    fun `base preference skips an mcdn-marked primary and keeps the normal backup`() {
         val original = buildPlaybackCdnCandidates(
-            videoUrls = listOf("https://base.bilivideo.com/v", "https://backup.bilivideo.com/v"),
+            videoUrls = listOf(
+                "https://upos-sz-mirrorali.bilivideo.com/upgcxcode/1/2/video.m4s?os=mcdn&sign=a",
+                "https://cn-example-cm-01-01.bilivideo.com/upgcxcode/1/2/video.m4s?sign=b",
+            ),
             audioUrls = emptyList(),
         )
 
-        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.BACKUP_URL)
+        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.BASE_URL)
 
-        assertEquals("backup.bilivideo.com", hostFromCdnUrl(preferred.first().videoUrl))
-        assertEquals("base.bilivideo.com", hostFromCdnUrl(preferred.last().videoUrl))
+        assertEquals(
+            "https://cn-example-cm-01-01.bilivideo.com/upgcxcode/1/2/video.m4s?sign=b",
+            preferred.first().videoUrl,
+        )
+    }
+
+    @Test
+    fun `fixed line uses a portable upgcxcode candidate instead of a resource path`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://upos-sz-mirrorali.bilivideo.com/v1/resource/upgcxcode/1/2/video.m4s?sign=a",
+                "https://cn-example-cm-01-01.bilivideo.com/upgcxcode/1/2/video.m4s?sign=b",
+            ),
+            audioUrls = emptyList(),
+        )
+
+        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.HW_08C)
+
+        assertEquals(
+            "https://upos-sz-mirror08c.bilivideo.com/upgcxcode/1/2/video.m4s?sign=b",
+            preferred.first().videoUrl,
+        )
+        assertFalse(preferred.first().videoUrl.contains("/v1/resource/"))
+    }
+
+    @Test
+    fun `fixed line does not invent a host when only resource paths exist`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://upos-sz-mirrorali.bilivideo.com/v1/resource/upgcxcode/1/2/video.m4s?sign=a",
+            ),
+            audioUrls = emptyList(),
+        )
+
+        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.HW_08C)
+
+        assertEquals(original, preferred)
+        assertFalse(preferred.any { it.videoUrl.contains("upos-sz-mirror08c") })
+    }
+
+    @Test
+    fun `default preference promotes signed regular backup without rewriting tracks`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://a.mcdn.bilivideo.cn/v?sign=a%2Fb",
+                "https://backup.bilivideo.com/v?sign=c%2Fd",
+            ),
+            audioUrls = listOf(
+                "https://a.mcdn.bilivideo.cn/a?sign=e%2Ff",
+                "https://backup.bilivideo.com/a?sign=g%2Fh",
+            ),
+        )
+
+        val preferred = applyPlaybackCdnPreference(original, PlaybackCdnPreference.fromStorageValue(null))
+
+        assertEquals(listOf(original[1], original[0]), preferred)
+    }
+
+    @Test
+    fun `backup preference preserves regular primary and stable server order`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://z.bilivideo.com/v", "https://a.bilivideo.com/v"),
+            audioUrls = emptyList(),
+        )
+
+        assertEquals(original, applyPlaybackCdnPreference(original, PlaybackCdnPreference.BACKUP_URL))
+        assertEquals(original, applyPlaybackCdnPreference(original, PlaybackCdnPreference.fromStorageValue("base_url")))
+    }
+
+    @Test
+    fun `backup preference keeps original candidates when only non-portable paths exist`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://1.2.3.4/v1/resource/a?sign=a", "https://a.mcdn.bilivideo.cn/v?sign=b"),
+            audioUrls = emptyList(),
+        )
+
+        assertEquals(original, applyPlaybackCdnPreference(original, PlaybackCdnPreference.BACKUP_URL))
+    }
+
+    @Test
+    fun `backup preference does not rotate plugin health ranking`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://a.bilivideo.com/v", "https://b.bilivideo.com/v"),
+            audioUrls = emptyList(),
+        )
+        val ranked = sortSafeSignedPlaybackCandidates(
+            original,
+            mapOf("a.bilivideo.com" to CdnCandidateHealth(playbackErrorCount = 2)),
+        )
+
+        assertEquals(original[1], ranked.first())
+        assertEquals(ranked, applyPlaybackCdnPreference(ranked, PlaybackCdnPreference.BACKUP_URL, pluginApplied = true))
     }
 }

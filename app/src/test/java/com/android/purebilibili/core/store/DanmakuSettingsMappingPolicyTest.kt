@@ -17,6 +17,25 @@ class DanmakuSettingsMappingPolicyTest {
     private val landscapeScope = DanmakuSettingsScope.LANDSCAPE
 
     @Test
+    fun disablingTapOperationsAppliesToBothScopesWithoutHidingDanmaku() {
+        val prefs = mutablePreferencesOf()
+        for (scope in listOf(portraitScope, landscapeScope)) {
+            assertTrue(mapDanmakuSettingsFromPreferences(prefs, scope).tapInteractionEnabled)
+        }
+        prefs[booleanPreferencesKey("danmaku_tap_interaction_enabled")] = false
+        for (scope in listOf(portraitScope, landscapeScope)) {
+            val settings = mapDanmakuSettingsFromPreferences(prefs, scope)
+            assertFalse(settings.tapInteractionEnabled)
+            assertTrue(settings.enabled)
+            assertFalse(settings.hideInteractiveCommands)
+        }
+        prefs[booleanPreferencesKey("danmaku_tap_interaction_enabled")] = true
+        for (scope in listOf(portraitScope, landscapeScope)) {
+            assertTrue(mapDanmakuSettingsFromPreferences(prefs, scope).tapInteractionEnabled)
+        }
+    }
+
+    @Test
     fun arbitraryDisplayAreaValues_preservePiliSelections() {
         assertEquals(0.1f, normalizeDanmakuDisplayArea(0f))
         assertEquals(0.33f, normalizeDanmakuDisplayArea(0.33f))

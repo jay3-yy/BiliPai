@@ -6,8 +6,42 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import top.yukonga.miuix.kmp.nav.transition.NavSettlePhase
+import top.yukonga.miuix.kmp.nav.runtime.boundedNavGestureProgress
 
 class MiuixPredictiveBackProgressTransitionTest {
+
+    @Test
+    fun `commit keeps held position and visual speed at limited preview release`() {
+        for (release in listOf(0.2f, 0.6f, 0.9f)) {
+            for (limit in listOf(0f, 0.5f, 1f)) {
+                val step = (1f - release) * 0.0001f
+                val held = resolveMiuixPredictiveBackVisualProgress(release, release, null, limit)
+                val before = resolveMiuixPredictiveBackVisualProgress(release - step, release - step, null, limit)
+                val committed = resolveMiuixPredictiveBackVisualProgress(release, release, NavSettlePhase.Commit, limit)
+                val after = resolveMiuixPredictiveBackVisualProgress(release + step, release, NavSettlePhase.Commit, limit)
+                assertEquals(held, committed, 0.0001f)
+                assertEquals((held - before) / step, (after - committed) / step, 0.015f,
+                    "release=$release limit=$limit")
+            }
+        }
+    }
+
+    @Test
+    fun `releasing at driver finger cap does not jump to the full exit`() {
+        val release = boundedNavGestureProgress(1f)
+        for (limit in listOf(0f, 0.5f, 1f)) {
+            val held = resolveMiuixPredictiveBackVisualProgress(release, 1f, null, limit)
+            val samples = (0..100).map { step ->
+                resolveMiuixPredictiveBackVisualProgress(
+                    release + (1f - release) * step / 100f, 1f, NavSettlePhase.Commit, limit,
+                )
+            }
+            assertEquals(held, samples.first(), 0.0001f)
+            assertEquals(1f, samples.last(), 0.0001f)
+            assertTrue(samples.all { it in 0f..1f })
+            assertTrue(samples.zipWithNext().all { (previous, next) -> next >= previous })
+        }
+    }
 
     @Test
     fun `preview maximum applies while held and commit completes continuously`() {

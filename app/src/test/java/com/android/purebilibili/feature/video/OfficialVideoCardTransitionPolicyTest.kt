@@ -9,20 +9,17 @@ import org.junit.Test
 
 class OfficialVideoCardTransitionPolicyTest {
     @Test
-    fun oplusSdkDoesNotWriteIrreversibleReturnControlsBeforeFinish() {
-        // 页面首帧身份未知、后续绑定就绪，都不能在关闭前写入返回控制。
-        for (sourceAvailable in listOf(false, true)) {
-            assertNull(
-                resolveOfficialVideoCardReturnPlan(
-                    metadata = "int",
-                    oplusSdkWindow = true,
-                    preparingToFinish = false,
-                    motionEnabled = true,
+    fun openingReturnControlsRemainUntouchedUntilFinish() {
+        // 来源缺失和正常就绪都不能触发播放期间的返回配置重写。
+        for (oplusSdkWindow in listOf(false, true)) {
+            for (sourceAvailable in listOf(false, true)) {
+                assertNull(resolveOfficialVideoCardReturnPlan(
+                    metadata = "int", oplusSdkWindow = oplusSdkWindow,
+                    preparingToFinish = false, motionEnabled = true,
                     sourceAvailable = sourceAvailable,
-                    sourceRadiusUnchanged = true,
                     preferSystemPredictiveBack = true,
-                ),
-            )
+                ))
+            }
         }
     }
 
@@ -34,7 +31,6 @@ class OfficialVideoCardTransitionPolicyTest {
             preparingToFinish = true,
             motionEnabled = true,
             sourceAvailable = true,
-            sourceRadiusUnchanged = true,
             preferSystemPredictiveBack = true,
         ))
         assertEquals(ViewAnimationType.VIEW_ANIM_DEFAULT, plan.backAnimType)
@@ -44,17 +40,12 @@ class OfficialVideoCardTransitionPolicyTest {
     }
 
     @Test
-    fun oplusSdkRejectsStaleCardGeometryAtFinish() {
-        // 来源已失效或圆角改变时，都不能把旧截图收回新形状。
-        for ((sourceAvailable, sameRadius) in listOf(false to true, true to false)) {
+    fun unavailableSourceWindowDisablesCardReturnAtFinish() {
+        for (oplusSdkWindow in listOf(false, true)) {
             val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
-                metadata = "int",
-                oplusSdkWindow = true,
-                preparingToFinish = true,
-                motionEnabled = true,
-                sourceAvailable = sourceAvailable,
-                sourceRadiusUnchanged = sameRadius,
-                preferSystemPredictiveBack = false,
+                metadata = "int", oplusSdkWindow = oplusSdkWindow,
+                preparingToFinish = true, motionEnabled = true,
+                sourceAvailable = false, preferSystemPredictiveBack = false,
             ))
             assertEquals(ViewAnimationType.VIEW_ANIM_FOLLOW_SYSTEM, plan.backAnimType)
             assertFalse(plan.useSourceBounds)
@@ -69,28 +60,10 @@ class OfficialVideoCardTransitionPolicyTest {
             preparingToFinish = true,
             motionEnabled = false,
             sourceAvailable = true,
-            sourceRadiusUnchanged = true,
             preferSystemPredictiveBack = true,
         ))
         assertEquals(ViewAnimationType.VIEW_ANIM_NONE, plan.backAnimType)
         assertFalse(plan.useSourceBounds)
-    }
-
-    @Test
-    fun otherSdkImplementationsKeepLiveOverridesAndCardReturnDuringPredictiveBack() {
-        val plan = requireNotNull(resolveOfficialVideoCardReturnPlan(
-            metadata = "int",
-            oplusSdkWindow = false,
-            preparingToFinish = false,
-            motionEnabled = true,
-            sourceAvailable = true,
-            sourceRadiusUnchanged = false,
-            preferSystemPredictiveBack = true,
-        ))
-        assertEquals(ViewAnimationType.VIEW_ANIM_DEFAULT, plan.backAnimType)
-        assertTrue(plan.useSourceBounds)
-        assertTrue(plan.updateRadius)
-        assertTrue(plan.updateEffects)
     }
 
     @Test

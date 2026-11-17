@@ -17,7 +17,7 @@ enum class CdnOptimizationProfile {
 data class CdnAuthorizedCandidate(
     val url: String,
     val host: String = hostFromCdnUrl(url),
-    val risky: Boolean = isRiskyCdnHost(host)
+    val risky: Boolean = isRiskyCdnUrl(url)
 )
 
 data class CdnByteRange(
@@ -63,7 +63,6 @@ internal fun sortAuthorizedCdnCandidates(
         compareByDescending<CdnAuthorizedCandidate> { it.host.equals(normalizedPin, ignoreCase = true) }
             .thenBy { it.risky }
             .thenByDescending { scoreCdnCandidate(healthByHost[it.host]) }
-            .thenBy { it.url }
     )
 }
 
@@ -72,12 +71,16 @@ internal fun sortSafeSignedPlaybackCandidates(
     healthByHost: Map<String, CdnCandidateHealth>,
     pinnedHost: String? = null
 ): List<PlaybackCdnCandidate> {
-    val order = sortAuthorizedCdnCandidates(
-        candidates = candidates.map { CdnAuthorizedCandidate(it.videoUrl) },
-        healthByHost = healthByHost,
-        pinnedHost = pinnedHost
-    ).map { it.url }
-    return order.mapNotNull { url -> candidates.firstOrNull { it.videoUrl == url } }
+    val normalizedPin = pinnedHost?.lowercase()?.takeIf { it.isNotBlank() }
+    return candidates.sortedWith(
+        compareByDescending<PlaybackCdnCandidate> {
+            hostFromCdnUrl(it.videoUrl).equals(normalizedPin, ignoreCase = true)
+        }.thenBy {
+            isRiskyCdnUrl(it.videoUrl) || it.audioUrl?.let(::isRiskyCdnUrl) == true
+        }.thenByDescending {
+            scoreCdnCandidate(healthByHost[hostFromCdnUrl(it.videoUrl)])
+        }
+    )
 }
 
 internal fun buildPlaybackCdnCacheKeys(candidates: List<PlaybackCdnCandidate>): Map<String, String> {
@@ -91,6 +94,20 @@ internal fun buildPlaybackCdnCacheKeys(candidates: List<PlaybackCdnCandidate>): 
             }
         }
     }
+}
+
+/** 常规镜像也可能通过 os=mcdn 标记资源来源，只看域名会漏判。 */
+internal fun isRiskyCdnUrl(url: String): Boolean {
+    val uri = runCatching { URI(url) }.getOrNull() ?: return true
+    return isRiskyCdnHost(uri.host.orEmpty()) ||
+        uri.rawQuery.orEmpty().split('&').any { it == "os=mcdn" } ||
+        (uri.port != -1 && uri.port != 80 && uri.port != 443)
+}
+
+/** /upgcxcode 可跨 host 复用签名；/v1/resource 是 PCDN/BCache 专用路径。 */
+internal fun isHostPortableCdnUrl(url: String): Boolean {
+    val path = runCatching { URI(url).rawPath.orEmpty() }.getOrDefault("")
+    return path.startsWith("/upgcxcode/") && !path.startsWith("/v1/resource/")
 }
 
 internal fun isRiskyCdnHost(host: String): Boolean {

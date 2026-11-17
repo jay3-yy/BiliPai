@@ -23,14 +23,15 @@ internal fun ModalWindowBackHandler(
     onCompleted: () -> Unit,
 ) {
     val view = LocalView.current
+    val previewEnabled = predictive && LocalPredictiveBackGestureEnabled.current
     val started = rememberUpdatedState(onStarted)
     val progress = rememberUpdatedState(onProgress)
     val cancelled = rememberUpdatedState(onCancelled)
     val completed = rememberUpdatedState(onCompleted)
     if (enabled && Build.VERSION.SDK_INT >= 33) {
-        DisposableEffect(view, predictive) {
+        DisposableEffect(view, previewEnabled) {
             val dispose = registerPopupBackHandler(
-                view, predictive, { started.value() }, { progress.value(it) },
+                view, previewEnabled, { started.value() }, { progress.value(it) },
                 { cancelled.value() }, { completed.value() },
             )
             onDispose { dispose() }

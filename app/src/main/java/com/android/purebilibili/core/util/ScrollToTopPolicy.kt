@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.util
 
+import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
@@ -63,6 +64,7 @@ fun shouldShowScrollToTop(
 }
 
 suspend fun LazyListState.animateScrollToTop(fast: Boolean = false) {
+    val wasScrolled = canScrollBackward
     val plan = resolveScrollToTopPlan(
         firstVisibleItemIndex = firstVisibleItemIndex,
         visibleItemCount = layoutInfo.visibleItemsInfo.size,
@@ -70,9 +72,11 @@ suspend fun LazyListState.animateScrollToTop(fast: Boolean = false) {
     )
     plan.preJumpIndex?.let { scrollToItem(it) }
     animateScrollToItem(plan.animateTargetIndex)
+    if (wasScrolled && !canScrollBackward) notifyAppScrollToTop()
 }
 
 suspend fun LazyGridState.animateScrollToTop(fast: Boolean = false) {
+    val wasScrolled = canScrollBackward
     val plan = resolveScrollToTopPlan(
         firstVisibleItemIndex = firstVisibleItemIndex,
         visibleItemCount = layoutInfo.visibleItemsInfo.size,
@@ -80,9 +84,11 @@ suspend fun LazyGridState.animateScrollToTop(fast: Boolean = false) {
     )
     plan.preJumpIndex?.let { scrollToItem(it) }
     animateScrollToItem(plan.animateTargetIndex)
+    if (wasScrolled && !canScrollBackward) notifyAppScrollToTop()
 }
 
 suspend fun LazyStaggeredGridState.animateScrollToTop(fast: Boolean = false) {
+    val wasScrolled = canScrollBackward
     val plan = resolveScrollToTopPlan(
         firstVisibleItemIndex = firstVisibleItemIndex,
         visibleItemCount = layoutInfo.visibleItemsInfo.size,
@@ -90,4 +96,5 @@ suspend fun LazyStaggeredGridState.animateScrollToTop(fast: Boolean = false) {
     )
     plan.preJumpIndex?.let { scrollToItem(it) }
     animateScrollToItem(plan.animateTargetIndex)
+    if (wasScrolled && !canScrollBackward) notifyAppScrollToTop()
 }

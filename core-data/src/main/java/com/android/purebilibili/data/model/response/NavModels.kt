@@ -24,6 +24,7 @@ data class NavData(
     val face: String = "",
     val mid: Long = 0,
     val level_info: LevelInfo = LevelInfo(),
+    val is_senior_member: Int = 0,
     val money: Double = 0.0, // 硬币
     val wallet: Wallet = Wallet(),
     val vip: VipInfo = VipInfo(),

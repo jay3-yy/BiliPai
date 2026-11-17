@@ -629,7 +629,7 @@ object CommentRepository {
             android.util.Log.e("CommentRepo", " getComments exception: oid=$oid, type=$type, ${e.message}", e)
             Result.failure(e)
         }
-    }.map { filterGoodsRepliesIfEnabled(it) }
+    }.map { filterCommentRepliesIfEnabled(it) }
 
     /**
      * 手机主评论通过独立排序字段与服务端 offset 分页。分页来源随缓存保存，
@@ -644,9 +644,10 @@ object CommentRepository {
         continuation: CommentMainListContinuation? = null,
         fallbackOnMissingLocation: Boolean = false,
         expectedCount: Int = 0,
+        applyDisplayFilter: Boolean = true,
     ): Result<ReplyData> = recoverEmptyCommentFirstPage(page, expectedCount) {
         readMobileCommentsForSubject(oid, type, page, ps, mode, continuation, fallbackOnMissingLocation)
-    }.map { filterGoodsRepliesIfEnabled(it) }
+    }.map { if (applyDisplayFilter) filterCommentRepliesIfEnabled(it) else it }
 
     private suspend fun readMobileCommentsForSubject(
         oid: Long,
@@ -758,6 +759,8 @@ object CommentRepository {
             } else {
                 Result.failure(CommentReadException(response.code, response.message))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -815,7 +818,7 @@ object CommentRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }.map { filterGoodsRepliesIfEnabled(it) }
+    }.map { filterCommentRepliesIfEnabled(it) }
 
     /** Resolve routed reply identities before reading a complete, sorted thread. */
     suspend fun getMobileSortedSubCommentsForSubject(
@@ -826,6 +829,7 @@ object CommentRepository {
         paginationOffset: String? = null,
         targetReplyId: Long = 0L,
         supplementLocations: Boolean = true,
+        applyDisplayFilter: Boolean = true,
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
             val account = com.android.purebilibili.core.store.TokenManager.accountIdentity.value
@@ -860,7 +864,7 @@ object CommentRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }.map { filterGoodsRepliesIfEnabled(it) }.let { result ->
+    }.map { if (applyDisplayFilter) filterCommentRepliesIfEnabled(it) else it }.let { result ->
         val data = result.getOrNull()
         if (data?.isTargetOnly == true && data.replies.isNullOrEmpty()) {
             Result.failure(IllegalStateException("该回复已按过滤设置隐藏"))
@@ -1005,7 +1009,7 @@ object CommentRepository {
             android.util.Log.e("CommentRepo", " getSubComments exception: oid=$oid, type=$type, ${e.message}", e)
             Result.failure(e)
         }
-    }.map { filterGoodsRepliesIfEnabled(it) }
+    }.map { filterCommentRepliesIfEnabled(it) }
 
     suspend fun getDialogCommentsForSubject(
         oid: Long,
@@ -1013,7 +1017,8 @@ object CommentRepository {
         rootId: Long,
         dialogId: Long,
         page: Int,
-        paginationOffset: String? = null
+        paginationOffset: String? = null,
+        applyDisplayFilter: Boolean = true,
     ): Result<ReplyData> = withContext(Dispatchers.IO) {
         try {
             BuvidManager.ensureBuvid3()
@@ -1038,7 +1043,7 @@ object CommentRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }.map { filterGoodsRepliesIfEnabled(it) }
+    }.map { if (applyDisplayFilter) filterCommentRepliesIfEnabled(it) else it }
 
     /**
      * 获取表情包映射
@@ -1451,6 +1456,8 @@ object CommentRepository {
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "操作失败" }))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1487,6 +1494,8 @@ object CommentRepository {
             } else {
                 Result.failure(Exception(response.message.ifEmpty { "操作失败" }))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

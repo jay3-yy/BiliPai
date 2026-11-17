@@ -9,6 +9,27 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class CdnOptimizationPolicyTest {
+    @Test
+    fun `paired ranking defers risky audio and mcdn query even on regular video hosts`() {
+        val candidates = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://a.bilivideo.com/v?sign=a",
+                "https://b.bilivideo.com/v?os=mcdn&sign=b",
+                "https://c.bilivideo.com/v?sign=c%2Fd",
+            ),
+            audioUrls = listOf(
+                "https://audio.mcdn.bilivideo.cn/a?sign=d",
+                "https://b.bilivideo.com/a?sign=e",
+                "https://c.bilivideo.com/a?sign=f%2Fg",
+            ),
+        )
+
+        assertEquals(
+            listOf(candidates[2], candidates[0], candidates[1]),
+            sortSafeSignedPlaybackCandidates(candidates, emptyMap()),
+        )
+    }
+
 
     @Test
     fun `safe candidates preserve signed urls and defer risky hosts`() {
@@ -34,6 +55,25 @@ class CdnOptimizationPolicyTest {
         )
 
         assertEquals(second, sorted.first().url)
+    }
+
+    @Test
+    fun `nonstandard cdn port or mcdn query is risky even on a regular mirror host`() {
+        assertTrue(
+            isRiskyCdnUrl(
+                "https://upos-sz-mirrorali.bilivideo.com:8082/v1/resource/upgcxcode/a.m4s?os=bcache&sign=a"
+            )
+        )
+        assertTrue(
+            isRiskyCdnUrl(
+                "https://upos-sz-mirrorali.bilivideo.com:4483/upgcxcode/a.m4s?os=mcdn&sign=b"
+            )
+        )
+        assertFalse(
+            isRiskyCdnUrl(
+                "https://cn-example-cm-01-01.bilivideo.com/upgcxcode/a.m4s?os=bcache&sign=c"
+            )
+        )
     }
 
     @Test

@@ -64,7 +64,8 @@ internal fun isVideoCardReturnTargetRoute(route: String?): Boolean {
         routeBase == ScreenRoutes.Partition.route ||
         routeBase.startsWith("category/") ||
         routeBase.startsWith("season_series_detail/") ||
-        routeBase.startsWith("space/")
+        routeBase.startsWith("space/") ||
+        routeBase.startsWith("chat/")
 }
 
 internal fun shouldMarkNavigationLeaveBeforeVideoExit(

@@ -27,6 +27,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -877,6 +880,7 @@ fun PureBiliBiliTheme(
     appFontWeightPreset: AppFontWeightPreset = AppFontWeightPreset.FOLLOW_THEME,
     appFontFileName: String = "",
     appIconStyle: AppIconStyle = AppIconStyle.AUTO,
+    appLineIconColor: Int? = null,
     appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     liquidGlassEnabled: Boolean = true,
     themeTransitionEnabled: Boolean = true,
@@ -884,6 +888,12 @@ fun PureBiliBiliTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
+
+    val predictiveBackEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getAppNavigationSettings(context)
+            .map { it.predictiveBackEnabled }
+            .distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = true)
 
     val isDynamicColorActive = resolveEffectiveDynamicColorEnabled(
         dynamicColorEnabled = resolveMd3DynamicColorEnabled(
@@ -1097,16 +1107,19 @@ fun PureBiliBiliTheme(
         }
     }
 
+    val platformOverscrollFactory = androidx.compose.foundation.rememberPlatformOverscrollFactory()
     val wallpaperPreviewSchemes = remember(dynamicLightBaseScheme, dynamicDarkBaseScheme) {
         ThemeWallpaperPreviewSchemes(dynamicLightBaseScheme, dynamicDarkBaseScheme)
     }
     CompositionLocalProvider(
         LocalThemeWallpaperPreviewSchemes provides wallpaperPreviewSchemes,
+        com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled provides predictiveBackEnabled,
         LocalAppUiStyle provides uiStyle,
         LocalDynamicColorActive provides isDynamicColorActive,
         LocalWallpaperColorCompatibility provides wallpaperCompatibility,
         LocalBaseThemeRoleOverrides provides baseThemeRoleOverrides,
         com.android.purebilibili.core.ui.LocalLiquidControlThemeColor provides animatedPalette.liquidAccent,
+        com.android.purebilibili.core.ui.LocalAppLineIconColor provides (appLineIconColor?.let { Color(it) } ?: Color.Unspecified),
         LocalAppIconStyle provides resolveAppIconStyle(
             iconStyle = appIconStyle,
             uiStyle = uiStyle
@@ -1129,11 +1142,21 @@ fun PureBiliBiliTheme(
                 shapes = shapes,
                 motionScheme = materialMotionScheme,
                 content = {
-                    com.android.purebilibili.core.ui.ProvideAppContentColors(
-                        nativeInteractionColors = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled(uiStyle, liquidGlassEnabled),
-                        miuixContentColors = uiStyle == AppUiStyle.MIUIX,
-                        content = content,
-                    )
+                    // Both themes are mounted for shared color tokens. Explicitly select
+                    // scrolling physics so MD3 does not inherit the enclosing Miuix factory.
+                    // Glass changes surfaces only; it retains the selected native scroll style.
+                    CompositionLocalProvider(
+                        androidx.compose.foundation.LocalOverscrollFactory provides
+                            if (uiStyle == AppUiStyle.MIUIX) {
+                                top.yukonga.miuix.kmp.utils.MiuixOverscrollFactory
+                            } else platformOverscrollFactory,
+                    ) {
+                        com.android.purebilibili.core.ui.ProvideAppContentColors(
+                            nativeInteractionColors = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled(uiStyle, liquidGlassEnabled),
+                            miuixContentColors = uiStyle == AppUiStyle.MIUIX,
+                            content = content,
+                        )
+                    }
                 }
             )
         }

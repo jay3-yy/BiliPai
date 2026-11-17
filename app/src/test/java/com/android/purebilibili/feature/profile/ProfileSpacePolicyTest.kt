@@ -31,6 +31,21 @@ import kotlin.test.assertTrue
 class ProfileSpacePolicyTest {
 
     @Test
+    fun `home uses aggregate video preview without loading the full contribution or dynamic lists`() {
+        val space = ProfileSpaceUiState(contributionVideos = listOf(SpaceVideoItem(bvid = "BVpreview")))
+        assertEquals(setOf(ProfileSpaceMainTab.FAVORITE, ProfileSpaceMainTab.BANGUMI), resolveProfileContentLoadTargets(space))
+        assertEquals(setOf(ProfileSpaceMainTab.CONTRIBUTION, ProfileSpaceMainTab.FAVORITE, ProfileSpaceMainTab.BANGUMI),
+            resolveProfileContentLoadTargets(space.copy(contributionVideos = emptyList())))
+    }
+
+    @Test
+    fun `each personal content tab only requests its own data`() {
+        for (tab in ProfileSpaceMainTab.entries.filter { it != ProfileSpaceMainTab.HOME }) {
+            assertEquals(setOf(tab), resolveProfileContentLoadTargets(ProfileSpaceUiState(selectedTab = tab)))
+        }
+    }
+
+    @Test
     fun `profile space tabs match self space order`() {
         assertEquals(
             listOf("主页", "动态", "投稿", "收藏", "番剧"),

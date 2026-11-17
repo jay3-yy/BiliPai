@@ -67,45 +67,22 @@ open class VideoActivity : ComponentActivity() {
     private var officialReturnMotionEnabled = true
     private var officialReturnBlurEnabled = true
     private var officialRootPredictiveBack = false
-    private var officialReturnBvid: String? = null
-    private class ReturnContentBinding(
-        val owner: Any,
-        val routeBvid: String,
-        val readBvid: () -> String?,
-        val lastBvid: String?,
-    )
-    private var officialReturnContentBinding: ReturnContentBinding? = null
+    private var officialCardReturnAtRoot = false
+    private var officialReturnToSource = true
 
-    /** 仅由当前拥有页面的详情实例登记；finish 时重新读取，避免等待重组后才同步身份。 */
-    internal fun bindOfficialReturnContent(owner: Any, routeBvid: String, readBvid: () -> String?) {
-        val previous = officialReturnContentBinding
-        val current = readBvid()
-        officialReturnContentBinding = ReturnContentBinding(owner, routeBvid, readBvid, current)
-        if (previous == null || previous.owner !== owner || previous.routeBvid != routeBvid || previous.lastBvid != current) {
-            refreshOfficialReturn("playback_content_changed")
-        }
+    internal val usesOfficialCardReturnAtRoot: Boolean
+        get() = officialCardReturnAtRoot && officialReturnMotionEnabled &&
+            intent.hasExtra(SystemVideoCardTransition.EXTRA_SESSION)
+
+    /** 从嵌套窗口直接跳首页时，首页不是打开本窗口的来源。 */
+    internal fun discardOfficialCardReturn() {
+        officialReturnToSource = false
     }
 
-    internal fun unbindOfficialReturnContent(owner: Any) {
-        if (officialReturnContentBinding?.owner === owner) officialReturnContentBinding = null
-    }
-
-    private fun currentOfficialReturnBvid(): String? {
-        if (!playbackWindowActive) return null
-        val binding = officialReturnContentBinding
-        return if (binding != null && binding.routeBvid == officialReturnBvid) binding.readBvid()
-        else officialReturnBvid
-    }
-
-    internal fun updateOfficialReturnContent(bvid: String?) {
-        if (officialReturnBvid == bvid) return
-        officialReturnBvid = bvid
-        refreshOfficialReturn("content_changed")
-    }
-
-    internal fun updateOfficialRootPredictiveBack(atRoot: Boolean) {
+    internal fun updateOfficialRootPredictiveBack(atRoot: Boolean, predictiveEnabled: Boolean) {
+        officialCardReturnAtRoot = atRoot
         // 仅标准系统转场尝试跨 Activity 预测返回；旧圆角协议沿用自身返回。
-        val enabled = atRoot && Build.VERSION.SDK_INT >= 35 &&
+        val enabled = atRoot && predictiveEnabled && Build.VERSION.SDK_INT >= 35 &&
             intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)?.startsWith("sdk:") == true
         if (officialRootPredictiveBack == enabled) return
         officialRootPredictiveBack = enabled
@@ -122,7 +99,7 @@ open class VideoActivity : ComponentActivity() {
     private fun refreshOfficialReturn(reason: String, preparingToFinish: Boolean = false) =
         SystemVideoCardTransition.refreshReturn(
             this, officialReturnMotionEnabled, officialReturnBlurEnabled, reason,
-            currentVideoBvid = currentOfficialReturnBvid(),
+            returnToSource = officialReturnToSource,
             preparingToFinish = preparingToFinish,
             preferSystemPredictiveBack = officialRootPredictiveBack,
         )
@@ -186,12 +163,6 @@ open class VideoActivity : ComponentActivity() {
             return
         }
         bindPerformanceCapture(kind = "detail", initialRoute = request.toInitialRoute())
-        officialReturnBvid = if (request.initialRoute.isBlank()) request.bvid else {
-            com.android.purebilibili.navigation3.resolveSystemWindowCardIdentity(
-                com.android.purebilibili.navigation3.legacyRouteToBiliPaiNavKey(request.initialRoute),
-            )
-        }
-
         updateStateFromConfig(resources.configuration)
 
         setContent {
@@ -258,6 +229,11 @@ open class VideoActivity : ComponentActivity() {
             val cardFrostedGlassEnabled by SettingsManager
                 .getHomeCardFrostedGlassEnabled(this@VideoActivity)
                 .collectAsStateWithLifecycle(initialValue = false)
+            val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
+                androidx.lifecycle.viewmodel.compose.viewModel()
+            val subReplyPreviewLikesEnabled by remember(this@VideoActivity) {
+                SettingsManager.getSubReplyPreviewLikesEnabled(this@VideoActivity)
+            }.collectAsStateWithLifecycle(initialValue = true)
             val commentIpLocationEnabled by remember(this@VideoActivity) {
                 SettingsManager.getCommentIpLocationEnabled(this@VideoActivity)
             }.collectAsStateWithLifecycle(initialValue = true)
@@ -344,6 +320,7 @@ open class VideoActivity : ComponentActivity() {
                 appFontWeightPreset = themeSettings.appFontWeightPreset,
                 appFontFileName = themeSettings.appFontFileName,
                 appIconStyle = themeSettings.appIconStyle,
+                appLineIconColor = themeSettings.appLineIconColor,
                 appListItemStyle = themeSettings.appListItemStyle,
                 liquidGlassEnabled = liquidGlassEnabled,
                 themeTransitionEnabled = uiEntranceAnimationEnabled,
@@ -364,6 +341,8 @@ open class VideoActivity : ComponentActivity() {
                         intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION),
                     ),
                     com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides themeSettings,
+                    com.android.purebilibili.feature.video.viewmodel.LocalReplyPreviewReactions provides replyPreviewReactions,
+                    com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                     com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                     com.android.purebilibili.core.ui.LocalCommentReplyPreviewVisible provides commentReplyPreviewVisible,
                     com.android.purebilibili.feature.aicu.LocalAicuNavigation provides { uid: Long? ->
@@ -418,7 +397,7 @@ open class VideoActivity : ComponentActivity() {
                         if (SystemVideoCardTransition.returnsDirectlyToHome(this@VideoActivity)) {
                             finish()
                         } else {
-                            updateOfficialReturnContent(null)
+                            discardOfficialCardReturn()
                             intent.removeExtra("video_parent_is_video")
                             startActivity(Intent(this@VideoActivity, com.android.purebilibili.MainActivity::class.java).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -470,8 +449,8 @@ open class VideoActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        refreshOfficialReturn("on_resume")
         playbackWindowActive = true
+        refreshOfficialReturn("on_resume")
         resumedVideoWindow = java.lang.ref.WeakReference(this)
         val mini = MiniPlayerManager.getInstance(this)
         mini.clearUserLeaveHint()
@@ -496,6 +475,7 @@ open class VideoActivity : ComponentActivity() {
     }
 
     override fun finish() {
+        // 窗口直接从当前画面退场，不先展开折叠视口或切换封面。
         val preparingToFinish = !isFinishing
         if (preparingToFinish) {
             // 系统返回与页面返回共用此入口；关闭窗口前刷新同一来源实例的落点。
@@ -537,7 +517,6 @@ open class VideoActivity : ComponentActivity() {
     }
     
     override fun onDestroy() {
-        officialReturnContentBinding = null
         if (!isChangingConfigurations) {
             VideoActivityLauncher.releaseParent(this)
             SystemVideoCardTransition.release(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))

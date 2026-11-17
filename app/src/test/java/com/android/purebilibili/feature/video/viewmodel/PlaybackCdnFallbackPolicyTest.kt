@@ -13,6 +13,39 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PlaybackCdnFallbackPolicyTest {
+    @Test
+    fun `candidate discovery restores signed track urls instead of a synthesized host`() {
+        val base = "https://a.mcdn.bilivideo.cn/upgcxcode/v.m4s?sign=a%2Fb"
+        val backup = "https://b.mcdn.bilivideo.cn/upgcxcode/v.m4s?sign=c%2Fd"
+        val video = DashVideo(id = 80, baseUrl = base, backupUrl = listOf(backup), codecs = "hev1")
+        val audio = DashAudio(id = 30280, baseUrl = base, backupUrl = listOf(backup))
+
+        assertEquals(listOf(base, backup), buildPlaybackVideoUrlCandidates(video.getValidUrl(), 80, listOf(video)))
+        assertEquals(listOf(base, backup), buildPlaybackAudioUrlCandidates(audio.getValidUrl(), listOf(audio)))
+    }
+
+    @Test
+    fun `fallback keeps original signed urls when every returned route is risky`() {
+        val first = PlaybackCdnCandidate(
+            videoUrl = "https://a.mcdn.bilivideo.cn/v?sign=a%2Fb",
+            audioUrl = "https://a.mcdn.bilivideo.cn/a?sign=c%2Fd",
+            source = PlaybackCdnCandidateSource.ORIGINAL,
+        )
+        val second = first.copy(
+            videoUrl = "https://b.mcdn.bilivideo.cn/v?sign=e%2Ff",
+            audioUrl = "https://b.mcdn.bilivideo.cn/a?sign=g%2Fh",
+        )
+        val state = buildPlaybackCdnFallbackState(
+            first.videoUrl, first.audioUrl, first.videoUrl, first.audioUrl,
+            regionLabel = null,
+            fallbackCandidates = listOf(first, second),
+        )
+
+        assertEquals(listOf(first, second), state.fallbackCandidates)
+        assertEquals(second.videoUrl, state.fallbackVideoUrl)
+        assertEquals(second.audioUrl, state.fallbackAudioUrl)
+    }
+
 
     @Test
     fun `video candidates keep backups on selected HEVC track when AVC is listed first`() {

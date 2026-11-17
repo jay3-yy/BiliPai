@@ -1,10 +1,46 @@
 package top.yukonga.miuix.kmp.nav.runtime
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.runtime.BroadcastFrameClock
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
+import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NavVelocityHandoffEasingTest {
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun velocityMatchingTweenDrivesTheAnimatableFromReleaseSpeedToRest() = runTest {
+        for (target in listOf(0f, 1f)) {
+            val clock = BroadcastFrameClock()
+            val driver = Animatable(0.5f)
+            val releaseVelocity = if (target == 0f) -1f else 1f
+            val job = launch(clock, start = CoroutineStart.UNDISPATCHED) {
+                driver.settleTo(
+                    target = target,
+                    spec = NavSettleSpec.Tween(300, LinearEasing, matchReleaseVelocity = true),
+                    initialVelocity = releaseVelocity,
+                )
+            }
+            clock.sendFrame(1_000_000_000L)
+            runCurrent()
+            assertEquals(0.5f, driver.value, 0.0001f)
+            clock.sendFrame(1_001_000_000L)
+            runCurrent()
+            assertEquals(releaseVelocity, (driver.value - 0.5f) / 0.001f, 0.03f)
+            clock.sendFrame(1_300_000_000L)
+            runCurrent()
+            job.join()
+            assertEquals(target, driver.value, 0f)
+            assertEquals(0f, driver.velocity, 0f)
+        }
+    }
+
     @Test
     fun handoffStartsAtTheReleaseVelocityAndArrivesAtRest() {
         for (distance in listOf(-.8f, -.3f, .3f, .8f)) {

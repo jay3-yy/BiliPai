@@ -77,7 +77,6 @@ import com.android.purebilibili.feature.home.components.FrostedSideBar
 import com.android.purebilibili.feature.home.components.CategoryTabRow
 import com.android.purebilibili.feature.home.components.HomeHeader
 import com.android.purebilibili.feature.home.components.HomeRefreshIndicator
-import com.android.purebilibili.feature.home.components.Md3ScreenshotRefreshIndicator
 import com.android.purebilibili.feature.home.components.nativeMd3TopTabSelectionSpec
 import com.android.purebilibili.feature.home.components.HomeInteractionMotionBudget
 import com.android.purebilibili.feature.home.components.rememberHomeUiSkinDecoration
@@ -205,6 +204,7 @@ val LocalHomeFeedScrollInProgress = compositionLocalOf { mutableStateOf(false) }
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
+    homeTopTabSettings: com.android.purebilibili.core.store.HomeTopTabSettings,
     onVideoClick: (HomeVideoClickRequest) -> Unit,
     onCompanionVideoClick: (HomeVideoClickRequest) -> Unit = {},
     availableFeedWidth: Dp? = null,
@@ -270,6 +270,7 @@ fun HomeScreen(
     onVideoDetailReturnAnimationConsumed: () -> Unit = {}
 ) {
     if (!rememberHomeMemoryRecoveryReady(viewModel)) return
+    com.android.purebilibili.core.performance.PerformanceScreenProbe("home")
     val pendingMemoryRecovery by viewModel.pendingMemoryRecovery.collectAsStateWithLifecycle()
     val feedNavigation = rememberHomeFeedNavigationCallbacks(onVideoClick, onSpaceClick, onLiveClick)
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
@@ -315,8 +316,6 @@ fun HomeScreen(
         mutableStateOf<com.android.purebilibili.feature.video.share.VideoSharePayload?>(null)
     }
     val coroutineScope = rememberCoroutineScope() // 用于双击回顶动画
-    var homeBackToTopSquishActive by remember { mutableStateOf(false) }
-    var homeBackToTopSquishGeneration by remember { mutableIntStateOf(0) }
     val headerSettleMotionSpec = AppMotionTokens.emphasizedSpec<Float>()
     val globalScrollOffset = LocalHomeScrollOffset.current
     val globalFeedScrollInProgress = LocalHomeFeedScrollInProgress.current
@@ -325,30 +324,11 @@ fun HomeScreen(
     var homeNavigationRevision by remember { mutableLongStateOf(0L) }
     val returnState = rememberHomeReturnState()
 
-    fun triggerHomeBackToTopCardSquish() {
-        val generation = homeBackToTopSquishGeneration + 1
-        homeBackToTopSquishGeneration = generation
-        homeBackToTopSquishActive = true
-        coroutineScope.launch {
-            delay(105L)
-            if (homeBackToTopSquishGeneration == generation) {
-                homeBackToTopSquishActive = false
-            }
-        }
-    }
-
     // [新增] 监听全局回顶事件
     val scrollChannel = LocalHomeScrollChannel.current
     val latestHomeScrollCategory by rememberUpdatedState(currentCategory)
     val latestHomeScrollPopularSubCategory by rememberUpdatedState(popularSubCategory)
 
-    val resolvedHomeTopTabSettings by remember(context) {
-        SettingsManager.getHomeTopTabSettings(context)
-    }.collectAsStateWithLifecycle(
-        initialValue = null,
-        context = kotlin.coroutines.EmptyCoroutineContext,
-    )
-    val homeTopTabSettings = resolvedHomeTopTabSettings ?: return
     // 顶部标签顺序和可见项交给设置页控制；默认仍是六项。
     // [Refactor] Hoist PagerState to be available for both Content and Header
     // 确保 pagerState 在所有作用域均可见，以便传给 HomeHeader
@@ -356,9 +336,9 @@ fun HomeScreen(
         .collectAsStateWithLifecycle()
     val installedPlugins by com.android.purebilibili.core.plugin.PluginManager.pluginsFlow
         .collectAsStateWithLifecycle()
-    val isSubscriptionPluginPersistedEnabled by com.android.purebilibili.core.plugin.PluginStore
-        .isEnabledFlow(context, BuiltinPluginIds.SUBSCRIPTION_FEED)
-        .collectAsStateWithLifecycle(initialValue = false)
+    val isSubscriptionPluginPersistedEnabled by remember(context) {
+        com.android.purebilibili.core.plugin.PluginStore.isEnabledFlow(context, BuiltinPluginIds.SUBSCRIPTION_FEED)
+    }.collectAsStateWithLifecycle(initialValue = false)
     val subscriptionFeedsEnabled = remember(
         subscriptionRevision,
         installedPlugins,
@@ -492,16 +472,18 @@ fun HomeScreen(
                     val isAtTop = gridState == null ||
                         (gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0)
 
+                    val shouldRefresh = request == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
+                        (request == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH && isAtTop)
                     if (!isAtTop) {
                         val listState = requireNotNull(gridState)
                         // 底栏/重选回顶直达：单次 scrollToItem 是原子操作，
                         // 无两段式 preJump+animate 的中间态，任何距离都不掉帧。
                         listState.scrollToItem(0)
                         if (!requestIsCurrent()) return@withScrollToTopLock
-                        triggerHomeBackToTopCardSquish()
+                        // 纯回顶反馈当前内容；回顶并刷新不能先在旧卡片上播放完成反馈。
+                        // 刷新期间的位移交给刷新容器，在结果提交后完成原生收回。
+                        if (!shouldRefresh && !isRefreshing) listState.notifyAppScrollToTop()
                     }
-                    val shouldRefresh = request == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
-                        (request == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH && isAtTop)
                     if (shouldRefresh && requestIsCurrent()) {
                         viewModel.refresh(
                             activeCategory,
@@ -638,7 +620,7 @@ fun HomeScreen(
     }.collectAsStateWithLifecycle(initialValue = false)
     val homeFeedCardStyle by remember(context) {
         SettingsManager.getHomeFeedCardStyle(context)
-    }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeFeedCardStyle.BILIPAI,
+    }.collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.HomeFeedCardStyle.CURRENT,
             context = kotlin.coroutines.EmptyCoroutineContext)
     val topChromePolicy = rememberAppTopChromePolicy()
     val pullRefreshProfile = rememberAppPullRefreshProfile()
@@ -1128,7 +1110,8 @@ fun HomeScreen(
         )
     }
     //  [修复] 动态计算内容顶部边距，防止被头部遮挡
-    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 首页在沉浸播放页下仍保留状态栏占位，返回时顶栏、列表和卡片落点不随可见性跳动。
+    val statusBarHeight = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
     val homeStartupElapsedAt = remember { SystemClock.elapsedRealtime() }
 
     val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -1389,10 +1372,16 @@ fun HomeScreen(
     val collapseSearchOnScroll = headerCollapseMode.collapseSearch
     val collapseTabsOnScroll = headerCollapseMode.collapseTabs
     val isAnyHeaderCollapseEnabled = headerCollapseMode.hasAnyCollapse
-    // 模式变化立即清理旧偏移，始终显示不依赖下一次滚动才能恢复。
+    var appliedHeaderCollapseMode by rememberSaveable {
+        mutableStateOf(homeSettings.homeHeaderCollapseMode)
+    }
+    // 只在模式真正改变时清理偏移；切换底部栏目后重新挂载应保留已保存的折叠位置。
     LaunchedEffect(headerCollapseMode) {
-        headerScrollState.setOffsetImmediately(0f)
-        headerScrollState.tabsCollapsed = false
+        if (appliedHeaderCollapseMode != homeSettings.homeHeaderCollapseMode) {
+            headerScrollState.setOffsetImmediately(0f)
+            headerScrollState.tabsCollapsed = false
+            appliedHeaderCollapseMode = homeSettings.homeHeaderCollapseMode
+        }
     }
     val headerAutoCollapseDistancePx = if (isAnyHeaderCollapseEnabled) {
         searchCollapseDistancePx
@@ -1862,7 +1851,6 @@ fun HomeScreen(
 
                         //  独立的 PullToRefreshState，避免所有页面共享一个状态导致冲突
                         val pullRefreshState = rememberPullToRefreshState()
-                        val pullDistanceFraction = pullRefreshState.distanceFraction
                         val isPageRefreshing = isRefreshing && currentCategory == category
                         val currentPageRefreshing by rememberUpdatedState(isPageRefreshing)
                         val refreshInteractionProvider = remember(pullRefreshState) {
@@ -1879,42 +1867,14 @@ fun HomeScreen(
                                 }
                             }
                         }
-                        var stablePullOffsetFraction by remember { mutableFloatStateOf(0f) }
-
-                        //  下拉物理由策略区分：MD3 截图式跟随当前手指距离回收，旧 iOS 弹性保留防抖滞后。
-                        val resolvedStablePullOffsetFraction = resolveStablePullContentOffsetFraction(
-                            distanceFraction = pullDistanceFraction,
+                        val animatedDragOffsetFraction = rememberHomePullContentOffset(
+                            state = pullRefreshState,
                             isRefreshing = isPageRefreshing,
-                            isStateAnimating = pullRefreshState.isAnimating,
-                            previousOffsetFraction = stablePullOffsetFraction,
                             motionStyle = pullRefreshMotionStyle,
-                            indicatorStyle = pullRefreshIndicatorStyle
-                        )
-                        SideEffect {
-                            stablePullOffsetFraction = resolvedStablePullOffsetFraction
-                        }
-
-                        //  使用 animateFloatAsState 包装偏移量
-                        val animatedDragOffsetFraction = androidx.compose.animation.core.animateFloatAsState(
-                            targetValue = resolvedStablePullOffsetFraction,
-                            animationSpec = if (
-                                systemReduceMotion || !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled ||
-                                shouldSnapPullOffsetToFinger(
-                                    distanceFraction = pullDistanceFraction,
-                                    isRefreshing = isPageRefreshing,
-                                    isStateAnimating = pullRefreshState.isAnimating,
-                                    indicatorStyle = pullRefreshIndicatorStyle
-                                )
-                            ) {
-                                androidx.compose.animation.core.snap()
-                            } else {
-                                com.android.purebilibili.core.ui.components.scrollFeedbackSpring(
-                                    com.android.purebilibili.core.ui.components.LocalScrollFeedbackPreset.current,
-                                    damping = 0.96f,
-                                    stiffness = 520f,
-                                )
-                            },
-                            label = "pull_bounce"
+                            indicatorStyle = pullRefreshIndicatorStyle,
+                            reduceMotion = systemReduceMotion ||
+                                !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled,
+                            active = pageWork.runActiveWork && homeVisualWorkActive,
                         )
 
                         //  Defers calculation to graphicsLayer
@@ -1964,31 +1924,11 @@ fun HomeScreen(
                                     }
                                     AppPullRefreshIndicatorStyle.MIUIX_NATIVE -> Unit
                                     AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE -> {
-                                        val indicatorHeight = resolveMd3ScreenshotRefreshIndicatorHeightDp(
-                                            progress = pullDistanceFraction,
-                                            isRefreshing = isPageRefreshing
-                                        ).dp
-                                        val indicatorTotalHeight = resolveMd3ScreenshotRefreshIndicatorTotalHeightDp(
-                                            indicatorHeightDp = indicatorHeight.value,
-                                            hasHintText = pullDistanceFraction > 0f || isPageRefreshing
-                                        ).dp
-                                        Md3ScreenshotRefreshIndicator(
+                                        HomeScreenshotRefreshIndicator(
                                             state = pullRefreshState,
                                             isRefreshing = isPageRefreshing,
-                                            indicatorHeight = indicatorHeight,
-                                            modifier = Modifier
-                                                .align(Alignment.TopCenter)
-                                                .padding(top = homeRefreshIndicatorTopInset)
-                                                .zIndex(1f)
-                                                .graphicsLayer {
-                                                    val currentDragOffset = calculateDragOffset()
-                                                    translationY = resolveMd3ScreenshotRefreshIndicatorTranslationY(
-                                                        dragOffsetPx = currentDragOffset,
-                                                        indicatorTotalHeightPx = indicatorTotalHeight.toPx(),
-                                                        minGapPx = AppSpacingTokens.Small.toPx()
-                                                    )
-                                                }
-                                                .fillMaxWidth()
+                                            topInset = homeRefreshIndicatorTopInset,
+                                            calculateDragOffset = calculateDragOffset,
                                         )
                                     }
                                     AppPullRefreshIndicatorStyle.CUPERTINO -> {
@@ -2239,8 +2179,6 @@ fun HomeScreen(
                                          // 刷新数据换位时不再同时启动整屏卡片 placement spring。
                                          cardAnimationEnabled = cardAnimationEnabled && !isPageRefreshing,
                                          cardMotionTier = cardMotionTier,
-                                         backToTopSquishActive = homeBackToTopSquishActive &&
-                                             category == latestHomeScrollCategory,
                                          cardTransitionEnabled = cardTransitionEnabled,
                                          isReturningFromVideoDetail = isReturningFromVideoDetail,
                                          isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
@@ -2294,7 +2232,7 @@ fun HomeScreen(
                                          oldContentLocatorRefreshKey = refreshNewItemsKey,
                                          onOldContentDividerClick = {
                                              coroutineScope.launch {
-                                                 contentGridState.animateScrollToItem(0)
+                                                 contentGridState.animateScrollToTop()
                                              }
                                              viewModel.refresh(category)
                                          },

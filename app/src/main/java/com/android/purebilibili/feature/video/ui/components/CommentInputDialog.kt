@@ -75,7 +75,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.android.purebilibili.core.ui.AppPredictiveDialog as Dialog
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.DialogProperties
@@ -419,10 +419,11 @@ fun CommentInputDialog(
             )
         ) {
             val dialogView = LocalView.current
-            SideEffect {
-                // The sheet owns its transition; avoid a second platform window animation.
+            DisposableEffect(dialogView) {
+                // 窗口挂载时关闭系统动画，IME 更新不能反复提交窗口属性。
                 ((dialogView.parent as? DialogWindowProvider) ?: (dialogView as? DialogWindowProvider))
                     ?.window?.setWindowAnimations(0)
+                onDispose { }
             }
             // 写评论时需要参照下层评论；输入窗在两种主题及玻璃开关下均不模糊背景。
             // 只退出本输入窗的模糊，不修改其他弹层的默认材质或模糊行为。
@@ -541,7 +542,10 @@ fun CommentInputDialog(
                                         enabled = canInputComment && !isSending,
                                         readOnly = showEmojiPanel,
                                         autoShowKeyboard = shouldAutoShowCommentKeyboard(
-                                            inputActive, canInputComment && !isSending, showEmojiPanel
+                                            // 先完成面板入场，再由 IME 推起，避免滑入与键盘位移叠加。
+                                            inputActive && inputVisibility.isIdle && inputVisibility.currentState,
+                                            canInputComment && !isSending,
+                                            showEmojiPanel,
                                         ),
                                         onBeginEditing = { showEmojiPanel = false },
                                         hint = inputHint.ifBlank { "进来唠会嗑呗~" }.let { resolvedHint ->

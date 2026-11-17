@@ -39,6 +39,9 @@ import kotlin.math.sqrt
  */
 internal fun anchoredProgress(anchor: Float, fingerProgress: Float): Float = (anchor + fingerProgress).coerceIn(anchor.coerceAtMost(0f), NavDriverSpec.MAX_FINGER_PROGRESS)
 
+/** 手势视觉策略与驱动共享末端上限；完整退出仍由提交动画完成。 */
+fun boundedNavGestureProgress(progress: Float): Float = anchoredProgress(anchor = 0f, fingerProgress = progress)
+
 /**
  * Pure mapping from a rest-state gesture progress to the `animatedTop` target value.
  *

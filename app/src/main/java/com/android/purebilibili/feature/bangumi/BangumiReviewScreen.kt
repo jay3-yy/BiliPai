@@ -2,6 +2,8 @@
 
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import android.widget.Toast
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -322,7 +324,7 @@ fun BangumiReviewScreen(
                         Box(
                             Modifier.heightIn(min = 48.dp)
                                 .clickable {
-                                    if (selected) scope.launch { listState.animateScrollToItem(0) }
+                                    if (selected) scope.launch { listState.animateScrollToTop() }
                                     else selectQuery(type, sortByType[type] ?: 0)
                                 }
                                 .semantics { this.selected = selected },

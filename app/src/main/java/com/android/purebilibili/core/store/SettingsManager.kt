@@ -578,11 +578,11 @@ enum class HomeFeedCardWidthPreset(
 enum class HomeFeedCardStyle(val value: Int, val label: String, val subtitle: String) {
     CURRENT(0, "16:9", "完整显示，接近投稿源图"),
     OFFICIAL(1, "4:3", "更高列表框，左右居中裁切"),
-    BILIPAI(2, "16:10", "默认信息流封面比例");
+    BILIPAI(2, "16:10", "介于完整封面与高封面之间");
 
     companion object {
         fun fromValue(value: Int): HomeFeedCardStyle =
-            entries.find { it.value == value } ?: BILIPAI
+            entries.find { it.value == value } ?: CURRENT
     }
 }
 
@@ -714,10 +714,13 @@ data class HomeSettings(
     val gridColumnsSharedAcrossPages: Boolean = true,
     val pinchToChangeGridColumnsEnabled: Boolean = true, // [新增] 双指缩放切换网格列数
     val homeFeedCardWidthPreset: HomeFeedCardWidthPreset = HomeFeedCardWidthPreset.AUTO,
-    val homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.BILIPAI,
+    val homeFeedCardStyle: HomeFeedCardStyle = HomeFeedCardStyle.CURRENT,
     val homeHeroCarouselEnabled: Boolean = false,
     val homeHeroCarouselAutoplayEnabled: Boolean = false,
     val homeRefreshTipVisible: Boolean = true, // 推荐流刷新后在旧内容分界处显示提示
+    val refreshLocatorDurationSeconds: Int = 3, // 0 表示不自动收起
+    val refreshLocatorPositionX: Float = 1f,
+    val refreshLocatorPositionY: Float = 1f,
     val homeRefreshUndoVisible: Boolean = false, // 刷新后的撤销按钮默认隐藏
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,   // 卡片展开过渡按需开启
@@ -797,6 +800,7 @@ data class AppThemeSettings(
     val appScreenshotCaptureMode: AppScreenshotCaptureMode =
         AppScreenshotCaptureMode.FULL_WINDOW,
     val appIconStyle: AppIconStyle = AppIconStyle.AUTO,
+    val appLineIconColor: Int? = null,
     val appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     val singleChoicePresentation: AppSingleChoicePresentation =
         AppSingleChoicePresentation.WINDOW_POPUP,
@@ -1047,6 +1051,7 @@ internal fun resolveDanmakuSettingsScope(isLandscape: Boolean): DanmakuSettingsS
 }
 
 data class DanmakuSettings(
+    val tapInteractionEnabled: Boolean = true,
     val enabled: Boolean = true,
     val opacity: Float = DANMAKU_DEFAULT_OPACITY,
     val fontScale: Float = 1.0f,
@@ -1177,6 +1182,7 @@ data class PlayerInteractionSettings(
     val seekForwardSeconds: Int = 10,
     val seekBackwardSeconds: Int = 10,
     val fullscreenSwipeSeekEnabled: Boolean = true,
+    val swipeSeekSeconds: Int = 30,
     val fullscreenGestureReverse: Boolean = false,
     val hideVideoPageStatusBar: Boolean = false,
     /** 动态环境光开启后，是否在竖屏全屏上下留白显示光晕；保留原存储键与默认值。 */
@@ -1522,6 +1528,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_APP_ICON = androidx.datastore.preferences.core.stringPreferencesKey("app_icon_key")
     private val KEY_APP_ICON_APPEARANCE = intPreferencesKey("app_icon_appearance")
     private val KEY_APP_ICON_STYLE = stringPreferencesKey("app_icon_style")
+    private val KEY_APP_LINE_ICON_COLOR = intPreferencesKey("app_line_icon_color")
     private val KEY_APP_LIST_ITEM_STYLE = stringPreferencesKey("app_list_item_style")
     //  [新增] 底部栏样式 (true=悬浮, false=贴底)
     private val KEY_BOTTOM_BAR_FLOATING = booleanPreferencesKey("bottom_bar_floating")
@@ -1720,6 +1727,9 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_HOME_WALLPAPER_EFFECT_SCOPE = intPreferencesKey("home_wallpaper_effect_scope")
     private val KEY_HOME_UP_BADGES_VISIBLE = booleanPreferencesKey("home_up_badges_visible")
     private val KEY_HOME_REFRESH_TIP_VISIBLE = booleanPreferencesKey("home_refresh_tip_visible")
+    private val KEY_REFRESH_LOCATOR_DURATION = intPreferencesKey("refresh_locator_duration_seconds")
+    private val KEY_REFRESH_LOCATOR_POSITION_X = floatPreferencesKey("refresh_locator_position_x")
+    private val KEY_REFRESH_LOCATOR_POSITION_Y = floatPreferencesKey("refresh_locator_position_y")
     private val KEY_HOME_REFRESH_UNDO_VISIBLE = booleanPreferencesKey("home_refresh_undo_visible")
     private val KEY_HOME_UP_AVATARS_VISIBLE = booleanPreferencesKey("home_up_avatars_visible")
     private val KEY_HOME_PUBLISH_TIME_VISIBLE = booleanPreferencesKey("home_publish_time_visible")
@@ -1778,6 +1788,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("comment_avatar_push_enabled")
     private val KEY_COMMENT_MEMBER_DECORATIONS_ENABLED =
         booleanPreferencesKey("comment_member_decorations_enabled")
+    private val KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED =
+        booleanPreferencesKey("sub_reply_preview_likes_enabled")
     private val KEY_COMMENT_IP_LOCATION_ENABLED = booleanPreferencesKey("comment_ip_location_enabled")
     private val KEY_DETAILED_COMMENT_TIME_ENABLED =
         booleanPreferencesKey("detailed_comment_time_enabled")
@@ -1933,12 +1945,15 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_HOME_FEED_CARD_WIDTH_PRESET] ?: HomeFeedCardWidthPreset.AUTO.value
             ),
             homeFeedCardStyle = HomeFeedCardStyle.fromValue(
-                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.BILIPAI.value
+                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.CURRENT.value
             ),
             homeHeroCarouselEnabled = preferences[KEY_HOME_HERO_CAROUSEL_ENABLED] ?: false,
             homeHeroCarouselAutoplayEnabled =
                 preferences[KEY_HOME_HERO_CAROUSEL_AUTOPLAY_ENABLED] ?: false,
             homeRefreshTipVisible = preferences[KEY_HOME_REFRESH_TIP_VISIBLE] ?: true,
+            refreshLocatorDurationSeconds = preferences[KEY_REFRESH_LOCATOR_DURATION] ?: 3,
+            refreshLocatorPositionX = preferences[KEY_REFRESH_LOCATOR_POSITION_X] ?: 1f,
+            refreshLocatorPositionY = preferences[KEY_REFRESH_LOCATOR_POSITION_Y] ?: 1f,
             homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: false,
@@ -2037,6 +2052,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             seekForwardSeconds = (preferences[KEY_SEEK_FORWARD_SECONDS] ?: 10).coerceIn(1, 60),
             seekBackwardSeconds = (preferences[KEY_SEEK_BACKWARD_SECONDS] ?: 10).coerceIn(1, 60),
             fullscreenSwipeSeekEnabled = preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] ?: true,
+            swipeSeekSeconds = (preferences[KEY_SWIPE_SEEK_SECONDS] ?: 30).coerceIn(1, 300),
             fullscreenGestureReverse = preferences[KEY_FULLSCREEN_GESTURE_REVERSE] ?: false,
             hideVideoPageStatusBar = preferences[KEY_HIDE_VIDEO_PAGE_STATUS_BAR] ?: false,
             portraitLetterboxAmbientHaze =
@@ -2470,6 +2486,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_SINGLE_CHOICE_PRESENTATION]
             ),
             appIconStyle = resolveAppIconStylePreference(preferences[KEY_APP_ICON_STYLE]),
+            appLineIconColor = preferences[KEY_APP_LINE_ICON_COLOR],
             appListItemStyle = resolveAppListItemStylePreference(preferences[KEY_APP_LIST_ITEM_STYLE])
         )
     }
@@ -2586,6 +2603,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             editSettings = { this[KEY_APP_ICON_STYLE] = style.name },
             editPrefs = { putString("app_icon_style", style.name) },
         )
+    }
+
+    fun getAppLineIconColor(context: Context): Flow<Int?> =
+        context.settingsDataStore.data.map { it[KEY_APP_LINE_ICON_COLOR] }.distinctUntilChanged()
+
+    suspend fun setAppLineIconColor(context: Context, color: Int?) {
+        context.settingsDataStore.edit {
+            if (color == null) it.remove(KEY_APP_LINE_ICON_COLOR)
+            else it[KEY_APP_LINE_ICON_COLOR] = color
+        }
     }
 
     suspend fun setAppListItemStyle(context: Context, style: AppListItemStyle) {
@@ -3470,7 +3497,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun getHomeFeedCardStyle(context: Context): Flow<HomeFeedCardStyle> =
         context.settingsDataStore.data.map { preferences ->
             HomeFeedCardStyle.fromValue(
-                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.BILIPAI.value
+                preferences[KEY_HOME_FEED_CARD_STYLE] ?: HomeFeedCardStyle.CURRENT.value
             )
         }
 
@@ -3882,6 +3909,18 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getHomeRefreshTipVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HOME_REFRESH_TIP_VISIBLE] ?: true }
+
+    suspend fun setRefreshLocatorDurationSeconds(context: Context, seconds: Int) {
+        require(seconds in listOf(0, 3, 5, 10, 30, 60))
+        context.settingsDataStore.edit { it[KEY_REFRESH_LOCATOR_DURATION] = seconds }
+    }
+
+    suspend fun setRefreshLocatorPosition(context: Context, x: Float, y: Float) {
+        context.settingsDataStore.edit {
+            it[KEY_REFRESH_LOCATOR_POSITION_X] = x
+            it[KEY_REFRESH_LOCATOR_POSITION_Y] = y
+        }
+    }
 
     fun getHomeRefreshUndoVisible(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false }
@@ -5145,6 +5184,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_DANMAKU_ALLOW_BOTTOM = booleanPreferencesKey("danmaku_allow_bottom")
     private val KEY_DANMAKU_ALLOW_COLORFUL = booleanPreferencesKey("danmaku_allow_colorful")
     private val KEY_DANMAKU_ALLOW_SPECIAL = booleanPreferencesKey("danmaku_allow_special")
+    private val KEY_DANMAKU_TAP_INTERACTION_ENABLED = booleanPreferencesKey("danmaku_tap_interaction_enabled")
     private val KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS =
         booleanPreferencesKey("danmaku_block_attention_commands")
     private val KEY_DANMAKU_SMART_OCCLUSION = booleanPreferencesKey("danmaku_smart_occlusion")
@@ -5424,6 +5464,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 defaultValue = true
             ),
             weightFilterLevel = (preferences[KEY_DANMAKU_WEIGHT_FILTER_LEVEL] ?: 0).coerceIn(0, 11),
+            tapInteractionEnabled = preferences[KEY_DANMAKU_TAP_INTERACTION_ENABLED] ?: true,
             hideInteractiveCommands = preferences[KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS] ?: false,
             blockAttentionCommands = preferences[KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS] ?: false,
             smartOcclusion = readScopedDanmakuPreference(
@@ -5911,6 +5952,14 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences ->
             preferences[keyDanmakuAllowSpecial(scope)] = value
         }
+    }
+
+    fun getDanmakuTapInteractionEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { it[KEY_DANMAKU_TAP_INTERACTION_ENABLED] ?: true }
+        .distinctUntilChanged()
+
+    suspend fun setDanmakuTapInteractionEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[KEY_DANMAKU_TAP_INTERACTION_ENABLED] = enabled }
     }
 
     fun getDanmakuHideInteractiveCommands(context: Context): Flow<Boolean> =
@@ -6765,6 +6814,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    fun getSubReplyPreviewLikesEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED] ?: true }
+
+    suspend fun setSubReplyPreviewLikesEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SUB_REPLY_PREVIEW_LIKES_ENABLED] = enabled
+        }
+    }
+
     fun getCommentIpLocationEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
             .map { preferences -> preferences[KEY_COMMENT_IP_LOCATION_ENABLED] ?: true }
@@ -6953,10 +7012,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_AUTO_CHECK_APP_UPDATE] = value }
     }
 
-    // --- 更新检测渠道 (默认正式版) ---
+    // --- 更新检测渠道（默认测试版，保留用户已保存的选择）---
     fun getAppUpdateChannel(context: Context): Flow<AppUpdateChannel> = context.settingsDataStore.data
         .map { preferences ->
-            AppUpdateChannel.fromValue(preferences[KEY_APP_UPDATE_CHANNEL] ?: AppUpdateChannel.STABLE.value)
+            AppUpdateChannel.fromValue(preferences[KEY_APP_UPDATE_CHANNEL] ?: AppUpdateChannel.BETA.value)
         }
 
     suspend fun setAppUpdateChannel(context: Context, channel: AppUpdateChannel) {
@@ -7690,6 +7749,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_PORTRAIT_SWIPE_TO_FULLSCREEN = booleanPreferencesKey("portrait_swipe_to_fullscreen")
     private val KEY_CENTER_SWIPE_TO_FULLSCREEN = booleanPreferencesKey("center_swipe_to_fullscreen")
     private val KEY_FULLSCREEN_SWIPE_SEEK_ENABLED = booleanPreferencesKey("fullscreen_swipe_seek_enabled")
+    private val KEY_SWIPE_SEEK_SECONDS = intPreferencesKey("swipe_seek_seconds")
     private val KEY_FULLSCREEN_GESTURE_REVERSE = booleanPreferencesKey("fullscreen_gesture_reverse")
     private val KEY_HIDE_VIDEO_PAGE_STATUS_BAR = booleanPreferencesKey("hide_video_page_status_bar")
     private val KEY_PORTRAIT_LETTERBOX_AMBIENT_HAZE =
@@ -7824,7 +7884,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences -> preferences[KEY_CENTER_SWIPE_TO_FULLSCREEN] = value }
     }
 
-    // --- 横屏左右滑动精细调进度开关（默认开启） ---
+    // --- 固定秒数滑动调进度（默认开启） ---
     fun getFullscreenSwipeSeekEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] ?: true }
 
@@ -7832,6 +7892,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_FULLSCREEN_SWIPE_SEEK_ENABLED] = enabled
         }
+    }
+
+    fun getSwipeSeekSeconds(context: Context): Flow<Int> = context.settingsDataStore.data
+        .map { (it[KEY_SWIPE_SEEK_SECONDS] ?: 30).coerceIn(1, 300) }
+
+    suspend fun setSwipeSeekSeconds(context: Context, seconds: Int) {
+        context.settingsDataStore.edit { it[KEY_SWIPE_SEEK_SECONDS] = seconds.coerceIn(1, 300) }
     }
 
     private fun isLargeScreenOrFoldableConfiguration(context: Context): Boolean {
@@ -8159,7 +8226,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getPlaybackCdnPreference(context: Context): Flow<String> =
         context.settingsDataStore.data.map { preferences ->
-            preferences[KEY_PLAYBACK_CDN_PREFERENCE] ?: "base_url"
+            preferences[KEY_PLAYBACK_CDN_PREFERENCE]
+                ?: com.android.purebilibili.feature.plugin.PlaybackCdnPreference.DEFAULT.storageValue
         }
 
     suspend fun setPlaybackCdnPreference(context: Context, preference: String) {
@@ -8679,6 +8747,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val shareableSettingDefinitions: List<ShareablePreferenceDefinition> by lazy {
         listOf(
             StringShareablePreferenceDefinition(KEY_THEME_SELECTION, SettingsShareSection.APPEARANCE),
+            StringShareablePreferenceDefinition(AboutAppearanceStore.modeKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(AboutAppearanceStore.topColorKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(AboutAppearanceStore.bottomColorKey, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(AboutAppearanceStore.glowColorKey, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_THEME_MODE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_DARK_SCHEDULE_ENABLED, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_DARK_SCHEDULE_START, SettingsShareSection.APPEARANCE),
@@ -8712,6 +8784,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             StringShareablePreferenceDefinition(KEY_APP_ICON, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_APP_ICON_APPEARANCE, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_APP_ICON_STYLE, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_APP_LINE_ICON_COLOR, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_APP_LIST_ITEM_STYLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_BOTTOM_BAR_FLOATING, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(
@@ -8862,6 +8935,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             IntShareablePreferenceDefinition(ContentDisplayPreferences.springKey, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(ContentDisplayPreferences.keepRecommendKey, SettingsShareSection.NAVIGATION),
             BooleanShareablePreferenceDefinition(KEY_HOME_REFRESH_TIP_VISIBLE, SettingsShareSection.APPEARANCE),
+            IntShareablePreferenceDefinition(KEY_REFRESH_LOCATOR_DURATION, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_REFRESH_UNDO_VISIBLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_UP_AVATARS_VISIBLE, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HOME_PUBLISH_TIME_VISIBLE, SettingsShareSection.APPEARANCE),
@@ -8989,6 +9063,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_PORTRAIT_SWIPE_TO_FULLSCREEN, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_CENTER_SWIPE_TO_FULLSCREEN, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_FULLSCREEN_SWIPE_SEEK_ENABLED, SettingsShareSection.GESTURE),
+            IntShareablePreferenceDefinition(KEY_SWIPE_SEEK_SECONDS, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_FULLSCREEN_GESTURE_REVERSE, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_AUTO_ENTER_FULLSCREEN, SettingsShareSection.GESTURE),
             BooleanShareablePreferenceDefinition(KEY_AUTO_EXIT_FULLSCREEN, SettingsShareSection.GESTURE),
@@ -9028,6 +9103,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_BOTTOM, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_COLORFUL, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_ALLOW_SPECIAL, SettingsShareSection.DANMAKU),
+            BooleanShareablePreferenceDefinition(KEY_DANMAKU_TAP_INTERACTION_ENABLED, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_BLOCK_ATTENTION_COMMANDS, SettingsShareSection.DANMAKU),
             BooleanShareablePreferenceDefinition(KEY_DANMAKU_SMART_OCCLUSION, SettingsShareSection.DANMAKU),
             StringShareablePreferenceDefinition(KEY_DANMAKU_BLOCK_RULES, SettingsShareSection.DANMAKU),

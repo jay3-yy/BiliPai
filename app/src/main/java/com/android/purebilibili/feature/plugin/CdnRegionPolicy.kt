@@ -63,8 +63,10 @@ enum class PlaybackCdnPreference(
     HK_BCACHE("hk_bcache", "hk_bcache（Bilibili海外）", "cn-hk-eq-bcache-01.bilivideo.com");
 
     companion object {
+        val DEFAULT = BACKUP_URL
+
         fun fromStorageValue(value: String?): PlaybackCdnPreference =
-            entries.firstOrNull { it.storageValue == value } ?: BASE_URL
+            entries.firstOrNull { it.storageValue == value } ?: DEFAULT
     }
 }
 
@@ -75,69 +77,80 @@ internal fun applyPlaybackCdnPreference(
 ): List<PlaybackCdnCandidate> {
     if (candidates.isEmpty()) return candidates
 
-    // ① 设置里选了具体线路：最高优先，无条件排到最前。
+    // ① 设置里选了具体线路：只对可跨 host 的 /upgcxcode 候选生效。
     val host = preference.host
     if (host != null) {
-        // 不管原候选是 PCDN 还是常规 CDN，改 host 后就是设置里的线路
-        // （upgcxcode 路径与签名在 host 之间通用）。
-        val base = candidates.first()
+        val base = candidates.firstOrNull { candidate ->
+            val audioUrl = candidate.audioUrl
+            isHostPortableCdnUrl(candidate.videoUrl) &&
+                (audioUrl == null || isHostPortableCdnUrl(audioUrl))
+        } ?: candidates.firstOrNull { isHostPortableCdnUrl(it.videoUrl) }
+        if (base == null) {
+            // 路径不能跨 host 复用时保留原候选，不能套用所选线路。
+            return normalizePlaybackCdnCandidates(candidates)
+        }
         val preferred = base.copy(
             videoUrl = rewriteBilivideoHost(base.videoUrl, host) ?: base.videoUrl,
-            audioUrl = base.audioUrl?.let { rewriteBilivideoHost(it, host) ?: it },
+            audioUrl = base.audioUrl
+                ?.takeIf(::isHostPortableCdnUrl)
+                ?.let { rewriteBilivideoHost(it, host) ?: it },
         )
-        val rest = excludePcdnCandidates(candidates)
+        val rest = normalizePlaybackCdnCandidates(candidates)
         return (listOf(preferred) + rest).distinctBy { it.videoUrl to it.audioUrl }
     }
 
-    // ② 插件（CDN 智能选线）已开启：尊重插件给出的顺序，不再额外过滤。
-    //    插件内部已用 risky 标记把 PCDN 排到最后，再过滤等于推翻它的判断。
-    if (pluginApplied) {
-        return if (preference == PlaybackCdnPreference.BACKUP_URL) {
-            candidates.drop(1) + candidates.take(1)
-        } else {
-            candidates
-        }
-    }
+    // 插件已按健康记录排序；保留其顺序，只给高风险原始地址补常规 CDN 副本。
+    if (pluginApplied) return normalizePlaybackCdnCandidates(candidates)
 
-    // ③ 插件没开：排除 PCDN，整批都是 PCDN 时换 host 兜底。
-    val usable = excludePcdnCandidates(candidates)
+    // 默认优先接口返回的常规签名地址，保持同级候选的原顺序。
+    // 高风险地址会补一份常规 CDN 副本，原始候选仍保留在列表后面。
     if (preference == PlaybackCdnPreference.BACKUP_URL) {
-        return usable.drop(1) + usable.take(1)
+        return sortSafeSignedPlaybackCandidates(
+            normalizePlaybackCdnCandidates(candidates),
+            emptyMap()
+        )
     }
-    return usable
+    // 基础URL 先排安全候选，不能让 os=mcdn 占住首位。
+    val safe = candidates.filterNot { candidate ->
+        isRiskyCdnUrl(candidate.videoUrl) ||
+            candidate.audioUrl?.let(::isRiskyCdnUrl) == true
+    }
+    if (safe.isEmpty()) return normalizePlaybackCdnCandidates(candidates)
+    val risky = candidates.filter { it !in safe }
+    return (safe + normalizePlaybackCdnCandidates(risky)).distinctBy {
+        it.videoUrl to it.audioUrl
+    }
 }
 
-/**
- * 处理候选里的 PCDN 地址。
- *
- * 不丢弃，而是保留 upgcxcode 路径与签名、把 host 换成常规线路——直接丢弃会让
- * 只下发 PCDN 的视频彻底打不开。顺序保持不变，换完 host 的地址照常参与选线。
- */
-private fun excludePcdnCandidates(
+/** 为可移植的高风险候选补常规 CDN 副本；原地址保留在后方回退。 */
+internal fun normalizePlaybackCdnCandidates(
     candidates: List<PlaybackCdnCandidate>
 ): List<PlaybackCdnCandidate> {
-    return candidates.map { candidate ->
-        // 视频和音频的 host 是独立下发的，B 站会只把其中一条分到 PCDN。
-        // 以前只看 videoUrl，视频走常规 CDN、音频走 PCDN 时整个候选被跳过，
-        // 音频就带着解析不了的 mcdn 域名进了播放器。
-        val videoRisky = isRiskyCdnHost(hostOf(candidate.videoUrl))
-        val audioRisky = candidate.audioUrl?.let { isRiskyCdnHost(hostOf(it)) } == true
-        if (!videoRisky && !audioRisky) return@map candidate
-        candidate.copy(
-            videoUrl = if (videoRisky) {
+    val normalized = candidates.mapNotNull { candidate ->
+        val videoRisky = isRiskyCdnUrl(candidate.videoUrl)
+        val audioRisky = candidate.audioUrl?.let(::isRiskyCdnUrl) == true
+        val videoPortable = isHostPortableCdnUrl(candidate.videoUrl)
+        val audioPortable = candidate.audioUrl?.let(::isHostPortableCdnUrl) ?: true
+        if ((!videoRisky || !videoPortable) && (!audioRisky || !audioPortable)) return@mapNotNull null
+        val copy = candidate.copy(
+            videoUrl = if (videoRisky && videoPortable) {
                 rewriteBilivideoHost(candidate.videoUrl, FALLBACK_CDN_HOST) ?: candidate.videoUrl
             } else {
                 candidate.videoUrl
             },
-            audioUrl = candidate.audioUrl?.let {
-                if (audioRisky) rewriteBilivideoHost(it, FALLBACK_CDN_HOST) ?: it else it
+            audioUrl = candidate.audioUrl?.let { audioUrl ->
+                if (audioRisky && audioPortable) {
+                    rewriteBilivideoHost(audioUrl, FALLBACK_CDN_HOST) ?: audioUrl
+                } else {
+                    audioUrl
+                }
             },
         )
+        copy.takeIf { it.videoUrl != candidate.videoUrl || it.audioUrl != candidate.audioUrl }
     }
+    // 高风险的原始候选保留在后面；即使插件给出了顺序，也不能让 mcdn 排在前面。
+    return (normalized + candidates).distinctBy { it.videoUrl to it.audioUrl }
 }
-
-private fun hostOf(url: String): String =
-    runCatching { java.net.URI(url).host.orEmpty() }.getOrDefault("")
 
 /** 整批候选都是 PCDN 时改写的目标线路。 */
 private const val FALLBACK_CDN_HOST = "upos-sz-mirrorali.bilivideo.com"
@@ -749,20 +762,23 @@ private fun normalizeRegionName(value: String): String {
 internal fun rewriteBilivideoHost(url: String, newHost: String): String? {
     val uri = runCatching { URI(url) }.getOrNull() ?: return null
     val originalHost = uri.host ?: return null
-    if (originalHost.equals(newHost, ignoreCase = true)) return null
+    if (newHost.isBlank()) return null
     // 能否换 host 取决于路径：upgcxcode 的路径与签名在 host 之间通用。
     // 不按域名白名单判断，否则 mountaintoys.cn / qrstuvwxyzab.com 这类 PCDN
     // 和裸 IP 会被挡掉，设置里的线路就失效了。
     val path = uri.rawPath.orEmpty()
     if (!path.contains("/upgcxcode/") && !path.contains("/v1/resource")) return null
-    if (newHost.isBlank()) return null
+
+    val hostChanged = !originalHost.equals(newHost, ignoreCase = true)
+    val standardPort = uri.port == -1 || uri.port == 80 || uri.port == 443
+    if (!hostChanged && standardPort) return null
 
     val scheme = uri.scheme ?: return null
     val userInfo = uri.rawUserInfo?.let { "$it@" }.orEmpty()
-    val port = if (uri.port >= 0) ":${uri.port}" else ""
     val query = uri.rawQuery?.let { "?$it" }.orEmpty()
     val fragment = uri.rawFragment?.let { "#$it" }.orEmpty()
-    return "$scheme://$userInfo$newHost$port$path$query$fragment"
+    // 换到常规线路时不能沿用 PCDN 的 8082/4483，否则只是换域名继续超时。
+    return "$scheme://$userInfo$newHost$path$query$fragment"
 }
 
 internal fun hostFromCdnUrl(url: String): String {

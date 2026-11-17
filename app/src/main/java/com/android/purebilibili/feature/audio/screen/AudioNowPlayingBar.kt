@@ -165,6 +165,7 @@ internal fun AudioNowPlayingBar(
         val snapshotScope = rememberCoroutineScope()
         var captureInProgress by remember(state.bvid) { mutableStateOf(false) }
         val barCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
+        val closeCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
         val coverCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
         val dissolveContext = LocalContext.current
         val artworkGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
@@ -220,6 +221,9 @@ internal fun AudioNowPlayingBar(
                                 window = hostWindow,
                                 bitmap = bitmap,
                                 windowBounds = android.graphics.RectF(snapshot.windowBounds),
+                                sweepReversed = true,
+                                originInWindow = closeCoordsRef[0]?.takeIf { it.isAttached }
+                                    ?.boundsInWindow()?.center?.let { android.graphics.PointF(it.x, it.y) },
                                 onFirstFrame = { dissolveContentHidden = true },
                                 onComplete = {
                                     finishCancelDissolveCleanup()
@@ -598,6 +602,7 @@ internal fun AudioNowPlayingBar(
                             .align(Alignment.TopEnd)
                             .padding(top = 1.dp, end = 2.dp)
                             .size(24.dp)
+                            .onGloballyPositioned { closeCoordsRef[0] = it }
                             .layout { measurable, constraints ->
                                 val child = measurable.measure(constraints)
                                 layout(child.width, child.height) {

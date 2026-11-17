@@ -23,7 +23,6 @@ import okhttp3.Callback
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
-import org.json.JSONObject
 import java.io.IOException
 import java.security.KeyFactory
 import java.security.spec.X509EncodedKeySpec
@@ -60,7 +59,7 @@ class CaptchaManager(private val activity: Activity) {
         onCancel: () -> Unit = {}
     ) {
         try {
-            Logger.d(TAG, "Starting WebView captcha with gt=$gt, challenge=$challenge")
+            Logger.d(TAG, "Starting WebView captcha")
             val isDarkMode = (activity.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
             hideKeyboard()
             
@@ -100,7 +99,7 @@ class CaptchaManager(private val activity: Activity) {
                 )
             }
             
-            // 先显示加载页，再按 PiliPlus 的流程获取当前 gt 对应的动态配置。
+            // 先显示加载页，再获取当前验证会话对应的动态配置。
             val html = generateLoadingHtml(isDarkMode)
             webView?.loadDataWithBaseURL(
                 "https://www.bilibili.com",
@@ -114,7 +113,10 @@ class CaptchaManager(private val activity: Activity) {
                 requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
                 setContentView(requireNotNull(webView))
                 setCanceledOnTouchOutside(true)
-                setOnCancelListener { onCancel() }
+                setOnCancelListener {
+                    geetestConfigCall?.cancel()
+                    onCancel()
+                }
             }
             
             dialog?.show()
@@ -210,29 +212,15 @@ class CaptchaManager(private val activity: Activity) {
                         activity.runOnUiThread {
                             if (webView == null || call.isCanceled()) return@runOnUiThread
                             result.onSuccess(onSuccess).onFailure { error ->
-                                onFailed("验证配置解析失败: ${error.message}")
+                                onFailed(
+                                    if (error is GeetestConfigRejectedException) error.message.orEmpty()
+                                    else "验证配置解析失败: ${error.message}"
+                                )
                             }
                         }
                     }
                 })
             }
-    }
-
-    private fun parseGeetestConfig(raw: String, gt: String, challenge: String): String {
-        val payload = raw.trim().removePrefix("(").removeSuffix(")")
-        val root = JSONObject(payload)
-        check(root.optString("status") == "success") { root.optString("status", "unknown") }
-        val data = root.optJSONObject("data") ?: error("缺少 data")
-        return data.apply {
-            put("gt", gt)
-            put("challenge", challenge)
-            put("offline", false)
-            put("new_captcha", true)
-            put("product", "bind")
-            put("width", "100%")
-            put("https", true)
-            put("protocol", "https://")
-        }.toString()
     }
 
     private fun generateGeetestHtml(configJson: String, dark: Boolean): String {

@@ -124,7 +124,9 @@ internal fun LargeScreenVideoLayout(
     predictiveBackCancelRecoveryGeneration: Int = 0,
     liveSurfaceCardTransitionEnabled: Boolean = true,
     isPlayerSurfaceReady: Boolean = true,
-    paneControlsEnabled: Boolean = true,
+    primaryContentReady: Boolean = true,
+    commentsContentReady: Boolean = true,
+    relatedContentReady: Boolean = true,
     videoAiSummaryEntryEnabled: Boolean = true,
     videoNoteEnabled: Boolean = true,
     videoNoteDefaultCollapsed: Boolean = true,
@@ -225,6 +227,7 @@ internal fun LargeScreenVideoLayout(
             VideoDetailSkeletonHandoff(
                 identity = bvid,
                 ready = success != null,
+                entryContentReady = primaryContentReady,
                 loading = success == null && uiState is VideoPlaybackUiState.Loading,
                 modifier = modifier.videoDetailTransitionChrome(transitionChromeAlphaProvider),
                 skeleton = {
@@ -267,6 +270,9 @@ internal fun LargeScreenVideoLayout(
                 VideoDetailSkeletonHandoff(
                     identity = bvid,
                     ready = success != null,
+                    entryContentReady = if (relatedTabFirst && includeRelatedTab) {
+                        relatedContentReady
+                    } else commentsContentReady,
                     loading = success == null && uiState is VideoPlaybackUiState.Loading,
                     modifier = Modifier.fillMaxSize(),
                     skeleton = {
@@ -394,6 +400,8 @@ internal fun LargeScreenVideoLayout(
                                     likeCount = engagementState.likeCount
                                         .takeIf { engagementState.likeStatusKnown }?.toLong(),
                                     commentCount = success.info.stat.reply.toLong(),
+                                    coinCount = success.info.stat.coin.toLong(),
+                                    shareCount = success.info.stat.share.toLong(),
                                     favoriteCount = engagementState.favoriteCount
                                         .takeIf { engagementState.likeStatusKnown }?.toLong(),
                                     onLike = engagementActions.toggleLike,

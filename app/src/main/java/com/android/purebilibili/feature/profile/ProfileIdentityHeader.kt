@@ -120,7 +120,7 @@ internal fun ProfileIdentityHeader(
                                 .clearAndSetSemantics {},
                         )
                     }
-                    UserLevelBadge(level = user.level)
+                    UserLevelBadge(level = user.level, isSeniorMember = user.isSeniorMember)
                     if (user.isVip) UserVipBadge(label = user.vipLabel, compact = true)
                 }
                 Box {

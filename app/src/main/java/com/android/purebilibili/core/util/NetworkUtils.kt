@@ -13,6 +13,12 @@ import com.android.purebilibili.data.model.VideoQuality
  */
 object NetworkUtils {
 
+    internal fun getActiveNetworkCapabilities(context: Context): NetworkCapabilities? {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = manager.activeNetwork ?: return null
+        return manager.getNetworkCapabilities(network)
+    }
+
     fun isNetworkAvailable(context: Context): Boolean {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = connectivityManager.activeNetwork ?: return false
@@ -54,10 +60,9 @@ object NetworkUtils {
      * 
      * @return 根据用户设置和网络类型返回对应清晰度
      */
-    fun getDefaultQualityId(context: Context): Int {
+    fun getDefaultQualityId(context: Context, isOnWifi: Boolean = isWifi(context)): Int {
         val prefs = context.getSharedPreferences("quality_settings", Context.MODE_PRIVATE)
 
-        val isOnWifi = isWifi(context)
         val quality = if (isOnWifi) {
             prefs.getInt("wifi_quality", 80)  // 默认 WiFi=1080P
         } else {
@@ -133,8 +138,7 @@ internal fun shouldRefreshVipStatusBeforeResolvingDefaultQuality(
     return autoHighestEnabled || storedQuality > 80
 }
 
-// Preserve the preferred ceiling even when cached membership is stale. The discovered
-// playable streams determine the actual fallback, as in PiliPlus.
+// 保留用户首播画质上限；实际可用轨道决定回退，不提前用会员缓存截断偏好。
 @Suppress("UNUSED_PARAMETER")
 internal fun resolvePlayableDefaultQualityId(
     storedQuality: Int,

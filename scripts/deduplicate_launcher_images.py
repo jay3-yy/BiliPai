@@ -45,7 +45,24 @@ def deduplicate():
         ET.indent(resources, space="    ")
         target.write_text('<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(resources, encoding="unicode") + '\n')
     previous = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else []
-    MANIFEST.write_text(json.dumps(previous + aliases, indent=2) + "\n")
+    entries = previous + aliases
+    targets = {entry["original"]: entry["target"] for entry in entries}
+    # 已有别名的目标也可能参与本次去重，直接指向最终图片，避免留下别名链。
+    for entry in entries:
+        target = entry["target"]
+        while target in targets:
+            target = targets[target]
+        if target == entry["target"]:
+            continue
+        entry["target"] = target
+        original = ROOT / entry["original"]
+        xml = original.parent.parent / original.parent.name.replace("mipmap", "values", 1) / "launcher_image_aliases.xml"
+        resources = ET.parse(xml).getroot()
+        item, = [item for item in resources if item.get("name") == original.stem]
+        item.text = "@mipmap/" + Path(target).stem
+        ET.indent(resources, space="    ")
+        xml.write_text('<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(resources, encoding="unicode") + '\n')
+    MANIFEST.write_text(json.dumps(entries, indent=2) + "\n")
     print(f"Shared {len(aliases)} launcher entries; source bytes removed: {saved}")
 
 

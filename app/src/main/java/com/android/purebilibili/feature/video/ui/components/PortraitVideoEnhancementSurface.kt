@@ -60,6 +60,7 @@ internal class PortraitVideoEnhancementSession internal constructor(internal val
     internal var usePipeline by mutableStateOf(false)
     internal var inputSurface by mutableStateOf<Surface?>(null)
     internal var firstFrame by mutableStateOf(false)
+    internal var nativeFirstFrame by mutableStateOf(false)
     internal var nativeView by mutableStateOf<PlayerView?>(null)
     internal var glView by mutableStateOf<Anime4KGLSurfaceView?>(null)
     internal var videoSize by mutableStateOf(VideoSize.UNKNOWN)
@@ -67,6 +68,9 @@ internal class PortraitVideoEnhancementSession internal constructor(internal val
     internal var changeEnabled: (Boolean) -> Unit = {}
     internal var plugin: VideoEnhancementPluginApi? = null
     val pipelineActive: Boolean get() = usePipeline && inputSurface != null
+    // 封面直接读取当前输出的状态，避免页面重组再次清空已收到的首帧。
+    val hasRenderedOutputFrame: Boolean
+        get() = if (pipelineActive) firstFrame else nativeFirstFrame
 
     fun setEnabled(value: Boolean) = changeEnabled(value)
     fun setAlgorithm(value: VideoEnhancementAlgorithm) {
@@ -113,6 +117,11 @@ internal fun rememberPortraitVideoEnhancementSession(
     var inputFormat by remember(player) { mutableStateOf(player.videoFormat) }
     DisposableEffect(session) {
         val listener = object : Player.Listener {
+            override fun onRenderedFirstFrame() {
+                if (!session.pipelineActive && session.nativeView?.player === player) {
+                    session.nativeFirstFrame = true
+                }
+            }
             override fun onVideoSizeChanged(videoSize: VideoSize) { session.videoSize = videoSize }
             override fun onEvents(player: Player, events: Player.Events) {
                 inputFormat = session.player.videoFormat
@@ -162,12 +171,21 @@ internal fun rememberPortraitVideoEnhancementSession(
     }
     LaunchedEffect(session, session.nativeView, session.inputSurface, session.usePipeline, started) {
         val view = session.nativeView
-        if (!session.pipelineActive && view != null && view.player !== player) view.player = player
+        if (session.pipelineActive) session.nativeFirstFrame = false
+        if (!session.pipelineActive && view != null && view.player !== player) {
+            session.nativeFirstFrame = false
+            view.player = player
+        }
         session.router.update(view, session.inputSurface, true, session.usePipeline)
     }
     LaunchedEffect(session, session.glView, session.usePipeline, started) {
         session.glView?.let { if (session.usePipeline && started) it.onResume() else it.onPause() }
     }
+    com.android.purebilibili.core.ui.performance.VideoSurfaceFrameRateEffect(
+        player = player,
+        surfaceView = session.glView,
+        active = session.pipelineActive && started,
+    )
     LaunchedEffect(session, session.pipelineActive) {
         if (!session.pipelineActive) return@LaunchedEffect
         var startedAt: Long? = null
@@ -200,23 +218,12 @@ internal fun PortraitVideoEnhancementSurface(
     flippedVertical: Boolean,
     onPlayerViewChanged: (PlayerView?) -> Unit,
     modifier: Modifier = Modifier,
-    onFirstFrameRendered: () -> Unit = {},
 ) {
     val latestViewChanged by rememberUpdatedState(onPlayerViewChanged)
-    val latestFirstFrame by rememberUpdatedState(onFirstFrameRendered)
     val scaleMode = when (resizeMode) {
         AspectRatioFrameLayout.RESIZE_MODE_FILL -> Anime4KDisplayScaleMode.STRETCH
         AspectRatioFrameLayout.RESIZE_MODE_ZOOM -> Anime4KDisplayScaleMode.CROP
         else -> Anime4KDisplayScaleMode.FIT
-    }
-    DisposableEffect(session) {
-        val listener = object : Player.Listener {
-            override fun onRenderedFirstFrame() {
-                if (!session.pipelineActive) latestFirstFrame()
-            }
-        }
-        session.player.addListener(listener)
-        onDispose { session.player.removeListener(listener) }
     }
     Box(modifier) {
         key(session, preferTexture) {
@@ -225,6 +232,7 @@ internal fun PortraitVideoEnhancementSurface(
                     val view = if (preferTexture) LayoutInflater.from(ctx)
                         .inflate(R.layout.view_player_texture, null, false) as PlayerView else PlayerView(ctx)
                     view.apply {
+                        session.nativeFirstFrame = false
                         session.nativeView = this
                         latestViewChanged(this)
                         player = if (!session.pipelineActive) session.player else null
@@ -237,7 +245,10 @@ internal fun PortraitVideoEnhancementSurface(
                 update = { view ->
                     session.nativeView = view
                     latestViewChanged(view)
-                    if (!session.pipelineActive && view.player !== session.player) view.player = session.player
+                    if (!session.pipelineActive && view.player !== session.player) {
+                        session.nativeFirstFrame = false
+                        view.player = session.player
+                    }
                     view.keepScreenOn = keepScreenOn
                     // 原生布局完成及视频格式变化都需要恢复视口；不能只依赖组合时的旧 View 尺寸。
                     // 玻璃、MD3 与 Miuix 共用出画修复，不改变各自的容器比例。
@@ -254,6 +265,7 @@ internal fun PortraitVideoEnhancementSurface(
                 onRelease = { view ->
                     cancelPlayerViewViewportRefresh(view)
                     if (session.nativeView === view) {
+                        session.nativeFirstFrame = false
                         session.nativeView = null
                         latestViewChanged(null)
                     }
@@ -269,6 +281,7 @@ internal fun PortraitVideoEnhancementSurface(
             AndroidView(
                 factory = { ctx ->
                     Anime4KGLSurfaceView(ctx, initialConfig = session.config).apply {
+                        session.firstFrame = false
                         session.glView = this
                         onInputSurfaceChanged = { surface ->
                             if (session.glView === this) {
@@ -279,7 +292,6 @@ internal fun PortraitVideoEnhancementSurface(
                         this.onFirstFrameRendered = {
                             if (session.glView === this) {
                                 session.firstFrame = true
-                                latestFirstFrame()
                             }
                         }
                         onPipelineError = { error ->

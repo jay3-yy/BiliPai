@@ -2,15 +2,10 @@
 // Copyright (C) 2026 BiliPai contributors
 package com.android.purebilibili.navigation3.predictiveback
 
-import android.graphics.RenderEffect as AndroidRenderEffect
-import android.graphics.Shader
-import android.os.Build
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RenderEffect as ComposeRenderEffect
-import androidx.compose.ui.graphics.asComposeRenderEffect
-import androidx.compose.ui.graphics.graphicsLayer
+import com.android.purebilibili.core.ui.transition.navigationBlurBlend
+import com.android.purebilibili.core.ui.transition.resolveNavigationBlurBlendFrame
 import com.android.purebilibili.core.ui.adaptive.MotionTier
-import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
 import top.yukonga.miuix.kmp.nav.transition.NavRole
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
@@ -88,33 +83,14 @@ private fun realtimeCoveredBlurTransition(
             }
             // 模糊只作用于被覆盖页；开关关闭或进入/退出的顶层页不挂额外效果图层。
             if (!blurEnabled || scope.role != NavRole.Covered) return transformed
-            val renderEffectCache = MiuixCoveredBlurRenderEffectCache()
-            return transformed.graphicsLayer {
-                val motionTier = motionTierProvider()
-                renderEffect = if (motionTier != MotionTier.Reduced) {
-                    val blurFrame = resolvePredictiveBackBlurFrame(
-                        progress = if (scope.gesture != null || scope.settle != null) {
-                            val coveredDepth = if (
-                                progressControlEnabled && scope.relativeDepth > 0f
-                            ) {
-                                resolveMiuixPredictiveBackCoveredDepth(
-                                    scope = scope,
-                                    maxPreviewFraction = maxPreviewFraction,
-                                )
-                            } else {
-                                scope.relativeDepth
-                            }
-                            resolveMiuixNavCoveredBlurProgress(coveredDepth)
-                        } else {
-                            0f
-                        },
-                        motionTier = motionTier,
-                        isLightBackground = isLightBackground,
-                    )
-                    renderEffectCache.resolve(blurFrame.blurRadiusPx)
-                } else {
-                    null
-                }
+            return transformed.navigationBlurBlend {
+                val progress = if (scope.gesture != null || scope.settle != null) {
+                    val coveredDepth = if (progressControlEnabled && scope.relativeDepth > 0f) {
+                        resolveMiuixPredictiveBackCoveredDepth(scope, maxPreviewFraction)
+                    } else scope.relativeDepth
+                    resolveMiuixNavCoveredBlurProgress(coveredDepth)
+                } else 0f
+                resolveNavigationBlurBlendFrame(progress, motionTierProvider(), isLightBackground)
             }
         }
     }
@@ -124,23 +100,4 @@ private fun realtimeCoveredBlurTransition(
 internal fun resolveMiuixNavCoveredBlurProgress(relativeDepth: Float): Float {
     val coveredDepth = relativeDepth.coerceIn(0f, 1f)
     return coveredDepth * coveredDepth
-}
-
-private class MiuixCoveredBlurRenderEffectCache {
-    // 半径已由公共策略按 4px 量化，往返手势复用各档效果，避免只缓存上一档反复创建。
-    private val effectsByRadius = mutableMapOf<Float, ComposeRenderEffect>()
-
-    fun resolve(radiusPx: Float): ComposeRenderEffect? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || radiusPx <= 0.5f) {
-            return null
-        }
-        val quantizedRadius = kotlin.math.round(radiusPx * 2f) / 2f
-        return effectsByRadius.getOrPut(quantizedRadius) {
-            AndroidRenderEffect.createBlurEffect(
-                quantizedRadius,
-                quantizedRadius,
-                Shader.TileMode.CLAMP,
-            ).asComposeRenderEffect()
-        }
-    }
 }

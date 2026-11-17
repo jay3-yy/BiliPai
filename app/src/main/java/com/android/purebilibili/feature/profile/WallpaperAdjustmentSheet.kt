@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,6 +46,8 @@ import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.WindowWidthSizeClass
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +59,8 @@ fun WallpaperAdjustmentSheet(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val windowSize = LocalWindowInfo.current.containerSize
+    val isTabletWindow = LocalWindowSizeClass.current.widthSizeClass != WindowWidthSizeClass.Compact
     var previewLoaded by remember(imageUri) { mutableStateOf(false) }
     var previewFailed by remember(imageUri) { mutableStateOf(false) }
     val previewRequest = remember(context, imageUri) {
@@ -65,7 +70,7 @@ fun WallpaperAdjustmentSheet(
             .crossfade(true)
             .build()
     }
-    var selectedTab by remember { mutableIntStateOf(0) } // 0: Mobile, 1: Tablet
+    var selectedTab by remember { mutableIntStateOf(if (isTabletWindow) 1 else 0) }
     var mobileBias by remember { mutableFloatStateOf(initialMobileBias) }
     var tabletBias by remember { mutableFloatStateOf(initialTabletBias) }
 
@@ -127,7 +132,7 @@ fun WallpaperAdjustmentSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Preview Area
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(300.dp) // Fixed height container for preview
@@ -135,8 +140,18 @@ fun WallpaperAdjustmentSheet(
                 contentAlignment = Alignment.Center
             ) {
                 // Device Mock Frame
-                val aspectRatio = if (selectedTab == 0) 9f / 18f else 16f / 10f
-                val width = if (selectedTab == 0) 140.dp else 280.dp
+                // 各材质共用实际窗口比例，与开屏的全窗口裁剪一致；另一设备保留示意比例。
+                val aspectRatio = resolveSplashWallpaperPreviewAspectRatio(
+                    isTabletPreview = selectedTab == 1,
+                    isTabletWindow = isTabletWindow,
+                    windowWidthPx = windowSize.width,
+                    windowHeightPx = windowSize.height,
+                )
+                val width = minOf(
+                    if (selectedTab == 0) 140.dp else 280.dp,
+                    maxWidth,
+                    maxHeight * aspectRatio,
+                )
                 val height = width / aspectRatio
                 val previewCornerRadius = if (selectedTab == 0) 16.dp else 12.dp
 

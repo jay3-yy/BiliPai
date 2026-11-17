@@ -111,7 +111,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             popularCategoryStates = PopularSubCategory.entries.associateWith { CategoryContent() }.toImmutableMap()
         )
     )
-    val uiState = _uiState.asStateFlow()
+    val uiState = _uiState.filteredHomeContent(viewModelScope)
     private val _pendingMemoryRecovery = MutableStateFlow<HomeFeedMemorySnapshot?>(null)
     internal val pendingMemoryRecovery = _pendingMemoryRecovery.asStateFlow()
     val currentCategory = homeStateFlow { it.currentCategory }
@@ -154,7 +154,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val isRefreshing = _isRefreshing.asStateFlow()
 
     private fun <T> homeStateFlow(selector: (HomeUiState) -> T): StateFlow<T> {
-        return HomeStateProjection(_uiState, selector)
+        return HomeStateProjection(uiState, selector)
     }
 
     private var refreshIdx = 0
@@ -251,9 +251,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             blockedUpRepository.getAllBlockedUps().collect { list ->
                 blockedMids = list.map { it.mid }.toSet()
-                if (pendingNotInterestedRefilterBvids.isEmpty()) {
-                    reFilterAllContent()
-                }
             }
         }
         syncTodayWatchFeedbackFromStore()
@@ -311,17 +308,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             com.android.purebilibili.feature.message.ForegroundMessageSync.snapshot.collect { snapshot ->
                 if (snapshot != null && snapshot.identity == accountRequests.awaitCurrentIdentity()) {
-                    val displayed = com.android.purebilibili.core.store.MessageBadgeCleanState.resolve(
-                        snapshot.identity.mid ?: 0L, snapshot.unread.total,
-                    )
-                    _uiState.update { it.copy(messageUnreadCount = displayed) }
+                    applyForegroundMessageUnread(snapshot)
                 }
             }
         }
         viewModelScope.launch {
             MessageRepository.readEvents.collect {
                 messageUnreadRefreshJob?.cancel()
-                messageUnreadRefreshJob = accountRequests.launch { refreshMessageUnreadCount() }
+                refreshMessageUnreadInBackground(afterCurrentFetch = true)
             }
         }
         refreshUserInfoInBackground()
@@ -333,12 +327,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val oldState = _uiState.value
         _uiState.value = oldState.mapHomeCategoryContent { category, subCategory, content ->
             content.copy(
-                videos = PluginManager.filterFeedItems(
-                    filterHomeFeedbackVideos(content.videos.filter { it.owner.mid !in blockedMids }),
+                videos = PluginManager.filterFeedItemsBeforeContentProjection(
+                    filterHomeFeedbackVideos(content.videos),
                     feedKind = category.toFeedKind(subCategory),
                 ).toImmutableList(),
-                liveRooms = content.liveRooms.filter { it.uid !in blockedMids }.toImmutableList(),
-                followedLiveRooms = content.followedLiveRooms.filter { it.uid !in blockedMids }.toImmutableList(),
+                liveRooms = content.liveRooms.toImmutableList(),
+                followedLiveRooms = content.followedLiveRooms.toImmutableList(),
             )
         }
         accountRequests.launch {
@@ -637,9 +631,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val validVideos = videos.filter {
             it.bvid.isNotBlank() && it.title.isNotBlank() && it.contentType !in setOf("bangumi", "picture")
         }
-        val blockedFiltered = validVideos.filter { it.owner.mid !in blockedMids }
+        val blockedFiltered = validVideos
         val feedbackFiltered = filterHomeFeedbackVideos(blockedFiltered)
-        val builtinFiltered = PluginManager.filterFeedItems(
+        val builtinFiltered = PluginManager.filterFeedItemsBeforeContentProjection(
             feedbackFiltered,
             feedKind = FeedKind.HOME_RECOMMEND
         )
@@ -719,8 +713,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         do {
             blocked = blockedMids
             videos = withContext(Dispatchers.Default) {
-                PluginManager.filterFeedItems(
-                    filterHomeFeedbackVideos(snapshot.videos.filter { it.owner.mid !in blocked }),
+                PluginManager.filterFeedItemsBeforeContentProjection(
+                    filterHomeFeedbackVideos(snapshot.videos),
                     feedKind = category.toFeedKind(subCategory),
                 ).toImmutableList()
             }
@@ -1071,6 +1065,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (shouldEmbedLivePageInHomeTopTab(category)) return
         if (_isRefreshing.value) return
         launchFeedRequest(category, popularSubCategory, HomeFeedRequestKind.REFRESH) {
+            com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("home", "feed_refresh_started")
             com.android.purebilibili.core.util.Logger.d(
                 "HomeFeed",
                 "refresh 触发 category=$category 实际列=$feedGridColumns " +
@@ -1296,15 +1291,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun refreshMessageUnreadInBackground() {
+    private fun applyForegroundMessageUnread(snapshot: com.android.purebilibili.feature.message.ForegroundMessageSnapshot) {
+        if (!accountRequests.isCurrent(snapshot.identity)) return
+        val displayed = com.android.purebilibili.core.store.MessageBadgeCleanState.resolve(
+            snapshot.identity.mid ?: 0L, snapshot.unread.total,
+        )
+        _uiState.update { it.copy(messageUnreadCount = displayed) }
+    }
+
+    private fun refreshMessageUnreadInBackground(afterCurrentFetch: Boolean = false) {
+        if (com.android.purebilibili.feature.message.ForegroundMessageSync.refreshRequests.request(
+                accountRequests.identity, afterCurrentFetch,
+            )
+        ) {
+            // 原始未读相同不会再次发布 StateFlow；本地清理状态仍须立即应用。
+            com.android.purebilibili.feature.message.ForegroundMessageSync.snapshot.value
+                ?.takeIf { it.identity == accountRequests.identity }
+                ?.let(::applyForegroundMessageUnread)
+            return
+        }
         if (messageUnreadRefreshJob?.isActive == true) return
         messageUnreadRefreshJob = accountRequests.launch {
             refreshMessageUnreadCount()
         }
     }
 
-    /** 回首页时重拉角标。 */
+    /** 回首页时刷新角标；前台同步运行时复用当前查询。 */
     fun refreshMessageUnread() {
+        com.android.purebilibili.core.performance.PerformanceCapture.recordDataEvent("home", "unread_refresh_requested")
         refreshMessageUnreadInBackground()
     }
 
@@ -1420,7 +1434,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Default) {
                 prepareHomeFeedVideos(
                     videos = videos,
-                    blockedMids = blockedMids,
+                    blockedMids = emptySet(),
                     feedKind = currentCategory.toFeedKind(popularSubCategory),
                     feedbackFilter = ::filterHomeFeedbackVideos,
                 )
@@ -1634,7 +1648,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             merge = withContext(Dispatchers.Default) {
                 mergeHomeFollowFeed(
                     currentVideos = base,
-                    incomingVideos = mapHomeFollowDynamicItemsToVideos(feed.items, blocked),
+                    incomingVideos = mapHomeFollowDynamicItemsToVideos(feed.items, emptySet()),
                     isLoadMore = isLoadMore,
                     incrementalRefreshEnabled = incrementalRefresh,
                     usedUpdateBaseline = feed.usedUpdateBaseline,
@@ -1706,6 +1720,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         name = navData.uname,
                         mid = navData.mid,
                         level = navData.level_info.current_level,
+                        isSeniorMember = navData.is_senior_member == 1,
                         currentLevelMinExp = navData.level_info.current_min ?: 0,
                         currentLevelExp = navData.level_info.current_exp ?: 0,
                         nextLevelExp = navData.level_info.next_exp ?: 0,

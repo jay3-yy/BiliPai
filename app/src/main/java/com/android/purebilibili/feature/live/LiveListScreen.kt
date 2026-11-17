@@ -81,6 +81,7 @@ import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
+import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
 import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.LiveAreaParent
@@ -572,7 +573,7 @@ fun LiveListScreen(
     val metrics = visualSpec.homeMetrics
     val gridBottomPadding = LocalBottomBarContentPadding.current
     val liveGridState = rememberLazyGridState()
-    val followRowState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val followRowState = rememberLiveFollowRowState(accountIdentity, state.refreshCompletion)
     // 与动态列表共用底栏滚动增量，未激活的 Pager 页面不写入全局状态。
     val navigationSettings by remember(context) {
         com.android.purebilibili.core.store.SettingsManager.getAppNavigationSettings(context)
@@ -607,14 +608,13 @@ fun LiveListScreen(
         }
     }
 
-    LaunchedEffect(state.refreshCompletion) {
-        if (state.refreshCompletion > 0L) followRowState.scrollToItem(0)
-    }
     suspend fun scrollLiveHomeToTop(refreshAtTop: Boolean = true) {
         val atTop = liveGridState.firstVisibleItemIndex == 0 &&
             liveGridState.firstVisibleItemScrollOffset < 50
         if (!refreshAtTop) {
+            val wasScrolled = liveGridState.canScrollBackward
             liveGridState.scrollToItem(0)
+            if (wasScrolled) liveGridState.notifyAppScrollToTop()
         } else if (!atTop) {
             liveGridState.animateScrollToTop()
         } else {

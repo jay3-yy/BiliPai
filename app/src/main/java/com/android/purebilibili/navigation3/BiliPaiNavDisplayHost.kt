@@ -63,7 +63,7 @@ import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackground
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionExposure
 import com.android.purebilibili.core.ui.transition.LocalVideoCardTransitionClock
 import com.android.purebilibili.core.ui.transition.LocalPredictiveBackBackgroundState
-import com.android.purebilibili.core.ui.transition.PredictiveBackBackgroundState
+import com.android.purebilibili.core.ui.transition.rememberPredictiveBackBackgroundState
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionClock
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionHostDepthLayer
 import com.android.purebilibili.core.ui.transition.rememberVideoCardTransitionSnapshotHandle
@@ -239,7 +239,6 @@ internal fun BiliPaiNavDisplayHost(
                 videoCardMotionEnabled = articleTarget || bangumiPlayerTarget,
                 cardBackgroundEffectsEnabled = articleTarget || bangumiPlayerTarget ||
                     target is BiliPaiNavKey.Live || target is BiliPaiNavKey.LiveAreaDetail,
-                isolateContentDrawing = target is BiliPaiNavKey.Live,
                 useSharedSnapshotBlur = target is BiliPaiNavKey.Live,
                 realtimeBlurEnabled = if (generalContainer) settingsContainerRealtimeBlurEnabled
                     else videoTransitionRealtimeBlurEnabled,
@@ -746,34 +745,22 @@ internal fun BiliPaiNavDisplayHost(
             sourceChromeSnapshot = sourceMetadata.sourceChromeSnapshot,
         )
     }
-    // 恢复 0.2.2 的预测返回背景链路：目标返回页（栈前一 key）在预测返回手势中
-    // 随手势进度模糊/消退，迁移到 Miuix 导航时该 provide 曾丢失。
-    val predictiveBackBackgroundState = remember(
-        currentKey,
-        cardMorphAvailable,
-        videoCardTransitionProgress,
-        currentBackTarget,
-        transitionMotionTier,
-        isLightBackground,
-        miuixTransitionBlurEnabled,
-    ) {
-        PredictiveBackBackgroundState(
-            progressProvider = {
-                val blurEnabled = miuixTransitionBlurEnabled
-                if (!blurEnabled || !isCardMorphDestinationNavKey(currentKey)) {
-                    0f
-                } else {
-                    videoCardTransitionProgress.gestureBackProgress()
-                        ?.takeIf { cardMorphAvailable }
-                        ?.let { resolvePredictiveBackGestureBlurProgress(it) }
-                        ?: 0f
-                }
-            },
-            targetKeyProvider = { currentBackTarget },
-            motionTierProvider = { transitionMotionTier },
-            isLightBackgroundProvider = { isLightBackground },
-        )
-    }
+    // 预测返回使用最新栈目标和手势进度；固定 provider 身份，避免 push/pop 重建入口包装。
+    val predictiveBackBackgroundState = rememberPredictiveBackBackgroundState(
+        progressProvider = {
+            if (!miuixTransitionBlurEnabled || !isCardMorphDestinationNavKey(currentKey)) {
+                0f
+            } else {
+                videoCardTransitionProgress.gestureBackProgress()
+                    ?.takeIf { cardMorphAvailable }
+                    ?.let { resolvePredictiveBackGestureBlurProgress(it) }
+                    ?: 0f
+            }
+        },
+        targetKey = currentBackTarget,
+        motionTier = transitionMotionTier,
+        isLightBackground = isLightBackground,
+    )
 
     val roundAllCorners = style == BiliPaiPredictiveBackAnimationStyle.AOSP ||
         style == BiliPaiPredictiveBackAnimationStyle.SCALE ||
@@ -822,7 +809,8 @@ internal fun BiliPaiNavDisplayHost(
     // 横滑冲突页面始终禁用（见 BiliPaiNavEntryProvider）。
     val fullScreenSwipeBackEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getFullScreenSwipeBackEnabled(context) }
             .collectAsStateWithLifecycle(initialValue = false)
-    val swipeBackDirection = if (fullScreenSwipeBackEnabled) {
+    val predictiveGestureEnabled = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current
+    val swipeBackDirection = if (fullScreenSwipeBackEnabled && predictiveGestureEnabled) {
         when (LocalLayoutDirection.current) {
             LayoutDirection.Rtl -> NavSwipeDirection.RightToLeft
             LayoutDirection.Ltr -> NavSwipeDirection.LeftToRight
@@ -831,7 +819,7 @@ internal fun BiliPaiNavDisplayHost(
         NavSwipeDirection.None
     }
     val interceptPredictiveBack =
-        style == BiliPaiPredictiveBackAnimationStyle.NONE && backStack.size > 1
+        (!predictiveGestureEnabled || style == BiliPaiPredictiveBackAnimationStyle.NONE) && backStack.size > 1
     val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     val clickToPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getClickToPlay(context) }
         .collectAsStateWithLifecycle(
@@ -886,10 +874,19 @@ internal fun BiliPaiNavDisplayHost(
         val latestNavEntryContent by rememberUpdatedState(content)
         val stableNavEntryContent: @Composable (BiliPaiNavKey) -> Unit =
             remember { { key: BiliPaiNavKey -> latestNavEntryContent(key) } }
+        // 返回能力只让返回处理器失效；返回事件执行时读取最新动作。
+        // 不以每次 push/pop 的栈快照重建所有入口的内容包装函数。
+        val latestEntryBack = rememberUpdatedState(performBack)
+        val stableEntryBack = remember { { latestEntryBack.value() } }
+        val entryBackEnabled = rememberUpdatedState(interceptPredictiveBack)
+        // 容器资格只在入口首次挂载时冻结；栏目路由只由壁纸判断消费。
+        // 两者不应因过滤目录或切换底栏而重建所有入口的注册内容。
+        val latestLiveContainerTransitions = rememberUpdatedState(liveContainerTransitions)
+        val latestMainHostRoute = rememberUpdatedState(activeMainHostRoute)
         // 内容 lambda 以前只作为 NavDisplay 的尾部字面量存在：宿主任何一次无关重组
         //（曝光边界、设置流、窗口焦点……）都会生成新实例，令 entryProvider 与全部
         // NavEntry 连带重建、所有在场 entry 的宿主跟着重组。这里按真实输入 remember，
-        // 只有导航栈 / 转场对象 / 提供给 entry 的可见性等输入真正变化时才重建。
+        // 转场对象及内容实际使用的配置变化时才重建；栈变化由下方注册表处理。
         val navEntryContent: @Composable (BiliPaiNavKey) -> Unit = remember(
             stableOnOpenCardContainer,
             liveContainerEnabled,
@@ -897,17 +894,17 @@ internal fun BiliPaiNavDisplayHost(
             settingsContainerMorphEnabled,
             settingsContainerSources,
             liveContainerSources,
-            liveContainerTransitions,
+            latestLiveContainerTransitions,
             globalWallpaperVisible,
-            activeMainHostRoute,
+            latestMainHostRoute,
             videoCardClock,
             transitionBackgroundState,
             miuixCardTransitionState,
             predictiveBackBackgroundState,
             videoCardTransitionEnabled,
-            performBack,
-            interceptPredictiveBack,
-            stackSnapshot,
+            stableEntryBack,
+            entryBackEnabled,
+            backStack,
             sourceMetadata,
             clickToPlayEnabled,
             dynamicImagePreviewTextVisible,
@@ -930,13 +927,13 @@ internal fun BiliPaiNavDisplayHost(
                 SideEffect { retainedCardTransition = entryCardTransitionState }
                 // Freeze this per entry so popping the key cannot remove its backing during exit.
                 val opaqueVideoChild = remember(key) {
-                    shouldUseOpaqueVideoChildBackground(key, stackSnapshot)
+                    shouldUseOpaqueVideoChildBackground(key, backStack)
                 }
                 // 每个直播 entry 固定表面类型，返回动画或目录清理时不重新绑定播放器。
-                val liveContainerEntry = remember(key) { liveContainerTransitions.containsKey(key) }
+                val liveContainerEntry = remember(key) { latestLiveContainerTransitions.value.containsKey(key) }
                 BiliPaiMiuixNavEntry(
-                    interceptPredictiveBack = interceptPredictiveBack,
-                    onBack = performBack,
+                    interceptPredictiveBack = entryBackEnabled,
+                    onBack = stableEntryBack,
                 ) {
                     CompositionLocalProvider(
                         com.android.purebilibili.core.ui.LocalNativeCardNavigate provides stableOnOpenCardContainer,
@@ -956,7 +953,7 @@ internal fun BiliPaiNavDisplayHost(
                                 shouldRenderGlobalHomeWallpaperBackdrop(
                                     effectScope = HomeWallpaperEffectScope.GLOBAL,
                                     currentRoute = key.toLegacyRoute(),
-                                    mainHostTabRoute = activeMainHostRoute,
+                                    mainHostTabRoute = latestMainHostRoute.value,
                                 )),
                         LocalVideoCardSharedElementSourceRoute provides key.toLegacyRoute(),
                         LocalVideoCardTransitionClock provides videoCardClock,
@@ -1035,14 +1032,14 @@ internal fun BiliPaiNavDisplayHost(
 
 @Composable
 private fun BiliPaiMiuixNavEntry(
-    interceptPredictiveBack: Boolean,
+    interceptPredictiveBack: androidx.compose.runtime.State<Boolean>,
     onBack: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     val navigationEventState = rememberNavigationEventState(NavigationEventInfo.None)
     NavigationBackHandler(
         state = navigationEventState,
-        isBackEnabled = interceptPredictiveBack,
+        isBackEnabled = interceptPredictiveBack.value,
         onBackCompleted = onBack,
     )
     val performanceOwner = remember { Any() }

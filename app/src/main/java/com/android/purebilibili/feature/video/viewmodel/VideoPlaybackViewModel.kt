@@ -2,6 +2,8 @@
 //  [重构] 简化版 VideoPlaybackViewModel - 使用 UseCase 层
 package com.android.purebilibili.feature.video.viewmodel
 
+import com.android.purebilibili.core.filter.contentFiltered
+
 import android.app.Application
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -82,6 +84,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -107,6 +110,7 @@ import com.android.purebilibili.feature.video.playback.loader.PlaybackRequest
 import com.android.purebilibili.feature.video.playback.loader.PlaybackLoadConfig
 import com.android.purebilibili.feature.video.playback.loader.PlaybackLoadResult
 import com.android.purebilibili.feature.video.playback.loader.PlaybackLoader
+import com.android.purebilibili.feature.video.playback.loader.readPlaybackLoadPreferences
 import com.android.purebilibili.core.player.dash.AdaptiveDashPlaybackSource
 import com.android.purebilibili.feature.video.playback.audio.AudioFallbackReason
 import com.android.purebilibili.feature.video.playback.audio.AudioQualityOption
@@ -481,27 +485,11 @@ internal fun buildPlaybackCdnFallbackState(
             )
         )
     }
-    // 回退时优先挑非 PCDN 的候选：首次选线（preferredDashUrl）已经排除 PCDN，
-    // 但这里的候选取自原始响应，可能把 mountaintoys 之类的 PCDN 地址捡回来。
-    val nonPcdn = candidates.filterNot {
-        com.android.purebilibili.feature.plugin.isRiskyCdnHost(it.videoUrl)
-    }
-    // 整批都是 PCDN 时不能直接用它回退（这些域名常常解析失败），
-    // 和 preferredDashUrl 一样换成常规 CDN：upgcxcode 路径与签名跨 host 通用。
-    val orderedCandidates = if (nonPcdn.isNotEmpty()) {
-        nonPcdn + candidates.filter { it !in nonPcdn }
-    } else {
-        val selectedHost = hostOf(selectedVideoUrl)
-        candidates.map { candidate ->
-            candidate.copy(
-                videoUrl = rewriteToDefaultCdnHost(candidate.videoUrl, selectedHost),
-                audioUrl = candidate.audioUrl
-                    ?.takeIf { com.android.purebilibili.feature.plugin.isRiskyCdnHost(it) }
-                    ?.let { url -> rewriteToDefaultCdnHost(url, selectedHost) }
-                    ?: candidate.audioUrl,
-            )
-        }
-    }
+    // 回退时同样只重排/补全已有候选，不把原签名拼接到未下发的 host。
+    val orderedCandidates = com.android.purebilibili.feature.plugin.sortSafeSignedPlaybackCandidates(
+        com.android.purebilibili.feature.plugin.normalizePlaybackCdnCandidates(candidates),
+        emptyMap()
+    )
     val firstFallback = orderedCandidates.firstOrNull { candidate ->
         candidate.videoUrl != selectedVideoUrl || candidate.audioUrl != selectedAudioUrl
     }
@@ -516,26 +504,6 @@ internal fun buildPlaybackCdnFallbackState(
     )
 }
 
-/** 把 URL 的 host 换成常规 CDN，保留原路径与签名参数。 */
-private fun rewriteToDefaultCdnHost(url: String, avoidHost: String? = null): String {
-    val path = url.substringAfter("://", "").substringAfter("/", "")
-    if (path.isEmpty()) return url
-    // 避开已经用过的线路（例如设置里选的就是阿里云），否则回退等于原地重试
-    val host = DEFAULT_FALLBACK_CDN_HOSTS.firstOrNull { host ->
-        avoidHost == null || !host.contains(avoidHost, ignoreCase = true)
-    } ?: DEFAULT_FALLBACK_CDN_HOSTS.first()
-    return "$host/$path"
-}
-
-private fun hostOf(url: String): String =
-    url.substringAfter("://", "").substringBefore("/").substringBefore(":")
-
-private val DEFAULT_FALLBACK_CDN_HOSTS = listOf(
-    "https://upos-sz-mirrorali.bilivideo.com",
-    "https://upos-sz-mirrorcos.bilivideo.com",
-    "https://upos-sz-mirrorhw.bilivideo.com",
-)
-
 internal fun buildPlaybackAudioUrlCandidates(
     audioUrl: String?,
     cachedDashAudios: List<DashAudio>
@@ -544,19 +512,25 @@ internal fun buildPlaybackAudioUrlCandidates(
         ?.takeIf { it.isNotBlank() }
         ?.let { selectedUrl ->
             cachedDashAudios.firstOrNull { audio ->
-                audio.getValidUrl() == selectedUrl ||
+                audio.baseUrl == selectedUrl || audio.getValidUrl() == selectedUrl ||
                     audio.backupUrl.orEmpty().any { backupUrl -> backupUrl == selectedUrl }
             }
         }
 
-    return buildList {
-        audioUrl?.takeIf { it.isNotBlank() }?.let(::add)
-        selectedAudio
-            ?.backupUrl
-            .orEmpty()
-            .filter { it.isNotBlank() }
-            .let(::addAll)
-    }.distinct()
+    val raw = if (selectedAudio != null) {
+        // 使用所选音轨的原始签名地址，避免携带 getValidUrl 的合成 host。
+        (listOf(selectedAudio.baseUrl) + selectedAudio.backupUrl.orEmpty())
+            .filter { it.isNotBlank() }.distinct()
+    } else {
+        listOfNotNull(audioUrl?.takeIf { it.isNotBlank() })
+    }
+    // 原始候选全是 PCDN 路径时，把 getValidUrl 选出的可换 host 地址放到前面。
+    return if (raw.any { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) {
+        raw
+    } else {
+        (listOfNotNull(audioUrl?.takeIf { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) + raw)
+            .distinct()
+    }
 }
 
 internal fun buildPlaybackVideoUrlCandidates(
@@ -566,21 +540,25 @@ internal fun buildPlaybackVideoUrlCandidates(
 ): List<String> {
     val selectedVideo = cachedDashVideos.firstOrNull { video ->
         video.id == quality && (
-            video.baseUrl == videoUrl ||
+            video.baseUrl == videoUrl || video.getValidUrl() == videoUrl ||
                 video.backupUrl.orEmpty().any { backupUrl -> backupUrl == videoUrl }
             )
     }
 
-    return buildList {
-        if (videoUrl.isNotBlank()) {
-            add(videoUrl)
-        }
-        selectedVideo
-            ?.backupUrl
-            .orEmpty()
-            .filter { it.isNotBlank() }
-            .let(::addAll)
-    }.distinct()
+    val raw = if (selectedVideo != null) {
+        // 编码与画质已经选定，只展开该轨道的原始地址。
+        (listOf(selectedVideo.baseUrl) + selectedVideo.backupUrl.orEmpty())
+            .filter { it.isNotBlank() }.distinct()
+    } else {
+        listOf(videoUrl).filter { it.isNotBlank() }
+    }
+    // 原始候选全是 PCDN 路径时，把 getValidUrl 选出的可换 host 地址放到前面。
+    return if (raw.any { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) {
+        raw
+    } else {
+        (listOfNotNull(videoUrl.takeIf { com.android.purebilibili.feature.plugin.isHostPortableCdnUrl(it) }) + raw)
+            .distinct()
+    }
 }
 
 internal fun shouldFallbackFromCdnRewrite(
@@ -1421,7 +1399,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val playbackCdnPreference = SettingsManager
         .getPlaybackCdnPreference(application.applicationContext)
         .map { PlaybackCdnPreference.fromStorageValue(it) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackCdnPreference.BASE_URL)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaybackCdnPreference.DEFAULT)
 
     // HDR auto-upgrade state
     private val attemptedUpgradeKeys = mutableSetOf<String>()
@@ -1479,20 +1457,34 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             }
         }
     }
-    val uiState: StateFlow<VideoPlaybackUiState> = combine(_uiState, sponsorVideoLabels) { state, labels ->
-        if (state is VideoPlaybackUiState.Success) {
-            val label = labels[state.info.bvid to state.info.cid].orEmpty()
-            if (state.sponsorVideoLabel == label) state else state.copy(sponsorVideoLabel = label)
-        } else {
-            state
+    private val relatedUiProjection = com.android.purebilibili.core.filter.ContentListProjection<RelatedVideo>()
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val uiState: StateFlow<VideoPlaybackUiState> = combine(
+        _uiState, sponsorVideoLabels, com.android.purebilibili.core.store.ContentFilterRules.current
+    ) { state, labels, rules -> Triple(state, labels, rules) }.mapLatest { (state, labels, rules) ->
+        withContext(Dispatchers.Default) {
+            if (state is VideoPlaybackUiState.Success) {
+                val label = labels[state.info.bvid to state.info.cid].orEmpty()
+                val related = if (rules == null) emptyList() else relatedUiProjection.filter(state.related, rules) {
+                    !rules.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED)
+                }
+                if (state.sponsorVideoLabel == label && related === state.related) state
+                else state.copy(sponsorVideoLabel = label, related = related)
+            } else state
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value)
 
     private val _subjectSnapshot = MutableStateFlow<VideoSubjectSnapshot?>(null)
     val subjectSnapshot = _subjectSnapshot.asStateFlow()
     private val _detailState = MutableStateFlow(VideoDetailUiState())
-    val detailState = _detailState.asStateFlow()
+    private val relatedDetailProjection = com.android.purebilibili.core.filter.ContentListProjection<RelatedVideo>()
+    val detailState = _detailState.contentFiltered(viewModelScope) { state, rules ->
+        state.copy(related = relatedDetailProjection.filter(state.related, rules) {
+            !rules.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED)
+        })
+    }
     private val playbackPreparationAllowed = MutableStateFlow(true)
+    private val playbackStartAllowed = MutableStateFlow(true)
     private val relatedPublicationAllowed = MutableStateFlow(true)
     private val videoUiWorkConsumers = MutableStateFlow<Map<Any, VideoUiWorkConsumer>>(emptyMap())
 
@@ -1543,6 +1535,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     fun setPlaybackPreparationAllowed(allowed: Boolean) {
         playbackPreparationAllowed.value = allowed
+    }
+
+    fun setPlaybackStartAllowed(allowed: Boolean) {
+        playbackStartAllowed.value = allowed
     }
 
     fun setRelatedPublicationAllowed(allowed: Boolean) {
@@ -1939,9 +1935,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     internal fun peekInPageInitiatedPlaybackIdentityBvid(): String? {
         return inPageInitiatedPlaybackIdentity?.first
     }
-
-    /** 当前详情播放会话的实时身份，包含不更换导航键的选集和自动连播。 */
-    internal fun peekWindowReturnBvid(): String? = currentBvid.takeIf { it.isNotBlank() }
 
     private fun markInPageInitiatedPlayback(bvid: String, cid: Long) {
         inPageInitiatedPlaybackIdentity = bvid to cid
@@ -2444,6 +2437,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     
     @SuppressLint("UnsafeOptInUsageError")
     fun attachPlayer(player: ExoPlayer) {
+        com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics.measureWork("player_attach") {
+            attachPlayerInternal(player)
+        }
+    }
+
+    @SuppressLint("UnsafeOptInUsageError")
+    private fun attachPlayerInternal(player: ExoPlayer) {
         val changed = exoPlayer !== player
         if (changed) playbackRecoveryGeneration++
         val previousPlayer = exoPlayer
@@ -3233,13 +3233,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     ) {
         if (bvid.isBlank()) return
         cancelSleepAfterCurrentForSwitch(bvid, cid)
-        playbackRecoveryGeneration++
-        // A full media load supersedes an in-place page switch. Without this, a slow page request
-        // can replace the player after navigation has already started loading another subject.
-        pageSwitchJob?.cancel()
-        pageSwitchJob = null
-        pendingPageSwitchCid = null
-        pageSwitchGeneration += 1L
         if (bvid != currentBvid || (cid > 0L && cid != currentCid)) {
             cancelPlaybackStallRecovery()
             playbackStallRecoveryFirstFrameRendered = false
@@ -3273,10 +3266,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             Logger.d("PlayerVM", " Already loading ${playbackRequest.bvid}, skip")
             return
         }
-        aiSummaryJob?.cancel()
-        videoshotJob?.cancel()
-        videoNoteJob?.cancel()
-        
         //  [修复] 更智能的重复检测：只有播放器真正在播放同一视频时才跳过
         // 如果播放器已停止、出错或处于空闲状态，应该重新加载
         val player = exoPlayer
@@ -3439,6 +3428,16 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             return
         }
 
+        // 仅真正开始整片加载时取代分 P 切换；CID 提交后的页面同步不能取消切换任务。
+        playbackRecoveryGeneration++
+        pageSwitchJob?.cancel()
+        pageSwitchJob = null
+        pendingPageSwitchCid = null
+        pageSwitchGeneration += 1L
+        aiSummaryJob?.cancel()
+        videoshotJob?.cancel()
+        videoNoteJob?.cancel()
+
         // 如果播放器正在播放目标视频，但 UI 未加载（新 ViewModel），我们需要获取信息但跳过播放器重置
         val shouldSkipPlayerPrepare = !playbackRequest.force && isPlayerPlayingSameVideo
         if (shouldSkipPlayerPrepare) {
@@ -3544,6 +3543,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             if (canStartDataLoad && playbackRequest.bvid.startsWith("BV", ignoreCase = true)) {
                 loadRelatedVideosForRequest(playbackRequest.bvid, requestToken, primaryLoad)
             }
+            var provisionalCid = 0L
             var provisionalPlayer: ExoPlayer? = null
             var provisionalMediaItem: androidx.media3.common.MediaItem? = null
             var provisionalVideoUrl: String? = null
@@ -3553,45 +3553,35 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             val preparationAccount = com.android.purebilibili.data.repository.videoPlaybackAccountScope()
             
             try {
+                val loadPreferences = appContext?.let { readPlaybackLoadPreferences(it) }
                 val isLoggedIn = com.android.purebilibili.data.repository.VideoRepository.isPlaybackLoggedIn()
-                var storedQualityForWarning = 64
-                var autoHighestQualityEnabledForLoad = false
-                val defaultQuality = appContext?.let { context ->
-                    val storedQuality = NetworkUtils.getDefaultQualityId(context)
-                    val autoHighestEnabled = com.android.purebilibili.core.store.SettingsManager
-                        .getAutoHighestQualitySync(context)
-                    storedQualityForWarning = storedQuality
-                    autoHighestQualityEnabledForLoad = autoHighestEnabled
+                val storedQualityForWarning = loadPreferences?.storedQuality ?: 64
+                val autoHighestQualityEnabledForLoad = loadPreferences?.autoHighestQuality ?: false
+                val defaultQuality = loadPreferences?.let { preferences ->
                     // 首帧前只读取当前账号缓存；实际可用画质由取流结果决定。
                     val effectiveVip = VideoRepository.isPlaybackVip()
                     com.android.purebilibili.core.util.resolvePlaybackDefaultQualityId(
-                        storedQuality = storedQuality,
-                        autoHighestEnabled = autoHighestEnabled,
+                        storedQuality = preferences.storedQuality,
+                        autoHighestEnabled = preferences.autoHighestQuality,
                         isLoggedIn = isLoggedIn,
                         isVip = effectiveVip
                     )
                 } ?: 64
                 //  [新增] 获取音频/视频偏好
-                val audioQualityPreference = appContext?.let { context ->
+                val audioQualityPreference = loadPreferences?.let { preferences ->
                     resolveRequestedAudioQuality(
-                        defaultAudioQuality = com.android.purebilibili.core.store.player.PlayerSettingsStore
-                            .getCachedDefaultAudioQuality(context),
-                        rememberedAudioQuality = com.android.purebilibili.core.store.player.PlayerSettingsStore
-                            .getCachedLastSelectedAudioQuality(context)
+                        defaultAudioQuality = preferences.defaultAudioQuality,
+                        rememberedAudioQuality = preferences.lastSelectedAudioQuality,
                     )
                 } ?: -1
-                val settingsCodecPreference = appContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getVideoCodecSync(it)
-                } ?: HEVC_CODEC_KEY
+                val settingsCodecPreference = loadPreferences?.videoCodec ?: HEVC_CODEC_KEY
                 val sessionBlockedCodecs = playbackSessionStore.state.value.blockedVideoCodecs
                 val videoCodecPreference = resolveEffectiveVideoCodecPreference(
                     requestCodecOverride = playbackRequest.videoCodecOverride,
                     settingsCodecPreference = settingsCodecPreference,
                     sessionBlockedCodecs = sessionBlockedCodecs
                 )
-                val settingsSecondCodecPreference = appContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getVideoSecondCodecSync(it)
-                } ?: AVC_CODEC_KEY
+                val settingsSecondCodecPreference = loadPreferences?.secondVideoCodec ?: AVC_CODEC_KEY
                 val videoSecondCodecPreference = resolveEffectiveVideoSecondCodecPreference(
                     requestCodecOverride = playbackRequest.videoCodecOverride,
                     settingsSecondCodecPreference = settingsSecondCodecPreference
@@ -3599,9 +3589,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 
                 // [Added] Determine auto-play behavior
                 // If autoPlay arg is present, use it. Otherwise reset to "Click to Play" setting
-                val shouldAutoPlay = playbackRequest.autoPlay ?: appContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getClickToPlaySync(it)
-                } ?: true
+                val shouldAutoPlay = playbackRequest.autoPlay ?: loadPreferences?.clickToPlay ?: true
                 
                 Logger.d(
                     "VideoPlaybackViewModel",
@@ -3611,10 +3599,9 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             // 📉 [省流量] 省流量模式逻辑：
             // - ALWAYS: 任何网络都限制 480P
             // - MOBILE_ONLY: 仅移动数据时限制 480P（WiFi不受限）
-            val isOnMobileNetwork = appContext?.let { NetworkUtils.isMobileData(it) } ?: false
-            val dataSaverMode = appContext?.let { 
-                com.android.purebilibili.core.store.SettingsManager.getDataSaverModeSync(it) 
-            } ?: com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY
+            val isOnMobileNetwork = loadPreferences?.isOnMobileNetwork ?: false
+            val dataSaverMode = loadPreferences?.dataSaverMode
+                ?: com.android.purebilibili.core.store.SettingsManager.DataSaverMode.MOBILE_ONLY
             
             //  判断是否应该限制画质
             val shouldLimitQuality = when (dataSaverMode) {
@@ -3632,77 +3619,94 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             
                 val capabilityContext = appContext
                 val loadQuality = finalQuality
-                val playbackSpeed = exoPlayer?.playbackParameters?.speed ?: capabilityContext?.let {
-                    com.android.purebilibili.core.store.SettingsManager.getPreferredPlaybackSpeedSync(it)
-                }
-                val loadConfig = withContext(Dispatchers.Default) {
-                    PlaybackLoadConfig(
-                        defaultQuality = loadQuality,
-                        audioQualityPreference = audioQualityPreference,
-                        videoCodecPreference = videoCodecPreference,
-                        videoSecondCodecPreference = videoSecondCodecPreference,
-                        playWhenReady = shouldAutoPlay,
-                        isAv1Supported = resolveEffectiveAv1Support(
+                val playbackSpeed = exoPlayer?.playbackParameters?.speed ?: loadPreferences?.preferredPlaybackSpeed
+                // 设备/显示能力仅在当前请求内共享，提前准备与正式选流使用同一份结果。
+                val (isAv1Supported, isHdrSupported, isDolbyVisionSupported) = withContext(Dispatchers.Default) {
+                    Triple(
+                        resolveEffectiveAv1Support(
                             deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
-                            sessionBlockedCodecs = sessionBlockedCodecs
+                            sessionBlockedCodecs = sessionBlockedCodecs,
                         ),
-                        isHdrSupported = com.android.purebilibili.core.util.MediaUtils
-                            .isHdrSupported(capabilityContext),
-                        isDolbyVisionSupported = com.android.purebilibili.core.util.MediaUtils
-                            .isDolbyVisionSupported(capabilityContext),
-                        // videoInfoDeferred publishes as soon as metadata arrives.
-                        videoInfoLoader = { videoInfoDeferred.await() },
-                        onPlaybackDataReady = { preparedCid, data ->
-                            // 仅显式分 P 可以提前准备；静音暂停等待详情确认，不提前播放。
-                            if (!shouldSkipPlayerPrepare && !_isInAudioMode.value &&
-                                preparedCid == playbackRequest.cid && playbackRequest.cid > 0L
-                            ) withContext(Dispatchers.Main.immediate) {
-                                playbackPreparationAllowed.first { it }
-                                if (currentLoadRequestToken == requestToken &&
-                                    preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope()
-                                ) {
+                        com.android.purebilibili.core.util.MediaUtils.isHdrSupported(capabilityContext),
+                        com.android.purebilibili.core.util.MediaUtils.isDolbyVisionSupported(capabilityContext),
+                    )
+                }
+                val loadConfig = PlaybackLoadConfig(
+                    defaultQuality = loadQuality,
+                    audioQualityPreference = audioQualityPreference,
+                    videoCodecPreference = videoCodecPreference,
+                    videoSecondCodecPreference = videoSecondCodecPreference,
+                    playWhenReady = shouldAutoPlay,
+                    isAv1Supported = isAv1Supported,
+                    isHdrSupported = isHdrSupported,
+                    isDolbyVisionSupported = isDolbyVisionSupported,
+                    onDataLoadStage = { stage ->
+                        val timelineStage = when (stage) {
+                            PlaybackDataLoadStage.PLAY_URL_READY -> VideoLoadStage.PLAY_URL_READY
+                            PlaybackDataLoadStage.HISTORY_REQUEST_STARTED -> VideoLoadStage.HISTORY_REQUEST_STARTED
+                            PlaybackDataLoadStage.HISTORY_REQUEST_FINISHED -> VideoLoadStage.HISTORY_REQUEST_FINISHED
+                        }
+                        logVideoLoadStage(timelineStage, requestToken)
+                    },
+                    // videoInfoDeferred publishes as soon as metadata arrives.
+                    videoInfoLoader = { videoInfoDeferred.await() },
+                    onPlaybackDataReady = { preparedCid, data ->
+                        // 详情已确认当前分 P；暂停准备与进度读取、入场重叠，不提前播放。
+                        if (!shouldSkipPlayerPrepare && !_isInAudioMode.value && preparedCid > 0L
+                        ) withContext(Dispatchers.Main.immediate) provisional@{
+                            playbackPreparationAllowed.first { it }
+                            if (currentLoadRequestToken == requestToken &&
+                                preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope()
+                            ) {
+                                val selection = withContext(Dispatchers.Default) {
                                     val target = if (loadQuality >= 127) playbackUseCase.resolveAutoHighestTargetQuality(
                                         data.dash?.video.orEmpty().map { it.id },
-                                        com.android.purebilibili.core.util.MediaUtils.isHdrSupported(capabilityContext),
-                                        com.android.purebilibili.core.util.MediaUtils.isDolbyVisionSupported(capabilityContext),
+                                        isHdrSupported,
+                                        isDolbyVisionSupported,
                                     ) else loadQuality
-                                    val selection = playbackUseCase.resolvePlaybackSelection(
+                                    playbackUseCase.resolvePlaybackSelection(
                                         playUrlData = data,
                                         targetQuality = target,
                                         audioQualityPreference = audioQualityPreference,
                                         playbackSpeed = playbackSpeed ?: 1f,
                                         videoCodecPreference = videoCodecPreference,
                                         videoSecondCodecPreference = videoSecondCodecPreference,
-                                        isAv1Supported = resolveEffectiveAv1Support(
-                                            deviceSupportsAv1 = com.android.purebilibili.core.util.MediaUtils.isAv1Supported(),
-                                            sessionBlockedCodecs = sessionBlockedCodecs,
-                                        ),
+                                        isAv1Supported = isAv1Supported,
                                         lockSelectedQuality = true,
                                     )
-                                    val player = exoPlayer
-                                    if (selection != null && player != null) {
-                                        val cdn = resolvePlaybackCdnCandidateSelection(
-                                            videoUrl = selection.videoUrl, audioUrl = selection.audioUrl,
-                                            quality = selection.actualQuality,
-                                            cachedDashVideos = selection.cachedDashVideos,
-                                            cachedDashAudios = selection.cachedDashAudios,
-                                            adaptiveDashSource = selection.adaptiveDashSource,
-                                        )
-                                        provisionalPlayer = player
-                                        provisionalVideoUrl = cdn.playUrl
-                                        provisionalAudioUrl = cdn.audioUrl
-                                        provisionalSource = cdn.adaptiveDashSource
-                                        playResolvedPlayback(cdn.playUrl, cdn.audioUrl, cdn.adaptiveDashSource,
-                                            requestedStartPositionMs, playWhenReady = false,
-                                            cdnCacheKeysByUrl = cdn.cdnCacheKeysByUrl)
-                                        provisionalMediaItem = player.currentMediaItem
-                                    }
+                                }
+                                // 后台计算期间可能离页、切片或切账号；仅当前请求仍允许准备时绑定媒体。
+                                if (!playbackPreparationAllowed.value || shouldSkipPlayerPrepare ||
+                                    _isInAudioMode.value || currentLoadRequestToken != requestToken ||
+                                    preparationAccount != com.android.purebilibili.data.repository.videoPlaybackAccountScope()
+                                ) return@provisional
+                                val player = exoPlayer
+                                if (selection != null && player != null) {
+                                    val cdn = resolvePlaybackCdnCandidateSelection(
+                                        videoUrl = selection.videoUrl, audioUrl = selection.audioUrl,
+                                        quality = selection.actualQuality,
+                                        cachedDashVideos = selection.cachedDashVideos,
+                                        cachedDashAudios = selection.cachedDashAudios,
+                                        adaptiveDashSource = selection.adaptiveDashSource,
+                                    )
+                                    provisionalCid = preparedCid
+                                    provisionalPlayer = player
+                                    provisionalVideoUrl = cdn.playUrl
+                                    provisionalAudioUrl = cdn.audioUrl
+                                    provisionalSource = cdn.adaptiveDashSource
+                                    playResolvedPlayback(cdn.playUrl, cdn.audioUrl, cdn.adaptiveDashSource,
+                                        if (playbackRequest.ignoreSavedProgress) 0L else requestedStartPositionMs,
+                                        playWhenReady = false,
+                                        cdnCacheKeysByUrl = cdn.cdnCacheKeysByUrl,
+                                        mediaCid = preparedCid)
+                                    provisionalMediaItem = player.currentMediaItem
+                                    logVideoLoadStage(VideoLoadStage.PLAYER_PREBUFFER_REQUESTED, requestToken)
                                 }
                             }
-                        },
-                        playbackSpeed = playbackSpeed
-                    )
-                }
+                        }
+                    },
+                    playbackSpeed = playbackSpeed
+                )
                 // 🛡️ [修复] 增加超时保护，防止加载无限挂起
                 val initialLoadResult = kotlinx.coroutines.withTimeout(15000L) {
                     playbackLoader.load(
@@ -3736,6 +3740,14 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 when (loadResult) {
                     is PlaybackLoadResult.Success -> {
                         val result = loadResult.payload
+                        logVideoLoadStage(VideoLoadStage.PLAYBACK_DATA_READY, requestToken)
+                        // 媒体已经暂停准备；进度确认后仍等待入场许可，避免转场中出声。
+                        // 许可开放后再校验请求和账号，拒绝过期结果。
+                        if (!shouldSkipPlayerPrepare) {
+                            playbackStartAllowed.first { it }
+                            // 与 PLAYBACK_DATA_READY 的差值表示数据就绪后等待起播许可的时间。
+                            logVideoLoadStage(VideoLoadStage.ENTRY_PREPARATION_RELEASED, requestToken)
+                        }
                         if (!shouldApplyVideoLoadResult(
                                 activeRequestToken = currentLoadRequestToken,
                                 resultRequestToken = requestToken,
@@ -3755,7 +3767,6 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                                 result.info.bvid, result.info.cid, preserveStarted = shouldSkipPlayerPrepare
                             )
                         }
-                        logVideoLoadStage(VideoLoadStage.PLAY_URL_READY, requestToken)
                         Logger.d(
                             "PlayerVM",
                             "SUB_DBG loadVideo success: requested=${playbackRequest.bvid}/${playbackRequest.cid}, loaded=${result.info.bvid}/${result.info.cid}, token=$requestToken"
@@ -3785,17 +3796,25 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
                         // Play video
                         if (!shouldSkipPlayerPrepare) {
-                            playbackPreparationAllowed.first { it }
                             relatedPlaybackPreparedToken = requestToken
                             val prepared = provisionalPlayer
                             if (prepared != null && prepared === exoPlayer &&
-                                result.info.cid == playbackRequest.cid &&
+                                result.info.cid == provisionalCid &&
                                 preparationAccount == com.android.purebilibili.data.repository.videoPlaybackAccountScope() &&
                                 provisionalVideoUrl == cdnSelection.playUrl && provisionalAudioUrl == cdnSelection.audioUrl &&
                                 provisionalSource == cdnSelection.adaptiveDashSource &&
+                                prepared.currentMediaItem === provisionalMediaItem &&
                                 prepared.playerError == null && prepared.mediaItemCount > 0
                             ) {
-                                prepared.seekTo(startPos)
+                                if (prepared.currentPosition != startPos) {
+                                    com.android.purebilibili.feature.video.playback.session.PlaybackFirstFrameTracker
+                                        .resetForStartupSeek(prepared)
+                                    prepared.seekTo(startPos)
+                                }
+                                armPlaybackCdnFallback(
+                                    cdnSelection.fallbackState,
+                                    activeLoadAutoPlay ?: shouldAutoPlay,
+                                )
                                 prepared.playWhenReady = activeLoadAutoPlay ?: shouldAutoPlay
                             } else playResolvedPlayback(
                                 videoUrl = cdnSelection.playUrl,
@@ -7915,7 +7934,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
 
     private fun requestQuality(qualityId: Int, source: String) {
         val current = _uiState.value as? VideoPlaybackUiState.Success ?: return
-        if (current.isQualitySwitching) {
+        if (current.isQualitySwitching || pendingPageSwitchCid != null) {
             toast("正在切换中...", PlayerToastPresentation.CenteredHighlight)
             return
         }
@@ -8200,6 +8219,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     internal fun setPageIdentityCommitListener(listener: ((String, Long) -> Unit)?) {
         onPageIdentityCommitted = listener
     }
+
+    /** uiState 的筛选投影异步发布；旧分 P 快照不能再驱动加载或覆盖媒体缓存。 */
+    internal fun isCurrentPlaybackSnapshot(snapshot: VideoPlaybackUiState.Success): Boolean {
+        val committed = _uiState.value as? VideoPlaybackUiState.Success ?: return false
+        return committed.info.bvid == snapshot.info.bvid && committed.info.cid == snapshot.info.cid
+    }
     
     fun switchPage(
         pageIndex: Int,
@@ -8235,9 +8260,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             saveCurrentPosition()
         }
         _uiState.value = subtitleClearedState.copy(
-            isQualitySwitching = true,
+            // 取目标分 P 的播放地址期间保留当前画面，不进入整页加载或清晰度切换。
+            isQualitySwitching = false,
+            requestedQuality = null,
             partResumeNotice = null,
-            pendingPlaybackTransitionPositionMs = 0L
+            pendingPlaybackTransitionPositionMs = null
         )
         
         pageSwitchJob = viewModelScope.launch {
@@ -8353,10 +8380,17 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         // Automatic continuation and media controls also call switchPage directly.
                         // Notify the mounted detail screen for every successful switch, otherwise
                         // its internal-CID guard can reload the previous part after auto-advance.
-                        onPageIdentityCommitted?.invoke(targetBvid, page.cid)
                         currentCid = page.cid
                         aiSummaryJob?.cancel()
                         _uiState.value = switchedState
+                        _detailState.update { details ->
+                            details.copy(
+                                requestBvid = targetBvid,
+                                requestCid = page.cid,
+                                info = switchedState.info,
+                            )
+                        }
+                        onPageIdentityCommitted?.invoke(targetBvid, page.cid)
                         exoPlayer?.let { PlayerHistorySessions.forPlayer(it).bindMedia(targetBvid, page.cid) }
                         playResolvedPlayback(
                             videoUrl = cdnSelection.playUrl,
@@ -8368,6 +8402,14 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                             cdnCacheKeysByUrl = cdnSelection.cdnCacheKeysByUrl
                         )
                         publishSubjectSnapshot(switchedState)
+                        appContext?.let { context ->
+                            exoPlayer?.let { player ->
+                                MiniPlayerManager.getInstance(context).syncCurrentVideoInfo(
+                                    switchedState,
+                                    expectedPlayer = player,
+                                )
+                            }
+                        }
                         monitorPlaybackTransitionPosition(restoredPosition.coerceAtLeast(0L))
                         startHeartbeat()
                         interactiveCurrentEdgeId = 0L
@@ -8763,10 +8805,8 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     return@repeat
                 }
                 // Tag metadata is opt-in ancillary work, not part of the related API's timeout.
-                val related = com.android.purebilibili.feature.plugin.filterVideoTagMatches(
+                val related = filterRelatedVideoRecommendations(
                     result.getOrDefault(emptyList()),
-                    bvid = { it.bvid },
-                    asVideoItem = { it.toVideoItem() },
                 )
                 val loadState = if (result.isSuccess) VideoPlaybackUiState.RelatedLoadState.READY
                     else VideoPlaybackUiState.RelatedLoadState.FAILED
@@ -8791,7 +8831,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 val latest = _uiState.value as? VideoPlaybackUiState.Success ?: return@launch
                 if (latest.info.bvid == bvid &&
                     currentLoadRequestToken == requestToken && result.isSuccess
-                ) updatePlaylist(latest.info, related)
+                ) {
+                    val rules = com.android.purebilibili.core.store.ContentFilterRules.current.value
+                    updatePlaylist(latest.info, related.filter {
+                        rules?.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED) != true
+                    })
+                }
                 return@launch
             }
         }
@@ -9763,10 +9808,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         startPositionMs: Long,
         playWhenReady: Boolean = true,
         cdnFallbackState: PlaybackCdnFallbackState = PlaybackCdnFallbackState.Inactive,
-        cdnCacheKeysByUrl: Map<String, String> = emptyMap()
+        cdnCacheKeysByUrl: Map<String, String> = emptyMap(),
+        mediaCid: Long = currentCid
     ) {
         exoPlayer?.let {
-            PlayerHistorySessions.forPlayer(it).bindMedia(currentBvid, currentCid, preserveStarted = true)
+            PlayerHistorySessions.forPlayer(it).bindMedia(currentBvid, mediaCid, preserveStarted = true)
         }
         playbackRecoveryGeneration++
         cancelPlaybackStallRecovery()

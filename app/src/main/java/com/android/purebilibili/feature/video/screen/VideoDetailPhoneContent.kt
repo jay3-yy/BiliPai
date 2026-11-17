@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.feature.video.viewmodel.CommentSubjectKey
 import com.android.purebilibili.feature.video.viewmodel.resolveReplyCount
 import com.android.purebilibili.core.ui.AppContentColors
@@ -7,8 +8,6 @@ import com.android.purebilibili.core.ui.AppContentColors
 import android.content.Context
 import android.os.Build
 import androidx.compose.ui.graphics.graphicsLayer
-import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
-import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -141,7 +140,6 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     val engagementSuccess = success.withEngagementUiState(engagementState)
     var pendingVideoShare by remember { mutableStateOf<VideoSharePayload?>(null) }
     val shareAnchorState = remember(success.info.bvid) { com.android.purebilibili.feature.video.share.VideoShareAnchorState() }
-    val coveredBlurEffectCache = remember { BlurRenderEffectCache() }
     // Android 16 ART 曾拒绝校验 VideoDetailScreen 中捕获过多状态的匿名 Compose lambda。
     // 保持这个成功态为命名边界，避免 R8/Compose 再生成单个超大内容块。
     androidx.compose.runtime.CompositionLocalProvider(
@@ -261,18 +259,8 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                         Modifier.hazeSourceCompat(hazeState)
                                     } else Modifier
                                 )
-                                .graphicsLayer {
-                                    // 在图层阶段读动画值，模糊动画不重新组合评论与简介。
-                                    val coveredBlurProgress = if (isCommentThreadVisible) {
-                                        commentThreadCoveredBlurProgressProvider()
-                                    } else {
-                                        0f
-                                    }
-                                    renderEffect = coveredBlurEffectCache.resolve(
-                                        resolvePredictiveBackBlurFrame(
-                                            progress = coveredBlurProgress,
-                                        ).blurRadiusPx
-                                    )
+                                .commentThreadNavigationBlur {
+                                    if (isCommentThreadVisible) commentThreadCoveredBlurProgressProvider() else 0f
                                 }
                         ) {
                             VideoDetailBodyUpdates(

@@ -10,6 +10,17 @@ import kotlin.test.assertTrue
 
 class PlaybackFirstFrameTrackerTest {
     @Test
+    fun startupProgressCorrectionWaitsForTheTargetFrame() {
+        val listener = PlaybackFirstFrameListener()
+        listener.onRenderedFirstFrame()
+        listener.resetForStartupSeek()
+        listener.onPlaybackStateChanged(Player.STATE_READY)
+        assertFalse(listener.hasRenderedFirstFrame.value)
+        listener.onRenderedFirstFrame()
+        assertTrue(listener.hasRenderedFirstFrame.value)
+    }
+
+    @Test
     fun readyPlaybackAndDecodedDimensionsDoNotRevealAnUnrenderedVideo() {
         val listener = PlaybackFirstFrameListener()
         listener.onVideoSizeChanged(VideoSize(1920, 1080))

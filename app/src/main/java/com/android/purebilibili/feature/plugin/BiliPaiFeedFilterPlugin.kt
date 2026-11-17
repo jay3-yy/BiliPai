@@ -40,6 +40,7 @@ import com.android.purebilibili.core.ui.components.AppSingleChoicePreference
 import com.android.purebilibili.core.ui.components.AppSwitchPreference
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.data.model.response.VideoItem
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -57,8 +58,8 @@ import com.android.purebilibili.core.ui.ContainerLevel
 class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
     override val id = BuiltinPluginIds.FEED_FILTER
-    override val name = "推荐流过滤"
-    override val description = "移植自 BiliPai 的推荐流过滤: 时长/播放量/点赞率/标题关键词/屏蔽用户/白名单"
+    override val name = "内容过滤"
+    override val description = "管理视频、评论、弹幕共享屏蔽词，以及视频时长、播放量、点赞率与过滤范围"
     override val version = "1.0.0"
     override val author = "qyo123oyq"
     override val icon: ImageVector = Icons.Outlined.FilterList
@@ -72,10 +73,12 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
     override suspend fun onEnable() {
         loadConfig(PluginManager.getContext())
         rebuildRegexes()
+        com.android.purebilibili.core.store.ContentFilterRules.setKeywordFilteringEnabled(true)
         Log.d(TAG, "推荐流过滤已启用")
     }
 
     override suspend fun onDisable() {
+        com.android.purebilibili.core.store.ContentFilterRules.setKeywordFilteringEnabled(false)
         Log.d(TAG, "推荐流过滤已禁用")
     }
 
@@ -94,17 +97,29 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
     // ==================== 配置持久化 ====================
 
     private suspend fun loadConfig(context: android.content.Context) {
-        try {
-            val json = PluginStore.getConfigJson(context, id)
-            if (json != null) {
-                config = Json.decodeFromString(BiliPaiFeedFilterConfig.serializer(), json)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "加载配置失败, 使用默认值: ${e.message}")
+        PluginStore.getConfigJson(context, id)?.let {
+            config = Json.decodeFromString(BiliPaiFeedFilterConfig.serializer(), it)
+        }
+        com.android.purebilibili.core.store.ContentFilterRules.migrateVideoPattern(context, config.banWordForRecommend)
+        val users = com.android.purebilibili.data.repository.BlockedUpRepository.getInstance(context)
+        val existing = users.getAllBlockedUps().first().mapTo(hashSetOf()) { it.mid }
+        config.recommendBlockedMids.forEach { (mid, name) ->
+            if (mid > 0L && mid !in existing) users.blockUp(mid, name, "")
+        }
+        if (config.banWordForRecommend.isNotEmpty() || config.recommendBlockedMids.isNotEmpty()) {
+            config = config.copy(banWordForRecommend = "", recommendBlockedMids = emptyMap())
+            PluginStore.setConfigJson(context, id, Json.encodeToString(BiliPaiFeedFilterConfig.serializer(), config))
         }
     }
 
     private fun rebuildRegexes() {
+        com.android.purebilibili.core.store.ContentFilterRules.setVideoPolicy(
+            com.android.purebilibili.core.store.ContentVideoKeywordPolicy(
+                whitelist = config.whitelistMids.keys.toSet(), exemptFollowed = config.exemptFilterForFollowed,
+                applyToPopular = config.applyToHotVideos, applyToRank = config.applyToRankVideos,
+                applyToSearch = config.applyToSearch,
+            )
+        )
         rcmdRegExp = parseBanWordToRegex(config.banWordForRecommend)?.let { Regex(it, RegexOption.IGNORE_CASE) }
         zoneRegExp = parseBanWordToRegex(config.banWordForZone)?.let { Regex(it, RegexOption.IGNORE_CASE) }
     }
@@ -153,6 +168,10 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         }
 
         Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            FilterSection("跨页面屏蔽") {
+                SharedContentFilterPreferences()
+                AppText("手动拉黑的用户在首页、搜索、相关推荐、动态与评论中共用，不受本插件开关和视频白名单影响。")
+            }
             FilterSection("过滤规则") {
                 NumericCustomSelect(
                     title = "视频时长过滤",
@@ -210,12 +229,6 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
 
             FilterSection("关键词过滤") {
                 KeywordField(
-                    title = "标题关键词",
-                    subtitle = "每行一个关键词, 支持正则",
-                    value = cfg.banWordForRecommend,
-                    onValue = { persist(cfg.copy(banWordForRecommend = it)) }
-                )
-                KeywordField(
                     title = "分区关键词",
                     subtitle = "按视频分区名(tname)过滤, 每行一个, 支持正则",
                     value = cfg.banWordForZone,
@@ -224,14 +237,7 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
             }
 
             FilterSection("屏蔽用户 / 白名单") {
-                KeywordField(
-                    title = "屏蔽用户",
-                    subtitle = "每行一个 UID, 推荐流中隐藏其视频",
-                    value = config.recommendBlockedMids.toEditorText(),
-                    onValue = {
-                        persist(cfg.copy(recommendBlockedMids = parseUidMap(it)))
-                    }
-                )
+                SharedBlockedUsersPreference()
                 KeywordField(
                     title = "白名单用户",
                     subtitle = "每行一个 UID, 白名单用户完全豁免过滤",

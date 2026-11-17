@@ -72,6 +72,7 @@ internal fun AppGlassPopupPredictiveBackHandler(
     val dispatcher = checkNotNull(LocalNavigationEventDispatcherOwner.current).navigationEventDispatcher
     val scope = rememberCoroutineScope()
     val gestures by rememberUpdatedState(gesturesEnabled)
+    val predictive by rememberUpdatedState(com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current)
     val reduced = LocalSystemReduceMotion.current || !LocalComponentMotionEnabled.current
     val latestReduced by rememberUpdatedState(reduced)
     val start by rememberUpdatedState(onGestureStarted)
@@ -82,16 +83,16 @@ internal fun AppGlassPopupPredictiveBackHandler(
                 if (!gestures) return
                 start()
                 state.beginGesture()
-                if (latestReduced) state.reset() else state.seek(event.progress)
+                if (latestReduced || !predictive) state.reset() else state.seek(event.progress)
             }
 
             override fun onBackProgressed(event: NavigationEvent) {
                 if (!gestures) return
-                if (latestReduced) state.reset() else state.seek(event.progress)
+                if (latestReduced || !predictive) state.reset() else state.seek(event.progress)
             }
 
             override fun onBackCancelled() {
-                state.restore(scope, latestReduced || !gestures)
+                state.restore(scope, latestReduced || !gestures || !predictive)
             }
 
             override fun onBackCompleted() {
@@ -102,7 +103,7 @@ internal fun AppGlassPopupPredictiveBackHandler(
     SideEffect {
         // 退场期间继续消费返回，防止第二次返回穿透到后方页面。
         handler.isBackEnabled = true
-        if (reduced) state.reset()
+        if (reduced || !predictive) state.reset()
     }
     DisposableEffect(dispatcher, handler) {
         dispatcher.addHandler(handler)

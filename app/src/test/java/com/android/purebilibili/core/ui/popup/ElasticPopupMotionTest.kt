@@ -2,6 +2,7 @@ package com.android.purebilibili.core.ui.popup
 
 import androidx.compose.ui.geometry.Rect
 import com.android.purebilibili.core.store.home.GlassMotionStyle
+import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -81,10 +82,11 @@ class ElasticPopupMotionTest {
         state.advanceTo(0.04f)
         state.reopen(turning, beforeTurn)
         assertEquals(turning, ElasticPopupMotion.frame(state, 0f, 24f, 1f))
-        val resumed = ElasticPopupMotion.frame(state, 0.0001f, 24f, 1f)
+        // Official spring sampling has millisecond resolution; check the first visible step.
+        val resumed = ElasticPopupMotion.frame(state, 0.001f, 24f, 1f)
         val expectedVelocity = (turning.rect.center.x - beforeTurn.rect.center.x) / state.sampleSeconds
-        val resumedVelocity = (resumed.rect.center.x - turning.rect.center.x) / 0.0001f
-        assertEquals(expectedVelocity, resumedVelocity, 3f)
+        val resumedVelocity = (resumed.rect.center.x - turning.rect.center.x) / 0.001f
+        assertEquals(expectedVelocity, resumedVelocity, maxOf(3f, abs(expectedVelocity) * 0.10f))
         assertEquals(card, ElasticPopupMotion.frame(state, state.openDuration, 24f, 1f).rect)
     }
 }

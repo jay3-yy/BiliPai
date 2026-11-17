@@ -49,7 +49,7 @@ class CommentThreadCompletenessTest {
                 }
                 call
             }
-            every { BiliGrpcClient.request(any(), any(), any(), any()) } answers {
+            coEvery { BiliGrpcClient.requestCancellable(any(), any(), any(), any()) } answers {
                 val fields = ProtoWire.parseFields(secondArg())
                 val anchor = fields.firstOrNull { it.number == 4 }?.varint ?: 0L
                 val hasContinuation = fields.any { it.number == 8 }

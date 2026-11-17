@@ -31,16 +31,16 @@ internal fun PerformanceCaptureConsentContent(modifier: Modifier = Modifier) {
         )
         PerformanceConsentParagraph(
             title = "记录内容",
-            body = "页面卡顿、渲染耗时，以及 CPU、内存、温控和设备信息。播放器专项数据暂不纳入。",
+            body = "页面卡顿、渲染耗时，以及 CPU、内存、温控和设备信息。记录四类页面根节点提交、数据加载入口事件和播放器创建、绑定、释放耗时；不包含解码与缓冲专项数据。",
             modifier = Modifier.fillMaxWidth(),
         )
         PerformanceConsentParagraph(
             title = "隐私说明",
-            body = "不记录账号、观看内容或网络请求。报告保存在本机，仅在你主动分享时发送。",
+            body = "不记录账号、观看内容、搜索词或网络请求明细。报告保存在本机，仅在你主动分享时发送。",
             modifier = Modifier.fillMaxWidth(),
         )
         AppText(
-            text = "重启后保持关闭；重新开启将覆盖上一份报告。",
+            text = "重启后保持关闭；最新报告随采集更新，本机保留最近 ${com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_LIMIT} 次历史。",
             modifier = Modifier.fillMaxWidth(),
             textAlign = TextAlign.Start,
         )

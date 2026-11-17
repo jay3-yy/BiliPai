@@ -2091,6 +2091,9 @@ private fun LightweightHomeTopTabs(
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Row(
+                            // 隐藏玻璃采样中，背景和触摸高光刷新只重放文字指令。
+                            // 不裁剪图标溢出；文字、图标及主题自身失效仍更新该层。
+                            modifier = Modifier.graphicsLayer { clip = false },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Start
                         ) {

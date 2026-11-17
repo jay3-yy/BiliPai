@@ -144,8 +144,8 @@ android {
         targetSdk = 37
         // 版本名按发行计划确定；versionCode 每次发布单调 +1
         // 规范：docs/wiki/VERSIONING.md · 更新日志：CHANGELOG.md
-        versionCode = 576
-        versionName = "0.8.1"
+        versionCode = 589
+        versionName = "0.8.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -254,7 +254,6 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
-        aidl = true
         // AGP 9 defaults this off; buildTypes use resValue("string", "app_name", ...)
         resValues = true
     }
@@ -457,7 +456,6 @@ dependencies {
     implementation("androidx.compose.runtime:runtime-tracing")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:$material3Version")
-    implementation("androidx.compose.material3:material3-window-size-class:$material3Version") // [新增] 窗口大小类
     implementation("androidx.compose.material3.adaptive:adaptive:$material3AdaptiveVersion")
     implementation("androidx.compose.material3.adaptive:adaptive-layout:$material3AdaptiveVersion")
     implementation(libs.miuix.ui)
@@ -468,7 +466,7 @@ dependencies {
     implementation(libs.miuix.icons)
     implementation(project(":miuix-navigation"))
     // 图标扩展库 (全屏、设置图标等)
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(project(":material-icons"))
     implementation("androidx.compose.animation:animation")
     // Compose UI 1.12 requires AndroidClipboard for native text selection/paste.
     // rc14's wrapper only implements Clipboard and crashes in RSS/video note editors (#744).
@@ -512,9 +510,6 @@ dependencies {
     // --- 3.5 Compose Cupertino (iOS 风格 UI 组件) ---
     // 提供 iOS 风格的 Switch、Button、Picker、Dialog 等组件
     implementation("io.github.alexzhirkevich:cupertino:0.1.0-alpha04")
-    implementation("io.github.alexzhirkevich:cupertino-adaptive:0.1.0-alpha04")
-    // 🍎 800+ iOS SF Symbols 风格图标
-    implementation("io.github.alexzhirkevich:cupertino-icons-extended:0.1.0-alpha04")
     
     // --- 3.6 Miuix Navigation ---
     // Miuix stack renderer and predictive-back driver.

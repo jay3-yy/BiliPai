@@ -141,6 +141,8 @@ internal fun applyPlayerViewResizeMode(
     playerView: androidx.media3.ui.PlayerView,
     resizeMode: Int,
     forceRelayout: Boolean,
+    expectedWidth: Int = 0,
+    expectedHeight: Int = 0,
 ) {
     val current = playerView.resizeMode
     if (current == resizeMode && !forceRelayout) return
@@ -152,19 +154,24 @@ internal fun applyPlayerViewResizeMode(
     )
     playerView.requestLayout()
     contentFrame?.requestLayout()
-    if (forceRelayout && playerView.width > 0 && playerView.height > 0) {
-        // 外框已被 AndroidView 更新时，内部相同 MeasureSpec 的缓存仍可能有效。
-        // 清除整棵视图树的测量缓存，确保画面、快门及字幕一起按当前视口布局。
+    val viewportWidth = if (expectedWidth > 0) expectedWidth else playerView.width
+    val viewportHeight = if (expectedHeight > 0) expectedHeight else playerView.height
+    if (forceRelayout && viewportWidth > 0 && viewportHeight > 0) {
+        // 使用 Compose 已测量的视口；外框尚未同步时，不能拿旧分栏尺寸再次重测。
+        // 同时清除子树测量缓存，让画面、快门及字幕按同一视口布局。
         forcePlayerViewportLayout(playerView)
         playerView.measure(
             android.view.View.MeasureSpec.makeMeasureSpec(
-                playerView.width, android.view.View.MeasureSpec.EXACTLY,
+                viewportWidth, android.view.View.MeasureSpec.EXACTLY,
             ),
             android.view.View.MeasureSpec.makeMeasureSpec(
-                playerView.height, android.view.View.MeasureSpec.EXACTLY,
+                viewportHeight, android.view.View.MeasureSpec.EXACTLY,
             ),
         )
-        playerView.layout(playerView.left, playerView.top, playerView.right, playerView.bottom)
+        playerView.layout(
+            playerView.left, playerView.top,
+            playerView.left + viewportWidth, playerView.top + viewportHeight,
+        )
     }
     playerView.invalidate()
 }
@@ -233,13 +240,19 @@ private class PlayerViewportRefreshController(
         val callback = Runnable {
             pending = null
             if (requested != request || !playerView.isAttachedToWindow) return@Runnable
-            applyPlayerViewResizeMode(playerView, request.resizeMode, forceRelayout = true)
+            applyPlayerViewResizeMode(
+                playerView, request.resizeMode, forceRelayout = true,
+                expectedWidth = request.width, expectedHeight = request.height,
+            )
             // postOnAnimation 早于本帧布局；保留一次绘制前校正，避免随后原生
             // 父布局只改外框，内部画面继续保留分栏尺寸。此回调不逐帧循环。
             pendingPreDraw = androidx.core.view.OneShotPreDrawListener.add(playerView) {
                 pendingPreDraw = null
                 if (requested == request && playerView.isAttachedToWindow) {
-                    applyPlayerViewResizeMode(playerView, request.resizeMode, forceRelayout = true)
+                    applyPlayerViewResizeMode(
+                        playerView, request.resizeMode, forceRelayout = true,
+                        expectedWidth = request.width, expectedHeight = request.height,
+                    )
                 }
             }
             // At most one follow-up, and only when there is a known size mismatch.
@@ -278,7 +291,13 @@ private class PlayerViewportRefreshController(
         if (right - left == oldRight - oldLeft && bottom - top == oldBottom - oldTop) return
         val request = requested ?: return
         completed = null
-        schedule(request.resizeMode, right - left, bottom - top, request.videoWidth, request.videoHeight)
+        // 原生布局回调只触发恢复，不能覆盖 Compose 已提交的目标视口。
+        // 未提供目标尺寸的调用保持 0，恢复时继续读取当前 View，避免把旧布局固化为目标。
+        schedule(
+            request.resizeMode,
+            request.width, request.height,
+            request.videoWidth, request.videoHeight,
+        )
     }
 
     override fun onViewDetachedFromWindow(view: android.view.View) {

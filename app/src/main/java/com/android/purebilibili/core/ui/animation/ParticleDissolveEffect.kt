@@ -160,6 +160,7 @@ fun DissolvableVideoCard(
     onReflowStarted: () -> Unit = {},
     /** true 时粒子自右向左消失，用于关闭按钮位于右侧的悬浮胶囊。 */
     reverseSweep: Boolean = false,
+    originInWindow: () -> android.graphics.PointF? = { null },
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -282,6 +283,7 @@ fun DissolvableVideoCard(
                 if (reflowDuringFinalTail && collapseAfterDissolve) beginCollapse()
             },
             sweepReversed = reverseSweep,
+            originInWindow = originInWindow(),
         )
         if (effectView == null) {
             if (!bitmap.isRecycled) bitmap.recycle()

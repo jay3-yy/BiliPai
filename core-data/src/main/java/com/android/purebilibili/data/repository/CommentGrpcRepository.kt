@@ -70,7 +70,7 @@ object CommentGrpcRepository {
         return ProtoWire.message(*fields.toTypedArray())
     }
 
-    fun getMainList(
+    suspend fun getMainList(
         oid: Long,
         type: Int,
         mode: Int,
@@ -80,7 +80,7 @@ object CommentGrpcRepository {
             return Result.failure(IllegalArgumentException("Unsupported gRPC reply mode: $mode"))
         }
         return runCatching {
-            val response = BiliGrpcClient.request(
+            val response = BiliGrpcClient.requestCancellable(
                 path = PATH_MAIN_LIST,
                 baseUrl = BASE_URL,
                 message = buildMainListRequest(
@@ -91,7 +91,7 @@ object CommentGrpcRepository {
                 )
             )
             parseMainListReply(response)
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
     // 完整楼层必须从开头分页。rpid 定位会返回中间窗口，单向分页无法补回之前的回复。
@@ -148,7 +148,7 @@ object CommentGrpcRepository {
         return ProtoWire.message(*fields.toTypedArray())
     }
 
-    fun getDetailList(
+    suspend fun getDetailList(
         oid: Long,
         type: Int,
         root: Long,
@@ -156,7 +156,7 @@ object CommentGrpcRepository {
         nextOffset: String?
     ): Result<ReplyData> {
         return runCatching {
-            val response = BiliGrpcClient.request(
+            val response = BiliGrpcClient.requestCancellable(
                 path = PATH_DETAIL_LIST,
                 baseUrl = BASE_URL,
                 message = buildDetailListRequest(
@@ -168,10 +168,10 @@ object CommentGrpcRepository {
                 )
             )
             parseDetailListReply(response)
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
-    fun getDialogList(
+    suspend fun getDialogList(
         oid: Long,
         type: Int,
         root: Long,
@@ -179,7 +179,7 @@ object CommentGrpcRepository {
         nextOffset: String?
     ): Result<ReplyData> {
         return runCatching {
-            val response = BiliGrpcClient.request(
+            val response = BiliGrpcClient.requestCancellable(
                 path = PATH_DIALOG_LIST,
                 baseUrl = BASE_URL,
                 message = buildDialogListRequest(
@@ -191,7 +191,7 @@ object CommentGrpcRepository {
                 )
             )
             parseDialogListReply(response)
-        }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
     /**
@@ -209,7 +209,7 @@ object CommentGrpcRepository {
                 ProtoWire.int64(2, oid),
                 ProtoWire.packedInt64(3, listOf(rpid))
             )
-            val response = BiliGrpcClient.request(
+            val response = BiliGrpcClient.requestCancellable(
                 path = PATH_TRANSLATE_REPLY,
                 baseUrl = BASE_URL,
                 message = request

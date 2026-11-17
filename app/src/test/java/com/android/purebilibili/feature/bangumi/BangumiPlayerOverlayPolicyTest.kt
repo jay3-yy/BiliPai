@@ -9,9 +9,25 @@ import com.android.purebilibili.data.model.response.FormatItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class BangumiPlayerOverlayPolicyTest {
+
+    @Test
+    fun quickSeekAdvancesNinetySecondsFromEachCurrentPosition() {
+        assertEquals(150_000L, resolveBangumiQuickSeekTargetPosition(60_000L, 1_440_000L))
+        assertEquals(240_000L, resolveBangumiQuickSeekTargetPosition(150_000L, 1_440_000L))
+    }
+
+    @Test
+    fun quickSeekStopsAtEpisodeEndAndWaitsForKnownDuration() {
+        assertEquals(120_000L, resolveBangumiQuickSeekTargetPosition(100_000L, 120_000L))
+        assertEquals(30_000L, resolveBangumiQuickSeekTargetPosition(0L, 30_000L))
+        assertEquals(120_000L, resolveBangumiQuickSeekTargetPosition(120_000L, 120_000L))
+        assertNull(resolveBangumiQuickSeekTargetPosition(0L, 0L))
+        assertNull(resolveBangumiQuickSeekTargetPosition(0L, androidx.media3.common.C.TIME_UNSET))
+    }
 
     @Test
     fun resolveBangumiOverlayQualityLabel_returnsMatchedLabel() {

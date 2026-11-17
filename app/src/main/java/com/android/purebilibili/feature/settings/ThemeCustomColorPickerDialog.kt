@@ -35,8 +35,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.theme.*
 import com.android.purebilibili.core.ui.*
 import com.android.purebilibili.core.ui.components.*
@@ -143,133 +141,137 @@ internal fun ThemeCustomColorPickerDialog(
         }
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        AppSurface(
-            modifier = Modifier.padding(horizontal = 16.dp).imePadding().widthIn(max = 520.dp)
-                .fillMaxWidth().heightIn(max = maxHeight),
-            shape = AppShapes.container(ContainerLevel.Dialog),
-            color = AppSurfaceTokens.surface(),
-        ) {
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.heightIn(max = maxHeight),
+        contentLayout = remember { resolveAppContentDialogLayoutPolicy(maxWidthDp = 520) },
+        title = {
             Column {
-                Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
-                    AppText(exactRoleTitle ?: roleTargetLabel ?: "自定义主题颜色", style = MaterialTheme.typography.titleLarge)
-                    AppText("先预览，再保存", style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText(), modifier = Modifier.padding(top = 4.dp))
-                }
-                Column(
-                    Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                AppText(exactRoleTitle ?: roleTargetLabel ?: "自定义主题颜色")
+                AppText(
+                    "先预览，再保存",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppContentColors.secondaryText(),
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                AppSurface(
+                    shape = AppShapes.container(ContainerLevel.Card),
+                    color = color.copy(alpha = 0.10f),
                 ) {
-                    AppSurface(
-                        shape = AppShapes.container(ContainerLevel.Card),
-                        color = color.copy(alpha = 0.10f),
-                    ) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Box(Modifier.size(40.dp).background(color, CircleShape)
+                                .border(1.dp, AppSurfaceTokens.divider(), CircleShape))
+                            Column(Modifier.weight(1f)) {
+                                AppText(colorHex, style = MaterialTheme.typography.titleMedium)
+                                AppText(if (exactRoleTitle != null) "角色颜色（精确值）" else if (controlColorPreview) "输入颜色（精确值）" else roleTargetLabel.orEmpty(), style = MaterialTheme.typography.bodySmall,
+                                    color = AppContentColors.secondaryText())
+                            }
+                        }
+                        if (exactRoleTitle != null) {
+                            AppSurface(color = color, contentColor = foreground,
+                                shape = AppShapes.container(ContainerLevel.Field)) {
+                                AppText("Aa 示例文字", color = foreground,
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp))
+                            }
+                            AppText("按所选色值应用，配套文字自动匹配明暗。",
+                                style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
+                        } else if (controlColorPreview) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Box(Modifier.size(40.dp).background(color, CircleShape)
+                                Box(Modifier.size(28.dp).background(previewTrackColor, CircleShape)
                                     .border(1.dp, AppSurfaceTokens.divider(), CircleShape))
                                 Column(Modifier.weight(1f)) {
-                                    AppText(colorHex, style = MaterialTheme.typography.titleMedium)
-                                    AppText(if (exactRoleTitle != null) "角色颜色（精确值）" else if (controlColorPreview) "输入颜色（精确值）" else roleTargetLabel.orEmpty(), style = MaterialTheme.typography.bodySmall,
-                                        color = AppContentColors.secondaryText())
+                                    AppText(formatMd3CustomColorHex(previewTrackColor), style = MaterialTheme.typography.titleSmall)
+                                    AppText(
+                                        if (previewUsesLiquidControls) "液态控件 · 跟随主题色时的轨道颜色"
+                                        else if (previewDark) "深色主题 · 实际轨道颜色" else "浅色主题 · 实际轨道颜色",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = AppContentColors.secondaryText(),
+                                    )
                                 }
                             }
-                            if (exactRoleTitle != null) {
-                                AppSurface(color = color, contentColor = foreground,
-                                    shape = AppShapes.container(ContainerLevel.Field)) {
-                                    AppText("Aa 示例文字", color = foreground,
-                                        modifier = Modifier.fillMaxWidth().padding(12.dp))
-                                }
-                                AppText("按所选色值应用，配套文字自动匹配明暗。",
-                                    style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
-                            } else if (controlColorPreview) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Box(Modifier.size(28.dp).background(previewTrackColor, CircleShape)
-                                        .border(1.dp, AppSurfaceTokens.divider(), CircleShape))
-                                    Column(Modifier.weight(1f)) {
-                                        AppText(formatMd3CustomColorHex(previewTrackColor), style = MaterialTheme.typography.titleSmall)
-                                        AppText(
-                                            if (previewUsesLiquidControls) "液态控件 · 跟随主题色时的轨道颜色"
-                                            else if (previewDark) "深色主题 · 实际轨道颜色" else "浅色主题 · 实际轨道颜色",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = AppContentColors.secondaryText(),
-                                        )
-                                    }
-                                }
-                                AppText(
-                                    if (previewUsesLiquidControls) "液态控件跟随主题色时使用输入颜色。"
-                                    else "主色使用输入色值；容器保留主题层级，配套文字自动匹配明暗。",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = AppContentColors.secondaryText(),
-                                )
-                                CompositionLocalProvider(
-                                    LocalLiquidControlThemeColor provides previewPalette.liquidAccent,
-                                    LocalAppThemeConfig provides previewConfig,
-                                ) {
-                                    MiuixTheme(controller = previewMiuixController) {
-                                        MaterialTheme(colorScheme = previewScheme) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                                AppSwitch(checked = previewChecked, onCheckedChange = { previewChecked = it },
-                                                    modifier = Modifier.semantics { contentDescription = "预览开关" })
-                                                AppSlider(value = previewValue, onValueChange = { previewValue = it },
-                                                    modifier = Modifier.weight(1f).semantics { contentDescription = "预览滑块" })
-                                            }
+                            AppText(
+                                if (previewUsesLiquidControls) "液态控件跟随主题色时使用输入颜色。"
+                                else "主色使用输入色值；容器保留主题层级，配套文字自动匹配明暗。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppContentColors.secondaryText(),
+                            )
+                            CompositionLocalProvider(
+                                LocalLiquidControlThemeColor provides previewPalette.liquidAccent,
+                                LocalAppThemeConfig provides previewConfig,
+                            ) {
+                                MiuixTheme(controller = previewMiuixController) {
+                                    MaterialTheme(colorScheme = previewScheme) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                            AppSwitch(checked = previewChecked, onCheckedChange = { previewChecked = it },
+                                                modifier = Modifier.semantics { contentDescription = "预览开关" })
+                                            AppSlider(value = previewValue, onValueChange = { previewValue = it },
+                                                modifier = Modifier.weight(1f).semantics { contentDescription = "预览滑块" })
                                         }
                                     }
                                 }
-                            } else {
-                                AppSurface(
-                                    color = previewScheme.surface,
-                                    shape = AppShapes.container(ContainerLevel.Field),
-                                ) {
-                                    androidx.compose.material3.Text("Aa 示例文字", color = if (
-                                        roleTarget == ThemeRoleColorTarget.LIGHT_SECONDARY_TEXT ||
-                                        roleTarget == ThemeRoleColorTarget.DARK_SECONDARY_TEXT
-                                    ) previewScheme.onSurfaceVariant else previewScheme.onSurface,
-                                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                        style = MaterialTheme.typography.titleMedium)
-                                }
+                            }
+                        } else {
+                            AppSurface(
+                                color = previewScheme.surface,
+                                shape = AppShapes.container(ContainerLevel.Field),
+                            ) {
+                                androidx.compose.material3.Text("Aa 示例文字", color = if (
+                                    roleTarget == ThemeRoleColorTarget.LIGHT_SECONDARY_TEXT ||
+                                    roleTarget == ThemeRoleColorTarget.DARK_SECONDARY_TEXT
+                                ) previewScheme.onSurfaceVariant else previewScheme.onSurface,
+                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    style = MaterialTheme.typography.titleMedium)
                             }
                         }
                     }
-                    if (exactRoleTitle == null) {
-                        AppText("预览已应用当前高级覆盖色、表面与文字可读性修正。",
-                            style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
-                        // 调色时警告数量与换行会变化；固定信息区域避免拖动中的选色板移位。
-                        Box(Modifier.fillMaxWidth().height(72.dp).verticalScroll(rememberScrollState())) {
-                            AppText(
-                                if (previewIssues.isEmpty()) "当前配色的对比度达到目标。" else
-                                    "最终配色有 ${previewIssues.size} 组配对低于目标：" +
-                                        previewIssues.take(3).joinToString("；") { "${it.label} %.2f:1（目标 %.1f:1）".format(it.ratio, it.required) },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (previewIssues.isEmpty()) AppContentColors.secondaryText() else AppContentColors.error(),
-                            )
-                        }
-                    }
-                    ThemeColorSelectionControls(
-                        hue = hue, saturation = saturation, brightness = brightness,
-                        pendingHex = pendingHex, onHsvChange = ::updateHsv, onHexChange = ::updateHex,
-                    )
                 }
-                AppHorizontalDivider(modifier = Modifier.padding(top = 12.dp))
+                if (exactRoleTitle == null) {
+                    AppText("预览已应用当前高级覆盖色、表面与文字可读性修正。",
+                        style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
+                    // 调色时警告数量与换行会变化；固定信息区域避免拖动中的选色板移位。
+                    Box(Modifier.fillMaxWidth().height(72.dp).verticalScroll(rememberScrollState())) {
+                        AppText(
+                            if (previewIssues.isEmpty()) "当前配色的对比度达到目标。" else
+                                "最终配色有 ${previewIssues.size} 组配对低于目标：" +
+                                    previewIssues.take(3).joinToString("；") { "${it.label} %.2f:1（目标 %.1f:1）".format(it.ratio, it.required) },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (previewIssues.isEmpty()) AppContentColors.secondaryText() else AppContentColors.error(),
+                        )
+                    }
+                }
+                ThemeColorSelectionControls(
+                    hue = hue, saturation = saturation, brightness = brightness,
+                    pendingHex = pendingHex, onHsvChange = ::updateHsv, onHexChange = ::updateHex,
+                )
                 if (onReset != null) {
+                    AppHorizontalDivider()
                     AppTextButton(onClick = onReset, modifier = Modifier.fillMaxWidth()) {
                         AppText("恢复此项壁纸配色")
                     }
                 }
-                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    AppTextButton(onClick = onDismiss, modifier = Modifier.weight(1f)) { AppText("取消") }
-                    AppButton(
-                        onClick = { haptic(HapticType.LIGHT); onConfirm(normalizeMd3CustomColorHex(pendingHex)) },
-                        enabled = validHex, modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = foreground),
-                    ) { AppText("保存并应用") }
-                }
             }
-        }
-    }
+        },
+        confirmButton = {
+            AppButton(
+                onClick = { haptic(HapticType.LIGHT); onConfirm(normalizeMd3CustomColorHex(pendingHex)) },
+                enabled = validHex,
+                colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = foreground),
+            ) {
+                AppText("保存并应用")
+            }
+        },
+        dismissButton = {
+            AppDialogAction(onClick = onDismiss) { AppText("取消") }
+        },
+    )
 }
 
 @Composable

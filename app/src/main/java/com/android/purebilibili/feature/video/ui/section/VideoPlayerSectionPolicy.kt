@@ -589,12 +589,14 @@ internal fun resolveHorizontalSeekDeltaMs(
     containerWidthPx: Float,
     gestureSensitivity: Float,
     durationMs: Long,
+    fixedSeekEnabled: Boolean = false,
+    fixedSeekSeconds: Int = 30,
 ): Long? {
     if (containerWidthPx <= 0f || !containerWidthPx.isFinite()) return null
     if (durationMs <= 0L) return null
-    // 对齐官方：满屏宽度 = resolveOfficialSwipeSeekSecondsPerScreen(duration) 秒。
-    // 手势灵敏度作为最终乘数保留（官方没有这个设置，但不影响曲线形状）。
-    val secondsPerScreen = resolveOfficialSwipeSeekSecondsPerScreen(durationMs)
+    // 固定模式的一屏秒数不随视频总时长变化；灵敏度仍作为最终乘数。
+    val secondsPerScreen = if (fixedSeekEnabled) fixedSeekSeconds.toFloat()
+        else resolveOfficialSwipeSeekSecondsPerScreen(durationMs)
     if (secondsPerScreen <= 0f) return null
     val maxDeltaMs = (durationMs.toDouble()).coerceAtLeast(1.0)
     val rawDeltaMs = (
@@ -614,20 +616,6 @@ internal fun shouldEngageHorizontalPlayerSeek(
     val verticalDistance = abs(totalDragDistanceY)
     return horizontalDistance >= 1f &&
         horizontalDistance >= verticalDistance * VIDEO_PLAYER_HORIZONTAL_SEEK_DOMINANCE_RATIO
-}
-
-private fun resolveConfiguredSeekDeltaMs(
-    totalDragDistanceX: Float,
-    containerWidthPx: Float,
-    seekSeconds: Int,
-    gestureSensitivity: Float
-): Long {
-    val effectiveDragRangePx = (containerWidthPx * 0.5f).coerceAtLeast(1f)
-    val maxDeltaMs = seekSeconds * 1000L
-    val rawDeltaMs = (
-        totalDragDistanceX / effectiveDragRangePx * maxDeltaMs * gestureSensitivity
-    ).toLong()
-    return rawDeltaMs.coerceIn(-maxDeltaMs, maxDeltaMs)
 }
 
 internal fun resolveRelativeSeekTargetPosition(

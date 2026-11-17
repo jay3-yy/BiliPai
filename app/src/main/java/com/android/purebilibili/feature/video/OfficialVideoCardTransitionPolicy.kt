@@ -58,15 +58,14 @@ internal fun resolveOfficialVideoCardReturnPlan(
     preparingToFinish: Boolean,
     motionEnabled: Boolean,
     sourceAvailable: Boolean,
-    sourceRadiusUnchanged: Boolean,
     preferSystemPredictiveBack: Boolean,
 ): OfficialVideoCardReturnPlan? {
-    if (oplusSdkWindow && !preparingToFinish) return null
-    val usableSource = sourceAvailable && (!oplusSdkWindow || sourceRadiusUnchanged)
-    val useSourceBounds = motionEnabled && usableSource
+    // 系统保留打开时的往返配置；播放与恢复过程中不改写，关闭时按最终状态提交。
+    if (!preparingToFinish) return null
+    val useSourceBounds = motionEnabled && sourceAvailable
     return OfficialVideoCardReturnPlan(
         backAnimType = resolveOfficialReturnAnimType(
-            metadata, motionEnabled, usableSource,
+            metadata, motionEnabled, sourceAvailable,
             // 此门面的 FOLLOW_SYSTEM 会跳过回卡，正常来源仍交给其原生开合执行器。
             preferSystemPredictiveBack = preferSystemPredictiveBack && !oplusSdkWindow,
         ),

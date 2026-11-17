@@ -64,6 +64,7 @@ fun VideoDetailScreen(
     supplementViewModel: VideoSupplementViewModel = viewModel(),
     commentViewModel: VideoCommentViewModel = viewModel(),
     onBgmClick: (BgmInfo) -> Unit = {},
+    takePreparedPlayer: (() -> androidx.media3.exoplayer.ExoPlayer?)? = null,
 ) {
     val visualWorkAllowed = com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current &&
         isVisible && !keepLoadedContentForBackPreview
@@ -72,6 +73,7 @@ fun VideoDetailScreen(
     ) {
         ProvideVideoUiWork(viewModel) {
             VideoDetailScreenStateHolder(
+                takePreparedPlayer = takePreparedPlayer,
                 bvid = bvid,
                 cid = cid,
                 coverUrl = coverUrl,

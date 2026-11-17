@@ -23,4 +23,7 @@
     <item type="mipmap" name="ic_launcher_retro">@mipmap/ic_launcher_shared_1830beed3c69e8df</item>
     <item type="mipmap" name="ic_launcher_retro_round">@mipmap/ic_launcher_shared_1830beed3c69e8df</item>
     <item type="mipmap" name="ic_launcher_yuki_foreground">@mipmap/ic_launcher_shared_9fdecb42f756e2fd</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid_front_foreground">@mipmap/ic_launcher_shared_b9812c58e947110b</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid_front_monochrome">@mipmap/ic_launcher_shared_ed49dd5c0da10c1e</item>
+    <item type="mipmap" name="ic_launcher_blue_snow_maid_monochrome">@mipmap/ic_launcher_shared_ed49dd5c0da10c1e</item>
 </resources>

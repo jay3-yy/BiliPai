@@ -27,6 +27,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.profileinstaller.ProfileInstaller
 import com.android.purebilibili.BuildConfig
 import coil3.ImageLoader
+import com.android.purebilibili.core.ui.components.biliImagePlaceholders
 import coil3.SingletonImageLoader
 import coil3.gif.GifDecoder
 import coil3.gif.AnimatedImageDecoder
@@ -77,6 +78,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 internal fun shouldRefreshLauncherIconForNightModeChange(
@@ -182,6 +184,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             )
             .build()
         return ImageLoader.Builder(this)
+            .biliImagePlaceholders(context)
             .components {
                 add(com.android.purebilibili.core.util.BiliImageQualityInterceptor())
                 // 共享网络客户端及 DNS 策略，保留 HTTP 缓存头语义。
@@ -283,6 +286,18 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             return
         }
         Logger.init(this)
+        com.android.purebilibili.core.store.ContentFilterRules.prepareProcessCollector()
+        AppScope.ioScope.launch {
+            com.android.purebilibili.core.plugin.PluginManager.awaitPluginReady(
+                com.android.purebilibili.core.plugin.BuiltinPluginIds.FEED_FILTER,
+                awaitContentRules = false,
+            )
+            com.android.purebilibili.core.store.ContentFilterRules.collect(
+                this@PureApplication,
+                com.android.purebilibili.data.repository.BlockedUpRepository.getInstance(this@PureApplication)
+                    .getAllBlockedUps().map { users -> users.map { it.mid }.toSet() },
+            )
+        }
         // 评论仓库已下沉 core-data；手机端的发评后反诈旁路在此注入，共享层不感知其实现。
         com.android.purebilibili.data.repository.CommentRepository.onCommentPosted =
             { reply, oid, type, root, parent, message ->
@@ -676,6 +691,12 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     
     private fun releaseRebuildableMemoryCaches() {
         com.android.purebilibili.data.repository.DanmakuContentRepository.clearCache()
+        // 颜色表容量已从 128 扩到 512（见 VideoCardCoverColorStore.MAX_CACHE_SIZE），此处的
+        // trimToSize(64) 语义随之从"砍到 128 的一半"变成"砍到 512 的 1/8"：
+        // 同样的调用在没有改一行回收代码的情况下变得更激进、更安全。
+        // 注意 LruCache.trimToSize 只即时淘汰到 64 条，容量上限仍然是 512，之后随使用自然回涨。
+        // 这是刻意的预期行为：回前台时缓存能重新长回来，命中率不会被后台一次清理永久拖低；
+        // 不要为了"清干净"把它改成 clear()/evictAll()，那会让每张封面都重走解码 + Palette 聚类。
         com.android.purebilibili.feature.home.components.cards.VideoCardCoverColorStore
             .trimToSize(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES)
         com.android.purebilibili.core.cache.PlayUrlCache.clear()
@@ -701,6 +722,9 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
                     requestIdlePlaybackRelease = plan.requestIdlePlaybackRelease
                 )
         }
+        // 同 releaseRebuildableMemoryCaches：容量 512 已被扩过，trimToSize(64) 是"砍到 1/8"，
+        // 单次淘汰比例比容量 128 时代更大，回收更激进。淘汰到 64 之后上限仍是 512，
+        // 会随使用自然回涨 —— 预期行为，不要改成 clear()。
         com.android.purebilibili.feature.home.components.cards.VideoCardCoverColorStore
             .trimToSize(BACKGROUND_COVER_COLOR_CACHE_MAX_ENTRIES)
         com.android.purebilibili.core.cache.PlayUrlCache.clear()

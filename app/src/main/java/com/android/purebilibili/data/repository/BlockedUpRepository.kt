@@ -1,6 +1,7 @@
 package com.android.purebilibili.data.repository
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.android.purebilibili.core.database.AppDatabase
 import com.android.purebilibili.core.database.entity.BlockedUp
 import com.android.purebilibili.core.network.BilibiliApi
@@ -297,7 +298,17 @@ class BlockedUpRepository(
             }
     }
 
-    private val blockedUpDao = AppDatabase.getDatabase(context).blockedUpDao()
+    private val database = AppDatabase.getDatabase(context)
+    private val blockedUpDao = database.blockedUpDao()
+
+    /** 一次编辑只提交一次列表变更，并保留已有用户的名称、头像与屏蔽时间。 */
+    suspend fun replaceLocalBlockedUserIds(mids: Set<Long>) {
+        database.withTransaction {
+            val existing = blockedUpDao.getAllBlockedUpsSnapshot().mapTo(hashSetOf()) { it.mid }
+            (existing - mids).forEach { blockedUpDao.delete(it) }
+            (mids - existing).forEach { blockedUpDao.insert(BlockedUp(mid = it, name = "UID:$it", face = "")) }
+        }
+    }
 
     fun getAllBlockedUps(): Flow<List<BlockedUp>> = blockedUpDao.getAllBlockedUps()
 

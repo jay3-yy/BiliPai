@@ -33,6 +33,8 @@ uniform float scale;
 uniform float uvOffset;
 // 0 = 自左向右扫描（上游默认），1 = 自右向左扫描。
 uniform float sweepReversed;
+uniform vec2 dissolveOrigin;
+uniform float useDissolveOrigin;
 
 #define noiseScale   12.0
 #define noiseSpeed    0.6
@@ -66,6 +68,11 @@ void main() {
 
   float effectFraction =   max(0.0, min(0.35, time)) / 0.35;
   float sweepX = mix(uv.x, 1.0 - uv.x, sweepReversed);
+  // 使用像素距离，避免宽胶囊中的扩散被拉伸；最远角点保持原扫描时长。
+  if (useDissolveOrigin > 0.5) {
+    vec2 farthest = max(abs(dissolveOrigin), abs(vec2(1.0) - dissolveOrigin)) * rectSize;
+    sweepX = length((uv + .5 / gridSize.xy - dissolveOrigin) * rectSize) / length(farthest);
+  }
   float particleFraction = max(0.0, min(0.2, .1 + time - sweepX * uvOffset)) / 0.2;
   position += velocity * deltaTime * particleFraction;
   velocity += vec2(19.0 * (velocity.x > 0.0 ? 1.0 : -1.0) * (1.0 - effectFraction), -65.0) * deltaTime * dp * particleFraction;

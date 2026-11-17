@@ -1,11 +1,9 @@
 package com.android.purebilibili.core.ui.transition
 
+import androidx.compose.animation.core.FloatSpringSpec
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
 import kotlin.math.abs
-import kotlin.math.exp
-import kotlin.math.sin
-import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -56,17 +54,16 @@ class VideoCardLandingFeedbackPolicyTest {
     fun compressionImpulseKeepsItsOriginalBudgetAndDecay() {
         for (layout in VideoCardSourceLayout.entries) {
             val motion = resolveVideoCardLandingMotion(layout)
-            val omega = sqrt(motion.stiffness)
-            val decay = motion.dampingRatio * omega
-            val dampedOmega = omega * sqrt(1f - motion.dampingRatio * motion.dampingRatio)
+            val compressionSpring = FloatSpringSpec(
+                dampingRatio = motion.dampingRatio, stiffness = motion.stiffness,
+            )
             for (width in listOf(100f, 180f, 400f, 800f)) {
                 val height = if (layout == stacked) width * 4f / 3f else width / 3f
                 val budget = resolveVideoCardLandingEdgeCompressionDp(width, height, 1f, layout)
                 val velocity = resolveVideoCardLandingImpulseVelocity(budget, layout)
                 var peak = 0f
                 for (ms in 0..500) {
-                    val time = ms / 1000f
-                    val edge = velocity * exp(-decay * time) * sin(dampedOmega * time) / dampedOmega
+                    val edge = compressionSpring.getValueFromNanos(ms * 1_000_000L, 0f, 0f, velocity)
                     peak = maxOf(peak, edge)
                     val scale = resolveVideoCardLandingScale(width, height, 1f, edge.coerceAtLeast(0f), layout)
                     assertTrue(scale in 0.988f..1f)
@@ -92,15 +89,14 @@ class VideoCardLandingFeedbackPolicyTest {
                 targetValue = 0f,
             )
             val velocity = resolveVideoCardLandingImpulseVelocity(compression, layout)
-            val omega = sqrt(motion.stiffness)
-            val decay = motion.dampingRatio * omega
-            val dampedOmega = omega * sqrt(1f - motion.dampingRatio * motion.dampingRatio)
+            val compressionSpring = FloatSpringSpec(
+                dampingRatio = motion.dampingRatio, stiffness = motion.stiffness,
+            )
             var outwardIntervals = 0
             var wasOutward = false
             var peakOutwardDp = 0f
             for (ms in 0..500) {
-                val time = ms / 1000f
-                val spring = velocity * exp(-decay * time) * sin(dampedOmega * time) / dampedOmega
+                val spring = compressionSpring.getValueFromNanos(ms * 1_000_000L, 0f, 0f, velocity)
                 val releaseValue = releaseAnimation.getValueFromNanos(ms * 1_000_000L)
                 val travel = spring.coerceAtLeast(0f) - releaseValue
                 val scale = resolveVideoCardLandingScale(width, height, 1f, travel, layout)

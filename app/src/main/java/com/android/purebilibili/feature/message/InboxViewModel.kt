@@ -13,7 +13,6 @@ import com.android.purebilibili.data.repository.MessageImRepository
 import com.android.purebilibili.data.repository.MessageRepository
 import com.android.purebilibili.data.repository.MessageReadEvent
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -146,11 +145,11 @@ class InboxViewModel : ViewModel() {
         if (snapshot.identity == requests.identity && requests.isCurrent() &&
             listJob?.isActive != true && moreJob?.isActive != true
         ) {
-            refresh()
+            load(refresh = true, unread = snapshot.unread)
         }
     }
 
-    private fun load(refresh: Boolean) {
+    private fun load(refresh: Boolean, unread: com.android.purebilibili.data.repository.MessageCenterUnread? = null) {
         listJob?.cancel()
         moreJob?.cancel()
         val version = ++generation
@@ -158,17 +157,18 @@ class InboxViewModel : ViewModel() {
         _uiState.update { it.copy(isLoading = it.sessions.isEmpty(), isRefreshing = refresh, isLoadingMore = false, error = null, loadMoreError = null) }
         listJob = requests.launch {
             coroutineScope {
-                val center = async { MessageRepository.getMessageCenterUnread() }
-                val sessions = async { MessageImRepository.sessions(pageType) }
-                val result = sessions.await()
-                val centerResult = center.await()
-                if (version != generation || !requests.isCurrent()) return@coroutineScope
-                // 四项优先用官方 GetTotalUnread；失败回退 REST。
-                val centerFeed = centerResult.getOrNull()?.let {
-                    MessageFeedUnreadData(reply = it.reply, at = it.at, like = it.like, sysMsg = it.sysMsg)
+                // 未读摘要独立补齐，会话列表不等待统计或统计备用接口。
+                launch {
+                    val centerUnread = unread ?: MessageRepository.getMessageCenterUnread().getOrNull()
+                    val centerFeed = centerUnread?.let {
+                        MessageFeedUnreadData(reply = it.reply, at = it.at, like = it.like, sysMsg = it.sysMsg)
+                    }
+                    val feedData = centerFeed ?: MessageRepository.getFeedUnread().getOrNull()
+                    if (version != generation || !requests.isCurrent()) return@launch
+                    feedData?.let { data -> _uiState.update { it.copy(feedUnreadData = data) } }
                 }
-                val feedData = centerFeed ?: MessageRepository.getFeedUnread().getOrNull()
-                feedData?.let { data -> _uiState.update { it.copy(feedUnreadData = data) } }
+                val result = MessageImRepository.sessions(pageType)
+                if (version != generation || !requests.isCurrent()) return@coroutineScope
                 result.fold(onSuccess = { data ->
                     pagination = data.pagination
                     val entries = data.sessions.distinctBy { it.key }.map(::retainReadAck)

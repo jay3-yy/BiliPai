@@ -77,7 +77,21 @@ import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.FeedTitleHierarchy
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
-import com.android.purebilibili.core.ui.resolveAppPlayIcon
+import com.android.purebilibili.R
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalDensity
+import com.android.purebilibili.core.util.CardPositionManager
+import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
+import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
+import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
+import com.android.purebilibili.core.ui.transition.VideoCardSourceCoverPresentation
+import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardSnapshotController
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
+import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
+import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
+import kotlin.math.roundToInt
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.feedContentTypography
@@ -189,7 +203,9 @@ fun ChatScreen(
     var followLatest by rememberSaveable(talkerId, sessionType, accountIdentity) { mutableStateOf(true) }
     var handledScrollVersion by remember(viewModel, accountIdentity) { mutableStateOf(uiState.scrollToLatestVersion) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(viewModel, lifecycleOwner, accountIdentity, showSettings) {
+    val chatWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    LaunchedEffect(viewModel, lifecycleOwner, accountIdentity, showSettings, chatWorkActive) {
+        if (!chatWorkActive) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             if (showSettings) return@repeatOnLifecycle
             while (isActive) {
@@ -974,18 +990,14 @@ fun MessageBubble(
         if (isLargeVideoMessage && parsedCard != null) {
             MessageLargeVideoCard(
                 preview = parsedCard,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .combinedClickable(
-                        onClick = {
-                            when {
-                                parsedCard.bvid.isNotBlank() -> onVideoClick?.invoke(parsedCard.bvid)
-                                parsedCard.targetUrl.isNotBlank() -> onLinkClick?.invoke(parsedCard.targetUrl)
-                            }
-                        },
-                        onLongClick = if (message.msg_status != 1) onLongPress else null,
-                    )
-                    .messageSecondaryClick { if (message.msg_status != 1) onLongPress?.invoke() },
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    when {
+                        parsedCard.bvid.isNotBlank() -> onVideoClick?.invoke(parsedCard.bvid)
+                        parsedCard.targetUrl.isNotBlank() -> onLinkClick?.invoke(parsedCard.targetUrl)
+                    }
+                },
+                onLongPress = onLongPress,
             )
         } else if (!shouldUseLargeVideoLinkCard) {
             // 消息气泡
@@ -1167,7 +1179,9 @@ fun MessageBubble(
 @Composable
 private fun MessageLargeVideoCard(
     preview: MessageCardPreview,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val cardShape = AppShapes.container(ContainerLevel.ProminentCard)
     val cardCorner = AppShapes.containerCornerDp(ContainerLevel.ProminentCard)
@@ -1177,18 +1191,69 @@ private fun MessageLargeVideoCard(
         defaultOnSurfaceVariant = AppContentColors.secondaryText(),
     )
 
+    val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    val cardCoordinates = remember(preview.bvid) { object { var value: LayoutCoordinates? = null } }
+    val coverCoordinates = remember(preview.bvid) { object { var value: LayoutCoordinates? = null } }
+    val infoCoordinates = remember(preview.bvid) { object { var value: LayoutCoordinates? = null } }
+    val nativeSnapshot = rememberNativeVideoCardSnapshotController(
+        key = preview.bvid,
+        enabled = preview.bvid.isNotBlank(),
+    )
+    val openVideo = {
+        if (!CardPositionManager.isVideoNavigationDebounceActive()) {
+            if (preview.bvid.isNotBlank()) {
+                cardCoordinates.value?.takeIf { it.isAttached }?.let { coordinates ->
+                    val coverBounds = coverCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
+                    CardPositionManager.recordVideoCardPosition(
+                        bvid = preview.bvid,
+                        sourceRoute = sourceRoute,
+                        bounds = coordinates.videoCardSourceBoundsInRoot(),
+                        screenWidth = with(density) { configuration.screenWidthDp.dp.toPx() },
+                        screenHeight = with(density) { configuration.screenHeightDp.dp.toPx() },
+                        density = density.density,
+                        sourceCornerDp = cardCorner.value.roundToInt(),
+                        coverBounds = coverBounds,
+                        infoBounds = infoCoordinates.value?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
+                        sourceLayout = VideoCardSourceLayout.STACKED,
+                        sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                            title = preview.title,
+                            ownerName = preview.subtitle,
+                            durationText = preview.duration.takeIf { it > 0 }?.let(::formatDuration).orEmpty(),
+                            coverUrl = preview.cover,
+                            coverCacheKey = preview.cover,
+                            coverPresentation = VideoCardSourceCoverPresentation(
+                                showDurationOnCover = preview.duration > 0,
+                                cornerRadiusDp = cardCorner.value,
+                            ),
+                        ).withMeasuredCoverDecodeSize(coverBounds),
+                    )
+                    nativeSnapshot.capture()
+                }
+            }
+            onClick()
+        }
+    }
+
     Column(
         modifier = modifier
+            .onPlaced { cardCoordinates.value = it }
+            .videoCardSourceAnchor(preview.bvid, cardShape)
+            .then(nativeSnapshot.modifier)
             .clip(cardShape)
             .messageGlassContainer(
                 defaultContainerColor = AppSurfaceTokens.cardContainer(),
                 shape = cardShape,
-            ),
+            )
+            .combinedClickable(onClick = openVideo, onLongClick = onLongPress)
+            .messageSecondaryClick { onLongPress?.invoke() },
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(MESSAGE_LARGE_VIDEO_COVER_ASPECT_RATIO)
+                .onPlaced { coverCoordinates.value = it }
                 .clip(AppShapes.topRounded(cardCorner))
                 .background(MaterialTheme.colorScheme.surfaceVariant),
         ) {
@@ -1201,34 +1266,41 @@ private fun MessageLargeVideoCard(
                 )
             }
 
-            if (preview.duration > 0) {
-                VideoCardCoverDurationText(
-                    text = formatDuration(preview.duration),
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(AppSpacingTokens.Small),
-                )
-            }
-
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(AppSpacingTokens.Small)
-                    .size(AppSpacingTokens.TripleExtraLarge),
-                contentAlignment = Alignment.Center,
+                    .fillMaxSize()
+                    .then(nativeSnapshot.coverOverlayModifier),
             ) {
-                AppIcon(
-                    imageVector = resolveAppPlayIcon(),
-                    contentDescription = "播放",
-                    modifier = Modifier.fillMaxSize(),
-                    tint = MediaContrastPalette.Foreground,
-                )
+                if (preview.duration > 0) {
+                    VideoCardCoverDurationText(
+                        text = formatDuration(preview.duration),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(AppSpacingTokens.Small),
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(AppSpacingTokens.Small)
+                        .size(AppSpacingTokens.TripleExtraLarge),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(
+                        painter = painterResource(R.drawable.ic_pili_tv_play),
+                        contentDescription = "播放",
+                        modifier = Modifier.fillMaxSize(),
+                        tint = MediaContrastPalette.Foreground,
+                    )
+                }
             }
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .onPlaced { infoCoordinates.value = it }
                 .clip(AppShapes.bottomRounded(cardCorner))
                 .background(AppSurfaceTokens.cardContainer())
                 .padding(
@@ -1239,6 +1311,7 @@ private fun MessageLargeVideoCard(
         ) {
             AppText(
                 text = preview.title.ifBlank { preview.kind.label },
+                tapToCopyEnabled = false,
                 style = contentTypography.title,
                 color = glassContentColors.titleColor,
                 maxLines = 2,
@@ -1248,6 +1321,7 @@ private fun MessageLargeVideoCard(
             preview.subtitle.takeIf { it.isNotBlank() }?.let { subtitle ->
                 AppText(
                     text = subtitle,
+                    tapToCopyEnabled = false,
                     style = contentTypography.author,
                     color = glassContentColors.subtitleColor,
                     maxLines = 1,
@@ -1318,6 +1392,7 @@ private fun MessageHorizontalVideoCard(
                 overlineText?.takeIf { it.isNotBlank() }?.let {
                     AppText(
                         text = it,
+                        tapToCopyEnabled = false,
                         style = MaterialTheme.typography.labelMedium,
                         color = AppContentColors.accent(),
                         maxLines = 1,
@@ -1326,6 +1401,7 @@ private fun MessageHorizontalVideoCard(
                 }
                 AppText(
                     text = title,
+                    tapToCopyEnabled = false,
                     style = contentTypography.title,
                     maxLines = com.android.purebilibili.core.ui.videoCardTitleMaxLines(),
                     overflow = com.android.purebilibili.core.ui.videoCardTitleOverflow(),
@@ -1335,6 +1411,7 @@ private fun MessageHorizontalVideoCard(
                 supportingText?.takeIf { it.isNotBlank() }?.let {
                     AppText(
                         text = it,
+                        tapToCopyEnabled = false,
                         style = contentTypography.author,
                         color = glassContentColors.subtitleColor,
                         maxLines = 1,
@@ -1375,10 +1452,9 @@ fun VideoLinkPreviewCard(
             bvid = preview.bvid,
             duration = preview.duration,
         ),
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongPress)
-            .messageSecondaryClick { onLongPress?.invoke() },
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick,
+        onLongPress = onLongPress,
     )
 }
 

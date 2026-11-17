@@ -23,19 +23,20 @@ class DynamicScreenStatePolicyTest {
 
 
     @Test
-    fun `all video and article categories expose author filters in horizontal mode`() {
-        for (tab in listOf(0, 1, 3)) {
-            assertTrue(shouldShowDynamicUpPanel(selectedTab = tab))
-            assertTrue(shouldShowDynamicHorizontalUserList(isHorizontalMode = true, selectedTab = tab))
-            assertFalse(shouldShowDynamicHorizontalUserList(isHorizontalMode = false, selectedTab = tab))
-        }
+    fun `selecting an author from pgc opens all dynamics with that author`() {
+        val targetTab = resolveDynamicAuthorSelectionTab(2)
+        val selectedUid = resolveDynamicSelectedUserIdAfterClick(null, 42L)
+        assertEquals(0, targetTab)
+        assertEquals(42L, selectedUid)
+        assertTrue(shouldUseSelectedUserDynamicFeed(targetTab, selectedUid))
+        assertFalse(shouldUseSelectedUserDynamicFeed(2, selectedUid))
     }
 
     @Test
-    fun `pgc never exposes an author panel`() {
-        assertFalse(shouldShowDynamicUpPanel(selectedTab = 2))
-        assertFalse(shouldShowDynamicHorizontalUserList(isHorizontalMode = true, selectedTab = 2))
-        assertFalse(shouldShowDynamicHorizontalUserList(isHorizontalMode = false, selectedTab = 2))
+    fun `author selection preserves all video and article categories`() {
+        for (tab in listOf(0, 1, 3)) {
+            assertEquals(tab, resolveDynamicAuthorSelectionTab(tab))
+        }
     }
 
     @Test

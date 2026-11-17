@@ -82,19 +82,19 @@ internal object MessageImRepository {
     private const val GATEWAY_SERVICE = "/bilibili.im.gateway.interface.v1.ImGatewayApi/"
     private suspend fun <T> request(method: String, message: ByteArray = byteArrayOf(), parse: (ByteArray) -> T): Result<T> =
         withContext(Dispatchers.IO) {
-            runCatching { parse(BiliGrpcClient.request(SERVICE + method, message)) }
+            runCatching { parse(BiliGrpcClient.requestCancellable(SERVICE + method, message)) }
                 .onFailure { if (it is CancellationException) throw it }
         }
 
     private suspend fun <T> interfaceRequest(method: String, message: ByteArray, parse: (ByteArray) -> T): Result<T> =
         withContext(Dispatchers.IO) {
-            runCatching { parse(BiliGrpcClient.request(INTERFACE_SERVICE + method, message)) }
+            runCatching { parse(BiliGrpcClient.requestCancellable(INTERFACE_SERVICE + method, message)) }
                 .onFailure { if (it is CancellationException) throw it }
         }
 
     private suspend fun <T> gatewayRequest(method: String, message: ByteArray, parse: (ByteArray) -> T): Result<T> =
         withContext(Dispatchers.IO) {
-            runCatching { parse(BiliGrpcClient.request(GATEWAY_SERVICE + method, message)) }
+            runCatching { parse(BiliGrpcClient.requestCancellable(GATEWAY_SERVICE + method, message)) }
                 .onFailure { if (it is CancellationException) throw it }
         }
 

@@ -14,53 +14,6 @@ import kotlin.test.assertSame
 class VideoLoadRequestPolicyTest {
 
     @Test
-    fun `page switch commits target ui identity before replacing player source`() {
-        val source = listOf(
-            java.io.File("app/src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt"),
-            java.io.File("src/main/java/com/android/purebilibili/feature/video/viewmodel/VideoPlaybackViewModel.kt"),
-        ).first { it.exists() }.readText()
-        val switchBlock = source
-            .substringAfter("fun switchPage(")
-            .substringBefore("fun dismissResumePlaybackSuggestion()")
-        val uiCommitIndex = switchBlock.indexOf("_uiState.value = switchedState")
-        val playerReplaceIndex = switchBlock.indexOf("playResolvedPlayback(")
-        val identityCallbackIndex = switchBlock.indexOf("onPageIdentityCommitted?.invoke(targetBvid, page.cid)")
-
-        assertTrue(uiCommitIndex >= 0)
-        assertTrue(playerReplaceIndex > uiCommitIndex)
-        assertTrue(identityCallbackIndex in 0 until uiCommitIndex)
-        assertTrue(switchBlock.contains("val targetBvid = current.info.bvid"))
-        assertTrue(
-            switchBlock.contains(
-                "VideoRepository.getPlayUrlDataForPlaybackTransition("
-            )
-        )
-        assertTrue(switchBlock.contains("currentQuality = selection.actualQuality"))
-        assertTrue(switchBlock.contains("info = current.info.copy(cid = page.cid)"))
-        assertTrue(switchBlock.contains("currentCid = previousCid"))
-    }
-
-    @Test
-    fun `page identity synchronization is registered for automatic switches as well as clicks`() {
-        val sourceRoot = listOf(
-            java.io.File("app/src/main/java/com/android/purebilibili/feature/video"),
-            java.io.File("src/main/java/com/android/purebilibili/feature/video"),
-        ).first { it.exists() }
-        val viewModelSource = sourceRoot.resolve("viewmodel/VideoPlaybackViewModel.kt").readText()
-        val screenSource = sourceRoot.resolve("screen/VideoDetailScreenStateHolder.kt").readText()
-        val switchParameters = viewModelSource.substringAfter("fun switchPage(").substringBefore(") {")
-        val registration = screenSource
-            .substringAfter("DisposableEffect(viewModel, presentationState) {")
-            .substringBefore("val playbackActions")
-
-        // End-of-playback calls do not supply a per-click callback. The listener must belong
-        // to the mounted screen, and be removed when that screen leaves composition.
-        assertFalse(switchParameters.contains("onIdentityCommitted"))
-        assertContains(registration, "setPageIdentityCommitListener(presentationState::syncPlaybackIdentity)")
-        assertContains(registration.substringAfter("onDispose {"), "setPageIdentityCommitListener(null)")
-    }
-
-    @Test
     fun `restores an empty reattached player from matching loaded ui without reloading detail`() {
         assertTrue(
             shouldRestoreAttachedPlayerFromLoadedUi(

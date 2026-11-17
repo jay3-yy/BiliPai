@@ -185,12 +185,7 @@ class BangumiViewModel : ViewModel() {
     private fun isActiveFollowRequest(session: BangumiFollowSession, generation: Long): Boolean =
         session == ensureFollowCacheSession() && generation == myFollowGeneration
     
-    init {
-        loadBangumiList()
-        loadHomeFeed()
-        // 首页只加载展示所需的追番页，不自动扫描全部追番。
-    }
-
+    // 详情入口只加载当前剧集；分类、时间表与追番由各自页面显式发起。
     fun loadHomeFeed() {
         val shouldShowTimeline = _uiState.value.selectedType == BangumiType.ANIME.value ||
             _uiState.value.selectedType == BangumiType.GUOCHUANG.value

@@ -203,8 +203,7 @@ internal fun ListenVideoScreen(
     val scope = rememberCoroutineScope()
     val listenBackdrop = rememberLayerBackdrop()
     val context = LocalContext.current
-    val homeSettings by SettingsManager
-        .getHomeSettings(context)
+    val homeSettings by remember(context) { SettingsManager.getHomeSettings(context) }
         .collectAsStateWithLifecycle(initialValue = HomeSettings())
 
     LaunchedEffect(pagerState) {

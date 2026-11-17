@@ -123,13 +123,11 @@ class DampedDragAnimation(
                 // band; it must never be adopted halfway through by the liquid indicator.
                 gestureAccepted = canDrag(down.position)
                 if (gestureAccepted) {
-                    isDragging = true
-                    onDragStarted(down.position)
-                    press()
+                    beginDrag(down.position)
                 }
             },
             onDragEnd = {
-                if (gestureAccepted) {
+                if (gestureAccepted && isDragging) {
                     // Settle first so pager-follow observers cannot snap to the stale page
                     // between isDragging flipping false and the drag target being recorded.
                     onDragStopped()
@@ -139,7 +137,7 @@ class DampedDragAnimation(
                 gestureAccepted = false
             },
             onDragCancel = {
-                if (gestureAccepted) {
+                if (gestureAccepted && isDragging) {
                     onDragStopped()
                     isDragging = false
                     release()
@@ -147,7 +145,7 @@ class DampedDragAnimation(
                 gestureAccepted = false
             }
         ) { change, dragAmount ->
-            if (!gestureAccepted) return@inspectDragGestures
+            if (!gestureAccepted || !isDragging) return@inspectDragGestures
             // Once the indicator owns this pointer, keep following it even if the moving
             // hit box translates out from under the finger. Dropping deltas here is what
             // made a second drag lose real-time tracking after search resized the dock.
@@ -164,13 +162,11 @@ class DampedDragAnimation(
             onDragStart = { position ->
                 gestureAccepted = canDrag(position)
                 if (gestureAccepted) {
-                    isDragging = true
-                    onDragStarted(position)
-                    press()
+                    beginDrag(position)
                 }
             },
             onDragEnd = {
-                if (gestureAccepted) {
+                if (gestureAccepted && isDragging) {
                     onDragStopped()
                     isDragging = false
                     release()
@@ -178,7 +174,7 @@ class DampedDragAnimation(
                 gestureAccepted = false
             },
             onDragCancel = {
-                if (gestureAccepted) {
+                if (gestureAccepted && isDragging) {
                     onDragStopped()
                     isDragging = false
                     release()
@@ -186,11 +182,34 @@ class DampedDragAnimation(
                 gestureAccepted = false
             },
             onDrag = { change, dragAmount ->
-                if (!gestureAccepted) return@detectDragGesturesAfterLongPress
+                if (!gestureAccepted || !isDragging) return@detectDragGesturesAfterLongPress
                 if (dragAmount != Offset.Zero) change.consume()
                 onDrag(size, dragAmount)
             },
         )
+    }
+
+    internal fun beginDrag(position: Offset) {
+        isDragging = true
+        // 重新抓取从眼前位置接手，停止旧目标的位移；普通拖动与长按拖动共用。
+        snapTo(value)
+        onDragStarted(position)
+        press()
+    }
+
+    /** 隐藏或失活时终止手势，不提交选中回调，也不等待离屏弹簧收尾。 */
+    suspend fun cancelDrag() {
+        if (!isDragging) return
+        isDragging = false
+        valueTrackingJob?.cancel()
+        pressJob?.cancel()
+        releaseJob?.cancel()
+        valueAnimation.snapTo(requestedValue)
+        pressProgressAnimation.snapTo(0f)
+        scaleXAnimation.snapTo(initialScale)
+        scaleYAnimation.snapTo(initialScale)
+        velocityAnimation.snapTo(0f)
+        velocityTracker.resetTracking()
     }
 
     fun press() {

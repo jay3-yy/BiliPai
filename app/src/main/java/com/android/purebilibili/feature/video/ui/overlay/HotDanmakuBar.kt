@@ -34,8 +34,6 @@ import com.android.purebilibili.feature.video.danmaku.selectFittingHotDanmaku
 import com.android.purebilibili.feature.video.danmaku.selectHotDanmaku
 import com.android.purebilibili.feature.video.ui.components.DanmakuSameSendConfirmation
 import com.android.purebilibili.danmaku.engine.DanmakuItem
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 private class HotDanmakuPresentation {
     var heightPx = 0
@@ -96,23 +94,15 @@ fun HotDanmakuBar(
         hotItems = player?.let { selectHotDanmaku(latestGetList(), it.currentPosition, maxItems = Int.MAX_VALUE) }.orEmpty()
     }
     val latestRefresh by rememberUpdatedState(refresh)
-    LaunchedEffect(player) {
-        if (player == null) return@LaunchedEffect
-        while (isActive) {
+    val samplingActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    // A new loaded window must refresh even when playback is paused.
+    val danmakuSnapshot = getDanmakuList()
+    LaunchedEffect(player, samplingActive, danmakuSnapshot) {
+        if (player == null || !samplingActive) return@LaunchedEffect
+        // Playing refreshes the moving window; paused playback waits for seek/events.
+        observeVideoPlayerProgress(player, videoDuration = 0L, pollingIntervalMs = 1_000L) {
             latestRefresh()
-            delay(1_000L)
         }
-    }
-    DisposableEffect(player) {
-        val listener = object : Player.Listener {
-            override fun onPositionDiscontinuity(
-                oldPosition: Player.PositionInfo,
-                newPosition: Player.PositionInfo,
-                reason: Int,
-            ) { latestRefresh() }
-        }
-        player?.addListener(listener)
-        onDispose { player?.removeListener(listener) }
     }
     if (hotItems.isEmpty()) SideEffect {
         presentation.heightPx = 0

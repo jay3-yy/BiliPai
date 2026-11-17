@@ -21,6 +21,7 @@ class NavResponseParsingTest {
               "data": {
                 "isLogin": true,
                 "uname": "满级大佬",
+                "is_senior_member": 1,
                 "mid": 74823629,
                 "level_info": {
                   "current_level": 6,
@@ -35,6 +36,7 @@ class NavResponseParsingTest {
 
         val data = assertNotNull(response.data)
         assertEquals(6, data.level_info.current_level)
+        assertEquals(1, data.is_senior_member)
         assertEquals(28800, data.level_info.current_min)
         assertEquals(57063, data.level_info.current_exp)
         assertEquals(0, data.level_info.next_exp)
@@ -62,6 +64,7 @@ class NavResponseParsingTest {
 
         val data = assertNotNull(response.data)
         assertEquals(4, data.level_info.current_level)
+        assertEquals(0, data.is_senior_member)
         assertEquals(7200, data.level_info.current_exp)
         assertEquals(10800, data.level_info.next_exp)
     }

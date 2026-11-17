@@ -12,6 +12,11 @@ internal enum class BangumiOverlayUnsupportedAction {
     COIN
 }
 
+internal fun resolveBangumiQuickSeekTargetPosition(positionMs: Long, durationMs: Long): Long? {
+    if (durationMs <= 0L) return null
+    return (positionMs.coerceIn(0L, durationMs) + 90_000L).coerceAtMost(durationMs)
+}
+
 internal fun resolveBangumiOverlayQualityLabel(
     currentQuality: Int,
     acceptQuality: List<Int>,

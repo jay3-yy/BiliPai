@@ -48,7 +48,7 @@ class HomeFeedCardStylePolicyTest {
         assertEquals(8, layout.storyCardHorizontalPaddingDp)
         assertEquals(true, layout.compactMetadata)
         assertEquals("16:10", HomeFeedCardStyle.BILIPAI.label)
-        assertTrue(HomeFeedCardStyle.BILIPAI.subtitle.contains("信息流"))
+        assertTrue(HomeFeedCardStyle.BILIPAI.subtitle.contains("封面"))
         assertEquals(2, HomeFeedCardStyle.BILIPAI.value)
         assertEquals(HomeFeedCardStyle.BILIPAI, HomeFeedCardStyle.fromValue(2))
     }

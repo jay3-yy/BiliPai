@@ -336,6 +336,7 @@ fun AudioModeScreen(
         // 听视频没有画面入场过渡，媒体 prepare 不必等它；若沿用详情页入场时写入的
         // "暂不许 prepare"，切歌请求会挂起在准备阶段，表现为一直加载、切换不完成。
         viewModel.setPlaybackPreparationAllowed(true)
+        viewModel.setPlaybackStartAllowed(true)
         AudioNowPlayingSession.markListening()
         onDispose { viewModel.setAudioMode(false) }
     }

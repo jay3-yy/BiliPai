@@ -1715,9 +1715,6 @@ internal fun MusicPlayerContent(
     if (showImportDialog) {
         ExternalPlaylistImportDialog(
             onDismiss = { showImportDialog = false },
-            backdrop = musicBackdrop,
-            glassEnabled = glassEnabled,
-            liquidGlassTuning = liquidGlassTuning,
             onSaved = { local ->
                 // 导入成功后立即作为播放队列加载，第一首进入待播起点
                 val items = local.items.map {

@@ -55,24 +55,17 @@ internal fun resolveEffectiveSearchCardTransitionEnabled(
 }
 
 internal fun shouldBootstrapSearchLandingData(
-    startupSettled: Boolean,
     showResults: Boolean,
     query: String
-): Boolean {
-    return startupSettled && !showResults && query.isBlank()
-}
+): Boolean = !showResults && query.isBlank()
 
-/**
- * Search is a navigation destination rather than an IME-first overlay. Do not focus the empty
- * landing automatically: an automatic IME consumes the first system Back event, making a newly
- * opened search page appear to require two Back actions to leave.
- */
+/** 空白搜索入口只自动进入编辑一次；结果页与已消费的入口不重新唤起输入法。 */
 internal fun shouldAutoFocusSearchField(
-    @Suppress("UNUSED_PARAMETER") startupSettled: Boolean,
-    @Suppress("UNUSED_PARAMETER") query: String,
-    @Suppress("UNUSED_PARAMETER") showResults: Boolean = false,
-    @Suppress("UNUSED_PARAMETER") autoFocusConsumed: Boolean = false
-): Boolean = false
+    startupSettled: Boolean,
+    query: String,
+    showResults: Boolean = false,
+    autoFocusConsumed: Boolean = false
+): Boolean = startupSettled && query.isBlank() && !showResults && !autoFocusConsumed
 
 enum class SearchBackAction {
     RETURN_TO_LANDING,

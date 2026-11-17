@@ -62,7 +62,8 @@ fun SubReplySheet(
     if (state.visible) {
         val rootReply = state.rootReply
         val backState = rememberNavigationEventState(NavigationEventInfo.None)
-        val transition = backState.transitionState as? NavigationEventTransitionState.InProgress
+        val transition = (backState.transitionState as? NavigationEventTransitionState.InProgress)
+            .takeIf { com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current }
         val backProgress by animateFloatAsState(
             targetValue = transition?.latestEvent?.progress ?: 0f,
             animationSpec = if (transition != null) snap() else tween(180),

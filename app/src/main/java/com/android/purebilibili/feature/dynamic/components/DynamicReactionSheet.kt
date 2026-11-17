@@ -21,9 +21,12 @@ import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.feature.video.playback.policy.VideoUiWorkPermission
+import com.android.purebilibili.feature.video.playback.policy.runVisibleVideoUiWork
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +38,7 @@ fun DynamicReactionSheet(item: DynamicItem, onDismiss: () -> Unit, onUserClick: 
     var loaded by remember(item.id_str) { mutableStateOf(false) }
     var error by remember(item.id_str) { mutableStateOf<String?>(null) }
     var title by remember(item.id_str) { mutableStateOf("赞和转发") }
+    val requestPermission = remember(item.id_str) { MutableStateFlow(VideoUiWorkPermission.Hidden) }
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     suspend fun load() {
@@ -42,7 +46,9 @@ fun DynamicReactionSheet(item: DynamicItem, onDismiss: () -> Unit, onUserClick: 
         loading = true
         error = null
         try {
-            val page = DynamicReactionApi.load(item, offset)
+            val page = runVisibleVideoUiWork(requestPermission) {
+                DynamicReactionApi.load(item, offset)
+            }
             users = (users + page.users).distinctBy { it.mid to it.action }
             hasMore = page.hasMore && page.offset.isNotBlank() && page.offset != offset
             offset = page.offset
@@ -76,6 +82,12 @@ fun DynamicReactionSheet(item: DynamicItem, onDismiss: () -> Unit, onUserClick: 
         }
     }
     AppModalBottomSheet(onDismissRequest = onDismiss) {
+        // 弹层使用自己的窗口焦点；自动分页和手动重试共用许可，恢复后继续当前游标。
+        val workActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+        DisposableEffect(requestPermission, workActive) {
+            requestPermission.value = if (workActive) VideoUiWorkPermission.Visible else VideoUiWorkPermission.Hidden
+            onDispose { requestPermission.value = VideoUiWorkPermission.Hidden }
+        }
         AppText(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
         LazyColumn(
             modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp),

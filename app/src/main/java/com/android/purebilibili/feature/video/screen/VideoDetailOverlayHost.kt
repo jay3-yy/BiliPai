@@ -366,73 +366,42 @@ internal fun VideoDetailPlaybackEndedDialog(
     )
     if (!showPlaybackEndedDialog) return
 
-    val dialogLayout = remember {
-        com.android.purebilibili.core.ui.resolveAppContentDialogLayoutPolicy(maxWidthDp = 420)
-    }
-    androidx.compose.ui.window.Dialog(
-        onDismissRequest = { viewModel.dismissPlaybackEndedDialog() },
-        properties = com.android.purebilibili.core.ui.resolveAppContentDialogProperties(
-            usePlatformDefaultWidth = dialogLayout.usePlatformDefaultWidth,
-        ),
-    ) {
-        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
-        AppSurface(
-            modifier = Modifier.appContentDialogWidth(policy = dialogLayout),
-            shape = AppShapes.container(ContainerLevel.Dialog),
-            color = AppSurfaceTokens.surface(),
-            tonalElevation = 8.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                AppText(
-                    text = "播放完成",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                AppText(
-                    text = "选择接下来的操作",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = AppContentColors.secondaryText()
-                )
-                AppButton(
+    AppAlertDialog(
+        onDismissRequest = viewModel::dismissPlaybackEndedDialog,
+        title = { AppText("播放完成") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                AppText("选择接下来的操作")
+                com.android.purebilibili.core.ui.components.AppOutlinedButton(
                     onClick = {
                         viewModel.dismissPlaybackEndedDialog()
                         player.seekTo(0)
                         playPlayerFromUserAction(player)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = AppContentColors.primaryText()
-                    )
                 ) {
-                    AppText("🔄 重播当前视频")
-                }
-                AppButton(
-                    onClick = {
-                        viewModel.dismissPlaybackEndedDialog()
-                        viewModel.playNextRecommended()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = resolveFilledButtonContainerColor(MaterialTheme.colorScheme),
-
-                        contentColor = resolveFilledButtonContentColor(MaterialTheme.colorScheme)
-                    )
-                ) {
-                    AppText("▶️ 播放下一个视频")
-                }
-                AppTextButton(
-                    onClick = { viewModel.dismissPlaybackEndedDialog() }
-                ) {
-                    AppText("暂不操作")
+                    AppText("重播当前视频")
                 }
             }
-        }
-    }
+        },
+        confirmButton = {
+            com.android.purebilibili.core.ui.AppDialogAction(
+                onClick = {
+                    viewModel.dismissPlaybackEndedDialog()
+                    viewModel.playNextRecommended()
+                },
+            ) {
+                AppText("播放下一个视频")
+            }
+        },
+        dismissButton = {
+            com.android.purebilibili.core.ui.AppDialogAction(
+                onClick = viewModel::dismissPlaybackEndedDialog,
+            ) {
+                AppText("暂不操作")
+            }
+        },
+    )
 }
 
 @Composable

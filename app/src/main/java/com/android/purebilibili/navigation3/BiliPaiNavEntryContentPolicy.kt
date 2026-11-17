@@ -11,6 +11,7 @@ internal enum class BiliPaiNavEntryContentRole {
     SETTINGS,
     SETTINGS_CATEGORY,
     SETTINGS_SEARCH,
+    PERFORMANCE_HISTORY,
     OPEN_SOURCE_LICENSES,
     APPEARANCE_SETTINGS,
     HOME_SETTINGS,
@@ -94,6 +95,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.Settings -> BiliPaiNavEntryContentRole.SETTINGS
         is BiliPaiNavKey.SettingsCategory -> BiliPaiNavEntryContentRole.SETTINGS_CATEGORY
         BiliPaiNavKey.SettingsSearch -> BiliPaiNavEntryContentRole.SETTINGS_SEARCH
+        BiliPaiNavKey.PerformanceHistory -> BiliPaiNavEntryContentRole.PERFORMANCE_HISTORY
         BiliPaiNavKey.OpenSourceLicenses -> BiliPaiNavEntryContentRole.OPEN_SOURCE_LICENSES
         BiliPaiNavKey.AppearanceSettings -> BiliPaiNavEntryContentRole.APPEARANCE_SETTINGS
         BiliPaiNavKey.HomeSettings -> BiliPaiNavEntryContentRole.HOME_SETTINGS

@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.search
 
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.feature.home.resolveIsVerticalForNavigation
 import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
@@ -218,9 +220,9 @@ internal fun SearchResultPageContent(
     LaunchedEffect(scrollToTopRequestId, scrollToTopSearchType, targetSearchType) {
         if (scrollToTopSearchType == targetSearchType && scrollToTopRequestId > 0) {
             if (targetSearchType == SearchType.VIDEO || targetSearchType == SearchType.ALL) {
-                activePageGridState.animateScrollToItem(0)
+                activePageGridState.animateScrollToTop()
             } else {
-                activePageListState.animateScrollToItem(0)
+                activePageListState.animateScrollToTop()
             }
         }
     }

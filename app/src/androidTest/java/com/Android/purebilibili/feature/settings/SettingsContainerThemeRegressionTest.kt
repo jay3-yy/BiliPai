@@ -15,6 +15,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -50,7 +51,19 @@ class SettingsContainerThemeRegressionTest {
     fun miuixGroupFollowsThemeAndCustomBackgroundUntilTheNextClick() =
         checkThemeUpdates(flatGroup = false, uiStyle = AppUiStyle.MIUIX)
 
-    private fun checkThemeUpdates(flatGroup: Boolean, uiStyle: AppUiStyle) {
+    @Test
+    fun materialRootCategoryUpdatesTheReturnContainerAfterThemeChanges() =
+        checkThemeUpdates(flatGroup = true, uiStyle = AppUiStyle.MATERIAL3, rootCategory = true)
+
+    @Test
+    fun miuixRootCategoryUpdatesTheReturnContainerAfterThemeChanges() =
+        checkThemeUpdates(flatGroup = false, uiStyle = AppUiStyle.MIUIX, rootCategory = true)
+
+    private fun checkThemeUpdates(
+        flatGroup: Boolean,
+        uiStyle: AppUiStyle,
+        rootCategory: Boolean = false,
+    ) {
         val background = mutableStateOf(Color(0xFF101510))
         val sources = SettingsContainerSources()
         val target = BiliPaiNavKey.AppearanceSettings
@@ -69,19 +82,31 @@ class SettingsContainerThemeRegressionTest {
                         sources.hostOrigin = it.positionInRoot()
                         sources.hostSize = it.size
                     }) {
-                        SettingsNavigationContainerOrigin(
-                            target = target,
-                            onClick = {},
-                            flatGroup = flatGroup,
-                        ) { click ->
-                            Box(Modifier.fillMaxWidth().height(48.dp)
-                                .testTag("appearance-row").clickable(onClick = click))
+                        if (rootCategory) {
+                            SettingsRootCategoryListSection(
+                                categories = listOf(SettingsRootCategory.APPEARANCE_THEME),
+                                onCategoryClick = {},
+                                onDonateClick = {},
+                            )
+                        } else {
+                            SettingsNavigationContainerOrigin(
+                                target = target,
+                                onClick = {},
+                                flatGroup = flatGroup,
+                            ) { click ->
+                                Box(Modifier.fillMaxWidth().height(48.dp)
+                                    .testTag("appearance-row").clickable(onClick = click))
+                            }
                         }
                     }
                 }
             }
         }
-        rule.onNodeWithTag("appearance-row").performClick()
+        fun clickAppearance() {
+            if (rootCategory) rule.onNodeWithText("外观与动画").performClick()
+            else rule.onNodeWithTag("appearance-row").performClick()
+        }
+        clickAppearance()
         lateinit var captured: SettingsContainerSource
         rule.runOnIdle {
             captured = requireNotNull(sources.sources[target])
@@ -100,7 +125,7 @@ class SettingsContainerThemeRegressionTest {
                 assertTrue(rebuilt.motion.programmatic is NavSettleSpec.Spring)
             }
         }
-        rule.onNodeWithTag("appearance-row").performClick()
+        clickAppearance()
         rule.runOnIdle {
             val recaptured = requireNotNull(sources.sources[target])
             assertNotSame(captured, recaptured)

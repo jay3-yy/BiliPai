@@ -25,13 +25,15 @@
 
 ## 导出与复查
 
-使用 Pillow，执行以下脚本即可更新资源，不调用 Gradle：
+使用 Python 3.9 及以上版本和 Pillow，执行以下脚本即可更新资源，不调用 Gradle：
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python artwork/app-icon/export_play_window.py
 PYTHONDONTWRITEBYTECODE=1 python artwork/app-icon/export_frameless_maids.py
 python scripts/deduplicate_launcher_images.py --check
 ```
+
+导出图片后运行 `python3 scripts/deduplicate_launcher_images.py` 更新去重资源、别名与 SHA 清单，再执行 `--check`。去重保留原来的密度和昼夜限定符；已有别名的目标再次参与去重时，直接改为引用最终图片。
 
 前景尺寸为 108/162/216/324/432px，普通与圆形后备尺寸为 48/72/96/144/192px。主题人物字形沿用已有的简化单色图案，并重新检查安全区；不会把复杂彩色头像直接压成实心块。
 
@@ -61,6 +63,8 @@ SVG 路径采用 `fill-rule="evenodd"`，Android 必须保留对应的 `android:
 图标页的「BiliPai 主题色」默认使用最终主色端点，支持系统壁纸、系统壁纸重新调色、自定义种子色与高级主色覆盖；开启独立调色时使用单独保存的标志颜色。自动背景模式保留每个 RGB 通道六级、共 216 档匹配，逐通道误差最多 25。独立背景使用 42 种标志色与 12 种背景色的 504 种组合，共打包 720 档图标。色板源数据位于 `bilipai-icon-color-palette.json`。自动背景下浅色标志使用墨色背景，其余使用白色背景。该选项不调用系统主题色接口改写用户壁纸或系统设置。
 
 执行 `python3 artwork/app-icon/export_theme_icon_palette.py` 可从 `bilipai-mark.svg` 重新导出矢量、adaptive-icon、启动主题、启动入口类与 Manifest 色板区块。每个色板保留正常启动和关闭启动图标的 alias，图标设置只显示一个主题色选项。入口启停与已有图标选择共用串行同步；Android 13 起批量提交启停状态，旧版本先启用目标再关闭当前入口。
+
+720 档配色保留各自的 adaptive-icon、背景色和启动主题；相同前景色共用 216 份矢量，其余 504 个 drawable 名称由 `bilipai_theme_icon_foreground_aliases.xml` 引用对应矢量。导出脚本同步维护这些别名，不重复生成相同的路径与颜色。
 
 只有主窗口将最终色板同步到桌面。取色弹窗与其他主题预览不写桌面状态，主题颜色动画帧不参与匹配；预览图标使用同一端点索引。图标选择和匹配档位分别保存，启动时恢复上次档位，主题就绪后再同步最新结果。
 

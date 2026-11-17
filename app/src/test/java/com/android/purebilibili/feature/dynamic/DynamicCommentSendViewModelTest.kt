@@ -100,6 +100,43 @@ class DynamicCommentSendViewModelTest {
     }
 
     @Test
+    fun `comments appear before exact count and late count preserves a sent reply`() = runTest(dispatcher) {
+        val count = CompletableDeferred<Result<Int>>()
+        coEvery { CommentRepository.getCommentCountForSubject(3000L, 11) } coAnswers { count.await() }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            assertFalse(owner.commentUiState.value.isLoading)
+            assertEquals(root.rpid, owner.commentUiState.value.comments.single().rpid)
+            owner.startCommentReply(owner.commentUiState.value.comments.single())
+            owner.postComment(subject.id_str, "reply while count pending") { _, _ -> }
+            runCurrent()
+            count.complete(Result.success(10))
+            runCurrent()
+            assertEquals(11, owner.commentUiState.value.totalCount)
+            assertEquals(40L, owner.commentUiState.value.comments.single().replies.orEmpty().first().rpid)
+        }
+    }
+
+    @Test
+    fun `late count from another dynamic cannot replace the selected count`() = runTest(dispatcher) {
+        val count = CompletableDeferred<Result<Int>>()
+        coEvery { CommentRepository.getCommentCountForSubject(3000L, 11) } coAnswers {
+            withContext(NonCancellable) { count.await() }
+        }
+        withViewModel { owner ->
+            owner.openCommentSheet(subject)
+            runCurrent()
+            owner.openCommentSheet(otherSubject)
+            runCurrent()
+            count.complete(Result.success(100))
+            runCurrent()
+            assertEquals(otherSubject.id_str, owner.commentUiState.value.dynamicId)
+            assertEquals(3, owner.commentUiState.value.totalCount)
+        }
+    }
+
+    @Test
     fun `main list reply callback fills omitted subject fields and immediately updates collapsed preview`() = runTest(dispatcher) {
         withViewModel { owner ->
             owner.openCommentSheet(subject)

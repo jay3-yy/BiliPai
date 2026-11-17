@@ -23,14 +23,11 @@ val LocalBottomBarVisible = compositionLocalOf<Boolean> { true }
 /** Final bottom content padding resolved by the app shell for top-level pages. */
 val LocalBottomBarContentPadding = compositionLocalOf<Dp> { 0.dp }
 
-/**
- * 全局“预测性返回手势”设置：关闭后仍可边缘返回，但不上报跟手进度、不显示预测预览。
- * 由 [com.android.purebilibili.navigation.AppNavigation] 从用户偏好提供。
- */
-val LocalPredictiveBackGestureEnabled = compositionLocalOf { true }
-
 /** 评论 IP 归属地显示开关，由应用根层收集偏好，默认开启。 */
 val LocalCommentIpLocationEnabled = compositionLocalOf { true }
+
+/** 楼中楼预览的正文末尾显示点赞数，根层统一订阅，默认开启。 */
+val LocalSubReplyPreviewLikesEnabled = compositionLocalOf { true }
 
 /** 评论详细时间开关，由应用根层收集偏好，避免每条评论各自订阅 DataStore。 */
 val LocalDetailedCommentTimeEnabled = compositionLocalOf { false }

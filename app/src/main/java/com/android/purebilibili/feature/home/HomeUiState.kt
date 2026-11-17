@@ -24,6 +24,7 @@ data class UserState(
     val name: String = "",
     val mid: Long = 0,
     val level: Int = 0,
+    val isSeniorMember: Boolean = false,
     val currentLevelMinExp: Int = 0,
     val currentLevelExp: Int = 0,
     val nextLevelExp: Int = 0,

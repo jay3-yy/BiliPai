@@ -249,10 +249,12 @@ fun SubscriptionFeedPage(
     DisposableEffect(Unit) {
         onDispose { onArticleOpenChanged(false) }
     }
+    val predictiveBackEnabled = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current
     PredictiveBackHandler(enabled = pageActive && isArticleOpen) { progress ->
         var lastFraction = 0f
         try {
             progress.collect { event ->
+                if (!predictiveBackEnabled) return@collect
                 lastFraction = event.progress.coerceIn(0f, 1f)
                 transitionState.seekTo(
                     fraction = lastFraction,

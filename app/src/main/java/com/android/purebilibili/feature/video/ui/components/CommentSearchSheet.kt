@@ -35,7 +35,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +43,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -76,6 +75,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.blur.LocalFloatingChromeBackdrop
+import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.ui.LocalDetailedCommentTimeEnabled
 import com.android.purebilibili.data.model.response.ReplyItem
@@ -84,8 +84,6 @@ import com.android.purebilibili.feature.home.components.bottomBarMatchedCaptureO
 import com.android.purebilibili.feature.home.components.biliPaiFloatingDockShell
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 
 /**
  * 评论区搜索排序模式
@@ -126,6 +124,7 @@ fun CommentSearchSheet(
     fullReplies: List<ReplyItem> = emptyList(),
     fullSearchState: FullCommentSearchUiState = FullCommentSearchUiState(),
     onLoadAllComments: () -> Unit = {},
+    onSearchConsumerChanged: (Any, Boolean) -> Unit = { _, _ -> },
     upMid: Long = 0L,
     onCommentClick: (ReplyItem) -> Unit,
     onSubReplyClick: (ReplyItem, Long) -> Unit = { _, _ -> },
@@ -138,11 +137,6 @@ fun CommentSearchSheet(
     var searchQuery by remember { mutableStateOf("") }
     var searchScope by remember { mutableStateOf(CommentSearchScope.ALL) }
     var sortMode by remember { mutableStateOf(CommentSearchSortMode.HOT) }
-
-    // 打开抽屉时自动补拉评论，失败后保留已取得的结果。
-    LaunchedEffect(Unit) {
-        onLoadAllComments()
-    }
 
     // 加载中和失败时也使用已补拉的部分结果；不丢弃已取得的楼中楼。
     val searchPool = if (fullSearchState.isReady || fullReplies.isNotEmpty()) fullReplies else replies
@@ -185,12 +179,7 @@ fun CommentSearchSheet(
     val listState = rememberLazyListState()
     val avatarPushEnabled = rememberCommentAvatarPushEnabled()
     val glassActive = LocalAppThemeConfig.current.liquidGlassEnabled
-    val backdropDemand = com.android.purebilibili.core.ui.blur.LocalFloatingChromeBackdropDemand.current
-    androidx.compose.runtime.DisposableEffect(backdropDemand, miuixBackdrop) {
-        val token = Any()
-        if (miuixBackdrop == null) backdropDemand?.acquire(token)
-        onDispose { backdropDemand?.release(token) }
-    }
+    // 玻璃筛选栏在弹层窗口内独立采样，结果行使用实色卡片；不为它们保留导航树录制。
     // 原生路径保留页面背景来源；玻璃筛选控件在弹层窗口内单独采样。
     val sheetBackdrop = miuixBackdrop ?: LocalFloatingChromeBackdrop.current
     CompositionLocalProvider(LocalFloatingChromeBackdrop provides sheetBackdrop) {
@@ -200,6 +189,13 @@ fun CommentSearchSheet(
             containerColor = MaterialTheme.colorScheme.surface,
             modifier = modifier,
         ) {
+            // 在弹层窗口内部判断焦点，宿主失焦不应暂停当前可见的搜索窗口。
+            val searchWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+            val searchWorkOwner = remember { Any() }
+            DisposableEffect(onSearchConsumerChanged, searchWorkOwner, searchWorkActive) {
+                onSearchConsumerChanged(searchWorkOwner, searchWorkActive)
+                onDispose { onSearchConsumerChanged(searchWorkOwner, false) }
+            }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -301,8 +297,11 @@ fun CommentSearchSheet(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
                 ) {
-                    val filterBackdrop = if (glassActive) rememberLayerBackdrop() else null
-                    if (filterBackdrop != null) {
+                    val filterBackdropSource = if (glassActive) {
+                        rememberChromeBackdropSource(drawContentToScreen = false)
+                    } else null
+                    val filterBackdrop = filterBackdropSource?.backdrop
+                    if (filterBackdropSource != null) {
                         // 独立采样层不录入前景 dock 和指示器自身；lens 折射会读取层边界外
                         // 像素，必须按 Dock 同款公式预留越界采样区，采样层保持不可见。
                         val liquidGlassTuning =
@@ -318,8 +317,7 @@ fun CommentSearchSheet(
                             modifier = Modifier
                                 .matchParentSize()
                                 .bottomBarMatchedCaptureOverflow(captureSafeInset)
-                                .alpha(0f)
-                                .layerBackdrop(filterBackdrop)
+                                .then(filterBackdropSource.modifier)
                                 .background(
                                     if (LocalAppUiStyle.current == AppUiStyle.MIUIX) {
                                         MaterialTheme.colorScheme.surfaceContainer

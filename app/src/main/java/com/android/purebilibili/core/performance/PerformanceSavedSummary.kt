@@ -13,6 +13,7 @@ internal fun savedPerformanceSummary(report: JSONObject): String? {
             page.getInt("windowId"), page.getString("page"), ui.getLong("frames"), ui.getLong("jankyFrames"),
             if (ui.isNull("p95UiMsUpperBound")) null else ui.getInt("p95UiMsUpperBound"), ui.getDouble("maxUiMs"),
             page.getJSONArray("interactions").let { values -> (0 until values.length()).map { values.getString(it) } },
+            if (ui.has("longFrames100Ms")) ui.getLong("longFrames100Ms") else null,
         )
     }
     val intervals = analysis.getJSONArray("problemIntervals").objects().map(::savedInterval)
@@ -23,7 +24,18 @@ internal fun savedPerformanceSummary(report: JSONObject): String? {
             item.getJSONArray("overlappingIntervals").objects().map(::savedInterval),
         )
     }
-    return formatPerformanceSummary(pages, intervals, markers)
+    val navigation = analysis.optJSONArray("navigationRanking")?.objects()?.map { item ->
+        val ui = item.getJSONObject("ui")
+        PerformanceNavigationSummaryRow(
+            item.getInt("windowId"), item.getLong("id"), item.getString("fromPage"), item.getString("toPage"),
+            item.getString("kind"), item.getString("outcome"), item.getBoolean("completeMotionBoundaries"),
+            ui.getLong("frames"), if (ui.isNull("longFrames100Ms")) null else ui.getLong("longFrames100Ms"),
+            if (ui.isNull("p95UiMsUpperBound")) null else ui.getInt("p95UiMsUpperBound"),
+            if (ui.isNull("maxUiMs")) null else ui.getDouble("maxUiMs"),
+        )
+    }
+    return formatPerformanceSummary(pages, intervals, markers) +
+        (navigation?.let(::formatPerformanceNavigationSummary) ?: "")
 }
 
 private fun savedInterval(item: JSONObject): PerformanceIntervalInsight {
@@ -34,6 +46,7 @@ private fun savedInterval(item: JSONObject): PerformanceIntervalInsight {
         if (item.isNull("pageAtEnd")) null else item.getString("pageAtEnd"),
         item.getLong("uiFrames"), item.getLong("jankyUiFrames"), item.getDouble("cpuPercentOneCore"),
         deadlineFrames, if (deadlineFrames == 0L) 0 else item.getLong("hwuiMissedDeadlines"),
+        if (item.isNull("longUiFrames100Ms")) null else item.getLong("longUiFrames100Ms"),
     )
 }
 

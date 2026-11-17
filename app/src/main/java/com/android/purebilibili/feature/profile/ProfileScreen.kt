@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.profile
 
+import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
+import com.android.purebilibili.core.ui.components.rememberAppScrollToTopFeedbackModifier
+import com.android.purebilibili.core.util.animateScrollToTop
+
 import com.android.purebilibili.core.util.responsiveContentWidth
 
 import com.android.purebilibili.navigation.tabIndicatorPosition
@@ -21,6 +25,7 @@ import com.android.purebilibili.core.ui.resolveFilledButtonContentColor
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.appGentleActionClickable
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
@@ -482,7 +487,7 @@ private fun ProfileScreenContent(
     }
     val isDarkTheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val isLoggedOut = state is ProfileUiState.LoggedOut
-    val privacyModeEnabled by SettingsManager.getPrivacyModeEnabled(context)
+    val privacyModeEnabled by remember(context) { SettingsManager.getPrivacyModeEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = SettingsManager.isPrivacyModeEnabledSync(context))
     val profileActionScope = androidx.compose.runtime.rememberCoroutineScope()
     val togglePrivacyMode: () -> Unit = {
@@ -509,9 +514,6 @@ private fun ProfileScreenContent(
         (skinProfileBackgroundPath != null || !skinVideoBackgroundPath.isNullOrBlank() ||
             (state as? ProfileUiState.Success)?.user?.topPhoto?.isNotEmpty() == true)
     val shouldControlSystemBars = isLoggedOut || isImmersiveMobileProfile
-    var handledAccountSessionRefreshGeneration by remember(viewModel) {
-        mutableIntStateOf(0)
-    }
     val lightStatusBars = resolveProfileLightStatusBars(
         isImmersive = shouldControlSystemBars,
         useSplitLayout = windowSizeClass.shouldUseSplitLayout,
@@ -571,24 +573,17 @@ private fun ProfileScreenContent(
         }
     }
 
-    DisposableEffect(viewModel, isCurrentPage) {
-        viewModel.setProfilePageActive(isCurrentPage)
+    val profileDataWorkActive = isCurrentPage && com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    DisposableEffect(viewModel, profileDataWorkActive) {
+        viewModel.setProfilePageActive(profileDataWorkActive)
         onDispose { viewModel.setProfilePageActive(false) }
     }
 
-    LaunchedEffect(viewModel, isCurrentPage, accountSessionRefreshGeneration) {
-        if (isCurrentPage) {
-            val force = shouldForceProfileLoadForAccountSessionRefresh(
-                isCurrentPage = isCurrentPage,
-                accountSessionRefreshGeneration = accountSessionRefreshGeneration,
-                handledAccountSessionRefreshGeneration = handledAccountSessionRefreshGeneration
-            )
-            viewModel.loadProfile(force = force)
-            if (force) {
-                handledAccountSessionRefreshGeneration = accountSessionRefreshGeneration
-            }
-        }
-    }
+    ProfilePageLoadEffect(
+        isActive = profileDataWorkActive,
+        accountSessionRefreshGeneration = accountSessionRefreshGeneration,
+        onLoad = viewModel::loadProfile,
+    )
 
     LaunchedEffect(Unit) {
         //  [埋点] 页面浏览追踪
@@ -945,7 +940,7 @@ private fun ProfileScreenContent(
                             onWatchLaterClick = onWatchLaterClick,
                             onInboxClick = onInboxClick,
                             onVideoClick = onVideoClick,
-                            onContributionRetry = viewModel::retryProfileContributions,
+                            onContentRetry = viewModel::retrySelectedProfileContent,
                             onDynamicDeleteClick = { action ->
                                 viewModel.deleteProfileDynamic(action) { _, message ->
                                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
@@ -999,7 +994,7 @@ private fun BoxScope.ProfileBackground(
     val hasSkinVideo = !skinVideoBackgroundPath.isNullOrBlank()
     val hasWallpaper = user.topPhoto.isNotEmpty() || hasSkinVideo
     val headerMotion = LocalProfileBackgroundMotion.current
-    val bgTransform by viewModel.getProfileBgTransform(isTablet).collectAsStateWithLifecycle(initialValue = ProfileWallpaperTransform())
+    val bgTransform by remember(viewModel, isTablet) { viewModel.getProfileBgTransform(isTablet) }.collectAsStateWithLifecycle(initialValue = ProfileWallpaperTransform())
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
@@ -1204,7 +1199,7 @@ private fun ProfileSpaceContent(
     onWatchLaterClick: () -> Unit,
     onInboxClick: () -> Unit,
     onVideoClick: (String) -> Unit,
-    onContributionRetry: () -> Unit,
+    onContentRetry: () -> Unit,
     onDynamicDeleteClick: (DynamicDeleteAction) -> Unit,
     onBangumiClick: (Long, Long) -> Unit,
     onBangumiMoreClick: () -> Unit,
@@ -1239,10 +1234,10 @@ private fun ProfileSpaceContent(
     var showAccountSexDialog by remember(user.mid) { mutableStateOf(false) }
     var showAdjustmentSheet by remember { mutableStateOf(false) }
     var tempSelectedUri by remember { mutableStateOf<Uri?>(null) }
-    val customBackgroundUri by viewModel.getProfileBgUri().collectAsStateWithLifecycle(initialValue = null
+    val customBackgroundUri by remember(viewModel) { viewModel.getProfileBgUri() }.collectAsStateWithLifecycle(initialValue = null
         )
     val context = LocalContext.current
-    val showProfileEditButton by SettingsManager.getShowProfileEditButton(context)
+    val showProfileEditButton by remember(context) { SettingsManager.getShowProfileEditButton(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = PickGalleryVisualMedia()
@@ -1554,6 +1549,7 @@ private fun ProfileSpaceContent(
                 Column(
                     modifier = Modifier
                         .widthIn(min = 300.dp, max = 360.dp)
+                        .then(rememberAppScrollToTopFeedbackModifier(tabletRailScrollState))
                         .verticalScroll(tabletRailScrollState),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -1596,7 +1592,7 @@ private fun ProfileSpaceContent(
                     onBangumiClick = onBangumiClick,
                     onBangumiMoreClick = onBangumiMoreClick,
                     onVideoClick = onVideoClick,
-                    onContributionRetry = onContributionRetry,
+                    onContentRetry = onContentRetry,
                     onHistoryClick = onHistoryClick,
                     showHistoryService = showHistoryService,
                     onDownloadClick = onDownloadClick,
@@ -1738,7 +1734,7 @@ private fun ProfileSpaceContent(
                             onBangumiClick = onBangumiClick,
                             onBangumiMoreClick = onBangumiMoreClick,
                             onVideoClick = onVideoClick,
-                            onContributionRetry = onContributionRetry,
+                            onContentRetry = onContentRetry,
                             onHistoryClick = onHistoryClick,
                             showHistoryService = showHistoryService,
                             onDownloadClick = onDownloadClick,
@@ -1950,7 +1946,7 @@ private fun ProfileSpaceFeedColumn(
     onBangumiClick: (Long, Long) -> Unit,
     onBangumiMoreClick: () -> Unit,
     onVideoClick: (String) -> Unit,
-    onContributionRetry: () -> Unit,
+    onContentRetry: () -> Unit,
     onHistoryClick: () -> Unit,
     showHistoryService: Boolean,
     onDownloadClick: () -> Unit,
@@ -2024,7 +2020,7 @@ private fun ProfileSpaceFeedColumn(
                 onBangumiClick = onBangumiClick,
                 onBangumiMoreClick = onBangumiMoreClick,
                 onVideoClick = onVideoClick,
-                onContributionRetry = onContributionRetry,
+                onContentRetry = onContentRetry,
                 onHistoryClick = onHistoryClick,
                 showHistoryService = showHistoryService,
                 onDownloadClick = onDownloadClick,
@@ -2362,7 +2358,7 @@ private fun ProfileSpaceHeader(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    UserLevelBadge(level = user.level)
+                    UserLevelBadge(level = user.level, isSeniorMember = user.isSeniorMember)
                     if (user.isVip) com.android.purebilibili.core.ui.components.UserVipBadge(label = user.vipLabel, compact = true)
                 }
                 AppText("UID ${user.mid}", color = secondaryColor, style = MaterialTheme.typography.bodySmall)
@@ -2632,7 +2628,7 @@ private fun ProfileSpaceTabBody(
     onBangumiClick: (Long, Long) -> Unit,
     onBangumiMoreClick: () -> Unit,
     onVideoClick: (String) -> Unit,
-    onContributionRetry: () -> Unit,
+    onContentRetry: () -> Unit,
     onHistoryClick: () -> Unit,
     showHistoryService: Boolean,
     onDownloadClick: () -> Unit,
@@ -2644,6 +2640,27 @@ private fun ProfileSpaceTabBody(
     contentChrome: ProfileContentChrome,
     embeddedInPanel: Boolean = false
 ) {
+    val hasSelectedContent = when (space.selectedTab) {
+        ProfileSpaceMainTab.DYNAMIC -> space.dynamicItems.isNotEmpty()
+        ProfileSpaceMainTab.FAVORITE -> space.favoriteFolders.isNotEmpty()
+        ProfileSpaceMainTab.BANGUMI -> space.bangumiItems.isNotEmpty()
+        else -> true
+    }
+    val contentError = space.contentErrors[space.selectedTab]
+    if (!hasSelectedContent && contentError != null) {
+        Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            AppText(contentError)
+            AppTextButton(onClick = onContentRetry) { AppText("重试") }
+        }
+        return
+    }
+    val waitingForInitialContent = space.selectedTab in space.loadingTabs && !hasSelectedContent
+    if (waitingForInitialContent) {
+        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+            AppCircularProgressIndicator()
+        }
+        return
+    }
     when (space.selectedTab) {
         ProfileSpaceMainTab.HOME -> ProfileSpaceHome(
             user = user,
@@ -2674,7 +2691,7 @@ private fun ProfileSpaceTabBody(
             videos = space.contributionVideos,
             loadState = space.contributionLoadState,
             onVideoClick = onVideoClick,
-            onRetry = onContributionRetry
+            onRetry = onContentRetry
         )
         ProfileSpaceMainTab.FAVORITE -> ProfileFavoriteFolderList(user.mid, space.favoriteFolders, onFavoriteFolderClick)
         ProfileSpaceMainTab.BANGUMI -> ProfileBangumiList(
@@ -4042,7 +4059,7 @@ private fun MobileProfileContent(
     // [New] Adjustment Sheet State
     var showAdjustmentSheet by remember { mutableStateOf(false) }
     var tempSelectedUri by remember { mutableStateOf<Uri?>(null) }
-    val customBackgroundUri by viewModel.getProfileBgUri().collectAsStateWithLifecycle(initialValue = null
+    val customBackgroundUri by remember(viewModel) { viewModel.getProfileBgUri() }.collectAsStateWithLifecycle(initialValue = null
         )
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -4852,7 +4869,7 @@ fun UserInfoText(user: UserState, centered: Boolean = false, forceWhite: Boolean
     )
     Spacer(modifier = Modifier.height(8.dp)) // Increased spacing
     Row(verticalAlignment = Alignment.CenterVertically) {
-        LevelTag(level = user.level)
+        LevelTag(level = user.level, isSeniorMember = user.isSeniorMember)
         Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
         if (user.isVip) {
             // Theme soft pill (same as space header / side drawer), not brand primary pink.
@@ -4877,8 +4894,8 @@ private data class ProfileWallpaperActionItem(
 )
 
 @Composable
-fun LevelTag(level: Int) {
-    UserLevelBadge(level = level)
+fun LevelTag(level: Int, isSeniorMember: Boolean = false) {
+    UserLevelBadge(level = level, isSeniorMember = isSeniorMember)
 }
 
 @Composable
@@ -6030,12 +6047,13 @@ private fun ObserveProfileScrollToTop(
         if (requestId <= 0) return@LaunchedEffect
         listState?.let { state ->
             if (state.firstVisibleItemIndex > 0 || state.firstVisibleItemScrollOffset > 0) {
-                state.animateScrollToItem(0)
+                state.animateScrollToTop()
             }
         }
         scrollState?.let { state ->
             if (state.value > 0) {
                 state.animateScrollTo(0)
+                state.notifyAppScrollToTop()
             }
         }
     }

@@ -1,5 +1,12 @@
 Third-party source notices
 
+Image loading placeholder asset:
+PiliPlus contributors, GPL-3.0, revision d635f20e22becbc6587c05c7a03671a4a9a3db9f.
+https://github.com/bggRGjQaUbCoE/PiliPlus
+assets/images/loading.png copied unchanged to drawable-nodpi/bili_image_placeholder.png.
+Android drawing and shared ImageLoader integration are implemented locally.
+License retained in artwork/third-party/piliplus/LICENSE.
+
 Source and copyright notices consolidated from implementation comments.
 
 Image preview and original-file saving behavior reference:

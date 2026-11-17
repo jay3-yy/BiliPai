@@ -54,15 +54,4 @@ class AndroidApiCompatibilityPolicyTest {
         )
     }
 
-    @Test
-    fun `navigation reads the predictive back user preference`() {
-        val navigation = listOf(
-            File("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"),
-            File("src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
-        ).firstOrNull { it.exists() } ?: error("Cannot locate AppNavigation.kt")
-        val source = navigation.readText()
-
-        assertTrue(source.contains("val predictiveBackEnabled = appNavigationSettings.predictiveBackEnabled"))
-        assertFalse(source.contains("val predictiveBackEnabled = true"))
-    }
 }

@@ -345,6 +345,37 @@ internal data class SpaceUserCardVisuals(
     val ipLocation: String? = null,
 )
 
+/** 次要请求等当前标签的首批内容结束后再启动；失败也会结束加载阶段。 */
+internal fun isSpacePrimaryContentReady(state: SpaceUiState.Success): Boolean {
+    val tab = state.tabShellState.selectedTab
+    return when (tab) {
+        SpaceMainTab.HOME -> state.tabShellState.tabStates[tab]?.hasLoaded == true && !state.isLoadingMore
+        SpaceMainTab.CONTRIBUTION -> !state.isLoadingMore && !state.isLoadingArticles &&
+            !state.isLoadingAudios && !state.isLoadingOpus && !state.isLoadingComics
+        SpaceMainTab.DYNAMIC -> state.hasLoadedDynamicsOnce && !state.isLoadingDynamics
+        SpaceMainTab.BANGUMI -> state.hasLoadedBangumiOnce && !state.isLoadingBangumi
+        SpaceMainTab.CHEESE -> state.hasLoadedCheeseOnce && !state.isLoadingCheese
+        SpaceMainTab.FAVORITE, SpaceMainTab.COLLECTIONS ->
+            state.tabShellState.tabStates[SpaceMainTab.COLLECTIONS]?.hasLoaded == true
+        SpaceMainTab.SHOP -> true
+    }
+}
+
+/** 背景图与属地晚到时只补缺失资料，保留聚合数据和用户操作后的状态。 */
+internal fun mergeSpaceUserCardVisuals(
+    userInfo: SpaceUserInfo,
+    visuals: SpaceUserCardVisuals,
+): SpaceUserInfo {
+    val topPhoto = resolveSpaceTopPhoto(userInfo.topPhoto, visuals.largePhoto, visuals.smallPhoto)
+    val ipLocation = userInfo.ipLocation?.takeIf { it.isNotBlank() }
+        ?: visuals.ipLocation?.takeIf { it.isNotBlank() }
+    val tags = if (userInfo.spaceTags.none { it.type == "location" || it.title.contains("IP") } && !ipLocation.isNullOrBlank()) {
+        val title = if (ipLocation.startsWith("IP属地")) ipLocation else "IP属地：$ipLocation"
+        userInfo.spaceTags + SpaceTagItem(type = "location", title = title)
+    } else userInfo.spaceTags
+    return userInfo.copy(topPhoto = topPhoto, ipLocation = ipLocation, spaceTags = tags)
+}
+
 /**
  * Flat unfolded foldables and tablets deliberately share the same width-class policy.
  * Geometry is derived from the current window, not from a device/model distinction.
@@ -680,7 +711,7 @@ internal fun buildInitialSpaceSuccessState(
     )
     val seededContributionLoaded = seed.totalVideos > 0 || seed.totalAudios > 0 || seed.totalArticles > 0
     var tabShellState = buildInitialTabShellState(selectedTab = selectedMainTab)
-        .withUpdatedTab(selectedMainTab) { it.copy(hasLoaded = true) }
+        .withUpdatedTab(selectedMainTab) { it.copy(hasLoaded = selectedMainTab == SpaceMainTab.CONTRIBUTION && seededContributionLoaded) }
     if (seededContributionLoaded) {
         tabShellState = tabShellState.withUpdatedTab(SpaceMainTab.CONTRIBUTION) { it.copy(hasLoaded = true) }
     }
@@ -710,7 +741,8 @@ internal fun buildInitialSpaceSuccessState(
         homeBangumiCount = seed.homeBangumiCount,
         homeComicItems = seed.homeComicItems,
         homeComicCount = seed.homeComicCount,
-        isLoadingMore = selectedSubTab != SpaceSubTab.CHARGING_VIDEO && shouldShowInitialVideoLoading,
+        isLoadingMore = selectedMainTab == SpaceMainTab.CONTRIBUTION &&
+            selectedSubTab != SpaceSubTab.CHARGING_VIDEO && shouldShowInitialVideoLoading,
         hasMoreVideos = seed.totalVideos > seed.videos.size,
         hasMoreAudios = seed.totalAudios > seed.audios.size,
         hasMoreArticles = seed.totalArticles > seed.articles.size,

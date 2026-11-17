@@ -8,6 +8,14 @@ import com.android.purebilibili.data.model.response.SponsorSegment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
+import java.io.IOException
+import kotlin.coroutines.resumeWithException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -24,6 +32,19 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaType
 import java.util.concurrent.TimeUnit
+
+/** The request belongs to its caller, including cancellation while the response is queued. */
+internal suspend fun Call.awaitSponsorResponse(): Response = suspendCancellableCoroutine { continuation ->
+    continuation.invokeOnCancellation { cancel() }
+    enqueue(object : Callback {
+        override fun onFailure(call: Call, error: IOException) {
+            continuation.resumeWithException(error)
+        }
+        override fun onResponse(call: Call, response: Response) {
+            continuation.resume(response) { _, resource, _ -> resource.close() }
+        }
+    })
+}
 
 internal fun buildSponsorBlockHttpClient(baseClient: OkHttpClient): OkHttpClient {
     return baseClient.newBuilder()
@@ -182,13 +203,14 @@ object SponsorBlockRepository {
             .url(url)
             .get()
             .build()
-        val segments = client.newCall(request).execute().use { response ->
+        val segments = client.newCall(request).awaitSponsorResponse().use { response ->
             when (response.code) {
                 200 -> json.decodeFromString<List<SponsorSegment>>(response.body.string())
                 404 -> emptyList()
                 else -> throw SponsorBlockRequestException(response.code, response.body.string().take(160))
             }
         }
+        currentCoroutineContext().ensureActive()
         val ttlMs = if (segments.isEmpty()) EMPTY_SEGMENT_CACHE_TTL_MS else SEGMENT_CACHE_TTL_MS
         synchronized(segmentCache) {
             // A submission can invalidate data while this request is in flight.

@@ -139,6 +139,7 @@ fun TopControlBar(
     isFollowing: Boolean = false,
     followStatusKnown: Boolean = false,
     onFollowClick: () -> Unit = {},
+    extraActions: (@Composable () -> Unit)? = null,
 ) {
     val policy = resolveTopControlBarLayoutPolicy(
         isPortrait = isPortrait,
@@ -276,6 +277,7 @@ fun TopControlBar(
                         if (!simplifiedPortrait && showPipButton && onPipClick != null) {
                             HeaderIcon(Icons.Outlined.PictureInPicture, "画中画", onPipClick)
                         }
+                        if (!simplifiedPortrait) extraActions?.invoke()
                         if (onMoreClick != null) {
                             HeaderIcon(
                                 Icons.Outlined.MoreVert,
@@ -494,6 +496,8 @@ internal fun PortraitEngagementRail(
     likeCount: Long?,
     commentCount: Long?,
     favoriteCount: Long?,
+    coinCount: Long?,
+    shareCount: Long?,
     onLike: () -> Unit,
     onTriple: () -> Unit,
     onCoin: () -> Unit,
@@ -504,59 +508,59 @@ internal fun PortraitEngagementRail(
     modifier: Modifier = Modifier,
     shareMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
 ) {
-    val glassDock = LocalPlayerControlGlassEnabled.current
-    val visibleCounts = rememberVisibleFullscreenCounts()
     val triplePress = rememberPiliHeaderTriplePressState()
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
     val likeClick = { haptic(HapticType.LIGHT); onLike() }
     val gesture = if (likeStatusKnown) {
         piliHeaderLikeGesture(triplePress, isLiked && isCoined && isFavorited, likeClick, onTriple)
     } else null
-    // 玻璃专属：整列共用一个外壳；原生直接展示图标与文字，不绘制圆形背景。
+    // 竖屏互动栏始终直接展示图标与下方计数，不跟随横屏数量或玻璃设置。
     Box(modifier = modifier) {
-        PlayerControlGlassGroup(enabled = glassDock) {
-            Column(
-                modifier = Modifier
-                    .width(64.dp)
-                    .verticalScroll(rememberScrollState())
-                    .padding(vertical = if (glassDock) 8.dp else 0.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (glassDock) 4.dp else 8.dp),
-            ) {
-                Box(Modifier.likeBurstAnchor()) {
-                    PortraitRailAction(
-                        icon = if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
-                        label = "点赞", onClick = onLike,
-                        active = likeStatusKnown && isLiked,
-                        gestureModifier = gesture, progress = triplePress.progress,
-                        count = likeCount.takeIf { com.android.purebilibili.core.store.FullscreenActionCount.LIKE in visibleCounts },
-                    )
-                }
+        Column(
+            modifier = Modifier
+                .width(64.dp)
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.likeBurstAnchor()) {
                 PortraitRailAction(
-                    icon = Icons.Outlined.Forum, label = "评论", onClick = onComment,
-                    count = commentCount.takeIf { com.android.purebilibili.core.store.FullscreenActionCount.COMMENT in visibleCounts },
-                )
-                PortraitRailAction(
-                    icon = AppIcons.BiliCoin, label = "投币", onClick = onCoin,
-                    active = isCoined, progress = triplePress.progress,
-                )
-                PortraitRailAction(
-                    icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
-                    label = "收藏", onClick = onFavorite, active = isFavorited,
-                    onLongClick = onQuickFavorite, modifier = Modifier.favoriteFolderMenuSource(),
-                    progress = triplePress.progress,
-                    count = favoriteCount.takeIf { com.android.purebilibili.core.store.FullscreenActionCount.FAVORITE in visibleCounts },
-                )
-                PortraitRailAction(
-                    icon = Icons.Outlined.Share, label = "分享", onClick = onShare,
-                    modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShare) } ?: Modifier,
+                    icon = if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                    label = "点赞", onClick = onLike,
+                    active = likeStatusKnown && isLiked,
+                    gestureModifier = gesture, progress = triplePress.progress,
+                    count = likeCount,
+                    reserveCountSpace = true,
                 )
             }
+            PortraitRailAction(
+                icon = Icons.Outlined.Forum, label = "评论", onClick = onComment,
+                count = commentCount,
+                reserveCountSpace = true,
+            )
+            PortraitRailAction(
+                icon = AppIcons.BiliCoin, label = "投币", onClick = onCoin,
+                active = isCoined, progress = triplePress.progress,
+                count = coinCount, reserveCountSpace = true,
+            )
+            PortraitRailAction(
+                icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                label = "收藏", onClick = onFavorite, active = isFavorited,
+                onLongClick = onQuickFavorite, modifier = Modifier.favoriteFolderMenuSource(),
+                progress = triplePress.progress,
+                count = favoriteCount,
+                reserveCountSpace = true,
+            )
+            PortraitRailAction(
+                icon = Icons.Outlined.Share, label = "分享", onClick = onShare,
+                count = shareCount, reserveCountSpace = true,
+                modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShare) } ?: Modifier,
+            )
         }
     }
 }
 
-/** 文字与计数占用同一固定槽位，整项均可点击，长按与图标区域保持同一行为。 */
+/** 仅显示图标与已知计数；无计数的操作收紧高度，名称保留在无障碍语义中。 */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 private fun PortraitRailAction(
@@ -566,6 +570,7 @@ private fun PortraitRailAction(
     modifier: Modifier = Modifier,
     active: Boolean = false,
     count: Long? = null,
+    reserveCountSpace: Boolean = false,
     onLongClick: (() -> Unit)? = null,
     gestureModifier: Modifier? = null,
     progress: Float = 0f,
@@ -575,7 +580,7 @@ private fun PortraitRailAction(
     Column(
         modifier = modifier
             .width(64.dp)
-            .heightIn(min = 68.dp)
+            .heightIn(min = if (reserveCountSpace) 68.dp else 48.dp)
             .semantics(mergeDescendants = true) {
                 contentDescription = label
                 selected = active
@@ -607,17 +612,21 @@ private fun PortraitRailAction(
                 modifier = Modifier.size(26.dp),
             )
         }
-        AppText(
-            text = count?.let(::formatPlayerActionCount) ?: label,
-            color = Color.White,
-            fontSize = 11.sp,
-            lineHeight = 16.sp,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis,
-            tapToCopyEnabled = false,
-            modifier = Modifier.widthIn(max = 60.dp),
-        )
+        if (count != null) {
+            AppText(
+                text = formatPlayerActionCount(count),
+                color = Color.White,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                tapToCopyEnabled = false,
+                modifier = Modifier.widthIn(max = 60.dp),
+            )
+        } else if (reserveCountSpace) {
+            Spacer(Modifier.height(16.dp))
+        }
     }
 }
 
@@ -738,6 +747,13 @@ private fun HeaderIcon(
                 modifier = Modifier.size(iconSize.dp),
             )
         }
+    }
+}
+
+@Composable
+internal fun PlayerQuickSeekForwardButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    HeaderButton(description = "快进90秒", onClick = onClick, modifier = modifier) {
+        AppText(text = "+90s", color = Color.White, fontSize = 11.sp, maxLines = 1, tapToCopyEnabled = false)
     }
 }
 

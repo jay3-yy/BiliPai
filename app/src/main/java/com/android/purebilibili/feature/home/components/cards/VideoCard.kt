@@ -923,16 +923,40 @@ internal fun ElegantVideoCard(
             com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
             !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current &&
             com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
+        // 时长必须在进入效果**之前**基于当前 animation 值求值：放进 LaunchedEffect 里延迟读取
+        // 会读到动画已经推进后的值，把"晚到的首色"误判成"运行中变色"，又退回 350ms。
+        // 首帧就有色（缓存命中）的情况不经过这里的判断：Animatable 初值等于 targetTint，
+        // 下面 `value == targetTint` 会直接 return，天然 0ms。
+        val tintAnimationMillis = resolveCardTintAnimationMillis(
+            isFirstColorForCard = tintAnimation.value.alpha == 0f,
+            motionAllowed = tintMotionAllowed,
+        )
         // 许可变化也取消在途过渡；只更换 animationSpec 不会打断目标未变的旧动画。
         LaunchedEffect(tintAnimation, targetTint, tintMotionAllowed) {
             if (tintAnimation.value == targetTint) return@LaunchedEffect
-            if (tintMotionAllowed) tintAnimation.animateTo(targetTint, tween(durationMillis = 350))
-            else tintAnimation.snapTo(targetTint)
+            if (tintAnimationMillis <= 0) tintAnimation.snapTo(targetTint)
+            else tintAnimation.animateTo(targetTint, tween(durationMillis = tintAnimationMillis))
         }
         if (tintMotionAllowed) tintAnimation.value else targetTint
     } else Color.Transparent
     val defaultOnSurface = AppContentColors.primaryText()
     val defaultOnSurfaceVariant = AppContentColors.secondaryText()
+    val infoBaseContainerColor = AppSurfaceTokens.videoCardContainer(glassEnabled = useCardEffectSurface)
+    val wallpaperSurfacePalette = remember(
+        wallpaperPalette, infoBaseContainerColor, defaultOnSurface, defaultOnSurfaceVariant,
+        hasRealtimeInfoBlur, useWallpaperInfoBacking, isDataSaverActive,
+    ) {
+        if (useWallpaperInfoBacking) {
+            resolveWallpaperCardSurfacePalette(
+                palette = wallpaperPalette ?: WallpaperPalette(infoBaseContainerColor, infoBaseContainerColor),
+                defaultContainerColor = infoBaseContainerColor,
+                titleColor = defaultOnSurface,
+                subtitleColor = defaultOnSurfaceVariant,
+                frostedGlassEnabled = hasRealtimeInfoBlur,
+                isDataSaverActive = isDataSaverActive,
+            )
+        } else null
+    }
     val adaptiveContentColors = remember(
         wallpaperPalette,
         animatedCoverTint,
@@ -956,6 +980,7 @@ internal fun ElegantVideoCard(
             defaultOnSurface = defaultOnSurface,
             defaultOnSurfaceVariant = defaultOnSurfaceVariant,
             homeCardDynamicTintEnabled = useCardEffectSurface,
+            wallpaperSurfaceToned = useWallpaperInfoBacking,
             wallpaperGlassAlpha = resolveWallpaperGlassAlpha(
                 frostedGlassEnabled = homeCardFrostedGlassEnabled,
                 isDarkTheme = isDarkCardTheme
@@ -1071,7 +1096,6 @@ internal fun ElegantVideoCard(
     val wholeCardCaptureScope = if (prepareCardTransition) rememberCoroutineScope() else null
 
     // 玻璃底色显式选择材质分支，原生卡片不借用玻璃透明度或布局参数。
-    val infoBaseContainerColor = AppSurfaceTokens.videoCardContainer(glassEnabled = useCardEffectSurface)
     fun resolvedInfoBackingColor(yFraction: Float): Color =
         if (useWallpaperInfoBacking && wallpaperPalette != null) {
             interpolateWallpaperColor(wallpaperPalette, yFraction).copy(alpha = 1f)
@@ -1134,11 +1158,10 @@ internal fun ElegantVideoCard(
                             (infoY / screenMetrics.heightPx).coerceIn(0f, 1f)
                         } else currentCoverYFraction()
                         val backing = resolvedInfoBackingColor(fraction)
-                        val plate = if (useRealtimeWallpaperBackdrop) {
-                            infoBaseContainerColor.copy(alpha = if (isDarkCardTheme) 0.44f else 0.36f)
-                        } else {
+                        val plate = if (homeCardDynamicTintEnabled) {
                             resolveVideoCardAmbientDrawSpec(
                                 wallpaperPalette = wallpaperPalette,
+                                wallpaperSurfacePalette = wallpaperSurfacePalette,
                                 yFraction = fraction,
                                 coverTint = animatedCoverTint.takeIf { it.alpha > 0f },
                                 wallpaperTintEnabled = resolvedWallpaperTintEnabled,
@@ -1147,10 +1170,13 @@ internal fun ElegantVideoCard(
                                 defaultBorderColor = MediaContrastPalette.Foreground,
                                 isDataSaverActive = isDataSaverActive,
                                 frostedGlassEnabled = homeCardFrostedGlassEnabled,
-                                dynamicTintEnabled = homeCardDynamicTintEnabled,
-                            ).containerColor.let { color ->
-                                if (!homeCardDynamicTintEnabled && !hasRealtimeInfoBlur) color.copy(alpha = 1f) else color
-                            }
+                                dynamicTintEnabled = true,
+                            ).containerColor
+                        } else {
+                            infoBaseContainerColor.copy(
+                                alpha = if (!hasRealtimeInfoBlur) 1f
+                                else if (isDarkCardTheme) 0.86f else 0.84f
+                            )
                         }
                         plate.compositeOver(backing)
                     } else null,
@@ -1535,8 +1561,11 @@ internal fun ElegantVideoCard(
                     .build()
             }
             var loadedCoverCacheKey by remember(requestCoverCacheKey) { mutableStateOf<String?>(null) }
-            val coverWorkAllowed = LocalPageImageLoadingAllowed.current &&
-                LocalHomeCardAuxiliaryWorkAllowed.current
+            // 取色只受"图片工作是否允许"约束，不再叠加 180ms 的空闲门控：那个门控把取色
+            // 推迟到滚动停止之后才**开始**，叠加排队 + 聚类 + 渐入后就是用户感知的"延迟一段
+            // 时间才生效"。取色本身走 backgroundLocalWork，不占网络许可，滚动中跑也不抢带宽。
+            // 后面两个 cacheKey 相等判断是安全阀，去掉会取到上一张卡的颜色——比慢更难查。
+            val coverWorkAllowed = LocalPageImageLoadingAllowed.current
             if (coverTintState != null && coverTint == null && coverWorkAllowed &&
                 coverCacheKey == requestCoverCacheKey && loadedCoverCacheKey == requestCoverCacheKey
             ) {
@@ -1862,7 +1891,7 @@ internal fun ElegantVideoCard(
             } else {
                 Modifier
             }
-            val baseContainerColor = AppSurfaceTokens.videoCardContainer(glassEnabled = true)
+            val baseContainerColor = infoBaseContainerColor
             val baseBorderColor = MediaContrastPalette.Foreground
             Modifier
                 .fillMaxWidth()
@@ -1895,9 +1924,10 @@ internal fun ElegantVideoCard(
                         isDataSaverActive = isDataSaverActive,
                         frostedGlassEnabled = homeCardFrostedGlassEnabled,
                         dynamicTintEnabled = homeCardDynamicTintEnabled,
+                        wallpaperSurfacePalette = wallpaperSurfacePalette,
                     )
                     val followsWallpaperPosition = homeCardDynamicTintEnabled &&
-                        !useRealtimeWallpaperBackdrop && resolvedWallpaperTintEnabled && wallpaperPalette != null
+                        resolvedWallpaperTintEnabled && wallpaperSurfacePalette != null
                     val glowBrush = if (cachedSpec.coverGlowAlpha > 0f && animatedCoverTint.alpha > 0f) {
                         Brush.verticalGradient(
                             colors = listOf(
@@ -1910,7 +1940,7 @@ internal fun ElegantVideoCard(
                         )
                     } else null
                     onDrawBehind {
-                        if (homeCardDynamicTintEnabled && !useRealtimeWallpaperBackdrop) {
+                        if (homeCardDynamicTintEnabled) {
                             val containerColor = if (followsWallpaperPosition) {
                                 // Subscribe to scrolling only when position changes wallpaper tint.
                                 homeScrollTickProvider?.invoke()
@@ -1923,9 +1953,8 @@ internal fun ElegantVideoCard(
                                 } else {
                                     currentCoverYFraction()
                                 }
-                                // Only the wallpaper RGB depends on Y; alpha/glow/border remain cached.
-                                interpolateWallpaperColor(requireNotNull(wallpaperPalette), yFraction)
-                                    .copy(alpha = cachedSpec.containerColor.alpha)
+                                // 色相与对比度已在色板变化时计算，滚动只插值。
+                                interpolateWallpaperColor(requireNotNull(wallpaperSurfacePalette), yFraction)
                             } else {
                                 cachedSpec.containerColor
                             }
@@ -1933,13 +1962,13 @@ internal fun ElegantVideoCard(
                             if (glowBrush != null) drawRect(brush = glowBrush)
                         } else {
                             val neutralGlassAlpha = if (isDarkCardTheme) 0.38f else 0.34f
-                            val realtimeAlpha = if (isDarkCardTheme) 0.44f else 0.36f
+                            val wallpaperPlateAlpha = if (isDarkCardTheme) 0.86f else 0.84f
                             drawRect(
                                 color = baseContainerColor.copy(
                                     alpha = if (!homeCardDynamicTintEnabled && !hasRealtimeInfoBlur) {
                                         1f
-                                    } else if (useRealtimeWallpaperBackdrop) {
-                                        realtimeAlpha
+                                    } else if (useWallpaperInfoBacking) {
+                                        wallpaperPlateAlpha
                                     } else if (homeCardFrostedGlassEnabled) {
                                         neutralGlassAlpha
                                     } else {
@@ -1953,7 +1982,9 @@ internal fun ElegantVideoCard(
                 .border(
                     width = 0.5.dp,
                     color = if (homeCardDynamicTintEnabled && !useRealtimeWallpaperBackdrop) {
-                        val borderAlpha = if (isDarkCardTheme) 0.30f else 0.45f
+                        val borderAlpha = if (isDarkCardTheme) {
+                            if (resolvedWallpaperTintEnabled) 0.12f else 0.30f
+                        } else 0.45f
                         val baseBorder = Color.White.copy(alpha = borderAlpha)
                         if (
                             shouldUseCoverTintForCard(resolvedWallpaperTintEnabled, coverTint) &&

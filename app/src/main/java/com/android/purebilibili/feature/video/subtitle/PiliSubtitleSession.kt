@@ -2,17 +2,23 @@ package com.android.purebilibili.feature.video.subtitle
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -20,6 +26,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.feature.video.ui.components.PlayerSubtitleAppearance
 
 /** Imported documents own cue data, not a fabricated Bilibili download URL. */
@@ -115,5 +123,104 @@ fun PiliStyledSubtitleText(
     Box(modifier.background(Color.Black.copy(alpha = appearance.backgroundOpacity)).padding(horizontal = 4.dp, vertical = 2.dp)) {
         if (strokePx > 0f) BasicText(text, style = style.copy(color = Color(appearance.strokeColor), drawStyle = Stroke(strokePx)), maxLines = 4)
         BasicText(text, style = style, maxLines = 4)
+    }
+}
+
+/**
+ * Derives primary and secondary subtitle line states from a playback position [State] without
+ * reading the position in the caller's composition scope, keeping cue switches isolated to the
+ * leaf text composable.
+ */
+@Composable
+internal fun rememberSubtitleLineStates(
+    positionState: State<Long>,
+    primaryCues: List<SubtitleCue>,
+    secondaryCues: List<SubtitleCue>,
+    displayMode: SubtitleDisplayMode,
+    timeOffsetMs: Long,
+    enabled: Boolean = true,
+): Pair<State<String?>, State<String?>> {
+    val primaryState = remember(positionState, primaryCues, displayMode, timeOffsetMs, enabled) {
+        derivedStateOf {
+            if (!enabled || !shouldRenderPrimarySubtitle(displayMode)) return@derivedStateOf null
+            resolveSubtitleDisplayTextAt(
+                primaryCues,
+                subtitlePositionForOffset(positionState.value, timeOffsetMs),
+            )
+        }
+    }
+    val secondaryState = remember(positionState, secondaryCues, displayMode, timeOffsetMs, enabled) {
+        derivedStateOf {
+            if (!enabled || !shouldRenderSecondarySubtitle(displayMode)) return@derivedStateOf null
+            resolveSubtitleDisplayTextAt(
+                secondaryCues,
+                subtitlePositionForOffset(positionState.value, timeOffsetMs),
+            )
+        }
+    }
+    return primaryState to secondaryState
+}
+
+/**
+ * Renders primary/secondary subtitle lines in their own leaf composition scope so state reads
+ * stay isolated from parent movable/host containers.
+ */
+@Composable
+internal fun PiliDualSubtitleLines(
+    primaryTextProvider: () -> String?,
+    secondaryTextProvider: () -> String?,
+    appearance: PlayerSubtitleAppearance,
+    primaryTextSizeSp: Int,
+    secondaryTextSizeSp: Int,
+    isFullscreen: Boolean,
+    useLocalTextStyleForGlass: Boolean = false,
+) {
+    val primaryText = primaryTextProvider()
+    val secondaryText = secondaryTextProvider()
+    val showPrimary = !primaryText.isNullOrBlank()
+    val showSecondary = !secondaryText.isNullOrBlank()
+    val secondaryAsPrimary = showSecondary && !showPrimary
+    if (LocalAppThemeConfig.current.liquidGlassEnabled && appearance == PlayerSubtitleAppearance()) {
+        val subtitleShadow = Shadow(
+            color = Color.Black.copy(alpha = 0.85f),
+            offset = Offset(0f, 1.5f),
+            blurRadius = 6f,
+        )
+        val baseStyle = if (useLocalTextStyleForGlass) LocalTextStyle.current else TextStyle.Default
+        val glassStyle = baseStyle.copy(shadow = subtitleShadow)
+        AppText(
+            text = secondaryText.orEmpty(),
+            color = Color.White.copy(alpha = if (showSecondary) 0.88f else 0f),
+            fontSize = (if (secondaryAsPrimary) primaryTextSizeSp else secondaryTextSizeSp).sp,
+            fontWeight = if (secondaryAsPrimary) FontWeight.SemiBold else FontWeight.Normal,
+            maxLines = 2,
+            textAlign = TextAlign.Center,
+            style = glassStyle,
+            modifier = Modifier.then(if (showSecondary) Modifier else Modifier.height(0.dp)),
+        )
+        AppText(
+            text = primaryText.orEmpty(),
+            color = Color.White.copy(alpha = if (showPrimary) 1f else 0f),
+            fontSize = primaryTextSizeSp.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            textAlign = TextAlign.Center,
+            style = glassStyle,
+            modifier = Modifier.then(if (showPrimary) Modifier else Modifier.height(0.dp)),
+        )
+    } else {
+        if (showSecondary) PiliStyledSubtitleText(
+            text = secondaryText.orEmpty(),
+            baseFontSizeSp = if (secondaryAsPrimary) primaryTextSizeSp else secondaryTextSizeSp,
+            appearance = appearance,
+            isFullscreen = isFullscreen,
+            color = Color(appearance.textColor).copy(alpha = 0.88f),
+        )
+        if (showPrimary) PiliStyledSubtitleText(
+            text = primaryText.orEmpty(),
+            baseFontSizeSp = primaryTextSizeSp,
+            appearance = appearance,
+            isFullscreen = isFullscreen,
+        )
     }
 }

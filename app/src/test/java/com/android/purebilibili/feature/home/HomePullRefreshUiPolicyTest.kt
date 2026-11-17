@@ -346,7 +346,6 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 1.15f,
                 isRefreshing = true,
                 isStateAnimating = false,
-                previousOffsetFraction = 0.9f,
                 motionStyle = AppPullRefreshMotionStyle.PLATFORM,
                 indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
             ),
@@ -362,7 +361,6 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 0.5f,
                 isRefreshing = false,
                 isStateAnimating = false,
-                previousOffsetFraction = 0.9f,
                 motionStyle = AppPullRefreshMotionStyle.PLATFORM,
                 indicatorStyle = AppPullRefreshIndicatorStyle.MATERIAL_SCREENSHOT_HANDLE
             ),
@@ -437,7 +435,6 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 0.6f,
                 isRefreshing = false,
                 isStateAnimating = false,
-                previousOffsetFraction = 0.8f,
                 motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
@@ -452,7 +449,6 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 1.2f,
                 isRefreshing = false,
                 isStateAnimating = false,
-                previousOffsetFraction = 0.3f,
                 motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
@@ -467,7 +463,6 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 0f,
                 isRefreshing = false,
                 isStateAnimating = false,
-                previousOffsetFraction = 0.8f,
                 motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
@@ -482,7 +477,6 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 1.2f,
                 isRefreshing = true,
                 isStateAnimating = false,
-                previousOffsetFraction = 0.8f,
                 motionStyle = AppPullRefreshMotionStyle.CUPERTINO
             ),
             0.001f
@@ -534,7 +528,6 @@ class HomePullRefreshUiPolicyTest {
                 distanceFraction = 1.2f,
                 isRefreshing = false,
                 isStateAnimating = false,
-                previousOffsetFraction = 0.8f,
                 motionStyle = AppPullRefreshMotionStyle.PLATFORM
             ),
             0.001f

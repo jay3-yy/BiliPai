@@ -17,6 +17,9 @@ import com.android.purebilibili.core.performance.PerformanceCapture
 import com.android.purebilibili.core.performance.PERFORMANCE_PREVIEW_SETTING_ID
 import com.android.purebilibili.core.performance.PERFORMANCE_PREVIEW_TITLE
 import com.android.purebilibili.core.performance.PerformanceReportPreview
+import com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_SETTING_ID
+import com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_TITLE
+import com.android.purebilibili.core.performance.PERFORMANCE_HISTORY_LIMIT
 import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.components.AppPreference
@@ -29,7 +32,7 @@ import kotlinx.coroutines.withContext
 
 /** 复用偏好组件和自适应弹窗，玻璃、MD3、Miuix 使用相同功能与各自的容器样式。 */
 @Composable
-internal fun PerformanceCaptureSection() {
+internal fun PerformanceCaptureSection(onOpenHistory: () -> Unit) {
     val context = LocalContext.current
     val windowOwner = LocalView.current.rootView
     val status by PerformanceCapture.status.collectAsStateWithLifecycle()
@@ -119,6 +122,15 @@ internal fun PerformanceCaptureSection() {
                         }
                     }
                 },
+            )
+        }
+        AppPreferenceDivider()
+        SettingsItemAnchor(PERFORMANCE_HISTORY_SETTING_ID) {
+            AppPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.PERFORMANCE_HISTORY),
+                title = PERFORMANCE_HISTORY_TITLE,
+                subtitle = if (status.recording) "结束采集后查看历史排行、趋势与对比" else "保留最近 $PERFORMANCE_HISTORY_LIMIT 次采集，按场景查看排行、坐标图与基准对比",
+                onClick = if (busy || status.recording) null else { onOpenHistory },
             )
         }
         AppPreferenceDivider()

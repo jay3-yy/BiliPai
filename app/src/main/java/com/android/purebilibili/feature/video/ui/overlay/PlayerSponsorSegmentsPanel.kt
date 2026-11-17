@@ -5,14 +5,16 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MyLocation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import com.android.purebilibili.core.ui.components.AppText as Text
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppDialogAction
+import com.android.purebilibili.core.ui.resolveAppExpandedContentDialogLayoutPolicy
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,8 +32,6 @@ import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.data.model.response.SponsorCategory
 import com.android.purebilibili.data.model.response.SponsorProgressMarker
 import com.android.purebilibili.feature.plugin.SponsorBlockSegmentBehavior
@@ -74,9 +74,8 @@ internal fun formatSponsorSegmentInfoTime(milliseconds: Long): String {
 }
 
 /**
- * PiliPlus BlockMixin.showSBDetail: centered native dialog, then vote/category dialogs.
- * Action callbacks dispatch into the owner's lifecycle scope and own result feedback; dismissing
- * this UI must not cancel a vote already sent to the community server.
+ * 片段列表、投票与类别选择共用标准对话框。
+ * 操作由调用方生命周期作用域提交；关闭面板不会取消已经发出的投票。
  */
 @Composable
 fun PlayerSponsorSegmentsPanel(
@@ -164,21 +163,22 @@ fun PlayerSponsorSegmentsPanel(
 
 @Composable
 private fun SponsorInfoDialog(onDismiss: () -> Unit, paneTitle: String, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 24.dp), contentAlignment = Alignment.Center) {
-            Surface(
-                modifier = Modifier.widthIn(min = 280.dp, max = 560.dp).fillMaxWidth()
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        contentLayout = remember { resolveAppExpandedContentDialogLayoutPolicy() },
+        title = { AppText(paneTitle) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .verticalScroll(rememberScrollState())
                     .semantics { this.paneTitle = paneTitle },
-                shape = RoundedCornerShape(28.dp), color = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            ) {
-                Column(
-                    Modifier.verticalScroll(rememberScrollState()).padding(vertical = 10.dp),
-                    content = content,
-                )
-            }
-        }
-    }
+                content = content,
+            )
+        },
+        confirmButton = {
+            AppDialogAction(onClick = onDismiss) { AppText("关闭") }
+        },
+    )
 }
 
 @Composable

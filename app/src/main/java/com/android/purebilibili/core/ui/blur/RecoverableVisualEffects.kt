@@ -51,8 +51,11 @@ fun rememberAppScaffoldHazeHandle(userEnabled: Boolean): AdaptiveScaffoldHazeHan
     return remember(state) { AdaptiveScaffoldHazeHandle(state, blurEnabled) }
 }
 
+/** 与玻璃采样共用页面曝光边界；返回手势中仍露出的页面继续保留采样。 */
+@Composable
 fun Modifier.hazeSourceCompat(state: HazeState): Modifier {
     if (!shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT)) return this
+    if (!LocalChromeBackdropRecordingAllowed.current) return this
     return hazeSource(state)
 }
 

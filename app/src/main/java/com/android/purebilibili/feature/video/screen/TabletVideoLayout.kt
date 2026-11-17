@@ -283,7 +283,9 @@ internal fun TabletVideoLayout(
     predictiveBackCancelRecoveryGeneration: Int = 0,
     liveSurfaceCardTransitionEnabled: Boolean = true,
     isPlayerSurfaceReady: Boolean = true,
-    paneControlsEnabled: Boolean = true,
+    primaryContentReady: Boolean = true,
+    commentsContentReady: Boolean = true,
+    relatedContentReady: Boolean = true,
     videoAiSummaryEntryEnabled: Boolean = true,
     videoNoteEnabled: Boolean = true,
     videoNoteDefaultCollapsed: Boolean = true,
@@ -543,6 +545,7 @@ internal fun TabletVideoLayout(
                     VideoDetailSkeletonHandoff(
                         identity = bvid,
                         ready = contentState != null,
+                        entryContentReady = primaryContentReady,
                         loading = contentState == null && uiState is VideoPlaybackUiState.Loading,
                         modifier = Modifier
                             .weight(1f)
@@ -592,6 +595,9 @@ internal fun TabletVideoLayout(
                 VideoDetailSkeletonHandoff(
                     identity = bvid,
                     ready = contentState != null,
+                    entryContentReady = if (useThreePaneLayout || secondaryDefaultTab ==
+                        com.android.purebilibili.core.store.TabletSecondaryDefaultTab.COMMENTS
+                    ) commentsContentReady else relatedContentReady,
                     loading = contentState == null && uiState is VideoPlaybackUiState.Loading,
                     modifier = Modifier.fillMaxSize(),
                     skeleton = {
@@ -671,6 +677,7 @@ internal fun TabletVideoLayout(
                     VideoDetailSkeletonHandoff(
                         identity = bvid,
                         ready = contentState != null,
+                        entryContentReady = relatedContentReady,
                         loading = contentState == null && uiState is VideoPlaybackUiState.Loading,
                         modifier = Modifier.fillMaxSize(),
                         skeleton = {

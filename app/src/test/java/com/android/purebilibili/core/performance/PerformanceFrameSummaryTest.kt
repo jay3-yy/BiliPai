@@ -37,6 +37,20 @@ class PerformanceFrameSummaryTest {
         assertEquals(10_000_000L, report.totalDurationNanos)
         assertEquals(10, report.percentileUpperBoundMs(.95))
         assertEquals(2L, live.frames)
+        assertEquals(0L, report.longFrames100Ms)
+        assertEquals(1L, live.longFrames100Ms)
+    }
+
+    @Test
+    fun `long frame count has an inclusive boundary independent from jank classification and merges`() {
+        val summary = PerformanceFrameSummary().apply {
+            add(99_999_999, true)
+            add(100_000_000, false)
+        }
+        val merged = PerformanceFrameSummary().apply { merge(summary) }
+        assertEquals(2L, merged.frames)
+        assertEquals(1L, merged.jankyFrames)
+        assertEquals(1L, merged.longFrames100Ms)
     }
 
     @Test

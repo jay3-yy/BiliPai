@@ -12,13 +12,15 @@ internal object VideoCardTransitionDiagnostics {
     fun <T> measureWork(stage: String, detail: () -> String = { "" }, block: () -> T): T {
         val logging = Logger.areVerboseRuntimeLogsEnabled()
         val tracing = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && Trace.isEnabled()
-        if (!logging && !tracing) return block()
+        val capture = com.android.purebilibili.core.performance.PerformanceCapture.beginNavigationWork(stage)
+        if (!logging && !tracing && capture == null) return block()
         val startedNs = System.nanoTime()
         if (tracing) Trace.beginSection("video.transition.$stage")
         try {
             return block()
         } finally {
             if (tracing) Trace.endSection()
+            capture?.let(com.android.purebilibili.core.performance.PerformanceCapture::finishNavigationWork)
             if (logging) {
                 val elapsedUs = (System.nanoTime() - startedNs) / 1_000L
                 Logger.d("VideoReturnWork", "monotonic_ns=$startedNs stage=$stage elapsed_us=$elapsedUs " +

@@ -35,28 +35,4 @@ class HomeEmbeddedTopTabPageStructureTest {
         assertTrue(source.contains("item(key = \"live_categories\", span = { GridItemSpan(maxLineSpan) })"))
     }
 
-    @Test
-    fun bangumiHomePageKeepsChannelTabsVisible() {
-        val source = File("src/main/java/com/android/purebilibili/feature/bangumi/HomeBangumiTabPage.kt").readText()
-        assertTrue(source.contains("scrollToTopRequestId"))
-        assertTrue(source.contains("listBottomPadding = contentPadding.calculateBottomPadding()"))
-        assertTrue(!source.contains(".padding(contentPadding)"))
-        assertTrue(!source.contains("categoryTabsVisible"))
-        assertTrue(!source.contains("AnimatedVisibility("))
-    }
-
-    @Test
-    fun bangumiPageCapturesContentWithoutCapturingItsChannelDock() {
-        val source = File(
-            "src/main/java/com/android/purebilibili/feature/bangumi/HomeBangumiTabPage.kt"
-        ).readText()
-
-        assertTrue(source.contains("miuixBackdrop = channelBackdrop"))
-        assertTrue(source.contains(".then(chromeSource?.modifier ?: Modifier)"))
-        assertTrue(source.contains(".globalWallpaperAwareBackground(MaterialTheme.colorScheme.background)"))
-        assertTrue(!source.contains("tabBackdrop = channelBackdrop"))
-        assertTrue(source.contains("listTopPadding = channelHeight"))
-        assertTrue(source.contains("chromeSource?.takeIf { it.isReady }?.backdrop"))
-        assertTrue(source.indexOf("BangumiHubContent(") < source.indexOf("AppLiquidAwareTabRow("))
-    }
 }

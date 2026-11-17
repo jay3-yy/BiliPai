@@ -362,6 +362,8 @@
     <string name="animation_transition_blur_official_supported">控制系统一镜到底动画的背景模糊</string>
     <string name="animation_transition_blur_official_system">当前系统自行管理转场背景模糊，此开关不影响系统效果</string>
     <string name="animation_transition_blur_summary">当前设备不支持系统一镜到底动画，此开关不影响普通页面转场</string>
+    <string name="animation_predictive_back_title">预测性返回手势</string>
+    <string name="animation_predictive_back_summary">统一控制页面、卡片、图片预览、评论和弹窗的跟手返回预览；关闭后仍可正常返回，不影响页面切换动画设置</string>
     <string name="animation_back_title">页面切换动画</string>
     <string name="animation_back_summary">普通页面全局生效，返回反向播放；卡片共享元素、设置容器形变与大屏分栏保留专属过渡</string>
     <string name="animation_settings_container_title">设置容器动画</string>
@@ -827,7 +829,7 @@
     <string name="home_settings_card_ratio_title">卡片封面比例</string>
     <string name="home_settings_card_ratio_current">完整显示，接近投稿源图</string>
     <string name="home_settings_card_ratio_official">更高列表框，左右居中裁切</string>
-    <string name="home_settings_card_ratio_bilipai">默认信息流封面比例</string>
+    <string name="home_settings_card_ratio_bilipai">介于完整封面与高封面之间</string>
     <string name="home_settings_card_ratio_sync">（首页、搜索、相关推荐、历史、收藏和稍后再看等视频卡片同步）</string>
     <string name="home_settings_search_full_card_title">完整显示标题</string>
     <string name="home_settings_search_card_ratio_title">卡片封面比例</string>
@@ -934,9 +936,9 @@
     <string name="appearance_home_duration_outside">封面外</string>
     <string name="appearance_home_duration_overlay">封面内无底色</string>
     <string name="appearance_home_duration_hidden">隐藏</string>
-    <string name="appearance_home_card_ratio_current_label">16:9（当前比例）</string>
+    <string name="appearance_home_card_ratio_current_label">16:9（默认）</string>
     <string name="appearance_home_card_ratio_official_label">4:3（官方比例）</string>
-    <string name="appearance_home_card_ratio_bilipai_label">16:10（BiliPai 默认）</string>
+    <string name="appearance_home_card_ratio_bilipai_label">16:10</string>
     <string name="animation_indicator_wobble_title">液态玻璃指示器甩尾</string>
     <string name="animation_indicator_wobble_summary">点按切换与拖动松手时追加形变回弹，仅作用于液态玻璃指示器；关闭后保留原有位移和按压反馈</string>
     <string name="animation_settings_container_blur_summary">容器形变进入与返回时，实时模糊背后的设置页；需 Android 12 及以上</string>

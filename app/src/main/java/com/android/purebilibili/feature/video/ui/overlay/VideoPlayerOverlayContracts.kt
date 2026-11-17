@@ -174,6 +174,8 @@ data class VideoPlayerOverlayState(
     val engagementCountsKnown: Boolean = false,
     val likeCount: Long = 0L,
     val favoriteCount: Long = 0L,
+    val totalCoinCount: Long = 0L,
+    val shareCount: Long = 0L,
     val coinCount: Int = 0,
     val pages: List<com.android.purebilibili.data.model.response.Page> = emptyList(),
     val currentPageIndex: Int = 0,

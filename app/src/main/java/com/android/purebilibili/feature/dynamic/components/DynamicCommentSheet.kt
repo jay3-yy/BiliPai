@@ -1,6 +1,7 @@
 // 文件路径: feature/dynamic/components/DynamicCommentSheet.kt
 package com.android.purebilibili.feature.dynamic.components
 
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
@@ -16,12 +17,9 @@ import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.skeleton.CommentListItemSkeleton
 
 import android.content.Context
-import android.os.Build
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
-import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import com.android.purebilibili.feature.video.ui.components.resolveCommentThreadCoveredBlurProgress
 import com.android.purebilibili.feature.video.ui.components.resolveCommentThreadPredictiveBackOffsetY
 import com.android.purebilibili.feature.video.ui.components.rememberCommentThreadDrag
@@ -329,7 +327,8 @@ fun DynamicCommentSheet(
             val threadSheetMotion = com.android.purebilibili.core.ui.rememberAppBottomSheetMotion()
             var threadBackCompleted by remember { mutableStateOf(false) }
             val rawThreadBackProgress = resolveVideoCommentPredictiveBackProgress(
-                inProgress = commentBackState.transitionState is NavigationEventTransitionState.InProgress &&
+                inProgress = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current &&
+                    commentBackState.transitionState is NavigationEventTransitionState.InProgress &&
                     hostContent == DynamicCommentSheetHostContent.THREAD_DETAIL,
                 progress = (commentBackState.transitionState as? NavigationEventTransitionState.InProgress)
                     ?.latestEvent
@@ -386,31 +385,13 @@ fun DynamicCommentSheet(
                 )
                 Column(modifier = Modifier.fillMaxSize()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                val coveredBlurProgress = if (
-                    hostContent == DynamicCommentSheetHostContent.THREAD_DETAIL
-                ) {
-                    resolveCommentThreadCoveredBlurProgress(maxOf(threadBackProgress, threadDrag.revealProgress))
-                } else {
-                    0f
-                }
-                val coveredBlurEffectCache = remember { BlurRenderEffectCache() }
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            renderEffect = null
-                            if (coveredBlurProgress > 0f &&
-                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                            ) {
-                                val blurFrame = resolvePredictiveBackBlurFrame(
-                                    progress = coveredBlurProgress,
-                                )
-                                renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                    coveredBlurEffectCache.resolve(blurFrame.blurRadiusPx)
-                                } else {
-                                    null
-                                }
-                            }
+                        .commentThreadNavigationBlur {
+                            if (hostContent == DynamicCommentSheetHostContent.THREAD_DETAIL) {
+                                resolveCommentThreadCoveredBlurProgress(maxOf(threadBackProgress, threadDrag.revealProgress))
+                            } else 0f
                         },
                 ) {
                 // 标题、数量和排序保持在同一视觉层级，关闭按钮保留 48dp 触控区。

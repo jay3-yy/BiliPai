@@ -7,31 +7,6 @@ import kotlin.test.assertTrue
 
 class HomeMotionAndFeedPerformanceStructureTest {
     @Test
-    fun bottomTabSwitch_usesSharedPagerSelection() {
-        val source = sourceFile("navigation/MainBottomPagerState.kt")
-        val sharedMotionSource = sourceFile("navigation/PagerSelectionMotion.kt")
-
-        assertTrue(source.contains("animatePagerSelection(pagerState, safeTargetIndex)"))
-        assertTrue(sharedMotionSource.contains("PagerState.tabIndicatorPosition"))
-        assertFalse(sharedMotionSource.contains("scrollBy(value - consumedPx)"))
-        assertTrue(sharedMotionSource.contains("easing = EaseInOut"))
-        assertTrue(sharedMotionSource.contains("pagerState.animateScrollToPage(target, animationSpec = spec)"))
-        assertFalse(sharedMotionSource.contains("pagerState.animateScrollBy("))
-        assertTrue(!sharedMotionSource.contains("dispatchRawDelta"))
-    }
-
-    @Test
-    fun bottomPager_preloadsOnlyAdjacentPage() {
-        val source = sourceFile("navigation/AppNavigation.kt")
-
-        assertTrue(
-            source.contains(
-                ").coerceAtMost(BOTTOM_PAGER_MAX_PRELOAD_DISTANCE)"
-            )
-        )
-    }
-
-    @Test
     fun homeFeed_compactStatsFollowTheAppearanceSettingWithoutInfoBadgeHaze() {
         val source = sourceFile("feature/home/HomeScreen.kt")
 

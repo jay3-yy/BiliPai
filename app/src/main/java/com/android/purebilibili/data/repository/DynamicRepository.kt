@@ -229,7 +229,9 @@ object DynamicRepository {
                 hasMore = data.has_more
                 receivedItemCount += data.items.size
                 // 折叠卡片仍保留在时间线中，供展开操作恢复对应内容。
-                items += if (blockGoods) data.items.filterNot(::isGoodsDynamic) else data.items
+                items += data.items.filterNot {
+                    blockGoods && isGoodsDynamic(it)
+                }
                 pagesFetched += 1
                 val fetchNext = if (useBaseline) {
                     shouldContinueDynamicIncrementalFetch(receivedItemCount, updateNum, hasMore, previousOffset, requestOffset)
@@ -489,6 +491,7 @@ object DynamicRepository {
             }
             Result.success(data.update_num.coerceAtLeast(0))
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             e.printStackTrace()
             Result.failure(e)
         }

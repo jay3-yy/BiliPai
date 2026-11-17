@@ -123,7 +123,6 @@ internal fun resolveStablePullContentOffsetFraction(
     distanceFraction: Float,
     isRefreshing: Boolean,
     isStateAnimating: Boolean,
-    previousOffsetFraction: Float,
     motionStyle: AppPullRefreshMotionStyle = AppPullRefreshMotionStyle.CUPERTINO,
     indicatorStyle: AppPullRefreshIndicatorStyle = AppPullRefreshIndicatorStyle.CUPERTINO
 ): Float {

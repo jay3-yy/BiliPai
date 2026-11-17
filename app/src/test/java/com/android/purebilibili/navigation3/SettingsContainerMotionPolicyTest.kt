@@ -3,6 +3,16 @@ package com.android.purebilibili.navigation3
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import top.yukonga.miuix.kmp.nav.runtime.NavChange
+import top.yukonga.miuix.kmp.nav.transition.NavGesture
+import top.yukonga.miuix.kmp.nav.transition.NavRole
+import top.yukonga.miuix.kmp.nav.transition.NavSettle
+import top.yukonga.miuix.kmp.nav.transition.NavSettlePhase
+import top.yukonga.miuix.kmp.nav.transition.NavSwipeEdge
+import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,6 +21,45 @@ import kotlin.test.assertTrue
 class SettingsContainerMotionPolicyTest {
     private val source = Rect(16f, 220f, 384f, 300f)
     private val page = Rect(0f, 0f, 400f, 900f)
+
+    @Test
+    fun releasingOrRegrabbingContainerPreservesBoundsCornersAndContentAtTheSameDepth() {
+        for (size in listOf(IntSize(400, 900), IntSize(1000, 800), IntSize(280, 700))) {
+            val destination = Rect(0f, 0f, size.width.toFloat(), size.height.toFloat())
+            val origin = Rect(16f, 220f, size.width - 16f, 300f)
+            for (depth in listOf(-0.8f, -0.5f, -0.2f)) {
+                val heldScope = containerScope(size, depth, null)
+                val held = resolveSettingsContainerFrame(origin, destination, heldScope,
+                    hasOpened = true, videoCardMotionEnabled = false)
+                for (phase in listOf(NavSettlePhase.Cancel, NavSettlePhase.Commit)) {
+                    val released = resolveSettingsContainerFrame(origin, destination, containerScope(size, depth, phase),
+                        hasOpened = true, videoCardMotionEnabled = false)
+                    assertEquals(held, released, "phase=$phase size=$size depth=$depth")
+                }
+                if (depth == -0.5f) assertEquals(0.5f, held.cornerFraction)
+            }
+        }
+    }
+
+    private fun containerScope(size: IntSize, depth: Float, phase: NavSettlePhase?): NavTransitionScope =
+        object : NavTransitionScope {
+            override val relativeDepth = depth
+            override val role = if (phase == NavSettlePhase.Commit) NavRole.Outgoing else NavRole.Incoming
+            // 取消不改变栈，保留最近一次 Push；手势元数据在松手收敛期间仍存在。
+            override val change = if (phase == NavSettlePhase.Commit) NavChange.Pop else NavChange.Push
+            override val isRemoving = phase == NavSettlePhase.Commit
+            override val gesture = NavGesture(-depth, NavSwipeEdge.Left, size.height / 2f)
+            override val settle: NavSettle? = phase?.let {
+                object : NavSettle {
+                    override val phase = it
+                    override val releaseVelocity = 0f
+                    override val elapsedMillis = 0f
+                }
+            }
+            override val layoutSize = size
+            override val layoutDirection = LayoutDirection.Ltr
+            override val density = Density(1f)
+        }
 
     @Test
     fun mediaAndUpCardsReturnOnlyToTheirActualNavigationOwner() {
