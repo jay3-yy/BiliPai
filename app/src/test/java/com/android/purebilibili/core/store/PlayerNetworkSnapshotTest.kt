@@ -12,7 +12,7 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import kotlin.test.Test
+import org.junit.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.runner.RunWith
