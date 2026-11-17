@@ -2784,16 +2784,39 @@ fun RichCommentText(
     }
 }
 
+// 行内占位按标签自身字号与固定内边距测量，避免正文缩放后裁切标签。
+@Composable
+private fun measuredInlineBadgePlaceholder(
+    text: String,
+    horizontalPadding: Dp,
+    bold: Boolean = true,
+): Placeholder {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val labelStyle = MaterialTheme.typography.labelSmall
+    val style = labelStyle.copy(
+        fontWeight = if (bold) FontWeight.Bold else labelStyle.fontWeight,
+        lineHeight = labelStyle.fontSize,
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+            alignment = androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center,
+            trim = androidx.compose.ui.text.style.LineHeightStyle.Trim.Both,
+        ),
+    )
+    val measured = rememberTextMeasurer().measure(text, style, softWrap = false, maxLines = 1)
+    return with(density) {
+        Placeholder(
+            width = (measured.size.width + horizontalPadding.roundToPx() * 2).toSp(),
+            height = (measured.size.height + 2.dp.roundToPx() * 2).toSp(),
+            placeholderVerticalAlign = PlaceholderVerticalAlign.Center,
+        )
+    }
+}
+
 @Composable
 private fun rememberInlineTopBadgeContent(): InlineTextContent {
-    return remember {
-        InlineTextContent(
-            Placeholder(
-                width = 2.5.em,
-                height = 1.15.em,
-                placeholderVerticalAlign = PlaceholderVerticalAlign.Center
-            )
-        ) {
+    val placeholder = measuredInlineBadgePlaceholder("TOP", 3.dp)
+    return remember(placeholder) {
+        InlineTextContent(placeholder) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -2806,14 +2829,9 @@ private fun rememberInlineTopBadgeContent(): InlineTextContent {
 
 @Composable
 private fun rememberInlineUpBadgeContent(): InlineTextContent {
-    return remember {
-        InlineTextContent(
-            Placeholder(
-                width = 1.7.em,
-                height = 1.15.em,
-                placeholderVerticalAlign = PlaceholderVerticalAlign.Center
-            )
-        ) {
+    val placeholder = measuredInlineBadgePlaceholder("UP", 3.dp)
+    return remember(placeholder) {
+        InlineTextContent(placeholder) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -3347,10 +3365,6 @@ fun UpTag() {
 @Composable
 fun TopTag(modifier: Modifier = Modifier) {
     val labelStyle = MaterialTheme.typography.labelSmall
-    // TOP 没有下伸部，行框居中后仍会显得偏下；按字号补偿视觉中心。
-    val opticalOffset = with(androidx.compose.ui.platform.LocalDensity.current) {
-        (labelStyle.fontSize * -0.08f).toDp()
-    }
     Box(
         modifier = modifier
             .clip(AppShapes.container(ContainerLevel.Tag))
@@ -3364,7 +3378,6 @@ fun TopTag(modifier: Modifier = Modifier) {
     ) {
         AppText(
             text = "TOP",
-            modifier = Modifier.offset(y = opticalOffset),
             style = labelStyle.copy(
                 lineHeight = labelStyle.fontSize,
                 platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
@@ -3417,14 +3430,9 @@ fun ChargedReplyTag(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun rememberInlineChargedBadgeContent(): InlineTextContent {
-    return remember {
-        InlineTextContent(
-            Placeholder(
-                width = 3.2.em,
-                height = 1.15.em,
-                placeholderVerticalAlign = PlaceholderVerticalAlign.Center
-            )
-        ) {
+    val placeholder = measuredInlineBadgePlaceholder("⚡充电评论", 4.dp, bold = false)
+    return remember(placeholder) {
+        InlineTextContent(placeholder) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center

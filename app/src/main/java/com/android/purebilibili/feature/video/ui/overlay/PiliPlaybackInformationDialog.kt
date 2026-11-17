@@ -4,22 +4,19 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.material3.MaterialTheme
+import com.android.purebilibili.core.ui.AppAlertDialog
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppDialogAction
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.resolveAppExpandedContentDialogLayoutPolicy
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -27,20 +24,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.media3.common.C
 import androidx.media3.common.Format
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
-import com.android.purebilibili.feature.video.ui.components.PlayerNativeMenuTheme
 
 /** Reads event-driven player state only; opening this dialog never probes platform decoders. */
 @Composable
@@ -77,69 +67,38 @@ internal fun PiliPlaybackInformationDialog(
         playbackInformationRows(player, effectiveDebugInfo, videoUrl, audioUrl)
     }
 
-    PlayerNativeMenuTheme {
-        Dialog(
-            onDismissRequest = onDismiss,
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            BoxWithConstraints(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Surface(
-                    modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().heightIn(max = maxHeight),
-                    shape = RoundedCornerShape(24.dp),
-                    color = Color(0xFF242424),
-                    contentColor = Color.White,
-                    tonalElevation = 0.dp,
-                ) {
-                    Column {
-                        Text(
-                            text = "播放信息",
-                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 16.dp),
-                            style = TextStyle(color = Color.White, fontSize = 22.sp, lineHeight = 28.sp),
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        contentLayout = remember { resolveAppExpandedContentDialogLayoutPolicy() },
+        title = { AppText("播放信息") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                rows.forEach { row ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText(row.label, row.value))
+                                Toast.makeText(context, "已复制 ${row.label}", Toast.LENGTH_SHORT).show()
+                            }
+                            .padding(vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        AppText(row.label, style = MaterialTheme.typography.bodyMedium)
+                        AppText(
+                            row.value,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.secondaryText(),
                         )
-                        Column(
-                            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
-                        ) {
-                            rows.forEach { row ->
-                                Column(
-                                    modifier = Modifier.fillMaxWidth()
-                                        .clickable {
-                                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                            clipboard.setPrimaryClip(ClipData.newPlainText(row.label, row.value))
-                                            Toast.makeText(context, "已复制 ${row.label}", Toast.LENGTH_SHORT).show()
-                                        }
-                                        .padding(horizontal = 24.dp, vertical = 10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Text(
-                                        text = row.label,
-                                        style = TextStyle(color = Color.White, fontSize = 14.sp, lineHeight = 20.sp),
-                                    )
-                                    Text(
-                                        text = row.value,
-                                        style = TextStyle(color = Color(0xFFD0D0D0), fontSize = 13.sp, lineHeight = 19.sp),
-                                    )
-                                }
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.End,
-                        ) {
-                            TextButton(
-                                onClick = onDismiss,
-                                colors = ButtonDefaults.textButtonColors(contentColor = Color.White),
-                            ) {
-                                Text("确定", style = TextStyle(fontSize = 14.sp))
-                            }
-                        }
                     }
                 }
             }
-        }
-    }
+        },
+        confirmButton = {
+            AppDialogAction(onClick = onDismiss) { AppText("确定") }
+        },
+    )
 }
 
 private const val UNKNOWN_PLAYBACK_VALUE = "未知"

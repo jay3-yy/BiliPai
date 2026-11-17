@@ -53,10 +53,8 @@ import top.yukonga.miuix.kmp.nav.gesture.navSwipeDismissImpl
 import top.yukonga.miuix.kmp.nav.runtime.NavChange
 import top.yukonga.miuix.kmp.nav.runtime.NavPresentation
 import top.yukonga.miuix.kmp.nav.runtime.commitVelocityFloor
-import top.yukonga.miuix.kmp.nav.runtime.isVisibleAt
 import top.yukonga.miuix.kmp.nav.runtime.navBackCompletionDecision
 import top.yukonga.miuix.kmp.nav.runtime.navReconcile
-import top.yukonga.miuix.kmp.nav.runtime.relativeDepth
 import top.yukonga.miuix.kmp.nav.runtime.rememberNavPresentation
 import top.yukonga.miuix.kmp.nav.runtime.settleCancel
 import top.yukonga.miuix.kmp.nav.runtime.settleProgrammatic
@@ -713,43 +711,9 @@ private fun NavDisplayLayout(
         // per-route override — the renderer keeps a layer alive while ANY transition in play would, so
         // a Modal override (opaqueDepth 2f) keeps the layer below it visible even under a shallower
         // global transition. Over-keeping a hidden layer is cheap; under-keeping would blank it out.
-        // The derived calculation re-runs each animation frame (it must, so the derived state can
-        // compare results) but notifies readers only when the membership actually changes — i.e.
-        // when a window boundary is crossed; per-frame floats are otherwise read lazily in
-        // graphicsLayer. Hand-rolled max/filter keeps the per-frame re-run free of closures,
-        // iterators, and boxed floats; the only allocation left is the result list, emitted in
-        // stack-index order (bottom first) so composition order matches draw order.
+        // 逐帧进度只更新各 entry 的可见性布尔值，不在成员不变时重建列表。
         val visibleEntries by remember(presentation, transition, indexByContentKey) {
-            derivedStateOf {
-                val top = presentation.animatedTop.value
-                val presented = presentation.presented
-                var windowDepth = transition.opaqueDepth
-                for (i in presented.indices) {
-                    val depth = (presented[i].transitionOrNull() ?: transition).opaqueDepth
-                    if (depth > windowDepth) windowDepth = depth
-                }
-                var result: MutableList<NavEntry<*>>? = null
-                for (i in presented.indices) {
-                    val entry = presented[i]
-                    val index = indexByContentKey[entry.contentKey] ?: continue
-                    val settlingSpring = entry.presentation.isRemoving &&
-                        (entry.transitionOrNull() ?: transition).retainsSpringOvershoot &&
-                        presentation.animatedTop.isRunning
-                    val preparingEnter = !entry.presentation.isRemoving &&
-                        relativeDepth(top, index) == -1f &&
-                        (entry.transitionOrNull() ?: transition).preparesEnterFrame
-                    if (isVisibleAt(relativeDepth(top, index), windowDepth) || settlingSpring || preparingEnter) {
-                        val list = result ?: ArrayList<NavEntry<*>>(presented.size).also { result = it }
-                        // Insertion-sorted by stack index: composition order is draw order, and a
-                        // pure back-stack reorder leaves `presented` in its old order. Stable, so a
-                        // replace transient (equal index) keeps the newer instance on top.
-                        var at = list.size
-                        while (at > 0 && (indexByContentKey[list[at - 1].contentKey] ?: -1) > index) at--
-                        list.add(at, entry)
-                    }
-                }
-                result ?: emptyList()
-            }
+            navVisibleEntriesState(presentation, transition, indexByContentKey)
         }
 
         // Highest visible layer; the fullscreen dim scrim renders just beneath it.

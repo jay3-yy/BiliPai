@@ -12,6 +12,19 @@ import kotlin.test.assertTrue
 class AppNavigationSettingsMappingPolicyTest {
 
     @Test
+    fun disablingPredictiveBack_preservesPageTransitionChoice() {
+        val prefs = mutablePreferencesOf(
+            booleanPreferencesKey("predictive_back_enabled") to false,
+            stringPreferencesKey("predictive_back_animation_style") to "ios",
+        )
+
+        val result = mapAppNavigationSettingsFromPreferences(prefs)
+
+        assertFalse(result.predictiveBackEnabled)
+        assertEquals("ios", result.predictiveBackAnimationStyle)
+    }
+
+    @Test
     fun containerRealtimeBlurDefaultsOffAndPreservesIndependentChoice() {
         val key = booleanPreferencesKey("settings_container_realtime_blur_enabled")
         assertFalse(AppNavigationSettings().settingsContainerRealtimeBlurEnabled)

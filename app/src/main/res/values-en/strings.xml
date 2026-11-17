@@ -359,6 +359,8 @@
     <string name="animation_transition_blur_official_supported">Control background blur for the system one-take animation</string>
     <string name="animation_transition_blur_official_system">The system manages transition blur; this switch does not affect the system effect</string>
     <string name="animation_transition_blur_summary">System one-take animation is unsupported; this switch does not affect regular page transitions</string>
+    <string name="animation_predictive_back_title">Predictive back gestures</string>
+    <string name="animation_predictive_back_summary">Control back previews across pages, cards, images, comments and dialogs. Turning this off keeps normal back navigation and your page transition choice.</string>
     <string name="animation_back_title">Page transition animation</string>
     <string name="animation_back_summary">Applies globally to ordinary pages, reversed on return. Shared cards, settings container morphs and large-screen panes keep their own transitions.</string>
     <string name="animation_settings_container_title">Settings container animation</string>

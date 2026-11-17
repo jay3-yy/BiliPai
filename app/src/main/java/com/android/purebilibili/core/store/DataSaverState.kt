@@ -10,15 +10,20 @@ import android.os.Looper
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 
-/** 进程级省流量快照：系统查询只用于初始化，后续由设置与默认网络回调更新。 */
+/** 进程级省流量与默认网络快照：系统查询只用于初始化，后续由设置与网络回调更新。 */
 internal class DataSaverState private constructor(context: Context) {
     private val preferences = context.getSharedPreferences("data_saver", Context.MODE_PRIVATE)
     private val connectivity = requireNotNull(context.getSystemService(ConnectivityManager::class.java))
     private val handler = Handler(Looper.getMainLooper())
     private var mode = SettingsManager.getDataSaverModeSync(context)
     private var defaultNetwork = connectivity.activeNetwork
-    private var cellular = connectivity.getNetworkCapabilities(defaultNetwork)
-        ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+    @Volatile private var capabilities = connectivity.getNetworkCapabilities(defaultNetwork)
+    private val cellular: Boolean
+        get() = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+
+    /** 播放器创建只读取当前快照，不在入场组合中重复查询系统服务。 */
+    val isOnWifi: Boolean
+        get() = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     private val activeState = mutableStateOf(resolveActive())
     val active: State<Boolean> = activeState
 
@@ -40,7 +45,7 @@ internal class DataSaverState private constructor(context: Context) {
 
         override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
             if (network == defaultNetwork) {
-                cellular = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                this@DataSaverState.capabilities = capabilities
                 publish()
             }
         }
@@ -48,7 +53,7 @@ internal class DataSaverState private constructor(context: Context) {
         override fun onLost(network: Network) {
             if (network == defaultNetwork) {
                 defaultNetwork = null
-                cellular = false
+                capabilities = null
                 publish()
             }
         }

@@ -331,8 +331,6 @@ class AppNavigationNavigation3BridgeStructureTest {
         assertFalse(source.contains("video" + "PredictiveReturnToCardEnabled"))
         assertFalse(source.contains("video" + "PredictiveReturnSourceBounds"))
         assertFalse(source.contains("shouldEnableVideo" + "PredictiveReturnToCard"))
-        assertTrue(source.contains("val predictiveBackEnabled = appNavigationSettings.predictiveBackEnabled"))
-        assertTrue(source.contains("LocalPredictiveBackGestureEnabled provides predictiveBackEnabled"))
         assertTrue(source.contains("isQuickReturnFromDetail = navigation3ReturnSession.isQuickReturnFromDetail"))
         assertTrue(source.contains("BiliPaiPredictiveBackAnimationStyle.fromStorageValue("))
         assertTrue(source.contains("appNavigationSettings.predictiveBackAnimationStyle"))

@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastRoundToInt
+import top.yukonga.miuix.kmp.nav.runtime.boundedNavGestureProgress
 import top.yukonga.miuix.kmp.nav.transition.NavMotion
 import top.yukonga.miuix.kmp.nav.transition.NavSettlePhase
 import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
@@ -28,20 +29,18 @@ internal fun resolveMiuixPredictiveBackVisualProgress(
 ): Float {
     val raw = rawProgress.coerceIn(0f, 1f)
     val previewLimit = maxPreviewFraction.coerceIn(0f, 1f)
-    val release = gestureProgress?.coerceIn(0f, 1f) ?: return raw
+    val release = gestureProgress?.let(::boundedNavGestureProgress) ?: return raw
     return when (settlePhase) {
         null,
         NavSettlePhase.Cancel,
         -> raw * previewLimit
 
         NavSettlePhase.Commit -> {
-            val releasePreview = release * previewLimit
-            val postRelease = if (release >= 0.999f) {
-                1f
-            } else {
-                ((raw - release) / (1f - release)).coerceIn(0f, 1f)
-            }
-            releasePreview + (1f - releasePreview) * postRelease
+            val postRelease = ((raw - release) / (1f - release)).coerceIn(0f, 1f)
+            // 先延续跟手的位移比例，再平滑补足预览上限留下的距离。
+            // 补足项首尾斜率均为零，避免松手瞬间把导航释放速度额外放大。
+            val completion = postRelease * postRelease * (3f - 2f * postRelease)
+            raw * previewLimit + (1f - previewLimit) * completion
         }
 
         NavSettlePhase.Programmatic -> raw
@@ -53,6 +52,7 @@ internal fun miuixPredictiveBackProgressTransition(maxPreviewFraction: Float): N
         commit = NavSettleSpec.Tween(
             durationMillis = MIUIX_PREDICTIVE_BACK_SETTLE_DURATION_MILLIS,
             easing = MiuixPredictiveBackEasing,
+            matchReleaseVelocity = true,
         ),
         cancel = NavSettleSpec.Spring(stiffness = 1500f),
         programmatic = NavSettleSpec.Tween(

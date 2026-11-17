@@ -79,10 +79,10 @@ open class VideoActivity : ComponentActivity() {
         officialReturnToSource = false
     }
 
-    internal fun updateOfficialRootPredictiveBack(atRoot: Boolean) {
+    internal fun updateOfficialRootPredictiveBack(atRoot: Boolean, predictiveEnabled: Boolean) {
         officialCardReturnAtRoot = atRoot
         // 仅标准系统转场尝试跨 Activity 预测返回；旧圆角协议沿用自身返回。
-        val enabled = atRoot && Build.VERSION.SDK_INT >= 35 &&
+        val enabled = atRoot && predictiveEnabled && Build.VERSION.SDK_INT >= 35 &&
             intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION)?.startsWith("sdk:") == true
         if (officialRootPredictiveBack == enabled) return
         officialRootPredictiveBack = enabled

@@ -190,6 +190,7 @@ fun SettingsScreen(
     var showImageSavePathDialog by remember { mutableStateOf(false) }
     // [新增] 打赏对话框
     var showDonateDialog by remember { mutableStateOf(false) }
+    val donationOrigin = remember { DonationDialogOrigin() }
     var showReleaseDisclaimerDialog by remember { mutableStateOf(false) }
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateStatusText by remember { mutableStateOf(context.getString(R.string.settings_update_tap_to_check)) }
@@ -690,9 +691,7 @@ fun SettingsScreen(
         )
     }
 
-    if (showDonateDialog) {
-        DonateDialog(onDismiss = { showDonateDialog = false })
-    }
+    DonateDialog(visible = showDonateDialog, origin = donationOrigin, onDismiss = { showDonateDialog = false })
 
     if (showReleaseDisclaimerDialog) {
         ReleaseChannelDisclaimerDialog(
@@ -770,7 +769,10 @@ fun SettingsScreen(
     }
 
     // 页面跳转逻辑
-    CompositionLocalProvider(LocalSettingsLiquidGlassEnabled provides com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled) {
+    CompositionLocalProvider(
+        LocalSettingsLiquidGlassEnabled provides com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+        LocalDonationDialogOrigin provides donationOrigin,
+    ) {
         if (showBlockedList) {
             BlockedListScreen(onBack = { showBlockedList = false })
         } else if (showCommentFraudHistory) {

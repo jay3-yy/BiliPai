@@ -659,6 +659,7 @@ fun AppNavigation(
     }
     val videoCardTransitionClock = rememberVideoCardTransitionClock()
     val systemReduceMotion = rememberSystemReduceMotion()
+    val predictiveBackGestureEnabled = LocalPredictiveBackGestureEnabled.current
     val systemCardTransitionEnabled = appearance.cardTransitionEnabled && !systemReduceMotion
     val sharedVideoCardTransitionEnabled = systemCardTransitionEnabled
     androidx.compose.runtime.SideEffect {
@@ -711,7 +712,10 @@ fun AppNavigation(
         }
         androidx.compose.runtime.SideEffect {
             (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)?.let { activity ->
-                activity.updateOfficialRootPredictiveBack(initialVideoRoute != null && navigation3BackStack.size == 1)
+                activity.updateOfficialRootPredictiveBack(
+                    atRoot = initialVideoRoute != null && navigation3BackStack.size == 1,
+                    predictiveEnabled = predictiveBackGestureEnabled,
+                )
             }
         }
         fun replaceNavigation3BackStack(keys: List<BiliPaiNavKey>) {
@@ -1158,6 +1162,21 @@ fun AppNavigation(
             return captureVideoCardTransitionSession(bvid, source, coverUrl, useRecordedCardSource)
         }
         var lastVideoDetailOpenId by remember { mutableLongStateOf(0L) }
+        val preparedVideoPlayers = remember {
+            mutableMapOf<Long, com.android.purebilibili.core.lifecycle.PendingResource<androidx.media3.exoplayer.ExoPlayer>>()
+        }
+        DisposableEffect(preparedVideoPlayers) {
+            onDispose {
+                preparedVideoPlayers.values.forEach { it.dispose() }
+                preparedVideoPlayers.clear()
+            }
+        }
+        val retainedVideoOpenIds = navigation3BackStack.filterIsInstance<BiliPaiNavKey.VideoDetail>()
+            .map { it.openId }.toSet()
+        androidx.compose.runtime.SideEffect {
+            val removed = preparedVideoPlayers.keys.filter { it !in retainedVideoOpenIds }
+            removed.forEach { preparedVideoPlayers.remove(it)?.dispose() }
+        }
         var lastLiveAreaDetailOpenId by remember { mutableLongStateOf(0L) }
         var lastSearchOpenId by remember { mutableLongStateOf(0L) }
         // 共用普通视频入口选择分栏，列表来源不再限定为首页。
@@ -1477,9 +1496,6 @@ fun AppNavigation(
             useRecordedCardSource: Boolean = true,
             pendingTransitionSession: VideoCardTransitionSession? = null,
         ) {
-            val navigationRequest = videoNavigationRequests.begin(
-                navigation3BackStack, navigation3ReturnSession.sourceGeneration,
-            )
             val parsedKey = legacyRouteToBiliPaiNavKey(route).let { key ->
                 if (key is BiliPaiNavKey.VideoDetail &&
                     com.android.purebilibili.data.repository.VideoRepository.getCachedVerticalFlag(key.bvid) == true
@@ -1512,6 +1528,9 @@ fun AppNavigation(
             // Resolve redirects first. Reserving the debounce slot before delegating to
             // Story makes that same click reject itself.
             if (!canNavigate(false)) return
+            val navigationRequest = videoNavigationRequests.begin(
+                navigation3BackStack, navigation3ReturnSession.sourceGeneration,
+            )
             val key = when (parsedKey) {
                 is BiliPaiNavKey.VideoDetail -> {
                     val morphDirectPortrait = resolveDirectPortraitDetailMorphEntry(
@@ -1532,7 +1551,7 @@ fun AppNavigation(
                 }
                 else -> parsedKey
             }
-            fun commitInAppVideoNavigation() {
+            fun commitInAppVideoNavigation(targetKey: BiliPaiNavKey = key) {
                 val videoBvid = videoKey?.bvid.orEmpty()
                 navigation3ReturnSession = navigation3ReturnSession
                     .recordTransitionSession(
@@ -1548,7 +1567,43 @@ fun AppNavigation(
                     miniPlayerManager?.haltForeignPlaybackForIncomingVideo(videoBvid)
                 }
                 miniPlayerManager?.exitMiniMode(animate = false)
-                pushNavigation3Key(key)
+                pushNavigation3Key(targetKey)
+            }
+            suspend fun prepareAndCommitInAppVideoNavigation() {
+                if (key !is BiliPaiNavKey.VideoDetail) {
+                    commitInAppVideoNavigation()
+                    return
+                }
+                val manager = MiniPlayerManager.getInstance(context)
+                if (com.android.purebilibili.feature.video.state.shouldReuseMiniPlayerAtEntry(
+                        isMiniPlayerActive = manager.isActive,
+                        miniPlayerBvid = manager.currentBvid,
+                        miniPlayerCid = manager.currentCid,
+                        hasMiniPlayerInstance = manager.player != null,
+                        requestBvid = key.bvid,
+                        requestCid = key.cid,
+                    )) {
+                    commitInAppVideoNavigation()
+                    return
+                }
+                val pending = com.android.purebilibili.feature.video.state.prepareVideoDetailPlayer(context)
+                var published = false
+                var openId = 0L
+                try {
+                    if (!videoNavigationRequests.isCurrent(
+                            navigationRequest, navigation3BackStack, navigation3ReturnSession.sourceGeneration,
+                        ) || !hostActivity.window.decorView.hasWindowFocus()) return
+                    openId = maxOf(SystemClock.uptimeMillis(), lastVideoDetailOpenId + 1L)
+                    lastVideoDetailOpenId = openId
+                    preparedVideoPlayers[openId] = pending
+                    commitInAppVideoNavigation(key.copy(openId = openId))
+                    published = true
+                } finally {
+                    if (!published) {
+                        preparedVideoPlayers.remove(openId)
+                        pending.dispose()
+                    }
+                }
             }
             if (key is BiliPaiNavKey.VideoDetail &&
                 com.android.purebilibili.feature.video.SystemVideoCardTransition.canAttempt(
@@ -1572,11 +1627,11 @@ fun AppNavigation(
                     if (opened) {
                         officialVideoChildActive = true
                     } else if (isCurrent() && hostActivity.window.decorView.hasWindowFocus()) {
-                        commitInAppVideoNavigation()
+                        prepareAndCommitInAppVideoNavigation()
                     }
                 }
             } else {
-                commitInAppVideoNavigation()
+                coroutineScope.launch { prepareAndCommitInAppVideoNavigation() }
             }
         }
         fun navigateToVideoInNavigation3Impl(
@@ -1596,9 +1651,6 @@ fun AppNavigation(
             pendingTransitionSession: VideoCardTransitionSession?,
             title: String,
         ) {
-            val navigationRequest = videoNavigationRequests.begin(
-                navigation3BackStack, navigation3ReturnSession.sourceGeneration,
-            )
             // 统一兜底：调用方没有显式给出竖屏结论时，用列表预取缓存补全。
             // 这样所有入口（首页/搜索/历史/UP/动态/赛事/收藏…）都不必逐个传参。
             val navigationVertical = initialVertical ||
@@ -1639,6 +1691,9 @@ fun AppNavigation(
             }
             val isNetworkAvailable = NetworkUtils.isNetworkAvailable(context)
             if (!isNetworkAvailable && !com.android.purebilibili.feature.download.DownloadManager.isInitialized.value) {
+                val navigationRequest = videoNavigationRequests.begin(
+                    navigation3BackStack, navigation3ReturnSession.sourceGeneration,
+                )
                 coroutineScope.launch {
                     com.android.purebilibili.feature.download.DownloadManager.awaitInitialization()
                     if (!videoNavigationRequests.isCurrent(
@@ -1792,7 +1847,6 @@ fun AppNavigation(
                 activeMainHostRoute = activeMainHostRoute,
             )
         }
-        val predictiveBackEnabled = appNavigationSettings.predictiveBackEnabled
         // 返回封面预热：每次进入详情(栈顶 key 变化)重置一次，预测手势首帧 / 返回提交
         // 合并为一轮有界预热；后续返回会取消上一轮尚未完成的工作。
         val homeCoverPrefetchTriggered = remember(currentNavigation3Key) {
@@ -1825,13 +1879,10 @@ fun AppNavigation(
         // 经 fromStorageValue 归一化后由策略层按 routeTransition 分发,不再改变 handler 选择;
         // exitDirection 默认 "auto" 时走 autoDerived(卡片来源方向),显式值(follow_gesture /
         // always_left / always_right)直接覆盖。
-        val predictiveBackAnimationStyle = if (appNavigationSettings.predictiveBackEnabled) {
+        val predictiveBackAnimationStyle =
             BiliPaiPredictiveBackAnimationStyle.fromStorageValue(
                 appNavigationSettings.predictiveBackAnimationStyle,
             )
-        } else {
-            BiliPaiPredictiveBackAnimationStyle.NONE
-        }
         val predictiveBackExitDirection = BiliPaiPredictiveBackExitDirection.fromStorageValue(
             appNavigationSettings.predictiveBackExitDirection
         )
@@ -2455,7 +2506,6 @@ fun AppNavigation(
             LocalGlobalWallpaperUri provides globalHomeWallpaperUri,
             com.android.purebilibili.feature.home.components.cards.LocalWallpaperPalette provides
                 wallpaperPalette,
-            LocalPredictiveBackGestureEnabled provides predictiveBackEnabled,
             com.android.purebilibili.core.ui.LocalUpBadgeVisibility provides
                 com.android.purebilibili.core.ui.UpBadgeVisibility(
                     showBadges = showUpBadges,
@@ -2875,9 +2925,10 @@ fun AppNavigation(
                             backgroundState.sourceRouteProvider()
                         )
                     // 只订阅本入口是否成为返回背景，不随无关返回目标的切换更新整页包装。
-                    val shouldApplyPredictiveBlur by remember(key, predictiveBackState, shouldApplyBackground) {
+                    val predictiveBlurEnabled = appNavigationSettings.miuixTransitionBlurEnabled
+                    val shouldApplyPredictiveBlur by remember(key, predictiveBackState, shouldApplyBackground, predictiveBlurEnabled) {
                         derivedStateOf {
-                            shouldApplyPredictiveBackBlurToRoute(
+                            predictiveBlurEnabled && shouldApplyPredictiveBackBlurToRoute(
                                 entryKey = key,
                                 targetBackKey = predictiveBackState.targetKeyProvider(),
                                 videoCardBackgroundApplied = shouldApplyBackground,
@@ -4017,6 +4068,7 @@ fun AppNavigation(
 
                     VideoDetailScreen(
                         bvid = videoKey.bvid,
+                        takePreparedPlayer = { preparedVideoPlayers[videoKey.openId]?.take() },
                         coverUrl = videoKey.coverUrl,
                         title = videoKey.title,
                         cid = videoKey.cid,
@@ -5588,6 +5640,7 @@ fun AppNavigation(
                     val articleKey = key as BiliPaiNavKey.ArticleDetail
                     ArticleDetailScreen(
                         articleId = articleKey.articleId,
+                        backHandlerEnabled = false,
                         initialTitle = articleKey.title,
                         openCommentRootRpid = articleKey.commentRootRpid,
                         openCommentTargetRpid = articleKey.commentTargetRpid,

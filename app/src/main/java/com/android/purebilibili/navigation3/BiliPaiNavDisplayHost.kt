@@ -239,7 +239,6 @@ internal fun BiliPaiNavDisplayHost(
                 videoCardMotionEnabled = articleTarget || bangumiPlayerTarget,
                 cardBackgroundEffectsEnabled = articleTarget || bangumiPlayerTarget ||
                     target is BiliPaiNavKey.Live || target is BiliPaiNavKey.LiveAreaDetail,
-                isolateContentDrawing = target is BiliPaiNavKey.Live,
                 useSharedSnapshotBlur = target is BiliPaiNavKey.Live,
                 realtimeBlurEnabled = if (generalContainer) settingsContainerRealtimeBlurEnabled
                     else videoTransitionRealtimeBlurEnabled,
@@ -810,7 +809,8 @@ internal fun BiliPaiNavDisplayHost(
     // 横滑冲突页面始终禁用（见 BiliPaiNavEntryProvider）。
     val fullScreenSwipeBackEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getFullScreenSwipeBackEnabled(context) }
             .collectAsStateWithLifecycle(initialValue = false)
-    val swipeBackDirection = if (fullScreenSwipeBackEnabled) {
+    val predictiveGestureEnabled = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current
+    val swipeBackDirection = if (fullScreenSwipeBackEnabled && predictiveGestureEnabled) {
         when (LocalLayoutDirection.current) {
             LayoutDirection.Rtl -> NavSwipeDirection.RightToLeft
             LayoutDirection.Ltr -> NavSwipeDirection.LeftToRight
@@ -819,7 +819,7 @@ internal fun BiliPaiNavDisplayHost(
         NavSwipeDirection.None
     }
     val interceptPredictiveBack =
-        style == BiliPaiPredictiveBackAnimationStyle.NONE && backStack.size > 1
+        (!predictiveGestureEnabled || style == BiliPaiPredictiveBackAnimationStyle.NONE) && backStack.size > 1
     val globalWallpaperVisible = LocalGlobalWallpaperBackdropVisible.current
     val clickToPlayEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getClickToPlay(context) }
         .collectAsStateWithLifecycle(

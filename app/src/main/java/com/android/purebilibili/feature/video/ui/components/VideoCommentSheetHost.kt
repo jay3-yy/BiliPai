@@ -4,14 +4,11 @@ import com.android.purebilibili.core.util.animateScrollToTop
 
 import com.android.purebilibili.core.ui.AppContentColors
 
-import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
-import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -742,26 +739,10 @@ fun VideoCommentSheetHost(
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         if (mainSheetVisible && hostContent != VideoCommentSheetHostContent.HIDDEN) {
-                            val coveredBlurProgress = threadCoveredBlurProgress
-                            val coveredBlurEffectCache = remember { BlurRenderEffectCache() }
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .graphicsLayer {
-                                        renderEffect = null
-                                        if (coveredBlurProgress > 0f &&
-                                            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                                        ) {
-                                            val blurFrame = resolvePredictiveBackBlurFrame(
-                                                progress = coveredBlurProgress,
-                                            )
-                                            renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                                coveredBlurEffectCache.resolve(blurFrame.blurRadiusPx)
-                                            } else {
-                                                null
-                                            }
-                                        }
-                                    },
+                                    .commentThreadNavigationBlur { threadCoveredBlurProgress },
                             ) {
                                 VideoCommentMainList(
                                     viewModel = commentViewModel,

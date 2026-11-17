@@ -19,7 +19,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import com.android.purebilibili.core.ui.AppPredictiveDialog as Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled

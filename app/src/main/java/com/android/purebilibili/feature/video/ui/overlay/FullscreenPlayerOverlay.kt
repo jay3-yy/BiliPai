@@ -615,11 +615,12 @@ private fun FullscreenPlayerOverlayContent(
         }
     }
     val backEventState = rememberNavigationEventState(NavigationEventInfo.None)
-    val backProgress =
+    val backProgress = if (com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current) {
         (backEventState.transitionState as? NavigationEventTransitionState.InProgress)
             ?.latestEvent
             ?.progress
             ?: 0f
+    } else 0f
     NavigationBackHandler(
         state = backEventState,
         isBackEnabled = true,
@@ -643,24 +644,21 @@ private fun FullscreenPlayerOverlayContent(
         resolveFullscreenVisibleBottomControlsGestureExclusionHeightDp().dp.toPx()
     }
     val overlayHazeState = rememberRecoverableHazeState()
-    val displayedProgressState = remember(
-        currentPosition,
-        duration,
-        seekPreviewPosition,
-        pendingGestureSeekPositionMs,
-        gestureMode,
-        player?.bufferedPosition
-    ) {
-        resolveDisplayedPlayerProgress(
-            progress = PlayerProgress(
-                current = currentPosition,
-                duration = duration,
-                buffered = player?.bufferedPosition ?: 0L
-            ),
-            previewPositionMs = seekPreviewPosition,
-            previewActive = gestureMode == FullscreenGestureMode.Seek,
-            playbackTransitionPositionMs = pendingGestureSeekPositionMs
-        )
+    // 原生与玻璃共用：播放位置只在控制层消费，不作为全屏外壳的 remember 键。
+    // 控件隐藏时保留进度采样供手势使用，但不因位置更新重组外壳。
+    val displayedProgressState = remember(player) {
+        derivedStateOf {
+            resolveDisplayedPlayerProgress(
+                progress = PlayerProgress(
+                    current = currentPosition,
+                    duration = duration,
+                    buffered = player?.bufferedPosition ?: 0L
+                ),
+                previewPositionMs = seekPreviewPosition,
+                previewActive = gestureMode == FullscreenGestureMode.Seek,
+                playbackTransitionPositionMs = pendingGestureSeekPositionMs
+            )
+        }
     }
 
     Box(
@@ -1372,7 +1370,7 @@ private fun FullscreenPlayerOverlayContent(
                             Spacer(modifier = Modifier.width(8.dp))
 
                             AppText(
-                                FormatUtils.formatDuration((displayedProgressState.current / 1000).toInt()),
+                                FormatUtils.formatDuration((displayedProgressState.value.current / 1000).toInt()),
                                 color = Color.White,
                                 style = MaterialTheme.typography.labelSmall
                             )
@@ -1381,7 +1379,7 @@ private fun FullscreenPlayerOverlayContent(
 
                             ThinWigglyProgressBar(
                                 progress = currentProgress,
-                                seekPositionMs = displayedProgressState.current,
+                                seekPositionMs = displayedProgressState.value.current,
                                 isSeekScrubbing = isDragging,
                                 layoutPolicy = resolvePortraitProgressBarLayoutPolicy(
                                     LocalConfiguration.current.screenWidthDp

@@ -27,6 +27,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -886,6 +889,12 @@ fun PureBiliBiliTheme(
 ) {
     val context = LocalContext.current
 
+    val predictiveBackEnabled by remember(context) {
+        com.android.purebilibili.core.store.SettingsManager.getAppNavigationSettings(context)
+            .map { it.predictiveBackEnabled }
+            .distinctUntilChanged()
+    }.collectAsStateWithLifecycle(initialValue = true)
+
     val isDynamicColorActive = resolveEffectiveDynamicColorEnabled(
         dynamicColorEnabled = resolveMd3DynamicColorEnabled(
             source = md3ColorSource,
@@ -1104,6 +1113,7 @@ fun PureBiliBiliTheme(
     }
     CompositionLocalProvider(
         LocalThemeWallpaperPreviewSchemes provides wallpaperPreviewSchemes,
+        com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled provides predictiveBackEnabled,
         LocalAppUiStyle provides uiStyle,
         LocalDynamicColorActive provides isDynamicColorActive,
         LocalWallpaperColorCompatibility provides wallpaperCompatibility,

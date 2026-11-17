@@ -362,6 +362,8 @@
     <string name="animation_transition_blur_official_supported">控制系统一镜到底动画的背景模糊</string>
     <string name="animation_transition_blur_official_system">当前系统自行管理转场背景模糊，此开关不影响系统效果</string>
     <string name="animation_transition_blur_summary">当前设备不支持系统一镜到底动画，此开关不影响普通页面转场</string>
+    <string name="animation_predictive_back_title">预测性返回手势</string>
+    <string name="animation_predictive_back_summary">统一控制页面、卡片、图片预览、评论和弹窗的跟手返回预览；关闭后仍可正常返回，不影响页面切换动画设置</string>
     <string name="animation_back_title">页面切换动画</string>
     <string name="animation_back_summary">普通页面全局生效，返回反向播放；卡片共享元素、设置容器形变与大屏分栏保留专属过渡</string>
     <string name="animation_settings_container_title">设置容器动画</string>

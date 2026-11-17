@@ -5,44 +5,37 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import com.android.purebilibili.core.ui.AppModalBottomSheet
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import com.android.purebilibili.core.ui.appContentDialogWidth
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppOutlinedButton
 import com.android.purebilibili.core.ui.components.AppSurface
-import com.android.purebilibili.core.ui.resolveAppExpandedContentDialogLayoutPolicy
-import com.android.purebilibili.core.ui.resolveAppContentDialogProperties
 import java.io.File
 import com.android.purebilibili.core.ui.AppShapes
-import com.android.purebilibili.core.ui.AppPopupSurface
-import com.android.purebilibili.core.ui.AppPopupSurfaceType
 import com.android.purebilibili.core.ui.ContainerLevel
 
 /**
- * 📂 文件夹选择对话框
+ * 文件夹选择面板：手机使用底部弹层，大屏沿用共用居中呈现策略。
  *
  * @param initialPath 初始路径
  * @param onPathSelected 选中回调
  * @param onDismiss 取消回调
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DirectorySelectionDialog(
     initialPath: String,
@@ -51,9 +44,11 @@ fun DirectorySelectionDialog(
 ) {
     var currentPath by remember { mutableStateOf(initialPath) }
     var fileList by remember { mutableStateOf<List<File>>(emptyList()) }
+    val listState = rememberLazyListState()
 
     // 加载文件列表
     LaunchedEffect(currentPath) {
+        listState.scrollToItem(0)
         val dir = File(currentPath)
         if (dir.exists() && dir.isDirectory) {
             val files = dir.listFiles()?.filter {
@@ -69,153 +64,147 @@ fun DirectorySelectionDialog(
         }
     }
 
-    val dialogLayout = remember { resolveAppExpandedContentDialogLayoutPolicy() }
-    Dialog(
+    AppModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = resolveAppContentDialogProperties(
-            usePlatformDefaultWidth = dialogLayout.usePlatformDefaultWidth,
-        ),
+        useWindowPredictiveBack = true,
     ) {
-        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect()
-        AppPopupSurface(
-            type = AppPopupSurfaceType.DIALOG,
+        LazyColumn(
+            state = listState,
             modifier = Modifier
-                .appContentDialogWidth(policy = dialogLayout, wrapHeight = false)
-                .height(500.dp),
-            shape = AppShapes.container(ContainerLevel.Card),
-            containerColor = MaterialTheme.colorScheme.surface,
+                .fillMaxWidth()
+                .heightIn(max = 500.dp),
+            contentPadding = PaddingValues(16.dp),
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // 1. 顶部标题和当前路径
-                AppText(
-                    text = "选择存储位置",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            item(key = "directory_header") {
+                Column {
+                    // 1. 顶部标题和当前路径
+                    AppText(
+                        text = "选择存储位置",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                // 当前路径显示
-                AppSurface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    shape = AppShapes.container(ContainerLevel.Chip),
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                ) {
+                    // 当前路径显示
+                    AppSurface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = AppShapes.container(ContainerLevel.Chip),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(
+                                imageVector = Icons.Filled.Folder,
+                                contentDescription = null,
+                                tint = AppContentColors.accent(),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            AppText(
+                                text = currentPath,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppContentColors.secondaryText(),
+                                maxLines = 2
+                            )
+                        }
+                    }
+
+                    // 返回上级按钮
+                    val parentDir = File(currentPath).parentFile
+                    if (parentDir != null && parentDir.canRead()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { currentPath = parentDir.absolutePath }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "上级目录",
+                                tint = AppContentColors.accent()
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            AppText(
+                                text = ".. (返回上级)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        AppHorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+            if (fileList.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        AppText(
+                            text = "空文件夹",
+                            color = AppContentColors.secondaryText()
+                        )
+                    }
+                }
+            } else {
+                items(fileList, key = { it.absolutePath }) { file ->
                     Row(
-                        modifier = Modifier.padding(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { currentPath = file.absolutePath }
+                            .padding(vertical = 12.dp, horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         AppIcon(
                             imageVector = Icons.Filled.Folder,
                             contentDescription = null,
-                            tint = AppContentColors.accent(),
-                            modifier = Modifier.size(20.dp)
+                            tint = MaterialTheme.colorScheme.secondary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(16.dp))
                         AppText(
-                            text = currentPath,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AppContentColors.secondaryText(),
-                            maxLines = 2
-                        )
-                    }
-                }
-
-                // 返回上级按钮
-                val parentDir = File(currentPath).parentFile
-                if (parentDir != null && parentDir.canRead()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { currentPath = parentDir.absolutePath }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppIcon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "上级目录",
-                            tint = AppContentColors.accent()
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        AppText(
-                            text = ".. (返回上级)",
+                            text = file.name,
                             style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
+                            color = AppContentColors.primaryText(),
+                            modifier = Modifier.weight(1f)
+                        )
+                        AppIcon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = AppContentColors.secondaryText().copy(alpha = 0.3f),
+                            modifier = Modifier.size(16.dp)
                         )
                     }
-                    AppHorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant)
+                    AppHorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 }
+            }
+            item(key = "directory_actions") {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                // 2. 文件夹列表
-                LazyColumn(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    if (fileList.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier.fillParentMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AppText(
-                                    text = "空文件夹",
-                                    color = AppContentColors.secondaryText()
-                                )
-                            }
-                        }
-                    } else {
-                        items(fileList, key = { it.absolutePath }) { file ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { currentPath = file.absolutePath }
-                                    .padding(vertical = 12.dp, horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                AppIcon(
-                                    imageVector = Icons.Filled.Folder,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.secondary
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                AppText(
-                                    text = file.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = AppContentColors.primaryText(),
-                                    modifier = Modifier.weight(1f)
-                                )
-                                AppIcon(
-                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    contentDescription = null,
-                                    tint = AppContentColors.secondaryText().copy(alpha = 0.3f),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            AppHorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 3. 底部按钮
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    AppOutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        shape = AppShapes.container(ContainerLevel.Chip)
+                    // 3. 底部按钮
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        AppText("取消")
-                    }
+                        AppOutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            shape = AppShapes.container(ContainerLevel.Chip)
+                        ) {
+                            AppText("取消")
+                        }
 
-                    AppButton(
-                        onClick = { onPathSelected(currentPath) },
-                        modifier = Modifier.weight(1f),
-                        shape = AppShapes.container(ContainerLevel.Chip)
-                    ) {
-                        AppText("选择此目录")
+                        AppButton(
+                            onClick = { onPathSelected(currentPath) },
+                            modifier = Modifier.weight(1f),
+                            shape = AppShapes.container(ContainerLevel.Chip)
+                        ) {
+                            AppText("选择此目录")
+                        }
                     }
                 }
             }

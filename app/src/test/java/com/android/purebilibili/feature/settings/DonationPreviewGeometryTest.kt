@@ -7,6 +7,20 @@ import kotlin.test.assertTrue
 
 class DonationPreviewGeometryTest {
     @Test
+    fun dialogCornersReturnToTheSourceRowAndUseContinuousPreviewCorners() {
+        for ((start, end) in listOf(0f to 28f, 20f to 28f, 28f to 52f)) {
+            assertEquals(start, donationCornerRadius(start, end, 0f))
+            assertEquals(end, donationCornerRadius(start, end, 1f))
+            val opening = (0..100).map { donationCornerRadius(start, end, it / 100f) }
+            val closing = (100 downTo 0).map { donationCornerRadius(start, end, it / 100f) }
+            assertEquals(opening.reversed(), closing)
+            assertTrue(opening.zipWithNext().all { (a, b) -> b >= a })
+        }
+        assertEquals(0f, donationCornerRadius(0f, 28f, -0.1f))
+        assertEquals(28f, donationCornerRadius(0f, 28f, 1.1f))
+    }
+
+    @Test
     fun containerUsesExactEndpointsAndOneContinuousGeometryInBothOrientations() {
         for ((compact, preview) in listOf(
             IntSize(420, 760) to IntSize(500, 1000),

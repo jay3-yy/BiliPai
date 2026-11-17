@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.feature.video.ui.components.commentThreadNavigationBlur
 import com.android.purebilibili.core.util.animateScrollToTop
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -9,10 +10,7 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import android.net.Uri
-import android.os.Build
 import androidx.compose.ui.graphics.graphicsLayer
-import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
-import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -564,25 +562,11 @@ fun DynamicDetailScreen(
                     showActionButtonsFallback = false,
                 )
 
-                val coveredBlurProgress = if (subReplyState.visible) subReplyCoveredBlurProgress else 0f
-                val coveredBlurEffectCache = remember { BlurRenderEffectCache() }
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            renderEffect = null
-                            if (coveredBlurProgress > 0f &&
-                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-                            ) {
-                                val blurFrame = resolvePredictiveBackBlurFrame(
-                                    progress = coveredBlurProgress,
-                                )
-                                renderEffect = if (blurFrame.blurRadiusPx > 0.5f) {
-                                    coveredBlurEffectCache.resolve(blurFrame.blurRadiusPx)
-                                } else {
-                                    null
-                                }
-                            }
+                        .commentThreadNavigationBlur {
+                            if (subReplyState.visible) subReplyCoveredBlurProgress else 0f
                         }
                 ) {
                     if (useSplitLayout) {

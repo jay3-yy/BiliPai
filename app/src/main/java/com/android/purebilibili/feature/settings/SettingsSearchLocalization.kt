@@ -5,6 +5,7 @@ import com.android.purebilibili.R
 
 @StringRes
 internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (settingId) {
+    "animation.predictive_back_enabled" -> R.string.animation_predictive_back_title
     "animation.card_transition_enabled" -> R.string.animation_title_card_transition
     "legacy.001" -> R.string.settings_search_legacy_001_title
     "legacy.002" -> R.string.settings_search_legacy_002_title

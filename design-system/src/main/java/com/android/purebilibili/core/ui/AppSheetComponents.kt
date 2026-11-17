@@ -247,7 +247,8 @@ private fun appModalSheetBackModifier(
     enabled: Boolean,
 ): Modifier {
     val transition = transitionState as? NavigationEventTransitionState.InProgress
-    val reducedMotion = LocalSystemReduceMotion.current || !LocalComponentMotionEnabled.current
+    val reducedMotion = LocalSystemReduceMotion.current || !LocalComponentMotionEnabled.current ||
+        !LocalPredictiveBackGestureEnabled.current
     val backProgress = animateFloatAsState(
         targetValue = if (enabled && !reducedMotion && transition != null &&
             transition.direction == NavigationEventTransitionState.TRANSITIONING_BACK
@@ -446,10 +447,10 @@ fun AppModalBottomSheet(
                 } else rememberSheetBlurMotionModifier(blurBehind)
                 // Consume back when the caller handles it inside the sheet (e.g. reply navigation).
                 // Drag/outside dismissal remains available independently of this back policy.
-                if (!dismissOnBackPress && !centered) {
+                if (!centered && (!dismissOnBackPress || !LocalPredictiveBackGestureEnabled.current)) {
                     NavigationBackHandler(
                         state = rememberNavigationEventState(NavigationEventInfo.None),
-                        onBackCompleted = {},
+                        onBackCompleted = { if (dismissOnBackPress) requestNativeDismiss() },
                     )
                 }
                 com.android.purebilibili.core.ui.components.ProvideAppActionContentColor(contentColor) {
@@ -563,7 +564,9 @@ fun AppModalBottomSheet(
             }
         }
         val windowBackState = rememberNavigationEventState(NavigationEventInfo.None)
-        val windowBackModifier = if (useWindowPredictiveBack) {
+        // 关闭全局预览时接管原生返回进度，提交仍走原生 hide，不改变拖动收起行为。
+        val windowHandlesBack = useWindowPredictiveBack || !LocalPredictiveBackGestureEnabled.current
+        val windowBackModifier = if (windowHandlesBack) {
             appModalSheetBackModifier(windowBackState.transitionState, dismissOnBackPress)
         } else Modifier
         val dismissScope = rememberCoroutineScope()
@@ -573,7 +576,7 @@ fun AppModalBottomSheet(
             sheetState = sheetState,
             // 默认保留 MD3 手势；显式启用窗口导航的入口自行接收进度，仍使用原生 hide。
             properties = ModalBottomSheetProperties(
-                shouldDismissOnBackPress = dismissOnBackPress && !useWindowPredictiveBack,
+                shouldDismissOnBackPress = dismissOnBackPress && !windowHandlesBack,
             ),
             shape = shape ?: BottomSheetDefaults.ExpandedShape,
             containerColor = windowColor,
@@ -583,7 +586,7 @@ fun AppModalBottomSheet(
             dragHandle = dragHandle,
             contentWindowInsets = { windowInsets },
         ) {
-            if (useWindowPredictiveBack) {
+            if (windowHandlesBack) {
                 // 分享入口将事件绑定到弹窗窗口，避免继承页面 dispatcher 后丢失手势进度。
                 // 完成后仍走原生 hide；取消时只还原面板形变，不关闭分享或下层页面。
                 AppModalSheetWindowNavigationScope {

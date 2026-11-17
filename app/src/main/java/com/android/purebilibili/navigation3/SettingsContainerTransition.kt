@@ -12,7 +12,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
 import com.android.purebilibili.core.ui.transition.videoCardTransitionSnapshotBlur
-import com.android.purebilibili.core.ui.transition.resolvePredictiveBackBlurFrame
+import com.android.purebilibili.core.ui.transition.navigationBlurBlend
+import com.android.purebilibili.core.ui.transition.resolveNavigationBlurBlendFrame
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundFrameCache
 import com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase
 import com.android.purebilibili.core.ui.transition.VIDEO_CARD_TRANSITION_LIGHT_SCRIM_TINT
@@ -48,10 +49,13 @@ internal class SettingsContainerTransition(
     private val cardBackgroundEffectsEnabled: Boolean = false,
     private val isLightBackground: () -> Boolean = { pageColor().luminance() > 0.5f },
     private val videoCardMotionEnabled: Boolean = false,
-    // 实时直播保留子绘制指令；实际画面失效仍更新，不录制冻结的视频快照。
-    private val isolateContentDrawing: Boolean = false,
     private val useSharedSnapshotBlur: Boolean = false,
 ) : NavTransition {
+    // 按页面 scope 持有，避免同一转场同时处理来源页与目标页时共享可变 Path。
+    private class DrawingResources {
+        val clipPath = Path()
+        val alphaPaint = Paint()
+    }
     private val blurCache = BlurRenderEffectCache()
     private val cardFrameCache = VideoCardTransitionBackgroundFrameCache()
     private val coveredShapeCache = MiuixVideoCardCoveredShapeCache()
@@ -104,6 +108,7 @@ internal class SettingsContainerTransition(
     override fun scrimFraction(scope: NavTransitionScope): Float = 0f
 
     override fun Modifier.transformEntry(scope: NavTransitionScope): Modifier {
+        val drawing = DrawingResources()
         val returnInFlight = {
             scope.role == NavRole.Outgoing && scope.isRunning
         }
@@ -124,16 +129,15 @@ internal class SettingsContainerTransition(
                 renderEffect = if (covered && realtimeBlurEnabled && !useSharedSnapshotBlur) {
                     blurCache.resolve(cardBackgroundFrame(scope).blurRadiusPx)
                 } else null
-            } else if (realtimeBlurEnabled) Modifier.graphicsLayer {
+            } else if (realtimeBlurEnabled) Modifier.navigationBlurBlend {
                 // 只模糊被覆盖的来源页；当前页文字与容器轮廓保持清晰。
                 // 进度在图层读取，进入、返回与取消共用导航时钟，不录制静态背景。
                 val progress = resolveSettingsContainerBlurProgress(scope.relativeDepth)
-                val frame = resolvePredictiveBackBlurFrame(
+                resolveNavigationBlurBlendFrame(
                     progress = progress,
                     motionTier = blurMotionTierProvider(),
                     isLightBackground = pageColor().luminance() > 0.5f,
                 )
-                renderEffect = blurCache.resolve(frame.blurRadiusPx)
             } else Modifier)
             .drawWithContent {
                 // 逐帧深度只在绘制阶段读取，避免整个直播 entry 跟随导航进度重组。
@@ -163,23 +167,17 @@ internal class SettingsContainerTransition(
                 if (!source.isUsable(scope.layoutSize, expectedSourceScale)) {
                     // 窗口变化或来源已卸载时只淡化，不能收回旧窗口中的错误位置。
                     val alpha = (1f + scope.relativeDepth).coerceIn(0f, 1f)
-                    drawContext.canvas.saveLayer(destination, Paint().apply { this.alpha = alpha })
+                    drawContext.canvas.saveLayer(destination, drawing.alphaPaint.apply { this.alpha = alpha })
                     drawContent()
                     drawContext.canvas.restore()
                     return@drawWithContent
                 }
-                val frame = if (videoCardMotionEnabled) {
-                    // 视频导航驱动已经缓动；几何直接读取同一深度，禁止再套设置页曲线。
-                    resolveSettingsContainerFrame(
-                        source.bounds, destination, scope.relativeDepth,
-                        returning = false, springDriven = true,
-                    )
-                } else resolveSettingsContainerFrame(
-                    source.bounds, destination, scope.relativeDepth,
-                    returning = source.hasOpened && (scope.change == NavChange.Pop || scope.gesture != null ||
-                        scope.change is NavChange.MultiPop || scope.settle?.phase == NavSettlePhase.Cancel ||
-                        scope.settle?.phase == NavSettlePhase.Commit),
-                    springDriven = source.hasOpened && scope.settle?.phase != NavSettlePhase.Cancel,
+                val frame = resolveSettingsContainerFrame(
+                    source = source.bounds,
+                    destination = destination,
+                    scope = scope,
+                    hasOpened = source.hasOpened,
+                    videoCardMotionEnabled = videoCardMotionEnabled,
                 )
                 // 头像入口按自身尺寸提前交接，不能沿用设置行的整页内容放大。
                 // 两种材质共用此入口；直播封面卡片与设置容器保留原有时机和缩放。
@@ -191,7 +189,8 @@ internal class SettingsContainerTransition(
                 val sourceScale = avatarFrame?.sourceScale ?: (frame.bounds.width / source.bounds.width)
                 val top = CornerRadius(source.topRadius * frame.cornerFraction)
                 val bottom = CornerRadius(source.bottomRadius * frame.cornerFraction)
-                val path = Path().apply {
+                val path = drawing.clipPath.apply {
+                    rewind()
                     addRoundRect(RoundRect(frame.bounds, top, top, bottom, bottom))
                 }
                 clipPath(path) {
@@ -199,7 +198,7 @@ internal class SettingsContainerTransition(
                     // 源行与目标页共用一个透明度时钟；目标页出现后不残留源文字和图标。
                     if (sourceAlpha > 0f) {
                         if (sourceAlpha < 1f) {
-                            drawContext.canvas.saveLayer(frame.bounds, Paint().apply { alpha = sourceAlpha })
+                            drawContext.canvas.saveLayer(frame.bounds, drawing.alphaPaint.apply { alpha = sourceAlpha })
                         }
                         // 仅重放当前行自己的图层，避免递归采集整页或玻璃背景。
                         translate(frame.bounds.left, frame.bounds.top) {
@@ -208,9 +207,11 @@ internal class SettingsContainerTransition(
                         if (sourceAlpha < 1f) drawContext.canvas.restore()
                     }
                     if (contentAlpha > 0f) {
-                        val needsContentLayer = contentAlpha < 1f || !isolateContentDrawing
+                        // 两种材质及模糊开关共用：仅淡入淡出需要整组 alpha 离屏合成。
+                        // 完全不透明时在现有裁剪和位移下直接绘制，避免额外整页 saveLayer。
+                        val needsContentLayer = contentAlpha < 1f
                         if (needsContentLayer) {
-                            drawContext.canvas.saveLayer(destination, Paint().apply { alpha = contentAlpha })
+                            drawContext.canvas.saveLayer(destination, drawing.alphaPaint.apply { alpha = contentAlpha })
                         }
                         // 页面按原始大小渲染，容器边界移动而不是反复测量页面。
                         translate(frame.bounds.left, frame.bounds.top) { this@drawWithContent.drawContent() }
@@ -222,7 +223,7 @@ internal class SettingsContainerTransition(
                 if (companionAlpha > 0f && source.companions.isNotEmpty()) {
                     val factor = sourceScale
                     if (companionAlpha < 1f) {
-                        drawContext.canvas.saveLayer(destination, Paint().apply { alpha = companionAlpha })
+                        drawContext.canvas.saveLayer(destination, drawing.alphaPaint.apply { alpha = companionAlpha })
                     }
                     source.companions.forEach { companion ->
                         val offset = frame.bounds.topLeft + (companion.bounds.topLeft - source.bounds.topLeft) * factor
@@ -241,6 +242,8 @@ internal class SettingsContainerTransition(
                 },
                 refreshSourceProvider = { source.hasOpened && scope.relativeDepth < 1f },
             ) else Modifier)
-            .then(if (isolateContentDrawing) Modifier.graphicsLayer() else Modifier)
+            // 三种材质共用绘制隔离：转场只重放内容指令；子内容失效时仍正常更新。
+            // 使用默认合成策略，不强制整页离屏纹理，也不冻结视频或网页。
+            .graphicsLayer()
     }
 }

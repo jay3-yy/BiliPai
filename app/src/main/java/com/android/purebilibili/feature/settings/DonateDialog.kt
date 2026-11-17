@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -19,6 +20,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import com.android.purebilibili.core.ui.motion.AppMotionTokens
+import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -39,10 +47,92 @@ import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.util.rememberDeviceCornerShape
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 @Composable
-fun DonateDialog(onDismiss: () -> Unit) {
+internal fun DonateDialog(visible: Boolean, origin: DonationDialogOrigin, onDismiss: () -> Unit) {
+    val progress = remember { mutableFloatStateOf(0f) }
+    var mounted by remember { mutableStateOf(false) }
+    val motionEnabled = LocalComponentMotionEnabled.current && !rememberSystemReduceMotion()
+    val spec = AppMotionTokens.spatialSpec<Float>()
+    val scope = rememberCoroutineScope()
+    val animation = remember { arrayOfNulls<Job>(1) }
+    val gesture = remember {
+        object {
+            var tracking = false
+            var start = 1f
+            var velocity = 0f
+            var lastSampleNs = 0L
+        }
+    }
+    fun settle(target: Float) {
+        animation[0]?.cancel()
+        animation[0] = scope.launch {
+            if (motionEnabled) {
+                animate(progress.floatValue, target, initialVelocity = gesture.velocity, animationSpec = spec) { value, velocity ->
+                    progress.floatValue = value.coerceIn(0f, 1f)
+                    gesture.velocity = velocity
+                }
+            }
+            progress.floatValue = target
+            gesture.velocity = 0f
+            if (target == 0f) mounted = false
+        }
+    }
+    LaunchedEffect(visible, motionEnabled) {
+        if (!visible && !mounted) return@LaunchedEffect
+        gesture.tracking = false
+        if (visible) mounted = true
+        settle(if (visible) 1f else 0f)
+    }
+    DisposableEffect(Unit) { onDispose { animation[0]?.cancel() } }
+    if (mounted) DonateDialogContent(
+        origin = origin,
+        entranceProgress = { progress.floatValue },
+        backEnabled = visible,
+        predictive = motionEnabled,
+        onBackStarted = {
+            animation[0]?.cancel()
+            gesture.tracking = true
+            gesture.start = progress.floatValue
+            gesture.velocity = 0f
+            gesture.lastSampleNs = System.nanoTime()
+        },
+        onBackProgress = { backProgress ->
+            if (gesture.tracking && motionEnabled) {
+                val now = System.nanoTime()
+                val next = gesture.start * (1f - backProgress.coerceIn(0f, 1f))
+                val seconds = (now - gesture.lastSampleNs) / 1_000_000_000f
+                if (seconds > 0f) gesture.velocity = ((next - progress.floatValue) / seconds).coerceIn(-10f, 10f)
+                progress.floatValue = next
+                gesture.lastSampleNs = now
+            }
+        },
+        onBackCancelled = {
+            if (gesture.tracking) {
+                gesture.tracking = false
+                settle(1f)
+            }
+        },
+        onDismiss = {
+            gesture.tracking = false
+            onDismiss()
+        },
+    )
+}
+
+@Composable
+private fun DonateDialogContent(
+    origin: DonationDialogOrigin,
+    entranceProgress: () -> Float,
+    backEnabled: Boolean,
+    predictive: Boolean,
+    onBackStarted: () -> Unit,
+    onBackProgress: (Float) -> Unit,
+    onBackCancelled: () -> Unit,
+    onDismiss: () -> Unit,
+) {
     val context = LocalContext.current
     val qrResource = donationQrResource()
     val scope = rememberCoroutineScope()
@@ -51,8 +141,7 @@ fun DonateDialog(onDismiss: () -> Unit) {
     var showSaveConfirmation by remember { mutableStateOf(false) }
     val requestLongPressSave: () -> Unit = { if (!saving) showSaveConfirmation = true }
     val previewMotion = rememberDonationPreviewMotion()
-    // 从已挂载的宿主读取设备圆角，静止、展开和返回共用同一个外框形状。
-    // 仅打赏容器显式采用设备形状，缺失时沿用当前材质的弹窗圆角。
+    // 紧凑态采用当前材质弹窗圆角，二维码展开态才逐角过渡到设备形状。
     val containerShape = rememberDeviceCornerShape(
         defaultRadius = AppShapes.containerCornerDp(ContainerLevel.Dialog),
     )
@@ -97,51 +186,91 @@ fun DonateDialog(onDismiss: () -> Unit) {
         },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
+        // 同一手势只操作一层：二维码预览优先，其次收回外层弹窗。
+        val backTargetsPreview = remember { booleanArrayOf(false) }
         ModalWindowBackHandler(
-            enabled = previewMotion.expanded && !showSaveConfirmation,
-            predictive = previewMotion.predictive && LocalPredictiveBackGestureEnabled.current,
-            onStarted = previewMotion.onBackStarted,
-            onProgress = previewMotion.onBackProgress,
-            onCancelled = previewMotion.onBackCancelled,
-            onCompleted = previewMotion.close,
+            enabled = backEnabled && !showSaveConfirmation,
+            predictive = (if (previewMotion.expanded) previewMotion.predictive else predictive) &&
+                LocalPredictiveBackGestureEnabled.current,
+            onStarted = {
+                backTargetsPreview[0] = previewMotion.expanded
+                if (backTargetsPreview[0]) previewMotion.onBackStarted() else onBackStarted()
+            },
+            onProgress = { progress ->
+                if (backTargetsPreview[0]) previewMotion.onBackProgress(progress) else onBackProgress(progress)
+            },
+            onCancelled = {
+                if (backTargetsPreview[0]) previewMotion.onBackCancelled() else onBackCancelled()
+            },
+            // 按键返回没有 started/progress，也沿用当前可见层的优先级。
+            onCompleted = { if (previewMotion.expanded) previewMotion.close() else onDismiss() },
         )
-        ModalWindowBlurBehindEffect()
+        // 窗口留到收回结束；背景与容器共用同一有限进度，避免窗口自带动画叠加。
+        val dialogView = LocalView.current
+        DisposableEffect(dialogView) {
+            val window = (dialogView.parent as DialogWindowProvider).window
+            val originalDim = window.attributes.dimAmount
+            val originalAnimations = window.attributes.windowAnimations
+            window.setDimAmount(0f)
+            window.setWindowAnimations(0)
+            onDispose {
+                window.setDimAmount(originalDim)
+                window.setWindowAnimations(originalAnimations)
+            }
+        }
+        ModalWindowBlurBehindEffect(progress = entranceProgress)
         AppPopupWindowHost {
-            BoxWithConstraints(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .safeDrawingPadding()
-                    .padding(16.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                val wide = maxWidth >= 600.dp && maxWidth > maxHeight
-                AppPopupSurface(
-                    type = AppPopupSurfaceType.DIALOG,
-                    shape = containerShape,
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.heightIn(max = maxHeight),
+            Box(Modifier.fillMaxSize()) {
+                Box(Modifier.matchParentSize()
+                    .drawBehind { drawRect(Color.Black.copy(alpha = 0.32f * entranceProgress().coerceIn(0f, 1f))) }
+                    .pointerInput(Unit) { detectTapGestures { if (previewMotion.expanded) previewMotion.close() else onDismiss() } })
+                BoxWithConstraints(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .safeDrawingPadding()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    DonationPreviewContainer(
-                        progress = { previewMotion.progress.value },
-                        previewActive = previewMotion.expanded,
-                        compactMaxWidth = if (wide) 740.dp else 420.dp,
-                        compact = { qrModifier ->
-                            DonationCardContent(
-                                wide = wide,
-                                saving = saving,
-                                saved = saved,
-                                error = error,
-                                onSave = requestSave,
-                                onOpenWechat = openWechat,
-                                onEnlarge = previewMotion.open,
-                                onDismiss = onDismiss,
-                                modifier = Modifier.fillMaxWidth(),
-                                qrModifier = qrModifier,
-                                onQrLongPress = requestLongPressSave,
+                    val wide = maxWidth >= 600.dp && maxWidth > maxHeight
+                    val density = LocalDensity.current
+                    val compactRadius = AppShapes.containerCornerDp(ContainerLevel.Dialog)
+                    DonationDialogContainer(
+                        origin = origin,
+                        progress = entranceProgress,
+                        previewProgress = { previewMotion.progress.value },
+                        compactRadiusPx = with(density) { compactRadius.toPx() },
+                        previewShape = containerShape,
+                        modifier = Modifier.heightIn(max = maxHeight),
+                    ) {
+                        DonationPopupSurface(
+                            previewProgress = { previewMotion.progress.value },
+                            compactRadius = compactRadius,
+                            previewShape = containerShape,
+                            modifier = Modifier.heightIn(max = maxHeight),
+                        ) {
+                            DonationPreviewContainer(
+                                progress = { previewMotion.progress.value },
+                                previewActive = previewMotion.expanded,
+                                compactMaxWidth = if (wide) 740.dp else 420.dp,
+                                compact = { qrModifier ->
+                                    DonationCardContent(
+                                        wide = wide,
+                                        saving = saving,
+                                        saved = saved,
+                                        error = error,
+                                        onSave = requestSave,
+                                        onOpenWechat = openWechat,
+                                        onEnlarge = previewMotion.open,
+                                        onDismiss = onDismiss,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        qrModifier = qrModifier,
+                                        onQrLongPress = requestLongPressSave,
+                                    )
+                                },
+                                preview = { qrModifier -> DonationQrPreview(previewMotion.close, requestLongPressSave, qrModifier) },
                             )
-                        },
-                        preview = { qrModifier -> DonationQrPreview(previewMotion.close, requestLongPressSave, qrModifier) },
-                    )
+                        }
+                    }
                 }
             }
         }

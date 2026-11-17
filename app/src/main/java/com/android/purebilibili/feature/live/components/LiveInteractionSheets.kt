@@ -245,7 +245,7 @@ fun LiveDmBlockSheet(
     var pendingUser by remember { mutableStateOf<LiveShieldUser?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val pager = androidx.compose.foundation.pager.rememberPagerState(pageCount = { 2 })
-    androidx.compose.ui.window.Dialog(
+    com.android.purebilibili.core.ui.AppPredictiveDialog(
         onDismissRequest = onDismiss,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     ) {

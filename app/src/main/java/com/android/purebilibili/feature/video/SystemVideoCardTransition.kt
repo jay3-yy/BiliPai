@@ -21,7 +21,9 @@ import com.itgsa.animation.sharedview.ViewAnimationExtras
 import com.itgsa.animation.sharedview.ViewAnimationListener
 import com.itgsa.animation.sharedview.ViewAnimationManager
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.lang.ref.WeakReference
@@ -172,14 +174,17 @@ internal object SystemVideoCardTransition {
         val bounds = anchor.bounds(windowCoordinates, allowPartial = layer != null) ?: return rejected("source_bounds_unavailable")
         val thumbnail = if (layer != null) {
             // 透明行卡的位图背景透明，先垫来源页面底色，避免引擎放大位图时透出双层内容。
-            compositeOverBackgroundColor(
-                layer.toImageBitmap().asAndroidBitmap(), sourceBackgroundColor,
-            ) ?: return rejected("source_pixels_unavailable")
+            val pixels = layer.toImageBitmap().asAndroidBitmap()
+            withContext(Dispatchers.Default) {
+                compositeOverBackgroundColor(pixels, sourceBackgroundColor)
+            } ?: return rejected("source_pixels_unavailable")
         } else {
             // 截图始终使用窗口坐标，独立于系统转场声明的屏幕 / 窗口坐标系。
             val captureBounds = anchor.bounds(windowCoordinates = true) ?: return rejected("source_bounds_unavailable")
             captureWindowRegion(activity, captureBounds) ?: return rejected("source_pixels_unavailable")
         }
+        // 像素准备期间可能已换卡或离开窗口，不为过期请求创建系统转场配置。
+        if (!isCurrent() || !CardPositionManager.isActiveVideoCardPixelOwner(owner)) return rejected("request_expired_after_pixels")
         if (kotlin.math.abs(thumbnail.width - bounds.width()) > 1 ||
             kotlin.math.abs(thumbnail.height - bounds.height()) > 1) return rejected(
                 "source_size_mismatch bitmap=${thumbnail.width}x${thumbnail.height} bounds=$bounds")
@@ -414,11 +419,16 @@ internal object SystemVideoCardTransition {
             Logger.w("SystemVideoCardTransition", "卡片位图软件化失败", error)
             return null
         }
-        val backed = Bitmap.createBitmap(softwareSource.width, softwareSource.height, Bitmap.Config.ARGB_8888)
-        val canvas = android.graphics.Canvas(backed)
-        canvas.drawColor(backgroundColor)
-        canvas.drawBitmap(softwareSource, 0f, 0f, null)
-        return backed
+        try {
+            val backed = Bitmap.createBitmap(softwareSource.width, softwareSource.height, Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(backed)
+            canvas.drawColor(backgroundColor)
+            canvas.drawBitmap(softwareSource, 0f, 0f, null)
+            return backed
+        } finally {
+            // 只回收本次软件化副本；来源图层仍持有传入的位图。
+            if (softwareSource !== source) softwareSource.recycle()
+        }
     }
 
     /** 无快照层时按窗口坐标复制来源卡片矩形；调用方在主线程等待结果。 */

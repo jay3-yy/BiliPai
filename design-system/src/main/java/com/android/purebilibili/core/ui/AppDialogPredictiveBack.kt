@@ -82,21 +82,22 @@ fun AppDialogPredictiveBackHandler(
     val reduced by rememberUpdatedState(LocalSystemReduceMotion.current || !LocalComponentMotionEnabled.current)
     val animateExit by rememberUpdatedState(animateCompletion)
     val gestures by rememberUpdatedState(gesturesEnabled)
+    val predictive by rememberUpdatedState(LocalPredictiveBackGestureEnabled.current)
     val retaining by rememberUpdatedState(retainPreview)
     val handler = remember(state, scope) {
         object : NavigationEventHandler<NavigationEventInfo>(NavigationEventInfo.None, false) {
             override fun onBackStarted(event: NavigationEvent) {
                 state.beginGesture()
-                if (reduced) state.reset() else if (gestures) state.seek(event.progress)
+                if (reduced || !predictive) state.reset() else if (gestures) state.seek(event.progress)
             }
 
             override fun onBackProgressed(event: NavigationEvent) {
-                if (reduced) state.reset() else if (gestures) state.seek(event.progress)
+                if (reduced || !predictive) state.reset() else if (gestures) state.seek(event.progress)
             }
 
             override fun onBackCancelled() {
                 state.settling?.cancel()
-                state.settling = scope.launch { state.settle(0f, reduced) }
+                state.settling = scope.launch { state.settle(0f, reduced || !predictive) }
             }
 
             override fun onBackCompleted() {

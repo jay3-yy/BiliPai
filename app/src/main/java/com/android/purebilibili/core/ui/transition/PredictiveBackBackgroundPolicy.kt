@@ -8,7 +8,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.BiliPaiNavRouteTransition
@@ -157,65 +156,24 @@ internal fun resolvePredictiveBackCommitBlurDurationMs(startProgress: Float): In
         .coerceIn(1, PREDICTIVE_BACK_BACKGROUND_COMMIT_DURATION_MS)
 }
 
-private class PredictiveBackBlurFrameCache {
-    private var lastProgress = Float.NaN
-    private var lastMotionTier: MotionTier? = null
-    private var lastIsLightBackground: Boolean? = null
-    private var cached = PredictiveBackBlurFrame(blurRadiusPx = 0f)
-
-    fun resolve(
-        progress: Float,
-        motionTier: MotionTier,
-        isLightBackground: Boolean,
-    ): PredictiveBackBlurFrame {
-        if (
-            progress != lastProgress ||
-            motionTier != lastMotionTier ||
-            isLightBackground != lastIsLightBackground
-        ) {
-            lastProgress = progress
-            lastMotionTier = motionTier
-            lastIsLightBackground = isLightBackground
-            cached = resolvePredictiveBackBlurFrame(
-                progress = progress,
-                motionTier = motionTier,
-                isLightBackground = isLightBackground,
-            )
-        }
-        return cached
-    }
-}
-
 @Composable
 internal fun Modifier.predictiveBackBackgroundEffect(
     progressProvider: () -> Float,
     motionTierProvider: () -> MotionTier = { MotionTier.Normal },
     isLightBackgroundProvider: () -> Boolean = { false },
 ): Modifier {
-    // 缓存必须在 remember 里跨重组存活：此前每次重组都 new 一个，等于每帧重建
-    // BlurEffect（RenderEffect.createBlurEffect 是分配 + 着色器重编译），预测返回手势
-    // 期间逐帧失效正是卡顿来源。与 videoCardTransitionLiveBackgroundEffect 的
-    // 「按量化半径复用」范式对齐，且不改变任何档位策略。
-    val frameCache = remember { PredictiveBackBlurFrameCache() }
-    val effectCache = remember { BlurRenderEffectCache() }
-    return graphicsLayer {
-        val frame = frameCache.resolve(
-            progressProvider(),
-            motionTierProvider(),
-            isLightBackgroundProvider(),
-        )
-        renderEffect = effectCache.resolve(frame.blurRadiusPx)
-    }.drawWithContent {
+    return drawWithContent {
         drawContent()
-        val frame = frameCache.resolve(
-            progressProvider(),
-            motionTierProvider(),
-            isLightBackgroundProvider(),
-        )
-        if (frame.separationTintAlpha > 0.001f) {
-            val tintColor = if (frame.useLightSeparationTint) Color.White else Color.Black
-            drawRect(tintColor.copy(alpha = frame.separationTintAlpha))
+        val light = isLightBackgroundProvider()
+        val tintAlpha = resolvePredictiveBackSeparationTintAlpha(progressProvider(), light)
+        if (tintAlpha > 0.001f) {
+            val tintColor = if (light) Color.White else Color.Black
+            drawRect(tintColor.copy(alpha = tintAlpha))
         }
+    }.navigationBlurBlend {
+        resolveNavigationBlurBlendFrame(
+            progressProvider(), motionTierProvider(), isLightBackgroundProvider(),
+        )
     }
 }
 

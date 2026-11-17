@@ -150,12 +150,15 @@ internal fun <T : Any> SharedCardContainerHost(
         opened = target
         scope.launch { transitionState.snapTo(target) }
     }
+    val predictiveBackEnabled = com.android.purebilibili.core.ui.LocalPredictiveBackGestureEnabled.current
     PredictiveBackHandler(enabled = detailVisible) { progress ->
         var fraction = 0f
         try {
             progress.collect { event ->
-                fraction = event.progress.coerceIn(0f, 1f)
-                transitionState.seekTo(if (reduceMotion) 0f else fraction, null)
+                if (predictiveBackEnabled) {
+                    fraction = event.progress.coerceIn(0f, 1f)
+                    transitionState.seekTo(if (reduceMotion) 0f else fraction, null)
+                }
             }
             // Continue the existing seek direction and let Compose use its remaining time.
             transitionState.animateTo(null)

@@ -143,6 +143,7 @@ internal enum class SettingsIconRole {
     CARD_TRANSITION_ANIMATION,
     LIVE_SURFACE_TRANSITION,
     PREDICTIVE_BACK,
+    PREDICTIVE_BACK_GESTURE,
     MIUIX_TRANSITION_BLUR,
     TOP_DOCK_GLASS,
     HOME_SEARCH_GLASS,
@@ -475,6 +476,7 @@ internal fun resolveSettingsMaterialSymbolResource(role: SettingsIconRole): Int 
     SettingsIconRole.CARD_TRANSITION_ANIMATION -> R.drawable.ms_sync_alt_24
     SettingsIconRole.LIVE_SURFACE_TRANSITION -> R.drawable.ms_movie_24
     SettingsIconRole.PREDICTIVE_BACK -> R.drawable.ms_arrow_back_24
+    SettingsIconRole.PREDICTIVE_BACK_GESTURE -> R.drawable.ic_settings_predictive_back_24
     SettingsIconRole.MIUIX_TRANSITION_BLUR -> R.drawable.ms_gradient_24
     SettingsIconRole.TOP_DOCK_GLASS -> R.drawable.ms_layers_24
     SettingsIconRole.HOME_SEARCH_GLASS -> R.drawable.ms_manage_search_24

@@ -8,7 +8,6 @@ import android.content.ContextWrapper
 import android.media.audiofx.LoudnessEnhancer
 import android.widget.Toast
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import com.android.purebilibili.core.ui.AppAlertDialog as AlertDialog
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField as OutlinedTextField
 import com.android.purebilibili.core.ui.components.AppText as Text
@@ -16,8 +15,11 @@ import com.android.purebilibili.core.ui.components.AppTextButton as TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import com.android.purebilibili.core.ui.AppModalBottomSheet
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.C
@@ -113,6 +115,7 @@ internal fun resolveAudioEffectControlAvailability(
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun rememberPiliPlayerMenuSession(
     player: ExoPlayer?,
@@ -284,9 +287,20 @@ fun rememberPiliPlayerMenuSession(
         )
     }
     if (showReport) {
-        Dialog(onDismissRequest = { showReport = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-            androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-                WebViewScreen(url = "https://www.bilibili.com/appeal/?avid=$aid", title = "举报视频", onBack = { showReport = false })
+        val reportHeight = LocalConfiguration.current.screenHeightDp.dp * 0.9f
+        AppModalBottomSheet(
+            onDismissRequest = { showReport = false },
+            useWindowPredictiveBack = true,
+            dragHandle = null,
+        ) {
+            androidx.compose.foundation.layout.Box(
+                Modifier.fillMaxWidth().heightIn(max = reportHeight),
+            ) {
+                WebViewScreen(
+                    url = "https://www.bilibili.com/appeal/?avid=$aid",
+                    title = "举报视频",
+                    onBack = { showReport = false },
+                )
             }
         }
     }

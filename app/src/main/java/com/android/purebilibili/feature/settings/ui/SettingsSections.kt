@@ -255,15 +255,17 @@ internal fun SettingsRootCategoryListSection(
             }
             SettingsAdaptiveDivider()
         }
-        SettingsRootCategoryRow(
-            title = settingsDestinationCopy(SettingsSearchTarget.DONATE).title,
-            subtitle = settingsDestinationCopy(SettingsSearchTarget.DONATE).summary,
-            icon = donateVisual.icon,
-            iconPainter = donateVisual.iconResId?.let { painterResource(id = it) },
-            iconTint = siblingTints.last(),
-            iconSizeDp = donateVisual.iconSizeDp,
-            onClick = onDonateClick,
-        )
+        DonationDialogOrigin {
+            SettingsRootCategoryRow(
+                title = settingsDestinationCopy(SettingsSearchTarget.DONATE).title,
+                subtitle = settingsDestinationCopy(SettingsSearchTarget.DONATE).summary,
+                icon = donateVisual.icon,
+                iconPainter = donateVisual.iconResId?.let { painterResource(id = it) },
+                iconTint = siblingTints.last(),
+                iconSizeDp = donateVisual.iconSizeDp,
+                onClick = onDonateClick,
+            )
+        }
     }
 }
 

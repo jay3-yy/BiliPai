@@ -5,6 +5,9 @@ import androidx.compose.animation.core.SpringSpec
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.lerp
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import top.yukonga.miuix.kmp.nav.runtime.NavChange
+import top.yukonga.miuix.kmp.nav.transition.NavSettlePhase
+import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
 internal const val SETTINGS_CONTAINER_DURATION_MILLIS = 300
 
@@ -15,6 +18,25 @@ internal data class SettingsContainerFrame(
     val bounds: Rect,
     val contentAlpha: Float,
     val cornerFraction: Float,
+)
+
+/** 已展开容器的跟手、取消和提交都直接消费导航深度，阶段切换不再重映射几何。 */
+internal fun resolveSettingsContainerFrame(
+    source: Rect,
+    destination: Rect,
+    scope: NavTransitionScope,
+    hasOpened: Boolean,
+    videoCardMotionEnabled: Boolean,
+): SettingsContainerFrame = resolveSettingsContainerFrame(
+    source = source,
+    destination = destination,
+    relativeDepth = scope.relativeDepth,
+    returning = !videoCardMotionEnabled && hasOpened && (
+        scope.change == NavChange.Pop || scope.change is NavChange.MultiPop || scope.gesture != null ||
+            scope.settle?.phase == NavSettlePhase.Cancel || scope.settle?.phase == NavSettlePhase.Commit
+        ),
+    // 玻璃与原生共用；视频卡片保留原有单时钟行为，普通容器取消时不再二次缓动。
+    springDriven = videoCardMotionEnabled || hasOpened,
 )
 
 /** 导航深度是唯一时钟；程序返回、跟手及取消返回都沿同一几何路径。 */

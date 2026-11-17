@@ -505,7 +505,8 @@ internal fun VideoDetailScreenStateHolder(
     composerViewModel: VideoComposerViewModel = viewModel(),
     supplementViewModel: VideoSupplementViewModel = viewModel(),
     commentViewModel: VideoCommentViewModel = viewModel(),
-    onBgmClick: (BgmInfo) -> Unit = {}
+    onBgmClick: (BgmInfo) -> Unit = {},
+    takePreparedPlayer: (() -> androidx.media3.exoplayer.ExoPlayer?)? = null,
 ) {
     // 详情页打开期间抑制历史/收藏列表刷新:播放心跳会持续触发
     // HistoryRefreshBus,若父级列表在预测性返回手势动画中重新加载,
@@ -2227,6 +2228,7 @@ internal fun VideoDetailScreenStateHolder(
     )
     // 初始化播放器状态
     val playerState = rememberVideoPlayerState(
+        takePreparedPlayer = takePreparedPlayer,
         context = context,
         viewModel = viewModel,
         bvid = currentBvid,

@@ -279,13 +279,9 @@ fun AnimationSettingsContent(
     // 开关开着、但有效参数被降级为不动画 → 系统减弱动效在生效。
     val entranceDowngradedBySystem = uiEntranceAnimationEnabled && !effectiveEntranceSpec.animate
     val predictiveBackStyle = remember(appNavigationSettings) {
-        if (appNavigationSettings.predictiveBackEnabled) {
-            BiliPaiPredictiveBackAnimationStyle.fromStorageValue(
-                appNavigationSettings.predictiveBackAnimationStyle
-            )
-        } else {
-            BiliPaiPredictiveBackAnimationStyle.NONE
-        }
+        BiliPaiPredictiveBackAnimationStyle.fromStorageValue(
+            appNavigationSettings.predictiveBackAnimationStyle
+        )
     }
     // 设置容器动画两档:容器形变(条目展开为页面)与默认导航转场。
     val settingsContainerMorphOptions = listOf(
@@ -706,6 +702,19 @@ fun AnimationSettingsContent(
                             )
                         }
                         AppPreferenceDivider()
+                        SettingsItemAnchor("animation.predictive_back_enabled") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.PREDICTIVE_BACK_GESTURE),
+                                title = settingItemTitle("animation.predictive_back_enabled"),
+                                subtitle = stringResource(R.string.animation_predictive_back_summary),
+                                checked = appNavigationSettings.predictiveBackEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch { SettingsManager.setPredictiveBackEnabled(context, enabled) }
+                                },
+                                iconTint = AppContentColors.secondaryText(),
+                            )
+                        }
+                        AppPreferenceDivider()
                         SettingsSingleChoicePreference(
                             icon = rememberSettingsSemanticIcon(SettingsIconRole.PREDICTIVE_BACK),
                             title = stringResource(R.string.animation_back_title),
@@ -714,7 +723,6 @@ fun AnimationSettingsContent(
                             selectedValue = predictiveBackStyle,
                             onSelectionChange = { style ->
                                 scope.launch {
-                                    SettingsManager.setPredictiveBackEnabled(context, true)
                                     SettingsManager.setPredictiveBackAnimationStyle(
                                         context,
                                         style.storageValue,
@@ -799,6 +807,7 @@ fun AnimationSettingsContent(
                                     stringResource(R.string.animation_fullscreen_swipe_back_off)
                                 },
                                 checked = fullScreenSwipeBackEnabled,
+                                enabled = appNavigationSettings.predictiveBackEnabled,
                                 onCheckedChange = { enabled ->
                                     scope.launch {
                                         SettingsManager.setFullScreenSwipeBackEnabled(context, enabled)

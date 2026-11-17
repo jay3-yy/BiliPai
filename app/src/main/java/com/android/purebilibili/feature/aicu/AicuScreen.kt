@@ -6,7 +6,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
@@ -112,9 +111,8 @@ internal fun AicuRoute(
             owner.lifecycle.removeObserver(observer)
         }
     }
-    DisposableEffect(model) { onDispose { model.cancelQuery() } }
+    DisposableEffect(model) { onDispose { model.leave() } }
     val back = { model.leave(); onBack() }
-    BackHandler(onBack = back)
     AicuScreen(
         state = state,
         liquidEnabled = settings?.otherGlassEnabled == true,
