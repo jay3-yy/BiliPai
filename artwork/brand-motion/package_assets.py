@@ -1,4 +1,5 @@
 """Deduplicate shipped images; keep the artwork preview self-contained and offline."""
+import argparse
 import base64
 import copy
 import json
@@ -42,18 +43,21 @@ def encode_lossless_webp(png):
     return encoded
 
 
-def build_preview():
+def render_preview():
     animations = {}
     for state, fallback in FALLBACKS.items():
         key = 'bilipai_maid_' + state
         data = json.loads((RAW / (key + '.json')).read_text())
         for asset in data['assets']:
             if asset.get('id') == 'maid_bitmap':
-                png = (DRAWABLE / (fallback + '.webp')).read_bytes()
-                asset.update(p='data:image/webp;base64,' + base64.b64encode(png).decode(), u='', e=1)
+                webp = (DRAWABLE / (fallback + '.webp')).read_bytes()
+                asset.update(p='data:image/webp;base64,' + base64.b64encode(webp).decode(), u='', e=1)
         animations[key] = data
-    (ART / 'preview.html').write_text((ART / 'preview-template.html').read_text().replace(
-        '__ANIMATIONS__', json.dumps(animations, separators=(',', ':'))))
+    return (ART / 'preview-template.html').read_text().replace(
+        '__ANIMATIONS__', json.dumps(animations, separators=(',', ':')))
+
+def build_preview():
+    (ART / 'preview.html').write_text(render_preview())
 
 def package_existing():
     before = after = 0
@@ -93,4 +97,10 @@ def package_existing():
     print(f'JSON bytes: {before} -> {after}; all 14 lossless WebPs are shared with static fallbacks.')
 
 if __name__ == '__main__':
-    package_existing()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--preview-only', action='store_true',
+                        help='Generate preview.html from the current app resources without rewriting them.')
+    if parser.parse_args().preview_only:
+        build_preview()
+    else:
+        package_existing()

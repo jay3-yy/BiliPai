@@ -8,12 +8,12 @@
 
 ## 素材
 
-- `bilipai-selected-original.png`：弹幕窗最初的蓝色参考稿。
 - `bilipai-play-window-neutral-foreground.png`：当前无蓝色、无投影前景。
 - `bilipai-play-window-monochrome.svg`：对应主题单色矢量。
 - `blue_snow_maid_frameless_foreground.png`、`blue_snow_maid_front_frameless_foreground.png`：第一次去圆框的头像前景；当前资源只使用这两份人物素材。
 - `cleanup-2026-11-06-prompts.json`：去投影、去圆框的图像编辑记录。
-- 既有 `*4096.png`、`*_native.png`：原头像及历史制作来源，保留作品牌身份参考。
+- 两张 `*monochrome_4096.png` 是当前头像单色图层的导出源文件。
+- 弹幕窗最初的蓝色参考稿、彩色 4K 母版、旧尺寸头像及概念图见[图稿归档](../README.md)。
 
 ## Android 接入
 

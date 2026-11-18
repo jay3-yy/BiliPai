@@ -154,6 +154,10 @@ reasonix.toml
 /app/src/main/java/com/android/purebilibili/feature/video/ambient/README.md
 /artwork/brand-motion/AGENTS.md
 /artwork/brand-motion/README.md
+!/artwork/brand-motion/LOTTIE-WEB-LICENSE.md
+/artwork/brand-motion/__pycache__/
+/artwork/brand-motion/preview.html
+/artwork/brand-motion/preview-*-frames.png
 /artwork/settings-icons/README.md
 /baselineprofile/README.md
 /design-tokens/README.md
@@ -184,6 +188,8 @@ reasonix.toml
 /miuix-navigation/UPGRADE_REVIEW.md
 /plugins/community/README.md
 /plugins/samples/blue-snow-maid-skin/README.md
+/plugins/samples/blue-snow-maid-skin/assets/bottom_trim.png
+/plugins/samples/blue-snow-maid-skin/assets/icon_*.png
 /plugins/samples/today-watch-remix/README.md
 /plugins/samples/watch-compass/README.md
 /plugins/samples/winter-cloud-skin/README.md
