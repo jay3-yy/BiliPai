@@ -169,6 +169,7 @@ internal fun HistoryPersonalCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     stacked: Boolean = false,
+    matchRowHeight: Boolean = false,
 ) {
     val video = item.videoItem
     val context = LocalContext.current
@@ -304,6 +305,7 @@ internal fun HistoryPersonalCard(
     if (stacked) {
         PersonalMediaCardFrame(
             stacked = true,
+            stackedSupportingContentAtBottom = matchRowHeight,
             selected = selected,
             modifier = modifier
                 .then(contentContainer?.modifier ?: transition.shellModifier)

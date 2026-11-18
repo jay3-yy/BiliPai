@@ -3352,6 +3352,7 @@ internal fun CommonListContent(
                                         item = historyItem,
                                         modifier = if (alignRows) Modifier.fillMaxHeight() else Modifier,
                                         stacked = columns > 1,
+                                        matchRowHeight = alignRows,
                                         selected = isSelected,
                                         batchMode = historyBatchMode,
                                         transitionEnabled = cardTransitionEnabled,

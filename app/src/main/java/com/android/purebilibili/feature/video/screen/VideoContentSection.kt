@@ -1742,7 +1742,7 @@ internal fun VideoCommentTab(
                         isDissolving = reply.rpid in dissolvingIds,
                         onDissolveComplete = { onDeleteComment(reply.rpid) },
                         cardId = "comment_${reply.rpid}",
-                        // 小间距防止裁剪；animateItem 放在最前，保证位移/淡入淡出作用于整个槽位。
+                        // 小间距防止裁剪；淡入淡出作用于整个评论槽位。
                         modifier = videoCommentItemModifier().padding(bottom = 1.dp)
                     ) {
                         ReplyItemView(

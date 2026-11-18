@@ -3,6 +3,48 @@ package com.android.purebilibili.data.repository
 import com.android.purebilibili.data.model.response.CommentMainListContinuation
 import com.android.purebilibili.data.model.response.CommentMainListRoute
 import com.android.purebilibili.data.model.response.ReplyData
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+
+internal suspend fun continueGoodsFilteredCommentPage(
+    first: ReplyData,
+    includeFeatured: Boolean,
+    readNext: suspend (CommentMainListContinuation) -> Result<ReplyData>,
+): Result<ReplyData> {
+    var page = first
+    val replies = first.replies.orEmpty().toMutableList()
+    val hots = first.hots.orEmpty().toMutableList()
+    val top = first.collectTopReplies().toMutableList()
+    val seen = mutableSetOf<CommentMainListContinuation>()
+    while (!page.cursor.isEnd && page.replies.orEmpty().all(::isGoodsReply) &&
+        (!includeFeatured || page.collectTopReplies().all(::isGoodsReply))
+    ) {
+        val continuation = requireNotNull(page.mainListContinuation)
+        if (!seen.add(continuation)) {
+            return Result.failure(IllegalStateException("评论分页游标未前进，请重试"))
+        }
+        val next = readNext(continuation)
+        currentCoroutineContext().ensureActive()
+        page = next.getOrElse {
+            if (it is CancellationException) throw it
+            return Result.failure(it)
+        }
+        replies += page.replies.orEmpty()
+        if (includeFeatured) {
+            hots += page.hots.orEmpty()
+            top += page.collectTopReplies()
+        }
+    }
+    return Result.success(if (page === first) first else first.copy(
+        replies = replies.distinctBy { it.rpid },
+        hots = if (includeFeatured) hots.distinctBy { it.rpid } else first.hots,
+        topReplies = if (includeFeatured) top.distinctBy { it.rpid } else first.topReplies,
+        cursor = first.cursor.copy(isEnd = page.cursor.isEnd),
+        grpcNextOffset = page.grpcNextOffset,
+        mainListContinuation = page.mainListContinuation,
+    ))
+}
 
 internal fun mobileRestCommentRoute(data: ReplyData): CommentMainListRoute =
     if (data.page.num > 0 || data.page.size > 0 || data.page.count > 0 &&

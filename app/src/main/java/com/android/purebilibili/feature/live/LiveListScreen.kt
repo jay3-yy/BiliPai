@@ -55,8 +55,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -879,22 +877,9 @@ internal fun LiveHomeContent(
                     AppTextButton(onClick = onRetry) { AppText("重试") }
                 }
             }
-            stickyHeader(key = LIVE_HOME_CATEGORY_KEY) { headerIndex ->
-                val headerBackground = rememberLiveChromePalette().backgroundTop
+            item(key = LIVE_HOME_CATEGORY_KEY, span = { GridItemSpan(maxLineSpan) }) {
                 Column(
-                    modifier = Modifier
-                        .zIndex(1f)
-                        .offset {
-                            // 顶栏覆盖列表视口。夹住指示条的最终位置，卡片仍可经过顶栏下方。
-                            val layout = gridState.layoutInfo
-                            val header = layout.visibleItemsInfo.firstOrNull { it.index == headerIndex }
-                            val offset = header?.let {
-                                topPadding.roundToPx() - (it.offset.y - layout.viewportStartOffset)
-                            } ?: 0
-                            IntOffset(0, offset.coerceAtLeast(0))
-                        }
-                        .fillMaxWidth()
-                        .background(headerBackground),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
                 ) {
                     LiveAreaHomeChipRow(

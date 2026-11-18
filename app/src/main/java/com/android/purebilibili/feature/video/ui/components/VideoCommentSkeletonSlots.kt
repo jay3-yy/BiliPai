@@ -19,18 +19,16 @@ private const val VIDEO_COMMENT_FADE_OUT_MILLIS = 160
 private const val VIDEO_COMMENT_PLACEMENT_DAMPING = 0.9f
 private const val VIDEO_COMMENT_PLACEMENT_STIFFNESS = 220f
 
-/**
- * 真实评论使用淡入、淡出和位移动画；临时骨架不参与离场动画。
- */
+/** 顶层评论预览会异步改变行高，邻近评论随布局更新，避免补齐时再跑一段弹簧位移。 */
 @Composable
-internal fun LazyItemScope.videoCommentItemModifier(): Modifier =
+internal fun LazyItemScope.videoCommentItemModifier(animatePlacement: Boolean = false): Modifier =
     if (LocalAppThemeConfig.current.uiEntranceAnimationEnabled) {
         Modifier.animateItem(
             fadeInSpec = tween(durationMillis = VIDEO_COMMENT_FADE_IN_MILLIS),
-            placementSpec = spring(
+            placementSpec = if (animatePlacement) spring(
                 dampingRatio = VIDEO_COMMENT_PLACEMENT_DAMPING,
                 stiffness = VIDEO_COMMENT_PLACEMENT_STIFFNESS,
-            ),
+            ) else null,
             fadeOutSpec = tween(durationMillis = VIDEO_COMMENT_FADE_OUT_MILLIS),
         )
     } else {

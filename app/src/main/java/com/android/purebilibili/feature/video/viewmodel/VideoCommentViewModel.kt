@@ -534,6 +534,7 @@ class VideoCommentViewModel : ViewModel() {
                     ps = VIDEO_COMMENT_PAGE_SIZE, mode = currentState.sortMode.apiMode,
                     continuation = request.continuation, fallbackOnMissingLocation = requestSubject.type == 1,
                     expectedCount = currentState.replyCount.takeIf { currentState.replyCountSubject == requestSubject } ?: 0,
+                    continueAfterGoodsFilter = true,
                 ).getOrThrow()
             },
             onPage = success@ { request, data ->

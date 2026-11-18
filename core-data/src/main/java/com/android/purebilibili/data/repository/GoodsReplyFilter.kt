@@ -62,11 +62,15 @@ class ReplyContentFilter(
         return if (filtered == replies) replies else filtered
     }
 
-    fun filter(reply: ReplyItem, keepThreadContext: Boolean = false): ReplyItem? {
+    fun filter(
+        reply: ReplyItem,
+        keepThreadContext: Boolean = false,
+        isThreadRoot: Boolean = false,
+    ): ReplyItem? {
         val hardReason = when {
             rules.blocksUser(reply.member.mid.toLongOrNull() ?: 0L) -> ContentFilterReason.BLOCKED_USER
             rules.blocksText(reply.content.message, ContentFilterScope.COMMENT) -> ContentFilterReason.KEYWORD
-            rules.blockGoodsReplies && isGoodsReply(reply) -> ContentFilterReason.GOODS
+            rules.blockGoodsReplies && !isThreadRoot && isGoodsReply(reply) -> ContentFilterReason.GOODS
             else -> null
         }
         if (hardReason != null) {
@@ -147,7 +151,7 @@ internal suspend fun filterCommentRepliesIfEnabled(data: ReplyData): ReplyData {
             replies = data.replies?.let(filter::filter),
             hots = data.hots?.let(filter::filter),
             topReplies = data.topReplies?.let(filter::filter),
-            root = data.root?.let { filter.filter(it, keepThreadContext = true) },
+            root = data.root?.let { filter.filter(it, keepThreadContext = true, isThreadRoot = true) },
             top = data.top?.let { top ->
                 top.copy(
                     admin = top.admin?.let { filter.filter(it) },

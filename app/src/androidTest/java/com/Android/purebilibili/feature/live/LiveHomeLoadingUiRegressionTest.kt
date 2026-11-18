@@ -5,8 +5,15 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
@@ -34,37 +41,13 @@ class LiveHomeLoadingUiRegressionTest(
             roomId = 1, title = "首批真实直播内容", cover = "", uname = "主播", face = "",
             online = 1, areaName = "分区",
         )
-        composeRule.setContent {
-            CompositionLocalProvider(
-                LocalAppUiStyle provides style,
-                LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glassEnabled),
-            ) {
-                MaterialTheme {
-                    val visualSpec = resolveLiveVisualSpec(rememberAppTopChromePolicy().tabPresentation)
-                    LiveHomeContent(
-                        gridState = rememberLazyGridState(),
-                        followRowState = rememberLazyListState(),
-                        // 模拟卡片与关注数据先到、整轮首次加载尚未结束。
-                        contentItems = listOf(room), followItems = listOf(room),
-                        areaEntries = emptyList(), areaList = emptyList(),
-                        selectedAreaIndex = 0, selectedParentAreaId = 0,
-                        sortTags = emptyList(), selectedSortType = null,
-                        livingCount = 1, showFollowSection = true, followError = null,
-                        isLoading = !contentLoadComplete.value,
-                        showInitialSkeleton = !initialLoadComplete.value,
-                        showContentSkeleton = !contentLoadComplete.value,
-                        error = null, onRetry = {}, isLoadingMore = false,
-                        hasMore = false, loadMoreError = null, showFirstFrame = false,
-                        bottomPadding = 0.dp, topPadding = 0.dp,
-                        metrics = visualSpec.homeMetrics, visualSpec = visualSpec,
-                        onLiveClick = { _, _, _ -> }, onUserClick = {}, onAreaSelected = {},
-                        onToggleFirstFrame = {}, onAreaListClick = {}, onMatchClick = {},
-                        onSortTagSelected = {}, onLoadMore = {},
-                        onAreaDetailClick = { _, _, _ -> }, onFollowingClick = {},
-                    )
-                }
-            }
-        }
+        // 模拟卡片与关注数据先到、整轮首次加载尚未结束。
+        setLiveContent(
+            rooms = listOf(room),
+            followedRooms = listOf(room),
+            initialLoadComplete = { initialLoadComplete.value },
+            contentLoadComplete = { contentLoadComplete.value },
+        )
         composeRule.onNodeWithText("首批真实直播内容").assertDoesNotExist()
         composeRule.onNodeWithText("我的关注", substring = true).assertDoesNotExist()
         composeRule.runOnIdle {
@@ -79,6 +62,66 @@ class LiveHomeLoadingUiRegressionTest(
         composeRule.onNodeWithText("首批真实直播内容").assertDoesNotExist()
         composeRule.runOnIdle { contentLoadComplete.value = true }
         composeRule.onNodeWithText("首批真实直播内容").assertExists()
+    }
+
+    @Test
+    fun categoryRowScrollsAwayAndReturnsWithTheRoomGrid() {
+        val rooms = List(40) { index ->
+            LiveRoomItem(
+                roomId = index + 1L, title = "直播房间 ${index + 1}", cover = "",
+                uname = "主播", face = "", online = 1, areaName = "分区",
+            )
+        }
+        setLiveContent(rooms, topPadding = 72.dp)
+        val grid = composeRule.onNode(
+            hasScrollToIndexAction() and hasAnyDescendant(hasText("直播房间", substring = true)),
+        )
+        val recommendation = composeRule.onNodeWithText("推荐")
+        recommendation.assertIsDisplayed()
+        grid.performScrollToIndex(30)
+        recommendation.assertIsNotDisplayed()
+        grid.performScrollToIndex(0)
+        recommendation.assertIsDisplayed()
+    }
+
+    private fun setLiveContent(
+        rooms: List<LiveRoomItem>,
+        followedRooms: List<LiveRoomItem> = emptyList(),
+        topPadding: Dp = 0.dp,
+        initialLoadComplete: () -> Boolean = { true },
+        contentLoadComplete: () -> Boolean = { true },
+    ) {
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalAppUiStyle provides style,
+                LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glassEnabled),
+            ) {
+                MaterialTheme {
+                    val visualSpec = resolveLiveVisualSpec(rememberAppTopChromePolicy().tabPresentation)
+                    LiveHomeContent(
+                        gridState = rememberLazyGridState(),
+                        followRowState = rememberLazyListState(),
+                        contentItems = rooms, followItems = followedRooms,
+                        areaEntries = emptyList(), areaList = emptyList(),
+                        selectedAreaIndex = LIVE_HOME_RECOMMEND_INDEX, selectedParentAreaId = 0,
+                        sortTags = emptyList(), selectedSortType = null,
+                        livingCount = followedRooms.size,
+                        showFollowSection = followedRooms.isNotEmpty(), followError = null,
+                        isLoading = !contentLoadComplete(),
+                        showInitialSkeleton = !initialLoadComplete(),
+                        showContentSkeleton = !contentLoadComplete(),
+                        error = null, onRetry = {}, isLoadingMore = false,
+                        hasMore = false, loadMoreError = null, showFirstFrame = false,
+                        bottomPadding = 0.dp, topPadding = topPadding,
+                        metrics = visualSpec.homeMetrics, visualSpec = visualSpec,
+                        onLiveClick = { _, _, _ -> }, onUserClick = {}, onAreaSelected = {},
+                        onToggleFirstFrame = {}, onAreaListClick = {}, onMatchClick = {},
+                        onSortTagSelected = {}, onLoadMore = {},
+                        onAreaDetailClick = { _, _, _ -> }, onFollowingClick = {},
+                    )
+                }
+            }
+        }
     }
 
     companion object {

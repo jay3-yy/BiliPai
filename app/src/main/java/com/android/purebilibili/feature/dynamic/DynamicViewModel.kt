@@ -797,6 +797,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.value = _uiState.value.copy(
                     userItems = emptyList<DynamicItem>().toImmutableList(),
                     hasUserMore = true,
+                    userLoadedPageCount = 0,
                     userIsLoading = false,
                     userError = null
                 )
@@ -823,6 +824,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(
                 userItems = emptyList<DynamicItem>().toImmutableList(),
                 hasUserMore = true,
+                userLoadedPageCount = 0,
                 userIsLoading = false,
                 userError = null
             )
@@ -887,7 +889,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         current.copy(
                             userItems = items,
                             userIsLoading = states?.refresh is LoadState.Loading || states?.append is LoadState.Loading,
-                            userError = failure?.message ?: failure?.let { "加载失败" },
+                            userError = failure?.let { it.message?.takeIf(String::isNotBlank) ?: "加载失败" },
+                            userLoadedPageCount = pages.size,
                             hasUserMore = states?.append?.endOfPaginationReached != true
                         )
                     }
@@ -896,7 +899,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
         )
         userPagingSession = session
-        _uiState.update { it.copy(userIsLoading = true, userError = null) }
+        _uiState.update { it.copy(userIsLoading = true, userError = null, userLoadedPageCount = 0) }
         userDynamicsJob = launchAccount { session.run() }
         session.awaitInitialLoad()
     }
@@ -1869,7 +1872,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             page = 1,
             ps = DYNAMIC_COMMENT_PAGE_SIZE,
             mode = sortMode.apiMode,
-            fallbackOnMissingLocation = target.type != 11
+            fallbackOnMissingLocation = target.type != 11,
+            continueAfterGoodsFilter = true,
         )
         return result.fold(
             onSuccess = { data ->
@@ -1993,7 +1997,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             initial = CommentPageRequest(state.nextPage, commentContinuation), mainList = true,
             load = { request -> CommentRepository.getMobileCommentsForSubject(applyDisplayFilter = false,
                 oid = target.oid, type = target.type, page = request.page, ps = DYNAMIC_COMMENT_PAGE_SIZE,
-                mode = sortMode.apiMode, continuation = request.continuation, fallbackOnMissingLocation = target.type != 11
+                mode = sortMode.apiMode, continuation = request.continuation, fallbackOnMissingLocation = target.type != 11,
+                continueAfterGoodsFilter = true,
             ).getOrThrow() },
             onPage = success@ { request, data ->
                 if (!currentRequest()) return@success
@@ -3414,6 +3419,7 @@ data class DynamicUiState(
     val userError: String? = null,
     val hasMore: Boolean = true,
     val hasUserMore: Boolean = true, //  [新增] UP主动态是否有更多
+    val userLoadedPageCount: Int = 0,
     val incrementalRefreshBoundaryKey: String? = null,
     val incrementalPrependedCount: Int = 0,
     val errorSource: DynamicFeedErrorSource = DynamicFeedErrorSource.NONE,

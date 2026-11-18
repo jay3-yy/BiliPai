@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.android.purebilibili.core.store.AccountSessionIdentity
+import com.android.purebilibili.core.store.ContentFilterRules
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.network.BilibiliApi
 import com.android.purebilibili.core.network.BuvidManager
@@ -646,9 +647,23 @@ object CommentRepository {
         fallbackOnMissingLocation: Boolean = false,
         expectedCount: Int = 0,
         applyDisplayFilter: Boolean = true,
-    ): Result<ReplyData> = recoverEmptyCommentFirstPage(page, expectedCount) {
-        readMobileCommentsForSubject(oid, type, page, ps, mode, continuation, fallbackOnMissingLocation)
-    }.map { if (applyDisplayFilter) filterCommentRepliesIfEnabled(it) else it }
+        continueAfterGoodsFilter: Boolean = false,
+    ): Result<ReplyData> {
+        val initial = recoverEmptyCommentFirstPage(page, expectedCount) {
+            readMobileCommentsForSubject(oid, type, page, ps, mode, continuation, fallbackOnMissingLocation)
+        }
+        val first = initial.getOrElse { return initial }
+        val context = NetworkModule.appContext
+        val result = if (continueAfterGoodsFilter && context != null &&
+            ContentFilterRules.snapshot(context).blockGoodsReplies
+        ) {
+            var nextPage = page + 1
+            continueGoodsFilteredCommentPage(first, includeFeatured = page == 1) { next ->
+                readMobileCommentsForSubject(oid, type, nextPage++, ps, mode, next, fallbackOnMissingLocation)
+            }
+        } else initial
+        return result.map { if (applyDisplayFilter) filterCommentRepliesIfEnabled(it) else it }
+    }
 
     private suspend fun readMobileCommentsForSubject(
         oid: Long,
@@ -713,11 +728,14 @@ object CommentRepository {
     ): Result<ReplyData> {
         return try {
             val plan = resolveCommentReadPlan(!com.android.purebilibili.core.store.TokenManager.sessDataCache.isNullOrEmpty())
+            val serverPage = if (continuation?.route == CommentMainListRoute.REST_LEGACY) {
+                continuation.next.toInt()
+            } else page
             suspend fun fetch(identity: CommentReadApiMode): ReplyResponse {
                 val client = resolveReadApi(identity)
                 if (continuation?.route == CommentMainListRoute.REST_LEGACY) {
                     val sort = when (mode) { 1 -> 2; 2 -> 0; else -> 1 }
-                    return client.getReplyListLegacy(oid = oid, type = type, pn = page, ps = ps, sort = sort)
+                    return client.getReplyListLegacy(oid = oid, type = type, pn = serverPage, ps = ps, sort = sort)
                 }
                 return fetchCommentsByApi(
                     client, oid, type, page, ps, mode,
@@ -738,7 +756,7 @@ object CommentRepository {
             require(continuation == null || continuation.route == mobileRestCommentRoute(rawData)) {
                 "评论分页接口发生变化，请刷新后重试"
             }
-            val data = resolveMobileRestCommentPage(rawData, page, ps)
+            val data = resolveMobileRestCommentPage(rawData, serverPage, ps)
             requireAdvancingMobileCommentCursor(data, continuation)
             Result.success(data)
         } catch (e: CancellationException) {

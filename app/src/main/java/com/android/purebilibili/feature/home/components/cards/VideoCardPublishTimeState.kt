@@ -58,5 +58,5 @@ private fun rememberMissingVideoCardPublishTimeText(
         fetchedPubdate = result.getOrNull()?.pubdate?.takeIf { it > 0L } ?: 0L
         attempted = true
     }
-    return resolveCompactPublishTimeRowText(pubdate).ifBlank { "发布时间未知" }
+    return resolveCompactPublishTimeRowText(pubdate)
 }

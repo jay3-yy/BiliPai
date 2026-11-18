@@ -56,7 +56,7 @@ internal class ReplyListProjection(private val foldDetectedReplies: Boolean = fa
         output = Content(
             items = filter.filter(content.items),
             baseItems = filter.filter(content.baseItems),
-            root = content.root?.let { filter.filter(it, keepThreadContext) },
+            root = content.root?.let { filter.filter(it, keepThreadContext, isThreadRoot = keepThreadContext) },
             anchor = content.anchor?.let { filter.filter(it, keepThreadContext) },
         )
         source = content
