@@ -722,4 +722,80 @@ class AppTopLevelNavigationPolicyTest {
         assertTrue(shouldPreserveProfileStackForShortcut(ScreenRoutes.Following.createRoute(123L)))
     }
 
+    @Test
+    fun officialVideoChildActive_clearsOnlyWhenHostStaysFocusedAndResumed() {
+        assertFalse(
+            shouldClearOfficialVideoChildActiveOnWindowState(
+                officialVideoChildActive = false,
+                hostWindowFocused = true,
+                hostResumed = true,
+            )
+        )
+        assertFalse(
+            shouldClearOfficialVideoChildActiveOnWindowState(
+                officialVideoChildActive = true,
+                hostWindowFocused = false,
+                hostResumed = true,
+            )
+        )
+        assertFalse(
+            shouldClearOfficialVideoChildActiveOnWindowState(
+                officialVideoChildActive = true,
+                hostWindowFocused = true,
+                hostResumed = false,
+            )
+        )
+        assertTrue(
+            shouldClearOfficialVideoChildActiveOnWindowState(
+                officialVideoChildActive = true,
+                hostWindowFocused = true,
+                hostResumed = true,
+            )
+        )
+    }
+
+    @Test
+    fun navigationSettleTimeout_armsOnlyOnMainHostWhenNotNavigatingOrGesturing() {
+        assertFalse(
+            shouldArmNavigationSettleTimeout(
+                isMainHostTop = false,
+                isNavigationSettled = false,
+                isPagerNavigating = false,
+                isCardGestureInProgress = false,
+            )
+        )
+        assertFalse(
+            shouldArmNavigationSettleTimeout(
+                isMainHostTop = true,
+                isNavigationSettled = true,
+                isPagerNavigating = false,
+                isCardGestureInProgress = false,
+            )
+        )
+        assertFalse(
+            shouldArmNavigationSettleTimeout(
+                isMainHostTop = true,
+                isNavigationSettled = false,
+                isPagerNavigating = true,
+                isCardGestureInProgress = false,
+            )
+        )
+        assertFalse(
+            shouldArmNavigationSettleTimeout(
+                isMainHostTop = true,
+                isNavigationSettled = false,
+                isPagerNavigating = false,
+                isCardGestureInProgress = true,
+            )
+        )
+        assertTrue(
+            shouldArmNavigationSettleTimeout(
+                isMainHostTop = true,
+                isNavigationSettled = false,
+                isPagerNavigating = false,
+                isCardGestureInProgress = false,
+            )
+        )
+    }
+
 }

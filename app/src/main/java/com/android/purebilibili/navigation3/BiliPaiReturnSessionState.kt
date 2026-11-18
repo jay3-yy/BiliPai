@@ -4,6 +4,68 @@ import com.android.purebilibili.core.ui.transition.VideoCardTransitionExposure
 
 private const val QUICK_RETURN_THRESHOLD_MILLIS = 500L
 
+internal const val RETURN_SESSION_RECONCILE_GRACE_MS = 450L
+internal const val RETURN_SESSION_STALE_TIMEOUT_MS = 2_000L
+internal const val CARD_TRANSITION_STUCK_RECOVERY_TIMEOUT_MS = 1_500L
+
+internal fun hasReturningDetailDestination(backStack: List<BiliPaiNavKey>): Boolean =
+    backStack.any { it is BiliPaiNavKey.VideoDetail || it is BiliPaiNavKey.ArticleDetail }
+
+internal fun hasCardMorphDestination(backStack: List<BiliPaiNavKey>): Boolean =
+    backStack.any { isCardMorphDestinationNavKey(it) }
+
+internal enum class ReturnSessionReconciliationAction {
+    NONE,
+    WAIT_FOR_SUPPRESSION_WINDOW,
+}
+
+/**
+ * State-derived check for whether a latched returning-from-detail session no longer has an
+ * owning detail destination on the back stack and is waiting only for the post-return animation
+ * suppression window to finish.
+ */
+internal fun resolveReturnSessionReconciliationAction(
+    isReturningFromDetail: Boolean,
+    hasReturningDetailOnStack: Boolean,
+    isNavigationSettled: Boolean,
+    isCardTransitionIdle: Boolean,
+    isCardGestureInProgress: Boolean,
+): ReturnSessionReconciliationAction {
+    if (!isReturningFromDetail || isCardGestureInProgress) {
+        return ReturnSessionReconciliationAction.NONE
+    }
+    if (!hasReturningDetailOnStack && isNavigationSettled && isCardTransitionIdle) {
+        return ReturnSessionReconciliationAction.WAIT_FOR_SUPPRESSION_WINDOW
+    }
+    return ReturnSessionReconciliationAction.NONE
+}
+
+/**
+ * State-derived check for card morph state left in HELD/AutoReturn/etc. even though no card
+ * morph destination remains on the stack and the host navigation transition has settled.
+ */
+internal fun shouldResetStuckCardTransition(
+    hasCardMorphDestinationOnStack: Boolean,
+    isCardTransitionIdle: Boolean,
+    isCardGestureInProgress: Boolean,
+    isHostNavigationSettled: Boolean,
+): Boolean = !isCardTransitionIdle &&
+    !isCardGestureInProgress &&
+    !hasCardMorphDestinationOnStack &&
+    isHostNavigationSettled
+
+/**
+ * Source-level watchdog check for card morph state remaining non-Idle after all morph
+ * destinations have left the back stack (for example when NavDisplay drops its final settle).
+ */
+internal fun shouldForceResetCardTransitionOnTimeout(
+    hasCardMorphDestinationOnStack: Boolean,
+    isCardTransitionIdle: Boolean,
+    isCardGestureInProgress: Boolean,
+): Boolean = !isCardTransitionIdle &&
+    !isCardGestureInProgress &&
+    !hasCardMorphDestinationOnStack
+
 /** Only a real prefix contraction consumes sources; cancelled back and replacement do not. */
 internal fun countSuccessfulVideoDetailPops(
     before: List<BiliPaiNavKey>,

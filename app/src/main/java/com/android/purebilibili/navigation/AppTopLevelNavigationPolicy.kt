@@ -29,12 +29,27 @@ internal data class BottomPagerRenderBudget(
 
 internal const val BOTTOM_TAB_RENDER_BUDGET_HOLD_MILLIS = 220L
 internal const val BOTTOM_BAR_MAX_VISIBLE_ITEMS = 5
+internal const val OFFICIAL_VIDEO_CHILD_STALE_TIMEOUT_MS = 1_000L
+
 internal fun shouldAllowBottomPagerBackgroundWork(
     isMainHostTop: Boolean,
     isCardTransitionIdle: Boolean,
     isPagerNavigating: Boolean,
     isNavigationSettled: Boolean = true,
 ): Boolean = isMainHostTop && isCardTransitionIdle && !isPagerNavigating && isNavigationSettled
+
+internal fun shouldClearOfficialVideoChildActiveOnWindowState(
+    officialVideoChildActive: Boolean,
+    hostWindowFocused: Boolean,
+    hostResumed: Boolean,
+): Boolean = officialVideoChildActive && hostWindowFocused && hostResumed
+
+internal fun shouldArmNavigationSettleTimeout(
+    isMainHostTop: Boolean,
+    isNavigationSettled: Boolean,
+    isPagerNavigating: Boolean,
+    isCardGestureInProgress: Boolean,
+): Boolean = isMainHostTop && !isNavigationSettled && !isPagerNavigating && !isCardGestureInProgress
 
 internal fun resolveTopLevelNavigationAction(
     currentRoute: String?,
