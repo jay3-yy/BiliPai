@@ -1210,6 +1210,105 @@ fun AppNavigation(
         }
         var lastLiveAreaDetailOpenId by remember { mutableLongStateOf(0L) }
         var lastSearchOpenId by remember { mutableLongStateOf(0L) }
+        fun prepareVideoPlaybackForNavigationExit(
+            videoKey: BiliPaiNavKey.VideoDetail,
+            targetKey: BiliPaiNavKey?,
+        ) {
+            val manager = miniPlayerManager ?: return
+            // Returning to a retained detail is a session replacement, not a mini/audio exit.
+            if (targetKey is BiliPaiNavKey.VideoDetail) {
+                manager.markLeavingByNavigation(expectedBvid = videoKey.bvid, forceStop = true)
+                return
+            }
+            if (manager.prepareAudioNowPlayingForNavigationExit(videoKey.bvid)) {
+                manager.markLeavingByNavigation(
+                    expectedBvid = videoKey.bvid,
+                    deferPlaybackStop = com.android.purebilibili.feature.video.screen
+                        .shouldDeferPlaybackStopForSharedLiveReturn(
+                            cardTransitionEnabled = cardTransitionEnabled,
+                            hasSourceRoute = !videoKey.sourceRoute.isNullOrBlank(),
+                        ),
+                )
+                return
+            }
+            if (manager.shouldShowInAppMiniPlayer()) {
+                manager.enterMiniMode()
+            } else if (shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = manager.isMiniMode)) {
+                // 卡片过渡开启时延后停播：完整进入后再返回需要 live surface 跟壳缩。
+                manager.markLeavingByNavigation(
+                    expectedBvid = videoKey.bvid,
+                    deferPlaybackStop = com.android.purebilibili.feature.video.screen
+                        .shouldDeferPlaybackStopForSharedLiveReturn(
+                            cardTransitionEnabled = cardTransitionEnabled,
+                            hasSourceRoute = !videoKey.sourceRoute.isNullOrBlank(),
+                        ),
+                )
+            }
+        }
+        // 📺⌨️ 伴随面板：Expanded+ 窗口内普通横屏视频不推返回栈，feed 驻留左侧。
+        // 面板内容挂在主宿主层，整卡转场时钟与返回会话零接触（P0 隔离）。
+        fun currentCompanionVideoKey(): BiliPaiNavKey.VideoDetail? {
+            val entry = companionVideoDetailKey ?: return null
+            val (bvid, cid) = companionPlaybackIdentity ?: (entry.bvid to entry.cid)
+            val manager = miniPlayerManager?.takeIf {
+                it.currentBvid == bvid && (cid <= 0L || it.currentCid == cid)
+            }
+            return entry.copy(
+                bvid = bvid,
+                cid = manager?.currentCid ?: cid,
+                coverUrl = manager?.currentCover ?: entry.coverUrl.takeIf { bvid == entry.bvid }.orEmpty(),
+                title = manager?.currentTitle ?: entry.title.takeIf { bvid == entry.bvid }.orEmpty(),
+                resumePositionMs = manager?.player?.currentPosition?.coerceAtLeast(0L)
+                    ?: entry.resumePositionMs.takeIf { bvid == entry.bvid && cid == entry.cid } ?: 0L,
+            )
+        }
+        fun closeCompanionVideoDetail(
+            targetKey: BiliPaiNavKey? = navigation3BackStack.lastOrNull(),
+            forceStopPlayback: Boolean = false,
+        ) {
+            val key = currentCompanionVideoKey() ?: return
+            if (companionPaneState.mode != CompanionPaneMode.Split) companionPaneState.restoreSplit()
+            companionImmersivePlayback = false
+            companionVideoDetailKey = null
+            companionPlaybackIdentity = null
+            companionSourceKey = null
+            onVideoDetailExit()
+            if (forceStopPlayback) {
+                miniPlayerManager?.let { manager ->
+                    manager.isNavigatingToVideo = true
+                    manager.markLeavingByNavigation(expectedBvid = key.bvid, forceStop = true)
+                    if (manager.isMiniMode) manager.exitMiniMode(animate = false)
+                }
+                if (com.android.purebilibili.feature.audio.player.AudioNowPlayingSession.active.value) {
+                    com.android.purebilibili.feature.audio.player.AudioNowPlayingSession.dismiss()
+                }
+            } else {
+                prepareVideoPlaybackForNavigationExit(key, targetKey)
+            }
+        }
+        fun handoffCompanionPlaybackForIncomingVideo(
+            incomingBvid: String,
+            incomingCid: Long,
+        ) {
+            val previousKey = companionVideoDetailKey
+            val switchingVideo = previousKey == null ||
+                previousKey.bvid != incomingBvid ||
+                previousKey.cid != incomingCid
+            if (!switchingVideo) return
+            miniPlayerManager?.let { manager ->
+                manager.isNavigatingToVideo = true
+                manager.haltForeignPlaybackForIncomingVideo(incomingBvid)
+                if (manager.isMiniMode) manager.exitMiniMode(animate = false)
+                if (previousKey != null && previousKey.bvid != incomingBvid) {
+                    manager.markLeavingByNavigation(expectedBvid = previousKey.bvid, forceStop = true)
+                }
+            }
+            if (com.android.purebilibili.feature.audio.player.AudioNowPlayingSession.active.value &&
+                (previousKey != null || miniPlayerManager?.currentBvid != incomingBvid)
+            ) {
+                com.android.purebilibili.feature.audio.player.AudioNowPlayingSession.dismiss()
+            }
+        }
         // 共用普通视频入口选择分栏，列表来源不再限定为首页。
         fun tryOpenCompanionVideoDetail(key: BiliPaiNavKey): Boolean {
             val originKey = navigation3BackStack.lastOrNull()
@@ -1224,9 +1323,11 @@ fun AppNavigation(
                     posture = appWindowAdaptiveInfo.posture,
                     shouldAvoidHinge = appWindowAdaptiveInfo.shouldAvoidHinge,
                 )) return false
-            if (companionPaneState.mode == CompanionPaneMode.Feed) companionPaneState.restoreSplit()
+            if (companionPaneState.mode != CompanionPaneMode.Split) companionPaneState.restoreSplit()
             navigationFocusManager.clearFocus()
             navigationKeyboardController?.hide()
+            handoffCompanionPlaybackForIncomingVideo(candidate.bvid, candidate.cid)
+            companionImmersivePlayback = false
             companionSourceKey = originKey
             companionPlaybackIdentity = candidate.bvid to candidate.cid
             companionVideoDetailKey = candidate
@@ -1293,7 +1394,7 @@ fun AppNavigation(
                 }
                 else -> key
             }
-            replaceNavigation3BackStack(when (sessionScopedKey) {
+            val nextStack = when (sessionScopedKey) {
                 is BiliPaiNavKey.SettingsCategory -> pushOrReplaceSettingsCategoryNavKey(
                     currentStack = navigation3BackStack,
                     key = sessionScopedKey,
@@ -1302,7 +1403,16 @@ fun AppNavigation(
                     currentStack = navigation3BackStack,
                     key = sessionScopedKey,
                 )
-            })
+            }
+            if (companionVideoDetailKey != null &&
+                nextStack.lastOrNull() != navigation3BackStack.lastOrNull()
+            ) {
+                closeCompanionVideoDetail(
+                    targetKey = sessionScopedKey,
+                    forceStopPlayback = isPlayerDestinationKey(sessionScopedKey),
+                )
+            }
+            replaceNavigation3BackStack(nextStack)
         }
         fun pushNavigation3KeyDirect(key: BiliPaiNavKey) {
             if (tryOpenCompanionVideoDetail(key)) return
@@ -2649,42 +2759,6 @@ fun AppNavigation(
                 }
             }
 
-            fun prepareVideoPlaybackForNavigationExit(
-                videoKey: BiliPaiNavKey.VideoDetail,
-                targetKey: BiliPaiNavKey?,
-            ) {
-                val manager = miniPlayerManager ?: return
-                // Returning to a retained detail is a session replacement, not a mini/audio exit.
-                if (targetKey is BiliPaiNavKey.VideoDetail) {
-                    manager.markLeavingByNavigation(expectedBvid = videoKey.bvid, forceStop = true)
-                    return
-                }
-                if (manager.prepareAudioNowPlayingForNavigationExit(videoKey.bvid)) {
-                    manager.markLeavingByNavigation(
-                        expectedBvid = videoKey.bvid,
-                        deferPlaybackStop = com.android.purebilibili.feature.video.screen
-                            .shouldDeferPlaybackStopForSharedLiveReturn(
-                                cardTransitionEnabled = cardTransitionEnabled,
-                                hasSourceRoute = !videoKey.sourceRoute.isNullOrBlank(),
-                            ),
-                    )
-                    return
-                }
-                if (manager.shouldShowInAppMiniPlayer()) {
-                    manager.enterMiniMode()
-                } else if (shouldMarkNavigationLeaveBeforeVideoExit(isMiniMode = manager.isMiniMode)) {
-                    // 卡片过渡开启时延后停播：完整进入后再返回需要 live surface 跟壳缩。
-                    manager.markLeavingByNavigation(
-                        expectedBvid = videoKey.bvid,
-                        deferPlaybackStop = com.android.purebilibili.feature.video.screen
-                            .shouldDeferPlaybackStopForSharedLiveReturn(
-                                cardTransitionEnabled = cardTransitionEnabled,
-                                hasSourceRoute = !videoKey.sourceRoute.isNullOrBlank(),
-                            ),
-                    )
-                }
-            }
-
             fun popVideoDetailWithSharedReturnState(
                 videoKey: BiliPaiNavKey.VideoDetail,
                 targetKey: BiliPaiNavKey?,
@@ -2704,32 +2778,6 @@ fun AppNavigation(
             }
 
             var liveNavigationExitPending by remember { mutableStateOf(false) }
-            // 📺⌨️ 伴随面板：Expanded+ 窗口内普通横屏视频不推返回栈，feed 驻留左侧。
-            // 面板内容挂在主宿主层，整卡转场时钟与返回会话零接触（P0 隔离）。
-            fun currentCompanionVideoKey(): BiliPaiNavKey.VideoDetail? {
-                val entry = companionVideoDetailKey ?: return null
-                val (bvid, cid) = companionPlaybackIdentity ?: (entry.bvid to entry.cid)
-                val manager = miniPlayerManager?.takeIf {
-                    it.currentBvid == bvid && (cid <= 0L || it.currentCid == cid)
-                }
-                return entry.copy(
-                    bvid = bvid,
-                    cid = manager?.currentCid ?: cid,
-                    coverUrl = manager?.currentCover ?: entry.coverUrl.takeIf { bvid == entry.bvid }.orEmpty(),
-                    title = manager?.currentTitle ?: entry.title.takeIf { bvid == entry.bvid }.orEmpty(),
-                    resumePositionMs = manager?.player?.currentPosition?.coerceAtLeast(0L)
-                        ?: entry.resumePositionMs.takeIf { bvid == entry.bvid && cid == entry.cid } ?: 0L,
-                )
-            }
-            fun closeCompanionVideoDetail() {
-                val key = currentCompanionVideoKey() ?: return
-                companionImmersivePlayback = false
-                companionVideoDetailKey = null
-                companionPlaybackIdentity = null
-                companionSourceKey = null
-                onVideoDetailExit()
-                prepareVideoPlaybackForNavigationExit(key, navigation3BackStack.lastOrNull())
-            }
             val performSystemBackAction: () -> Unit = {
                 if (companionSessionVisible) {
                     if (companionPaneState.mode != CompanionPaneMode.Split) companionPaneState.restoreSplit()
@@ -4439,9 +4487,13 @@ fun AppNavigation(
                                 if (normalizedBvid.isBlank() || normalizedBvid == videoKey.bvid) {
                                     false
                                 } else {
+                                    val resolvedCid = targetCid.coerceAtLeast(0L)
+                                    handoffCompanionPlaybackForIncomingVideo(normalizedBvid, resolvedCid)
+                                    companionImmersivePlayback = false
+                                    companionPlaybackIdentity = normalizedBvid to resolvedCid
                                     companionVideoDetailKey = BiliPaiNavKey.VideoDetail(
                                         bvid = normalizedBvid,
-                                        cid = targetCid.coerceAtLeast(0L),
+                                        cid = resolvedCid,
                                         coverUrl = targetCover,
                                         resumePositionMs = resumePositionMs.coerceAtLeast(0L),
                                     )
@@ -4455,17 +4507,40 @@ fun AppNavigation(
                                 val coverUrl = options?.getString(
                                     com.android.purebilibili.feature.video.screen.VIDEO_NAV_COVER_URL_KEY
                                 ).orEmpty()
-                                // 面板内点相关视频：替换面板内容，不进返回栈。
-                                companionVideoDetailKey = BiliPaiNavKey.VideoDetail(
+                                val targetKey = BiliPaiNavKey.VideoDetail(
                                     bvid = vid,
                                     cid = targetCid,
                                     coverUrl = coverUrl,
                                     fullscreen = com.android.purebilibili.feature.video.screen
                                         .resolveVideoNavigationStartInFullscreen(options),
-                                    initialVertical = com.android.purebilibili.feature.video.screen
-                                        .resolveVideoNavigationIsVertical(options) ?: false,
+                                    initialVertical = (com.android.purebilibili.feature.video.screen
+                                        .resolveVideoNavigationIsVertical(options) ?: false) ||
+                                        com.android.purebilibili.data.repository.VideoRepository
+                                            .getCachedVerticalFlag(vid) == true,
                                     sourceRoute = "video/${videoKey.bvid}",
                                 )
+                                if (shouldOpenVideoCompanion(
+                                        key = targetKey,
+                                        origin = companionSourceKey,
+                                        enabled = videoCompanionEnabled,
+                                        window = windowSizeClass,
+                                        posture = appWindowAdaptiveInfo.posture,
+                                        shouldAvoidHinge = appWindowAdaptiveInfo.shouldAvoidHinge,
+                                    )
+                                ) {
+                                    // 面板内点相关视频：替换面板内容，不进返回栈。
+                                    handoffCompanionPlaybackForIncomingVideo(targetKey.bvid, targetKey.cid)
+                                    companionImmersivePlayback = false
+                                    companionPlaybackIdentity = targetKey.bvid to targetKey.cid
+                                    companionVideoDetailKey = targetKey
+                                } else {
+                                    handoffCompanionPlaybackForIncomingVideo(targetKey.bvid, targetKey.cid)
+                                    closeCompanionVideoDetail(
+                                        targetKey = targetKey,
+                                        forceStopPlayback = true,
+                                    )
+                                    pushResolvedNavigation3KeyDirect(targetKey)
+                                }
                             },
                             onBgmClick = { bgm ->
                                 val musicId = bgm.musicId.ifBlank {
@@ -6227,6 +6302,7 @@ fun AppNavigation(
                         ) ?: return@LaunchedEffect
                         // 旧面板的销毁也应识别为详情接管，避免延后恢复方向盖过新页面。
                         manager?.isNavigatingToVideo = true
+                        if (companionPaneState.mode != CompanionPaneMode.Split) companionPaneState.restoreSplit()
                         companionImmersivePlayback = false
                         companionVideoDetailKey = null
                         companionPlaybackIdentity = null

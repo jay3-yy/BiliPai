@@ -3569,7 +3569,12 @@ internal fun VideoDetailScreenStateHolder(
             displayContext = displayContext,
             portraitExperienceEnabled = portraitExperienceEnabled,
             onEnterPortraitFullscreen = { enterPortraitFullscreen() },
-            onUserRequestedFullscreenChange = { requested -> userRequestedFullscreen = requested },
+            onUserRequestedFullscreenChange = { requested ->
+                userRequestedFullscreen = requested
+                if (!isOrientationDrivenFullscreen) {
+                    latestOnImmersivePlaybackChanged(requested || isPortraitFullscreen || isPipMode)
+                }
+            },
             onManualPortraitHoldActiveChange = { active -> manualPortraitHoldActive = active }
         )
     }
