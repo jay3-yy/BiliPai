@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.video.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,20 +13,17 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
-import com.android.purebilibili.core.ui.AppPredictiveDialog as Dialog
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
-import com.android.purebilibili.core.ui.rememberAppBottomSheetMotion
 
 @Composable
 internal fun PlainLandscapeDanmakuComposer(
@@ -45,33 +40,23 @@ internal fun PlainLandscapeDanmakuComposer(
     onSelectionChange: (color: Int, mode: Int, fontSize: Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val sheetMotion = rememberAppBottomSheetMotion()
-    val visibility = remember { MutableTransitionState(false) }
-    var closeRequested by remember { mutableStateOf(false) }
-    val latestDismiss by rememberUpdatedState(onDismiss)
+    var closeRequested by remember(visible) { mutableStateOf(false) }
     val inputActive = visible && !closeRequested
-    LaunchedEffect(visible) {
-        closeRequested = false
-        visibility.targetState = visible
+    val panelMotion = rememberInputPanelMotion(inputActive) {
+        if (closeRequested) onDismiss()
     }
-    LaunchedEffect(inputActive) { visibility.targetState = inputActive }
-    LaunchedEffect(visibility.isIdle, visibility.currentState, closeRequested) {
-        if (visibility.isIdle && !visibility.currentState && closeRequested) latestDismiss()
-    }
-    val requestDismiss: () -> Unit = {
-        closeRequested = true
-        visibility.targetState = false
-    }
-    if (visibility.currentState || visibility.targetState) {
+    val requestDismiss: () -> Unit = { if (visible) closeRequested = true }
+    if (panelMotion.mounted) {
         Dialog(
             onDismissRequest = requestDismiss,
             properties = DialogProperties(
-                dismissOnBackPress = true,
+                dismissOnBackPress = inputActive,
                 dismissOnClickOutside = true,
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false,
             ),
         ) {
+            InputPanelBackHandler(panelMotion, inputActive, requestDismiss)
             val view = LocalView.current
             SideEffect {
                 ((view.parent as? DialogWindowProvider) ?: (view as? DialogWindowProvider))
@@ -89,12 +74,7 @@ internal fun PlainLandscapeDanmakuComposer(
                         onClick = requestDismiss,
                     )
                 )
-                AnimatedVisibility(
-                    visibleState = visibility,
-                    enter = sheetMotion.contentEnter,
-                    exit = sheetMotion.contentExit,
-                    label = "plainLandscapeDanmakuInput",
-                ) {
+                Box(Modifier.inputPanelMotion(panelMotion), propagateMinConstraints = true) {
                     LandscapeDanmakuComposerEditor(
                         visible = inputActive,
                         onSend = { message, color, mode, size, attention ->

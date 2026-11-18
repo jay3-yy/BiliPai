@@ -2,6 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import androidx.compose.ui.graphics.Color
 import com.android.purebilibili.R
+import com.android.purebilibili.core.store.SettingsIconGlyphs
 import com.android.purebilibili.core.theme.iOSBlue
 import com.android.purebilibili.core.theme.iOSPink
 import com.android.purebilibili.core.theme.iOSRed
@@ -12,6 +13,18 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SettingsEntryVisualPolicyTest {
+    @Test
+    fun originalGlyphsRestoreSearchResultIconsWithoutChangingPresentation() {
+        val phosphor = resolveSettingsEntryVisual(SettingsSearchTarget.HOME_FEED)
+        val original = resolveSettingsEntryVisual(
+            SettingsSearchTarget.HOME_FEED,
+            glyphs = SettingsIconGlyphs.ORIGINAL,
+        )
+
+        assertEquals(R.drawable.ph_house_24, phosphor.iconResId)
+        assertEquals(phosphor.copy(iconResId = R.drawable.ms_home_24), original)
+    }
+
     private val materialPolicy = AppSemanticVisualPolicy.material(
         AppSemanticAccentPalette(
             primary = Color(0xFF112233),
@@ -22,17 +35,17 @@ class SettingsEntryVisualPolicyTest {
     )
 
     @Test
-    fun materialEntries_useMaterialSymbolResources() {
+    fun materialEntries_useSharedSettingsVectors() {
         val expected = mapOf(
-            SettingsSearchTarget.HOME_FEED to R.drawable.ms_home_24,
-            SettingsSearchTarget.INTERACTION_COMMENT to R.drawable.ms_chat_bubble_outline_24,
-            SettingsSearchTarget.DATA_BACKUP to R.drawable.ms_backup_24,
-            SettingsSearchTarget.DIAGNOSTICS to R.drawable.ms_terminal_24,
-            SettingsSearchTarget.APPEARANCE to R.drawable.ms_palette_24,
-            SettingsSearchTarget.PERMISSION to R.drawable.ms_security_24,
-            SettingsSearchTarget.FULLSCREEN_GESTURE to R.drawable.ms_touch_app_24,
-            SettingsSearchTarget.BLOCKED_LIST to R.drawable.ms_block_24,
-            SettingsSearchTarget.DONATE to R.drawable.ms_card_giftcard_24,
+            SettingsSearchTarget.HOME_FEED to R.drawable.ph_house_24,
+            SettingsSearchTarget.INTERACTION_COMMENT to R.drawable.ph_chat_circle_24,
+            SettingsSearchTarget.DATA_BACKUP to R.drawable.ph_archive_24,
+            SettingsSearchTarget.DIAGNOSTICS to R.drawable.ph_terminal_window_24,
+            SettingsSearchTarget.APPEARANCE to R.drawable.ph_paint_brush_broad_24,
+            SettingsSearchTarget.PERMISSION to R.drawable.ph_shield_check_24,
+            SettingsSearchTarget.FULLSCREEN_GESTURE to R.drawable.ph_hand_tap_24,
+            SettingsSearchTarget.BLOCKED_LIST to R.drawable.ph_prohibit_24,
+            SettingsSearchTarget.DONATE to R.drawable.ph_gift_24,
         )
         expected.forEach { (target, resource) ->
             val visual = resolveSettingsEntryVisual(target, materialPolicy)
@@ -70,7 +83,7 @@ class SettingsEntryVisualPolicyTest {
         val category = SettingsRootCategory.SYSTEM_ABOUT
         assertEquals(SettingsSearchTarget.ABOUT_SUPPORT, category.searchTarget)
         assertEquals(
-            R.drawable.ms_info_24,
+            R.drawable.ph_info_24,
             resolveSettingsEntryVisual(category.searchTarget, materialPolicy).iconResId,
         )
         assertEquals(category, resolveSettingsRootCategoryForSearchTarget(category.searchTarget))

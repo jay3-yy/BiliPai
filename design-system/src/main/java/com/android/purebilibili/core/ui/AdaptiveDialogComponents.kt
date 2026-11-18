@@ -92,6 +92,7 @@ internal fun AdaptiveAlertDialog(
     tonalElevation: Dp? = null,
     properties: DialogProperties = DialogProperties(),
     contentLayout: AppContentDialogLayoutPolicy = resolveAppCompactContentDialogLayoutPolicy(),
+    keepCenteredInMiuix: Boolean = false,
 ) {
     val sceneConfig = LocalAppThemeConfig.current
     androidx.compose.runtime.CompositionLocalProvider(
@@ -258,6 +259,8 @@ internal fun AdaptiveAlertDialog(
                         // 返回由内容内的处理器消费；窗口回调只按外部点击策略关闭。
                         onDismissRequest = if (properties.dismissOnClickOutside) onDismissRequest else null,
                         maxWidth = contentLayout.maxWidthDp.dp,
+                        // 居中设置弹窗显式选择 Miuix 的居中布局，普通弹窗继续由窗口尺寸决定。
+                        largeScreen = true.takeIf { keepCenteredInMiuix },
                         backgroundColor = containerColor ?: top.yukonga.miuix.kmp.layout.DialogDefaults.backgroundColor(),
                     ) {
                         nativeBackHandler()
@@ -290,6 +293,7 @@ internal fun AdaptiveAlertDialog(
                     show = true,
                     onDismissRequest = if (properties.dismissOnClickOutside) onDismissRequest else null,
                     maxWidth = contentLayout.maxWidthDp.dp,
+                    largeScreen = true.takeIf { keepCenteredInMiuix },
                     // WindowDialog 自带背景、圆角和 24dp 内边距。这里只用其窗口/动画，
                     // 外观由 AppPopupSurface 负责，避免内外两张圆角卡片叠加。
                     backgroundColor = Color.Transparent,

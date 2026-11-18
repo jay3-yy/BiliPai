@@ -162,11 +162,13 @@ private fun SubtitleColorPreference(label: String, value: Int, onChange: (Int) -
         onDismissRequest = { editing = false }, title = { Text(label) },
         text = {
             Column {
-                OutlinedTextField(
-                    value = hex, onValueChange = { hex = it }, label = { Text("十六进制颜色 #RRGGBB") },
-                    singleLine = true, isError = parsed == null,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                    OutlinedTextField(
+                        value = hex, onValueChange = { hex = it }, label = { Text("十六进制颜色 #RRGGBB") },
+                        singleLine = true, isError = parsed == null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Row {
                     listOf("白" to 0xFFFFFFFF.toInt(), "黑" to 0xFF000000.toInt(),
                         "黄" to 0xFFFFEB3B.toInt(), "青" to 0xFF80DEEA.toInt()).forEach { (name, preset) ->

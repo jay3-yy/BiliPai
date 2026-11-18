@@ -1,5 +1,6 @@
 package com.android.purebilibili.core.ui.common
 
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.MutatePriority
@@ -15,6 +16,7 @@ import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -22,12 +24,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.pageLeft
+import androidx.compose.ui.semantics.pageRight
+import androidx.compose.ui.semantics.scrollToIndex
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineStart
@@ -142,16 +147,17 @@ internal fun resolvePagerReleaseTargetPage(
  */
 internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
     state: PagerState,
-    enabled: Boolean,
+    enabled: Boolean = true,
     reverseLayout: Boolean = false,
     horizontalLockSlopMultiplier: Float = 1f,
-    forceVerticalPriority: Boolean = false,
+    forceVerticalPriority: Boolean = true,
     dragInteractionSource: MutableInteractionSource? = null,
     shouldYield: () -> Boolean = { false },
+    settleAnimationSpec: AnimationSpec<Float>? = null,
+    exposePageActions: Boolean = true,
 ): Modifier = composed {
-    if (!enabled) return@composed this
-    // Glass comment lists need child-first arbitration even while the list is flinging.
-    // Other callers retain Miuix's native cross-axis takeover behavior by default.
+    if (!enabled || state.pageCount < 2) return@composed this
+    // Non-list surfaces can retain Miuix's cross-axis takeover behavior.
     if (!forceVerticalPriority && LocalAppUiStyle.current == AppUiStyle.MIUIX) {
         return@composed pagerGestureOverride(
             pagerState = state,
@@ -162,6 +168,8 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
 
     val latestShouldYield = rememberUpdatedState(shouldYield)
     val latestDragInteractionSource = rememberUpdatedState(dragInteractionSource)
+    val latestSettleAnimationSpec = rememberUpdatedState(settleAnimationSpec)
+    val pageActionScope = rememberCoroutineScope()
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
     val minimumFlingVelocityPx = with(density) {
@@ -178,7 +186,32 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
         )
     }
 
-    pointerInput(
+    val pageActions = if (exposePageActions) {
+        Modifier.semantics {
+            // The built-in pager input is disabled, so expose page navigation here.
+            pageLeft {
+                if (!state.canScrollBackward) false
+                else {
+                    pageActionScope.launch { state.animateScrollToPage(state.currentPage - 1) }
+                    true
+                }
+            }
+            pageRight {
+                if (!state.canScrollForward) false
+                else {
+                    pageActionScope.launch { state.animateScrollToPage(state.currentPage + 1) }
+                    true
+                }
+            }
+            scrollToIndex { page ->
+                require(page in 0 until state.pageCount) { "Page index out of bounds: $page" }
+                pageActionScope.launch { state.scrollToPage(page) }
+                true
+            }
+        }
+    } else Modifier
+
+    then(pageActions).pointerInput(
         state,
         reverseDirection,
         minimumFlingVelocityPx,
@@ -193,17 +226,10 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                 pass = PointerEventPass.Initial,
             )
             if (latestShouldYield.value()) return@gesture
-            if (state.isScrollInProgress) {
-                dragCoroutineScope.launch(start = CoroutineStart.UNDISPATCHED) {
-                    state.scroll(MutatePriority.UserInput) { }
-                }
-            }
             velocityTracker.resetTracking()
             velocityTracker.addPosition(down.uptimeMillis, down.position)
-            val gestureStartPage = state.currentPage
 
             var totalDrag = Offset.Zero
-            var availableHorizontalDrag = 0f
             var direction = PagerGestureDirection.UNDECIDED
             var trackedPointerId = down.id
             var horizontalLockChange: PointerInputChange? = null
@@ -214,16 +240,17 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                 // creator-team row) to keep ownership instead of being hijacked by the
                 // surrounding content pager.
                 val event = awaitPointerEvent(PointerEventPass.Main)
-                if (latestShouldYield.value()) return@gesture
+                if (latestShouldYield.value() || event.changes.count { it.pressed } > 1) return@gesture
                 val change = event.changes.firstOrNull { it.id == trackedPointerId }
                     ?: event.changes.firstOrNull { it.pressed }
                     ?: return@gesture
                 trackedPointerId = change.id
 
-                if (change.changedToUpIgnoreConsumed() || !change.pressed) return@gesture
-                val rawPositionChange = change.positionChangeIgnoreConsumed()
-                totalDrag += rawPositionChange
-                availableHorizontalDrag += change.positionChange().x
+                if (!change.pressed) return@gesture
+                val delta = change.positionChangeIgnoreConsumed()
+                if (delta == Offset.Zero) continue
+                if (change.isConsumed) return@gesture
+                totalDrag += delta
                 velocityTracker.addPosition(change.uptimeMillis, change.position)
                 direction = resolveVerticalPriorityPagerGestureDirection(
                     totalX = totalDrag.x,
@@ -232,20 +259,16 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                     horizontalLockSlopMultiplier = horizontalLockSlopMultiplier,
                 )
                 if (direction == PagerGestureDirection.HORIZONTAL) {
-                    // A nested horizontal scroller consumed the horizontal delta before this
-                    // parent pager. Leave the gesture with that child instead of switching tabs.
-                    if (abs(availableHorizontalDrag) <= viewConfiguration.touchSlop) {
-                        return@gesture
-                    }
                     horizontalLockChange = change
                 }
             }
 
             if (direction != PagerGestureDirection.HORIZONTAL) return@gesture
             horizontalLockChange?.consume()
+            val gestureStartPage = state.currentPage
 
             val initialHorizontalDelta = resolvePagerInitialHorizontalDelta(
-                totalX = availableHorizontalDrag,
+                totalX = totalDrag.x,
                 touchSlop = viewConfiguration.touchSlop,
             )
             val scrollDirectionMultiplier = if (reverseDirection) -1f else 1f
@@ -260,17 +283,18 @@ internal fun Modifier.verticalPriorityHorizontalPagerSwipe(
                     }
                 }
                 release?.let { dragRelease ->
-                    state.animateScrollToPage(
-                        resolvePagerReleaseTargetPage(
-                            startPage = gestureStartPage,
-                            pageCount = state.pageCount,
-                            pageSizePx = state.layoutInfo.pageSize.toFloat(),
-                            scrollDeltaPx = dragRelease.scrollDeltaPx,
-                            scrollVelocityPxPerSecond = dragRelease.velocityPxPerSecond,
-                            maximumPositionThresholdPx = maximumPositionThresholdPx,
-                            minimumFlingVelocityPxPerSecond = minimumFlingVelocityPx,
-                        ),
+                    val targetPage = resolvePagerReleaseTargetPage(
+                        startPage = gestureStartPage,
+                        pageCount = state.pageCount,
+                        pageSizePx = state.layoutInfo.pageSize.toFloat(),
+                        scrollDeltaPx = dragRelease.scrollDeltaPx,
+                        scrollVelocityPxPerSecond = dragRelease.velocityPxPerSecond,
+                        maximumPositionThresholdPx = maximumPositionThresholdPx,
+                        minimumFlingVelocityPxPerSecond = minimumFlingVelocityPx,
                     )
+                    val animationSpec = latestSettleAnimationSpec.value
+                    if (animationSpec == null) state.animateScrollToPage(targetPage)
+                    else state.animateScrollToPage(targetPage, animationSpec = animationSpec)
                 }
             }
 

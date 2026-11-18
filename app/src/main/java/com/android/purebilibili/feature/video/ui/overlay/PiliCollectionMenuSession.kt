@@ -1,6 +1,5 @@
 package com.android.purebilibili.feature.video.ui.overlay
 
-import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.HapticType
 
 import android.widget.Toast
@@ -32,7 +31,7 @@ fun rememberPiliCollectionMenuSession(
 ): PiliCollectionMenuSession {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val subscriptionHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
+    val subscriptionHaptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
     val seasonId = remember(ugcSeason) { ugcSeason?.let(::resolveCollectionSubscriptionId) ?: 0L }
     val orderSeasonId = if (isParts) 0L else seasonId
     val aid = remember(ugcSeason, bvid, cid) {

@@ -494,6 +494,45 @@ class CdnRegionPolicyTest {
     }
 
     @Test
+    fun `automatic selection prefers the fastest measured safe line and retains the originals`() {
+        val measured = rankCdnSpeedResults(listOf(
+            CdnSpeedResult(PlaybackCdnPreference.HW, 400_000, 30),
+            CdnSpeedResult(PlaybackCdnPreference.ALI, null, null),
+            CdnSpeedResult(PlaybackCdnPreference.COS, 800_000, 60),
+        )).first().preference
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf(
+                "https://video.bilivideo.com/upgcxcode/1/v.m4s?os=mcdn&sign=a",
+                "https://backup.bilivideo.com/upgcxcode/1/v.m4s?sign=b%2Fc",
+            ),
+            audioUrls = listOf(
+                "https://video.bilivideo.com/upgcxcode/1/a.m4s?os=mcdn&sign=d",
+                "https://backup.bilivideo.com/upgcxcode/1/a.m4s?sign=e%2Ff",
+            ),
+        )
+
+        val auto = applyPlaybackCdnPreference(original, PlaybackCdnPreference.AUTO, measuredPreference = measured)
+        assertEquals("https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/1/v.m4s?sign=b%2Fc", auto.first().videoUrl)
+        assertEquals("https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/1/a.m4s?sign=e%2Ff", auto.first().audioUrl)
+        assertTrue(auto.containsAll(original))
+
+        val fixed = applyPlaybackCdnPreference(original, PlaybackCdnPreference.HW, measuredPreference = measured)
+        assertEquals(PlaybackCdnPreference.HW.host, hostFromCdnUrl(fixed.first().videoUrl))
+    }
+
+    @Test
+    fun `measured host does not override a non portable audio track`() {
+        val original = buildPlaybackCdnCandidates(
+            videoUrls = listOf("https://video.bilivideo.com/upgcxcode/1/v.m4s?sign=a"),
+            audioUrls = listOf("https://audio.bilivideo.com/v1/resource/audio?sign=b"),
+        )
+        val selected = applyPlaybackCdnPreference(
+            original, PlaybackCdnPreference.AUTO, measuredPreference = PlaybackCdnPreference.COS,
+        )
+        assertEquals(original, selected)
+    }
+
+    @Test
     fun `default preference promotes signed regular backup without rewriting tracks`() {
         val original = buildPlaybackCdnCandidates(
             videoUrls = listOf(

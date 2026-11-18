@@ -471,7 +471,8 @@ fun BangumiPlayerScreen(
     val landscapeCommentCloseProgress = remember(seasonId) { mutableFloatStateOf(1f) }
     var measuredCommentWidthPx by remember { mutableIntStateOf(0) }
     val commentWidthDp = resolveLandscapeEndDrawerLayoutPolicy(configuration.screenWidthDp).drawerWidthDp
-    val commentPanelVisible = landscapeCommentVisible && isFullscreen && !isInPipMode && successState != null
+    val commentPanelAvailable = isFullscreen && !isInPipMode && successState != null
+    val commentPanelVisible = landscapeCommentVisible && commentPanelAvailable
     LaunchedEffect(isFullscreen, isInPipMode) {
         if (!isFullscreen || isInPipMode) {
             landscapeCommentVisible = false
@@ -511,7 +512,9 @@ fun BangumiPlayerScreen(
         commentVisible = commentPanelVisible, commentOnLeft = landscapeCommentOnLeft,
         commentWidthDp = commentWidthDp,
         commentCloseProgressProvider = { landscapeCommentCloseProgress.floatValue },
-        onCommentClick = { landscapeCommentVisible = !landscapeCommentVisible },
+        onCommentClick = if (commentPanelAvailable) ({
+            landscapeCommentVisible = !landscapeCommentVisible
+        }) else null,
         onDanmakuInputClick = {
             if (!danmakuAllowed) Toast.makeText(context, "该剧集不支持弹幕", Toast.LENGTH_SHORT).show()
             else if (successState?.isLoggedIn != true) onNavigateToLogin()

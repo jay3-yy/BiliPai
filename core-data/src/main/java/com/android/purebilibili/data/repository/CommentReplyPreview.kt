@@ -15,6 +15,7 @@ suspend fun loadCommentReplyPreview(
     item: ReplyItem,
     collapsedLimit: Int,
     loadedReplies: List<ReplyItem> = item.replies.orEmpty(),
+    applyDisplayFilter: Boolean = true,
     loadPage: suspend (pageSize: Int) -> Result<ReplyData> = { pageSize ->
         CommentRepository.getSubCommentsForSubject(
             oid = item.oid,
@@ -22,6 +23,7 @@ suspend fun loadCommentReplyPreview(
             rootId = item.rpid,
             page = 1,
             ps = pageSize,
+            applyDisplayFilter = applyDisplayFilter,
         )
     },
 ): List<ReplyItem> {

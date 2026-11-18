@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.message.feed
 
 import com.android.purebilibili.core.ui.AppContentColors
 
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.runtime.*
 import com.android.purebilibili.feature.message.*
 import androidx.compose.foundation.clickable
@@ -311,7 +311,7 @@ private fun AtMeCard(
     MessageFeedCard(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = { confirmDelete = true })
+            .appCombinedClickable(onClick = onClick, onLongClick = { confirmDelete = true })
             .messageSecondaryClick { confirmDelete = true }
     ) {
         Row(modifier = Modifier.padding(14.dp)) {

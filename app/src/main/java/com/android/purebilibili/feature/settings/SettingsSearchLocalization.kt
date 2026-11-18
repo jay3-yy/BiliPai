@@ -7,6 +7,7 @@ import com.android.purebilibili.R
 internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (settingId) {
     "animation.predictive_back_enabled" -> R.string.animation_predictive_back_title
     "animation.card_transition_enabled" -> R.string.animation_title_card_transition
+    SETTINGS_ICON_GLYPHS_SETTING_ID -> R.string.appearance_settings_icon_glyphs_title
     "legacy.001" -> R.string.settings_search_legacy_001_title
     "legacy.002" -> R.string.settings_search_legacy_002_title
     "legacy.003" -> R.string.settings_search_legacy_003_title
@@ -34,6 +35,7 @@ internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (
 
 @StringRes
 internal fun settingsSearchResultSummaryResource(settingId: String): Int? = when (settingId) {
+    SETTINGS_ICON_GLYPHS_SETTING_ID -> R.string.appearance_settings_icon_glyphs_summary
     "legacy.001" -> R.string.settings_search_legacy_001_summary
     "legacy.002" -> R.string.settings_search_legacy_002_summary
     "legacy.003" -> R.string.settings_search_legacy_003_summary

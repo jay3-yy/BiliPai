@@ -14,7 +14,6 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi //  Added
-import androidx.compose.foundation.LocalOverscrollFactory // [Fix] Import for disabling overscroll (New API)
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.foundation.layout.*
@@ -26,6 +25,8 @@ import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import com.android.purebilibili.core.ui.blur.LocalChromeBackdropRecordingAllowed
 import com.android.purebilibili.core.ui.blur.rememberPagerChromeBackdropRecordingAllowed
+import com.android.purebilibili.core.ui.common.HOME_PAGER_HORIZONTAL_LOCK_SLOP_MULTIPLIER
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,6 +37,10 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
+import com.android.purebilibili.core.ui.rememberVisualWorkActive
+import com.android.purebilibili.core.util.animateScrollWhileActive
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material.icons.outlined.Close
@@ -46,6 +51,7 @@ import com.android.purebilibili.core.ui.components.AppModalNavigationDrawer
 import com.android.purebilibili.core.ui.components.AppButton
 import androidx.compose.material3.rememberDrawerState
 import com.android.purebilibili.feature.home.components.MineSideDrawer
+import com.android.purebilibili.feature.home.components.resolveHomeTopLinkedBottomBarAppearance
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -96,6 +102,7 @@ import com.android.purebilibili.feature.home.policy.reduceHomeBottomBarListScrol
 import com.android.purebilibili.feature.home.policy.shouldEmitBottomBarScrollSample
 import com.android.purebilibili.feature.home.policy.resolveHomeBottomBarBaseVisibility
 import com.android.purebilibili.feature.home.policy.resolveHomeRecommendationHeaderCollapseMode
+import com.android.purebilibili.feature.bangumi.BangumiChannel
 import com.android.purebilibili.feature.bangumi.HomeBangumiTabPage
 import com.android.purebilibili.feature.live.LiveListScreen
 import com.android.purebilibili.feature.home.policy.resolveHomeInitialTopTabPage
@@ -149,7 +156,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged  //  性能优化：防止�
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map as mapFlow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import androidx.compose.animation.ExperimentalSharedTransitionApi  //  共享过渡实验API
 import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
 import com.android.purebilibili.core.ui.LocalBottomBarVisible
@@ -168,26 +176,8 @@ enum class HomeScrollRequest {
     SCROLL_TO_TOP_AND_REFRESH,
 }
 
-private const val HOME_RESELECT_DOUBLE_TAP_WINDOW_MS = 300L
-
-internal fun mergeHomeScrollRequests(
-    first: HomeScrollRequest,
-    followUp: HomeScrollRequest,
-): HomeScrollRequest = when {
-    first == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ||
-        followUp == HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH ->
-        HomeScrollRequest.SCROLL_TO_TOP_AND_REFRESH
-    first == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH ||
-        followUp == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH ->
-        HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH
-    else -> HomeScrollRequest.SCROLL_TO_TOP
-}
-
 // 首页只有一个可见消费者；Channel 保证底栏重选/双击事件不会在暂停采集时丢失。
 val LocalHomeScrollChannel = compositionLocalOf<Channel<HomeScrollRequest>?> { null }
-
-/** Home feed LayerBackdrop for card info liquid glass (sibling capture, not nested SO). */
-val LocalHomeMiuixBackdrop = staticCompositionLocalOf<MiuixBackdrop?> { null }
 
 /** Wallpaper-only LayerBackdrop used by video-card info surfaces. */
 val LocalHomeWallpaperBackdrop = staticCompositionLocalOf<MiuixBackdrop?> { null }
@@ -253,7 +243,7 @@ fun HomeScreen(
     onLiveAreaDetailClick: (Int, Int, String) -> Unit = { _, _, _ -> },
     onBangumiSeasonClick: (Long) -> Unit = {},
     onBangumiEpisodeClick: (Long, Long) -> Unit = { seasonId, _ -> onBangumiSeasonClick(seasonId) },
-    onBangumiPlayFollow: (Long) -> Unit = onBangumiSeasonClick,
+    onOpenFavoritePgc: ((BangumiChannel) -> Unit)? = null,
     onWatchLaterClick: () -> Unit = {},  // 稍后再看页面
     onDownloadClick: () -> Unit = {},  // 离线缓存页面
     onInboxClick: () -> Unit = {},  // 私信页面
@@ -310,6 +300,8 @@ fun HomeScreen(
     var subscriptionArticleScrolling by remember { mutableStateOf(false) }
     val subscriptionListState = rememberHomeStaggeredGridState()
     // [Feature] Video Preview State (Global Scope)
+    val downloadAccount by com.android.purebilibili.core.store.TokenManager.accountIdentity.collectAsStateWithLifecycle()
+    val downloadSelection = remember(currentCategory, popularSubCategory, downloadAccount) { HomeDownloadSelection() }
     val targetVideoItemState = remember { mutableStateOf<VideoItem?>(null) }
     var dissolvingNotInterestedVideo by remember { mutableStateOf<VideoItem?>(null) }
     var pendingNotInterestedVideo by remember { mutableStateOf<VideoItem?>(null) }
@@ -409,6 +401,10 @@ fun HomeScreen(
     )
     val latestHomeTopTabEntries by rememberUpdatedState(topTabEntries)
     val latestHomeTopLevelActive by rememberUpdatedState(isTopLevelActive)
+    val homeVisualWorkActive = rememberVisualWorkActive()
+    val latestHomeReturnMotionAllowed by rememberUpdatedState(
+        homeVisualWorkActive && LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current,
+    )
 
     fun selectHomeTopTab(index: Int) {
         val selectedEntry = topTabEntries.getOrNull(index) ?: return
@@ -455,9 +451,15 @@ fun HomeScreen(
                 pagerScrolling = pagerState.isScrollInProgress,
             )
         }
-        headerScrollState.withScrollToTopLock(headerSettleMotionSpec, requestIsCurrent = requestIsCurrent) {
-            val entry = identity.entry
-            when (resolveHomeTopTabScrollTarget(entry)) {
+        val entry = identity.entry
+        val target = resolveHomeTopTabScrollTarget(entry)
+        headerScrollState.withScrollToTopLock(
+            requestIsCurrent = requestIsCurrent,
+            settleMotionSpec = headerSettleMotionSpec.takeIf {
+                target != HomeTopTabScrollTarget.FEED && latestHomeReturnMotionAllowed
+            },
+        ) {
+            when (target) {
                 HomeTopTabScrollTarget.LIVE -> liveScrollToTopRequestId++
                 HomeTopTabScrollTarget.BANGUMI -> bangumiScrollToTopRequestId++
                 HomeTopTabScrollTarget.PARTITION -> partitionScrollToTopRequestId++
@@ -477,13 +479,23 @@ fun HomeScreen(
                         (request == HomeScrollRequest.SCROLL_TO_TOP_OR_REFRESH && isAtTop)
                     if (!isAtTop) {
                         val listState = requireNotNull(gridState)
-                        // 底栏/重选回顶直达：单次 scrollToItem 是原子操作，
-                        // 无两段式 preJump+animate 的中间态，任何距离都不掉帧。
-                        listState.scrollToItem(0)
-                        if (!requestIsCurrent()) return@withScrollToTopLock
-                        // 纯回顶反馈当前内容；回顶并刷新不能先在旧卡片上播放完成反馈。
-                        // 刷新期间的位移交给刷新容器，在结果提交后完成原生收回。
-                        if (!shouldRefresh && !isRefreshing) listState.notifyAppScrollToTop()
+                        if (shouldRefresh || isRefreshing || !latestHomeReturnMotionAllowed) {
+                            // 刷新换批前一次到位，旧内容不参与回顶动画。
+                            listState.scrollToItem(0)
+                        } else {
+                            val completed = headerScrollState.followReturnToTop(
+                                remainingScrollPx = {
+                                    listState.remainingScrollToTopPx().takeIf { requestIsCurrent() }
+                                },
+                            ) {
+                                animateScrollWhileActive(
+                                    isActive = { requestIsCurrent() && latestHomeReturnMotionAllowed && !isRefreshing },
+                                ) {
+                                    listState.animateScrollToItem(0)
+                                }
+                            }
+                            if (!completed) return@withScrollToTopLock false
+                        }
                     }
                     if (shouldRefresh && requestIsCurrent()) {
                         viewModel.refresh(
@@ -493,28 +505,24 @@ fun HomeScreen(
                     }
                 }
             }
+            true
         }
     }
     LaunchedEffect(scrollChannel, useRegularHomeGrid) {
         val channel = scrollChannel ?: return@LaunchedEffect
-        for (initialRequest in channel) {
-            // 合并双击的等待期也属于当前页面，期间切页不能把旧事件送给新页面。
+        var activeRequest: Job? = null
+        var activeIdentity: HomeScrollRequestIdentity? = null
+        for (request in channel) {
             val requestIdentity = currentHomeScrollRequestIdentity()
-            // 双击首先会发出普通重选，随后再发出“回顶并刷新”。
-            // 在双击窗口内将它们升级为一个语义事务，避免先回顶、再回顶刷新的两段滚动。
-            val request = if (initialRequest == HomeScrollRequest.SCROLL_TO_TOP) {
-                withTimeoutOrNull(HOME_RESELECT_DOUBLE_TAP_WINDOW_MS) {
-                    channel.receive()
-                }?.let { followUp ->
-                    mergeHomeScrollRequests(initialRequest, followUp)
-                } ?: initialRequest
-            } else {
-                initialRequest
+            if (request == HomeScrollRequest.SCROLL_TO_TOP &&
+                requestIdentity == activeIdentity && activeRequest?.isActive == true
+            ) continue
+            // 首击立即滚动；第二击接管当前列表位置，提交一次回顶刷新。
+            activeRequest?.cancelAndJoin()
+            activeIdentity = requestIdentity
+            activeRequest = launch {
+                performHomeScrollRequest(requestIdentity, request)
             }
-            performHomeScrollRequest(
-                requestIdentity,
-                request,
-            )
         }
     }
     TrackJankStateFlag(
@@ -621,7 +629,6 @@ fun HomeScreen(
     // displayed feed data; pager synchronization and anchor recovery gate work below.
     val homeFeedWorkAllowed = homeFeedUpdatesAllowed &&
         pagerCoordinator.hasSynced && returnState.pendingAnchor == null
-    val homeVisualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
     val foregroundSettling by com.android.purebilibili.core.lifecycle.ForegroundSettleBudget
         .isSettling
         .collectAsStateWithLifecycle()
@@ -811,7 +818,6 @@ fun HomeScreen(
     val cardAnimationEnabled = homePerformanceConfig.cardAnimationEnabled && !systemReduceMotion
     // 过渡由用户设置控制；系统“减弱动效”开启时统一关闭。
     val cardTransitionEnabled = homePerformanceConfig.cardTransitionEnabled && !systemReduceMotion
-    val isBottomBarLiquidGlassEnabled = homePerformanceConfig.bottomBarLiquidGlassEnabled
     val homeLiquidGlassTuning = remember(
         homeSettings.liquidGlassProgress,
         homeSettings.liquidGlassAdvancedSettings,
@@ -825,18 +831,10 @@ fun HomeScreen(
     }
     val isLiquidGlassEnabled = homePerformanceConfig.isAnyLiquidGlassEnabled
     val appThemeConfig = com.android.purebilibili.core.ui.LocalAppThemeConfig.current
-    val chromeCategoryStateFlow = remember(viewModel, currentCategory, popularSubCategory) {
-        if (currentCategory == HomeCategory.POPULAR) {
-            viewModel.getPopularCategoryState(popularSubCategory)
-        } else {
-            viewModel.getCategoryState(currentCategory)
-        }
-    }
-    val chromeContentReady by chromeCategoryStateFlow.collectHomeChromeContentReady(homeFeedUpdatesAllowed)
     val homeChromeBlurEnabled = isLiquidGlassEnabled || isHeaderBlurEnabled ||
         isBottomBarBlurEnabled || appThemeConfig.progressiveTopBlurEnabled
     // 渐进模糊没有有效半径、系统不支持或被预算关闭时，不单独录制整个 feed。
-    // 搜索、标签和底栏的独立磨砂/玻璃仍按原有需求保留背景源，纯色渐隐无需采样。
+    // 纯色渐隐无需独立的背景源。
     val progressiveTopBlurNeedsBackdrop =
         com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur(
             enabled = appThemeConfig.progressiveTopBlurEnabled && !isHeaderBlurEnabled,
@@ -845,58 +843,7 @@ fun HomeScreen(
         ) && !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
     val shouldCaptureHomeChromeBackdrop = isLiquidGlassEnabled || isHeaderBlurEnabled ||
         isBottomBarBlurEnabled || progressiveTopBlurNeedsBackdrop
-    val homeChromeRecordingAllowed = LocalChromeBackdropRecordingAllowed.current
-    val rasterizeHomeChromeBackdrop by remember(
-        isLiquidGlassEnabled, cardTransitionEnabled, systemReduceMotion,
-        homeChromeRecordingAllowed, videoCardTransitionBackgroundState,
-    ) {
-        derivedStateOf {
-            com.android.purebilibili.core.ui.transition.shouldRasterizeVideoCardChromeBackdrop(
-                liquidGlassEnabled = isLiquidGlassEnabled,
-                cardTransitionEnabled = cardTransitionEnabled,
-                reduceMotion = systemReduceMotion,
-                recordingAllowed = homeChromeRecordingAllowed,
-                exposure = videoCardTransitionBackgroundState.exposureProvider(),
-            )
-        }
-    }
-    val homeMiuixBackdropSource = if (shouldCaptureHomeChromeBackdrop) {
-        // 顶栏采样变换前的 feed，不能改用包含顶栏自身的导航背景源。
-        // 玻璃开合时在内层复用实时纹理，供顶栏、图标与外层导航合成共同使用；
-        // 原生 MD3、Miuix 及普通滚动保持原有绘制，壁纸专用源不加入该纹理。
-        rememberChromeBackdropSource(
-            isolateContentDrawing = true,
-            rasterizeContent = rasterizeHomeChromeBackdrop,
-        )
-    } else {
-        null
-    }
-    val homeMiuixBackdrop = homeMiuixBackdropSource?.backdrop
-    val readyHomeMiuixBackdrop = homeMiuixBackdropSource?.takeIf {
-        chromeContentReady && it.isReady
-    }?.backdrop
-
-    // 已有页面背景源时，只为仍消费 Haze 的原生顶栏保留额外采样。
-    // 渐进模糊独立开启时顶栏不消费 Haze；抽屉的顶部模糊需求仍按原开关保留。
     val appUiStyle = com.android.purebilibili.core.theme.LocalAppUiStyle.current
-    val shouldCaptureHomeHaze = if (homeMiuixBackdropSource != null) {
-        com.android.purebilibili.feature.home.components.shouldUseOfficialMd3HomeTopToolbar(
-            uiStyle = appUiStyle,
-            liquidGlassEnabled = isLiquidGlassEnabled,
-        ) && (!appThemeConfig.progressiveTopBlurEnabled || isHeaderBlurEnabled)
-    } else {
-        isLiquidGlassEnabled || isHeaderBlurEnabled || isBottomBarBlurEnabled
-    }
-    // 首页使用独立 HazeState，避免命中外层全局 source 的祖先过滤规则导致无模糊。
-    // 实色路径不创建 source；普通模糊或玻璃路径才承担背景采样成本。
-    val hazeState = if (shouldCaptureHomeHaze &&
-        shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT) &&
-        !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
-    ) {
-        rememberRecoverableHazeState(initialBlurEnabled = true)
-    } else {
-        null
-    }?.takeIf { recoverableBlurEnabled(it) }
     val isDataSaverActive = homePerformanceConfig.isDataSaverActive
     val preloadAheadCount = homePerformanceConfig.preloadAheadCount
     val configuredHomeWallpaperUri = com.android.purebilibili.core.ui.wallpaper.LocalHomeWallpaperSelection.current.uri
@@ -1646,14 +1593,110 @@ fun HomeScreen(
     } else {
         Modifier
     }
+    val videoCardClock = LocalVideoCardTransitionClock.current
+    val videoCardSettleState = videoCardClock?.settleState
+    val homeHeaderChromeVisible = !subscriptionArticleOpen && (
+        homeFeedOwnsVideoCardSnapshot ||
+            shouldShowHomeOverlayChromeDuringVideoCardTransition(
+                exposure = resolveVideoCardTransitionExposure(
+                    phase = videoCardClock?.phase ?: VideoCardTransitionBackgroundPhase.IDLE,
+                    predictiveBackInProgress =
+                        videoCardSettleState == VideoCardTransitionSettleState.InteractiveSeek,
+                    gestureRestoreInProgress =
+                        videoCardSettleState == VideoCardTransitionSettleState.CancelRestore ||
+                            videoCardClock?.gestureRestoreInProgress == true,
+                ),
+            )
+        )
+    val appearHomeHeaderFromHidden = homeHeaderChromeVisible && (
+        videoCardSettleState == VideoCardTransitionSettleState.InteractiveSeek ||
+            videoCardClock?.phase == VideoCardTransitionBackgroundPhase.RETURNING
+        )
+    val homeHeaderVisibilityState = remember(isHomeDrawerEnabled) {
+        MutableTransitionState(!appearHomeHeaderFromHidden)
+    }
+    homeHeaderVisibilityState.targetState = homeHeaderChromeVisible
+
+    val headerMounted = homeHeaderVisibilityState.currentState || homeHeaderVisibilityState.targetState ||
+        !homeHeaderVisibilityState.isIdle
+    val linkedTopBlur = remember(effectiveHomeSettings, topChromePolicy.tabPresentation) {
+        resolveHomeTopLinkedBottomBarAppearance(effectiveHomeSettings, topChromePolicy.tabPresentation).blurEnabled
+    }
+    val headerNeedsBackdrop = headerMounted && (
+        homePerformanceConfig.topBarLiquidGlassEnabled || homePerformanceConfig.homeSearchLiquidGlassEnabled ||
+            isHeaderBlurEnabled || linkedTopBlur || progressiveTopBlurNeedsBackdrop
+        )
+    val drawerMounted = isHomeDrawerEnabled && shouldKeepDrawerBottomBarHidden
+    val previewNeedsBackdrop = targetVideoItemState.value != null && homeChromeBlurEnabled &&
+        shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT) &&
+        !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
+    val homeChromeRecordingAllowed = LocalChromeBackdropRecordingAllowed.current
+    val recordHomeChromeBackdrop = shouldCaptureHomeChromeBackdrop && homeChromeRecordingAllowed && (
+        headerNeedsBackdrop || (drawerMounted && isLiquidGlassEnabled) || previewNeedsBackdrop
+        )
+    val rasterizeHomeChromeBackdrop by remember(
+        isLiquidGlassEnabled, cardTransitionEnabled, systemReduceMotion,
+        recordHomeChromeBackdrop, videoCardTransitionBackgroundState,
+    ) {
+        derivedStateOf {
+            com.android.purebilibili.core.ui.transition.shouldRasterizeVideoCardChromeBackdrop(
+                liquidGlassEnabled = isLiquidGlassEnabled,
+                cardTransitionEnabled = cardTransitionEnabled,
+                reduceMotion = systemReduceMotion,
+                recordingAllowed = recordHomeChromeBackdrop,
+                exposure = videoCardTransitionBackgroundState.exposureProvider(),
+            )
+        }
+    }
+    val homeMiuixBackdropSource = if (shouldCaptureHomeChromeBackdrop) {
+        // 顶栏只采样变换前的 feed，外层导航源还包含顶栏本身。停录时保留源身份。
+        rememberChromeBackdropSource(
+            isolateContentDrawing = true,
+            recordingEnabled = recordHomeChromeBackdrop,
+            rasterizeContent = rasterizeHomeChromeBackdrop,
+        )
+    } else null
+    val chromeCategoryStateFlow = remember(viewModel, currentCategory, popularSubCategory) {
+        if (currentCategory == HomeCategory.POPULAR) {
+            viewModel.getPopularCategoryState(popularSubCategory)
+        } else {
+            viewModel.getCategoryState(currentCategory)
+        }
+    }
+    val chromeContentReady by chromeCategoryStateFlow.collectHomeChromeContentReady(
+        homeFeedUpdatesAllowed && recordHomeChromeBackdrop,
+    )
+    val readyHomeMiuixBackdrop = homeMiuixBackdropSource?.takeIf {
+        chromeContentReady && it.isReady
+    }?.backdrop
+
+    val shouldCaptureHomeHaze = shouldCaptureHomeChromeBackdrop &&
+        com.android.purebilibili.feature.home.components.shouldUseOfficialMd3HomeTopToolbar(
+            uiStyle = appUiStyle,
+            liquidGlassEnabled = isLiquidGlassEnabled,
+        ) && (!appThemeConfig.progressiveTopBlurEnabled || isHeaderBlurEnabled)
+    val hazeState = if (shouldCaptureHomeHaze &&
+        shouldAllowRenderEffectBackedHazeEffect(Build.VERSION.SDK_INT) &&
+        !com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced()
+    ) {
+        rememberRecoverableHazeState(initialBlurEnabled = true)
+    } else null
+    val headerUsesHomeHaze =
+        topChromeMaterialMode != com.android.purebilibili.feature.home.components.TopTabMaterialMode.PLAIN &&
+            !appThemeConfig.progressiveTopBlurEnabled
+    val recordHomeHaze = homeChromeRecordingAllowed && (
+        (headerMounted && headerUsesHomeHaze) || (drawerMounted && isHeaderBlurEnabled) || previewNeedsBackdrop
+        )
+    val readyHomeHaze = hazeState?.takeIf { recordHomeHaze && recoverableBlurEnabled(it) }
     val homeFeedUnobscured = targetVideoItemState.value == null && pendingVideoShare.value == null &&
+        downloadSelection.request == null &&
         !easterEggDialogVisible.value && !(isHomeDrawerEnabled && shouldKeepDrawerBottomBarHidden)
     val scaffoldLayout: @Composable () -> Unit = {
         // Composite header and feed before applying depth; separate blur layers form a seam.
         Box(modifier = Modifier.fillMaxSize().then(homeFeedSnapshotModifier)) {
         AppScaffold(
-                // 顶部渐进模糊和玻璃控件沿用 feed 背景；避免 scaffold 再录制相同内容。
-                topBarIconBackdropSource = homeMiuixBackdropSource,
+                // 顶栏在 Scaffold 外，其采样由首页提供。
+                contentBackdropEnabled = false,
                 modifier = Modifier
                     .fillMaxSize()
                     .nestedScroll(nestedScrollConnection),
@@ -1673,7 +1716,6 @@ fun HomeScreen(
                             com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current &&
                                 homeFeedUnobscured
                         ),
-                        LocalHomeMiuixBackdrop provides homeMiuixBackdrop,
                         LocalHomeWallpaperBackdrop provides readyHomeWallpaperBackdrop,
                         LocalHomeWallpaperBackdropReady provides (readyHomeWallpaperBackdrop != null),
                         LocalHomeWallpaperIsStatic provides (
@@ -1689,8 +1731,8 @@ fun HomeScreen(
                             .then(homeMiuixBackdropSource?.modifier ?: Modifier)
                             // 首页使用 Pager + Lazy 子层，source 挂在外层容器更稳定。
                             .then(
-                                if (hazeState != null && LocalChromeBackdropRecordingAllowed.current) {
-                                    Modifier.hazeSourceCompat(state = hazeState)
+                                if (readyHomeHaze != null) {
+                                    Modifier.hazeSourceCompat(state = readyHomeHaze)
                                 } else {
                                     Modifier
                                 }
@@ -1748,13 +1790,15 @@ fun HomeScreen(
                         HorizontalPager(
                             state = pagerState,
                             beyondViewportPageCount = 0,
-                            userScrollEnabled = homeTopPagerSwipeEnabled,
-                            shouldYieldGesture = shouldYieldHomePagerToHeroCarousel,
-                            // 轮播按下时只停用外层识别器；移除 Miuix 接管节点会取消子树触摸。
-                            // 仅首页嵌套分页使用此策略，MD3 与玻璃材质的布局参数保持原样。
-                            useNativeGestures = true,
+                            userScrollEnabled = false,
                             modifier = Modifier
-                                .fillMaxSize(),
+                                .fillMaxSize()
+                                .verticalPriorityHorizontalPagerSwipe(
+                                    state = pagerState,
+                                    enabled = homeTopPagerSwipeEnabled,
+                                    horizontalLockSlopMultiplier = HOME_PAGER_HORIZONTAL_LOCK_SLOP_MULTIPLIER,
+                                    shouldYield = shouldYieldHomePagerToHeroCarousel,
+                                ),
                             key = { index -> resolveHomeTopTabEntryKey(topTabEntries, index) }
                         ) { page ->
                         val pageWork = resolveHomePagerPageWork(
@@ -1866,7 +1910,7 @@ fun HomeScreen(
                                     ),
                                     onBangumiClick = onBangumiSeasonClick,
                                     onBangumiEpisodeClick = onBangumiEpisodeClick,
-                                    onPlayFollow = onBangumiPlayFollow,
+                                    onOpenFavoritePgc = onOpenFavoritePgc,
                                     scrollToTopRequestId = bangumiScrollToTopRequestId,
                                 )
                             }
@@ -2170,7 +2214,7 @@ fun HomeScreen(
                                      itemCount = pageCategoryState.videos.size
                                  )
                                  val pageContentPadding = PaddingValues(
-                                     bottom = homeListBottomPadding,
+                                     bottom = homeListBottomPadding + if (category == currentCategory && downloadSelection.active) 64.dp else 0.dp,
                                      start = homeFeedCardLayout.outerPaddingDp.dp,
                                      end = homeFeedCardLayout.outerPaddingDp.dp,
                                      top = resolveHomeFeedTopPaddingDp(
@@ -2219,7 +2263,8 @@ fun HomeScreen(
                                          onWatchLater = onWatchLaterCallback,
                                          onDissolveComplete = onDissolveCompleteCallback,
                                          dissolveReflowEnabled = !systemReduceMotion,
-                                         longPressCallback = onLongPressCallback, // [Feature] Pass callback
+                                         longPressCallback = onLongPressCallback,
+                                         downloadSelection = downloadSelection.takeIf { category == currentCategory },
                                          displayMode = displayMode,
                                          // 刷新数据换位时不再同时启动整屏卡片 placement spring。
                                          cardAnimationEnabled = cardAnimationEnabled && !isPageRefreshing,
@@ -2331,7 +2376,7 @@ fun HomeScreen(
                 } // Close HorizontalPager lambda
                         } // Close AppHingeSafeContent
             } // Close Box wrapper
-                    } // Close LocalHomeMiuixBackdrop provider
+                    } // Close wallpaper and feed work provider
         } // Close Scaffold lambda
 
         //  ===== Header Overlay (毛玻璃效果) =====
@@ -2386,30 +2431,6 @@ fun HomeScreen(
         } else {
             false
         }
-        val videoCardClock = LocalVideoCardTransitionClock.current
-        val videoCardSettleState = videoCardClock?.settleState
-        val homeHeaderChromeVisible = !subscriptionArticleOpen && (
-            homeFeedOwnsVideoCardSnapshot ||
-            shouldShowHomeOverlayChromeDuringVideoCardTransition(
-            exposure = resolveVideoCardTransitionExposure(
-                phase = videoCardClock?.phase ?: VideoCardTransitionBackgroundPhase.IDLE,
-                predictiveBackInProgress = videoCardSettleState ==
-                    VideoCardTransitionSettleState.InteractiveSeek,
-                gestureRestoreInProgress = videoCardSettleState ==
-                    VideoCardTransitionSettleState.CancelRestore ||
-                    videoCardClock?.gestureRestoreInProgress == true,
-            ),
-            )
-        )
-        val appearHomeHeaderFromHidden = homeHeaderChromeVisible &&
-            (
-                videoCardSettleState == VideoCardTransitionSettleState.InteractiveSeek ||
-                    videoCardClock?.phase == VideoCardTransitionBackgroundPhase.RETURNING
-            )
-        val homeHeaderVisibilityState = remember {
-            MutableTransitionState(!appearHomeHeaderFromHidden)
-        }
-        homeHeaderVisibilityState.targetState = homeHeaderChromeVisible
         val headerDepthDensity = LocalDensity.current
         val activeHeaderDepthClock = videoCardClock?.takeIf {
             !homeFeedOwnsVideoCardSnapshot && it.phase != VideoCardTransitionBackgroundPhase.IDLE &&
@@ -2491,20 +2512,7 @@ fun HomeScreen(
             },
             onPartitionClick = onPartitionClick,
             // isScrollingUp = isHeaderVisible, // [Removed] logic moved to offset
-            hazeState = if (topChromeMaterialMode != com.android.purebilibili.feature.home.components.TopTabMaterialMode.PLAIN && !appThemeConfig.progressiveTopBlurEnabled) {
-                hazeState
-            } else {
-                null
-            },
-            onStatusBarDoubleTap = {
-                val identity = currentHomeScrollRequestIdentity()
-                coroutineScope.launch {
-                    performHomeScrollRequest(
-                        identity,
-                        HomeScrollRequest.SCROLL_TO_TOP,
-                    )
-                }
-            },
+            hazeState = readyHomeHaze.takeIf { headerUsesHomeHaze },
             isRefreshing = isRefreshing,
             pullProgress = 0f, // [Fix] Outer header doesn't track inner pull state
             pagerState = pagerState,
@@ -2512,6 +2520,7 @@ fun HomeScreen(
             homeSettings = effectiveHomeSettings,
             topTabsVisible = !effectiveHomeSettings.hideTopTabs,
             topTabsCollapsed = topTabsCollapsedForHeader,
+            returnTabRevealFraction = headerScrollState.returnTabRevealFraction,
             onTopTabsCollapsedChange = {},
             motionTier = deviceUiProfile.motionTier,
             isScrolling = isFeedScrollInProgress,
@@ -2558,14 +2567,24 @@ fun HomeScreen(
             )
         }
 
+        androidx.compose.runtime.key(downloadSelection) {
+            HomeBatchDownloadHost(
+                selection = downloadSelection,
+                pageActive = isTopLevelActive,
+                onOpenDownloads = onDownloadClick,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = homeListBottomPadding),
+            )
+        }
+
         HomeVideoPreviewHost(
             viewModel = viewModel,
+            downloadSelection = downloadSelection,
             targetVideoItemState = targetVideoItemState,
             pendingVideoShare = pendingVideoShare,
             currentCategory = currentCategory,
             onVideoClick = wrappedOnVideoClick,
             onDismissVideoCallback = onDismissVideoCallback,
-            hazeState = hazeState,
+            hazeState = readyHomeHaze,
             miuixBackdrop = readyHomeMiuixBackdrop,
             backgroundBlurEnabled = homeChromeBlurEnabled,
         )
@@ -2605,7 +2624,7 @@ fun HomeScreen(
                         onSettingsClick = onSettingsClick,
                         onProfileClick = onProfileClick,
                         onAccountSwitchClick = onAccountSwitchClick,
-                        hazeState = hazeState,
+                        hazeState = readyHomeHaze,
                         isBlurEnabled = isHeaderBlurEnabled,
                         bottomOverlayHeight = drawerBottomOverlayHeight,
                         miuixBackdrop = readyHomeMiuixBackdrop,

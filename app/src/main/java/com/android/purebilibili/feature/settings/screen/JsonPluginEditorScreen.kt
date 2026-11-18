@@ -1,6 +1,7 @@
 // 文件路径: feature/settings/JsonPluginEditorScreen.kt
 package com.android.purebilibili.feature.settings
 
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
@@ -65,7 +66,7 @@ fun JsonPluginEditorScreen(
                 )
                 onSave(updated)
             }) {
-                AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_24), contentDescription = "保存")
+                AppIcon(rememberSettingsVector(R.drawable.ph_check_24, R.drawable.ms_check_24), contentDescription = "保存")
             }
         },
     ) {
@@ -145,7 +146,7 @@ fun JsonPluginEditorContent(
                 AppTextButton(onClick = {
                     onRulesChange(rules + Rule(field = "title", op = "contains", value = JsonPrimitive(""), action = "hide"))
                 }) {
-                    AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_add_24), null, modifier = Modifier.size(16.dp))
+                    AppIcon(rememberSettingsVector(R.drawable.ph_plus_24, R.drawable.ms_add_24), null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     AppText("添加规则")
                 }
@@ -240,7 +241,7 @@ private fun RuleEditor(
                 )
                 AppIconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
                     AppIcon(
-                        com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_delete_24),
+                        rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24),
                         contentDescription = "删除",
                         tint = AppContentColors.error(),
                         modifier = Modifier.size(18.dp)

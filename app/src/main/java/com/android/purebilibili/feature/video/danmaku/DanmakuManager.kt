@@ -173,7 +173,7 @@ class DanmakuManager private constructor(
     private var sourceBasDanmakuList: List<BasDanmaku>? = null
     private var sourceCommandDanmakuList: List<CommandDanmakuItem> = emptyList()
     private var mergedAdvancedDanmakuList: List<AdvancedDanmakuData> = emptyList()
-    private var rawDanmakuList: List<DanmakuItem>? = null
+    private var hotDanmakuIndex by mutableStateOf<HotDanmakuIndex?>(null)
     private var hotDanmakuIds: Set<Long> = emptySet()
     private var hotDanmakuTexts: Set<String> = emptySet()
     // [新增] 高级弹幕数据流
@@ -266,11 +266,9 @@ class DanmakuManager private constructor(
         return sourceDanmakuList ?: cachedDanmakuList ?: emptyList()
     }
     
-    /** 合并前的已过滤快照，交给悬浮条按时间和宽度选择，不复制弹幕对象。 */
-    fun getHotDanmakuList(expectedCid: Long): List<DanmakuItem> {
-        if (cachedCid != expectedCid || cachedDanmakuList == null) return emptyList()
-        return rawDanmakuList.orEmpty()
-    }
+    /** 悬浮条观察当前分 P 合并前的候选索引，暂停时也能收到新分段。 */
+    internal fun getHotDanmakuIndex(expectedCid: Long): HotDanmakuIndex? =
+        hotDanmakuIndex.takeIf { cachedCid == expectedCid }
 
     var opacity: Float
         get() = config.opacity
@@ -450,7 +448,7 @@ class DanmakuManager private constructor(
         val sourceStandard: List<DanmakuItem>?,
         val sourceAdvanced: List<AdvancedDanmakuData>?,
         val sourceBas: List<BasDanmaku>?,
-        val rawStandard: List<DanmakuItem>,
+        val hotIndex: HotDanmakuIndex?,
         val visibleStandard: List<DanmakuItem>,
         val visibleAdvanced: List<AdvancedDanmakuData>,
         val visibleBas: List<BasDanmaku>,
@@ -515,7 +513,7 @@ class DanmakuManager private constructor(
             sourceStandard = sourceStandard.takeIf { sourceStandardOverride != null },
             sourceAdvanced = sourceAdvanced.takeIf { sourceAdvancedOverride != null },
             sourceBas = sourceBas.takeIf { sourceBasOverride != null },
-            rawStandard = projectedStandardList,
+            hotIndex = HotDanmakuIndex(projectedStandardList),
             visibleStandard = rebuiltStandard,
             visibleAdvanced = rebuiltAdvanced,
             visibleBas = visibleBas,
@@ -528,7 +526,7 @@ class DanmakuManager private constructor(
         rebuild.sourceStandard?.let { sourceDanmakuList = it }
         rebuild.sourceAdvanced?.let { sourceAdvancedDanmakuList = it }
         rebuild.sourceBas?.let { sourceBasDanmakuList = it }
-        rawDanmakuList = rebuild.rawStandard
+        hotDanmakuIndex = rebuild.hotIndex
         cachedDanmakuList = rebuild.visibleStandard
         _advancedDanmakuFlow.value = rebuild.visibleAdvanced
         _basDanmakuFlow.value = rebuild.visibleBas
@@ -1240,8 +1238,7 @@ class DanmakuManager private constructor(
         val height = if (items.isEmpty()) 0f else heightPx.coerceAtLeast(0).toFloat()
         if (config.hotBarReservedHeightPx == height) return
         config.hotBarReservedHeightPx = height
-        // 海量模式仅隐藏对应弹幕，不改变轨道；普通模式按浮层实测高度避让。
-        if (!config.massiveMode) applyConfigToController("hot_bar_space")
+        applyConfigToController("hot_bar_space")
     }
 
     /**
@@ -1923,6 +1920,7 @@ class DanmakuManager private constructor(
         clearExplicitSeekResyncMarker()
         updateHotDanmakuPresentation(emptyList(), 0)
         cachedDanmakuList = null
+        hotDanmakuIndex = null
         sourceDanmakuList = null
         sourceAdvancedDanmakuList = null
         sourceBasDanmakuList = null
@@ -2395,6 +2393,7 @@ class DanmakuManager private constructor(
             val ordered = activeSegmentIndices.mapNotNull(parsedSegments::get)
             val special = result.parsed
             val standardChanged = specialDanmaku.standardList != special.standardList
+            val currentHotIndex = hotDanmakuIndex
             val rebuild = withContext(Dispatchers.Default) {
                 val advanced = (ordered.flatMap { it.advancedList } + special.advancedList)
                     .sortedBy(AdvancedDanmakuData::startTimeMs)
@@ -2415,7 +2414,7 @@ class DanmakuManager private constructor(
                         sourceStandard = null,
                         sourceAdvanced = advanced,
                         sourceBas = bas,
-                        rawStandard = rawDanmakuList.orEmpty(),
+                        hotIndex = currentHotIndex,
                         visibleStandard = cachedDanmakuList.orEmpty(),
                         visibleAdvanced = visibleAdvanced + mergedAdvancedDanmakuList,
                         visibleBas = filterBasDanmakuForRender(bas),
@@ -2532,6 +2531,7 @@ class DanmakuManager private constructor(
         clearExplicitSeekResyncMarker()
         updateHotDanmakuPresentation(emptyList(), 0)
         cachedDanmakuList = null
+        hotDanmakuIndex = null
         sourceDanmakuList = null
         sourceAdvancedDanmakuList = null
         sourceBasDanmakuList = null
@@ -2661,6 +2661,7 @@ class DanmakuManager private constructor(
         webMaskWindowStartMs = Long.MIN_VALUE
         webMaskWindowEndMs = Long.MIN_VALUE
         cachedDanmakuList = null
+        hotDanmakuIndex = null
         sourceDanmakuList = null
         sourceAdvancedDanmakuList = null
         sourceBasDanmakuList = null
@@ -3002,7 +3003,7 @@ class DanmakuManager private constructor(
         webMaskWindowEndMs = Long.MIN_VALUE
         maskFetchJob?.cancel()
         maskFetchJob = null
-        rawDanmakuList = null
+        hotDanmakuIndex = null
         controller?.pause()
         controller?.clear()
         // A trimmed renderer no longer owns the visible timeline. Foreground recovery
@@ -3128,7 +3129,7 @@ class DanmakuManager private constructor(
         sourceAdvancedDanmakuList = null
         sourceBasDanmakuList = null
         sourceCommandDanmakuList = emptyList()
-        rawDanmakuList = null
+        hotDanmakuIndex = null
         _advancedDanmakuFlow.value = emptyList()
         _basDanmakuFlow.value = emptyList()
         _commandDanmakuFlow.value = emptyList()

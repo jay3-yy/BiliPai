@@ -300,6 +300,7 @@ suspend fun PointerInputScope.detectPlayerTapGestures(
     captureSingleTap: (Offset) -> com.android.purebilibili.danmaku.engine.DanmakuClickCapture? = { null },
     onLongPress: ((Offset) -> Unit)? = null,
     onPressEnd: () -> Unit = {},
+    detectDoubleTap: Boolean = true,
 ) {
     val doubleTapSlopSquared = doubleTapSlopPx * doubleTapSlopPx
     val danmakuSlopSquared = (2.dp.toPx()).let { it * it }
@@ -339,6 +340,11 @@ suspend fun PointerInputScope.detectPlayerTapGestures(
                     return@awaitEachGesture
                 }
                 up.consume()
+                if (!detectDoubleTap) {
+                    captured?.invoke() ?: onTap(up.position)
+                    confirmed = true
+                    return@awaitEachGesture
+                }
                 val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
                     val minUptime = up.uptimeMillis + viewConfiguration.doubleTapMinTimeMillis
                     var candidate = awaitFirstDown()

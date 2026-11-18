@@ -75,7 +75,7 @@ class MainCommentReplyVisibilityTest {
         }
         coEvery { CommentRepository.addCommentForSubject(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(sent.copy(root = 0L, parent = 0L))
-        coEvery { CommentRepository.checkCommentStatus(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { CommentRepository.checkCommentStatus(any(), any(), any(), any(), any()) } returns
             Result.failure(IllegalStateException("Detection disabled in this fixture"))
         coEvery {
             CommentFraudRepository.saveRecord(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
@@ -185,7 +185,7 @@ class MainCommentReplyVisibilityTest {
     @Test
     fun `main list composer immediately inserts a reply even when response omits threading fields`() = runTest(dispatcher) {
         model.replyTo(root)
-        model.sendComment("new reply", fraudDetectionEnabled = false)
+        model.sendComment("new reply")
         runCurrent()
 
         val updated = model.commentState.value.replies.single()
@@ -199,7 +199,7 @@ class MainCommentReplyVisibilityTest {
 
     @Test
     fun `external reply is visible ahead of a full collapsed preview`() {
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
 
         val updated = model.commentState.value.replies.single()
         assertEquals(listOf(50L, 20L, 21L, 22L, 23L, 24L), updated.replies.orEmpty().map { it.rpid })
@@ -209,8 +209,8 @@ class MainCommentReplyVisibilityTest {
 
     @Test
     fun `stale refresh preserves local reply and repeated events do not inflate thread count`() = runTest(dispatcher) {
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
+        model.onExternalCommentSent(1001L, sent)
         model.refreshComments()
         runCurrent()
 
@@ -222,7 +222,7 @@ class MainCommentReplyVisibilityTest {
 
     @Test
     fun `server acknowledgement deduplicates reply without incrementing acknowledged count`() = runTest(dispatcher) {
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
         remoteRoot = root.copy(count = 9, rcount = 9, replies = root.replies.orEmpty() + sent)
         model.refreshComments()
         runCurrent()
@@ -238,7 +238,7 @@ class MainCommentReplyVisibilityTest {
         coEvery {
             CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(ReplyData(root = root, replies = root.replies, cursor = ReplyCursor(isEnd = true)))
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
 
         repeat(2) {
             model.openSubReply(model.commentState.value.replies.single())
@@ -255,7 +255,7 @@ class MainCommentReplyVisibilityTest {
             CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(ReplyData(root = root, replies = root.replies, cursor = ReplyCursor(isEnd = true)))
         coEvery { CommentRepository.deleteCommentForSubject(any(), any(), any()) } returns Result.success(Unit)
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
         model.openSubReply(model.commentState.value.replies.single())
         runCurrent()
 
@@ -276,7 +276,7 @@ class MainCommentReplyVisibilityTest {
         coEvery {
             CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
         } returns Result.failure(IllegalStateException("offline"))
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
         model.openSubReply(model.commentState.value.replies.single(), targetReplyId = sent.rpid)
         assertEquals(listOf(50L), model.subReplyState.value.items.map { it.rpid })
         runCurrent()
@@ -305,7 +305,7 @@ class MainCommentReplyVisibilityTest {
         }
         coEvery { CommentRepository.getDialogCommentsForSubject(any(), any(), any(), any(), any(), any()) } returns
             Result.success(ReplyData(replies = listOf(anchor), cursor = ReplyCursor(isEnd = true)))
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
         model.openSubReply(model.commentState.value.replies.single())
         runCurrent()
         model.setSubReplySortMode(SubReplySortMode.HOT)
@@ -333,7 +333,7 @@ class MainCommentReplyVisibilityTest {
                 cursor = ReplyCursor(isEnd = !firstPage)
             ))
         }
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
         model.openSubReply(model.commentState.value.replies.single())
         runCurrent()
         assertEquals(listOf(20L, 21L, 50L), model.subReplyState.value.items.map { it.rpid })
@@ -347,8 +347,8 @@ class MainCommentReplyVisibilityTest {
         coEvery {
             CommentRepository.getMobileSortedSubCommentsForSubject(any(), any(), any(), any(), any(), any(), any())
         } returns Result.success(ReplyData(root = root, replies = root.replies, cursor = ReplyCursor(isEnd = true)))
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
-        model.onExternalCommentSent(1001L, sent.copy(rpid = 60L), fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
+        model.onExternalCommentSent(1001L, sent.copy(rpid = 60L))
         assertEquals(listOf(60L, 50L), model.commentState.value.replies.single().replies.orEmpty().take(2).map { it.rpid })
         model.openSubReply(model.commentState.value.replies.single())
         runCurrent()
@@ -361,7 +361,7 @@ class MainCommentReplyVisibilityTest {
             model.init(1001L, commentType = type)
             runCurrent()
             model.replyTo(root.copy(replyType = type))
-            model.sendComment("new reply", fraudDetectionEnabled = false)
+            model.sendComment("new reply")
             runCurrent()
             val reply = model.commentState.value.replies.single().replies.orEmpty().first()
             assertEquals(50L, reply.rpid)
@@ -373,13 +373,13 @@ class MainCommentReplyVisibilityTest {
 
     @Test
     fun `account switch clears previews and rejects an old account send completion`() = runTest(dispatcher) {
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
         val response = CompletableDeferred<Result<ReplyItem?>>()
         coEvery { CommentRepository.addCommentForSubject(any(), any(), any(), any(), any(), any(), any()) } coAnswers {
             response.await()
         }
         model.replyTo(root)
-        model.sendComment("old account reply", fraudDetectionEnabled = false)
+        model.sendComment("old account reply")
         runCurrent()
         identities.value = AccountSessionIdentity(202L, 1L)
         runCurrent()
@@ -391,7 +391,7 @@ class MainCommentReplyVisibilityTest {
 
     @Test
     fun `switching comment subject drops locally sent previews`() = runTest(dispatcher) {
-        model.onExternalCommentSent(1001L, sent, fraudDetectionEnabled = false)
+        model.onExternalCommentSent(1001L, sent)
         model.init(2002L)
         runCurrent()
 

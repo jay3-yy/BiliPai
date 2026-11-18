@@ -22,6 +22,10 @@ import androidx.compose.runtime.*
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.components.AppListItem
+import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 
 
 /** 只在同窗玻璃设置容器实际接管后移除内容的原生实色底板。 */
@@ -29,13 +33,16 @@ internal val LocalPlayerGlassSettingsSurface = compositionLocalOf { false }
 
 internal fun playerNativeMenuConfig(config: com.android.purebilibili.core.ui.AppThemeConfig) =
     config.copy(nativeMiuixPopupsEnabled = false, liquidGlassEnabled = config.popupGlassEnabled)
-/** 播放器保留原生面板结构，内部菜单跟随菜单与弹窗场景；关闭玻璃不启用独立 Miuix 菜单。 */
+/** 保留播放器自有弹窗宿主。设置面板可显式传入用户选择的组件风格。 */
 @Composable
-internal fun PlayerNativeMenuTheme(content: @Composable () -> Unit) {
+internal fun PlayerNativeMenuTheme(
+    uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
+    content: @Composable () -> Unit,
+) {
     val config = LocalAppThemeConfig.current
     CompositionLocalProvider(
         LocalAppThemeConfig provides playerNativeMenuConfig(config),
-        LocalAppUiStyle provides AppUiStyle.MATERIAL3,
+        LocalAppUiStyle provides (if (config.popupGlassEnabled) AppUiStyle.MATERIAL3 else uiStyle),
         content = content,
     )
 }
@@ -48,6 +55,7 @@ internal fun PlayerNativeSettingsHost(
     playerBounds: androidx.compose.ui.unit.IntRect? = null,
     content: @Composable () -> Unit,
 ) {
+    val uiStyle = LocalAppUiStyle.current
     val windowSize = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize
     val config = LocalConfiguration.current
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -89,7 +97,7 @@ internal fun PlayerNativeSettingsHost(
             showScrollbar = false,
             useAvailableHeight = true,
         ) {
-            PlayerNativeMenuTheme {
+            PlayerNativeMenuTheme(uiStyle) {
                 CompositionLocalProvider(LocalPlayerGlassSettingsSurface provides true) {
                     Box(Modifier.width(menuWidth).heightIn(max = glassMaxHeight)) { content() }
                 }
@@ -97,7 +105,7 @@ internal fun PlayerNativeSettingsHost(
         }) return
     // 播放器提供避让宿主时，横屏更多操作与选集共用侧面板；其他入口保留原有弹窗。
     if (sidePanel) {
-        PlayerNativeMenuTheme {
+        PlayerNativeMenuTheme(uiStyle) {
             PlayerDetailPanel("更多操作", isFullscreen, playerBounds, onDismiss) { requestDismiss ->
                 Row(
                     modifier = Modifier
@@ -115,8 +123,8 @@ internal fun PlayerNativeSettingsHost(
         }
         return
     }
-    PlayerNativeMenuTheme {
-        DanmakuSettingsPanelHost(false, policy, onDismiss) {
+    PlayerNativeMenuTheme(uiStyle) {
+        DanmakuSettingsPanelHost(false, policy, onDismiss, uiStyle = uiStyle) {
             Surface(
                 modifier = Modifier
                     .padding(12.dp)
@@ -132,48 +140,62 @@ internal fun PlayerNativeSettingsHost(
 
 @Composable
 internal fun PlayerSettingsRow(title: String, subtitle: String? = null, onClick: (() -> Unit)?) {
+    val icon = when (title) {
+        "弹幕设置" -> null
+        "稍后再看（添加 / 移出）" -> Icons.Outlined.WatchLater
+        "查看笔记" -> Icons.Outlined.EditNote
+        "离线缓存" -> Icons.Outlined.FolderZip
+        "保存字幕" -> Icons.Outlined.Download
+        "保存封面" -> Icons.Outlined.Image
+        "定时关闭" -> Icons.Outlined.HourglassTop
+        "播放地址" -> Icons.Outlined.Link
+        "重载视频" -> Icons.Outlined.Refresh
+        "画质增强" -> Icons.Outlined.StayCurrentLandscape
+        "播放器音量" -> Icons.Outlined.VolumeUp
+        "画面变换" -> Icons.Outlined.Flip
+        "恢复默认" -> Icons.Outlined.Restore
+        "CDN 设置" -> Icons.Outlined.Cloud
+        "选择画质" -> Icons.Outlined.PlayCircle
+        "选择音质" -> Icons.Outlined.Album
+        "首选编码格式" -> Icons.Outlined.AvTimer
+        "播完后行为" -> Icons.Outlined.Repeat
+        "弹幕列表" -> Icons.Outlined.Comment
+        "字幕设置" -> Icons.Outlined.Subtitles
+        "加载字幕" -> Icons.Outlined.FileOpen
+        "播放信息" -> Icons.Outlined.Info
+        "举报" -> Icons.Outlined.ErrorOutline
+        FullscreenActionCountSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ic_settings_action_counts_24)
+        "返回" -> Icons.Outlined.ArrowBack
+        else -> Icons.Outlined.Settings
+    }
+    val nativeMiuix = isMiuixNonGlassEnabled()
+    val iconTint = if (nativeMiuix) AppContentColors.secondaryText() else MaterialTheme.colorScheme.onSurfaceVariant
+    val leading: @Composable () -> Unit = {
+        if (icon == null) {
+            PiliPlusDanmakuSettingsIcon(size = 20.dp, tint = iconTint)
+        } else {
+            Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = iconTint)
+        }
+    }
+    val rowModifier = Modifier.fillMaxWidth()
+        .then(if (onClick != null) Modifier.appActionClickable(onClick = onClick) else Modifier)
+    if (nativeMiuix) {
+        AppListItem(
+            modifier = rowModifier,
+            headlineContent = { AppText(title) },
+            supportingContent = subtitle?.takeIf { it.isNotBlank() }?.let { summary -> { AppText(summary) } },
+            leadingContent = leading,
+        )
+        return
+    }
+
     Row(
-        modifier = Modifier.fillMaxWidth()
-            .then(if (onClick != null) Modifier.appActionClickable(onClick = onClick) else Modifier)
-            .heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = rowModifier
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (title == "弹幕设置") {
-            PiliPlusDanmakuSettingsIcon(size = 20.dp, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        } else {
-        Icon(
-            imageVector = when (title) {
-                "稍后再看（添加 / 移出）" -> Icons.Outlined.WatchLater
-                "查看笔记" -> Icons.Outlined.EditNote
-                "离线缓存" -> Icons.Outlined.FolderZip
-                "保存字幕" -> Icons.Outlined.Download
-                "保存封面" -> Icons.Outlined.Image
-                "定时关闭" -> Icons.Outlined.HourglassTop
-                "播放地址" -> Icons.Outlined.Link
-                "重载视频" -> Icons.Outlined.Refresh
-                "画质增强" -> Icons.Outlined.StayCurrentLandscape
-                "播放器音量" -> Icons.Outlined.VolumeUp
-                "画面变换" -> Icons.Outlined.Flip
-                "恢复默认" -> Icons.Outlined.Restore
-                "CDN 设置" -> Icons.Outlined.Cloud
-                "选择画质" -> Icons.Outlined.PlayCircle
-                "选择音质" -> Icons.Outlined.Album
-                "首选编码格式" -> Icons.Outlined.AvTimer
-                "播完后行为" -> Icons.Outlined.Repeat
-                "弹幕列表" -> Icons.Outlined.Comment
-                "字幕设置" -> Icons.Outlined.Subtitles
-                "加载字幕" -> Icons.Outlined.FileOpen
-                "播放信息" -> Icons.Outlined.Info
-                "举报" -> Icons.Outlined.ErrorOutline
-                FullscreenActionCountSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ic_settings_action_counts_24)
-                "返回" -> Icons.Outlined.ArrowBack
-                else -> Icons.Outlined.Settings
-            },
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        }
+        leading()
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
@@ -241,11 +263,27 @@ internal fun PlayerSettingsSelectionRow(
     allowSelectedClick: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val rowModifier = Modifier
+        .fillMaxWidth()
+        .appActionClickable(enabled = enabled) { if (!selected || allowSelectedClick) onClick() }
+    if (isMiuixNonGlassEnabled()) {
+        AppListItem(
+            modifier = rowModifier,
+            headlineContent = {
+                AppText(title, color = if (enabled) AppContentColors.primaryText() else AppContentColors.disabled())
+            },
+            supportingContent = subtitle?.let { summary -> { AppText(summary) } },
+            trailingContent = if (selected) ({
+                Icon(Icons.Outlined.Done, null, tint = AppContentColors.accent())
+            }) else null,
+        )
+        return
+    }
     ListItem(
         headlineContent = { Text(title, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f)) },
         supportingContent = if (subtitle != null) ({ Text(subtitle, fontSize = 12.sp) }) else null,
         trailingContent = { if (selected) Icon(Icons.Outlined.Done, null, tint = MaterialTheme.colorScheme.primary) },
-        modifier = Modifier.fillMaxWidth().appActionClickable(enabled = enabled) { if (!selected || allowSelectedClick) onClick() },
+        modifier = rowModifier,
         // 玻璃容器接管时透出父容器；其他场景保留原生列表底色。
         colors = ListItemDefaults.colors(
             containerColor = if (LocalPlayerGlassSettingsSurface.current) Color.Transparent

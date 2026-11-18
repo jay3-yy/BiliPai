@@ -8,6 +8,8 @@ import com.android.purebilibili.feature.home.policy.resolveHomeHeaderSettleTrans
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -25,8 +27,10 @@ internal class HomeHeaderScrollState(
     private var headerSettleTargetPx: Float? = null
     var revealLocked by mutableStateOf(false)
         private set
+    var returnTabRevealFraction by mutableStateOf<Float?>(null)
+        private set
     val offsetProvider: () -> Float = { offsetPx }
-    val isSettling: Boolean get() = headerSettleAnimationJob != null
+    val isSettling: Boolean get() = headerSettleAnimationJob != null || revealLocked
     val scrollToTopInProgress: Boolean get() = homeScrollToTopMutex.isLocked
 
     fun setOffsetImmediately(value: Float) {
@@ -89,45 +93,52 @@ internal class HomeHeaderScrollState(
 
     private val homeScrollToTopMutex = Mutex()
     suspend fun withScrollToTopLock(
-        headerSettleMotionSpec: AnimationSpec<Float>,
         requestIsCurrent: () -> Boolean,
-        block: suspend () -> Unit,
+        settleMotionSpec: AnimationSpec<Float>? = null,
+        block: suspend () -> Boolean,
     ) {
         homeScrollToTopMutex.withLock {
             if (!requestIsCurrent()) return@withLock
-            kotlinx.coroutines.coroutineScope {
-                revealLocked = true
-                cancelSettle()
-                tabsCollapsed = false
-                globalScrollOffset.floatValue = 0f
-                val headerAnimJob = launch {
-                    if (offsetPx < -0.5f) {
-                        animate(
-                            initialValue = offsetPx,
-                            targetValue = 0f,
-                            animationSpec = headerSettleMotionSpec
-                        ) { value, _ -> offsetPx = value }
-                    } else {
-                        offsetPx = 0f
+            revealLocked = true
+            cancelSettle()
+            try {
+                if (!block() || !requestIsCurrent()) return@withLock
+                if (settleMotionSpec != null && offsetPx < -0.5f) {
+                    coroutineScope {
+                        animateTo(0f, this, settleMotionSpec)
+                        headerSettleAnimationJob?.join()
                     }
                 }
-                headerSettleAnimationJob = headerAnimJob
-                try {
-                    block()
-                    headerAnimJob.join()
-                } finally {
-                    headerAnimJob.cancel()
-                    if (requestIsCurrent()) {
-                        reveal()
-                    } else {
-                        // 旧请求只释放自己持有的锁，不把新页面顶栏强行展开。
-                        if (headerSettleAnimationJob === headerAnimJob) {
-                            setOffsetImmediately(offsetProvider())
-                        }
-                    }
-                    revealLocked = false
-                }
+                if (requestIsCurrent()) reveal()
+            } finally {
+                returnTabRevealFraction = null
+                revealLocked = false
             }
+        }
+    }
+
+    /** The leading card's remaining travel also drives the search and collapsed tab reveal. */
+    suspend fun followReturnToTop(
+        remainingScrollPx: () -> Int?,
+        scroll: suspend () -> Boolean,
+    ): Boolean = coroutineScope {
+        val startingOffset = offsetPx
+        val revealTabs = tabsCollapsed
+        if (startingOffset >= -0.5f && !revealTabs) return@coroutineScope scroll()
+        val tracking = launch(start = CoroutineStart.UNDISPATCHED) {
+            var revealDistancePx: Int? = null
+            snapshotFlow(remainingScrollPx).collect { remaining ->
+                if (remaining == null) return@collect
+                val distance = revealDistancePx ?: remaining.coerceAtLeast(1).also { revealDistancePx = it }
+                val progress = (1f - remaining.toFloat() / distance).coerceIn(0f, 1f)
+                offsetPx = startingOffset * (1f - progress)
+                if (revealTabs) returnTabRevealFraction = progress
+            }
+        }
+        try {
+            scroll()
+        } finally {
+            tracking.cancel()
         }
     }
 }

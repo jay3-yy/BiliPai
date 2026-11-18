@@ -691,11 +691,17 @@ data class MyFollowBangumiResponse(
 
 @Serializable
 data class MyFollowBangumiData(
-    val total: Int = 0,
+    val total: Int? = null,
     val pn: Int = 1,
     val ps: Int = 30,
     val list: List<FollowBangumiItem>? = null
-)
+) {
+    fun hasNextPage(requestedPage: Int): Boolean {
+        val itemCount = list.orEmpty().size
+        if (itemCount == 0) return false
+        return total?.let { requestedPage * ps < it } ?: (itemCount >= ps)
+    }
+}
 
 @Serializable
 data class FollowBangumiItem(
@@ -726,7 +732,9 @@ data class FollowBangumiItem(
     val total: Int = 0,                  // 总集数
     @SerialName("first_ep")
     val firstEp: Long = 0,               // 第一集 epId
-    val url: String = ""
+    val url: String = "",
+    @SerialName("renewal_time")
+    val renewalTime: String? = null
 )
 
 // ========== 筛选条件 ==========

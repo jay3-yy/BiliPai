@@ -21,6 +21,7 @@ internal fun HomeVideoPreviewHost(
     targetVideoItemState: MutableState<VideoItem?>,
     pendingVideoShare: MutableState<VideoSharePayload?>,
     currentCategory: HomeCategory,
+    downloadSelection: HomeDownloadSelection,
     onVideoClick: (HomeVideoClickRequest) -> Unit,
     onDismissVideoCallback: (VideoItem) -> Unit,
     hazeState: HazeState?,
@@ -77,6 +78,12 @@ internal fun HomeVideoPreviewHost(
                     viewModel.addToWatchLater(item.bvid, item.aid)
                     targetVideoItemState.value = null
                 },
+                onDownloadVideo = if (item.supportsFeedDownload()) {
+                    { downloadSelection.openSingle(item) }
+                } else null,
+                onStartBatchDownload = if (item.supportsFeedDownload()) {
+                    { downloadSelection.start(item) }
+                } else null,
                 onSaveCover = {
                     val coverUrl = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(item.pic)
                     if (coverUrl.isBlank()) {

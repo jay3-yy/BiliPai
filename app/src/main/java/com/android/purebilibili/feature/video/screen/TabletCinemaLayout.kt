@@ -54,6 +54,7 @@ import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
@@ -617,6 +618,7 @@ private fun CinemaStagePlayer(
                         onHomeClick = onHomeClick,
                         menuActions = playbackActions.menuActions,
                         onQuickFavorite = { engagementActions.onFavoriteAction(true) },
+                        onSendSameDanmaku = playbackActions.sendSameDanmaku,
                         onDoubleTapLike = engagementActions.toggleLike,
                         onReloadVideo = playbackActions.reloadVideo,
                         onSwitchCdn = playbackActions.switchCdn,
@@ -1242,14 +1244,10 @@ private fun CinemaSideCurtain(
 
                             HorizontalPager(
                                 state = pagerState,
-                                userScrollEnabled = shouldEnableVideoContentHorizontalPagerSwipe(
-                                            currentPage = pagerState.currentPage,
-                                            commentPageIndex = 0,
-                                            isPagerScrollInProgress = pagerState.isScrollInProgress,
-                                        ),
+                                userScrollEnabled = false,
                                 modifier = Modifier
                                     .fillMaxSize()
-
+                                    .verticalPriorityHorizontalPagerSwipe(pagerState),
                             ) { page ->
                                 when {
                                     success == null -> {

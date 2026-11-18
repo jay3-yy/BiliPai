@@ -40,6 +40,7 @@ enum class PlaybackCdnPreference(
     val displayName: String,
     val host: String? = null,
 ) {
+    AUTO("auto", "自动优选"),
     BASE_URL("base_url", "基础URL"),
     BACKUP_URL("backup_url", "备用URL"),
     ALI("ali", "ali（阿里云）", "upos-sz-mirrorali.bilivideo.com"),
@@ -63,7 +64,7 @@ enum class PlaybackCdnPreference(
     HK_BCACHE("hk_bcache", "hk_bcache（Bilibili海外）", "cn-hk-eq-bcache-01.bilivideo.com");
 
     companion object {
-        val DEFAULT = BACKUP_URL
+        val DEFAULT = AUTO
 
         fun fromStorageValue(value: String?): PlaybackCdnPreference =
             entries.firstOrNull { it.storageValue == value } ?: DEFAULT
@@ -74,29 +75,44 @@ internal fun applyPlaybackCdnPreference(
     candidates: List<PlaybackCdnCandidate>,
     preference: PlaybackCdnPreference,
     pluginApplied: Boolean = false,
+    measuredPreference: PlaybackCdnPreference? = null,
 ): List<PlaybackCdnCandidate> {
     if (candidates.isEmpty()) return candidates
 
     // ① 设置里选了具体线路：只对可跨 host 的 /upgcxcode 候选生效。
-    val host = preference.host
+    val measured = measuredPreference.takeIf { preference == PlaybackCdnPreference.AUTO }
+    val measuredHost = measured?.host
+    val host = preference.host ?: measuredHost
     if (host != null) {
-        val base = candidates.firstOrNull { candidate ->
+        fun hasPortableTracks(candidate: PlaybackCdnCandidate): Boolean {
             val audioUrl = candidate.audioUrl
-            isHostPortableCdnUrl(candidate.videoUrl) &&
+            return isHostPortableCdnUrl(candidate.videoUrl) &&
                 (audioUrl == null || isHostPortableCdnUrl(audioUrl))
-        } ?: candidates.firstOrNull { isHostPortableCdnUrl(it.videoUrl) }
-        if (base == null) {
-            // 路径不能跨 host 复用时保留原候选，不能套用所选线路。
-            return normalizePlaybackCdnCandidates(candidates)
         }
-        val preferred = base.copy(
-            videoUrl = rewriteBilivideoHost(base.videoUrl, host) ?: base.videoUrl,
-            audioUrl = base.audioUrl
-                ?.takeIf(::isHostPortableCdnUrl)
-                ?.let { rewriteBilivideoHost(it, host) ?: it },
-        )
-        val rest = normalizePlaybackCdnCandidates(candidates)
-        return (listOf(preferred) + rest).distinctBy { it.videoUrl to it.audioUrl }
+        fun rewrite(base: PlaybackCdnCandidate): PlaybackCdnCandidate =
+            base.copy(
+                videoUrl = rewriteBilivideoHost(base.videoUrl, host) ?: base.videoUrl,
+                audioUrl = base.audioUrl
+                    ?.takeIf(::isHostPortableCdnUrl)
+                    ?.let { rewriteBilivideoHost(it, host) ?: it },
+            )
+        val preferred = if (measuredHost != null) {
+            // 样本可用不代表当前签名可换线路，视频与音频都须能安全改写。
+            fun isSafe(candidate: PlaybackCdnCandidate): Boolean =
+                !isRiskyCdnUrl(candidate.videoUrl) && candidate.audioUrl?.let(::isRiskyCdnUrl) != true
+            candidates.firstOrNull {
+                hostFromCdnUrl(it.videoUrl) == measuredHost && isSafe(it)
+            } ?: candidates.asSequence().filter {
+                it.source != PlaybackCdnCandidateSource.CUSTOM && hasPortableTracks(it)
+            }.map(::rewrite).firstOrNull(::isSafe)
+        } else {
+            (candidates.firstOrNull(::hasPortableTracks)
+                ?: candidates.firstOrNull { isHostPortableCdnUrl(it.videoUrl) })?.let(::rewrite)
+        }
+        if (preferred != null || measuredHost == null) {
+            return (listOfNotNull(preferred) + normalizePlaybackCdnCandidates(candidates))
+                .distinctBy { it.videoUrl to it.audioUrl }
+        }
     }
 
     // 插件已按健康记录排序；保留其顺序，只给高风险原始地址补常规 CDN 副本。
@@ -104,7 +120,7 @@ internal fun applyPlaybackCdnPreference(
 
     // 默认优先接口返回的常规签名地址，保持同级候选的原顺序。
     // 高风险地址会补一份常规 CDN 副本，原始候选仍保留在列表后面。
-    if (preference == PlaybackCdnPreference.BACKUP_URL) {
+    if ((measured ?: preference) != PlaybackCdnPreference.BASE_URL) {
         return sortSafeSignedPlaybackCandidates(
             normalizePlaybackCdnCandidates(candidates),
             emptyMap()

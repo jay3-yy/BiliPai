@@ -8,40 +8,6 @@ import kotlin.test.assertTrue
 class HomeFeedScrollStatePersistenceStructureTest {
 
     @Test
-    fun `bottom bar reselect scrolls the latest visible home category`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        val scrollCollectorSource = source
-            .substringAfter("// [新增] 监听全局回顶事件")
-            .substringBefore("val homeTopTabSettings")
-
-        assertTrue(
-            scrollCollectorSource.contains(
-                "latestHomeScrollCategory by rememberUpdatedState(currentCategory)"
-            )
-        )
-        assertTrue(
-            scrollCollectorSource.contains(
-                "latestHomeScrollPopularSubCategory by rememberUpdatedState(popularSubCategory)"
-            )
-        )
-        assertTrue(scrollCollectorSource.contains("val activeCategory = latestHomeScrollCategory"))
-        assertTrue(scrollCollectorSource.contains("gridStates[activeCategory]"))
-    }
-
-    @Test
-    fun `home double tap is coalesced before scroll to top starts`() {
-        val source = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
-        val scrollCollectorSource = source
-            .substringAfter("LaunchedEffect(scrollChannel)")
-            .substringBefore("TrackJankStateFlag(")
-
-        assertTrue(scrollCollectorSource.contains("for (initialRequest in channel)"))
-        assertTrue(scrollCollectorSource.contains("withTimeoutOrNull(HOME_RESELECT_DOUBLE_TAP_WINDOW_MS)"))
-        assertTrue(scrollCollectorSource.contains("mergeHomeScrollRequests(initialRequest, followUp)"))
-        assertFalse(scrollCollectorSource.contains("collectLatest"))
-    }
-
-    @Test
     fun `avatar preference does not change card bounds during predictive return`() {
         val screenSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt")
         val pageSource = loadSource("app/src/main/java/com/android/purebilibili/feature/home/HomeCategoryPage.kt")

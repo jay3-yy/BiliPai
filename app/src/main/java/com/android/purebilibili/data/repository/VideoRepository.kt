@@ -1253,14 +1253,20 @@ object VideoRepository {
     /** 取流复用启动恢复的持久密钥及并发刷新，避免另开 nav 请求和串行重试。 */
     private suspend fun getWbiKeys(): Pair<String, String> = WbiKeyManager.getWbiKeys().getOrThrow()
 
-    suspend fun getPlayUrlData(bvid: String, cid: Long, qn: Int, audioLang: String? = null): PlayUrlData? = withContext(Dispatchers.IO) {
+    suspend fun getPlayUrlData(
+        bvid: String,
+        cid: Long,
+        qn: Int,
+        audioLang: String? = null,
+        retainOriginalUrls: Boolean = false,
+    ): PlayUrlData? = withContext(Dispatchers.IO) {
         fetchPlaybackUrl(
             bvid = bvid,
             cid = cid,
             targetQn = qn,
             audioLang = audioLang,
             requestKind = PlayUrlRequestKind.EXPLICIT
-        )?.data?.withPreferredCdnTracks()
+        )?.data?.withPreferredCdnTracks(retainOriginalUrls)
     }
 
     /**
@@ -1283,7 +1289,7 @@ object VideoRepository {
             targetQn = qn,
             audioLang = audioLang,
             requestKind = PlayUrlRequestKind.INITIAL
-        )?.data?.withPreferredCdnTracks()
+        )?.data?.withPreferredCdnTracks(retainOriginalUrls = true)
     }
 
     /**
@@ -1329,19 +1335,39 @@ object VideoRepository {
      * 不经过播放器的 applyPlaybackCdnPreference，B 站下发 PCDN 地址时会解析失败，
      * 表现为「播放地址未应用」或直接卡住。
      */
-    internal fun PlayUrlData.withPreferredCdnTracks(): PlayUrlData {
+    internal fun PlayUrlData.withPreferredCdnTracks(retainOriginalUrls: Boolean = false): PlayUrlData {
         val dash = dash ?: return this
         return copy(
             dash = dash.copy(
                 video = dash.video.map { track ->
-                    track.copy(baseUrl = pickNonPcdnUrl(track.baseUrl, track.backupUrl))
+                    val preferred = pickNonPcdnUrl(track.baseUrl, track.backupUrl)
+                    track.copy(
+                        baseUrl = preferred,
+                        backupUrl = retainReplacedCdnUrl(retainOriginalUrls, track.baseUrl, preferred, track.backupUrl),
+                    )
                 },
                 audio = dash.audio?.map { track ->
-                    track.copy(baseUrl = pickNonPcdnUrl(track.baseUrl, track.backupUrl))
+                    val preferred = pickNonPcdnUrl(track.baseUrl, track.backupUrl)
+                    track.copy(
+                        baseUrl = preferred,
+                        backupUrl = retainReplacedCdnUrl(retainOriginalUrls, track.baseUrl, preferred, track.backupUrl),
+                    )
                 },
             )
         )
     }
+
+    private fun retainReplacedCdnUrl(
+        retainOriginalUrls: Boolean,
+        original: String,
+        preferred: String,
+        backups: List<String>?,
+    ): List<String>? =
+        if (retainOriginalUrls && original.isNotBlank() && original != preferred) {
+            (backups.orEmpty() + original).distinct()
+        } else {
+            backups
+        }
 
     /** 从 baseUrl + backupUrl 里挑一个可用的地址，全 PCDN 时换成常规 CDN 域名。 */
     private fun pickNonPcdnUrl(baseUrl: String, backupUrl: List<String>?): String {

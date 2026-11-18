@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -196,7 +196,8 @@ internal fun MiuixAboutOverview(
                 Column(
                     modifier = Modifier
                         .clip(RoundedCornerShape(16.dp))
-                        .combinedClickable(
+                        .appCombinedClickable(
+                            longPressScene = com.android.purebilibili.core.ui.AppHapticScene.TEXT,
                             role = Role.Button,
                             onClickLabel = "查看版本",
                             onLongClickLabel = "复制版本号",

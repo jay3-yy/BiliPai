@@ -194,6 +194,12 @@ fun OfflineVideoPlayerScreen(
 
     // 长按倍速状态
     var isLongPressing by remember { mutableStateOf(false) }
+    val playerGestureHaptic = com.android.purebilibili.core.util.rememberHapticFeedback(
+        com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES
+    )
+    val playerSeekHaptic = com.android.purebilibili.core.util.rememberHapticFeedback(
+        com.android.purebilibili.core.ui.AppHapticScene.PLAYER_SEEK
+    )
     var originalSpeed by remember { mutableFloatStateOf(1.0f) }
     var longPressSpeedVisible by remember { mutableStateOf(false) }
     var danmakuEnabled by remember(currentTaskId) { mutableStateOf(true) }
@@ -764,6 +770,7 @@ fun OfflineVideoPlayerScreen(
                             originalSpeed = player.playbackParameters.speed
                             player.setPlaybackSpeed(longPressSpeed)
                             isLongPressing = true
+                            playerGestureHaptic(com.android.purebilibili.core.util.HapticType.MEDIUM)
                             longPressSpeedVisible = true
                         },
                         onDoubleTap = { offset ->
@@ -771,6 +778,7 @@ fun OfflineVideoPlayerScreen(
                             when {
                                 // 右侧 1/3：快进
                                 offset.x > screenWidth * 2 / 3 -> {
+                                    playerSeekHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
                                     val seekMs = seekForwardSeconds * 1000L
                                     val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
                                     seekToPosition(newPos)
@@ -779,6 +787,7 @@ fun OfflineVideoPlayerScreen(
                                 }
                                 // 左侧 1/3：后退
                                 offset.x < screenWidth / 3 -> {
+                                    playerSeekHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
                                     seekToPosition(newPos)
@@ -788,6 +797,7 @@ fun OfflineVideoPlayerScreen(
                                 // 中间：暂停/播放
                                 else -> {
                                     player.playWhenReady = !player.playWhenReady
+                                    playerGestureHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
                                 }
                             }
                         },

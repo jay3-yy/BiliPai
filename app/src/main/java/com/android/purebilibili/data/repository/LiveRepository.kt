@@ -95,6 +95,13 @@ data class LiveAreaRoomsPage(
     val totalCount: Int = 0
 )
 
+internal const val LIVE_SEARCH_PAGE_SIZE = 30
+
+enum class LiveSearchType(val apiValue: String) {
+    ROOM("room"),
+    USER("user"),
+}
+
 data class LiveHeartbeatSession(
     val roomId: Long,
     val nextIntervalSec: Int = DEFAULT_LIVE_HEARTBEAT_INTERVAL_SEC
@@ -689,6 +696,67 @@ object LiveRepository {
         return AppSignUtils.signForAndroidApi(params)
     }
 
+    private fun signedLiveBrowseParams(vararg fields: Pair<String, String>): Map<String, String> {
+        val params = linkedMapOf(
+            "actionKey" to "appkey",
+            "build" to "8430300",
+            "version" to "8.43.0",
+            "channel" to "master",
+            "c_locale" to "zh_CN",
+            "s_locale" to "zh_CN",
+            "device" to "android",
+            "mobi_app" to "android",
+            "platform" to "android",
+            "disable_rcmd" to "0",
+            "ts" to AppSignUtils.getTimestamp().toString(),
+            "statistics" to """{"appId":1,"platform":3,"version":"8.43.0","abtest":""}""",
+        )
+        params.putAll(fields)
+        TokenManager.accessTokenCache?.takeIf(String::isNotBlank)?.let { params["access_key"] = it }
+        return AppSignUtils.signForAndroidHdLogin(params)
+    }
+
+    suspend fun searchLive(
+        keyword: String,
+        page: Int,
+        type: LiveSearchType,
+    ): Result<LiveAppSearchData> = withContext(Dispatchers.IO) {
+        try {
+            val params = signedLiveBrowseParams(
+                "page" to page.toString(),
+                "pagesize" to LIVE_SEARCH_PAGE_SIZE.toString(),
+                "keyword" to keyword,
+                "type" to type.apiValue,
+            )
+            val response = api.searchLiveApp(params)
+            if (response.code == 0) Result.success(response.data ?: LiveAppSearchData())
+            else Result.failure(IllegalStateException(response.message.ifBlank { "直播搜索失败" }))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    suspend fun getLiveAreaNavigation(parentAreaId: Int): Result<List<LiveAreaNavigationTab>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val response = api.getLiveAreaNavigation(
+                    signedLiveBrowseParams(
+                        "parent_id" to parentAreaId.toString(),
+                        "need_entrance" to "1",
+                        "source_id" to "2",
+                    ),
+                )
+                if (response.code == 0) Result.success(response.data.orEmpty())
+                else Result.failure(IllegalStateException(response.message.ifBlank { "加载分区失败" }))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+        }
+
     suspend fun submitLiveFeedFeedback(
         roomId: Long,
         reason: com.android.purebilibili.data.model.response.LiveFeedbackReason,
@@ -715,18 +783,9 @@ object LiveRepository {
         }
     }
 
-    private fun buildLiveFavoriteTagParams(tags: List<LiveFavoriteTagEntry>? = null): Map<String, String> {
-        val params = buildLiveAppFeedParams(1, false).toMutableMap()
-        params.remove("sign")
-        params.remove("page")
-        params.remove("relation_page")
-        if (tags != null) params["tags"] = tags.joinToString(",") { it.areaId.toString() }
-        return AppSignUtils.signForAndroidApi(params)
-    }
-
     suspend fun getLiveFavoriteTags(): Result<List<LiveFavoriteTagEntry>> = withContext(Dispatchers.IO) {
         try {
-            val root = JSONObject(api.getLiveFavoriteTagsRaw(buildLiveFavoriteTagParams()).use { it.string() })
+            val root = JSONObject(api.getLiveFavoriteTagsRaw(signedLiveBrowseParams()).use { it.string() })
             if (root.optInt("code", -1) != 0) return@withContext Result.failure(Exception(root.optString("message", "获取常用标签失败")))
             val tags = root.optJSONObject("data")?.optJSONArray("tags")
             Result.success(buildList {
@@ -746,7 +805,8 @@ object LiveRepository {
 
     suspend fun setLiveFavoriteTags(tags: List<LiveFavoriteTagEntry>): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            val root = JSONObject(api.setLiveFavoriteTagsRaw(buildLiveFavoriteTagParams(tags)).use { it.string() })
+            val tagIds = tags.joinToString(",") { it.areaId.toString() }
+            val root = JSONObject(api.setLiveFavoriteTagsRaw(signedLiveBrowseParams("tags" to tagIds)).use { it.string() })
             if (root.optInt("code", -1) == 0) Result.success(Unit)
             else Result.failure(Exception(root.optString("message", "保存常用标签失败")))
         } catch (e: CancellationException) {
@@ -1237,6 +1297,108 @@ object LiveRepository {
             Result.failure(e)
         }
     }
+
+    internal suspend fun getLiveRoomMedal(userId: Long, anchorId: Long): Result<LiveRoomMedalStatus> =
+        requestLiveMedalData { api.getLiveRoomMedal(userId, anchorId) }.map { data ->
+            LiveRoomMedalStatus(
+                hasRoomMedal = data["up_medal"]?.let { it != kotlinx.serialization.json.JsonNull } == true,
+                displayed = data.obj("curr_show")?.let(::parseLiveRoomMedal),
+                roomMedalId = data.obj("lookup_v2")?.long("id")?.takeIf { it > 0L },
+                wearingMedalId = data.obj("curr_weared_v2")?.long("id")?.takeIf { it > 0L },
+            )
+        }
+
+    internal suspend fun getLiveMedalPanel(page: Int): Result<LiveRoomMedalPage> =
+        requestLiveMedalData { api.getLiveMedalPanel(page) }.map { data ->
+            val entries = data.array("special_list").orEmpty() + data.array("list").orEmpty()
+            LiveRoomMedalPage(
+                items = entries.mapNotNull { entry ->
+                    val item = entry as? JsonObject ?: return@mapNotNull null
+                    val info = item.obj("uinfo_medal") ?: return@mapNotNull null
+                    val id = info.long("id").takeIf { it > 0L } ?: return@mapNotNull null
+                    val badge = parseLiveRoomMedal(info) ?: return@mapNotNull null
+                    val progress = item.obj("medal")
+                    LiveRoomMedalEntry(
+                        id = id,
+                        anchorId = info.long("ruid"),
+                        anchorName = item.obj("anchor_info")?.string("nick_name").orEmpty(),
+                        medal = badge,
+                        wearing = progress?.int("wearing_status") == 1,
+                        intimacy = progress?.string("intimacy")?.toIntOrNull(),
+                        nextIntimacy = progress?.string("next_intimacy")?.toIntOrNull(),
+                        todayFeed = progress?.string("today_feed")?.toIntOrNull(),
+                        dailyLimit = progress?.string("day_limit")?.toIntOrNull(),
+                    )
+                }.distinctBy { it.id },
+                hasMore = (data.obj("page_info")?.get("has_more") as? kotlinx.serialization.json.JsonPrimitive)
+                    ?.contentOrNull == "true",
+                total = data.string("total_number").toIntOrNull(),
+            )
+        }
+
+    private suspend fun requestLiveMedalData(
+        request: suspend () -> okhttp3.ResponseBody,
+    ): Result<JsonObject> = withContext(Dispatchers.IO) {
+        try {
+            val response = request().use { liveRepositoryJson.parseToJsonElement(it.string()).jsonObject }
+            if (response.int("code", -1) == 0) {
+                Result.success(response.obj("data") ?: JsonObject(emptyMap()))
+            } else {
+                Result.failure(IllegalStateException(response.string("message").ifBlank { "读取粉丝勋章失败" }))
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    internal suspend fun updateLiveMedalWearing(medalId: Long?): Result<Unit> = withContext(Dispatchers.IO) {
+        val csrf = TokenManager.csrfCache ?: return@withContext Result.failure(IllegalStateException("请先登录"))
+        val fields = mapOf("csrf" to csrf, "csrf_token" to csrf, "target_id" to "0", "room_id" to "0")
+        try {
+            val response = if (medalId == null) api.takeOffLiveMedal(fields)
+                else api.wearLiveMedal(fields + ("medal_id" to medalId.toString()))
+            if (response.code == 0) Result.success(Unit)
+            else Result.failure(IllegalStateException(response.message.ifBlank { "更新粉丝勋章失败" }))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Result.failure(error)
+        }
+    }
+
+    internal suspend fun getLiveMedalVisibility(): Result<LiveMedalVisibility> =
+        requestLiveMedalData { api.getLiveMedalVisibility() }.mapCatching { data ->
+            val configs = data.obj("configs")
+            fun hidden(option: LiveMedalVisibilityOption): Boolean {
+                val entry = checkNotNull(configs?.obj(option.apiKey)) { "直播勋章展示设置不可用" }
+                return entry.int("status") == 1
+            }
+            LiveMedalVisibility(
+                hideSpaceMedal = hidden(LiveMedalVisibilityOption.HIDE_SPACE_MEDAL),
+                showWearingOnly = hidden(LiveMedalVisibilityOption.SHOW_WEARING_ONLY),
+            )
+        }
+
+    internal suspend fun setLiveMedalVisibility(option: LiveMedalVisibilityOption, enabled: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val csrf = TokenManager.csrfCache ?: return@withContext Result.failure(IllegalStateException("请先登录"))
+            try {
+                val response = api.updateLiveMedalVisibility(
+                    mapOf(
+                        "key" to option.apiKey, "status" to if (enabled) "1" else "0",
+                        "csrf" to csrf, "csrf_token" to csrf,
+                    ),
+                )
+                if (response.code == 0) Result.success(Unit)
+                else Result.failure(IllegalStateException(response.message.ifBlank { "更新勋章展示设置失败" }))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+        }
 
     suspend fun setLiveSilentRule(
         type: String,

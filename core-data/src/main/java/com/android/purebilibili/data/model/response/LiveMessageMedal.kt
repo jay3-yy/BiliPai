@@ -18,13 +18,19 @@ data class LiveMessageMedal(
 /** 新版点亮勋章优先；明确未点亮时不回退到旧版勋章。 */
 fun parseLiveMessageMedal(modern: JsonObject?, legacy: JsonObject? = null): LiveMessageMedal? {
     val value = modern ?: legacy ?: return null
+    if (modern != null && (modern["is_light"] as? JsonPrimitive)?.intOrNull != 1) return null
+    return parseLiveMedal(value, modern = modern != null)
+}
+
+fun parseLiveRoomMedal(value: JsonObject): LiveMessageMedal? = parseLiveMedal(value, modern = true)
+
+private fun parseLiveMedal(value: JsonObject, modern: Boolean): LiveMessageMedal? {
     fun text(key: String) = (value[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
     fun number(key: String) = (value[key] as? JsonPrimitive)?.intOrNull
-    if (modern != null && number("is_light") != 1) return null
     val name = text("name").ifBlank { text("medal_name") }
     val level = number("level") ?: number("medal_level") ?: 0
     if (name.isBlank() || level <= 0) return null
-    val background = if (modern != null) parseLiveMedalColor(text("v2_medal_color_start"), rgba = true)
+    val background = if (modern) parseLiveMedalColor(text("v2_medal_color_start"), rgba = true)
         else parseLiveMedalColor(text("medal_color"))
     val foreground = parseLiveMedalColor(text("v2_medal_color_text")).takeIf { it != 0 } ?: 0xFFFFFFFF.toInt()
     return LiveMessageMedal(name, level, background, foreground, value)

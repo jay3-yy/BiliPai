@@ -1,4 +1,7 @@
 <resources>
+    <string name="dynamic_live_photo_badge">Live Photo</string>
+    <string name="link_preview_card_label">Link preview</string>
+    <string name="history_activity_stats">Reading and Viewing Stats</string>
     <string name="app_name">BiliPai</string>
 
     <string name="common_back">Back</string>
@@ -258,7 +261,7 @@
     <string name="tips_01_title">1. Shrink the video while reading comments</string>
     <string name="tips_01_content">In Full Screen &amp; Gestures settings, enable “Shrink Video While Browsing” and choose when it applies: by video orientation or only while paused.</string>
     <string name="tips_02_title">2. Jump back to the top</string>
-    <string name="tips_02_content">When you have scrolled far down the home feed, double-tap the Home icon in the bottom bar or the channel title at the top.</string>
+    <string name="tips_02_content">Tap Home in the bottom bar or tap the selected channel again to scroll to the top. Double-tap Home to scroll to the top and refresh.</string>
     <string name="tips_03_title">3. Long-press a video for shortcuts</string>
     <string name="tips_03_content">Long-press a video card to preview it or use actions such as Watch Later.</string>
     <string name="tips_04_title">4. Search for more than videos</string>
@@ -678,6 +681,10 @@
     <string name="appearance_list_item_style_summary">Use rounded list items throughout or follow the current interface preset.</string>
     <string name="appearance_icon_style_title">Icon style</string>
     <string name="appearance_icon_style_summary">Choose soft or vivid color, themed containers, or monochrome line icons across Settings.</string>
+    <string name="appearance_settings_icon_glyphs_title">Settings icon glyphs</string>
+    <string name="appearance_settings_icon_glyphs_summary">Choose the icon shapes used across Settings.</string>
+    <string name="appearance_settings_icon_glyphs_phosphor">Phosphor</string>
+    <string name="appearance_settings_icon_glyphs_original">Original</string>
     <string name="appearance_single_choice_title">Single-choice menu style</string>
     <string name="appearance_single_choice_summary">Open beside the setting or in a centered dialog.</string>
     <string name="appearance_animation_glass_title">Motion, haptics, and glass effects</string>
@@ -1019,4 +1026,42 @@
     <string name="companion_show_video">Show video only</string>
     <string name="video_companion_title">Video split view on large screens</string>
     <string name="video_companion_summary">Keep the source page beside videos opened from any page; drag to resize or switch to a single pane</string>
+    <string name="ai_reply_filter_title">AI bot comment filter</string>
+    <string name="ai_reply_filter_description">Detects suspected AI bot accounts on device. Requires the Content Filter plugin.</string>
+    <string name="ai_reply_filter_on">On</string>
+    <string name="ai_reply_filter_off">Off</string>
+    <string name="ai_reply_filter_hide">Collapse comments from suspected bots</string>
+    <string name="ai_reply_filter_allowlist">Allowlisted UIDs</string>
+    <string name="ai_reply_filter_allowlist_hint">Enter one UID per line. This list only exempts accounts from AI bot detection.</string>
+    <string name="ai_reply_filter_invalid_uid">Enter valid positive integer UIDs.</string>
+    <string name="ai_reply_filter_save">Save</string>
+    <string name="ai_reply_filter_expand">Suspected AI bot comment · Tap to expand</string>
+    <string name="ai_reply_filter_collapse">Collapse again</string>
+    <string name="ai_reply_filter_open_thread">Suspected AI bot reply · View thread</string>
+    <string name="repeated_reply_filter_title">Repeated comment filter</string>
+    <string name="repeated_reply_filter_description">Collapses similar long comments posted by several accounts within a short time</string>
+    <string name="repeated_reply_expand">Possible repeated comment · Tap to expand</string>
+    <string name="repeated_reply_open_thread">Possible repeated comment · View thread</string>
+    <string name="filtered_content_history_title">Filter history</string>
+    <string name="filtered_content_history_entry">View collapsed or hidden comments and videos</string>
+    <string name="filtered_content_history_limit">Up to %1$d recent entries per category for this app session</string>
+    <string name="filtered_content_history_comments">Comments</string>
+    <string name="filtered_content_history_videos">Videos</string>
+    <string name="filtered_content_history_empty">No entries this session</string>
+    <string name="filtered_content_history_no_text">No text</string>
+    <string name="filtered_content_reason_user">Blocked user</string>
+    <string name="filtered_content_reason_keyword">Shared blocked keyword</string>
+    <string name="filtered_content_reason_pattern">Video title pattern</string>
+    <string name="filtered_content_reason_ad_title">Ad title keyword</string>
+    <string name="filtered_content_reason_goods">Shopping comment</string>
+    <string name="filtered_content_reason_duration">Video duration</string>
+    <string name="filtered_content_reason_plays">View count</string>
+    <string name="filtered_content_reason_likes">Like rate</string>
+    <string name="filtered_content_reason_category">Category keyword</string>
+    <string name="filtered_content_reason_sponsored">Sponsored content</string>
+    <string name="filtered_content_reason_clickbait">Clickbait</string>
+    <string name="filtered_content_reason_tag">Tag keyword</string>
+    <string name="filtered_content_reason_plugin">Plugin filter</string>
+    <string name="hot_danmaku_send_plus_one">Plus one, send the same danmaku</string>
+    <string name="hot_danmaku_send_error">Could not send. Try again.</string>
 </resources>

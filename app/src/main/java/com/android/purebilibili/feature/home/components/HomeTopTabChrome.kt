@@ -111,6 +111,7 @@ internal fun HomeTopTabChrome(
         (AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Small).toPx()
     }
     val showCollapsedHandle = gestureEnabled && isTabsCollapsed
+    val showTabContent = tabAlpha > 0f && tabContentAlpha > 0f
     val safeTabHorizontalPadding = tabHorizontalPadding.coerceAtLeast(AppSpacingTokens.None)
     val safeTabVerticalPadding = tabVerticalPadding.coerceAtLeast(AppSpacingTokens.None)
     val containerAlpha = if (showCollapsedHandle) {
@@ -163,7 +164,7 @@ internal fun HomeTopTabChrome(
                 }
             )
     ) {
-        BoxWithConstraints(
+        if (showTabContent) BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = safeTabHorizontalPadding, vertical = safeTabVerticalPadding)

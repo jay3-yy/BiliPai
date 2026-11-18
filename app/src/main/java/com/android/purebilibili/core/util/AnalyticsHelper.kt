@@ -4,6 +4,9 @@ import android.content.Context
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
+import com.android.purebilibili.feature.download.DownloadFailureReason
+import com.android.purebilibili.feature.download.DownloadOutcome
+import com.android.purebilibili.feature.download.DownloadStage
 import com.android.purebilibili.BuildConfig
 import com.google.firebase.analytics.FirebaseAnalytics
 import java.time.LocalDate
@@ -734,6 +737,30 @@ object AnalyticsHelper {
         }
     }
     
+    internal fun logDownloadStage(
+        generation: Long,
+        stage: DownloadStage,
+        outcome: DownloadOutcome,
+        attempt: Int?,
+        reason: DownloadFailureReason?,
+        httpStatus: Int?,
+    ) {
+        try {
+            synchronized(telemetryLock) {
+                if (generation != collectionGeneration || !isEnabled) return
+                logAnalyticsEvent("download_stage") {
+                    param("stage", stage.name.lowercase())
+                    param("outcome", outcome.name.lowercase())
+                    attempt?.let { param("attempt", it.toLong()) }
+                    reason?.let { param("reason", it.name.lowercase()) }
+                    httpStatus?.takeIf { it in 100..599 }?.let { param("http_status", it.toLong()) }
+                }
+            }
+        } catch (error: Exception) {
+            Log.e(TAG, "Failed to log download stage", error)
+        }
+    }
+
     /**
      * 记录画质切换
      */

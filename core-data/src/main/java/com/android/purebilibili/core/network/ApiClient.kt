@@ -668,6 +668,9 @@ interface BilibiliApi {
     @GET("https://api.live.bilibili.com/room/v1/Area/getList")
     suspend fun getLiveAreaList(): LiveAreaListResponse
 
+    @GET("https://api.live.bilibili.com/room/v1/Area/getList")
+    suspend fun getLiveAreaNavigation(@QueryMap params: Map<String, String>): LiveAreaNavigationResponse
+
     @GET("https://api.live.bilibili.com/xlive/app-interface/v2/second/get_fav_tag")
     suspend fun getLiveFavoriteTagsRaw(@QueryMap params: Map<String, String>): okhttp3.ResponseBody
 
@@ -693,6 +696,11 @@ interface BilibiliApi {
 
     @GET("https://api.live.bilibili.com/xlive/app-interface/v2/index/feedback")
     suspend fun submitLiveFeedFeedback(@QueryMap params: Map<String, String>): SimpleApiResponse
+
+    @GET("https://api.live.bilibili.com/xlive/app-interface/v2/search_live")
+    suspend fun searchLiveApp(
+        @QueryMap params: Map<String, String>,
+    ): com.android.purebilibili.data.model.response.LiveAppSearchResponse
 
     // BiliPai-aligned app second-area list (supports new_tags sort chips)
     @GET("https://api.live.bilibili.com/xlive/app-interface/v2/second/getList")
@@ -836,6 +844,33 @@ interface BilibiliApi {
     suspend fun getLiveInfoByUser(
         @QueryMap params: Map<String, String>
     ): ResponseBody
+
+    @GET("https://api.live.bilibili.com/xlive/app-ucenter/v1/fansMedal/user_medal_info")
+    suspend fun getLiveRoomMedal(
+        @Query("uid") userId: Long,
+        @Query("up_uid") anchorId: Long,
+    ): ResponseBody
+
+    @GET("https://api.live.bilibili.com/xlive/app-ucenter/v1/fansMedal/panel")
+    suspend fun getLiveMedalPanel(
+        @Query("page") page: Int,
+        @Query("page_size") pageSize: Int = 20,
+    ): ResponseBody
+
+    @FormUrlEncoded
+    @POST("https://api.live.bilibili.com/xlive/app-ucenter/v1/fansMedal/wear")
+    suspend fun wearLiveMedal(@FieldMap fields: Map<String, String>): SimpleApiResponse
+
+    @FormUrlEncoded
+    @POST("https://api.live.bilibili.com/xlive/app-ucenter/v1/fansMedal/take_off")
+    suspend fun takeOffLiveMedal(@FieldMap fields: Map<String, String>): SimpleApiResponse
+
+    @GET("https://api.live.bilibili.com/xlive/web-ucenter/v1/labs/ConfigPlugs")
+    suspend fun getLiveMedalVisibility(): ResponseBody
+
+    @FormUrlEncoded
+    @POST("https://api.live.bilibili.com/xlive/web-ucenter/v1/labs/EditPlugs")
+    suspend fun updateLiveMedalVisibility(@FieldMap fields: Map<String, String>): SimpleApiResponse
 
     @retrofit2.http.FormUrlEncoded
     @retrofit2.http.POST("https://api.live.bilibili.com/liveact/user_silent")
@@ -1252,7 +1287,8 @@ interface BilibiliApi {
         @Query("type") type: Int = 1,
         @Query("root") root: Long, // 根评论 ID (rpid)
         @Query("pn") pn: Int,     // 页码
-        @Query("ps") ps: Int = 20 // 每页数量
+        @Query("ps") ps: Int = 20, // 每页数量
+        @Query("sort") sort: Int? = null,
     ): ReplyResponse
 
     // 单条评论；root 参数是待查询评论自身的 rpid，不一定是楼层根评论。

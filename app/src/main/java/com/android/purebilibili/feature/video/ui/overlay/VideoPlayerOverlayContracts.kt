@@ -192,10 +192,11 @@ data class VideoPlayerOverlayState(
 )
 
 data class VideoPlayerOverlayActions(
-    val onToggleVisible: () -> Unit,
+    // 竖屏分页由画面手势管理显隐，传 null 时覆盖层不启动超时计时。
+    val onToggleVisible: (() -> Unit)?,
     val onQualitySelected: (Int) -> Unit,
     val onBack: () -> Unit,
-    val onLandscapeCommentClick: () -> Unit = {},
+    val onLandscapeCommentClick: (() -> Unit)? = null,
     val onHomeClick: () -> Unit = onBack,
     val onToggleFullscreen: () -> Unit,
     val onLockToggle: () -> Unit = {},

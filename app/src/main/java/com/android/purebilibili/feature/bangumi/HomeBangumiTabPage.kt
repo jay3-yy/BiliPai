@@ -2,13 +2,16 @@ package com.android.purebilibili.feature.bangumi
 
 import com.android.purebilibili.feature.home.collectAsHomeFeedState
 import com.android.purebilibili.navigation.tabIndicatorPosition
-import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,10 +30,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.AppTopBar
+import com.android.purebilibili.core.ui.LocalNavigationBackHandler
+import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.AppIconButton
+import com.android.purebilibili.core.ui.components.AppSnackbarHost
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.globalWallpaperAwareBackground
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -39,8 +49,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.components.AppLiquidAwareTabRow
 import com.android.purebilibili.core.ui.components.AppSegmentOption
-import com.android.purebilibili.feature.download.DownloadManager
-import kotlinx.coroutines.launch
 
 /**
  * 首页顶栏「追番」独立页：留在首页 Pager 内，
@@ -51,11 +59,11 @@ fun HomeBangumiTabPage(
     contentPadding: PaddingValues,
     onBangumiClick: (Long) -> Unit,
     onBangumiEpisodeClick: (Long, Long) -> Unit,
-    onPlayFollow: (Long) -> Unit,
     initialType: Int = 1,
     scrollToTopRequestId: Int = 0,
     viewModel: BangumiHubViewModel = viewModel(),
     pageActive: Boolean = true,
+    onOpenFavoritePgc: ((BangumiChannel) -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsHomeFeedState(pageActive)
     val channelPager = rememberBangumiChannelPagerState(
@@ -63,8 +71,14 @@ fun HomeBangumiTabPage(
         enabled = pageActive && state.page == BangumiHubPage.HOME,
         onChannelSelected = viewModel::selectChannel,
     )
+    val inHubHome = state.page == BangumiHubPage.HOME
+    val snackbarHostState = remember { SnackbarHostState() }
+    val handleBack: () -> Unit = { viewModel.consumeBack() }
+    LocalNavigationBackHandler(enabled = pageActive && !inHubHome, onBackCompleted = handleBack)
+    LaunchedEffect(viewModel, pageActive) {
+        if (pageActive) viewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+    }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val showPgcTimeline by SettingsManager.getShowPgcTimeline(context)
         .collectAsStateWithLifecycle(initialValue = true)
     val channelOptions = remember {
@@ -90,7 +104,7 @@ fun HomeBangumiTabPage(
     var lastScrollIndex by remember { mutableStateOf(0) }
     var lastScrollOffset by remember { mutableStateOf(0) }
     val homeTopPadding = contentPadding.calculateTopPadding()
-    val visibleChannelHeight = if (channelTabsVisible) channelHeight else 0.dp
+    val visibleChannelHeight = if (channelTabsVisible || !inHubHome) channelHeight else 0.dp
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -112,14 +126,16 @@ fun HomeBangumiTabPage(
                     onPrepareChannel = viewModel::prepareHomeChannel,
                     onBangumiClick = onBangumiClick,
                     onEpisodeClick = onBangumiEpisodeClick,
-                    onPlayFollow = onPlayFollow,
                     onRefreshHome = { viewModel.refreshHome() },
+                    onRefreshHomeFollows = viewModel::refreshHomeFollows,
                     onLoadMoreHomeRecommendations = viewModel::loadMoreHomeRecommendations,
                     onLoadMoreHomeFollows = viewModel::loadMoreHomeFollows,
                     onRetryTimeline = viewModel::retryTimeline,
-                    onTimelineRangeSelected = viewModel::selectTimelineRange,
                     onOpenIndex = viewModel::openIndex,
-                    onOpenFollow = viewModel::openFollowManager,
+                    onOpenFollow = {
+                        if (onOpenFavoritePgc != null) onOpenFavoritePgc(state.channel)
+                        else viewModel.openFollowManager()
+                    },
                     onIndexCategorySelected = viewModel::selectIndexCategory,
                     onIndexFilterSelected = viewModel::selectIndexFilter,
                     onToggleFiltersExpanded = viewModel::toggleIndexFiltersExpanded,
@@ -137,11 +153,6 @@ fun HomeBangumiTabPage(
                     onUnfollowSingle = viewModel::unfollowSingleItem,
                     onSearchCategorySelected = viewModel::selectSearchCategory,
                     onLoadMoreSearch = viewModel::loadMoreSearch,
-                    onSaveCover = { url, title ->
-                        scope.launch {
-                            DownloadManager.saveImageToGallery(context, url, title)
-                        }
-                    },
                     scrollToTopRequestId = scrollToTopRequestId,
                     listBottomPadding = contentPadding.calculateBottomPadding(),
                     // 频道栏收起后撤销其占位，不保留上次测量的完整高度。
@@ -170,37 +181,51 @@ fun HomeBangumiTabPage(
             }
         }
         AnimatedVisibility(
-            visible = channelTabsVisible,
+            visible = channelTabsVisible || !inHubHome,
             modifier = Modifier.padding(top = homeTopPadding),
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut(),
         ) {
-            AppLiquidAwareTabRow(
-                // Glass indicator fills the measured slot; native geometry keeps its defaults.
-                liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-                role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                options = channelOptions,
-                selectedValue = state.channel,
-                indicatorPositionProvider = if (state.page == BangumiHubPage.HOME) {
-                    { channelPager.tabIndicatorPosition }
-                } else null,
-                isScrollInProgressProvider = {
-                    state.page == BangumiHubPage.HOME && channelPager.isScrollInProgress
-                },
-                onSelectionChange = viewModel::selectChannel,
-                dragSelectionEnabled = channelOptions.size > 1,
-                tapPressRefractionEnabled = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onSizeChanged { channelHeightPx = it.height }
-                    .then(
-                        if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
-                            Modifier.background(MaterialTheme.colorScheme.background)
-                        } else Modifier
+            Column(Modifier.fillMaxWidth().onSizeChanged { channelHeightPx = it.height }) {
+                if (!inHubHome) {
+                    AppTopBar(
+                        modifier = Modifier.consumeWindowInsets(WindowInsets.statusBars),
+                        title = when (state.page) {
+                            BangumiHubPage.INDEX -> "索引"
+                            BangumiHubPage.FOLLOW -> if (state.channel == BangumiChannel.BANGUMI) "我的追番" else "我的追剧"
+                            BangumiHubPage.SEARCH -> "搜索"
+                            BangumiHubPage.HOME -> state.channel.label
+                        },
+                        navigationIcon = {
+                            AppIconButton(onClick = handleBack) {
+                                AppIcon(rememberAppBackIcon(), contentDescription = "返回")
+                            }
+                        },
                     )
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                miuixBackdrop = channelBackdrop,
-            )
+                } else {
+                    AppLiquidAwareTabRow(
+                        // Glass indicator fills the measured slot; native geometry keeps its defaults.
+                        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                        role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+                        options = channelOptions,
+                        selectedValue = state.channel,
+                        indicatorPositionProvider = { channelPager.tabIndicatorPosition },
+                        isScrollInProgressProvider = { channelPager.isScrollInProgress },
+                        onSelectionChange = viewModel::selectChannel,
+                        dragSelectionEnabled = channelOptions.size > 1,
+                        tapPressRefractionEnabled = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        miuixBackdrop = channelBackdrop,
+                    )
+                }
+            }
         }
+        AppSnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+                .padding(bottom = contentPadding.calculateBottomPadding()),
+        )
     }
 }

@@ -169,31 +169,33 @@ private fun CompactLiquidSearchInput(
             tint = hintColor,
             modifier = Modifier.padding(start = leadingIconHorizontalOffset).size(24.dp),
         )
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f).focusRequester(requester).padding(vertical = 6.dp),
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = contentColor),
-            singleLine = true,
-            interactionSource = interactionSource,
-            cursorBrush = androidx.compose.ui.graphics.SolidColor(contentColor),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-            decorationBox = { innerTextField ->
-                Box(contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) {
-                        AppText(
-                            placeholder,
-                            color = hintColor,
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        )
+        com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+            BasicTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f).focusRequester(requester).padding(vertical = 6.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = contentColor),
+                singleLine = true,
+                interactionSource = interactionSource,
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(contentColor),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+                decorationBox = { innerTextField ->
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (query.isEmpty()) {
+                            AppText(
+                                placeholder,
+                                color = hintColor,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            )
+                        }
+                        innerTextField()
                     }
-                    innerTextField()
-                }
-            },
-        )
+                },
+            )
+        }
         if (showClearAction && query.isNotEmpty()) {
             AppIconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
                 AppIcon(Icons.Default.Clear, contentDescription = "清除搜索内容", tint = hintColor)

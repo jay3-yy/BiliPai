@@ -2,6 +2,7 @@
 
 package com.android.purebilibili.feature.settings.screen
 
+import com.android.purebilibili.R
 import com.android.purebilibili.feature.settings.SettingsFunctionIcon
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -20,6 +21,7 @@ import com.android.purebilibili.feature.settings.UiSkinCompositionPreview
 import com.android.purebilibili.feature.settings.UiSkinCompositionPreviewData
 import com.android.purebilibili.feature.settings.downloadUiSkinRemotePackage
 import com.android.purebilibili.feature.settings.parsePreviewColor
+import com.android.purebilibili.feature.settings.rememberSettingsVector
 import com.android.purebilibili.feature.settings.resolveUiSkinImportErrorMessage
 
 import android.content.Context
@@ -445,7 +447,7 @@ private fun SkinCatalogPreviewDialog(
     com.android.purebilibili.core.ui.AppAlertDialog(
         onDismissRequest = { if (!installing) onDismiss() },
         icon = { SettingsFunctionIcon(
-            com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_brush_fill_24),
+            rememberSettingsVector(R.drawable.ph_paint_brush_24, R.drawable.ms_brush_fill_24),
             title = entry.displayName,
         ) },
         title = { AppText(entry.displayName) },

@@ -115,13 +115,6 @@ class BangumiHubPolicyTest {
     }
 
     @Test
-    fun `timeline ranges stay within the server supported seven day window`() {
-        assertEquals(0 to 7, BangumiTimelineRange.UPCOMING.before to BangumiTimelineRange.UPCOMING.after)
-        assertEquals(3 to 7, BangumiTimelineRange.DEFAULT.before to BangumiTimelineRange.DEFAULT.after)
-        assertEquals(7 to 7, BangumiTimelineRange.TWO_WEEKS.before to BangumiTimelineRange.TWO_WEEKS.after)
-    }
-
-    @Test
     fun `timeline episode metadata prefers the matching cover and update state`() {
         val episode = TimelineEpisode(
             cover = "season-cover",
@@ -172,7 +165,7 @@ class BangumiHubPolicyTest {
             resolveBangumiIndexQueryTarget(BangumiIndexCategory.GUOCHUANG),
         )
         assertEquals(
-            listOf(BangumiIndexCategory.BANGUMI, BangumiIndexCategory.GUOCHUANG),
+            listOf(BangumiIndexCategory.BANGUMI),
             bangumiIndexCategoriesForChannel(BangumiChannel.BANGUMI),
         )
     }
@@ -219,12 +212,5 @@ class BangumiHubPolicyTest {
             listOf(2, 3),
             mergeBangumiPagedItems(listOf(1), listOf(2, 2, 3), reset = true) { it },
         )
-    }
-
-    @Test
-    fun `failed batch mutation preserves selection`() {
-        val selected = setOf(2L, 4L)
-        assertEquals(selected, resolveBangumiSelectionAfterMutation(selected, succeeded = false))
-        assertTrue(resolveBangumiSelectionAfterMutation(selected, succeeded = true).isEmpty())
     }
 }

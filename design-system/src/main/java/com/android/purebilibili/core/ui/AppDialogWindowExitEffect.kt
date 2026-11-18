@@ -9,7 +9,7 @@ import androidx.compose.ui.window.DialogWindowProvider
 
 /** 窗口遮罩随卡片一起退出，避免系统窗口动画再补一遍淡出。 */
 @Composable
-internal fun AppDialogWindowExitEffect(progress: State<Float>) {
+fun AppDialogWindowExitEffect(progress: State<Float>) {
     val view = LocalView.current
     DisposableEffect(view, progress) {
         val window = ((view.parent as? DialogWindowProvider) ?: (view as? DialogWindowProvider))?.window

@@ -41,6 +41,9 @@ import kotlinx.coroutines.launch
 
 data class CommentDetailFraudResult(
     val rpid: Long,
+    val oid: Long,
+    val type: Int,
+    val message: String,
     val status: CommentFraudStatus
 )
 
@@ -72,7 +75,9 @@ class CommentDetailViewModel : ViewModel() {
 
     fun checkCommentFraud(reply: ReplyItem) {
         val oid = currentOid
-        if (currentType != 1 || oid <= 0L || reply.rpid <= 0L) return
+        val type = currentType
+        val identity = accountIdentity.value
+        if (oid <= 0L || reply.rpid <= 0L) return
         fraudCheckJob?.cancel()
         _fraudResult.value = null
         fraudCheckJob = viewModelScope.launch {
@@ -80,20 +85,20 @@ class CommentDetailViewModel : ViewModel() {
                 aid = oid,
                 rpid = reply.rpid,
                 rootId = reply.root,
-                hasPictures = !reply.content.pictures.isNullOrEmpty(),
-                sentAtSeconds = reply.ctime,
-                waitMs = 0L
+                type = type,
             ).onSuccess { status ->
+                if (accountIdentity.value != identity || currentOid != oid || currentType != type) return@onSuccess
                 CommentFraudRepository.saveRecord(
                     rpid = reply.rpid,
                     oid = oid,
-                    type = 1,
+                    type = type,
                     root = reply.root,
+                    uid = reply.mid,
                     message = reply.content.message,
                     status = status,
                     initialStatus = null
                 )
-                _fraudResult.value = CommentDetailFraudResult(reply.rpid, status)
+                _fraudResult.value = CommentDetailFraudResult(reply.rpid, oid, type, reply.content.message, status)
             }
         }
     }

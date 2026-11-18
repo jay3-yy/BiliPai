@@ -1,9 +1,7 @@
 package com.android.purebilibili.core.ui.common
 
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 class VerticalPriorityPagerGestureTest {
 
@@ -211,55 +209,4 @@ class VerticalPriorityPagerGestureTest {
             ),
         )
     }
-
-    @Test
-    fun `home and phone comments use vertical priority pager input`() {
-        val homeSource = File(
-            "src/main/java/com/android/purebilibili/feature/home/HomeScreen.kt"
-        ).readText()
-        val videoContentSource = File(
-            "src/main/java/com/android/purebilibili/feature/video/screen/VideoContentSection.kt"
-        ).readText()
-
-        val homePager = homeSource
-            .substringAfter("val homeTopPagerSwipeEnabled")
-            .substringAfter("HorizontalPager(")
-            .substringBefore(") { page ->")
-        assertTrue(homePager.contains("userScrollEnabled = homeTopPagerSwipeEnabled"))
-        assertTrue(homeSource.contains("AppHorizontalPager as HorizontalPager"))
-        assertTrue(homePager.contains("shouldYieldGesture = shouldYieldHomePagerToHeroCarousel"))
-
-        val commentPager = videoContentSource
-            .substringAfter("HorizontalPager(")
-            .substringBefore(") { page ->")
-        assertTrue(commentPager.contains("userScrollEnabled = shouldEnableVideoContentHorizontalPagerSwipe("))
-        assertTrue(videoContentSource.contains("AppHorizontalPager as HorizontalPager"))
-    }
-
-    @Test
-    fun `other paged vertical lists use the shared direction gate`() {
-        val expectedGateCounts = mapOf(
-            "feature/search/SearchScreen.kt" to 1,
-            "feature/dynamic/DynamicScreen.kt" to 2,
-            "feature/list/CommonListScreen.kt" to 1,
-            "feature/live/LiveAreaScreen.kt" to 1,
-            "feature/bangumi/ui/player/BangumiPlayerContent.kt" to 1,
-            "feature/video/screen/TabletVideoLayout.kt" to 1,
-            "feature/video/screen/TabletCinemaLayout.kt" to 1,
-        )
-
-        expectedGateCounts.forEach { (relativePath, expectedCount) ->
-            val source = File("src/main/java/com/android/purebilibili/$relativePath").readText()
-            assertTrue(
-                source.countOccurrences("HorizontalPager(") >= expectedCount,
-                "$relativePath should use the shared theme pager",
-            )
-            assertTrue(
-                source.contains("AppHorizontalPager as HorizontalPager"),
-                "$relativePath should select the native pager through the theme facade",
-            )
-        }
-    }
-
-    private fun String.countOccurrences(value: String): Int = split(value).size - 1
 }

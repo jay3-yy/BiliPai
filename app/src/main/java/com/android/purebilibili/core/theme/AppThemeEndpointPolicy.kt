@@ -2,7 +2,6 @@ package com.android.purebilibili.core.theme
 
 import androidx.compose.material3.ColorScheme
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import com.android.purebilibili.core.store.ThemeRoleOverrides
 import com.android.purebilibili.core.store.WallpaperPaletteOverrides
 import com.android.purebilibili.core.store.WallpaperPaletteRole
@@ -27,28 +26,26 @@ internal fun resolveAppThemeEndpointPalette(
     // Wallpaper edits can change a role's backdrop. Repair only extended foregrounds
     // before either native bridge; glass on/off consumes the same corrected palette.
     val configured = if (preserveGeneratedPalette) enforceSeedTextContrast(overridden) else overridden
-    // Miuix 内容色板不随玻璃开关切换；玻璃控件的强调色单独提供。
+    // Miuix 的原生控件和玻璃控件共用当前明暗模式解析后的主色。
     if (uiStyle == AppUiStyle.MIUIX) {
+        // 普通自定义色的选中容器共用主色容器；高级编辑和壁纸色板可独立指定角色。
+        val palette = if (source == Md3ColorSource.CUSTOM && !roleOverrides.enabled && !preserveGeneratedPalette) {
+            configured.copy(
+                secondaryContainer = configured.primaryContainer,
+                onSecondaryContainer = configured.onPrimaryContainer,
+            )
+        } else configured
         val generatedMiuix = resolveMiuixColorsFromMaterialBridge(
-            createMiuixMaterialBridge(configured), darkTheme, useMonetMapping = true,
+            createMiuixMaterialBridge(palette), darkTheme, useMonetMapping = true,
         )
         val miuix = if (source == Md3ColorSource.WALLPAPER_RETONED &&
             WallpaperPaletteRole.SECONDARY in wallpaperOverrides.forMode(darkTheme)
         ) generatedMiuix.copy(secondary = configured.secondary, onSecondary = configured.onSecondary)
             else generatedMiuix
         val material = alignMaterialSurfacesWithMiuix(
-            configured, miuix, preserveMaterialAccentRoles = true,
+            palette, miuix, preserveMaterialAccentRoles = true,
         )
-        val glassAccent = if (liquidGlassEnabled && !preserveGeneratedPalette) {
-            resolveLiquidControlAccentColor(
-                source = source,
-                customSeed = customSeed,
-                generatedAccent = configured.primary,
-                roleOverridesEnabled = roleOverrides.enabled,
-                roleControlHex = if (darkTheme) roleOverrides.dark.controlAccentHex else roleOverrides.light.controlAccentHex,
-            )
-        } else material.primary
-        return AppThemePalette(material, miuix, glassAccent)
+        return AppThemePalette(material, miuix, material.primary)
     }
     val pickedAccent = resolveLiquidControlAccentColor(
         source = source,
@@ -75,18 +72,14 @@ internal fun resolveAppThemeEndpointPalette(
     val useNativeCustomSelection = !preserveGeneratedPalette && !liquidGlassEnabled && source == Md3ColorSource.CUSTOM
     val material = if (useNativeCustomSelection) {
         val selectionSurface = nativeMiuixColors?.surface ?: exactPrimary.surface
-        val selectionContainer = opaqueCompositeOver(selectedAccent.copy(alpha = 0.14f), selectionSurface)
-        val onSelectionContainer = resolveCustomSelectionContentColor(
-            accent = selectedAccent,
-            container = selectionContainer,
-        )
+        val selection = resolveTintedSelectionAccentColors(selectedAccent, selectionSurface)
         // Standard custom colors share one accent family across tonal actions and tabs.
         // Glass and generated/wallpaper palettes retain their independent role contracts.
         exactPrimary.copy(
-            primaryContainer = selectionContainer,
-            onPrimaryContainer = onSelectionContainer,
-            secondaryContainer = selectionContainer,
-            onSecondaryContainer = onSelectionContainer,
+            primaryContainer = selection.backgroundColor,
+            onPrimaryContainer = selection.contentColor,
+            secondaryContainer = selection.backgroundColor,
+            onSecondaryContainer = selection.contentColor,
         )
     } else exactPrimary
     val bridgedMiuix = nativeMiuixColors
@@ -109,16 +102,4 @@ internal fun resolveAppThemeEndpointPalette(
         )
     } else material
     return AppThemePalette(aligned, miuix, aligned.primary)
-}
-
-/** Preserve the picked accent family instead of jumping straight to black/white at the threshold. */
-internal fun resolveCustomSelectionContentColor(accent: Color, container: Color): Color {
-    val target = resolveReadableForeground(container)
-    for (step in 0..256) {
-        val candidate = lerp(accent, target, step / 256f)
-        if (calculateContrastRatio(candidate, container) >= ACCESSIBLE_TEXT_MIN_CONTRAST) {
-            return candidate
-        }
-    }
-    return target
 }

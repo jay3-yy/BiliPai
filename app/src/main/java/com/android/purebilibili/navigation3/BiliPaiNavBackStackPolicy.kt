@@ -3,13 +3,8 @@ package com.android.purebilibili.navigation3
 import com.android.purebilibili.feature.settings.isSettingsSubtreeRoute
 
 internal fun resolveInitialBiliPaiBackStack(
-    firstRoute: String?,
-    onboardingRequired: Boolean,
     openPortraitFeedOnStartup: Boolean = false
 ): List<BiliPaiNavKey> {
-    if (onboardingRequired) {
-        return listOf(BiliPaiNavKey.Onboarding)
-    }
     if (openPortraitFeedOnStartup) {
         return listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Story())
     }

@@ -59,7 +59,7 @@ import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_CHANNEL_URL
 import com.android.purebilibili.feature.settings.OFFICIAL_TELEGRAM_GROUP_URL
 
 /**
- * Mandatory user-agreement gate (A+B): scrollable notice + required checkboxes.
+ * Usage notice opened from Settings.
  *
  * - Default action: 「我不同意」→ exit app
  * - 「我已知晓」only after every clause is checked

@@ -88,7 +88,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.math.sin
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -119,7 +122,6 @@ import com.android.purebilibili.core.ui.motion.emphasizedExitTween
 import com.android.purebilibili.core.ui.motion.interactiveSnapSpring
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.util.FormatUtils
-import com.android.purebilibili.core.util.rememberHapticFeedback
 import java.io.File
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigationevent.NavigationEventInfo
@@ -452,7 +454,7 @@ private fun ImagePreviewOverlayContent(
     val density = LocalDensity.current
     val layoutDirection = LocalLayoutDirection.current
     val scope = rememberCoroutineScope()
-    val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.RESULTS)
+    val haptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.RESULTS)
     val shareIcon = rememberAppShareIcon()
     val likeIcon = rememberAppLikeIcon()
     val likeFilledIcon = rememberAppLikeFilledIcon()
@@ -1962,11 +1964,10 @@ private fun ImagePreviewOverlayContent(
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                if (isLivePhotoEnabled) {
-                                    LivePhotoIcon(tint = Color.White)
-                                } else {
-                                    LivePhotoOffIcon(tint = Color.White.copy(alpha = 0.8f))
-                                }
+                                LivePhotoIcon(
+                                    enabled = isLivePhotoEnabled,
+                                    tint = Color.White.copy(alpha = if (isLivePhotoEnabled) 1f else 0.8f),
+                                )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 AppText(
                                     text = if (isLivePhotoEnabled) "实况" else "实况已关",
@@ -2006,11 +2007,7 @@ private fun ImagePreviewOverlayContent(
                                                 .padding(horizontal = 14.dp, vertical = 10.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            if (isLivePhotoEnabled) {
-                                                LivePhotoOffIcon(tint = Color.White)
-                                            } else {
-                                                LivePhotoIcon(tint = Color.White)
-                                            }
+                                            LivePhotoIcon(enabled = !isLivePhotoEnabled)
                                             Spacer(modifier = Modifier.width(10.dp))
                                             AppText(
                                                 text = if (isLivePhotoEnabled) "关闭实况" else "开启实况",
@@ -3010,53 +3007,45 @@ suspend fun saveLivePhotoVideoToGallery(context: android.content.Context, videoU
 }
 
 @Composable
-private fun LivePhotoIcon(
+internal fun LivePhotoIcon(
+    enabled: Boolean,
     modifier: Modifier = Modifier,
-    tint: Color = Color.White
+    tint: Color = Color.White,
 ) {
     androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val outerRadius = size.minDimension / 2f - 1.5f
-        val innerRadius = outerRadius * 0.46f
+        val unit = size.minDimension / 16f
+        val ringStroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.1f * unit)
         drawCircle(
             color = tint,
-            radius = outerRadius,
-            center = center,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f)
+            radius = 4.8f * unit,
+            style = ringStroke,
         )
         drawCircle(
             color = tint,
-            radius = innerRadius,
-            center = center
+            radius = 2.15f * unit,
+            style = ringStroke,
         )
-    }
-}
 
-@Composable
-private fun LivePhotoOffIcon(
-    modifier: Modifier = Modifier,
-    tint: Color = Color.White
-) {
-    androidx.compose.foundation.Canvas(modifier = modifier.size(16.dp)) {
-        val center = Offset(size.width / 2f, size.height / 2f)
-        val outerRadius = size.minDimension / 2f - 1.5f
-        val innerRadius = outerRadius * 0.46f
-        drawCircle(
-            color = tint,
-            radius = outerRadius,
-            center = center,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8f)
-        )
-        drawCircle(
-            color = tint,
-            radius = innerRadius,
-            center = center
-        )
-        drawLine(
-            color = tint,
-            start = Offset(2f, size.height - 2f),
-            end = Offset(size.width - 2f, 2f),
-            strokeWidth = 1.8f
-        )
+        val dotCount = 16
+        val dotOrbit = 7f * unit
+        repeat(dotCount) { index ->
+            val angle = index * (2 * PI / dotCount)
+            drawCircle(
+                color = tint,
+                radius = 0.55f * unit,
+                center = center + Offset(cos(angle).toFloat() * dotOrbit, sin(angle).toFloat() * dotOrbit),
+            )
+        }
+
+        if (!enabled) {
+            val slashOffset = Offset(5.6f * unit, -5.6f * unit)
+            drawLine(
+                color = tint,
+                start = center - slashOffset,
+                end = center + slashOffset,
+                strokeWidth = 1.25f * unit,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+            )
+        }
     }
 }

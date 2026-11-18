@@ -1,8 +1,9 @@
 package com.android.purebilibili.core.ui.components
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -30,10 +31,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Text
 import com.android.purebilibili.core.ui.motion.AppMotionEasing
+import kotlin.math.roundToLong
 
 /**
  * 数值变化时带滚动 + 脉冲缩放的计数文本：
- * 首次强调从零展示，后续数值从当前值滚动到目标，同时整体放大再回落（1 -> 1.15 -> 1），
+ * 首次从零匀速展示，后续数值从当前值滚动到目标，同时整体放大再回落（1 -> 1.15 -> 1），
  * 用于高赞弹幕计数、点赞数等需要"跳一下"反馈的场景。
  * 数字以等宽特性渲染，滚动与进位期间文本宽度保持稳定。
  */
@@ -52,21 +54,22 @@ fun AnimatedCountText(
 ) {
     val motionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current &&
         !com.android.purebilibili.core.ui.LocalSystemReduceMotion.current
-    val target = count.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
-    // 首次强调只播一次；后续回填从当前值接续，不用弹簧越过真实计数。
-    val animatedCount = remember { Animatable(if (animateFromZero) 0 else target, Int.VectorConverter) }
-    var firstCountUpdate by remember { mutableStateOf(true) }
+    val target = count.coerceAtLeast(0L)
+    var displayedCount by remember { mutableLongStateOf(if (animateFromZero) 0L else target) }
+    var initialRevealComplete by remember { mutableStateOf(!animateFromZero) }
     LaunchedEffect(target, motionEnabled) {
-        val initialReveal = firstCountUpdate && animateFromZero
-        firstCountUpdate = false
-        if (!motionEnabled) {
-            animatedCount.snapTo(target)
-        } else {
-            animatedCount.animateTo(
-                target,
-                tween(if (initialReveal) 450 else 180, easing = AppMotionEasing.EmphasizedEnter),
-            )
+        val start = displayedCount
+        if (motionEnabled && start != target) {
+            val spec = if (initialRevealComplete) tween<Float>(180, easing = AppMotionEasing.EmphasizedEnter)
+            else tween(900, easing = LinearEasing)
+            animate(initialValue = 0f, targetValue = 1f, animationSpec = spec) { progress, _ ->
+                displayedCount = (start.toDouble() + (target - start).toDouble() * progress)
+                    .roundToLong().coerceIn(minOf(start, target), maxOf(start, target))
+            }
         }
+        displayedCount = target
+        // Only a completed reveal switches to the short update animation.
+        if (target > 0L || !motionEnabled) initialRevealComplete = true
     }
     val pulseScale = remember { Animatable(1f) }
     val blurProgress = remember { Animatable(0f) }
@@ -80,7 +83,7 @@ fun AnimatedCountText(
             }
         } else emptyList()
     }
-    var previousCount by remember { mutableLongStateOf(if (animateFromZero && blurOnChange) Long.MIN_VALUE else count) }
+    var previousCount by remember { mutableLongStateOf(count) }
     LaunchedEffect(count, blurOnChange, motionEnabled) {
         if (!blurOnChange) blurProgress.snapTo(0f)
         if (!motionEnabled) {
@@ -91,6 +94,7 @@ fun AnimatedCountText(
         }
         if (count != previousCount) {
             previousCount = count
+            if (!initialRevealComplete) return@LaunchedEffect
             coroutineScope {
                 launch {
                     // Retarget from the current value when counts change during a rebound.
@@ -111,10 +115,7 @@ fun AnimatedCountText(
         }
     }
     Text(
-        text = prefix + formatter(
-            if (!motionEnabled || count > Int.MAX_VALUE.toLong()) count.coerceAtLeast(0L)
-            else animatedCount.value.coerceAtLeast(0).toLong()
-        ),
+        text = prefix + formatter(if (motionEnabled) displayedCount else target),
         style = style.withTabularNumbers(),
         color = color,
         maxLines = maxLines,

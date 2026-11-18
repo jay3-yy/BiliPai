@@ -57,7 +57,7 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("appearance.home_card_dynamic_tint_enabled", "卡片跟随背景变色", SettingsRootCategory.HOME_RECOMMENDATION, "home_wallpaper", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeCardDynamicTintEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_hero_carousel_enabled", "首页顶部轮播封面", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeHeroCarouselEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.home_hero_carousel_autoplay_enabled", "轮播默认播放", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeHeroCarouselAutoplayEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
-    PlaybackSettingItem("appearance.show_pgc_timeline", "番剧影视更新时间表", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getShowPgcTimeline(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
+    PlaybackSettingItem("appearance.show_pgc_timeline", "追番时间表", SettingsRootCategory.HOME_RECOMMENDATION, "home_recommendation", { context -> com.android.purebilibili.core.store.SettingsManager.getShowPgcTimeline(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.is_header_collapse_enabled", "顶栏滚动时收起", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", null, target = SettingsSearchTarget.HOME_FEED, readState = { state -> if (state.isHeaderCollapseEnabled) "开启" else "关闭" }),
     PlaybackSettingItem("appearance.video_card_long_press_action_enabled", "长按视频卡片", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", { context -> com.android.purebilibili.core.store.SettingsManager.getVideoCardLongPressActionEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.show_profile_edit_button", "编辑资料按钮", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", { context -> com.android.purebilibili.core.store.SettingsManager.getShowProfileEditButton(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.HOME_FEED),
@@ -120,6 +120,19 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("privacy.search_history_control", "显示搜索历史", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 1).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
     PlaybackSettingItem("privacy.search_discover_control", "显示搜索发现", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchLandingSectionVisible(context, 2).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
     PlaybackSettingItem("privacy.search_suggestions_enabled", "个性化搜索推荐", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getSearchSuggestionsEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
+    PlaybackSettingItem(
+        settingId = "privacy.link_preview_enabled",
+        title = "链接即时预览",
+        page = SettingsRootCategory.PRIVACY_PERMISSION,
+        sectionKey = "privacy_options",
+        observeValue = { context ->
+            com.android.purebilibili.core.store.SettingsManager.getLinkPreviewEnabled(context)
+                .map { if (it) "开启" else "关闭" }
+        },
+        aliases = listOf("链接预览", "网页预览", "外链预览", "短链预览"),
+        target = SettingsSearchTarget.PRIVACY_PERMISSION,
+        openCategory = true,
+    ),
     PlaybackSettingItem("privacy.privacy_mode_enabled", "不记录历史", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getPrivacyModeEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
     PlaybackSettingItem("privacy.privacy_content_authentication_enabled", "进入隐私内容时验证", SettingsRootCategory.PRIVACY_PERMISSION, "privacy_options", { context -> com.android.purebilibili.core.store.SettingsManager.getPrivacyContentAuthenticationEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.PRIVACY_PERMISSION, openCategory = true),
     PlaybackSettingItem("diagnostics.crash_tracking_enabled", "记录崩溃信息", SettingsRootCategory.PLAYER_DIAGNOSTICS, "diagnostics_options", { context -> com.android.purebilibili.core.store.SettingsManager.getCrashTrackingEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.DIAGNOSTICS, openCategory = true),
@@ -157,6 +170,15 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("playback.bottom_progress_behavior", "底部进度条展示", SettingsRootCategory.FULLSCREEN_GESTURE, SettingsSearchFocusIds.PLAYBACK_FULLSCREEN, { context -> com.android.purebilibili.core.store.SettingsManager .getBottomProgressBehavior(context).map { it.label } }, target = SettingsSearchTarget.PLAYBACK),
     PlaybackSettingItem("appearance.app_list_item_style", "列表条目样式", SettingsRootCategory.APPEARANCE_THEME, "appearance_display_mode", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> state.appListItemStyle.toString() }),
     PlaybackSettingItem("appearance.app_icon_style", "图标样式", SettingsRootCategory.APPEARANCE_THEME, "appearance_display_mode", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> resolveAppIconStyleOptions().first { it.value == state.appIconStyle }.label }),
+    PlaybackSettingItem(
+        SETTINGS_ICON_GLYPHS_SETTING_ID,
+        "设置图标字形",
+        SettingsRootCategory.APPEARANCE_THEME,
+        "appearance_display_mode",
+        observeValue = null,
+        aliases = listOf("Phosphor", "原版图标", "settings icon glyphs", "original icons"),
+        target = SettingsSearchTarget.APPEARANCE,
+    ),
     PlaybackSettingItem("appearance.single_choice_presentation", "选项弹窗样式", SettingsRootCategory.APPEARANCE_THEME, "appearance_display_mode", { context -> com.android.purebilibili.core.store.SettingsManager.getSingleChoicePresentation(context).map { it.toString() } }, target = SettingsSearchTarget.APPEARANCE),
     PlaybackSettingItem("appearance.md3_color_source", "主题颜色来源", SettingsRootCategory.APPEARANCE_THEME, "appearance_theme_color", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> state.md3ColorSource.label }),
     PlaybackSettingItem("appearance.app_font_size_preset", "字体大小", SettingsRootCategory.APPEARANCE_THEME, "appearance_text_size", null, target = SettingsSearchTarget.APPEARANCE, readState = { state -> state.appFontSizePreset.label }),
@@ -172,7 +194,7 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("appearance.home_wallpaper_effect_scope", "壁纸作用范围", SettingsRootCategory.HOME_RECOMMENDATION, "home_wallpaper", { context -> com.android.purebilibili.core.store.SettingsManager.getHomeWallpaperEffectScope(context).map { it.toString() } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("appearance.common_list_header_collapse_mode", "列表顶栏显示", SettingsRootCategory.HOME_RECOMMENDATION, "home_browsing", { context -> com.android.purebilibili.core.store.SettingsManager.getCommonListHeaderCollapseMode(context).map { it.toString() } }, target = SettingsSearchTarget.HOME_FEED),
     PlaybackSettingItem("navigation.visibility_mode", "显示模式", SettingsRootCategory.NAVIGATION_INTERACTION, "navigation_display", { context -> com.android.purebilibili.core.store.SettingsManager.getBottomBarVisibilityMode(context).map { it.toString() } }, target = SettingsSearchTarget.BOTTOM_BAR),
-    PlaybackSettingItem("playback.playback_cdn_preference", "CDN", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_NETWORK, { context -> com.android.purebilibili.core.store.SettingsManager.getPlaybackCdnPreference(context).map { com.android.purebilibili.feature.plugin.PlaybackCdnPreference.fromStorageValue(it).displayName } }, aliases = listOf("播放线路")),
+    PlaybackSettingItem("playback.playback_cdn_preference", "CDN", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_NETWORK, { context -> com.android.purebilibili.core.store.SettingsManager.getPlaybackCdnPreference(context).map { com.android.purebilibili.feature.plugin.PlaybackCdnPreference.fromStorageValue(it).displayName } }, aliases = listOf("播放线路", "CDN 测速", "自动优选")),
     PlaybackSettingItem("playback.default_audio_quality", "默认音质", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_NETWORK, { context -> com.android.purebilibili.core.store.player.PlayerSettingsStore.getDefaultAudioQuality(context).map { resolveSelectionLabel(resolveDefaultAudioQualityOptions(it), normalizeDefaultAudioQualityOption(it), "跟随上次") } }),
 ) + listOf(
     PlaybackSettingItem(LIQUID_GLASS_SCENES_SETTING_ID, LIQUID_GLASS_SCENES_TITLE, SettingsRootCategory.APPEARANCE_THEME, "animation_glass",

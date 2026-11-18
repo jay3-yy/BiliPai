@@ -10,8 +10,10 @@ import coil3.asImage
 import coil3.intercept.Interceptor
 import coil3.memory.MemoryCache
 import coil3.request.ImageResult
+import coil3.request.SuccessResult
 import com.android.purebilibili.data.model.response.VideoItem
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -26,7 +28,9 @@ import org.junit.Test
 class HomeFeedCoverPreloadTest {
     @get:Rule val rule = createComposeRule()
     private val started = CopyOnWriteArrayList<String>()
+    private val completed = CopyOnWriteArrayList<String>()
     private val cancelled = CopyOnWriteArrayList<String>()
+    @Volatile private var resumeRequests: CompletableDeferred<Unit>? = null
 
     @After
     fun closeLoader() = loader.shutdown()
@@ -41,7 +45,8 @@ class HomeFeedCoverPreloadTest {
                         val url = chain.request.data.toString()
                         started += url
                         return try {
-                            chain.proceed()
+                            resumeRequests?.await()
+                            chain.proceed().also { if (it is SuccessResult) completed += url }
                         } catch (error: Throwable) {
                             cancelled += url
                             throw error
@@ -112,6 +117,40 @@ class HomeFeedCoverPreloadTest {
         rule.runOnIdle { visible.value = 1..3 }
         rule.waitUntil(5_000) { requestedNames().containsAll(listOf("feed-4", "feed-5")) }
         rule.waitForIdle()
+        assertEquals(0, cancelled.size)
+    }
+
+    @Test
+    fun switchingAwayFromCoverTint_keepsAnInFlightCoverRequest() {
+        val resume = CompletableDeferred<Unit>()
+        resumeRequests = resume
+        val warmCoverTint = mutableStateOf(true)
+        val visible = mutableStateOf<IntRange?>(6..8)
+        val scrolling = mutableStateOf(true)
+        rule.setContent {
+            HomeFeedCoverPreload(
+                videos = FEED_VIDEOS,
+                visibleVideoRange = visible,
+                isScrolling = scrolling,
+                gridState = rememberHomeFeedGridState(regularLayout = true),
+                columns = 2,
+                requestSpec = REQUEST_SPEC,
+                allowed = true,
+                isDataSaverActive = false,
+                isLowRamDevice = false,
+                isMeteredNetwork = false,
+                aheadCount = 2,
+                imageLoader = loader,
+                warmCoverTint = warmCoverTint.value,
+            )
+        }
+        rule.waitUntil(5_000) { "feed-9" in requestedNames() }
+        rule.runOnIdle { warmCoverTint.value = false }
+        rule.waitForIdle()
+        resume.complete(Unit)
+
+        rule.waitUntil(5_000) { completed.any { it.substringAfterLast('/').substringBefore('.') == "feed-9" } }
+        assertEquals(1, requestedNames().count { it == "feed-9" })
         assertEquals(0, cancelled.size)
     }
 

@@ -1,5 +1,9 @@
 # Third-party notices
 
+## AI bot comment detection
+
+The local comment detector adapts scoring rules from [dafeiyu-cleaner v1.4.0](https://github.com/liyupi/dafeiyu-cleaner/tree/v1.4.0), copyright 2026 大肥鱼消除计划 contributors, under the MIT License. The bundled license is in `app/src/main/assets/licenses/dafeiyu-cleaner.LICENSE`.
+
 ## Local RSS article extraction
 
 The RSS reader uses [Readability4J](https://github.com/dankito/Readability4J)
@@ -33,6 +37,13 @@ Source paths, preserved behavior, and modifications are recorded in
 
 UI components and liquid-glass indicator behavior reference
 [Miuix](https://github.com/compose-miuix-ui/miuix).
+
+## Publication visibility check references
+
+The dynamic and comment visibility workflows reference
+[PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) at revision `217fb54f5`
+(GPL-3.0). The comment visibility concepts also reference
+[biliSendCommAntifraud](https://github.com/freedom-introvert/biliSendCommAntifraud).
 
 ## Player buffering animation asset
 

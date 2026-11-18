@@ -41,16 +41,6 @@ enum class BangumiFollowStatus(val value: Int, val label: String) {
     WATCHED(3, "看过"),
 }
 
-enum class BangumiTimelineRange(
-    val label: String,
-    val before: Int,
-    val after: Int,
-) {
-    UPCOMING(label = "未来一周", before = 0, after = 7),
-    DEFAULT(label = "前3后7天", before = 3, after = 7),
-    TWO_WEEKS(label = "前后一周", before = 7, after = 7),
-}
-
 enum class BangumiIndexCategory(
     val label: String,
     val seasonType: Int? = null,
@@ -68,10 +58,7 @@ enum class BangumiIndexCategory(
 fun bangumiIndexCategoriesForChannel(
     channel: BangumiChannel,
 ): List<BangumiIndexCategory> = when (channel) {
-    BangumiChannel.BANGUMI -> listOf(
-        BangumiIndexCategory.BANGUMI,
-        BangumiIndexCategory.GUOCHUANG,
-    )
+    BangumiChannel.BANGUMI -> listOf(BangumiIndexCategory.BANGUMI)
     BangumiChannel.CINEMA -> listOf(
         BangumiIndexCategory.CINEMA_ALL,
         BangumiIndexCategory.MOVIE,
@@ -83,7 +70,10 @@ fun bangumiIndexCategoriesForChannel(
 
 fun resolveBangumiSearchCategories(
     channel: BangumiChannel,
-): List<BangumiIndexCategory> = bangumiIndexCategoriesForChannel(channel)
+): List<BangumiIndexCategory> = when (channel) {
+    BangumiChannel.BANGUMI -> listOf(BangumiIndexCategory.BANGUMI, BangumiIndexCategory.GUOCHUANG)
+    BangumiChannel.CINEMA -> bangumiIndexCategoriesForChannel(channel)
+}
 
 fun resolveDefaultBangumiSearchCategory(
     channel: BangumiChannel,
@@ -315,8 +305,3 @@ fun <T, K> mergeBangumiPagedItems(
     reset: Boolean,
     keyOf: (T) -> K,
 ): List<T> = (if (reset) incoming else existing + incoming).distinctBy(keyOf)
-
-fun resolveBangumiSelectionAfterMutation(
-    selectedIds: Set<Long>,
-    succeeded: Boolean,
-): Set<Long> = if (succeeded) emptySet() else selectedIds

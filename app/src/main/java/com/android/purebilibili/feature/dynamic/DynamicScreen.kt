@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.dynamic
 
 import com.android.purebilibili.navigation.tabIndicatorPosition
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -30,7 +31,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -225,10 +226,8 @@ fun DynamicScreen(
             ).show()
         }
     }
-    val checkDynamicFallback: (String) -> Unit = { id ->
-        viewModel.checkDynamic(id) { _, message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-        }
+    val checkDynamicFallback: (String, String?) -> Unit = { id, text ->
+        onCheckDynamicClick?.invoke(id) ?: viewModel.checkDynamic(id, text)
     }
 
     val unfoldRelatedDynamics: (String) -> Unit = { id ->
@@ -856,9 +855,10 @@ fun DynamicScreen(
                             ) {
                             HorizontalPager(
                                 state = pagerState,
-                                userScrollEnabled = true,
+                                userScrollEnabled = false,
                                 modifier = Modifier
-                                    .fillMaxSize(),
+                                    .fillMaxSize()
+                                    .verticalPriorityHorizontalPagerSwipe(pagerState),
                                 key = { page -> resolveDynamicPagerTabKey(visibleTabs, page) }
                             ) { page ->
                                 val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
@@ -936,7 +936,7 @@ fun DynamicScreen(
                                         onOpenLink = onOpenLink,
                                         onSaveDynamicClick = onSaveDynamicClick ?: saveDynamicFallback,
                                         onShareToMessageClick = onShareToMessageClick ?: { pendingMessageShare = it },
-                                        onCheckDynamicClick = onCheckDynamicClick ?: checkDynamicFallback,
+                                        onCheckDynamicClick = checkDynamicFallback,
                                         onReserveClick = viewModel::toggleDynamicReserve,
                                         onLoginClick = onLoginClick,
                                         gifImageLoader = gifImageLoader,
@@ -1060,9 +1060,10 @@ fun DynamicScreen(
                         ) {
                         HorizontalPager(
                             state = pagerState,
-                            userScrollEnabled = true,
+                            userScrollEnabled = false,
                             modifier = Modifier
-                                .fillMaxSize(),
+                                .fillMaxSize()
+                                .verticalPriorityHorizontalPagerSwipe(pagerState),
                             key = { page -> resolveDynamicPagerTabKey(visibleTabs, page) }
                         ) { page ->
                             val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
@@ -1140,7 +1141,7 @@ fun DynamicScreen(
                                     onOpenLink = onOpenLink,
                                     onSaveDynamicClick = onSaveDynamicClick ?: saveDynamicFallback,
                                     onShareToMessageClick = onShareToMessageClick ?: { pendingMessageShare = it },
-                                    onCheckDynamicClick = onCheckDynamicClick ?: checkDynamicFallback,
+                                    onCheckDynamicClick = checkDynamicFallback,
                                     onReserveClick = viewModel::toggleDynamicReserve,
                                     onLoginClick = onLoginClick,
                                     gifImageLoader = gifImageLoader,
@@ -1521,7 +1522,7 @@ internal fun DynamicList(
     onOpenLink: ((String) -> Unit)?,
     onSaveDynamicClick: ((com.android.purebilibili.data.model.response.DynamicItem) -> Unit)?,
     onShareToMessageClick: ((com.android.purebilibili.data.model.response.DynamicItem) -> Unit)?,
-    onCheckDynamicClick: ((String) -> Unit)?,
+    onCheckDynamicClick: ((String, String?) -> Unit)?,
     onReserveClick: (
         com.android.purebilibili.feature.dynamic.components.DynamicReserveAction,
         (Result<com.android.purebilibili.feature.dynamic.components.DynamicReserveResult>) -> Unit,
@@ -1586,7 +1587,7 @@ internal fun DynamicList(
                 interaction = DynamicCardInteractionActions(
                     onSaveDynamicClick = { onSaveDynamicClick?.invoke(item) },
                     onShareToMessageClick = { onShareToMessageClick?.invoke(item) },
-                    onCheckDynamicClick = { onCheckDynamicClick?.invoke(item.id_str) },
+                    onCheckDynamicClick = { onCheckDynamicClick?.invoke(item.id_str, item.modules.module_dynamic?.desc?.text) },
                     onReserveClick = onReserveClick,
                     onCommentClick = onCommentClick,
                     onRepostClick = onRepostClick,
@@ -1959,7 +1960,7 @@ private fun HorizontalUserList(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .combinedClickable(
+                            .appCombinedClickable(
                                 onClick = appActionWithFeedback { onUserClick(user.uid) },
                                 onLongClick = if (glassMenuAvailable) null else ({ if (!isShortcut) showMenu = true })
                             )
@@ -2070,7 +2071,7 @@ private fun HorizontalUserList(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .padding(AppSpacingTokens.ExtraSmall)
-                            .combinedClickable(
+                            .appCombinedClickable(
                                 onClick = appActionWithFeedback(onToggleShowHidden),
                                 onLongClick = onToggleShowHidden
                             )

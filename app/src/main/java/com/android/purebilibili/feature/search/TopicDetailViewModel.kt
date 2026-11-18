@@ -187,6 +187,7 @@ class TopicDetailViewModel : ViewModel() {
                     if (draft.publishAtSeconds == null) refreshSelectedFeed()
                     com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.afterPublication(
                         context.applicationContext, createdId, identity,
+                        text = draft.text,
                         privatePublication = draft.private,
                         scheduledPublication = draft.publishAtSeconds != null,
                     )

@@ -88,6 +88,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.android.purebilibili.R
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.video.progress.PbpProgressData
@@ -1661,6 +1662,7 @@ private fun VideoPlayerSectionContent(
             }
         }
         isLongPressing = true
+        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
         totalDragDistanceY = 0f
         totalDragDistanceX = 0f
         longPressSpeedStartedAtMs = android.os.SystemClock.elapsedRealtime()
@@ -2893,6 +2895,7 @@ private fun VideoPlayerSectionContent(
                             )
                         ) {
                             FullscreenDoubleTapAction.SeekForward -> {
+                                seekSceneHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 val seekMs = seekForwardSeconds * 1000L
                                 val newPos = resolveRelativeSeekTargetPosition(
                                     currentPositionMs = player.currentPosition,
@@ -2912,6 +2915,7 @@ private fun VideoPlayerSectionContent(
                                 }
                             }
                             FullscreenDoubleTapAction.SeekBackward -> {
+                                seekSceneHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 val seekMs = seekBackwardSeconds * 1000L
                                 val newPos = resolveRelativeSeekTargetPosition(
                                     currentPositionMs = player.currentPosition,
@@ -2931,6 +2935,7 @@ private fun VideoPlayerSectionContent(
                                 }
                             }
                             FullscreenDoubleTapAction.TogglePlayPause -> {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 togglePlayerPlaybackFromUserAction(player)
                                 com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
                                     "⏯️ DoubleTap: toggle play/pause"
@@ -4553,6 +4558,15 @@ private fun VideoPlayerSectionContent(
         pipNoDanmakuEnabled = pipNoDanmakuEnabled,
         hostLifecycleStarted = hostLifecycleStarted
     )
+    val hotBarCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
+    val canShowHotBar = danmakuHotBarEnabled && shouldShowDanmakuLayer
+    val canSendHotBarDanmaku = canShowHotBar && !isInPipMode &&
+        com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current
+    val sendSameDanmaku = actions.onSendSameDanmaku
+    val hotDanmakuSendFailureMessage = stringResource(R.string.hot_danmaku_send_error)
+    var sendingHotDanmaku by remember(danmakuManager, bvid, hotBarCid, canSendHotBarDanmaku) {
+        mutableStateOf(false)
+    }
         val advancedDanmakuList by danmakuManager.advancedDanmakuFlow.collectAsStateWithLifecycle()
         val basDanmakuList by danmakuManager.basDanmakuFlow.collectAsStateWithLifecycle()
         val commandDanmakuList by danmakuManager.commandDanmakuFlow.collectAsStateWithLifecycle()
@@ -4801,26 +4815,33 @@ private fun VideoPlayerSectionContent(
                     )
                 }
                 // 3.1 高赞弹幕悬浮条：当前时间窗内点赞 Top-N，支持一键跟发
-                if (danmakuHotBarEnabled && shouldShowDanmakuLayer && danmakuRenderWorkActive) {
+                if (canShowHotBar && danmakuRenderWorkActive) {
                     val hotBarLikedDanmakuIds by actions.likedDanmakuIds
                         .collectAsStateWithLifecycle()
-                    val hotBarCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
                     key(danmakuManager, hotBarCid) {
                         HotDanmakuBar(
-                            getDanmakuList = { danmakuManager.getHotDanmakuList(hotBarCid) },
+                            getDanmakuIndex = { danmakuManager.getHotDanmakuIndex(hotBarCid) },
                             onPresentationChange = danmakuManager::updateHotDanmakuPresentation,
                             player = playerState.player,
                             likedDanmakuIds = hotBarLikedDanmakuIds,
                             onLikeDanmaku = actions.onLikeDanmakuToggle,
-                            isSending = isSendingDanmakuComposer,
-                            onSendSame = { message ->
-                                onSendDanmakuComposer(
-                                    message,
-                                    16777215,
-                                    1,
-                                    25,
-                                    false,
-                                )
+                            isSending = sendingHotDanmaku || isSendingDanmakuComposer,
+                            onSendSame = sendSameDanmaku?.takeIf { canSendHotBarDanmaku }?.let { send ->
+                                { message: String ->
+                                    if (!sendingHotDanmaku && !isSendingDanmakuComposer) {
+                                        sendingHotDanmaku = true
+                                        send(message) { result ->
+                                            sendingHotDanmaku = false
+                                            result.onFailure {
+                                                Toast.makeText(
+                                                    context,
+                                                    it.message ?: hotDanmakuSendFailureMessage,
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .align(Alignment.TopCenter)

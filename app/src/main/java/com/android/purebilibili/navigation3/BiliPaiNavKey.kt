@@ -132,6 +132,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
     }
 
     @Serializable
+    data object ContentFilterHistory : BiliPaiNavKey {
+        override val routeBase: String = "content_filter_history"
+    }
+
+    @Serializable
     data class JsPluginContent(
         val pluginId: String
     ) : BiliPaiNavKey {
@@ -215,6 +220,11 @@ internal sealed interface BiliPaiNavKey : NavKey {
 
     @Serializable
     data object Favorite : BiliPaiNavKey {
+        override val routeBase: String = "favorite"
+    }
+
+    @Serializable
+    data class FavoritePgc(val cinema: Boolean) : BiliPaiNavKey {
         override val routeBase: String = "favorite"
     }
 

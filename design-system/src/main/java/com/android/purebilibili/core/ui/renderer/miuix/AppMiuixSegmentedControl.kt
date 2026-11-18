@@ -346,8 +346,8 @@ private fun <T> AppMiuixNonGlassTabs(
                 inactiveContentColor = palette.unselectedContent,
             ) } ?: if (nativeStyle) AppSegmentedControlColors(
                 outerContainerColor = MiuixTheme.colorScheme.surface,
-                activeContainerColor = MiuixTheme.colorScheme.surfaceContainer,
-                activeContentColor = MiuixTheme.colorScheme.onBackground,
+                activeContainerColor = MiuixTheme.colorScheme.primaryContainer,
+                activeContentColor = MiuixTheme.colorScheme.onPrimaryContainer,
                 inactiveContentColor = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             ) else colors,
             height = maxOf(height ?: geometry.height, geometry.height),

@@ -40,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import com.android.purebilibili.core.util.FormatUtils
@@ -172,10 +173,14 @@ class LivePlayerViewModel : ViewModel() {
     companion object {
         private const val MAX_PLAYBACK_RELOAD_ATTEMPTS = 1
         private const val MAX_ACTIVE_SUPER_CHAT_ITEMS = 100
+        private const val MAX_CHAT_HISTORY_ITEMS = 200
+        private const val CHAT_HISTORY_PUBLISH_INTERVAL_MS = 50L
     }
     
     private val _uiState = MutableStateFlow<LivePlayerState>(LivePlayerState.Loading)
     val uiState = _uiState.asStateFlow()
+    private val _switchingAudioOnly = MutableStateFlow(false)
+    val switchingAudioOnly = _switchingAudioOnly.asStateFlow()
     
     // 直播弹幕流 (UI 观察此流进行渲染)
     private val _danmakuFlow = MutableSharedFlow<LiveDanmakuItem>(
@@ -186,8 +191,10 @@ class LivePlayerViewModel : ViewModel() {
 
     private val _chatHistory = MutableStateFlow<List<LiveChatMessage>>(emptyList())
     val chatHistory = _chatHistory.asStateFlow()
+    // 实时消息、预加载和设置在主线程更新同一份历史，发布时才复制为 UI 快照。
+    private val recentChatMessages = ArrayDeque<LiveChatMessage>(MAX_CHAT_HISTORY_ITEMS)
     private var nextChatSequence = 0L
-    private val chatHistoryLock = Any()
+    private var chatHistoryPublishJob: Job? = null
 
     private val _superChatItems = MutableStateFlow<List<LiveDanmakuItem>>(emptyList())
     val superChatItems = _superChatItems.asStateFlow()
@@ -207,6 +214,8 @@ class LivePlayerViewModel : ViewModel() {
 
     private val _emoticonPackages = MutableStateFlow<List<LiveEmoticonPackage>>(emptyList())
     val emoticonPackages = _emoticonPackages.asStateFlow()
+    private val emptyMessageEmoteResolver = LiveMessageEmoteResolver(emptyList())
+    private var messageEmoteResolver = emptyMessageEmoteResolver
 
     private val _shieldInfo = MutableStateFlow<LiveShieldInfo?>(null)
     val shieldInfo = _shieldInfo.asStateFlow()
@@ -274,9 +283,15 @@ class LivePlayerViewModel : ViewModel() {
         qn: Int,
         showLoading: Boolean,
         reconnectDanmaku: Boolean,
-        refreshEmoticons: Boolean
-    ) {
-        pauseLiveHeartbeat()
+        refreshEmoticons: Boolean,
+        audioOnly: Boolean = currentAudioOnly,
+    ): Job {
+        val changingAudioMode = audioOnly != currentAudioOnly
+        if (!changingAudioMode) pauseLiveHeartbeat()
+        fun handleLoadFailure(message: String) {
+            if (changingAudioMode) _events.tryEmit(LivePlayerEvent.Toast(message))
+            else _uiState.value = LivePlayerState.Error(message)
+        }
         if (currentRoomId != roomId) {
             _voteSnapshot.value = LiveVoteSnapshot()
             clearChatHistory()
@@ -290,6 +305,7 @@ class LivePlayerViewModel : ViewModel() {
             _shieldInfo.value = null
             danmakuFilter = LiveDanmakuFilterPolicy()
             shieldRequestGeneration++
+            messageEmoteResolver = emptyMessageEmoteResolver
             _emoticonPackages.value = emptyList()
             currentUid = 0
             resolvedPlayback = null
@@ -303,9 +319,8 @@ class LivePlayerViewModel : ViewModel() {
         CrashReporter.markLivePlaybackStage("load_stream_request")
         
         liveStreamLoadJob?.cancel()
-        liveRoomInfoJob?.cancel()
-        val audioOnly = currentAudioOnly
-        liveStreamLoadJob = viewModelScope.launch {
+        if (!changingAudioMode) liveRoomInfoJob?.cancel()
+        val loadJob = viewModelScope.launch {
             val startedAtMs = android.os.SystemClock.elapsedRealtime()
             if (showLoading) {
                 _uiState.value = LivePlayerState.Loading
@@ -334,7 +349,7 @@ class LivePlayerViewModel : ViewModel() {
             )
             currentCoroutineContext().ensureActive()
             val playData = playUrlResult.getOrElse { error ->
-                _uiState.value = LivePlayerState.Error(error.message ?: "加载失败")
+                handleLoadFailure(error.message ?: "加载失败")
                 CrashReporter.markLivePlaybackStage("load_stream_failed")
                 CrashReporter.reportLiveError(roomId, "load_stream_failed", error.message ?: "load failed", error)
                 return@launch
@@ -357,10 +372,11 @@ class LivePlayerViewModel : ViewModel() {
                     anchorInfo = previous?.anchorInfo?.takeIf { it.uid == currentUid } ?: AnchorInfo(uid = currentUid),
                     isFollowing = previous?.isFollowing ?: false,
                     redPocketInfo = previous?.redPocketInfo,
-                    danmakuPermission = previous?.danmakuPermission ?: LiveDanmakuPermission()
+                    danmakuPermission = previous?.danmakuPermission ?: LiveDanmakuPermission(),
+                    audioOnly = audioOnly,
                 )
             ) {
-                _uiState.value = LivePlayerState.Error("无法获取直播流地址")
+                handleLoadFailure("无法获取直播流地址")
                 CrashReporter.markLivePlaybackStage("stream_url_empty")
                 return@launch
             }
@@ -371,17 +387,24 @@ class LivePlayerViewModel : ViewModel() {
             if (reconnectDanmaku) startLiveDanmaku(realRoomId)
             val followingVersion = followingMutationVersion
             // 房间资料任务独立于切画质取流，避免首播后马上切画质永久丢失详情。
+            if (changingAudioMode) liveRoomInfoJob?.cancel()
             liveRoomInfoJob = viewModelScope.launch {
                 if (refreshEmoticons) {
                     launch(Dispatchers.IO) {
                         LiveRepository.getLiveEmoticonPackages(realRoomId).onSuccess { packages ->
-                            currentCoroutineContext().ensureActive()
-                            _emoticonPackages.value = packages
-                            com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper.update(
-                                packages.flatMap { it.items }
-                                    .filter { it.emoji.isNotBlank() && it.url.isNotBlank() }
-                                    .associate { it.emoji to it.url }
-                            )
+                            val resolver = LiveMessageEmoteResolver(packages)
+                            val urls = packages.flatMap { it.items }
+                                .filter { it.emoji.isNotBlank() && it.url.isNotBlank() }
+                                .associate { it.emoji to it.url }
+                            val published = withContext(Dispatchers.Main.immediate) {
+                                if (currentRoomId != realRoomId) return@withContext false
+                                messageEmoteResolver = resolver
+                                _emoticonPackages.value = packages
+                                true
+                            }
+                            if (published) {
+                                com.android.purebilibili.feature.live.components.DanmakuEmoticonMapper.update(urls)
+                            }
                         }
                     }
                 }
@@ -580,6 +603,8 @@ class LivePlayerViewModel : ViewModel() {
                 }
             }
         }
+        liveStreamLoadJob = loadJob
+        return loadJob
     }
 
 
@@ -707,16 +732,17 @@ class LivePlayerViewModel : ViewModel() {
      */
     fun toggleAudioOnly() {
         val currentState = _uiState.value as? LivePlayerState.Success ?: return
-        currentAudioOnly = !currentAudioOnly
+        if (_switchingAudioOnly.value) return
         resetPlaybackReloadBudget()
-        _uiState.value = currentState.copy(isAudioOnly = currentAudioOnly)
+        _switchingAudioOnly.value = true
         loadLiveStreamInternal(
             roomId = currentRoomId,
             qn = currentRequestedQuality,
             showLoading = false,
             reconnectDanmaku = false,
-            refreshEmoticons = false
-        )
+            refreshEmoticons = false,
+            audioOnly = !currentState.isAudioOnly,
+        ).invokeOnCompletion { _switchingAudioOnly.value = false }
     }
     
     /**
@@ -835,7 +861,8 @@ class LivePlayerViewModel : ViewModel() {
         anchorInfo: AnchorInfo,
         isFollowing: Boolean,
         redPocketInfo: LiveRedPocketInfo?,
-        danmakuPermission: LiveDanmakuPermission
+        danmakuPermission: LiveDanmakuPermission,
+        audioOnly: Boolean = currentAudioOnly,
     ): Boolean {
         val danmakuEnabled = (_uiState.value as? LivePlayerState.Success)?.isDanmakuEnabled ?: true
         val resolved = resolveLivePlayback(data, requestedQn)?.let { playback ->
@@ -857,6 +884,7 @@ class LivePlayerViewModel : ViewModel() {
         val selected = resolved?.candidates?.getOrNull(preferredIndex)
         val primaryUrl = selected?.urls?.firstOrNull()
         if (resolved != null && selected != null && primaryUrl != null) {
+            currentAudioOnly = audioOnly
             resolvedPlayback = resolved
             activeCandidateIndex = preferredIndex
             activeUrlIndex = 0
@@ -947,7 +975,7 @@ class LivePlayerViewModel : ViewModel() {
             items.filter { shouldRenderLiveDanmaku(it.text, it.emoticonUrl) }.forEach { seed ->
                 currentCoroutineContext().ensureActive()
                 if (danmakuFilter.blocks(seed.uid, seed.text)) return@forEach
-                appendChatHistory(
+                recordChatHistory(
                     LiveDanmakuItem(
                         text = seed.text,
                         uid = seed.uid,
@@ -969,6 +997,7 @@ class LivePlayerViewModel : ViewModel() {
                     )
                 )
             }
+            publishChatHistory()
         }
         if (!superChatEnabled) return
         LiveRepository.getLiveSuperChatMessages(roomId).onSuccess { items ->
@@ -1003,8 +1032,9 @@ class LivePlayerViewModel : ViewModel() {
                     superChatEndTime = endTime
                 )
                 if (persistSuperChats || remainingLiveSuperChatSeconds(endTime, nowSeconds) > 0) prefetchedSuperChats += item
-                appendChatHistory(item)
+                recordChatHistory(item)
             }
+            publishChatHistory()
         }
         if (prefetchedSuperChats.isNotEmpty()) {
             _superChatItems.value = prefetchedSuperChats.take(MAX_ACTIVE_SUPER_CHAT_ITEMS)
@@ -1017,7 +1047,7 @@ class LivePlayerViewModel : ViewModel() {
         if (!enabled) {
             superChatMenuPauses.clear()
             _superChatItems.value = emptyList()
-            _chatHistory.update { entries -> entries.filterNot { it.item.isSuperChat } }
+            if (recentChatMessages.removeAll { it.item.isSuperChat }) publishChatHistory()
             scheduleSuperChatExpiry()
         }
     }
@@ -1053,17 +1083,31 @@ class LivePlayerViewModel : ViewModel() {
         if (roomId != currentRoomId || id <= 0L) return
         val now = android.os.SystemClock.elapsedRealtime()
         if (paused) {
-            superChatMenuPauses.open(id, now)
+            superChatMenuPauses.open(id, now, System.currentTimeMillis() / 1_000L)
         } else {
             val extraSeconds = superChatMenuPauses.close(id, now) ?: return
             fun LiveDanmakuItem.resume(): LiveDanmakuItem = if (superChatId == id) {
                 copy(superChatEndTime = superChatEndTime + extraSeconds)
             } else this
             _superChatItems.update { items -> items.map { it.resume() } }
-            _chatHistory.update { history -> history.map { it.copy(item = it.item.resume()) } }
+            var historyChanged = false
+            for (index in recentChatMessages.indices) {
+                val entry = recentChatMessages[index]
+                if (entry.item.superChatId == id) {
+                    recentChatMessages[index] = entry.copy(item = entry.item.resume())
+                    historyChanged = true
+                }
+            }
+            if (historyChanged) publishChatHistory()
         }
         scheduleSuperChatExpiry()
     }
+
+    internal fun superChatRemainingSeconds(item: LiveDanmakuItem, nowEpochSeconds: Long): Int =
+        remainingLiveSuperChatSeconds(
+            item.superChatEndTime,
+            superChatMenuPauses.countdownTime(item.superChatId, nowEpochSeconds),
+        )
 
     private fun scheduleSuperChatExpiry() {
         superChatExpiryJob?.cancel()
@@ -1285,15 +1329,12 @@ class LivePlayerViewModel : ViewModel() {
             if (currentRoomId != roomId || generation != shieldRequestGeneration) return@onSuccess
             _shieldInfo.value = info
             danmakuFilter = LiveDanmakuFilterPolicy(info)
-            synchronized(chatHistoryLock) {
-                _chatHistory.update { history ->
-                    history.filterNot { message ->
-                        val item = message.item
-                        !item.isSelf && !item.isSystem && !item.isSuperChat &&
-                            danmakuFilter.blocks(item.uid, item.text)
-                    }
-                }
+            val removed = recentChatMessages.removeAll { message ->
+                val item = message.item
+                !item.isSelf && !item.isSystem && !item.isSuperChat &&
+                    danmakuFilter.blocks(item.uid, item.text)
             }
+            if (removed || chatHistoryPublishJob != null) publishChatHistory()
         }
     }
 
@@ -1512,27 +1553,43 @@ class LivePlayerViewModel : ViewModel() {
             android.util.Log.d("LivePlayer", "🔄 Skipped duplicate self-sent danmaku: ${item.text}")
             return
         }
-        val resolved = resolveLiveMessageEmoteResources(item, _emoticonPackages.value).copy(originRoomId = currentRoomId)
+        val resolved = messageEmoteResolver.resolve(item).copy(originRoomId = currentRoomId)
         appendChatHistory(resolved)
         if (!resolved.isSuperChat) _danmakuFlow.tryEmit(resolved)
     }
 
     private fun appendChatHistory(item: LiveDanmakuItem) {
-        synchronized(chatHistoryLock) {
-            val entry = LiveChatMessage(++nextChatSequence, item)
-            _chatHistory.update { current -> (current + entry).takeLast(200) }
+        recordChatHistory(item)
+        if (item.isSelf || item.isSuperChat || item.isSystem) {
+            publishChatHistory()
+        } else if (chatHistoryPublishJob == null) {
+            chatHistoryPublishJob = viewModelScope.launch {
+                delay(CHAT_HISTORY_PUBLISH_INTERVAL_MS)
+                chatHistoryPublishJob = null
+                publishChatHistory()
+            }
         }
+    }
+
+    private fun recordChatHistory(item: LiveDanmakuItem) {
+        if (recentChatMessages.size == MAX_CHAT_HISTORY_ITEMS) recentChatMessages.removeFirst()
+        recentChatMessages.addLast(LiveChatMessage(++nextChatSequence, item))
+    }
+
+    private fun publishChatHistory() {
+        chatHistoryPublishJob?.cancel()
+        chatHistoryPublishJob = null
+        _chatHistory.value = recentChatMessages.toList()
     }
 
     private fun clearChatHistory() {
-        synchronized(chatHistoryLock) {
-            _chatHistory.value = emptyList()
-            nextChatSequence = 0L
-        }
+        recentChatMessages.clear()
+        nextChatSequence = 0L
+        publishChatHistory()
     }
 
     private fun emitOwnLiveChatItem(item: LiveDanmakuItem) {
-        val resolved = resolveLiveMessageEmoteResources(item, _emoticonPackages.value).copy(originRoomId = currentRoomId)
+        val resolved = messageEmoteResolver.resolve(item).copy(originRoomId = currentRoomId)
         appendChatHistory(resolved)
         _danmakuFlow.tryEmit(resolved)
     }

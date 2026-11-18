@@ -11,7 +11,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -638,7 +638,7 @@ fun SessionListItem(
     AppSurface(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = { showMenu = true })
+            .appCombinedClickable(onClick = appActionWithFeedback(onClick), onLongClick = { showMenu = true })
             .messageSecondaryClick { showMenu = true }
             .padding(horizontal = if (useGroupedListCards) 12.dp else 0.dp, vertical = if (useGroupedListCards) 3.dp else 0.dp),
         shape = if (useGroupedListCards) {

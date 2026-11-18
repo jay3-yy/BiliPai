@@ -84,10 +84,16 @@ val openSourceLibraries = listOf(
         description = "Material Design 组件与主题系统"
     ),
     OpenSourceLibrary(
+        name = "Phosphor Icons",
+        license = "MIT",
+        url = "https://github.com/phosphor-icons/core",
+        description = "设置界面使用的 Regular 矢量字形"
+    ),
+    OpenSourceLibrary(
         name = "Material Symbols",
         license = "Apache 2.0",
         url = "https://github.com/google/material-design-icons",
-        description = "设置语义图标使用的 Outlined 矢量字形"
+        description = "界面使用的 Outlined 矢量字形"
     ),
     OpenSourceLibrary(
         name = "Miuix",
@@ -457,7 +463,7 @@ fun LicenseCard(
                 )
             }
             AppIcon(
-                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
                 contentDescription = null,
                 tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
                 modifier = Modifier.size(20.dp)

@@ -46,6 +46,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
     useOfficialInlinePortraitDetailExperience: Boolean,
     isLandscape: Boolean,
     shouldAnimatePortraitPager: Boolean,
+    entryTransitionFinished: Boolean,
     motionSpec: StandalonePortraitPagerMotionSpec,
     initialBvidOverride: String?,
     initialStartPositionMs: Long,
@@ -63,6 +64,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
     onExitSnapshot: (String, Long, Long, String) -> Unit,
     onSearchClick: () -> Unit,
     onUserClick: (Long) -> Unit,
+    onOpenBilibiliLink: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val showPortraitFullscreen = shouldShowStandalonePortraitPager(
@@ -122,7 +124,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
         .getPortraitOnlyVerticalRecommendations(context)
         .collectAsStateWithLifecycle(initialValue = false)
     AnimatedVisibility(
-        visible = showPortraitFullscreen && success != null,
+        visible = entryTransitionFinished && showPortraitFullscreen && success != null,
         enter = if (shouldAnimatePortraitPager) {
             fadeIn(emphasizedEnterTween(motionSpec.enterDurationMillis))
         } else {
@@ -158,6 +160,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
                 recommendations = portraitRecommendations,
                 onlyVerticalRecommendations = portraitOnlyVerticalRecommendations,
                 isInPipMode = isInPipMode,
+                ownsSystemBars = false,
                 onBack = onExitFullscreen,
                 onHomeClick = onHomeClick,
                 onVideoChange = onVideoChange,
@@ -172,6 +175,7 @@ internal fun VideoDetailPortraitOverlayAdapter(
                 onExitSnapshot = onExitSnapshot,
                 onSearchClick = onSearchClick,
                 onUserClick = onUserClick,
+                onOpenBilibiliLink = onOpenBilibiliLink,
                 onExitFullscreen = onExitFullscreen,
             )
         }

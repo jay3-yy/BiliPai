@@ -115,6 +115,7 @@ Share bugs and ideas through [Issues](https://github.com/jay3-yy/BiliPai/issues/
 - [Compose Rich Editor](https://github.com/MohamedRejeb/Compose-Rich-Editor) — rich text editing
 - [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine) — danmaku rendering engine
 - [BiliBili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) — BiliBili API reference
+- [大肥鱼消除计划](https://github.com/liyupi/dafeiyu-cleaner) — AI bot detection rules for comment sections
 - [BiliBiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) — sponsor-skip data and API
 - [Miuix](https://github.com/compose-miuix-ui/miuix) — UI component library
 - [Haze](https://github.com/chrisbanes/haze) — blur effects

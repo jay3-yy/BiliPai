@@ -134,22 +134,27 @@ internal fun resolveCommentReadErrorMessage(code: Int, serverMessage: String? = 
     }
 }
 
-/** Location supplementation must not replace the gRPC ranking, cursor or reply controls. */
-internal fun mergeCommentReplyLocations(
+/** 补充 REST 已返回的资料，保留 gRPC 排序、游标及评论控制信息。 */
+internal fun mergeCommentReplyMetadata(
     data: ReplyData,
     supplements: List<ReplyItem>,
 ): ReplyData {
     val locations = supplements.asSequence()
         .filter { it.rpid > 0 && !it.replyControl?.location.isNullOrBlank() }
         .associate { it.rpid to requireNotNull(it.replyControl).location }
-    if (locations.isEmpty()) return data
+    val signatures = supplements.asSequence()
+        .filter { it.authorMid() > 0L && it.member.sign.isNotBlank() }
+        .associate { it.authorMid() to it.member.sign }
+    if (locations.isEmpty() && signatures.isEmpty()) return data
     fun merge(item: ReplyItem): ReplyItem {
         val location = locations[item.rpid]
         val control = if (item.replyControl?.location.isNullOrBlank() && location != null) {
             (item.replyControl ?: com.android.purebilibili.data.model.response.ReplyControl())
                 .copy(location = location)
         } else item.replyControl
-        return item.copy(replyControl = control, replies = item.replies?.map(::merge))
+        val sign = signatures[item.authorMid()]
+        val member = if (item.member.sign.isBlank() && sign != null) item.member.copy(sign = sign) else item.member
+        return item.copy(member = member, replyControl = control, replies = item.replies?.map(::merge))
     }
     return data.copy(
         root = data.root?.let(::merge),

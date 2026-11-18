@@ -1,6 +1,9 @@
 // 文件路径: feature/bangumi/BangumiPlayerViewModel.kt
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.feature.download.allDownloadAudioTracks
+import com.android.purebilibili.feature.download.downloadAudioBackupUrls
+import com.android.purebilibili.feature.download.downloadVideoBackupUrls
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import androidx.media3.exoplayer.ExoPlayer
@@ -1009,7 +1012,12 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             quality = state.quality,
             qualityDesc = qualityDesc,
             videoUrl = videoUrl,
-            audioUrl = state.audioUrl.orEmpty()
+            audioUrl = state.audioUrl.orEmpty(),
+            videoBackupUrls = state.cachedDash?.video.orEmpty().downloadVideoBackupUrls(videoUrl),
+            audioBackupUrls = state.cachedDash?.allDownloadAudioTracks().orEmpty().downloadAudioBackupUrls(state.audioUrl.orEmpty()),
+            pgcEpisodeId = episode.id,
+            pgcSeasonId = detail.seasonId,
+            isCourse = isCourseMode,
         )
         viewModelScope.launch {
             val added = DownloadManager.addTask(task)
@@ -1714,6 +1722,10 @@ class BangumiPlayerViewModel : BasePlayerViewModel() {
             ownerName = state.seasonDetail.title, ownerFace = "",
             duration = (episode.duration / 1000L).toInt(), quality = 0, qualityDesc = "音频",
             videoUrl = "", audioUrl = audioUrl, isAudioOnly = true,
+            audioBackupUrls = state.cachedDash?.allDownloadAudioTracks().orEmpty().downloadAudioBackupUrls(audioUrl),
+            pgcEpisodeId = episode.id,
+            pgcSeasonId = state.seasonDetail.seasonId,
+            isCourse = isCourseMode,
         )
         viewModelScope.launch {
             val started = com.android.purebilibili.feature.download.DownloadManager.addTask(task)

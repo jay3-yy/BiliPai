@@ -66,6 +66,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.LoginActivitySettings -> ScreenRoutes.LoginActivitySettings.route
         BiliPaiNavKey.MessageNotificationSettings -> ScreenRoutes.MessageNotificationSettings.route
         is BiliPaiNavKey.PluginsSettings -> ScreenRoutes.PluginsSettings.createRoute(importUrl)
+        BiliPaiNavKey.ContentFilterHistory -> routeBase
         is BiliPaiNavKey.JsPluginContent -> ScreenRoutes.JsPluginContent.createRoute(pluginId)
         is BiliPaiNavKey.ExternalMedia -> ScreenRoutes.ExternalMedia.createRoute(launchId)
         BiliPaiNavKey.BottomBarSettings -> ScreenRoutes.BottomBarSettings.route
@@ -83,6 +84,7 @@ internal fun BiliPaiNavKey.toLegacyRoute(): String {
         BiliPaiNavKey.History -> ScreenRoutes.History.route
         is BiliPaiNavKey.HistorySearch -> "history_search?query=${encodeRouteValue(query)}"
         BiliPaiNavKey.Favorite -> ScreenRoutes.Favorite.route
+        is BiliPaiNavKey.FavoritePgc -> "${ScreenRoutes.Favorite.route}?pgc=${if (cinema) "cinema" else "bangumi"}"
         BiliPaiNavKey.FavoriteSubscribed -> "favorite_subscribed"
         is BiliPaiNavKey.FavoriteSearch ->
             "favorite_search?query=${encodeRouteValue(query)}&scope=${scope.name}&subscribed=$subscribed"
@@ -221,6 +223,7 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         normalized == ScreenRoutes.LoginActivitySettings.route -> BiliPaiNavKey.LoginActivitySettings
         normalized == ScreenRoutes.MessageNotificationSettings.route -> BiliPaiNavKey.MessageNotificationSettings
         routeBase == "plugins_settings" -> BiliPaiNavKey.PluginsSettings(importUrl = query["importUrl"])
+        normalized == BiliPaiNavKey.ContentFilterHistory.routeBase -> BiliPaiNavKey.ContentFilterHistory
         segments.firstOrNull() == "js_plugin" && segments.size >= 2 -> {
             BiliPaiNavKey.JsPluginContent(pluginId = decodeRouteValue(segments[1]))
         }
@@ -246,6 +249,10 @@ internal fun legacyRouteToBiliPaiNavKey(route: String?): BiliPaiNavKey {
         normalized == ScreenRoutes.History.route -> BiliPaiNavKey.History
         routeBase == "history_search" -> BiliPaiNavKey.HistorySearch(query["query"].orEmpty())
         normalized == ScreenRoutes.Favorite.route -> BiliPaiNavKey.Favorite
+        routeBase == ScreenRoutes.Favorite.route && query["pgc"] == "bangumi" ->
+            BiliPaiNavKey.FavoritePgc(cinema = false)
+        routeBase == ScreenRoutes.Favorite.route && query["pgc"] == "cinema" ->
+            BiliPaiNavKey.FavoritePgc(cinema = true)
         normalized == "favorite_subscribed" -> BiliPaiNavKey.FavoriteSubscribed
         routeBase == "favorite_search" -> BiliPaiNavKey.FavoriteSearch(
             query = query["query"].orEmpty(),
@@ -496,6 +503,7 @@ internal fun isCardReturnTargetNavKey(key: BiliPaiNavKey): Boolean {
         BiliPaiNavKey.History,
         is BiliPaiNavKey.HistorySearch,
         BiliPaiNavKey.Favorite,
+        is BiliPaiNavKey.FavoritePgc,
         BiliPaiNavKey.FavoriteSubscribed,
         is BiliPaiNavKey.FavoriteSearch,
         is BiliPaiNavKey.LikedVideos,

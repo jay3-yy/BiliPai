@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.live
 
-import com.android.purebilibili.core.ui.AppContentColors
-
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -10,10 +8,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AppInteractionColors
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -38,16 +38,13 @@ fun LiveHomeSelectableChip(
         )
         return
     }
-    val container = if (selected) {
-        MaterialTheme.colorScheme.secondaryContainer
-    } else {
-        Color.Transparent
-    }
-    val content = if (selected) {
-        MaterialTheme.colorScheme.onSecondaryContainer
-    } else {
-        AppSurfaceTokens.onSurfaceVariantSummary()
-    }
+    val nativeMaterial = LocalAppUiStyle.current == AppUiStyle.MATERIAL3 &&
+        !LocalAppThemeConfig.current.liquidGlassEnabled
+    val selection = if (selected && nativeMaterial) AppInteractionColors.rememberMaterialNavigationSelection() else null
+    val container = if (selected) selection?.backgroundColor ?: MaterialTheme.colorScheme.secondaryContainer
+        else Color.Transparent
+    val content = if (selected) selection?.contentColor ?: MaterialTheme.colorScheme.onSecondaryContainer
+        else AppSurfaceTokens.onSurfaceVariantSummary()
     AppSurface(
         onClick = onClick,
         modifier = modifier,
@@ -55,10 +52,7 @@ fun LiveHomeSelectableChip(
         contentColor = content,
         // 原生 MD3 与同类 tonal 标签共用胶囊圆角；其他材质保留自身几何。
         shape = androidx.compose.foundation.shape.RoundedCornerShape(
-            if (com.android.purebilibili.core.theme.LocalAppUiStyle.current ==
-                com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3 &&
-                !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-            ) {
+            if (nativeMaterial) {
                 com.android.purebilibili.core.ui.renderer.material3.resolveTonalPillTabCornerRadius()
             } else 8.dp
         ),

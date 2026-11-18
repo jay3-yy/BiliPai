@@ -4,18 +4,26 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.hypot
 
+@Composable
 internal fun Modifier.onLongPressAction(
     enabled: Boolean,
     onLongPress: () -> Unit,
 ): Modifier {
     if (!enabled) return this
-    return pointerInput(onLongPress) {
+    val latestLongPress by rememberUpdatedState(appLongClickWithFeedback(
+        onLongClick = onLongPress,
+        scene = com.android.purebilibili.core.ui.AppHapticScene.TEXT,
+    ))
+    return pointerInput(Unit) {
         val timeoutMs = viewConfiguration.longPressTimeoutMillis.coerceAtLeast(1L)
         val touchSlop = viewConfiguration.touchSlop
         awaitEachGesture {
@@ -34,7 +42,7 @@ internal fun Modifier.onLongPressAction(
                 true
             }
             if (completedBeforeTimeout == null) {
-                onLongPress()
+                latestLongPress()
                 waitForUpOrCancellation()
             }
         }

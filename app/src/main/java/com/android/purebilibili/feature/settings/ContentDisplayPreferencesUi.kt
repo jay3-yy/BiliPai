@@ -157,7 +157,7 @@ internal fun DynamicVisibilityCheckPreference(modifier: Modifier = Modifier) {
         AppSwitchPreference(
             title = ContentDisplaySetting.title(ContentDisplaySetting.DYNAMIC_VISIBILITY_CHECK),
             icon = rememberSettingsSemanticIcon(SettingsIconRole.DYNAMIC_VISIBILITY_CHECK),
-            subtitle = "发布或转发后，检查未登录时能否看到；私密和定时发布不立即检查",
+            subtitle = "发布或转发成功 5 秒后检查游客可见性，私密和定时发布不立即检查",
             checked = enabled,
             onCheckedChange = { scope.savePreference(context) { ContentDisplayPreferences.setDynamicVisibilityCheck(context, it) } },
         )

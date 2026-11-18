@@ -242,48 +242,50 @@ internal fun DanmakuSendDialogContent(
                     tint = if (showSettings) AppContentColors.accent() else AppContentColors.secondaryText(),
                 )
             }
-            androidx.compose.foundation.text.BasicTextField(
-                value = text,
-                onValueChange = {
-                    if (it.length <= 100) {
-                        text = it
-                        onDraftChange(it, attentionCommandChecked)
-                    }
-                },
-                modifier = Modifier.weight(1f)
-                    .padding(start = 12.dp)
-                    .heightIn(min = 48.dp)
-                    .testTag("danmaku_compact_input")
-                    .focusRequester(focusRequester)
-                    .pointerInput(isSending) {
-                        if (!isSending) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                showSettings = false
-                            }
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = text,
+                    onValueChange = {
+                        if (it.length <= 100) {
+                            text = it
+                            onDraftChange(it, attentionCommandChecked)
                         }
                     },
-                enabled = visible && !isSending,
-                readOnly = showSettings || showCustomColorPicker,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = AppContentColors.primaryText()),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(AppContentColors.accent()),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Send,
-                ),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { sendMessage() }),
-                decorationBox = { field ->
-                    Box(contentAlignment = Alignment.CenterStart) {
-                        if (text.isEmpty()) AppText(
-                            "输入弹幕内容",
-                            color = AppContentColors.secondaryText(),
-                            style = MaterialTheme.typography.bodyLarge,
-                            maxLines = 1,
-                        )
-                        field()
-                    }
-                },
-            )
+                    modifier = Modifier.weight(1f)
+                        .padding(start = 12.dp)
+                        .heightIn(min = 48.dp)
+                        .testTag("danmaku_compact_input")
+                        .focusRequester(focusRequester)
+                        .pointerInput(isSending) {
+                            if (!isSending) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    showSettings = false
+                                }
+                            }
+                        },
+                    enabled = visible && !isSending,
+                    readOnly = showSettings || showCustomColorPicker,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = AppContentColors.primaryText()),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(AppContentColors.accent()),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Send,
+                    ),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSend = { sendMessage() }),
+                    decorationBox = { field ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (text.isEmpty()) AppText(
+                                "输入弹幕内容",
+                                color = AppContentColors.secondaryText(),
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                            )
+                            field()
+                        }
+                    },
+                )
+            }
             if (text.isNotEmpty() && !isSending) AppIconButton(
                 onClick = { text = ""; onDraftChange("", attentionCommandChecked) },
                 modifier = Modifier.size(36.dp),

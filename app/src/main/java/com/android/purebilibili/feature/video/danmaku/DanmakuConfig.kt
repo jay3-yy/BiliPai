@@ -74,7 +74,7 @@ class DanmakuConfig {
     
     // 顶部边距（像素）
     var topMarginPx = 0
-    /** 普通模式为顶部计数条预留空间；海量模式只叠加浮层，不改变轨道。 */
+    /** 顶部计数条实测高度，普通和海量模式均从显示区域中预留。 */
     var hotBarReservedHeightPx = 0f
     
     /** Resolve app settings into the renderer-neutral configuration contract. */
@@ -97,7 +97,7 @@ class DanmakuConfig {
         )
         val areaRatio = displayAreaRatio.coerceIn(0.1f, 1f)
         val hotBarSpace = resolveDanmakuHotBarReservedHeightPx(
-            hotBarReservedHeightPx, viewHeight, massiveMode
+            hotBarReservedHeightPx, viewHeight
         )
         val topMargin = hotBarSpace
         val visibleHeightPx = if (viewHeight > 0) {
@@ -267,8 +267,7 @@ internal fun resolveDanmakuVisibleLineCount(
 internal fun resolveDanmakuHotBarReservedHeightPx(
     requestedHeightPx: Float,
     viewportHeightPx: Int,
-    massiveMode: Boolean,
-): Float = if (massiveMode || !requestedHeightPx.isFinite()) 0f
+): Float = if (!requestedHeightPx.isFinite()) 0f
 else requestedHeightPx.coerceIn(0f, viewportHeightPx.coerceAtLeast(0).toFloat())
 
 internal fun resolveDanmakuMinimumVisibleLines(displayAreaRatio: Float): Int {

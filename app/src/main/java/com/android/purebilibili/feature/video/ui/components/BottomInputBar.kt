@@ -12,7 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -645,7 +645,7 @@ private fun IconActionButton(
                 )
                 .then(
                     if (onLongClick != null) {
-                        Modifier.combinedClickable(
+                        Modifier.appCombinedClickable(
                             enabled = enabled,
                             role = Role.Button,
                             onClick = appActionWithFeedback(onClick),

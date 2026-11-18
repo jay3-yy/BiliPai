@@ -27,6 +27,7 @@ internal fun LivePlaybackPreferencesDialog(onDismiss: () -> Unit, onQualityChang
     val mobile by SettingsManager.getLivePreferredQuality(context, false).collectAsStateWithLifecycle(initialValue = 250)
     val scEnabled by SettingsManager.getLiveSuperChatEnabled(context).collectAsStateWithLifecycle(initialValue = true)
     val autoMiniEnabled by SettingsManager.getLiveAutoMiniPlayerEnabled(context).collectAsStateWithLifecycle(initialValue = true)
+    val autoWearMedal by SettingsManager.getLiveAutoWearMedal(context).collectAsStateWithLifecycle(initialValue = false)
     val cdnHost by SettingsManager.getLiveCdnHost(context).collectAsStateWithLifecycle(initialValue = null)
     var editingHost by remember { mutableStateOf(false) }
     var hostDraft by remember { mutableStateOf("") }
@@ -113,6 +114,15 @@ internal fun LivePlaybackPreferencesDialog(onDismiss: () -> Unit, onQualityChang
                         save { SettingsManager.setLiveSuperChatEnabled(context, enabled) }
                     })
                 }
+                AppSwitchPreference(
+                    title = "自动佩戴当前主播的勋章",
+                    subtitle = "进入直播间时切换到已拥有的粉丝勋章",
+                    checked = autoWearMedal,
+                    enabled = !saving,
+                    onCheckedChange = { enabled ->
+                        save { SettingsManager.setLiveAutoWearMedal(context, enabled) }
+                    },
+                )
             }
         },
         confirmButton = { AppTextButton(enabled = !saving, onClick = onDismiss) { AppText("完成") } },

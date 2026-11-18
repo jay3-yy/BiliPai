@@ -47,7 +47,6 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -903,8 +902,7 @@ private fun Md3NativeListItemContent(
     iconGlyphSize: Dp,
     iconCornerRadius: Dp,
 ) {
-    val haptic = LocalHapticFeedback.current
-    val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
+    val feedbackClick = appActionWithFeedback { onClick?.invoke() }
     androidx.compose.material3.ListItem(
         headlineContent = {
             Text(
@@ -982,12 +980,7 @@ private fun Md3NativeListItemContent(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = minTouchHeight.dp)
-            .clickable(enabled = onClick != null) {
-                if (hapticsEnabled) {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                }
-                onClick?.invoke()
-            },
+            .clickable(enabled = onClick != null, onClick = feedbackClick),
     )
 }
 
@@ -1142,18 +1135,12 @@ internal fun AdaptivePreferenceContent(
         return
     }
     if (clickableRenderer == AppClickableItemRenderer.MD3_BASIC) {
-        val haptic = LocalHapticFeedback.current
-        val hapticsEnabled = LocalAppThemeConfig.current.hapticFeedbackEnabled
+        val feedbackClick = appActionWithFeedback { onClick?.invoke() }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = rowSpec.minTouchTargetHeightDp.dp)
-                .clickable(enabled = onClick != null) {
-                    if (hapticsEnabled) {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                    }
-                    onClick?.invoke()
-                }
+                .clickable(enabled = onClick != null, onClick = feedbackClick)
                 .padding(
                     horizontal = rowSpec.insideHorizontalPaddingDp.dp,
                     vertical = rowSpec.insideVerticalPaddingDp.dp
@@ -1658,49 +1645,53 @@ fun AdaptiveTextFieldRenderer(
         val nativeError = isMiuixNonGlassEnabled() && isError
         val errorColor = AppContentColors.error()
         Column(modifier = modifier.fillMaxWidth()) {
-            MiuixTextField(
-                value = value,
-                onValueChange = onValueChange,
-                // 原生输入框本身只在聚焦时绘制边框，错误态额外保留失焦后的轮廓。
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (nativeError) Modifier.squircleBorder(
-                        width = 2.dp,
-                        color = errorColor,
-                        cornerRadius = MiuixTextFieldDefaults.CornerRadius,
-                    ) else Modifier),
-                label = label ?: placeholder.orEmpty(),
-                useLabelAsPlaceholder = label == null,
-                keyboardOptions = keyboardOptions,
-                singleLine = singleLine,
-                minLines = minLines,
-                maxLines = maxLines,
-                colors = MiuixTextFieldDefaults.textFieldColors(
-                    labelColor = if (nativeError) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
-                    borderColor = if (isError) {
-                        errorColor
-                    } else {
-                        MiuixTheme.colorScheme.primary
-                    },
-                ),
-            )
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                MiuixTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    // 原生输入框本身只在聚焦时绘制边框，错误态额外保留失焦后的轮廓。
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (nativeError) Modifier.squircleBorder(
+                            width = 2.dp,
+                            color = errorColor,
+                            cornerRadius = MiuixTextFieldDefaults.CornerRadius,
+                        ) else Modifier),
+                    label = label ?: placeholder.orEmpty(),
+                    useLabelAsPlaceholder = label == null,
+                    keyboardOptions = keyboardOptions,
+                    singleLine = singleLine,
+                    minLines = minLines,
+                    maxLines = maxLines,
+                    colors = MiuixTextFieldDefaults.textFieldColors(
+                        labelColor = if (nativeError) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
+                        borderColor = if (isError) {
+                            errorColor
+                        } else {
+                            MiuixTheme.colorScheme.primary
+                        },
+                    ),
+                )
+            }
             supportingText?.invoke()
         }
         return
     }
-    OutlinedTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
-        label = label?.let { { Text(it) } },
-        placeholder = placeholder?.let { { Text(it) } },
-        keyboardOptions = keyboardOptions,
-        singleLine = singleLine,
-        minLines = minLines,
-        maxLines = maxLines,
-        isError = isError,
-        supportingText = supportingText
-    )
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier.fillMaxWidth(),
+            label = label?.let { { Text(it) } },
+            placeholder = placeholder?.let { { Text(it) } },
+            keyboardOptions = keyboardOptions,
+            singleLine = singleLine,
+            minLines = minLines,
+            maxLines = maxLines,
+            isError = isError,
+            supportingText = supportingText
+        )
+    }
 }
 
 @Composable

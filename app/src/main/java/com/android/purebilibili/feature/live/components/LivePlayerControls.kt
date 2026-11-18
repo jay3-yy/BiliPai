@@ -57,6 +57,7 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.core.ui.LocalNavigationBackHandler
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.feature.live.resolveLiveVisualSpec
 import com.android.purebilibili.feature.live.LiveStatusPalette
@@ -78,6 +79,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SettingsInputComponent
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -110,6 +112,7 @@ private fun LivePlayerIconButton(
     stateDescription: String? = null,
     /** 点击振动档位；null 关闭（如调用方已自行触发更强的状态反馈）。 */
     hapticType: HapticType? = HapticType.LIGHT,
+    hapticScene: com.android.purebilibili.core.ui.AppHapticScene = com.android.purebilibili.core.ui.AppHapticScene.CONTROLS,
     modifier: Modifier = Modifier,
     glassShape: androidx.compose.ui.graphics.Shape = CircleShape,
     iconContent: (@Composable (Color) -> Unit)? = null,
@@ -123,7 +126,7 @@ private fun LivePlayerIconButton(
     val glass = LocalPlayerControlGlassEnabled.current
     val touchTargetSize = visualSpec.playerButtonTouchTargetDp.dp
     val visualSize = visualSpec.playerButtonVisualSizeDp.dp
-    val haptic = rememberHapticFeedback()
+    val haptic = rememberHapticFeedback(hapticScene)
 
     LivePlayerGlassDock(
         enabled = glass,
@@ -194,6 +197,7 @@ fun LivePlayerControls(
     onToggleFullscreen: () -> Unit,
     onBack: () -> Unit,
     onOpenRank: () -> Unit = {},
+    onShareRoom: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     // 新增：弹幕开关
     isDanmakuEnabled: Boolean = true,
@@ -205,6 +209,7 @@ fun LivePlayerControls(
     // [新增] 刷新
     onRefresh: () -> Unit = {},
     isAudioOnly: Boolean = false,
+    switchingAudioOnly: Boolean = false,
     onToggleAudioOnly: () -> Unit = {},
     isBackgroundPlaybackEnabled: Boolean = true,
     onToggleBackgroundPlayback: () -> Unit = {},
@@ -227,6 +232,7 @@ fun LivePlayerControls(
     onScale: (Float) -> Unit = {},
     onResetScale: () -> Unit = {},
     showPipButton: Boolean = false,
+    canEnterPip: Boolean = true,
     onEnterPip: () -> Unit = {},
     applyTopSystemBarPadding: Boolean = true,
     applyBottomSystemBarPadding: Boolean = true,
@@ -252,6 +258,11 @@ fun LivePlayerControls(
     var menuExpanded by remember { mutableStateOf(false) }
     // 全屏锁屏状态（仅 showLockButton 场景生效）
     var isLocked by rememberSaveable { mutableStateOf(false) }
+    fun unlockControls() {
+        isLocked = false
+        isControlsVisible = true
+    }
+    LocalNavigationBackHandler(enabled = isFullscreen && isLocked, onBackCompleted = ::unlockControls)
     val latestInteractionEnabledChange by rememberUpdatedState(onDanmakuInteractionEnabledChange)
     DisposableEffect(isLocked) {
         latestInteractionEnabledChange(!isLocked)
@@ -335,6 +346,7 @@ fun LivePlayerControls(
                         }
                         .pointerInput(gesturePolicy.doubleTapPlayback) {
                             detectPlayerTapGestures(
+                                detectDoubleTap = gesturePolicy.doubleTapPlayback,
                                 doubleTapSlopPx = 100.dp.toPx(),
                                 captureSingleTap = { latestCaptureDanmakuTap(it + controlsWindowOffset) },
                                 onTap = { isControlsVisible = !isControlsVisible },
@@ -499,7 +511,9 @@ fun LivePlayerControls(
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
             BoxWithConstraints {
-                val compactTop = maxWidth < (600 * androidx.compose.ui.platform.LocalDensity.current.fontScale).dp
+                val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+                val compactTop = maxWidth < (600 * fontScale).dp
+                val showShareButton = maxWidth >= (720 * fontScale).dp
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -518,6 +532,10 @@ fun LivePlayerControls(
                     }
                     if (isFullscreen && !compactTop) {
                         LivePlayerStatus(Modifier.padding(end = 10.dp))
+                        LivePlayerIconButton(
+                            null, "发弹幕", false, true, onOpenSend,
+                            iconContent = { tint -> PiliPlusDanmakuSendIcon(tint = tint, size = 22.dp) },
+                        )
                     }
                     if (showInteractionToggle) LivePlayerIconButton(
                         Icons.Outlined.ChatBubbleOutline, "弹幕互动窗", interactionWindowVisible, true,
@@ -526,26 +544,51 @@ fun LivePlayerControls(
                             Modifier.appGlassMenuSource(interactionWindowSource, onToggleInteractionWindow)
                         } else Modifier,
                     )
-                    if (!compactTop && showPipButton) LivePlayerIconButton(Icons.Outlined.PictureInPictureAlt, "画中画", false, true, onEnterPip, glassShape = CircleShape)
-                    if (!compactTop) LivePlayerIconButton(Icons.Outlined.MusicNote, "仅播放音频", isAudioOnly, true, onToggleAudioOnly, if (isAudioOnly) "已开启" else "已关闭", glassShape = CircleShape)
+                    if (!compactTop && showPipButton) LivePlayerIconButton(
+                        Icons.Outlined.PictureInPictureAlt, "画中画", false, canEnterPip, onEnterPip,
+                        stateDescription = if (isAudioOnly) "请先恢复视频" else null,
+                        glassShape = CircleShape,
+                    )
+                    if (!compactTop) LivePlayerIconButton(
+                        Icons.Outlined.MusicNote, if (isAudioOnly) "恢复视频" else "仅播放音频",
+                        isAudioOnly, !switchingAudioOnly, onToggleAudioOnly,
+                        if (switchingAudioOnly) "切换中" else null,
+                        glassShape = CircleShape,
+                    )
                     if (!compactTop) LivePlayerIconButton(Icons.Outlined.PlayCircleOutline, "后台播放", isBackgroundPlaybackEnabled, true, onToggleBackgroundPlayback, if (isBackgroundPlaybackEnabled) "已开启" else "已关闭", glassShape = CircleShape)
                     if (!compactTop) LivePlayerIconButton(Icons.Outlined.Timer, "定时关闭", false, true, onOpenShutdownTimer, glassShape = CircleShape)
+                    if (showShareButton && onShareRoom != null) {
+                        LivePlayerIconButton(Icons.Outlined.Share, "分享直播间", false, true, onShareRoom)
+                    }
                     LivePlayerActionMenu(
                         compact = true,
                         glassShape = CircleShape,
                         onExpandedChange = { menuExpanded = it },
                         anchorModifier = if (glass) Modifier.size(PlayerGlassIconButtonSize) else Modifier.size(30.dp),
                         groups = listOf(buildList {
+                            if (compactTop) {
+                                if (isFullscreen) add(AppWindowAction("发弹幕", onClick = onOpenSend))
+                                if (showPipButton) add(AppWindowAction(
+                                    label = "画中画",
+                                    onClick = onEnterPip,
+                                    enabled = canEnterPip,
+                                    summary = if (isAudioOnly) "请先恢复视频" else null,
+                                ))
+                                add(AppWindowAction(
+                                    label = if (switchingAudioOnly) "切换中…" else if (isAudioOnly) "恢复视频" else "仅播放音频",
+                                    onClick = onToggleAudioOnly,
+                                    enabled = !switchingAudioOnly,
+                                ))
+                                add(AppWindowAction(if (isBackgroundPlaybackEnabled) "关闭后台播放" else "开启后台播放", onClick = onToggleBackgroundPlayback))
+                                add(AppWindowAction("定时关闭", onClick = onOpenShutdownTimer))
+                            }
+                            if (!showShareButton && onShareRoom != null) {
+                                add(AppWindowAction("分享直播间", onClick = onShareRoom))
+                            }
                             add(AppWindowAction("切换路线", onClick = onSourceClick))
                             add(AppWindowAction("播放信息", onClick = onOpenPlayerInfo))
                             add(AppWindowAction("播放器音量", onClick = onOpenVolume))
                             add(AppWindowAction("直播偏好", onClick = onOpenPlaybackPreferences))
-                            if (compactTop) {
-                                if (showPipButton) add(AppWindowAction("画中画", onClick = onEnterPip))
-                                add(AppWindowAction(if (isAudioOnly) "恢复视频" else "仅播放音频", onClick = onToggleAudioOnly))
-                                add(AppWindowAction(if (isBackgroundPlaybackEnabled) "关闭后台播放" else "开启后台播放", onClick = onToggleBackgroundPlayback))
-                                add(AppWindowAction("定时关闭", onClick = onOpenShutdownTimer))
-                            }
                         }),
                     ) { AppIcon(Icons.Outlined.Settings, "播放设置", tint = Color.White, modifier = Modifier.size(18.dp)) }
                 }
@@ -559,20 +602,20 @@ fun LivePlayerControls(
             BoxWithConstraints {
                 val fontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
                 val compact = maxWidth < ((if (glass) 520 else 360) * fontScale).dp
-                val collapseTools = glass && maxWidth < (400 * fontScale).dp
-                val collapseRefresh = glass && maxWidth < (320 * fontScale).dp
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .then(if (!glass) Modifier.background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)))) else Modifier)
-                        .then(if (applyBottomSystemBarPadding) Modifier.navigationBarsPadding() else Modifier)
-                        .padding(horizontal = 14.dp, vertical = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(if (glass) 6.dp else 0.dp),
-                ) {
+                val twoRows = isFullscreen && compact
+                val collapseTools = !twoRows && glass && maxWidth < (400 * fontScale).dp
+                val collapseRefresh = !twoRows && glass && maxWidth < (320 * fontScale).dp
+                val buttonSpacing = if (glass) 6.dp else 0.dp
+                val bottomBarModifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (!glass) Modifier.background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)))) else Modifier)
+                    .then(if (applyBottomSystemBarPadding) Modifier.navigationBarsPadding() else Modifier)
+                    .padding(horizontal = 14.dp, vertical = 13.dp)
+                val playbackButtons: @Composable () -> Unit = {
                     LivePlayerIconButton(if (isPlaying) Icons.Outlined.Pause else playIcon, if (isPlaying) "暂停" else "播放", false, true, onPlayPause)
                     if (!collapseRefresh) LivePlayerIconButton(refreshIcon, "刷新", false, true, onRefresh)
-                    Spacer(Modifier.weight(1f))
+                }
+                val danmakuButtons: @Composable () -> Unit = {
                     if (!collapseTools) LivePlayerIconButton(Icons.Outlined.Block, "屏蔽", false, true, onOpenBlockSettings)
                     LivePlayerDanmakuControls(
                         enabled = isDanmakuEnabled,
@@ -581,52 +624,92 @@ fun LivePlayerControls(
                         onOpenSettings = onOpenDanmakuSettings,
                         source = danmakuSettingsSource,
                     )
-                    if (isFullscreen) LivePlayerIconButton(
-                        null, "发弹幕", false, true, onOpenSend, glassShape = CircleShape,
-                        iconContent = { tint -> PiliPlusDanmakuSendIcon(tint = tint, size = 22.dp) },
+                }
+                val fullscreenButton: @Composable () -> Unit = {
+                    LivePlayerIconButton(
+                        if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                        if (isFullscreen) "退出全屏" else "全屏",
+                        false, true, onToggleFullscreen,
                     )
-                    if (!compact) {
+                }
+                val pictureMenus: @Composable () -> Unit = {
+                    val anchorSize = Modifier.height(if (glass) 34.dp else 30.dp).widthIn(min = 50.dp, max = 90.dp)
+                    LivePlayerActionMenu(
+                        compact = true,
+                        onExpandedChange = { menuExpanded = it },
+                        anchorModifier = anchorSize.semantics { contentDescription = "画面比例" },
+                        groups = listOf(videoFitOptions),
+                    ) {
+                        AppText(videoFitDesc, color = Color.White, fontSize = 13.sp, maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 10.dp), overflow = TextOverflow.Ellipsis)
+                    }
+                    if (qualityOptions.isNotEmpty()) {
                         LivePlayerActionMenu(
                             compact = true,
                             onExpandedChange = { menuExpanded = it },
-                            anchorModifier = Modifier.height(if (glass) 34.dp else 30.dp).widthIn(min = 50.dp, max = 90.dp),
-                            groups = listOf(videoFitOptions),
-                        ) {
-                            AppText(videoFitDesc, color = Color.White, fontSize = 13.sp, maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 10.dp), overflow = TextOverflow.Ellipsis)
-                        }
-                        LivePlayerActionMenu(
-                            compact = true,
-                            onExpandedChange = { menuExpanded = it },
-                            anchorModifier = Modifier.height(if (glass) 34.dp else 30.dp).widthIn(min = 50.dp, max = 90.dp),
+                            anchorModifier = anchorSize.semantics { contentDescription = "画质" },
                             groups = listOf(qualityOptions),
                         ) {
                             AppText(currentQualityDesc, color = Color.White, fontSize = 13.sp, maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 10.dp), overflow = TextOverflow.Ellipsis)
                         }
-                    } else {
-                        LivePlayerActionMenu(
-                            sourceOverride = danmakuSettingsSource.takeIf { collapseTools },
-                            compact = true,
-                            onExpandedChange = { menuExpanded = it },
-                            anchorModifier = if (glass) Modifier.size(PlayerGlassIconButtonSize) else Modifier.size(30.dp),
-                            groups = listOf(buildList {
-                                if (collapseRefresh) add(AppWindowAction("刷新", onClick = onRefresh))
-                                if (collapseTools) {
-                                    add(AppWindowAction("屏蔽", onClick = onOpenBlockSettings))
-                                    add(AppWindowAction("弹幕设置", onClick = onOpenDanmakuSettings))
-                                }
-                                add(AppWindowAction("画面比例：$videoFitDesc", children = videoFitOptions))
-                                add(AppWindowAction("画质：$currentQualityDesc", children = qualityOptions))
-                            }),
-                        ) { AppIcon(Icons.Outlined.Tune, if (collapseTools) "播放工具" else "画面比例与画质", tint = Color.White, modifier = Modifier.size(18.dp)) }
                     }
-                    LivePlayerIconButton(if (isFullscreen) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen, if (isFullscreen) "退出全屏" else "全屏", false, true, onToggleFullscreen)
+                }
+                if (twoRows) {
+                    // 窄全屏换行，玻璃和原生控件各自使用已有的触控尺寸。
+                    Column(bottomBarModifier, verticalArrangement = Arrangement.spacedBy(buttonSpacing)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(buttonSpacing),
+                        ) {
+                            playbackButtons()
+                            danmakuButtons()
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(buttonSpacing, Alignment.End),
+                        ) {
+                            pictureMenus()
+                            fullscreenButton()
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = bottomBarModifier,
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(buttonSpacing),
+                    ) {
+                        playbackButtons()
+                        Spacer(Modifier.weight(1f))
+                        danmakuButtons()
+                        if (!compact) {
+                            pictureMenus()
+                        } else {
+                            LivePlayerActionMenu(
+                                sourceOverride = danmakuSettingsSource.takeIf { collapseTools },
+                                compact = true,
+                                onExpandedChange = { menuExpanded = it },
+                                anchorModifier = if (glass) Modifier.size(PlayerGlassIconButtonSize) else Modifier.size(30.dp),
+                                groups = listOf(buildList {
+                                    if (collapseRefresh) add(AppWindowAction("刷新", onClick = onRefresh))
+                                    if (collapseTools) {
+                                        add(AppWindowAction("屏蔽", onClick = onOpenBlockSettings))
+                                        add(AppWindowAction("弹幕设置", onClick = onOpenDanmakuSettings))
+                                    }
+                                    add(AppWindowAction("画面比例：$videoFitDesc", children = videoFitOptions))
+                                    if (qualityOptions.isNotEmpty()) add(AppWindowAction("画质：$currentQualityDesc", children = qualityOptions))
+                                }),
+                            ) { AppIcon(Icons.Outlined.Tune, if (collapseTools) "播放工具" else "画面比例与画质", tint = Color.White, modifier = Modifier.size(18.dp)) }
+                        }
+                        fullscreenButton()
+                    }
                 }
             }
         }
         if (effectiveControlsVisible && showLockButton) {
-            LivePlayerIconButton(Icons.Outlined.LockOpen, "锁定", false, true, { isLocked = true }, hapticType = HapticType.MEDIUM, glassShape = CircleShape, modifier = Modifier.align(Alignment.CenterStart).padding(start = AppSpacingTokens.Small))
+            LivePlayerIconButton(Icons.Outlined.LockOpen, "锁定", false, true, { isLocked = true }, hapticType = HapticType.MEDIUM, hapticScene = com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES, glassShape = CircleShape, modifier = Modifier.align(Alignment.CenterStart).padding(start = AppSpacingTokens.Small))
             LivePlayerIconButton(Icons.Outlined.PhotoCamera, "截图", false, true, onCaptureScreenshot, glassShape = CircleShape, modifier = Modifier.align(Alignment.CenterEnd).padding(end = AppSpacingTokens.Small))
         }
         if (effectiveControlsVisible && videoScale != 1f) {
@@ -652,10 +735,8 @@ fun LivePlayerControls(
                 selected = true,
                 enabled = true,
                 hapticType = HapticType.MEDIUM,
-                onClick = {
-                    isLocked = false
-                    isControlsVisible = true
-                },
+                onClick = ::unlockControls,
+                hapticScene = com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES,
                 stateDescription = "已锁定，点击解锁",
                 modifier = Modifier
                     .align(Alignment.CenterStart)

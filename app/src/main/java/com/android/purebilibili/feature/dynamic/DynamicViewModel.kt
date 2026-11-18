@@ -1229,14 +1229,16 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     
     // 评论区单一状态源：所有字段一次发射，避免「评论已到但 loading 还没关」这类中间帧。
     private val _commentUiState = MutableStateFlow(DynamicCommentUiState())
-    private val commentRepliesProjection = ReplyListProjection()
+    private val commentRepliesProjection = ReplyListProjection(foldDetectedReplies = true)
     internal val commentUiState: StateFlow<DynamicCommentUiState> = _commentUiState.contentFiltered(viewModelScope) { state, rules ->
-        state.copy(
-            comments = commentRepliesProjection.project(state.comments, rules).toImmutableList(),
-            pinnedReply = state.pinnedReply?.let {
-                com.android.purebilibili.data.repository.filterReplyForContent(it, rules)
-            },
+        val upMid = _selectedDynamic.value?.takeIf { it.id_str == state.dynamicId }
+            ?.modules?.module_author?.mid ?: 0L
+        val content = commentRepliesProjection.project(
+            ReplyListProjection.Content(state.comments, root = state.pinnedReply),
+            rules,
+            upMid,
         )
+        state.copy(comments = content.items.toImmutableList(), pinnedReply = content.root)
     }
 
     private val _dynamicCommentSortMode = MutableStateFlow(CommentSortMode.HOT)
@@ -2823,17 +2825,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun checkDynamic(dynamicId: String, onResult: (Boolean, String) -> Unit) {
-        if (dynamicId.isBlank()) {
-            onResult(false, "无法识别该动态")
-            return
-        }
+    fun checkDynamic(dynamicId: String, text: String? = null) {
         val identity = activeAccountIdentity
         launchAccount {
             val status = com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.check(dynamicId)
-            if (identity == TokenManager.accountIdentity.value) {
-                onResult(status == com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityStatus.VISIBLE, status.message)
-            }
+            com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityFeedback.offer(
+                com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityNotice(
+                    identity, dynamicId, status, text, manual = true,
+                )
+            )
         }
     }
 
@@ -2944,6 +2944,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         appContext,
                         com.android.purebilibili.data.model.response.resolveCreatedDynamicId(response.data),
                         identity,
+                        text = content,
                     )
                 } else {
                     onResult(false, response.message.ifBlank { "转发失败" })
@@ -3038,6 +3039,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 if (draft.publishAtSeconds == null) refresh(selectedTab = _selectedTab.value)
                 com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.afterPublication(
                     appContext, createdId, identity,
+                    text = draft.text,
                     privatePublication = draft.private,
                     scheduledPublication = draft.publishAtSeconds != null,
                 )

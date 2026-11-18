@@ -355,7 +355,7 @@ private fun SearchTopBarInputField(
     val contentColor = AppSurfaceTokens.onSurface()
     val placeholderColor = AppSurfaceTokens.onSurfaceVariantSummary()
     val focusBorderColor = AppSurfaceTokens.primary()
-    val textStyle = MaterialTheme.typography.bodyLarge.copy(
+    val textStyle = searchInputTextStyle().copy(
         color = contentColor,
         // Explicit line height avoids type-scale clipping in single-line fields.
         lineHeight = SEARCH_INPUT_LINE_HEIGHT_SP.sp
@@ -363,83 +363,85 @@ private fun SearchTopBarInputField(
     val cursorBrush = androidx.compose.ui.graphics.SolidColor(focusBorderColor)
 
     // 所有材质共用同一个编辑状态，选区与输入法组合文字不通过父级重组回传。
-    androidx.compose.foundation.text.BasicTextField(
-        state = state,
-        modifier = modifier
-            .focusRequester(focusRequester)
-            .then(
-                if (containerColor.alpha > 0.001f) {
-                    Modifier
-                        .clip(fieldShape)
-                        .background(containerColor, fieldShape)
-                } else {
-                    Modifier
-                }
-            )
-            .then(
-                if (isFocused) {
-                    Modifier.border(
-                        width = 1.5.dp,
-                        color = focusBorderColor,
-                        shape = fieldShape
-                    )
-                } else {
-                    Modifier
-                }
-            ),
-        textStyle = textStyle,
-        lineLimits = androidx.compose.foundation.text.input.TextFieldLineLimits.SingleLine,
-        cursorBrush = cursorBrush,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        onKeyboardAction = { onSearch() },
-        interactionSource = interactionSource,
-        decorator = { innerTextField ->
-            // This is the search page's shared edit affordance, not a glass geometry override.
-            // Native MD3/Miuix and liquid chrome keep their existing field dimensions and padding.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 12.dp)
-            ) {
-                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                    if (state.text.isEmpty()) {
-                        AppText(
-                            text = placeholder,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = textStyle,
-                            color = placeholderColor
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        androidx.compose.foundation.text.BasicTextField(
+            state = state,
+            modifier = modifier
+                .focusRequester(focusRequester)
+                .then(
+                    if (containerColor.alpha > 0.001f) {
+                        Modifier
+                            .clip(fieldShape)
+                            .background(containerColor, fieldShape)
+                    } else {
+                        Modifier
+                    }
+                )
+                .then(
+                    if (isFocused) {
+                        Modifier.border(
+                            width = 1.5.dp,
+                            color = focusBorderColor,
+                            shape = fieldShape
                         )
+                    } else {
+                        Modifier
                     }
-                    // Keep text contrast inside the transparent liquid capsule.
-                    androidx.compose.runtime.CompositionLocalProvider(
-                        androidx.compose.material3.LocalContentColor provides contentColor
-                    ) {
-                        innerTextField()
-                    }
-                }
-                if (state.text.isNotEmpty()) {
-                    // The field owns the only surface; never decorate its clear icon as a top-bar dock.
-                    CompositionLocalProvider(LocalAppTopBarIconDecorationEnabled provides false) {
-                        AppIconButton(
-                            onClick = onClear,
-                            modifier = Modifier.size(32.dp),
-                            colors = AppIconButtonDefaults.colors(
-                                containerColor = Color.Transparent,
-                                disabledContainerColor = Color.Transparent,
-                            ),
-                        ) {
-                            AppIcon(
-                                imageVector = rememberAppClearIcon(),
-                                contentDescription = stringResource(R.string.common_clear),
-                                tint = placeholderColor,
-                                modifier = Modifier.size(20.dp),
+                ),
+            textStyle = textStyle,
+            lineLimits = androidx.compose.foundation.text.input.TextFieldLineLimits.SingleLine,
+            cursorBrush = cursorBrush,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            onKeyboardAction = { onSearch() },
+            interactionSource = interactionSource,
+            decorator = { innerTextField ->
+                // This is the search page's shared edit affordance, not a glass geometry override.
+                // Native MD3/Miuix and liquid chrome keep their existing field dimensions and padding.
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp)
+                ) {
+                    Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                        if (state.text.isEmpty()) {
+                            AppText(
+                                text = placeholder,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = textStyle,
+                                color = placeholderColor
                             )
+                        }
+                        // Keep text contrast inside the transparent liquid capsule.
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            androidx.compose.material3.LocalContentColor provides contentColor
+                        ) {
+                            innerTextField()
+                        }
+                    }
+                    if (state.text.isNotEmpty()) {
+                        // The field owns the only surface; never decorate its clear icon as a top-bar dock.
+                        CompositionLocalProvider(LocalAppTopBarIconDecorationEnabled provides false) {
+                            AppIconButton(
+                                onClick = onClear,
+                                modifier = Modifier.size(32.dp),
+                                colors = AppIconButtonDefaults.colors(
+                                    containerColor = Color.Transparent,
+                                    disabledContainerColor = Color.Transparent,
+                                ),
+                            ) {
+                                AppIcon(
+                                    imageVector = rememberAppClearIcon(),
+                                    contentDescription = stringResource(R.string.common_clear),
+                                    tint = placeholderColor,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
-    )
+        )
+    }
 }

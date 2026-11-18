@@ -11,7 +11,7 @@ import com.android.purebilibili.core.ui.AppContentColors
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.height
@@ -355,32 +355,34 @@ fun DynamicPublishComposer(
                                 }
                             }
                         }
-                        androidx.compose.foundation.text.BasicTextField(
-                            value = title,
-                            onValueChange = { if (!submitting) title = it.take(20) },
-                            modifier = Modifier.fillMaxWidth().onFocusChanged {
-                                if (it.isFocused) { showEmotePanel = false; showMorePanel = false }
-                            },
-                            enabled = !submitting,
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(
-                                color = AppContentColors.primaryText(),
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                            ),
-                            cursorBrush = androidx.compose.ui.graphics.SolidColor(AppContentColors.accent()),
-                            singleLine = true,
-                            decorationBox = { field ->
-                                Box {
-                                    if (title.isEmpty()) AppText(
-                                        "标题，选填20字",
-                                        color = AppContentColors.secondaryText(),
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                                        ),
-                                    )
-                                    field()
-                                }
-                            },
-                        )
+                        com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                            androidx.compose.foundation.text.BasicTextField(
+                                value = title,
+                                onValueChange = { if (!submitting) title = it.take(20) },
+                                modifier = Modifier.fillMaxWidth().onFocusChanged {
+                                    if (it.isFocused) { showEmotePanel = false; showMorePanel = false }
+                                },
+                                enabled = !submitting,
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(
+                                    color = AppContentColors.primaryText(),
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                ),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(AppContentColors.accent()),
+                                singleLine = true,
+                                decorationBox = { field ->
+                                    Box {
+                                        if (title.isEmpty()) AppText(
+                                            "标题，选填20字",
+                                            color = AppContentColors.secondaryText(),
+                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                            ),
+                                        )
+                                        field()
+                                    }
+                                },
+                            )
+                        }
                         CommentEmoteTextField(
                             value = textValue,
                             onValueChange = { next ->
@@ -509,7 +511,7 @@ fun DynamicPublishComposer(
                                         modifier = Modifier
                                             .size(100.dp)
                                             .clip(AppShapes.container(ContainerLevel.Chip))
-                                            .combinedClickable(
+                                            .appCombinedClickable(
                                                 enabled = !submitting,
                                                 onClick = { previewImage = uri },
                                                 onLongClickLabel = "移除图片",

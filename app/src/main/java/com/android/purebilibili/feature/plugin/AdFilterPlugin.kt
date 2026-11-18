@@ -1,6 +1,8 @@
 // 文件路径: feature/plugin/AdFilterPlugin.kt
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.filter.recordFilteredVideo
+import com.android.purebilibili.core.store.ContentFilterReason
 import com.android.purebilibili.core.plugin.BuiltinPluginIds
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -12,7 +14,7 @@ import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -328,6 +330,15 @@ class AdFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         reasonType: AdFilterReasonType,
         matchedText: String
     ) {
+        val reason = when (reasonType) {
+            AdFilterReasonType.BLOCKED_UP -> ContentFilterReason.BLOCKED_USER
+            AdFilterReasonType.SPONSORED -> ContentFilterReason.SPONSORED
+            AdFilterReasonType.CLICKBAIT -> ContentFilterReason.CLICKBAIT
+            AdFilterReasonType.CUSTOM_KEYWORD -> ContentFilterReason.AD_TITLE
+            AdFilterReasonType.TAG_KEYWORD -> ContentFilterReason.TAG
+            AdFilterReasonType.LOW_VIEW -> ContentFilterReason.PLAY_COUNT
+        }
+        recordFilteredVideo(item, reason)
         val record = buildAdFilterRecord(
             item = item,
             reasonType = reasonType,
@@ -953,7 +964,7 @@ private fun AdFilterRecordCard(
             .fillMaxWidth()
             .clip(AppShapes.container(ContainerLevel.Card))
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = {},
                 onLongClick = { showDetailDialog = true }
             )

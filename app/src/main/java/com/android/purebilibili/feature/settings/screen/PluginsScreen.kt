@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +68,7 @@ import com.android.purebilibili.core.plugin.json.scheduleJsonPluginStatsSummary
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.theme.iOSPink  // 插件图标色
 import com.android.purebilibili.core.theme.resolveAccessibleContainerColors
+import com.android.purebilibili.feature.plugin.BiliPaiFeedFilterPlugin
 import com.android.purebilibili.feature.settings.SettingsLocalBackHandler
 import com.android.purebilibili.feature.settings.screen.SkinCatalogScreen
 import com.android.purebilibili.feature.settings.ui.SettingsBottomBarScrollEffect
@@ -177,6 +179,8 @@ private fun PluginCenterSectionTitle(title: String, modifier: Modifier = Modifie
 @Composable
 fun PluginsScreen(
     onBack: () -> Unit,
+    onOpenFilterHistory: () -> Unit,
+    isActive: Boolean,
     initialImportUrl: String? = null,
     onOpenJsPlugin: (String) -> Unit = {}
 ) {
@@ -189,7 +193,7 @@ fun PluginsScreen(
     //  编辑插件状态
     var editingPlugin by remember { mutableStateOf<com.android.purebilibili.core.plugin.json.JsonRulePlugin?>(null) }
     var creatingJsonPlugin by remember { mutableStateOf(false) }
-    var selectedBuiltInPluginId by remember { mutableStateOf<String?>(null) }
+    var selectedBuiltInPluginId by rememberSaveable { mutableStateOf<String?>(null) }
     var showSkinCatalog by remember { mutableStateOf(false) }
 
     //  如果正在编辑插件，显示编辑器全屏覆盖 (Mobile behavior)
@@ -207,10 +211,12 @@ fun PluginsScreen(
     selectedBuiltInPluginId?.let { pluginId ->
         val pluginInfo = plugins.firstOrNull { it.plugin.id == pluginId }
         if (pluginInfo != null) {
-            SettingsLocalBackHandler { selectedBuiltInPluginId = null }
+            // 过滤记录转场期间，底层插件详情仍可能保留在组合中。
+            SettingsLocalBackHandler(enabled = isActive) { selectedBuiltInPluginId = null }
             PluginDetailScreen(
                 pluginInfo = pluginInfo,
-                onBack = { selectedBuiltInPluginId = null }
+                onBack = { selectedBuiltInPluginId = null },
+                onOpenFilterHistory = onOpenFilterHistory,
             )
             return
         }
@@ -613,14 +619,14 @@ fun PluginsContent(
             item(key = "rule-actions") {
                 AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
                     AppPreference(
-                        icon = rememberMaterialSymbol(R.drawable.ms_edit_note_24),
+                        icon = rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24),
                         title = "编写 JSON 规则",
                         subtitle = "粘贴或编写规则，实时测试过滤结果",
                         onClick = onCreateJsonPlugin,
                     )
                     AppPreferenceDivider()
                     AppPreference(
-                        icon = rememberMaterialSymbol(R.drawable.ms_cloud_download_24),
+                        icon = rememberSettingsVector(R.drawable.ph_cloud_arrow_down_24, R.drawable.ms_cloud_download_24),
                         title = "通过链接安装规则",
                         subtitle = "预览 JSON 规则后安装",
                         onClick = { showImportDialog = true },
@@ -727,7 +733,7 @@ fun PluginsContent(
             item(key = "media-import") {
                 AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
                     AppPreference(
-                        icon = rememberMaterialSymbol(R.drawable.ms_terminal_24),
+                        icon = rememberSettingsVector(R.drawable.ph_terminal_window_24, R.drawable.ms_terminal_24),
                         title = "JS 媒体插件",
                         subtitle = if (isJsPreviewLoading) "正在预览插件…" else "安装媒体来源，打开已安装插件浏览内容",
                         showChevron = false,
@@ -799,7 +805,7 @@ fun PluginsContent(
                 Spacer(Modifier.height(12.dp))
                 AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
                     AppPreference(
-                        icon = rememberMaterialSymbol(R.drawable.ms_upload_file_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_file_arrow_up_24, R.drawable.ms_upload_file_fill_24),
                         title = "安装 Kotlin 插件包",
                         subtitle = if (isKotlinPackageLoading) "正在读取插件包…" else "选择本地 .bpplugin 文件，预览后安装",
                         onClick = if (isKotlinPackageLoading) null else ({ kotlinPackagePicker.launch("*/*") }),
@@ -871,14 +877,14 @@ fun PluginsContent(
             item(key = "skin-actions") {
                 AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
                     AppPreference(
-                        icon = rememberMaterialSymbol(R.drawable.ms_cloud_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_cloud_24, R.drawable.ms_cloud_fill_24),
                         title = "在线装扮",
                         subtitle = "浏览装扮，预览后安装",
                         onClick = onOpenSkinCatalog,
                     )
                     AppPreferenceDivider()
                     AppPreference(
-                        icon = rememberMaterialSymbol(R.drawable.ms_brush_fill_24),
+                        icon = rememberSettingsVector(R.drawable.ph_paint_brush_24, R.drawable.ms_brush_fill_24),
                         title = "导入装扮包",
                         subtitle = if (isUiSkinPackageLoading) "正在读取装扮及所需资源…" else "支持 .bpskin、主题 ZIP 和装扮 JSON",
                         onClick = if (isUiSkinPackageLoading) null else ({ uiSkinPackagePicker.launch("*/*") }),
@@ -1042,7 +1048,7 @@ fun PluginsContent(
                     jsImportError = null
                 }
             },
-            icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_terminal_24), title = "导入 JS 媒体插件") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_terminal_window_24, R.drawable.ms_terminal_24), title = "导入 JS 媒体插件") },
             title = { AppText("导入 JS 媒体插件") },
             text = {
                 Column {
@@ -1108,7 +1114,7 @@ fun PluginsContent(
                     jsPreview = null
                 }
             },
-            icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_shield_fill_24), title = "JS 插件预览") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_fill_24), title = "JS 插件预览") },
             title = { AppText("JS 插件预览") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1205,7 +1211,7 @@ fun PluginsContent(
                 importUrl = ""
                 importError = null
             },
-            icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_cloud_download_24), title = "导入外部插件") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_cloud_arrow_down_24, R.drawable.ms_cloud_download_24), title = "导入外部插件") },
             title = { AppText("导入外部插件") },
             text = {
                 Column {
@@ -1317,7 +1323,7 @@ fun PluginsContent(
                         )
                     } else {
                         SettingsFunctionIcon(
-                            com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_extension_24),
+                            rememberSettingsVector(R.drawable.ph_puzzle_piece_24, R.drawable.ms_extension_24),
                             title = "确认安装插件",
                         )
                     }
@@ -1413,7 +1419,7 @@ fun PluginsContent(
                     kotlinPackageBytes = null
                 }
             },
-            icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_shield_fill_24), title = "Kotlin 插件包预览") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_fill_24), title = "Kotlin 插件包预览") },
             title = { AppText("Kotlin 插件包预览") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1503,7 +1509,7 @@ fun PluginsContent(
                     uiSkinPreviewAssetFiles = emptyMap()
                 }
             },
-            icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_brush_fill_24), title = "界面皮肤包预览") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_paint_brush_24, R.drawable.ms_brush_fill_24), title = "界面皮肤包预览") },
             title = { AppText("界面皮肤包预览") },
             text = {
                 Column(
@@ -1647,7 +1653,7 @@ fun PluginsContent(
         val imagePreviewItems = buildUiSkinImagePreviewItems(installed.assetFiles)
         AppAlertDialog(
             onDismissRequest = { uiSkinInstalledPreview = null },
-            icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_visibility_24), title = "皮肤预览") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24), title = "皮肤预览") },
             title = { AppText("皮肤预览") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1727,7 +1733,7 @@ fun PluginsContent(
     uiSkinPendingDelete?.let { skin ->
         AppAlertDialog(
             onDismissRequest = { uiSkinPendingDelete = null },
-            icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_delete_24), title = "删除皮肤") },
+            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24), title = "删除皮肤") },
             title = { AppText("删除皮肤") },
             text = { AppText("确定要删除皮肤 \"${skin.displayName}\" 吗？删除后会清理本地包和已解压资源。") },
             confirmButton = {
@@ -1818,7 +1824,7 @@ private fun UiSkinImagePreviewGrid(
                         contentAlignment = Alignment.Center,
                     ) {
                         AppIcon(
-                            imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_play_circle_24),
+                            imageVector = rememberSettingsVector(R.drawable.ph_play_circle_24, R.drawable.ms_play_circle_24),
                             contentDescription = item.label,
                             tint = AppContentColors.accent(),
                         )
@@ -1889,12 +1895,12 @@ private fun InstalledUiSkinItem(
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             AppTextButton(onClick = onPreview) {
-                AppIcon(rememberMaterialSymbol(R.drawable.ms_visibility_24), null, modifier = Modifier.size(18.dp))
+                AppIcon(rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24), null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
                 AppText("预览")
             }
             AppTextButton(onClick = onDelete, enabled = previewModel.canDelete) {
-                AppIcon(rememberMaterialSymbol(R.drawable.ms_delete_24), null,
+                AppIcon(rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24), null,
                     tint = if (previewModel.canDelete) AppContentColors.error() else AppContentColors.secondaryText(),
                     modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
@@ -1949,11 +1955,11 @@ private fun PluginItem(
                     title = plugin.name,
                     imageVector = when (plugin.id) {
                         BuiltinPluginIds.SUBSCRIPTION_FEED ->
-                            com.android.purebilibili.feature.settings.rememberMaterialSymbol(
-                                com.android.purebilibili.R.drawable.ms_rss_feed_24,
+                            rememberSettingsVector(
+                                settingsIconResource(R.drawable.ph_rss_24, R.drawable.ms_rss_feed_24),
                             )
-                        else -> plugin.icon ?: com.android.purebilibili.feature.settings.rememberMaterialSymbol(
-                            com.android.purebilibili.R.drawable.ms_extension_24,
+                        else -> plugin.icon ?: rememberSettingsVector(
+                            settingsIconResource(R.drawable.ph_puzzle_piece_24, R.drawable.ms_extension_24),
                         )
                     },
                 )
@@ -1966,11 +1972,11 @@ private fun PluginItem(
                 AppIcon(
                     imageVector = when (plugin.id) {
                         BuiltinPluginIds.SUBSCRIPTION_FEED ->
-                            com.android.purebilibili.feature.settings.rememberMaterialSymbol(
-                                com.android.purebilibili.R.drawable.ms_rss_feed_24,
+                            rememberSettingsVector(
+                                settingsIconResource(R.drawable.ph_rss_24, R.drawable.ms_rss_feed_24),
                             )
-                        else -> plugin.icon ?: com.android.purebilibili.feature.settings.rememberMaterialSymbol(
-                            com.android.purebilibili.R.drawable.ms_extension_24,
+                        else -> plugin.icon ?: rememberSettingsVector(
+                            settingsIconResource(R.drawable.ph_puzzle_piece_24, R.drawable.ms_extension_24),
                         )
                     },
                     contentDescription = null,
@@ -2017,7 +2023,7 @@ private fun PluginItem(
 
             // 进入详情
             AppIcon(
-                imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                imageVector = rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
                 contentDescription = "打开插件详情",
                 tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
                 modifier = Modifier
@@ -2033,6 +2039,7 @@ private fun PluginItem(
 private fun PluginDetailScreen(
     pluginInfo: PluginInfo,
     onBack: () -> Unit,
+    onOpenFilterHistory: () -> Unit,
 ) {
     val plugin = pluginInfo.plugin
     val bottomContentPadding = LocalBottomBarContentPadding.current
@@ -2083,6 +2090,13 @@ private fun PluginDetailScreen(
                         color = AppContentColors.secondaryText(),
                         modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp),
                     )
+                } else if (plugin is BiliPaiFeedFilterPlugin) {
+                    plugin.FeedFilterSettingsContent(
+                        onOpenHistory = onOpenFilterHistory,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    )
                 } else {
                     plugin.SettingsContent(
                         modifier = Modifier
@@ -2117,7 +2131,7 @@ private fun InstalledJsPluginItem(
             if (LocalAppUiStyle.current == AppUiStyle.MIUIX || com.android.purebilibili.core.ui.components.useColorfulPreferenceIcons()) {
                 SettingsFunctionIcon(
                     title = installed.manifest.title,
-                    imageVector = rememberMaterialSymbol(R.drawable.ms_data_object_fill_24),
+                    imageVector = rememberSettingsVector(R.drawable.ph_brackets_curly_24, R.drawable.ms_data_object_fill_24),
                 )
             } else Box(
                 modifier = Modifier
@@ -2126,7 +2140,7 @@ private fun InstalledJsPluginItem(
                 contentAlignment = Alignment.Center
             ) {
                 AppIcon(
-                    imageVector = rememberMaterialSymbol(R.drawable.ms_data_object_fill_24),
+                    imageVector = rememberSettingsVector(R.drawable.ph_brackets_curly_24, R.drawable.ms_data_object_fill_24),
                     contentDescription = null,
                     tint = rememberAdaptivePreferenceIconContentColor(iconTint),
                     modifier = Modifier.size(20.dp)
@@ -2224,7 +2238,7 @@ private fun JsPluginTestDialog(
 
     AppAlertDialog(
         onDismissRequest = { if (!isRunning) onDismiss() },
-        icon = { SettingsFunctionIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_terminal_24), title = "测试：${installed.manifest.title}") },
+        icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_terminal_window_24, R.drawable.ms_terminal_24), title = "测试：${installed.manifest.title}") },
         title = { AppText("测试：${installed.manifest.title}") },
         text = {
             Column {
@@ -2426,7 +2440,7 @@ private fun JsonPluginStatsNotificationSection(
                 if (LocalAppUiStyle.current == AppUiStyle.MIUIX || com.android.purebilibili.core.ui.components.useColorfulPreferenceIcons()) {
                     SettingsFunctionIcon(
                         title = "插件统计通知",
-                        imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_notifications_24),
+                        imageVector = rememberSettingsVector(R.drawable.ph_bell_24, R.drawable.ms_notifications_24),
                     )
                 } else Box(
                     modifier = Modifier
@@ -2435,7 +2449,7 @@ private fun JsonPluginStatsNotificationSection(
                     contentAlignment = Alignment.Center
                 ) {
                     AppIcon(
-                        imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_notifications_24),
+                        imageVector = rememberSettingsVector(R.drawable.ph_bell_24, R.drawable.ms_notifications_24),
                         contentDescription = null,
                         tint = notificationIconContentColor,
                         modifier = Modifier.size(20.dp)
@@ -2473,7 +2487,7 @@ private fun JsonPluginStatsNotificationSection(
                     .align(Alignment.End)
                     .padding(horizontal = 16.dp, vertical = 4.dp),
             ) {
-                AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_notifications_24), null, modifier = Modifier.size(16.dp))
+                AppIcon(rememberSettingsVector(R.drawable.ph_bell_ringing_24, R.drawable.ms_notifications_24), null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 AppText("发送测试通知", style = MaterialTheme.typography.labelMedium)
             }
@@ -2533,7 +2547,7 @@ internal fun JsonPluginItem(
                     } else {
                         SettingsFunctionIcon(
                             title = plugin.name,
-                            imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_terminal_24),
+                            imageVector = rememberSettingsVector(R.drawable.ph_terminal_window_24, R.drawable.ms_terminal_24),
                             contentDescription = null,
                             tint = jsonPluginIconContentColor,
                             nativeSize = 20.dp
@@ -2580,7 +2594,7 @@ internal fun JsonPluginItem(
                 AppText(if (isExpanded) "收起" else "管理规则", style = MaterialTheme.typography.labelMedium,
                     color = AppContentColors.secondaryText())
                 AppIcon(
-                    imageVector = rememberMaterialSymbol(if (isExpanded) R.drawable.ms_keyboard_arrow_up_24 else R.drawable.ms_keyboard_arrow_down_24),
+                    imageVector = rememberSettingsVector(if (isExpanded) settingsIconResource(R.drawable.ph_caret_up_24, R.drawable.ms_keyboard_arrow_up_24) else settingsIconResource(R.drawable.ph_caret_down_24, R.drawable.ms_keyboard_arrow_down_24)),
                     contentDescription = null,
                     tint = AppContentColors.secondaryText(),
                     modifier = Modifier.size(20.dp),
@@ -2612,7 +2626,7 @@ internal fun JsonPluginItem(
                     AppTextButton(
                         onClick = onTest,
                     ) {
-                        AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lightbulb_24), null, modifier = Modifier.size(16.dp))
+                        AppIcon(rememberSettingsVector(R.drawable.ph_lightbulb_24, R.drawable.ms_lightbulb_24), null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         AppText("测试规则", style = MaterialTheme.typography.labelMedium)
                     }
@@ -2621,7 +2635,7 @@ internal fun JsonPluginItem(
                     AppTextButton(
                         onClick = onResetStats,
                     ) {
-                        AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_refresh_24), null, modifier = Modifier.size(16.dp))
+                        AppIcon(rememberSettingsVector(R.drawable.ph_arrows_clockwise_24, R.drawable.ms_refresh_24), null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         AppText("重置统计", style = MaterialTheme.typography.labelMedium)
                     }
@@ -2630,7 +2644,7 @@ internal fun JsonPluginItem(
                     AppTextButton(
                         onClick = onEdit,
                     ) {
-                        AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_edit_note_24), null, modifier = Modifier.size(16.dp))
+                        AppIcon(rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24), null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         AppText("编辑", style = MaterialTheme.typography.labelMedium)
                     }
@@ -2642,7 +2656,7 @@ internal fun JsonPluginItem(
                             contentColor = AppContentColors.error()
                         )
                     ) {
-                        AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_delete_24), null, modifier = Modifier.size(16.dp))
+                        AppIcon(rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24), null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         AppText("删除", style = MaterialTheme.typography.labelMedium)
                     }
@@ -2696,7 +2710,7 @@ private fun TestResultDialog(
         onDismissRequest = onDismiss,
         icon = {
             SettingsFunctionIcon(
-                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lightbulb_24),
+                rememberSettingsVector(R.drawable.ph_lightbulb_24, R.drawable.ms_lightbulb_24),
                 title = "规则测试结果",
                 contentDescription = null,
                 tint = dialogIconTint
@@ -2783,7 +2797,7 @@ private fun TestResultDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 AppIcon(
-                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_delete_24),
+                                    rememberSettingsVector(R.drawable.ph_trash_24, R.drawable.ms_delete_24),
                                     contentDescription = null,
                                     tint = AppContentColors.error().copy(alpha = 0.7f),
                                     modifier = Modifier.size(14.dp)

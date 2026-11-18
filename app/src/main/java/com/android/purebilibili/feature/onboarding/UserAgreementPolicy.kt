@@ -1,16 +1,5 @@
 package com.android.purebilibili.feature.onboarding
 
-/**
- * SharedPreferences key for the mandatory user-agreement gate.
- *
- * Versioned so existing installs (old users) also see the new agreement once.
- * Not tied to legacy `first_launch_shown`.
- */
-const val USER_AGREEMENT_ACK_KEY = "user_agreement_ack_v1"
-
-/** SharedPreferences file used for welcome / agreement flags. */
-const val APP_WELCOME_PREFS_NAME = "app_welcome"
-
 enum class UserAgreementClause(
     val title: String,
     val body: String,
@@ -68,7 +57,3 @@ fun canAcknowledgeUserAgreement(
     noDomesticPromoChecked: Boolean,
     feedbackWithLogsChecked: Boolean,
 ): Boolean = openSourceFreeChecked && noDomesticPromoChecked && feedbackWithLogsChecked
-
-/** Gate: both first-time and existing users need an unacked agreement. */
-fun isUserAgreementRequired(hasAcknowledgedUserAgreement: Boolean): Boolean =
-    !hasAcknowledgedUserAgreement

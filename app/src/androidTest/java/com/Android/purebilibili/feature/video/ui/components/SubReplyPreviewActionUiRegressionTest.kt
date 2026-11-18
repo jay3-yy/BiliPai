@@ -163,6 +163,36 @@ class SubReplyPreviewActionUiRegressionTest {
     }
 
     @Test
+    fun tappingReportedVideoLinkInPreview_opensTheShortLink() {
+        val shortUrl = "https://b23.tv/8ln6bYc"
+        val title = "Windows微信更新后，几乎无法触屏使用了"
+        val content = ReplyContent(
+            message = shortUrl,
+            urls = mapOf(shortUrl to ReplyContentUrl(title = title)),
+        )
+        val child = mentionReply().copy(content = content)
+        val openedUrls = mutableListOf<String>()
+        val openedThreads = mutableListOf<Long>()
+        rule.setContent {
+            MaterialTheme {
+                ReplyItemView(
+                    item = reply(total = 1, loaded = 1).copy(replies = listOf(child)),
+                    onClick = {},
+                    onSubClick = { _, target -> openedThreads += target },
+                    onAvatarClick = {},
+                    onUrlClick = { openedUrls += it },
+                )
+            }
+        }
+
+        tapCharacter(title, "触屏")
+        rule.runOnIdle {
+            assertEquals(listOf(shortUrl), openedUrls)
+            assertTrue(openedThreads.isEmpty())
+        }
+    }
+
+    @Test
     fun previewSearchKeywordsStayPlainWhileFullCommentsKeepSearchLinks() {
         val searchUrl = "https://search.bilibili.com/all?keyword=%E5%8E%9F%E7%A5%9E"
         val videoUrl = "https://www.bilibili.com/video/BV1xx411c7mD"

@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import kotlinx.coroutines.Job
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppShapes
@@ -80,6 +81,19 @@ internal data class SearchResultPageAppearance(
     val isQuickReturningFromVideoDetail: Boolean,
 )
 
+/** The scaffold updates its top inset during measurement as the result toolbar folds. */
+private data class SearchResultPadding(
+    val chrome: PaddingValues,
+    val bottom: Dp = 0.dp,
+    val horizontal: Dp = 0.dp,
+    val extraTop: Dp = 0.dp,
+) : PaddingValues {
+    override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = horizontal
+    override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = horizontal
+    override fun calculateTopPadding(): Dp = chrome.calculateTopPadding() + extraTop
+    override fun calculateBottomPadding(): Dp = bottom
+}
+
 /** 单个结果页只渲染自身数据；筛选、输入和导航由页面入口协调。 */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -95,7 +109,7 @@ internal fun SearchResultPageContent(
     scrollToTopRequestId: Int,
     appearance: SearchResultPageAppearance,
     hazeState: dev.chrisbanes.haze.HazeState,
-    resultTopPadding: androidx.compose.ui.unit.Dp,
+    resultChromePadding: PaddingValues,
     resultBottomPadding: androidx.compose.ui.unit.Dp,
     onLoadMore: () -> Unit,
     onRetrySearch: (String) -> Unit,
@@ -226,6 +240,7 @@ internal fun SearchResultPageContent(
             }
         }
     }
+    val resultPadding = SearchResultPadding(resultChromePadding, bottom = resultBottomPadding)
     if (pagePresentation.body == SearchResultBodyMode.LOADING) {
         // 结果形态已知：用骨架占位，不用主题 Loading 动画。
         when (targetSearchType) {
@@ -242,32 +257,21 @@ internal fun SearchResultPageContent(
                 ContentVideoGridSkeletonFixedColumns(
                     columns = videoGridColumns,
                     coverAspectRatio = cardLayout.coverAspectRatio,
-                    contentPadding = PaddingValues(
-                        top = resultTopPadding,
-                        bottom = resultBottomPadding,
-                        start = cardLayout.outerPaddingDp.dp,
-                        end = cardLayout.outerPaddingDp.dp,
-                    ),
+                    contentPadding = resultPadding.copy(horizontal = cardLayout.outerPaddingDp.dp),
                     spacing = cardLayout.itemSpacingDp.dp,
                     modifier = skeletonModifier,
                 )
             }
             SearchType.UP, SearchType.LIVE_USER -> ContentMediaListSkeleton(
                 useUserRow = true,
-                contentPadding = PaddingValues(
-                    top = resultTopPadding,
-                    bottom = resultBottomPadding,
-                ),
+                contentPadding = resultPadding,
                 modifier = Modifier
                     .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
                     .fillMaxSize(),
             )
             else -> ContentMediaListSkeleton(
                 useUserRow = false,
-                contentPadding = PaddingValues(
-                    top = resultTopPadding,
-                    bottom = resultBottomPadding,
-                ),
+                contentPadding = resultPadding,
                 modifier = Modifier
                     .responsiveContentWidth(maxWidth = resolveSearchSingleColumnResultMaxWidth())
                     .fillMaxSize(),
@@ -287,7 +291,7 @@ internal fun SearchResultPageContent(
             },
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = resultTopPadding, bottom = resultBottomPadding),
+                .padding(resultPadding),
             animation = com.android.purebilibili.core.ui.MaidAnimation.RETRY,
             isVisible = isPageVisible()
         )
@@ -297,7 +301,7 @@ internal fun SearchResultPageContent(
             Box(
                 Modifier
                     .fillMaxSize()
-                    .padding(top = resultTopPadding, bottom = resultBottomPadding),
+                    .padding(resultPadding),
                 contentAlignment = Alignment.Center
             ) {
                 com.android.purebilibili.core.ui.EmptyState(
@@ -415,12 +419,7 @@ internal fun SearchResultPageContent(
             LazyVerticalStaggeredGrid(
                 columns = StaggeredGridCells.Fixed(effectiveSearchGridColumns),
                 state = activePageGridState,
-                contentPadding = PaddingValues(
-                    top = resultTopPadding,
-                    bottom = resultBottomPadding,
-                    start = searchGridCardLayout.outerPaddingDp.dp,
-                    end = searchGridCardLayout.outerPaddingDp.dp
-                ),
+                contentPadding = resultPadding.copy(horizontal = searchGridCardLayout.outerPaddingDp.dp),
                 horizontalArrangement = searchGridHorizontalArrangement,
                 verticalItemSpacing = searchGridCardLayout.itemSpacingDp.dp,
                 modifier = videoGridModifier
@@ -730,14 +729,14 @@ internal fun SearchResultPageContent(
                     columns = effectiveSearchGridColumns,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
-                        .padding(top = resultTopPadding + 16.dp)
+                        .padding(SearchResultPadding(resultChromePadding, extraTop = 16.dp))
                 )
             }
         }
         com.android.purebilibili.data.model.response.SearchType.UP -> {
             //  UP主搜索结果
             LazyColumn(
-                contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
+                contentPadding = resultPadding.copy(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 state = activePageListState,
                 modifier = Modifier
@@ -815,7 +814,7 @@ internal fun SearchResultPageContent(
         com.android.purebilibili.data.model.response.SearchType.MEDIA_FT -> {
             //  番剧/影视搜索结果
             LazyColumn(
-                contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
+                contentPadding = resultPadding.copy(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 state = activePageListState,
                 modifier = Modifier
@@ -900,7 +899,7 @@ internal fun SearchResultPageContent(
         com.android.purebilibili.data.model.response.SearchType.LIVE -> {
             //  直播搜索结果
             LazyColumn(
-                contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
+                contentPadding = resultPadding.copy(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 state = activePageListState,
                 modifier = Modifier
@@ -973,7 +972,7 @@ internal fun SearchResultPageContent(
         }
         com.android.purebilibili.data.model.response.SearchType.LIVE_USER -> {
             LazyColumn(
-                contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
+                contentPadding = resultPadding.copy(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 state = activePageListState,
                 modifier = Modifier
@@ -1029,7 +1028,7 @@ internal fun SearchResultPageContent(
         }
         com.android.purebilibili.data.model.response.SearchType.ARTICLE -> {
             LazyColumn(
-                contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
+                contentPadding = resultPadding.copy(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 state = activePageListState,
                 modifier = Modifier
@@ -1100,7 +1099,7 @@ internal fun SearchResultPageContent(
         }
         com.android.purebilibili.data.model.response.SearchType.TOPIC -> {
             LazyColumn(
-                contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
+                contentPadding = resultPadding.copy(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 state = activePageListState,
                 modifier = Modifier
@@ -1145,7 +1144,7 @@ internal fun SearchResultPageContent(
         }
         com.android.purebilibili.data.model.response.SearchType.PHOTO -> {
             LazyColumn(
-                contentPadding = PaddingValues(top = resultTopPadding, bottom = resultBottomPadding, start = 16.dp, end = 16.dp),
+                contentPadding = resultPadding.copy(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 state = activePageListState,
                 modifier = Modifier

@@ -4,8 +4,10 @@ import android.content.Context
 import android.os.Build
 import androidx.work.*
 import com.android.purebilibili.app.DOWNLOAD_NOTIFICATION_CHANNEL_ID
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -26,6 +28,8 @@ class DownloadWorker(
 
     companion object {
         const val KEY_TASK_ID = "task_id"
+        private const val KEY_WORK_TOKEN = "download_work_token"
+        private const val KEY_RETRY_WAKEUP = "download_retry_wakeup"
         const val TAG_DOWNLOAD = "video_download"
 
         // 通知 id 按任务派生：同一任务反复 setForeground 复用同一个 id，避免堆积；
@@ -35,42 +39,48 @@ class DownloadWorker(
         /**
          * 调度下载任务
          */
-        fun enqueue(context: Context, taskId: String) {
+        internal suspend fun enqueue(
+            context: Context,
+            taskId: String,
+            workToken: String,
+            retryDelayMs: Long? = null,
+        ) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
             
             val inputData = Data.Builder()
                 .putString(KEY_TASK_ID, taskId)
+                .putString(KEY_WORK_TOKEN, workToken)
+                .putBoolean(KEY_RETRY_WAKEUP, retryDelayMs != null)
                 .build()
             
             val workRequest = OneTimeWorkRequestBuilder<DownloadWorker>()
                 .setConstraints(constraints)
                 .setInputData(inputData)
                 .addTag(TAG_DOWNLOAD)
-                .addTag(taskId) // 用于取消特定任务
-                .setBackoffCriteria(
-                    BackoffPolicy.EXPONENTIAL,
-                    30_000L, // 30 秒初始退避
-                    java.util.concurrent.TimeUnit.MILLISECONDS
-                )
+                .addTag(taskId)
+                .setInitialDelay(retryDelayMs ?: 0L, TimeUnit.MILLISECONDS)
                 .build()
             
             WorkManager.getInstance(context)
                 .enqueueUniqueWork(
-                    taskId,
-                    ExistingWorkPolicy.KEEP, // 如果已存在则保留
+                    if (retryDelayMs == null) taskId else "$taskId:retry:$workToken",
+                    if (retryDelayMs == null) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
                     workRequest
-                )
-            
-            com.android.purebilibili.core.util.Logger.d("DownloadWorker", "📥 Enqueued download: $taskId")
+                ).await()
+
+            com.android.purebilibili.core.util.Logger.d(
+                "DownloadWorker",
+                if (retryDelayMs == null) "已调度下载：$taskId" else "已安排下载重试：$taskId",
+            )
         }
         
         /**
          * 取消下载任务
          */
-        fun cancel(context: Context, taskId: String) {
-            WorkManager.getInstance(context).cancelUniqueWork(taskId)
+        internal suspend fun cancel(context: Context, taskId: String) {
+            WorkManager.getInstance(context).cancelAllWorkByTag(taskId).await()
             com.android.purebilibili.core.util.Logger.d("DownloadWorker", "⏹️ Cancelled download: $taskId")
         }
         
@@ -83,63 +93,104 @@ class DownloadWorker(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
-        val taskId = inputData.getString(KEY_TASK_ID) 
-            ?: return@withContext Result.failure()
-        
-        com.android.purebilibili.core.util.Logger.d("DownloadWorker", "🚀 Starting download: $taskId")
-        DownloadManager.init(applicationContext)
-        setForeground(getForegroundInfo())
-
-        // 周期性把任务进度刷到前台通知上（进度条 + 百分比）
-        val progressJob = launch {
-            while (isActive) {
-                delay(2_000L)
-                val progress = DownloadManager.tasks.value[taskId]?.progress ?: 0f
-                runCatching { setForeground(getForegroundInfo(progress)) }
+        val taskId = inputData.getString(KEY_TASK_ID) ?: return@withContext Result.failure()
+        val workToken = inputData.getString(KEY_WORK_TOKEN)
+        val telemetry = DownloadTelemetry()
+        var stage = DownloadStage.FOREGROUND
+        var attempt: Int? = null
+        val onStage: (DownloadStage) -> Unit = {
+            stage = it
+            if (stage == DownloadStage.COMPLETE) {
+                telemetry.record(stage, DownloadOutcome.COMPLETED, attempt = attempt)
             }
         }
-
+        var progressJob: Job? = null
+        var foregroundStarted = false
         try {
-            val foregroundWorkTimeoutMs = resolveDownloadForegroundWorkTimeoutMs(Build.VERSION.SDK_INT)
-            if (foregroundWorkTimeoutMs != null) {
-                withTimeout(foregroundWorkTimeoutMs) {
-                    DownloadManager.executeDownload(taskId)
-                }
-            } else {
-                DownloadManager.executeDownload(taskId)
+            DownloadManager.init(applicationContext)
+            if (inputData.getBoolean(KEY_RETRY_WAKEUP, false)) {
+                DownloadManager.makeDownloadRetryReady(taskId, workToken)
+                return@withContext Result.success()
             }
-            
-            com.android.purebilibili.core.util.Logger.d("DownloadWorker", "✅ Download completed: $taskId")
-            Result.success()
-            
-        } catch (e: TimeoutCancellationException) {
-            com.android.purebilibili.core.util.Logger.w("DownloadWorker", "⏱️ Download paused before Android foreground-service timeout: $taskId", e)
-            DownloadManager.pauseForSystemForegroundTimeout(taskId)
-            Result.success()
-
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            if (DownloadManager.shouldTreatWorkerCancellationAsFinished(taskId)) {
-                com.android.purebilibili.core.util.Logger.d("DownloadWorker", "⏸️ Download paused: $taskId")
-                Result.success()
-            } else {
-                com.android.purebilibili.core.util.Logger.w("DownloadWorker", "🔁 Download interrupted, will retry: $taskId", e)
-                withContext(NonCancellable) {
-                    DownloadManager.markInterruptedForRetry(taskId, e.message ?: "下载被系统中断，等待重试")
+            attempt = DownloadManager.beginWorkerAttempt(taskId, workToken)
+                ?: return@withContext Result.success()
+            telemetry.record(DownloadStage.FOREGROUND, DownloadOutcome.STARTED, attempt = attempt)
+            setForeground(getForegroundInfo())
+            foregroundStarted = true
+            progressJob = launch {
+                while (isActive) {
+                    delay(2_000L)
+                    if (!DownloadManager.ownsActiveWork(taskId, workToken)) break
+                    val progress = DownloadManager.tasks.value[taskId]?.progress ?: 0f
+                    try {
+                        setForeground(getForegroundInfo(progress))
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (error: Exception) {
+                        com.android.purebilibili.core.util.Logger.w("DownloadWorker", "下载通知更新失败", error)
+                    }
                 }
-                Result.retry()
             }
-            
-        } catch (e: Exception) {
-            com.android.purebilibili.core.util.Logger.e("DownloadWorker", "❌ Download failed: $taskId", e)
-            
-            // 更新任务状态
-            DownloadManager.markFailed(taskId, e.message ?: "下载失败")
+            val timeout = resolveDownloadForegroundWorkTimeoutMs(Build.VERSION.SDK_INT)
+            if (timeout == null) {
+                DownloadManager.executeDownload(taskId, workToken, onStage)
+            } else {
+                withTimeout(timeout) { DownloadManager.executeDownload(taskId, workToken, onStage) }
+            }
             Result.success()
+        } catch (error: TimeoutCancellationException) {
+            if (DownloadManager.ownsActiveWork(taskId, workToken)) {
+                telemetry.record(stage, DownloadOutcome.PAUSED, attempt = attempt)
+            }
+            DownloadManager.finishWorkerAttempt(
+                taskId, workToken, DownloadStatus.PAUSED,
+                "下载已暂停：后台服务接近系统时限，请稍后继续",
+            )
+            Result.success()
+        } catch (cancelled: CancellationException) {
+            val interrupted = DownloadManager.ownsActiveWork(taskId, workToken)
+            if (attempt != null && stage != DownloadStage.COMPLETE) {
+                val task = DownloadManager.tasks.value[taskId]
+                val outcome = when {
+                    interrupted -> DownloadOutcome.INTERRUPTED
+                    task?.status == DownloadStatus.PAUSED -> DownloadOutcome.PAUSED
+                    else -> DownloadOutcome.CANCELLED
+                }
+                telemetry.record(stage, outcome, attempt = attempt)
+            }
+            if (interrupted) {
+                DownloadManager.finishWorkerAttempt(taskId, workToken, DownloadStatus.PENDING, "下载中断，等待重试")
+            }
+            throw cancelled
+        } catch (error: Exception) {
+            if (!DownloadManager.ownsActiveWork(taskId, workToken)) return@withContext Result.failure()
+            progressJob?.cancel()
+            val retry = foregroundStarted && isRetryableDownloadFailure(error) &&
+                DownloadManager.deferDownloadRetry(taskId, workToken)
+            if (!retry && !DownloadManager.ownsActiveWork(taskId, workToken)) {
+                return@withContext Result.success()
+            }
+            val message = when {
+                !foregroundStarted -> "无法启动下载服务：${error.message.orEmpty()}"
+                retry -> "下载遇到网络错误，已安排重试"
+                else -> error.message ?: "下载失败"
+            }
+            com.android.purebilibili.core.util.Logger.w("DownloadWorker", message, error)
+            if (!retry) {
+                DownloadManager.finishWorkerAttempt(taskId, workToken, DownloadStatus.FAILED, message)
+            }
+            telemetry.record(
+                stage,
+                if (retry) DownloadOutcome.RETRY else DownloadOutcome.FAILED,
+                error,
+                attempt = attempt,
+            )
+            if (retry) Result.success() else Result.failure()
         } finally {
-            progressJob.cancel()
+            progressJob?.cancel()
         }
     }
-    
+
     // CoroutineWorker 要求的抽象实现；实际渲染走带进度的重载
     override suspend fun getForegroundInfo(): ForegroundInfo = getForegroundInfo(0f)
 

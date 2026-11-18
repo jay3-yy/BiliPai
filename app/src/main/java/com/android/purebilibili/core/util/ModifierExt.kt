@@ -128,6 +128,27 @@ fun VideoGridItemSkeleton(coverAspectRatio: Float = 4f / 3f) {
 //  Android 特有功能：触觉反馈 + 弹性点击
 // =============================================================================
 
+/** 异步结果只在当前可见、前台且窗口有焦点时反馈，恢复页面后不补振。 */
+@Composable
+fun rememberVisibleHapticFeedback(
+    scene: com.android.purebilibili.core.ui.AppHapticScene,
+    isVisible: Boolean = true,
+): (HapticType) -> Unit {
+    val view = LocalView.current
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    val visible by rememberUpdatedState(isVisible && com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current)
+    val haptic by rememberUpdatedState(rememberHapticFeedback(scene))
+    return remember(view, lifecycle) {
+        { type ->
+            if (visible && view.hasWindowFocus() &&
+                lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+            ) {
+                haptic(type)
+            }
+        }
+    }
+}
+
 /**
  *  触觉反馈类型枚举
  */

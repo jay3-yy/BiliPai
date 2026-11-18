@@ -68,7 +68,7 @@ internal fun InstantArticleScreen(
         onRetry = { model.load(url, force = true) },
         onOpenLink = onOpenLink,
         onOpenOriginal = {
-            val original = (state as? InstantArticleUiState.Content)?.article?.url ?: url
+            val original = (state as? InstantArticleUiState.Content)?.url ?: url
             runCatching { uriHandler.openUri(original) }.onFailure {
                 Toast.makeText(context, "没有可打开此链接的应用", Toast.LENGTH_SHORT).show()
             }
@@ -123,12 +123,12 @@ internal fun InstantArticleContent(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center,
             ) { AdaptiveLoadingIndicator() }
-            InstantArticleUiState.Unavailable -> Column(
+            is InstantArticleUiState.Unavailable -> Column(
                 modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             ) {
-                AppText("暂时无法提取这篇网页的正文")
+                AppText(state.message)
                 AppText(
                     "可以重试，或打开原文继续查看。",
                     color = AppContentColors.secondaryText(),
@@ -149,12 +149,12 @@ internal fun InstantArticleContent(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         AppText(
-                            state.article.title.ifBlank { initialTitle }.ifBlank { "网页正文" },
+                            state.title.ifBlank { initialTitle }.ifBlank { "网页正文" },
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold,
                         )
                         AppText(
-                            listOf(state.article.author, runCatching { java.net.URI(state.article.url).host }.getOrNull().orEmpty())
+                            listOf(state.author, runCatching { java.net.URI(state.url).host }.getOrNull().orEmpty())
                                 .filter { it.isNotBlank() }.joinToString(" · "),
                             color = AppContentColors.secondaryText(),
                         )

@@ -1125,6 +1125,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     override fun onEnterBackground() {
         if (remoteAudio.active) return
+        if (isLiveMode && shouldKeepPlaybackForPipTransition()) return
         tryTransferDetachedAudio()
         if (!isActive) return
         val currentPlayer = player ?: return

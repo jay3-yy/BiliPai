@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 class BiliPaiNavKeyMappingPolicyTest {
     @Test
@@ -99,6 +100,22 @@ class BiliPaiNavKeyMappingPolicyTest {
         )
 
         keys.forEach { key -> assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute())) }
+    }
+
+    @Test
+    fun pgcFavoritesRestoreTheCategoryAndKeepTheirOriginOnBack() {
+        val home = listOf(BiliPaiNavKey.MainHost)
+        val hub = home + BiliPaiNavKey.Bangumi(initialType = 2)
+        for (origin in listOf(home, hub)) {
+            for (cinema in listOf(false, true)) {
+                val key = BiliPaiNavKey.FavoritePgc(cinema = cinema)
+                assertEquals(key, legacyRouteToBiliPaiNavKey(key.toLegacyRoute()))
+                assertEquals(BiliPaiNavEntryContentRole.FAVORITE, resolveBiliPaiNavEntryContentRole(key))
+                assertTrue(isCardReturnTargetNavKey(key))
+                assertEquals(origin, popBiliPaiNavKey(pushBiliPaiNavKey(origin, key)))
+            }
+        }
+        assertEquals(BiliPaiNavKey.Favorite, legacyRouteToBiliPaiNavKey(ScreenRoutes.Favorite.route))
     }
 
     @Test

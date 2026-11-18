@@ -74,7 +74,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
@@ -104,7 +104,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import com.android.purebilibili.core.ui.components.AppDropdownMenuItem as DropdownMenuItem
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -5997,7 +5997,7 @@ private fun SpaceHeaderStat(
     val context = LocalContext.current
     Column(
         modifier = modifier
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = if (onClick != null) appActionWithFeedback(onClick) else ({}),
                 onLongClick = {
                     android.widget.Toast.makeText(

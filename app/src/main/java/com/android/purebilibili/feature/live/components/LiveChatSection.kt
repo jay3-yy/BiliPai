@@ -502,6 +502,7 @@ internal fun LiveChatInputBar(
     canLike: Boolean = true,
     onLikeUnavailable: () -> Unit = {},
     modifier: Modifier = Modifier,
+    medalContent: (@Composable () -> Unit)? = null,
 ) {
     val palette = rememberLiveChromePalette()
     val foreground = if (isOverlay) LiveStatusPalette.MediaContent else palette.primaryText
@@ -554,6 +555,7 @@ internal fun LiveChatInputBar(
                     modifier = Modifier.size(22.dp),
                 )
             }
+            if (!compact) medalContent?.invoke()
             AppText("发送弹幕", modifier = Modifier.weight(1f).padding(top = if (compact) 0.dp else 6.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, color = foreground.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium)
             LiveLikeButton(tint = foreground, onLike = onLike, modifier = Modifier.size(34.dp), canLike = canLike, onUnavailable = onLikeUnavailable)
             AppIconButton(onClick = onOpenEmote, modifier = Modifier.size(34.dp)) {

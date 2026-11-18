@@ -5,7 +5,8 @@ import kotlin.math.roundToInt
 
 internal enum class LiveDanmakuStyleOption {
     NormalFontScale, FullscreenFontScale, Opacity, Speed,
-    FontWeight, StrokeWidth, LineHeight, ScrollDuration, StaticDuration, SuperChatWidth,
+    FontWeight, StrokeWidth, LineHeight, ScrollDuration, StaticDuration,
+    SuperChatWidth, SuperChatOpacity, SuperChatScale,
 }
 
 /** 字号随全屏状态选择，其他样式保留窗口方向对应的存量设置。 */
@@ -42,6 +43,8 @@ internal fun savedLiveDanmakuStyleValue(
     fullscreen: DanmakuSettings,
     isLandscape: Boolean,
     superChatWidth: Int,
+    superChatOpacity: Float = 1f,
+    superChatScale: Float = 1f,
 ): Float {
     val window = if (isLandscape) fullscreen else normal
     return when (option) {
@@ -55,5 +58,7 @@ internal fun savedLiveDanmakuStyleValue(
         LiveDanmakuStyleOption.ScrollDuration -> window.scrollDurationSeconds
         LiveDanmakuStyleOption.StaticDuration -> window.staticDurationSeconds
         LiveDanmakuStyleOption.SuperChatWidth -> superChatWidth.toFloat()
+        LiveDanmakuStyleOption.SuperChatOpacity -> superChatOpacity
+        LiveDanmakuStyleOption.SuperChatScale -> superChatScale
     }
 }

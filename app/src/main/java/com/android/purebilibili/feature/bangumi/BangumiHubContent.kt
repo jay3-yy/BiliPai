@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.wallpaperMediaCardSurface
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -23,7 +24,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -46,6 +47,7 @@ import androidx.compose.foundation.pager.PagerState
 import com.android.purebilibili.core.ui.components.AppHorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -60,12 +62,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -113,6 +117,10 @@ import com.android.purebilibili.data.model.response.FollowBangumiItem
 import com.android.purebilibili.data.model.response.TimelineDay
 import com.android.purebilibili.data.model.response.TimelineEpisode
 import com.android.purebilibili.feature.bangumi.ui.list.BangumiBadge
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
+import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
+import com.android.purebilibili.navigation.animatePagerSelection
+import com.android.purebilibili.navigation.tabIndicatorPosition
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.blur.Backdrop
 
@@ -157,14 +165,13 @@ internal fun BangumiHubContent(
     state: BangumiHubUiState,
     onBangumiClick: (Long) -> Unit,
     onEpisodeClick: (Long, Long) -> Unit,
-    onPlayFollow: (Long) -> Unit,
     channelPagerState: PagerState,
     onPrepareChannel: (BangumiChannel) -> Unit,
     onRefreshHome: () -> Unit,
+    onRefreshHomeFollows: () -> Unit,
     onLoadMoreHomeRecommendations: () -> Unit,
     onLoadMoreHomeFollows: () -> Unit,
     onRetryTimeline: () -> Unit,
-    onTimelineRangeSelected: (BangumiTimelineRange) -> Unit,
     onOpenIndex: () -> Unit,
     onOpenFollow: () -> Unit,
     onIndexCategorySelected: (BangumiIndexCategory) -> Unit,
@@ -184,7 +191,6 @@ internal fun BangumiHubContent(
     onUnfollowSingle: (Long) -> Unit,
     onSearchCategorySelected: (BangumiIndexCategory) -> Unit,
     onLoadMoreSearch: () -> Unit,
-    onSaveCover: (String, String) -> Unit,
     onHomeScrollChanged: (firstVisibleIndex: Int, scrollOffset: Int) -> Unit = { _, _ -> },
     scrollToTopRequestId: Int = 0,
     listBottomPadding: Dp = 24.dp,
@@ -193,9 +199,25 @@ internal fun BangumiHubContent(
     showFollowStatusTabs: Boolean = true,
 ) {
     val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    var coverPreview by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val onPreviewCover: (String, String) -> Unit = { url, title ->
+        if (url.isNotBlank()) coverPreview = FormatUtils.fixImageUrl(url) to title
+    }
+    coverPreview?.let { (url, title) ->
+        ImagePreviewDialog(
+            images = listOf(url),
+            initialIndex = 0,
+            textContent = ImagePreviewTextContent(headline = title),
+            publicContent = true,
+            onDismiss = { coverPreview = null },
+        )
+    }
     val homeGridStates = rememberSaveable(saver = BangumiGridStatesSaver) { mutableMapOf<String, LazyGridState>() }
     val indexGridStates = rememberSaveable(saver = BangumiGridStatesSaver) { mutableMapOf<String, LazyGridState>() }
     val followGridStates = rememberSaveable(saver = BangumiGridStatesSaver) { mutableMapOf<String, LazyGridState>() }
+    val homePageState = key(state.accountGeneration) {
+        rememberSaveableStateHolder()
+    }
     val searchGridState = rememberLazyGridState()
     var handledScrollToTopRequestId by rememberSaveable { mutableIntStateOf(0) }
     val activeHomeGrid = homeGridStates.getOrPut(state.channel.name) { LazyGridState() }
@@ -229,54 +251,103 @@ internal fun BangumiHubContent(
             // 频道滑动复用主题手势策略；各频道的列表状态仍按频道身份独立保存。
             AppHorizontalPager(
                 state = pager,
-                modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = false,
+                modifier = Modifier.fillMaxSize()
+                    .verticalPriorityHorizontalPagerSwipe(pager),
                 key = { channels[it].name },
             ) { page ->
                 val channel = channels[page]
                 LaunchedEffect(channel, state.accountGeneration, state.channel, pageWorkActive) {
                     if (pageWorkActive && channel == state.channel) onPrepareChannel(channel)
                 }
-                BangumiHomeContent(
-                    channel = channel,
-                    state = state.homeStates[channel] ?: BangumiHomeState(),
-                    gridState = homeGridStates.getOrPut(channel.name) { LazyGridState() },
-                    isLoggedIn = state.isLoggedIn,
-                    showPgcTimeline = state.showPgcTimeline,
-                    onBangumiClick = onBangumiClick,
-                    onEpisodeClick = onEpisodeClick,
-                    onPlayFollow = onPlayFollow,
-                    onRefresh = { if (channel == state.channel) onRefreshHome() },
-                    onLoadMoreRecommendations = { if (channel == state.channel) onLoadMoreHomeRecommendations() },
-                    onLoadMoreFollows = { if (channel == state.channel) onLoadMoreHomeFollows() },
-                    onRetryTimeline = { if (channel == state.channel) onRetryTimeline() },
-                    onTimelineRangeSelected = { if (channel == state.channel) onTimelineRangeSelected(it) },
-                    onOpenIndex = { if (channel == state.channel) onOpenIndex() },
-                    onOpenFollow = { if (channel == state.channel) onOpenFollow() },
-                    onSaveCover = onSaveCover,
-                    listBottomPadding = listBottomPadding,
-                    listTopPadding = listTopPadding,
-                    tabBackdrop = tabBackdrop,
-                )
+                homePageState.SaveableStateProvider(channel.name) {
+                    BangumiHomeContent(
+                        channel = channel,
+                        state = state.homeStates[channel] ?: BangumiHomeState(),
+                        gridState = homeGridStates.getOrPut(channel.name) { LazyGridState() },
+                        isLoggedIn = state.isLoggedIn,
+                        showPgcTimeline = state.showPgcTimeline && channel == BangumiChannel.BANGUMI,
+                        onBangumiClick = onBangumiClick,
+                        onEpisodeClick = onEpisodeClick,
+                        onRefreshFollows = { if (channel == state.channel) onRefreshHomeFollows() },
+                        onRefresh = { if (channel == state.channel) onRefreshHome() },
+                        onLoadMoreRecommendations = { if (channel == state.channel) onLoadMoreHomeRecommendations() },
+                        onLoadMoreFollows = { if (channel == state.channel) onLoadMoreHomeFollows() },
+                        onRetryTimeline = { if (channel == state.channel) onRetryTimeline() },
+                        onOpenIndex = { if (channel == state.channel) onOpenIndex() },
+                        onOpenFollow = { if (channel == state.channel) onOpenFollow() },
+                        onPreviewCover = onPreviewCover,
+                        listBottomPadding = listBottomPadding,
+                        listTopPadding = listTopPadding,
+                        tabBackdrop = tabBackdrop,
+                    )
+                }
             }
         }
 
-        BangumiHubPage.INDEX -> BangumiIndexContent(
-            channel = state.channel,
-            category = state.indexCategory,
-            state = state.indexStates[state.indexCategory] ?: BangumiIndexState(),
-            gridState = indexGridStates.getOrPut(state.indexCategory.name) { LazyGridState() },
-            onCategorySelected = onIndexCategorySelected,
-            onFilterSelected = onIndexFilterSelected,
-            onToggleExpanded = onToggleFiltersExpanded,
-            onRetryConditions = onRetryIndexConditions,
-            onRetryResults = onRetryIndexResults,
-            onLoadMore = onLoadMoreIndexResults,
-            onBangumiClick = onBangumiClick,
-            onSaveCover = onSaveCover,
-            listBottomPadding = listBottomPadding,
-            listTopPadding = listTopPadding,
-            tabBackdrop = tabBackdrop,
-        )
+        BangumiHubPage.INDEX -> {
+            val categories = bangumiIndexCategoriesForChannel(state.channel)
+            val activeCategory = state.indexCategory
+            val indexPage: @Composable (BangumiIndexCategory, Dp) -> Unit = { category, topPadding ->
+                val active = activeCategory == category
+                BangumiIndexContent(
+                    state = state.indexStates[category] ?: BangumiIndexState(),
+                    gridState = indexGridStates.getOrPut(category.name) { LazyGridState() },
+                    pageActive = pageWorkActive && active,
+                    onFilterSelected = { group, choice -> if (active) onIndexFilterSelected(group, choice) },
+                    onToggleExpanded = { if (active) onToggleFiltersExpanded() },
+                    onRetryConditions = { if (active) onRetryIndexConditions() },
+                    onRetryResults = { if (active) onRetryIndexResults() },
+                    onLoadMore = { if (active) onLoadMoreIndexResults() },
+                    onBangumiClick = onBangumiClick,
+                    onPreviewCover = onPreviewCover,
+                    listBottomPadding = listBottomPadding,
+                    listTopPadding = topPadding,
+                )
+            }
+            if (categories.size == 1) {
+                indexPage(categories.single(), listTopPadding)
+            } else {
+                val pager = rememberPagerState(initialPage = categories.indexOf(activeCategory)) { categories.size }
+                val latestCategorySelected by rememberUpdatedState(onIndexCategorySelected)
+                val scope = rememberCoroutineScope()
+                LaunchedEffect(pager, pageWorkActive) {
+                    if (!pageWorkActive) return@LaunchedEffect
+                    snapshotFlow { pager.settledPage }.collect { page ->
+                        latestCategorySelected(categories[page])
+                    }
+                }
+                Column(Modifier.fillMaxSize().padding(top = listTopPadding)) {
+                    AppThemeAdaptiveTabRow(
+                        options = categories.map { AppSegmentOption(it, it.label) },
+                        selectedValue = activeCategory,
+                        onSelectionChange = { category ->
+                            scope.launch {
+                                if (category == activeCategory && !pager.isScrollInProgress) {
+                                    indexGridStates[category.name]?.animateScrollToTop()
+                                } else {
+                                    animatePagerSelection(pager, categories.indexOf(category))
+                                }
+                            }
+                        },
+                        role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
+                        scrollable = true,
+                        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
+                        indicatorPositionProvider = { pager.tabIndicatorPosition },
+                        isScrollInProgressProvider = { pager.isScrollInProgress },
+                        miuixBackdrop = tabBackdrop,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    AppHorizontalPager(
+                        state = pager,
+                        userScrollEnabled = false,
+                        key = { categories[it].name },
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                            .verticalPriorityHorizontalPagerSwipe(pager),
+                    ) { page -> indexPage(categories[page], 0.dp) }
+                }
+            }
+        }
 
         BangumiHubPage.FOLLOW -> BangumiFollowContent(
             channel = state.channel,
@@ -287,7 +358,6 @@ internal fun BangumiHubContent(
             onRefresh = onRefreshFollow,
             onLoadMore = onLoadMoreFollow,
             onBangumiClick = onBangumiClick,
-            onPlayFollow = onPlayFollow,
             onToggleSelection = onToggleFollowSelection,
             onSelectAll = onSelectAllFollow,
             onClearSelection = onClearFollowSelection,
@@ -307,7 +377,7 @@ internal fun BangumiHubContent(
             onCategorySelected = onSearchCategorySelected,
             onBangumiClick = onBangumiClick,
             onLoadMore = onLoadMoreSearch,
-            onSaveCover = onSaveCover,
+            onPreviewCover = onPreviewCover,
             listBottomPadding = listBottomPadding,
             listTopPadding = listTopPadding,
             tabBackdrop = tabBackdrop,
@@ -324,25 +394,30 @@ private fun BangumiHomeContent(
     showPgcTimeline: Boolean,
     onBangumiClick: (Long) -> Unit,
     onEpisodeClick: (Long, Long) -> Unit,
-    onPlayFollow: (Long) -> Unit,
+    onRefreshFollows: () -> Unit,
     onRefresh: () -> Unit,
     onLoadMoreRecommendations: () -> Unit,
     onLoadMoreFollows: () -> Unit,
     onRetryTimeline: () -> Unit,
-    onTimelineRangeSelected: (BangumiTimelineRange) -> Unit,
     onOpenIndex: () -> Unit,
     onOpenFollow: () -> Unit,
-    onSaveCover: (String, String) -> Unit,
+    onPreviewCover: (String, String) -> Unit,
     listBottomPadding: Dp,
     listTopPadding: Dp,
     tabBackdrop: Backdrop?,
 ) {
     val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    val isRefreshing = state.recommendations.isRefreshing ||
-        state.follows.isRefreshing || state.timeline.isRefreshing
+    val followRowState = rememberLazyListState()
+    val refreshFollows = {
+        followRowState.requestScrollToItem(0)
+        onRefreshFollows()
+    }
     AdaptivePullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
+        isRefreshing = state.recommendations.isRefreshing,
+        onRefresh = {
+            if (isLoggedIn) followRowState.requestScrollToItem(0)
+            onRefresh()
+        },
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyVerticalGrid(
@@ -352,47 +427,53 @@ private fun BangumiHomeContent(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "follow_header") {
-                val followLabel = if (channel == BangumiChannel.BANGUMI) "追番" else "追剧"
-                val followCount = state.followTotal.takeIf { it >= 0 }?.let { " $it" }.orEmpty()
-                SectionHeader(
-                    title = "最近$followLabel$followCount",
-                    actionLabel = if (isLoggedIn) "查看全部" else null,
-                    onAction = onOpenFollow,
-                    onRefresh = if (isLoggedIn) onRefresh else null,
-                )
-            }
-            item(span = { GridItemSpan(maxLineSpan) }, key = "follows") {
-                when {
-                    !isLoggedIn -> InlineNotice("登录后可同步追番/追剧")
-                    state.follows.isLoading && state.follows.items.isEmpty() -> BangumiPosterSkeletonRow()
-                    state.follows.error != null && state.follows.items.isEmpty() -> InlineError(
-                        message = state.follows.error,
-                        onRetry = onRefresh,
+            if (isLoggedIn) {
+                item(span = { GridItemSpan(maxLineSpan) }, key = "follow_header") {
+                    val followLabel = if (channel == BangumiChannel.BANGUMI) "追番" else "追剧"
+                    val followCount = state.followTotal?.let { " $it" }.orEmpty()
+                    SectionHeader(
+                        title = "最近$followLabel$followCount",
+                        actionLabel = "查看全部",
+                        onAction = onOpenFollow,
+                        onRefresh = refreshFollows,
                     )
-                    state.follows.items.isEmpty() -> InlineNotice("这里还没有内容")
-                    else -> LazyRow(
-                        contentPadding = PaddingValues(horizontal = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        itemsIndexed(
-                            state.follows.items,
-                            key = { index, item -> resolveMyFollowItemLazyKey(index, item) },
-                        ) { index, item ->
-                            FollowPosterCard(
-                                item = item,
-                                onClick = { onBangumiClick(item.seasonId) },
-                                onLongClick = { onSaveCover(item.cover, item.title) },
-                                onPlay = { onPlayFollow(item.seasonId) },
-                                modifier = Modifier.width(104.dp),
-                            )
-                            if (index == state.follows.items.lastIndex && state.follows.hasMore) {
-                                LaunchedEffect(item.seasonId, state.follows.page, pageWorkActive) {
-                                    if (pageWorkActive) onLoadMoreFollows()
+                }
+                item(span = { GridItemSpan(maxLineSpan) }, key = "follows") {
+                    when {
+                        (state.follows.isLoading || state.follows.isRefreshing) && state.follows.items.isEmpty() -> BangumiPosterSkeletonRow()
+                        state.follows.error != null && state.follows.items.isEmpty() -> InlineError(
+                            message = state.follows.error,
+                            onRetry = refreshFollows,
+                        )
+                        state.follows.items.isEmpty() -> InlineNotice("这里还没有内容")
+                        else -> LazyRow(
+                            state = followRowState,
+                            contentPadding = PaddingValues(horizontal = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            itemsIndexed(
+                                state.follows.items,
+                                key = { _, item -> resolveMyFollowItemBusinessKey(item) },
+                            ) { index, item ->
+                                FollowPosterCard(
+                                    item = item,
+                                    onClick = { onBangumiClick(item.seasonId) },
+                                    onLongClick = { onPreviewCover(item.cover, item.title) },
+                                    modifier = Modifier.width(104.dp),
+                                )
+                                if (index == state.follows.items.lastIndex && state.follows.hasMore &&
+                                    !state.follows.isRefreshing && state.follows.error == null
+                                ) {
+                                    LaunchedEffect(item.seasonId, state.follows.page, pageWorkActive) {
+                                        if (pageWorkActive) onLoadMoreFollows()
+                                    }
                                 }
                             }
+                            if (state.follows.isLoadingMore) item { InlineLoading(modifier = Modifier.width(64.dp)) }
+                            if (state.follows.error != null) item {
+                                Box(Modifier.width(160.dp)) { InlineError(state.follows.error, onLoadMoreFollows) }
+                            }
                         }
-                        if (state.follows.isLoadingMore) item { InlineLoading(modifier = Modifier.width(64.dp)) }
                     }
                 }
             }
@@ -403,7 +484,7 @@ private fun BangumiHomeContent(
                         state = state.timeline,
                         onEpisodeClick = onEpisodeClick,
                         onRetry = onRetryTimeline,
-                        onRangeSelected = onTimelineRangeSelected,
+                        onPreviewCover = onPreviewCover,
                         tabBackdrop = tabBackdrop,
                     )
                 }
@@ -433,9 +514,11 @@ private fun BangumiHomeContent(
                 PosterGridCard(
                     item = item,
                     onClick = { onBangumiClick(item.seasonId) },
-                    onLongClick = { onSaveCover(item.cover, item.title) },
+                    onLongClick = { onPreviewCover(item.cover, item.title) },
                 )
-                if (index == state.recommendations.items.lastIndex && state.recommendations.hasMore) {
+                if (index == state.recommendations.items.lastIndex && state.recommendations.hasMore &&
+                    !state.recommendations.isRefreshing && state.recommendations.error == null
+                ) {
                     LaunchedEffect(item.seasonId, state.recommendations.page, pageWorkActive) {
                         if (pageWorkActive) onLoadMoreRecommendations()
                     }
@@ -458,45 +541,20 @@ private fun TimelineSection(
     state: BangumiTimelineHubState,
     onEpisodeClick: (Long, Long) -> Unit,
     onRetry: () -> Unit,
-    onRangeSelected: (BangumiTimelineRange) -> Unit,
+    onPreviewCover: (String, String) -> Unit,
     tabBackdrop: Backdrop?,
 ) {
-    val today = state.days.indexOfFirst { it.isToday == 1 }.coerceAtLeast(0)
-    var selectedDay by remember(state.days) { mutableIntStateOf(today) }
+    val today = state.days.firstOrNull { it.isToday == 1 } ?: state.days.firstOrNull()
+    var selectedDate by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedDay = state.days.firstOrNull { it.date == selectedDate } ?: today
+    val uiStyle = LocalAppUiStyle.current
+    val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AppText(
-            text = "追番时间表",
-            style = MaterialTheme.typography.titleMedium,
-        )
-        val uiStyle = LocalAppUiStyle.current
-        val liquidGlassEnabled = com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled
-        val timelineRangeMinWidth = if (liquidGlassEnabled || uiStyle == AppUiStyle.MATERIAL3) {
-            AppChromeSizeTokens.MinimumTouchTarget
-        } else {
-            104.dp
-        }
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
-        ) {
-            AppThemeAdaptiveTabRow(
-                // Glass indicator fills the measured slot; native geometry keeps its defaults.
-                liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-                role = com.android.purebilibili.core.ui.components.AppTabRowRole.FILTER,
-                options = BangumiTimelineRange.entries.map { range ->
-                    AppSegmentOption(range, range.label)
-                },
-                selectedValue = state.range,
-                onSelectionChange = onRangeSelected,
-                minTabWidth = timelineRangeMinWidth,
-                scrollable = false,
-                miuixBackdrop = tabBackdrop,
-            )
-        }
+        AppText("追番时间表", style = MaterialTheme.typography.titleMedium)
         when {
             state.isLoading && state.days.isEmpty() -> BangumiTimelineSkeleton()
             state.error != null && state.days.isEmpty() -> InlineError(state.error, onRetry)
-            state.days.isEmpty() -> InlineNotice("当前范围暂无更新时间表")
+            selectedDay == null -> Unit
             else -> {
                 val timelineDayMinWidth = if (liquidGlassEnabled || uiStyle == AppUiStyle.MATERIAL3) {
                     AppChromeSizeTokens.MinimumTouchTarget
@@ -507,11 +565,11 @@ private fun TimelineSection(
                     // Glass indicator fills the measured slot; native geometry keeps its defaults.
                     liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
                     role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                    options = state.days.mapIndexed { index, item ->
-                        AppSegmentOption(index, resolveBangumiTimelineDayLabel(item))
+                    options = state.days.map { day ->
+                        AppSegmentOption(day.date, resolveBangumiTimelineDayLabel(day))
                     },
-                    selectedValue = selectedDay,
-                    onSelectionChange = { selectedDay = it },
+                    selectedValue = selectedDay.date,
+                    onSelectionChange = { selectedDate = it },
                     // Glass drags on the selected capsule choose a date; other slots remain scrollable.
                     dragSelectionEnabled = liquidGlassEnabled,
                     scrollable = true,
@@ -519,10 +577,13 @@ private fun TimelineSection(
                     miuixBackdrop = tabBackdrop,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                val motionEnabled = LocalComponentMotionEnabled.current
+                val dateOrder = state.days.map(TimelineDay::date)
                 AnimatedContent(
-                    targetState = selectedDay,
+                    targetState = selectedDay.date,
                     transitionSpec = {
-                        val direction = if (targetState >= initialState) 1 else -1
+                        if (!motionEnabled) return@AnimatedContent EnterTransition.None.togetherWith(ExitTransition.None)
+                        val direction = if (dateOrder.indexOf(targetState) >= dateOrder.indexOf(initialState)) 1 else -1
                         (
                             slideInHorizontally(animationSpec = tween(220)) { width ->
                                 direction * width / 4
@@ -536,21 +597,22 @@ private fun TimelineSection(
                     contentAlignment = Alignment.CenterStart,
                     label = "timelineDayContent",
                 ) { targetDay ->
-                    val day = state.days.getOrNull(targetDay) ?: state.days.first()
-                    if (day.episodes.isNullOrEmpty()) {
-                        InlineNotice("当天暂无更新")
-                    } else {
+                    val episodes = state.days.firstOrNull { it.date == targetDay }?.episodes.orEmpty()
+                    if (episodes.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             itemsIndexed(
-                                day.episodes.orEmpty(),
+                                episodes,
                                 key = { index, episode -> resolveTimelineEpisodeLazyKey(index, episode) },
                             ) { _, episode ->
                                 TimelineEpisodeCard(
                                     episode = episode,
                                     onClick = { onEpisodeClick(episode.seasonId, episode.episodeId) },
+                                    onLongClick = {
+                                        onPreviewCover(resolveTimelineEpisodeCover(episode, preferEpisodeCover = false), episode.title)
+                                    },
                                 )
                             }
                         }
@@ -563,28 +625,22 @@ private fun TimelineSection(
 
 @Composable
 private fun BangumiIndexContent(
-    channel: BangumiChannel,
-    category: BangumiIndexCategory,
     state: BangumiIndexState,
     gridState: LazyGridState,
-    onCategorySelected: (BangumiIndexCategory) -> Unit,
+    pageActive: Boolean,
     onFilterSelected: (BangumiIndexFilterGroupUi, BangumiIndexChoice) -> Unit,
     onToggleExpanded: () -> Unit,
     onRetryConditions: () -> Unit,
     onRetryResults: () -> Unit,
     onLoadMore: () -> Unit,
     onBangumiClick: (Long) -> Unit,
-    onSaveCover: (String, String) -> Unit,
+    onPreviewCover: (String, String) -> Unit,
     listBottomPadding: Dp,
     listTopPadding: Dp,
-    tabBackdrop: Backdrop?,
 ) {
-    val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    val scope = rememberCoroutineScope()
-    val categories = bangumiIndexCategoriesForChannel(channel)
     AdaptivePullToRefreshBox(
         isRefreshing = state.results.isRefreshing,
-        onRefresh = onRetryResults,
+        onRefresh = if (state.conditionError != null) onRetryConditions else onRetryResults,
         modifier = Modifier.fillMaxSize(),
     ) {
         LazyVerticalGrid(
@@ -594,47 +650,16 @@ private fun BangumiIndexContent(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            if (categories.size > 1) item(
-                span = { GridItemSpan(maxLineSpan) },
-                key = "index_categories",
-            ) {
-                val uiStyle = LocalAppUiStyle.current
-                // Native Miuix widths do not participate in glass label measurement.
-                val categoryMinWidth = if (
-                    com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled ||
-                    uiStyle == AppUiStyle.MATERIAL3
-                ) {
-                    AppChromeSizeTokens.MinimumTouchTarget
-                } else {
-                    108.dp
-                }
-                AppThemeAdaptiveTabRow(
-                    // Glass indicator fills the measured slot; native geometry keeps its defaults.
-                    liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-                    role = com.android.purebilibili.core.ui.components.AppTabRowRole.SECONDARY,
-                    options = categories.map { AppSegmentOption(it, it.label) },
-                    selectedValue = category,
-                    scrollable = true,
-                    minTabWidth = categoryMinWidth,
-                    miuixBackdrop = tabBackdrop,
-                    onSelectionChange = {
-                        if (it == category) {
-                            scope.launch { gridState.animateScrollToTop() }
-                        } else {
-                            onCategorySelected(it)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
             item(span = { GridItemSpan(maxLineSpan) }, key = "filters") {
                 when {
                     state.isConditionLoading -> BangumiFilterSkeleton()
                     state.conditionError != null -> InlineError(state.conditionError, onRetryConditions)
                     else -> IndexFilterPanel(
                         state = state,
-                        onFilterSelected = onFilterSelected,
+                        onFilterSelected = { group, choice ->
+                            gridState.requestScrollToItem(0)
+                            onFilterSelected(group, choice)
+                        },
                         onToggleExpanded = onToggleExpanded,
                     )
                 }
@@ -650,7 +675,7 @@ private fun BangumiIndexContent(
                 ) { InlineError(state.results.error, onRetryResults) }
                 !state.isConditionLoading && state.results.items.isEmpty() -> item(
                     span = { GridItemSpan(maxLineSpan) }, key = "index_empty",
-                ) { InlineNotice("没有找到符合条件的内容") }
+                ) { InlineError("没有找到符合条件的内容", onRetryResults) }
             }
             itemsIndexed(
                 state.results.items,
@@ -659,11 +684,13 @@ private fun BangumiIndexContent(
                 PosterGridCard(
                     item = item,
                     onClick = { onBangumiClick(item.seasonId) },
-                    onLongClick = { onSaveCover(item.cover, item.title) },
+                    onLongClick = { onPreviewCover(item.cover, item.title) },
                 )
-                if (index == state.results.items.lastIndex && state.results.hasMore) {
-                    LaunchedEffect(item.seasonId, state.results.page, pageWorkActive) {
-                        if (pageWorkActive) onLoadMore()
+                if (index == state.results.items.lastIndex && state.results.hasMore &&
+                    !state.results.isRefreshing && state.results.error == null
+                ) {
+                    LaunchedEffect(item.seasonId, state.results.page, pageActive) {
+                        if (pageActive) onLoadMore()
                     }
                 }
             }
@@ -689,9 +716,10 @@ private fun IndexFilterPanel(
         animationSpec = if (motionEnabled) spring(dampingRatio = 0.75f, stiffness = 450f) else snap(),
         label = "indexFilterExpandArrow",
     )
+    val collapsedCount = if (state.conditions.size > 5) state.conditions.size / 2 else state.conditions.size
     Column {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            state.conditions.take(5).forEach { group ->
+            state.conditions.take(collapsedCount).forEach { group ->
                 IndexFilterRow(group, state.selectedParams[group.field], onFilterSelected)
             }
         }
@@ -717,7 +745,7 @@ private fun IndexFilterPanel(
                     modifier = Modifier.padding(top = 6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    state.conditions.drop(5).forEach { group ->
+                    state.conditions.drop(collapsedCount).forEach { group ->
                         IndexFilterRow(group, state.selectedParams[group.field], onFilterSelected)
                     }
                 }
@@ -734,7 +762,7 @@ private fun IndexFilterPanel(
                     contentDescription = null,
                     modifier = Modifier.graphicsLayer { rotationZ = arrowRotation.value },
                 )
-                AppText(if (state.isExpanded) "收起" else "展开全部筛选")
+                AppText(if (state.isExpanded) "收起" else "展开")
             }
         }
     }
@@ -796,7 +824,6 @@ private fun BangumiFollowContent(
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onBangumiClick: (Long) -> Unit,
-    onPlayFollow: (Long) -> Unit,
     onToggleSelection: (Long) -> Unit,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
@@ -809,7 +836,11 @@ private fun BangumiFollowContent(
     showStatusTabs: Boolean,
 ) {
     val pageWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    val selectionMode = state.selectedIds.isNotEmpty()
+    val selectionMode = state.isSelecting
+    val followKeys = remember(state.content.items) {
+        state.content.items.map(::resolveMyFollowItemBusinessKey)
+    }
+    val scope = rememberCoroutineScope()
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().then(
@@ -824,7 +855,10 @@ private fun BangumiFollowContent(
                     options = BangumiFollowStatus.entries.map { AppSegmentOption(it, it.label) },
                     selectedValue = status,
                     enabled = !state.isMutating,
-                    onSelectionChange = onStatusSelected,
+                    onSelectionChange = {
+                        if (it == status) scope.launch { gridState.animateScrollToTop() }
+                        else onStatusSelected(it)
+                    },
                     dragSelectionEnabled = BangumiFollowStatus.entries.size > 1,
                     tapPressRefractionEnabled = true,
                     modifier = Modifier
@@ -881,7 +915,6 @@ private fun BangumiFollowContent(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            val followKeys = state.content.items.mapIndexed { index, item -> resolveMyFollowItemLazyKey(index, item) }
                             val renderFollow: @Composable (Int, Modifier) -> Unit = { index, cardModifier ->
                                 val item = state.content.items[index]
                                 FollowInfoCard(
@@ -897,14 +930,15 @@ private fun BangumiFollowContent(
                                         if (selectionMode) onToggleSelection(item.seasonId)
                                         else onBangumiClick(item.seasonId)
                                     },
-                                    onLongClick = { onToggleSelection(item.seasonId) },
-                                    onPlay = { onPlayFollow(item.seasonId) },
+                                    onLongClick = { if (!selectionMode) onToggleSelection(item.seasonId) },
                                     onMove = { onMoveSingle(item.seasonId, it) },
                                     onUnfollow = { onUnfollowSingle(item.seasonId) },
                                 )
-                                if (index == state.content.items.lastIndex && state.content.hasMore) {
-                                    LaunchedEffect(item.seasonId, state.content.page, pageWorkActive) {
-                                        if (pageWorkActive) onLoadMore()
+                                if (index == state.content.items.lastIndex && state.content.hasMore &&
+                                    !state.content.isRefreshing && state.content.error == null
+                                ) {
+                                    LaunchedEffect(item.seasonId, state.content.page, state.isMutating, pageWorkActive) {
+                                        if (pageWorkActive && !state.isMutating) onLoadMore()
                                     }
                                 }
                             }
@@ -977,7 +1011,8 @@ private fun FollowBatchBar(
                     onCheckedChange = { onSelectAll() },
                     enabled = !state.isMutating,
                 )
-                AppText("已选择 ${state.selectedIds.size} 项", modifier = Modifier.weight(1f))
+                AppTextButton(onClick = onSelectAll, enabled = !state.isMutating) { AppText("全选") }
+                AppText("已选 ${state.selectedIds.size} 项", modifier = Modifier.weight(1f))
                 AppTextButton(onClick = onClear, enabled = !state.isMutating) { AppText("取消") }
             }
             Row(
@@ -987,9 +1022,9 @@ private fun FollowBatchBar(
                 BangumiFollowStatus.entries.filter { it != currentStatus }.forEach { target ->
                     AppTextButton(
                         onClick = { onMove(target) },
-                        enabled = !state.isMutating,
+                        enabled = !state.isMutating && state.selectedIds.isNotEmpty(),
                         modifier = Modifier.heightIn(min = 48.dp),
-                    ) { AppText("移到${target.label}") }
+                    ) { AppText("标记为${target.label}") }
                 }
                 if (state.isMutating) AdaptiveLoadingIndicator(modifier = Modifier.size(32.dp))
             }
@@ -1005,7 +1040,7 @@ private fun BangumiSearchContent(
     onCategorySelected: (BangumiIndexCategory) -> Unit,
     onBangumiClick: (Long) -> Unit,
     onLoadMore: () -> Unit,
-    onSaveCover: (String, String) -> Unit,
+    onPreviewCover: (String, String) -> Unit,
     listBottomPadding: Dp,
     listTopPadding: Dp,
     tabBackdrop: Backdrop?,
@@ -1079,7 +1114,7 @@ private fun BangumiSearchContent(
                         SearchPosterCard(
                             item = item,
                             onClick = { onBangumiClick(item.seasonId.takeIf { it > 0 } ?: item.pgcSeasonId) },
-                            onLongClick = { onSaveCover(item.cover, plainSearchTitle(item)) },
+                            onLongClick = { onPreviewCover(item.cover, plainSearchTitle(item)) },
                         )
                         if (index == results.items.lastIndex && results.hasMore) {
                             LaunchedEffect(item.seasonId, results.page, pageWorkActive) {
@@ -1107,7 +1142,7 @@ private fun PosterGridCard(
     val transition = rememberBangumiCardTransition(item.seasonId, onClick = onClick)
     // Only the poster is rounded; keep the title block square for cleaner media rows.
     Column(
-        modifier = transition.modifier.combinedClickable(
+        modifier = transition.modifier.appCombinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = if (transition.enabled) null else LocalIndication.current,
             onClick = transition.onClick,
@@ -1146,7 +1181,7 @@ private fun SearchPosterCard(
 ) {
     val transition = rememberBangumiCardTransition(item.seasonId, onClick = onClick)
     Column(
-        modifier = transition.modifier.combinedClickable(
+        modifier = transition.modifier.appCombinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = if (transition.enabled) null else LocalIndication.current,
             onClick = transition.onClick,
@@ -1217,12 +1252,11 @@ private fun FollowPosterCard(
     item: FollowBangumiItem,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onPlay: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val transition = rememberBangumiCardTransition(item.seasonId, onClick = onClick)
     Column(
-        modifier = modifier.then(transition.modifier).combinedClickable(
+        modifier = modifier.then(transition.modifier).appCombinedClickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = if (transition.enabled) null else LocalIndication.current,
             onClick = transition.onClick,
@@ -1233,6 +1267,7 @@ private fun FollowPosterCard(
             cover = item.cover,
             title = item.title,
             badge = item.badge,
+            bottomBadge = if (item.isFinish == 0) item.renewalTime.orEmpty() else "",
         )
         AppText(
             item.title,
@@ -1250,26 +1285,27 @@ private fun FollowPosterCard(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (item.seasonId > 0L) {
-            AppTextButton(onClick = onPlay) {
-                AppText(if (item.progress.isNotBlank()) "继续观看" else "开始观看", maxLines = 1)
-            }
-        }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TimelineEpisodeCard(episode: TimelineEpisode, onClick: () -> Unit) {
+private fun TimelineEpisodeCard(
+    episode: TimelineEpisode,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val transition = rememberBangumiCardTransition(episode.seasonId, episode.episodeId, onClick)
     Column(
-        modifier = Modifier
+        modifier = modifier
             .then(transition.modifier)
             .width(104.dp)
-            .combinedClickable(
+            .appCombinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = if (transition.enabled) null else LocalIndication.current,
                 onClick = transition.onClick,
+                onLongClick = onLongClick,
             ),
     ) {
         PosterImage(
@@ -1310,7 +1346,6 @@ private fun FollowInfoCard(
     channel: BangumiChannel,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onPlay: () -> Unit,
     onMove: (BangumiFollowStatus) -> Unit,
     onUnfollow: () -> Unit,
 ) {
@@ -1328,7 +1363,7 @@ private fun FollowInfoCard(
             .heightIn(min = 150.dp)
             .then(transition.modifier)
             .then(cardSurface.modifier)
-            .combinedClickable(
+            .appCombinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = if (transition.enabled) null else LocalIndication.current,
                 onClick = if (selectionMode) onClick else transition.onClick,
@@ -1387,10 +1422,15 @@ private fun FollowInfoCard(
                                     expanded = menuExpanded,
                                     onDismissRequest = { menuExpanded = false },
                                 ) {
-                                    BangumiFollowStatus.entries.filter { it != currentStatus }.forEach { target ->
+                                    BangumiFollowStatus.entries.asReversed().forEach { target ->
                                         AppDropdownMenuItem(
-                                            text = { AppText("移到${target.label}") },
-                                            onClick = { menuExpanded = false; onMove(target) },
+                                            text = { AppText(target.label) },
+                                            selected = target == currentStatus,
+                                            enabled = target != currentStatus,
+                                            onClick = {
+                                                menuExpanded = false
+                                                onMove(target)
+                                            },
                                         )
                                     }
                                     AppDropdownMenuItem(
@@ -1401,8 +1441,12 @@ private fun FollowInfoCard(
                             }
                         }
                     }
-                    item.newEp?.indexShow?.takeIf { it.isNotBlank() }?.let {
-                        AppText(it, style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
+                    val updateLabel = listOfNotNull(
+                        item.newEp?.indexShow?.takeIf(String::isNotBlank),
+                        item.renewalTime?.takeIf { item.isFinish == 0 && it.isNotBlank() },
+                    ).joinToString("，")
+                    if (updateLabel.isNotEmpty()) {
+                        AppText(updateLabel, style = MaterialTheme.typography.bodySmall, color = AppContentColors.secondaryText())
                     }
                     item.progress.takeIf { it.isNotBlank() }?.let {
                         AppText(it, style = MaterialTheme.typography.bodySmall, color = AppContentColors.accent())
@@ -1415,11 +1459,6 @@ private fun FollowInfoCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                    }
-                    if (!selectionMode && item.seasonId > 0L) {
-                        AppTextButton(onClick = onPlay) {
-                            AppText(if (item.progress.isNotBlank()) "继续观看" else "开始观看", maxLines = 1)
-                        }
                     }
                 }
             }

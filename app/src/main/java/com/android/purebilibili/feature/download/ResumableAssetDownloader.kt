@@ -10,13 +10,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import java.io.File
 import java.io.FileOutputStream
+import java.io.EOFException
 import java.io.IOException
+import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
 
 internal data class HttpDownloadAssetRequest(
@@ -30,8 +33,11 @@ internal data class HttpDownloadAssetRequest(
 internal data class HttpDownloadAssetResult(
     val totalBytes: Long,
     val downloadedBytes: Long,
-    val segmentCount: Int
+    val segmentCount: Int,
+    val reusedCompletedFile: Boolean = false,
 )
+
+internal class DownloadRangeMismatchException(message: String) : IOException(message)
 
 internal class ResumableAssetDownloader(
     private val client: OkHttpClient
@@ -41,9 +47,22 @@ internal class ResumableAssetDownloader(
         ensureActive: () -> Unit,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit
     ): HttpDownloadAssetResult = withContext(Dispatchers.IO) {
-        ensureActive()
+        val transferContext = coroutineContext
+        val checkActive = {
+            transferContext.ensureActive()
+            ensureActive()
+        }
+        checkActive()
         request.outputFile.parentFile?.mkdirs()
         val probe = probe(request)
+        checkActive()
+        val parallel = shouldUseParallelChunks(
+            totalBytes = probe.totalBytes,
+            supportsRanges = probe.supportsRanges,
+            thresholdBytes = request.parallelThresholdBytes,
+            maxChunks = request.maxParallelChunks,
+        )
+        prepareResumeFiles(request, probe)
         if (probe.totalBytes > 0L && request.outputFile.exists()) {
             val outputBytes = request.outputFile.length()
             if (shouldReuseCompletedAsset(outputBytes, probe.totalBytes)) {
@@ -51,7 +70,8 @@ internal class ResumableAssetDownloader(
                 return@withContext HttpDownloadAssetResult(
                     totalBytes = probe.totalBytes,
                     downloadedBytes = probe.totalBytes,
-                    segmentCount = 1
+                    segmentCount = 1,
+                    reusedCompletedFile = true,
                 )
             }
             if (shouldDiscardCompletedAsset(outputBytes, probe.totalBytes)) {
@@ -59,17 +79,46 @@ internal class ResumableAssetDownloader(
             }
         }
 
-        if (shouldUseParallelChunks(
-                totalBytes = probe.totalBytes,
-                supportsRanges = probe.supportsRanges,
-                thresholdBytes = request.parallelThresholdBytes,
-                maxChunks = request.maxParallelChunks
-            )
-        ) {
-            downloadChunked(request, probe, ensureActive, onProgress)
-        } else {
-            downloadSingle(request, probe, ensureActive, onProgress)
+        val useChunks = parallel && !partFileFor(request.outputFile).exists()
+        val result = try {
+            if (useChunks) downloadChunked(request, probe, checkActive, onProgress)
+            else downloadSingle(request, probe, checkActive, onProgress)
+        } catch (error: DownloadRangeMismatchException) {
+            checkActive()
+            discardPartialFiles(request.outputFile)
+            downloadSingle(request, probe.copy(supportsRanges = false), checkActive, onProgress)
         }
+        discardPartialFiles(request.outputFile)
+        result
+    }
+
+    private fun prepareResumeFiles(request: HttpDownloadAssetRequest, probe: DownloadRangeProbe) {
+        // 没有强校验标识时只信任同一个完整地址，换签名也重新下载该流。
+        val resource = if (probe.strongETag != null) request.url.substringBefore('?') else request.url
+        val identity = "$resource\n${probe.strongETag.orEmpty()}\n${probe.totalBytes}\n${request.maxParallelChunks}"
+        val fingerprint = MessageDigest.getInstance("SHA-256").digest(identity.toByteArray(Charsets.UTF_8))
+        val sourceFile = downloadSourceFile(request.outputFile)
+        if (sourceFile.exists() && sourceFile.readBytes().contentEquals(fingerprint)) return
+        discardPartialFiles(request.outputFile)
+        deleteResumeFile(request.outputFile)
+        sourceFile.writeBytes(fingerprint)
+    }
+
+    fun discardTrackFiles(outputFile: File) {
+        discardPartialFiles(outputFile)
+        deleteResumeFile(downloadSourceFile(outputFile))
+        deleteResumeFile(outputFile)
+    }
+
+    private fun discardPartialFiles(outputFile: File) {
+        val part = partFileFor(outputFile)
+        deleteResumeFile(part)
+        part.parentFile?.listFiles { file -> file.name.startsWith("${part.name}.chunk") }
+            ?.forEach(::deleteResumeFile)
+    }
+
+    private fun deleteResumeFile(file: File) {
+        if (file.exists() && !file.delete()) throw IOException("无法清理下载文件：${file.name}")
     }
 
     private fun probe(request: HttpDownloadAssetRequest): DownloadRangeProbe {
@@ -78,7 +127,11 @@ internal class ResumableAssetDownloader(
             head.open(DataSpec.Builder().setUri(request.url).setHttpMethod(DataSpec.HTTP_METHOD_HEAD).build())
             val totalBytes = head.header("Content-Length")?.toLongOrNull() ?: 0L
             if (totalBytes > 0L) {
-                return DownloadRangeProbe(totalBytes, head.header("Accept-Ranges").equals("bytes", ignoreCase = true))
+                return DownloadRangeProbe(
+                    totalBytes,
+                    head.header("Accept-Ranges").equals("bytes", ignoreCase = true),
+                    head.strongETag(),
+                )
             }
         } catch (_: HttpDataSource.InvalidResponseCodeException) {
             // 部分源站不支持 HEAD，改用一个字节的 GET 探测。
@@ -88,10 +141,13 @@ internal class ResumableAssetDownloader(
         val probe = dataSource(request)
         try {
             probe.open(DataSpec.Builder().setUri(request.url).setLength(1).build())
-            parseDownloadContentRange(probe.header("Content-Range"))?.let { return it }
+            parseDownloadContentRange(probe.header("Content-Range"))?.let {
+                return it.copy(strongETag = probe.strongETag())
+            }
             return DownloadRangeProbe(
                 totalBytes = probe.header("Content-Length")?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L,
                 supportsRanges = false,
+                strongETag = probe.strongETag(),
             )
         } finally {
             probe.close()
@@ -112,13 +168,14 @@ internal class ResumableAssetDownloader(
             acceptsRanges = probe.supportsRanges
         )
         if (plan.alreadyComplete) {
+            ensureActive()
             promotePartFile(partFile, request.outputFile)
             onProgress(plan.totalBytes, plan.totalBytes)
-            return HttpDownloadAssetResult(plan.totalBytes, plan.totalBytes, 1)
+            return HttpDownloadAssetResult(plan.totalBytes, plan.totalBytes, 1, reusedCompletedFile = true)
         }
 
         if (!plan.append && partFile.exists()) {
-            partFile.delete()
+            deleteResumeFile(partFile)
         }
 
         val source = dataSource(request)
@@ -126,6 +183,14 @@ internal class ResumableAssetDownloader(
             // DataSpec 负责 Range 及源站忽略 Range 时的跳过，保留本地临时文件布局。
             val remainingBytes = source.open(DataSpec.Builder().setUri(request.url)
                 .setPosition(plan.rangeStartBytes).build())
+            source.requireMatchingETag(probe.strongETag)
+            ensureActive()
+            if (source.responseCode == 206 && probe.totalBytes > 0L &&
+                !isValidPartialContentResponse(
+                    source.responseCode, source.header("Content-Range"),
+                    plan.rangeStartBytes, probe.totalBytes - 1L, probe.totalBytes,
+                )
+            ) throw DownloadRangeMismatchException("续传响应与请求范围不一致")
             val totalBytes = probe.totalBytes.takeIf { it > 0L }
                 ?: (remainingBytes.takeIf { it != C.LENGTH_UNSET.toLong() }?.plus(plan.initialDownloadedBytes) ?: 0L)
             var downloadedBytes = plan.initialDownloadedBytes
@@ -142,8 +207,11 @@ internal class ResumableAssetDownloader(
                 }
             }
             if (totalBytes > 0L && downloadedBytes != totalBytes) {
-                throw IOException("下载长度不匹配: $downloadedBytes/$totalBytes")
+                throw if (downloadedBytes < totalBytes) EOFException("下载未完成：$downloadedBytes/$totalBytes")
+                else IOException("下载长度超过预期：$downloadedBytes/$totalBytes")
             }
+            if (downloadedBytes == 0L) throw EOFException("下载响应为空")
+            ensureActive()
             promotePartFile(partFile, request.outputFile)
             return HttpDownloadAssetResult(totalBytes, downloadedBytes, 1)
         } finally {
@@ -171,7 +239,11 @@ internal class ResumableAssetDownloader(
         ranges.map { range ->
             async(Dispatchers.IO) {
                 semaphore.withPermit {
-                    downloadChunk(request, partFile, range, probe.totalBytes, progressBytes, ensureActive, onProgress)
+                    val chunkContext = coroutineContext
+                    downloadChunk(request, partFile, range, probe, progressBytes, {
+                        chunkContext.ensureActive()
+                        ensureActive()
+                    }, onProgress)
                 }
             }
         }.awaitAll()
@@ -183,11 +255,17 @@ internal class ResumableAssetDownloader(
         FileOutputStream(partFile, false).use { output ->
             ranges.forEach { range ->
                 chunkFileFor(partFile, range.index).inputStream().use { input ->
-                    input.copyTo(output)
+                    val buffer = ByteArray(DEFAULT_DOWNLOAD_BUFFER_BYTES)
+                    while (true) {
+                        ensureActive()
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        output.write(buffer, 0, read)
+                    }
                 }
             }
         }
-        ranges.forEach { chunkFileFor(partFile, it.index).delete() }
+        ensureActive()
         promotePartFile(partFile, request.outputFile)
         onProgress(probe.totalBytes, probe.totalBytes)
         HttpDownloadAssetResult(
@@ -201,11 +279,12 @@ internal class ResumableAssetDownloader(
         request: HttpDownloadAssetRequest,
         partFile: File,
         range: DownloadChunkRange,
-        totalBytes: Long,
+        probe: DownloadRangeProbe,
         progressBytes: AtomicLong,
         ensureActive: () -> Unit,
         onProgress: (downloadedBytes: Long, totalBytes: Long) -> Unit
     ) {
+        val totalBytes = probe.totalBytes
         val chunkFile = chunkFileFor(partFile, range.index)
         val rawExistingBytes = chunkFile.takeIf(File::exists)?.length() ?: 0L
         val existingBytes = if (rawExistingBytes > range.sizeBytes) {
@@ -224,13 +303,16 @@ internal class ResumableAssetDownloader(
         try {
             source.open(DataSpec.Builder().setUri(request.url).setPosition(start)
                 .setLength(range.endBytesInclusive - start + 1L).build())
+            source.requireMatchingETag(probe.strongETag)
+            ensureActive()
             if (!isValidPartialContentResponse(
                     responseCode = source.responseCode,
                     contentRange = source.header("Content-Range"),
                     requestedStart = start,
                     requestedEnd = range.endBytesInclusive,
+                    expectedTotal = totalBytes,
                 )
-            ) throw IOException("分片响应不匹配: HTTP ${source.responseCode}")
+            ) throw DownloadRangeMismatchException("分片响应不匹配: HTTP ${source.responseCode}")
             FileOutputStream(chunkFile, existingBytes > 0L).use { output ->
                 val buffer = ByteArray(DEFAULT_DOWNLOAD_BUFFER_BYTES)
                 while (true) {
@@ -253,6 +335,17 @@ internal class ResumableAssetDownloader(
     private fun HttpDataSource.header(name: String): String? =
         responseHeaders.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value?.firstOrNull()
 
+    private fun HttpDataSource.strongETag(): String? = header("ETag")?.trim()?.takeIf {
+        it.startsWith('"') && it.endsWith('"')
+    }
+
+    private fun HttpDataSource.requireMatchingETag(expected: String?) {
+        val actual = strongETag()
+        if (expected != null && actual != null && expected != actual) {
+            throw DownloadRangeMismatchException("下载流已变更")
+        }
+    }
+
     private fun partFileFor(outputFile: File): File = File(outputFile.parentFile, "${outputFile.name}.part")
 
     private fun chunkFileFor(partFile: File, index: Int): File = File(partFile.parentFile, "${partFile.name}.chunk$index")
@@ -265,19 +358,19 @@ internal class ResumableAssetDownloader(
     private fun validateChunkFile(chunkFile: File, expectedBytes: Long) {
         val actualBytes = chunkFile.takeIf(File::exists)?.length() ?: 0L
         if (!isDownloadChunkComplete(actualBytes, expectedBytes)) {
-            throw IOException("分片下载未完成: ${chunkFile.name} $actualBytes/$expectedBytes")
+            throw EOFException("分片下载未完成: ${chunkFile.name} $actualBytes/$expectedBytes")
         }
     }
 
     private fun promotePartFile(partFile: File, outputFile: File) {
-        if (outputFile.exists()) outputFile.delete()
-        if (!partFile.renameTo(outputFile)) {
-            partFile.copyTo(outputFile, overwrite = true)
-            partFile.delete()
-        }
+        deleteResumeFile(outputFile)
+        if (!partFile.renameTo(outputFile)) throw IOException("无法提交下载文件：${outputFile.name}")
     }
 
     private companion object {
         private const val DEFAULT_DOWNLOAD_BUFFER_BYTES = 64 * 1024
     }
 }
+
+internal fun downloadSourceFile(outputFile: File): File =
+    File(outputFile.parentFile, "${outputFile.name}.source")

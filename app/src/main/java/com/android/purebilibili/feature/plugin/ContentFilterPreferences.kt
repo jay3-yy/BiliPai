@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.R
 import com.android.purebilibili.core.store.ContentFilterRules
 import com.android.purebilibili.core.store.ContentFilterScope
 import com.android.purebilibili.core.store.ContentFilterSnapshot
@@ -66,6 +68,94 @@ internal fun SharedContentFilterPreferences() {
             }
         }, enabled = video || comment || danmaku || text.isBlank()) { AppText("保存") } },
         dismissButton = { AppTextButton(onClick = { editing = false }) { AppText("取消") } },
+    )
+}
+
+@Composable
+internal fun AiReplyFilterPreference() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val rules by remember(context) { ContentFilterRules.observeSettings(context) }
+        .collectAsStateWithLifecycle<ContentFilterSnapshot?>(initialValue = null)
+    var editing by rememberSaveable { mutableStateOf(false) }
+    var hide by rememberSaveable { mutableStateOf(false) }
+    var allowedUids by rememberSaveable { mutableStateOf("") }
+    val allowedLines = remember(allowedUids) {
+        allowedUids.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+    }
+    val valid = allowedLines.all { (it.toLongOrNull() ?: 0L) > 0L }
+    val title = stringResource(R.string.ai_reply_filter_title)
+    val icon = rememberSettingsSemanticIcon(SettingsIconRole.AI_COMMENT_FILTER)
+
+    AppPreference(
+        title = title,
+        subtitle = stringResource(R.string.ai_reply_filter_description),
+        value = rules?.let {
+            stringResource(if (it.hideAiReplies) R.string.ai_reply_filter_on else R.string.ai_reply_filter_off)
+        },
+        icon = icon,
+        onClick = rules?.let { current -> {
+            hide = current.hideAiReplies
+            allowedUids = current.aiReplyAllowedMids.sorted().joinToString("\n")
+            editing = true
+        } },
+    )
+    if (editing) AppAlertDialog(
+        onDismissRequest = { editing = false },
+        title = { AppText(title) },
+        text = {
+            Column {
+                AppSwitchPreference(
+                    title = stringResource(R.string.ai_reply_filter_hide),
+                    checked = hide,
+                    onCheckedChange = { hide = it },
+                    icon = icon,
+                )
+                AppTextField(
+                    value = allowedUids,
+                    onValueChange = { allowedUids = it },
+                    singleLine = false,
+                    minLines = 2,
+                    maxLines = 4,
+                    label = stringResource(R.string.ai_reply_filter_allowlist),
+                    isError = !valid,
+                    supportingText = {
+                        AppText(stringResource(
+                            if (valid) R.string.ai_reply_filter_allowlist_hint else R.string.ai_reply_filter_invalid_uid
+                        ))
+                    },
+                )
+            }
+        },
+        confirmButton = {
+            AppTextButton(enabled = valid, onClick = {
+                scope.launch {
+                    ContentFilterRules.saveAiReplyFilter(context, hide, allowedLines.map(String::toLong).toSet())
+                    editing = false
+                }
+            }) { AppText(stringResource(R.string.ai_reply_filter_save)) }
+        },
+        dismissButton = {
+            AppTextButton(onClick = { editing = false }) { AppText(stringResource(android.R.string.cancel)) }
+        },
+    )
+}
+
+@Composable
+internal fun RepeatedReplyFilterPreference() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val rules by remember(context) { ContentFilterRules.observeSettings(context) }
+        .collectAsStateWithLifecycle<ContentFilterSnapshot?>(initialValue = null)
+    AppSwitchPreference(
+        title = stringResource(R.string.repeated_reply_filter_title),
+        subtitle = stringResource(R.string.repeated_reply_filter_description),
+        checked = rules?.filterRepeatedReplies == true,
+        enabled = rules != null,
+        onCheckedChange = { enabled ->
+            scope.launch { ContentFilterRules.saveRepeatedReplyFilter(context, enabled) }
+        },
+        icon = rememberSettingsSemanticIcon(SettingsIconRole.REPEATED_COMMENT_FILTER),
     )
 }
 

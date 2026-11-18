@@ -1,6 +1,7 @@
 // 文件路径: app/src/main/java/com/android/purebilibili/MainActivity.kt
 package com.android.purebilibili
 
+import com.android.purebilibili.core.ui.components.AppSnackbarHost
 import com.android.purebilibili.core.ui.components.AppText
 
 import androidx.compose.runtime.collectAsState
@@ -139,9 +140,8 @@ import com.android.purebilibili.core.util.calculateWindowSizeClass
 import com.android.purebilibili.core.util.rememberAppWindowAdaptiveInfo
 import com.android.purebilibili.core.util.resolveSafeAndroidPipRational
 import com.android.purebilibili.data.repository.VideoRepository
+import com.android.purebilibili.feature.agreement.UserAgreementStore
 import com.android.purebilibili.feature.cast.LocalProxyServer
-import com.android.purebilibili.feature.onboarding.USER_AGREEMENT_ACK_KEY
-import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
 import com.android.purebilibili.feature.settings.completeAppUpdateDownload
 import com.android.purebilibili.feature.settings.downloadAppUpdateApk
 import com.android.purebilibili.feature.settings.failAppUpdateDownload
@@ -206,8 +206,6 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 
 private const val TAG = "MainActivity"
-private const val PREFS_NAME = "app_welcome"
-private const val KEY_FIRST_LAUNCH = "first_launch_shown"
 private const val STATE_MAIN_ACTIVITY_INTENT = "main_activity_intent"
 internal const val EXTRA_PENDING_NAVIGATION_ROUTE = "pending_navigation_route"
 internal const val EXTRA_OPEN_ACTIVE_PLAYBACK = "open_active_playback"
@@ -710,13 +708,12 @@ internal fun shouldStartLocalProxyOnAppLaunch(): Boolean = false
 
 internal fun shouldEnableSplashFlyoutAnimation(
     sdkInt: Int,
-    hasCompletedOnboarding: Boolean,
-    hasAcceptedReleaseDisclaimer: Boolean,
+    agreementAccepted: Boolean,
     splashIconAnimationEnabled: Boolean
 ): Boolean {
     if (!splashIconAnimationEnabled) return false
     if (sdkInt < Build.VERSION_CODES.S) return false
-    return hasCompletedOnboarding && hasAcceptedReleaseDisclaimer
+    return agreementAccepted
 }
 
 internal fun shouldKeepSystemSplashForPreload(
@@ -1125,9 +1122,8 @@ class MainActivity : AppCompatActivity() {
         //  安装 SplashScreen
         val splashScreen = installSplashScreen()
         val runColdStartSplash = shouldRunColdStartSplash(savedInstanceStatePresent = savedInstanceState != null)
-        val welcomePrefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val splashIconVisible = SettingsManager.isSplashIconAnimationEnabledSync(this)
-        val userAgreementAcked = welcomePrefs.getBoolean(USER_AGREEMENT_ACK_KEY, false)
+        val userAgreementAcked = UserAgreementStore.isAccepted(this)
         val startupStyle = SettingsManager.getStartupAnimationStyleSync(this)
         val maidStartupEnabled = com.android.purebilibili.core.store.shouldShowMaidStartup(
             coldStart = runColdStartSplash,
@@ -1138,10 +1134,7 @@ class MainActivity : AppCompatActivity() {
         val splashFlyoutEnabled = startupStyle == com.android.purebilibili.core.store.StartupAnimationStyle.ICON_FLYOUT &&
             runColdStartSplash && shouldEnableSplashFlyoutAnimation(
             sdkInt = Build.VERSION.SDK_INT,
-            // Flyout only after mandatory user-agreement gate (covers both new and old users).
-            hasCompletedOnboarding = userAgreementAcked,
-            hasAcceptedReleaseDisclaimer = userAgreementAcked ||
-                welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false),
+            agreementAccepted = userAgreementAcked,
             splashIconAnimationEnabled = splashIconVisible
         )
         val keepSystemSplashForPreload = shouldKeepSystemSplashForPreload(
@@ -1151,7 +1144,7 @@ class MainActivity : AppCompatActivity() {
         splashFlyoutEnabledAtCreate = splashFlyoutEnabled
         Logger.d(
             TAG,
-            "🚀 Splash setup. coldStart=$runColdStartSplash, iconVisible=$splashIconVisible, keepForPreload=$keepSystemSplashForPreload, flyoutEnabled=$splashFlyoutEnabled, userAgreementAck=$userAgreementAcked, firstLaunchShown=${welcomePrefs.getBoolean(KEY_FIRST_LAUNCH, false)}, disclaimerAck=${welcomePrefs.getBoolean(RELEASE_DISCLAIMER_ACK_KEY, false)}, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
+            "🚀 Splash setup. coldStart=$runColdStartSplash, iconVisible=$splashIconVisible, keepForPreload=$keepSystemSplashForPreload, flyoutEnabled=$splashFlyoutEnabled, userAgreementAck=$userAgreementAcked, taskRoot=$isTaskRoot, savedState=${savedInstanceState != null}, intentFlags=0x${intent?.flags?.toString(16) ?: "0"}, launchIconResId=$splashFlyoutIconResId"
         )
         
         //  🚀 [启动优化] 立即开始预加载首页数据
@@ -1440,10 +1433,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             
-            //  首次启动检测已移交 AppNavigation 处理
-            // val prefs = remember { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
-            // var showWelcome by remember { mutableStateOf(!prefs.getBoolean(KEY_FIRST_LAUNCH, false)) }
-
             // 同步队列操作在后台也会读取保存范围，订阅跟随应用外壳的组合生命周期。
             LaunchedEffect(context) {
                 com.android.purebilibili.core.store.ContentDisplayPreferences.rememberPlayerAdjustments(context).collect { }
@@ -1734,6 +1723,7 @@ class MainActivity : AppCompatActivity() {
                             appThemeSettings.singleChoicePresentation,
                     ) {
                     com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityNoticeHost()
+                    com.android.purebilibili.feature.comment.visibility.PostedCommentVisibilityHost()
                     MaidLottieAnimationSettingsHost {
                     val isPipRenderingActive =
                         isInPipMode || miniPlayerManager.shouldKeepPlaybackForPipTransition()
@@ -2337,7 +2327,7 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
 
-                    SnackbarHost(
+                    AppSnackbarHost(
                         hostState = appScreenshotSnackbarHostState,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)

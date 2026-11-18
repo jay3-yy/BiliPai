@@ -111,7 +111,7 @@ internal data class VideoPlayerSectionActions(
     val onQualityChange: (Int) -> Unit,
     val onBack: () -> Unit,
     val onHomeClick: (() -> Unit)? = null,
-    val onLandscapeCommentClick: () -> Unit = {},
+    val onLandscapeCommentClick: (() -> Unit)? = null,
     val onDanmakuInputClick: () -> Unit = {},
     val onDismissDanmakuComposer: () -> Unit = {},
     val onSendDanmakuComposer: (
@@ -121,6 +121,7 @@ internal data class VideoPlayerSectionActions(
         fontSize: Int,
         attentionCommand: Boolean,
     ) -> Unit = { _, _, _, _, _ -> },
+    val onSendSameDanmaku: ((String, (Result<Unit>) -> Unit) -> Unit)? = null,
     val onDanmakuComposerDraftChange: (String, Boolean) -> Unit = { _, _ -> },
     val onDanmakuComposerSelectionChange: (Int, Int, Int) -> Unit = { _, _, _ -> },
     val onDoubleTapLike: () -> Unit = {},

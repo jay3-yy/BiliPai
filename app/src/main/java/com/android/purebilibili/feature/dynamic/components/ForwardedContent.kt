@@ -86,6 +86,7 @@ fun ForwardedContent(
     gifImageLoader: ImageLoader,
     defaultPreviewTextVisible: Boolean = true,
     collapseWebLinks: Boolean = false,
+    showWebLinkPreviews: Boolean = false,
     isDetail: Boolean = false,
 ) {
     val context = LocalContext.current
@@ -253,6 +254,7 @@ fun ForwardedContent(
                 var bodyTextOverflow by remember(origDynamicId, desc, isDetail) { mutableStateOf(false) }
                 RichTextContent(
                     collapseWebLinks = collapseWebLinks,
+                    showWebLinkPreviews = showWebLinkPreviews && !resolveDynamicMenuCapabilities(orig, null).isPrivate,
                     desc = desc,
                     onUserClick = onUserClick,
                     onTopicClick = onTopicClick,

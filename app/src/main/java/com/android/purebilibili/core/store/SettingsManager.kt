@@ -774,6 +774,16 @@ internal fun resolveHomeCardFrostedGlassEnabled(
     legacyCombinedValue: Boolean?,
 ): Boolean = storedValue ?: legacyCombinedValue ?: false
 
+enum class SettingsIconGlyphs {
+    PHOSPHOR,
+    ORIGINAL;
+
+    companion object {
+        fun fromStorageValue(value: String?): SettingsIconGlyphs =
+            if (value == ORIGINAL.name) ORIGINAL else PHOSPHOR
+    }
+}
+
 data class AppThemeSettings(
     val uiStyle: AppUiStyle = AppUiStyle.MATERIAL3,
     val themeMode: AppThemeMode = AppThemeMode.FOLLOW_SYSTEM,
@@ -804,6 +814,7 @@ data class AppThemeSettings(
     val appListItemStyle: AppListItemStyle = AppListItemStyle.AUTO,
     val singleChoicePresentation: AppSingleChoicePresentation =
         AppSingleChoicePresentation.WINDOW_POPUP,
+    val settingsIconGlyphs: SettingsIconGlyphs = SettingsIconGlyphs.PHOSPHOR,
 )
 
 data class ThemeModeRoleOverrides(
@@ -1528,6 +1539,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_APP_ICON = androidx.datastore.preferences.core.stringPreferencesKey("app_icon_key")
     private val KEY_APP_ICON_APPEARANCE = intPreferencesKey("app_icon_appearance")
     private val KEY_APP_ICON_STYLE = stringPreferencesKey("app_icon_style")
+    private val KEY_SETTINGS_ICON_GLYPHS = stringPreferencesKey("settings_icon_glyphs")
     private val KEY_APP_LINE_ICON_COLOR = intPreferencesKey("app_line_icon_color")
     private val KEY_APP_LIST_ITEM_STYLE = stringPreferencesKey("app_list_item_style")
     //  [新增] 底部栏样式 (true=悬浮, false=贴底)
@@ -1679,16 +1691,19 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     // 实时画面转场：SDR 用 TextureView 一镜到底；HDR 仍 SurfaceView（不降画质），morph 走封面
     private val KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED =
         booleanPreferencesKey("live_surface_card_transition_enabled")
-    // 直播间 SC 醒目留言浮层：默认开启；关闭弹幕时一律隐藏，此处提供独立开关
+    // 聊天区 SC 页面和全屏 SC 浮层分别设置，默认开启。
     private val KEY_LIVE_SUPER_CHAT_PANEL_ENABLED = booleanPreferencesKey("live_super_chat_panel_enabled")
     private val KEY_LIVE_SUPER_CHAT_FLASH_ENABLED =
         booleanPreferencesKey("live_super_chat_flash_enabled")
     private val KEY_LIVE_DANMAKU_ENABLED = booleanPreferencesKey("live_danmaku_enabled")
+    private val KEY_LIVE_AUTO_WEAR_MEDAL = booleanPreferencesKey("live_auto_wear_medal")
     private val KEY_LIVE_AUTO_MINI_PLAYER_ENABLED = booleanPreferencesKey("live_auto_mini_player_enabled")
     private val KEY_LIVE_SUPER_CHAT_PERSISTENT =
         booleanPreferencesKey("live_super_chat_persistent")
     private val KEY_LIVE_SUPER_CHAT_MAX_WIDTH_DP =
         intPreferencesKey("live_super_chat_max_width_dp")
+    private val KEY_LIVE_SUPER_CHAT_FLASH_OPACITY = floatPreferencesKey("live_super_chat_flash_opacity")
+    private val KEY_LIVE_SUPER_CHAT_FLASH_SCALE = floatPreferencesKey("live_super_chat_flash_scale")
     private val KEY_LIVE_PORTRAIT_EXPAND_ENABLED =
         booleanPreferencesKey("live_portrait_expand_enabled")
     private val KEY_LIVE_KEYBOARD_CONTROLS_ENABLED =
@@ -2486,6 +2501,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 preferences[KEY_SINGLE_CHOICE_PRESENTATION]
             ),
             appIconStyle = resolveAppIconStylePreference(preferences[KEY_APP_ICON_STYLE]),
+            settingsIconGlyphs = SettingsIconGlyphs.fromStorageValue(preferences[KEY_SETTINGS_ICON_GLYPHS]),
             appLineIconColor = preferences[KEY_APP_LINE_ICON_COLOR],
             appListItemStyle = resolveAppListItemStylePreference(preferences[KEY_APP_LIST_ITEM_STYLE])
         )
@@ -2515,6 +2531,10 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         return AppThemeSettings(
             appLanguage = getAppLanguageSync(context),
             darkThemeSchedule = getCachedDarkThemeSchedule(context),
+            settingsIconGlyphs = SettingsIconGlyphs.fromStorageValue(
+                context.getSharedPreferences("theme_cache", Context.MODE_PRIVATE)
+                    .getString(KEY_SETTINGS_ICON_GLYPHS.name, null),
+            ),
         )
     }
 
@@ -2602,6 +2622,14 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             context, "theme_cache",
             editSettings = { this[KEY_APP_ICON_STYLE] = style.name },
             editPrefs = { putString("app_icon_style", style.name) },
+        )
+    }
+
+    suspend fun setSettingsIconGlyphs(context: Context, glyphs: SettingsIconGlyphs) {
+        editSettingsAndCommitPrefs(
+            context, "theme_cache",
+            editSettings = { this[KEY_SETTINGS_ICON_GLYPHS] = glyphs.name },
+            editPrefs = { putString(KEY_SETTINGS_ICON_GLYPHS.name, glyphs.name) },
         )
     }
 
@@ -3582,7 +3610,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
-    /** 默认开启：SC 浮层跟随弹幕开关显示；关闭后即使弹幕开启也不再弹出 SC 卡片。 */
+    /** 聊天区的 SC 页面开关。 */
     fun getLiveSuperChatPanelEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data.map { it[KEY_LIVE_SUPER_CHAT_PANEL_ENABLED] ?: true }
 
@@ -3611,6 +3639,13 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    fun getLiveAutoWearMedal(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data.map { it[KEY_LIVE_AUTO_WEAR_MEDAL] ?: false }
+
+    suspend fun setLiveAutoWearMedal(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[KEY_LIVE_AUTO_WEAR_MEDAL] = enabled }
+    }
+
     suspend fun setLiveSuperChatFlashEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_LIVE_SUPER_CHAT_FLASH_ENABLED] = value
@@ -3637,6 +3672,20 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         context.settingsDataStore.edit { preferences ->
             preferences[KEY_LIVE_SUPER_CHAT_MAX_WIDTH_DP] = value.coerceIn(260, 640)
         }
+    }
+
+    fun getLiveSuperChatFlashOpacity(context: Context): Flow<Float> =
+        context.settingsDataStore.data.map { it[KEY_LIVE_SUPER_CHAT_FLASH_OPACITY] ?: 1f }
+
+    suspend fun setLiveSuperChatFlashOpacity(context: Context, opacity: Float) {
+        context.settingsDataStore.edit { it[KEY_LIVE_SUPER_CHAT_FLASH_OPACITY] = opacity.coerceIn(0.1f, 1f) }
+    }
+
+    fun getLiveSuperChatFlashScale(context: Context): Flow<Float> =
+        context.settingsDataStore.data.map { it[KEY_LIVE_SUPER_CHAT_FLASH_SCALE] ?: 1f }
+
+    suspend fun setLiveSuperChatFlashScale(context: Context, scale: Float) {
+        context.settingsDataStore.edit { it[KEY_LIVE_SUPER_CHAT_FLASH_SCALE] = scale.coerceIn(0.1f, 1f) }
     }
 
     fun getLivePortraitExpandEnabled(context: Context): Flow<Boolean> =
@@ -6381,7 +6430,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
-    /** 历史页「我的回顾」开关，默认关闭。 */
+    /** 历史页「阅读与观看统计」开关，默认关闭。 */
     fun getSubscriptionRecapEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_SUBSCRIPTION_RECAP_ENABLED] ?: false }
 
@@ -6753,7 +6802,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     fun getCommentFraudDetectionEnabled(context: Context): Flow<Boolean> =
         context.settingsDataStore.data
-            .map { preferences -> preferences[KEY_COMMENT_FRAUD_DETECTION_ENABLED] ?: true }
+            .map { preferences -> preferences[KEY_COMMENT_FRAUD_DETECTION_ENABLED] ?: false }
 
     suspend fun setCommentFraudDetectionEnabled(context: Context, enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
@@ -7028,6 +7077,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_PRIVACY_CONTENT_AUTHENTICATION_ENABLED =
         booleanPreferencesKey("privacy_content_authentication_enabled")
     
+    private val KEY_LINK_PREVIEW_ENABLED = booleanPreferencesKey("link_preview_enabled")
+
+    fun getLinkPreviewEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { it[KEY_LINK_PREVIEW_ENABLED] ?: true }
+        .distinctUntilChanged()
+
+    suspend fun setLinkPreviewEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { it[KEY_LINK_PREVIEW_ENABLED] = enabled }
+    }
+
     // --- 不记录播放历史和搜索历史 ---
     fun getPrivacyModeEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
         .map { preferences -> preferences[KEY_PRIVACY_MODE_ENABLED] ?: false }  // 默认关闭

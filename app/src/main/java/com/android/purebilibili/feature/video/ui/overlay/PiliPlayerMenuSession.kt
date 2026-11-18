@@ -30,6 +30,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.MergingMediaSource
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.player.PiliPlayerMenuStore
+import com.android.purebilibili.feature.plugin.CdnSpeedTest
+import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
+import com.android.purebilibili.feature.plugin.applyPlaybackCdnPreference
+import com.android.purebilibili.feature.plugin.buildPlaybackCdnCandidates
 import com.android.purebilibili.feature.video.ui.pager.buildPortraitCachedMediaSourceFactory
 import com.android.purebilibili.feature.web.WebViewScreen
 import kotlinx.coroutines.launch
@@ -153,9 +157,9 @@ fun rememberPiliPlayerMenuSession(
     }
     val currentAmplification by rememberUpdatedState(amplification)
     val storedCdnService by remember(context) { PiliPlayerMenuStore.cdnService(context) }
-        .collectAsStateWithLifecycle(initialValue = "BACKUP")
+        .collectAsStateWithLifecycle(initialValue = PiliCdnService.AUTO.name)
     val cdnService = remember(storedCdnService) {
-        PiliCdnService.entries.firstOrNull { it.name == storedCdnService } ?: PiliCdnService.BACKUP
+        PiliCdnService.entries.firstOrNull { it.name == storedCdnService } ?: PiliCdnService.AUTO
     }
     val cdnLabels = remember { PiliCdnService.entries.map { it.label } }
     val sourceKey = remember(videoUrl) { runCatching { java.net.URI(videoUrl).rawPath }.getOrNull().orEmpty() }
@@ -168,8 +172,17 @@ fun rememberPiliPlayerMenuSession(
     }
     fun applyCdn(service: PiliCdnService) {
         if (originalVideos.isEmpty() || currentIdentity.first != bvid || currentIdentity.second != cid) return
-        val video = selectPiliCdnUrl(originalVideos, service)
-        val audio = if (originalAudios.isEmpty()) "" else selectPiliCdnUrl(originalAudios, service)
+        val (video, audio) = if (service == PiliCdnService.AUTO) {
+            val selected = applyPlaybackCdnPreference(
+                candidates = buildPlaybackCdnCandidates(originalVideos, originalAudios),
+                preference = PlaybackCdnPreference.AUTO,
+                measuredPreference = CdnSpeedTest.recommendedPreference(),
+            ).first()
+            selected.videoUrl to (selected.audioUrl ?: originalAudios.firstOrNull().orEmpty())
+        } else {
+            selectPiliCdnUrl(originalVideos, service) to
+                if (originalAudios.isEmpty()) "" else selectPiliCdnUrl(originalAudios, service)
+        }
         if (video == videoUrl && audio == audioUrl) return
         val replacement = actions.onReplacePlaybackSources
         if (replacement != null) replacement(bvid, cid, video, audio)
@@ -267,8 +280,12 @@ fun rememberPiliPlayerMenuSession(
             text = {
                 Column {
                     Text(title)
-                    OutlinedTextField(editedVideo, { editedVideo = it }, label = { Text("VIDEO URL") })
-                    OutlinedTextField(editedAudio, { editedAudio = it }, label = { Text("AUDIO URL（可留空）") })
+                    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                        OutlinedTextField(editedVideo, { editedVideo = it }, label = { Text("VIDEO URL") })
+                    }
+                    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                        OutlinedTextField(editedAudio, { editedAudio = it }, label = { Text("AUDIO URL（可留空）") })
+                    }
                 }
             },
             confirmButton = {

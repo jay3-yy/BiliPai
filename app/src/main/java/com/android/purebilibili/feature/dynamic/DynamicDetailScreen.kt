@@ -443,9 +443,9 @@ fun DynamicDetailScreen(
                                         onShareToMessageClick?.invoke(state.item) ?: run { pendingMessageShare = state.item }
                                     },
                                     onCheckDynamicClick = {
-                                        interactionViewModel.checkDynamic(state.item.id_str) { _, msg ->
-                                            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                        }
+                                        interactionViewModel.checkDynamic(
+                                            state.item.id_str, state.item.modules.module_dynamic?.desc?.text,
+                                        )
                                     },
                                     onReserveClick = interactionViewModel::toggleDynamicReserve,
                                     onManageAction = { action ->

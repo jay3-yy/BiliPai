@@ -115,6 +115,7 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 - [Compose Rich Editor](https://github.com/MohamedRejeb/Compose-Rich-Editor) — 富文本编辑
 - [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine) — 弹幕渲染引擎
 - [BiliBili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) — B 站 API 文档
+- [大肥鱼消除计划](https://github.com/liyupi/dafeiyu-cleaner) — 评论区 AI 挂机账号识别规则
 - [BiliBiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) — 空降助手数据与 API
 - [Miuix](https://github.com/compose-miuix-ui/miuix) — 界面组件库
 - [Haze](https://github.com/chrisbanes/haze) — 毛玻璃效果

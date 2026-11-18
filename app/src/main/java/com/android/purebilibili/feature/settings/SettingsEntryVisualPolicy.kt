@@ -7,6 +7,7 @@ import com.android.purebilibili.core.ui.AppContentColors
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.android.purebilibili.R
+import com.android.purebilibili.core.store.SettingsIconGlyphs
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.iOSBlue
@@ -95,15 +96,16 @@ internal fun rememberSettingsEntryVisual(
     val policy = rememberAppSemanticVisualPolicy()
     val neutralColor = AppContentColors.secondaryText()
     val colorful = LocalAppUiStyle.current == AppUiStyle.MIUIX
-    val resolved = remember(target, policy, neutralColor, colorful) {
-        resolveSettingsEntryVisual(target, policy, neutralColor, colorful)
+    val glyphs = currentSettingsIconGlyphs()
+    val resolved = remember(target, policy, neutralColor, colorful, glyphs) {
+        resolveSettingsEntryVisual(target, policy, neutralColor, colorful, glyphs)
     }
     // Material 3's native ListItem renders ImageVector leading content more
     // consistently than a VectorDrawable painter (whose XML tint can be
     // overridden by the platform theme). Keep the resource for legacy skins,
     // but also expose the vector form so MD3 rows never lose their glyph.
     return if (resolved.icon == null && resolved.iconResId != null) {
-        resolved.copy(icon = rememberMaterialSymbol(resolved.iconResId))
+        resolved.copy(icon = rememberSettingsVector(resolved.iconResId))
     } else {
         resolved
     }
@@ -123,6 +125,7 @@ internal fun resolveSettingsEntryVisual(
     ),
     neutralColor: Color = Color.Unspecified,
     colorful: Boolean = false,
+    glyphs: SettingsIconGlyphs = SettingsIconGlyphs.PHOSPHOR,
 ): SettingsEntryVisual {
     val iconTint = if (colorful) resolveIosSettingsEntryTint(target) else neutralColor
     return when (target) {
@@ -137,7 +140,7 @@ internal fun resolveSettingsEntryVisual(
         else -> {
             val role = resolveSettingsSearchTargetIconRole(target)
             SettingsEntryVisual(
-                iconResId = resolveSettingsMaterialSymbolResource(role),
+                iconResId = resolveSettingsIconResource(role, glyphs),
                 iconTint = iconTint,
                 iconSizeDp = resolveSettingsSemanticIconSizeDp(role, policy.effectiveIconFamily),
             )

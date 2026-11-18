@@ -44,18 +44,16 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
+import com.android.purebilibili.core.ui.AppInteractionColors
+import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppExactTouchTargets
 import com.android.purebilibili.core.ui.components.resolveAppTabSlotGeometry
 import com.android.purebilibili.core.ui.components.resolveElasticTabIndicatorBounds
 
 /**
- * PiliPlus 风格的 tonal 胶囊 Tab 行(MD3 非玻璃次级筛选行专用)。
- *
- * 选中项衬一块 secondaryContainer 圆角胶囊(20dp 圆角),文字切换为 onSecondaryContainer,
- * 未选中使用可读的次要文字色;行内没有分隔线与默认水波纹。动画与 AppElasticTabIndicator 共用同一套
- * PiliPlus 缓动插值:[indicatorPositionProvider](Pager 连续驱动)优先,否则按选中索引做
- * 位置动画。
+ * 原生 MD3 胶囊标签。默认选中态与原生底栏共用主色配对，未选中项使用次要文字色。
+ * [indicatorPositionProvider] 优先跟随 Pager，其他入口按选中索引移动指示器。
  */
 @Composable
 fun <T> AppTonalPillTabRow(
@@ -78,7 +76,10 @@ fun <T> AppTonalPillTabRow(
 ) {
     if (options.isEmpty()) return
     val selectedIndex = options.indexOfFirst { it.value == selectedValue }.coerceAtLeast(0)
-    val colorScheme = MaterialTheme.colorScheme
+    val scheme = MaterialTheme.colorScheme
+    val selection = if (!LocalAppThemeConfig.current.liquidGlassEnabled) {
+        AppInteractionColors.rememberMaterialNavigationSelection()
+    } else null
     val density = LocalDensity.current
     val resolvedFontSize = if (labelFontSize.isSpecified) {
         labelFontSize
@@ -130,7 +131,7 @@ fun <T> AppTonalPillTabRow(
         return bounds
     }
 
-    val pillColor = selectedContainerColor ?: colorScheme.secondaryContainer
+    val pillColor = selectedContainerColor ?: selection?.backgroundColor ?: scheme.secondaryContainer
     val pillShape = RoundedCornerShape(resolveTonalPillTabCornerRadius())
     val motionEnabled = com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
     AppExactTouchTargets {
@@ -186,7 +187,7 @@ fun <T> AppTonalPillTabRow(
                             selected = index == selectedIndex,
                             enabled = enabled,
                             labelColor = if (index == selectedIndex) {
-                                selectedContentColor ?: colorScheme.onSecondaryContainer
+                                selectedContentColor ?: selection?.contentColor ?: scheme.onSecondaryContainer
                             } else unselectedContentColor ?: com.android.purebilibili.core.ui.AppContentColors.secondaryText(),
                             textStyle = textStyle,
                             onClick = { onSelectionChange(option.value) },

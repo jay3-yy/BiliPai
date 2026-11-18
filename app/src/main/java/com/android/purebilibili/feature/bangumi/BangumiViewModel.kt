@@ -72,7 +72,7 @@ sealed class MyFollowState {
     data class Success(
         val items: List<FollowBangumiItem>,
         val hasMore: Boolean = true,
-        val total: Int = 0
+        val total: Int? = null
     ) : MyFollowState()
     data class Error(val message: String) : MyFollowState()
 }
@@ -656,7 +656,7 @@ class BangumiViewModel : ViewModel() {
                             myFollowStats = statsForType(it.myFollowStats, targetType, data.total),
                             myFollowState = MyFollowState.Success(
                                 items = data.list ?: emptyList(),
-                                hasMore = (data.list?.size ?: 0) >= data.ps,
+                                hasMore = data.hasNextPage(data.pn),
                                 total = data.total
                             )
                         )
@@ -699,7 +699,7 @@ class BangumiViewModel : ViewModel() {
                             myFollowStats = statsForType(it.myFollowStats, targetType, data.total),
                             myFollowState = MyFollowState.Success(
                                 items = currentState.items + (data.list ?: emptyList()),
-                                hasMore = (data.list?.size ?: 0) >= data.ps,
+                                hasMore = data.hasNextPage(data.pn),
                                 total = data.total
                             )
                         )
@@ -729,13 +729,13 @@ class BangumiViewModel : ViewModel() {
         }
     }
 
-    private fun updateMyFollowStatsForType(type: Int, total: Int) {
+    private fun updateMyFollowStatsForType(type: Int, total: Int?) {
         loadedFollowStatsTypes.add(type)
         _uiState.update { it.copy(myFollowStats = statsForType(it.myFollowStats, type, total)) }
     }
 
-    private fun statsForType(current: MyFollowStats, type: Int, total: Int): MyFollowStats {
-        val normalized = total.coerceAtLeast(0)
+    private fun statsForType(current: MyFollowStats, type: Int, total: Int?): MyFollowStats {
+        val normalized = total?.coerceAtLeast(0) ?: return current
         return if (type == MY_FOLLOW_TYPE_BANGUMI) {
             buildMyFollowStats(
                 bangumiTotal = normalized,

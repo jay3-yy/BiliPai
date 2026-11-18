@@ -35,7 +35,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.R
-import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.ui.adaptiveSquircleBackground
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppPreference
@@ -48,6 +47,7 @@ import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIco
 import com.android.purebilibili.core.ui.components.rememberAdaptivePreferenceIconContentColor
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.LocalGlobalWallpaperBackdropVisible
+import com.android.purebilibili.core.ui.rememberAppSettingsIcon
 import com.android.purebilibili.core.ui.wallpaper.LocalGlobalWallpaperBackdropSource
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -159,7 +159,7 @@ internal fun SettingsSearchEmptyState(
             contentAlignment = Alignment.Center,
         ) {
             AppIcon(
-                imageVector = rememberAppSettingsIcon(),
+                imageVector = rememberSettingsVector(R.drawable.ph_gear_24) { rememberAppSettingsIcon() },
                 contentDescription = null,
                 tint = iconContentColor,
                 modifier = Modifier.size(28.dp),
@@ -203,8 +203,12 @@ internal fun SettingsSearchResultRow(
     }
     val context = LocalContext.current
     val valueFlow = remember(item, context) { item?.observeValue?.invoke(context) }
-    val seedValue = item?.readState?.invoke(settingsState)
-        ?: playbackSettingStateValue(result.settingId, settingsState)
+    val seedValue = if (result.settingId == SETTINGS_ICON_GLYPHS_SETTING_ID) {
+        stringResource(currentSettingsIconGlyphs().labelResId)
+    } else {
+        item?.readState?.invoke(settingsState)
+            ?: playbackSettingStateValue(result.settingId, settingsState)
+    }
     val currentValue = if (valueFlow != null) {
         val value by valueFlow.collectAsStateWithLifecycle(initialValue = seedValue)
         value

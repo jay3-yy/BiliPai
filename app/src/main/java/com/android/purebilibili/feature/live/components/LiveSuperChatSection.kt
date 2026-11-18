@@ -6,7 +6,8 @@ import com.android.purebilibili.feature.live.resolveLiveMessageMedal
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
+import com.android.purebilibili.core.ui.common.AppSelectedTextAction
+import com.android.purebilibili.core.ui.common.AppSelectionContainer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Spacer
@@ -46,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +65,9 @@ import com.android.purebilibili.feature.live.rememberLiveChromePalette
 import com.android.purebilibili.feature.live.resolveLiveSuperChatColor
 import com.android.purebilibili.feature.live.remainingLiveSuperChatSeconds
 import kotlinx.coroutines.delay
+
+internal val LocalLiveSuperChatSelectionActions =
+    staticCompositionLocalOf<(String) -> List<AppSelectedTextAction>> { { emptyList() } }
 
 @Composable
 fun LiveSuperChatSection(
@@ -117,6 +122,7 @@ internal fun LiveSuperChatCard(
     persistent: Boolean = false,
     onMenuVisibilityChange: (Boolean) -> Unit = {},
     onCountdownPauseChange: (Boolean) -> Unit = {},
+    interactive: Boolean = true,
 ) {
     val palette = rememberLiveChromePalette()
     val scope = rememberCoroutineScope()
@@ -184,8 +190,10 @@ internal fun LiveSuperChatCard(
               )
               Row(
                   modifier = Modifier.fillMaxWidth()
-                      .onSecondaryClick { menuExpanded = true }
-                      .clickable(onClickLabel = "醒目留言操作") { menuExpanded = true }
+                      .then(if (interactive) {
+                          Modifier.onSecondaryClick { menuExpanded = true }
+                              .clickable(onClickLabel = "醒目留言操作") { menuExpanded = true }
+                      } else Modifier)
                       .padding(8.dp),
                   verticalAlignment = Alignment.CenterVertically,
                   horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -213,9 +221,12 @@ internal fun LiveSuperChatCard(
                   if (!persistent) AppText(remainingSec.toString(), color = Color.Gray, fontSize = 14.sp)
               }
               }
-              SelectionContainer {
+              val message: @Composable () -> Unit = {
                   AppText(item.text, color = messageColor, modifier = Modifier.fillMaxWidth().padding(8.dp))
               }
+              if (interactive) {
+                  AppSelectionContainer(additionalActions = LocalLiveSuperChatSelectionActions.current, content = message)
+              } else message()
           }
       }
       AppDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {

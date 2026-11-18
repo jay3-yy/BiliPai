@@ -45,12 +45,10 @@ internal fun formatLiveSuperChatCountdown(remainingSec: Int): String {
     }
 }
 
-/**
- * SC 实时浮层显示策略：跟随弹幕开关，同时受独立设置项控制。
- * 关闭弹幕后不再弹出 SC 卡片，避免遮挡全屏画面。
- */
+/** 横屏留言条独立显示，竖屏实时弹窗跟随普通弹幕开关。 */
 internal fun shouldShowLiveSuperChatFlash(
     showMediaOverlays: Boolean,
+    isLandscape: Boolean,
     isDanmakuEnabled: Boolean,
     flashEnabled: Boolean,
-): Boolean = showMediaOverlays && isDanmakuEnabled && flashEnabled
+): Boolean = showMediaOverlays && flashEnabled && (isLandscape || isDanmakuEnabled)

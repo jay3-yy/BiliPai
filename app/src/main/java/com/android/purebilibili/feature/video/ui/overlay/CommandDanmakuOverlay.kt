@@ -47,6 +47,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,6 +55,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -128,21 +130,25 @@ internal fun CommandDanmakuOverlay(
     if (!visible || items.isEmpty()) return
     val placementHeightPx = (viewport.heightPx - bottomInsetPx.coerceAtLeast(0)).coerceAtLeast(0)
     if (placementHeightPx == 0) return
-    val currentPosition by produceState(
-        initialValue = player.currentPosition, key1 = player,
-    ) {
-        observeVideoPlayerProgress(
-            player = player,
-            videoDuration = 0L,
-            pollingIntervalMs = 80L,
-        ) { value = it.current }
+    val position = key(player, state) {
+        produceState(initialValue = player.currentPosition) {
+            observeVideoPlayerProgress(
+                player = player,
+                videoDuration = 0L,
+                pollingIntervalMs = 80L,
+            ) { value = it.current }
+        }
+    }
+    // 卡片列表只在进入、离开时间窗或关闭卡片时变化。
+    val activeItems = remember(items, state, position) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            val positionMs = position.value
+            items.filter { it.isActiveAt(positionMs) && !state.isDismissed(it.id) }
+        }
     }
     Box(modifier = modifier.fillMaxSize()) {
-        val active = items.filter {
-            !state.isDismissed(it.id) && it.isActiveAt(currentPosition)
-        }
-        active.forEach { item ->
-            key(item.id) {
+        activeItems.value.forEach { item ->
+            key(state, item.id) {
                 CommandDanmakuCard(
                     item = item,
                     viewport = viewport,

@@ -97,6 +97,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.feature.home.components.LiquidGlassTuning
@@ -142,6 +143,7 @@ internal fun AudioNowPlayingBar(
     liquidGlassTuning: LiquidGlassTuning = LocalLiquidGlassRenderConfig.current.tuning,
     liftAboveBottomBar: Boolean = true,
     consumeNavigationBarsPadding: Boolean = true,
+    bottomSpacing: Dp? = null,
     dockHosted: Boolean = false,
     dockMergeProgress: () -> Float = { 0f },
     iconOnlyProgress: () -> Float = { 0f },
@@ -400,6 +402,8 @@ internal fun AudioNowPlayingBar(
                     bottom = when {
                         dockHosted -> 0.dp
                         liftAboveBottomBar -> 72.dp
+                        // 独立入口显式统一各材质间距；首页保留原有宿主布局和默认值。
+                        bottomSpacing != null -> bottomSpacing
                         !glassActive && chrome.uiStyle == com.android.purebilibili.core.theme.AppUiStyle.MATERIAL3 -> 16.dp
                         else -> 8.dp
                     }

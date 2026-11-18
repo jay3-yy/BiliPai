@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import com.android.purebilibili.core.ui.rememberAppShareIcon
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.R
-import com.android.purebilibili.core.ui.rememberAppShareIcon
 import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.adaptiveSquircleBackground
@@ -352,7 +352,7 @@ private fun SettingsRootCategoryRow(
             )
         }
         AppIcon(
-            imageVector = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+            imageVector = rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
             contentDescription = null,
             tint = AppContentColors.secondaryText().copy(alpha = 0.55f),
             modifier = Modifier.size(14.dp),
@@ -886,7 +886,7 @@ private fun SettingsAboutCategoryContent(
     val agreement: @Composable () -> Unit = {
         var showUserAgreement by remember { mutableStateOf(false) }
         SettingClickableItem(
-            icon = rememberMaterialSymbol(R.drawable.ms_gavel_24),
+            icon = rememberSettingsVector(R.drawable.ph_scales_24, R.drawable.ms_gavel_24),
             title = "用户协议与隐私政策",
             value = "查看全文",
             onClick = { showUserAgreement = true },
@@ -980,7 +980,7 @@ fun ReleaseChannelPinnedCard(
     onDisclaimerClick: () -> Unit
 ) {
     val disclaimerTint = rememberAdaptivePreferenceIconTint(AppContentColors.accent())
-    val releaseChannelIcon = rememberAppShareIcon()
+    val releaseChannelIcon = rememberSettingsVector(R.drawable.ph_share_network_24) { rememberAppShareIcon() }
     AppCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -1356,6 +1356,9 @@ fun PrivacySection(
     val searchHintEnabled by remember(context) {
         com.android.purebilibili.core.store.SearchHintSettingsStore.isEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = true)
+    val linkPreviewEnabled by remember(context) {
+        SettingsManager.getLinkPreviewEnabled(context)
+    }.collectAsStateWithLifecycle(initialValue = true)
     val personalRecapEnabled by remember(context) {
         SettingsManager.getSubscriptionRecapEnabled(context)
     }.collectAsStateWithLifecycle(initialValue = false)
@@ -1425,6 +1428,19 @@ fun PrivacySection(
             )
         }
         SettingsAdaptiveDivider()
+        SettingsItemAnchor("privacy.link_preview_enabled") {
+            SettingSwitchItem(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.OPEN_LINKS),
+                title = settingItemTitle("privacy.link_preview_enabled"),
+                subtitle = settingSearchDescription("privacy.link_preview_enabled"),
+                checked = linkPreviewEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setLinkPreviewEnabled(context, enabled) }
+                },
+                iconTint = siblingTints[0],
+            )
+        }
+        SettingsAdaptiveDivider()
         SettingsItemAnchor("privacy.privacy_mode_enabled") {
             SettingSwitchItem(
                 icon = historyIcon,
@@ -1438,7 +1454,7 @@ fun PrivacySection(
         SettingsAdaptiveDivider()
         SettingSwitchItem(
             icon = personalRecapIcon,
-            title = "我的回顾",
+            title = stringResource(R.string.history_activity_stats),
             subtitle = "在历史页显示阅读与观看统计、趋势图和最近爱看的 UP 主",
             checked = personalRecapEnabled,
             onCheckedChange = { enabled ->
@@ -1494,7 +1510,7 @@ fun PrivacySection(
         )
         SettingsAdaptiveDivider()
         SettingClickableItem(
-            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_shield_24),
+            icon = rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
             title = "评论检查记录",
             value = "查看已发评论及其显示状态",
             onClick = onCommentFraudHistoryClick,
@@ -1672,7 +1688,7 @@ private fun DiagnosticsSection(
         SettingsAdaptiveDivider()
         SettingsItemAnchor("diagnostics.enhanced_diagnostic_logging_enabled") {
             SettingSwitchItem(
-                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_pest_control_24),
+                icon = rememberSettingsVector(R.drawable.ph_bug_beetle_24, R.drawable.ms_pest_control_24),
                 title = settingItemTitle("diagnostics.enhanced_diagnostic_logging_enabled"),
                 subtitle = if (enhancedDiagnosticLoggingEnabled) {
                     "记录详细运行信息；关闭后清除，基础错误日志保留"
@@ -1689,7 +1705,7 @@ private fun DiagnosticsSection(
         }
         SettingsAdaptiveDivider()
         SettingSwitchItem(
-            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_lan_24),
+            icon = rememberSettingsVector(R.drawable.ph_tree_structure_24, R.drawable.ms_lan_24),
             title = "网络代理",
             subtitle = formatAppHttpProxySummary(proxySettings) +
                 "（作用于应用内网络请求；视频播放始终直连）",
@@ -1705,7 +1721,7 @@ private fun DiagnosticsSection(
         )
         SettingsAdaptiveDivider()
         SettingClickableItem(
-            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_hub_24),
+            icon = rememberSettingsVector(R.drawable.ph_graph_24, R.drawable.ms_hub_24),
             title = "代理地址",
             value = formatAppHttpProxyEndpoint(proxySettings),
             subtitle = "填写“主机:端口”，例如 127.0.0.1:7890",

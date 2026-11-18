@@ -3,7 +3,6 @@ package com.android.purebilibili.feature.live.components
 import com.android.purebilibili.core.util.animateScrollToTop
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
-import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,9 +12,10 @@ import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,24 +28,19 @@ import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.feature.live.resolveLiveSheetVisualSpec
 import com.android.purebilibili.feature.live.AnchorInfo
 import com.android.purebilibili.feature.live.RoomInfo
-import com.android.purebilibili.feature.live.formatLiveDuration
-import com.android.purebilibili.feature.live.formatLiveViewerCount
 import com.android.purebilibili.data.model.response.LiveContributionRankItem
 import com.android.purebilibili.data.repository.LiveContributionRankType
 import com.android.purebilibili.data.repository.LiveRepository
@@ -85,7 +80,12 @@ fun LiveContributionRankSheet(
                 isScrollInProgressProvider = { pager.isScrollInProgress },
                 modifier = Modifier.fillMaxWidth(),
             )
-            com.android.purebilibili.core.ui.components.AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+            com.android.purebilibili.core.ui.components.AppHorizontalPager(
+                state = pager,
+                userScrollEnabled = false,
+                modifier = Modifier.weight(1f)
+                    .verticalPriorityHorizontalPagerSwipe(pager),
+            ) { page ->
                 LiveRankPage(roomInfo.roomId, anchorInfo.uid, rankTypes[page], pageStates.getValue(rankTypes[page]), listStates[page], onUserClick)
             }
         }
@@ -173,18 +173,23 @@ private fun RankItemRow(
                 horizontal = AppSpacingTokens.Large,
                 vertical = AppSpacingTokens.Small
             ),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             modifier = Modifier.weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium)
+            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             AppText(
                 text = item.rank.takeIf { it > 0 }?.toString() ?: "-",
                 color = AppSurfaceTokens.primary(),
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(min = 24.dp),
             )
+            LiveViewerAvatar(item.face, Modifier.size(34.dp))
             Column(modifier = Modifier.weight(1f)) {
                 AppText(
                     text = item.name.ifBlank { "用户" },

@@ -20,6 +20,7 @@ import com.android.purebilibili.core.ui.components.AppText
 
 import android.content.res.Configuration
 import androidx.compose.foundation.background
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
@@ -498,6 +499,7 @@ internal fun TabletVideoLayout(
                                     onHomeClick = onHomeClick,
                                     menuActions = playbackActions.menuActions,
                                     onQuickFavorite = { engagementActions.onFavoriteAction(true) },
+                                    onSendSameDanmaku = playbackActions.sendSameDanmaku,
                                     onDoubleTapLike = engagementActions.toggleLike,
                                     onToggleFollow = engagementActions.toggleFollow,
                                     onFollow = engagementActions.followOwner,
@@ -1130,15 +1132,11 @@ internal fun TabletSecondaryContent(
 
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = shouldEnableVideoContentHorizontalPagerSwipe(
-                        currentPage = pagerState.currentPage,
-                        commentPageIndex = resolveTabletCommentTabIndex(tabs),
-                        isPagerScrollInProgress = pagerState.isScrollInProgress,
-                    ),
+            userScrollEnabled = false,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-
+                .verticalPriorityHorizontalPagerSwipe(pagerState),
         ) { page ->
             when (tabs[page]) {
                 TabletSecondaryTab.COMMENTS -> {

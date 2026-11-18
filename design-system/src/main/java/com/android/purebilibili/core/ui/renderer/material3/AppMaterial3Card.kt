@@ -1,6 +1,6 @@
 package com.android.purebilibili.core.ui.renderer.material3
 
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +33,7 @@ internal fun AppMaterial3Card(
     val resolvedShape = shape?.toMaterial3Shape()
     val cardModifier = if (onLongClick != null) {
         val interactionSource = remember { MutableInteractionSource() }
-        modifier.combinedClickable(
+        modifier.appCombinedClickable(
             interactionSource = interactionSource,
             indication = ripple(),
             onClick = { onClick?.invoke() },

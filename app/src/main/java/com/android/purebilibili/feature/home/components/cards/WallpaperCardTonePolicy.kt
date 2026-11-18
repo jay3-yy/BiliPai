@@ -16,6 +16,7 @@ internal fun resolveWallpaperCardTint(
     isDataSaverActive: Boolean = false,
     titleColor: Color = if (defaultContainerColor.luminance() < 0.5f) Color.White else Color.Black,
     subtitleColor: Color = if (defaultContainerColor.luminance() < 0.5f) Color(0xFFCAC4D0) else Color(0xFF49454F),
+    maxChroma: Double = Double.POSITIVE_INFINITY,
 ): Color {
     val dark = defaultContainerColor.luminance() < 0.5f
     val source = Hct.fromInt(wallpaperColor.toArgb())
@@ -27,7 +28,8 @@ internal fun resolveWallpaperCardTint(
         source.chroma.coerceAtMost(if (frostedGlassEnabled) 28.0 else 36.0)
     }
     val desiredTone = if (dark) 18.0 + source.tone * 0.06 else 88.0 + source.tone * 0.08
-    fun colorAt(tone: Double) = Color(Hct.from(source.hue, chroma, tone).toInt())
+    val surfaceChroma = minOf(chroma, maxChroma)
+    fun colorAt(tone: Double) = Color(Hct.from(source.hue, surfaceChroma, tone).toInt())
     // 为色点插值和 8 位颜色量化留少量余量，避免滚动中恰好跌破文字对比度要求。
     val minimumContrast = ACCESSIBLE_TEXT_MIN_CONTRAST + 0.1f
     fun readable(background: Color): Boolean =
@@ -66,6 +68,21 @@ internal fun resolveWallpaperCardTint(
     }
     return toned.copy(alpha = passingAlpha)
 }
+
+/** 保留封面色相，限制信息区色度，并为主题文字保留对比度。 */
+internal fun resolveCoverCardTint(
+    coverColor: Color,
+    defaultContainerColor: Color,
+    titleColor: Color,
+    subtitleColor: Color,
+): Color = resolveWallpaperCardTint(
+    wallpaperColor = coverColor,
+    defaultContainerColor = defaultContainerColor,
+    frostedGlassEnabled = false,
+    titleColor = titleColor,
+    subtitleColor = subtitleColor,
+    maxChroma = if (defaultContainerColor.luminance() < 0.5f) 10.0 else 18.0,
+)
 
 /** 在壁纸或主题变化时预先调色；滚动绘制只在这些色点之间插值。 */
 internal fun resolveWallpaperCardSurfacePalette(

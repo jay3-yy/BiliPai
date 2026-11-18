@@ -16,8 +16,6 @@ const val OFFICIAL_TELEGRAM_CHANNEL_URL = "https://t.me/bilipai666"
 const val OFFICIAL_TELEGRAM_GROUP_URL = "https://t.me/bilipai888/1"
 /** 兼容旧调用：默认打开频道 */
 const val OFFICIAL_TELEGRAM_URL = OFFICIAL_TELEGRAM_CHANNEL_URL
-const val RELEASE_DISCLAIMER_ACK_KEY = "release_disclaimer_ack_v1"
-
 @Composable
 fun ReleaseChannelDisclaimerDialog(
     onDismiss: () -> Unit,

@@ -1,7 +1,5 @@
 package com.android.purebilibili.feature.profile
 
-import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
-import com.android.purebilibili.core.ui.components.rememberAppScrollToTopFeedbackModifier
 import com.android.purebilibili.core.util.animateScrollToTop
 
 import com.android.purebilibili.core.util.responsiveContentWidth
@@ -1549,7 +1547,6 @@ private fun ProfileSpaceContent(
                 Column(
                     modifier = Modifier
                         .widthIn(min = 300.dp, max = 360.dp)
-                        .then(rememberAppScrollToTopFeedbackModifier(tabletRailScrollState))
                         .verticalScroll(tabletRailScrollState),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
@@ -6053,7 +6050,6 @@ private fun ObserveProfileScrollToTop(
         scrollState?.let { state ->
             if (state.value > 0) {
                 state.animateScrollTo(0)
-                state.notifyAppScrollToTop()
             }
         }
     }

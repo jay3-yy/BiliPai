@@ -9,40 +9,6 @@ data class CommentPresenceProbe(
     val invisible: Boolean = false
 )
 
-data class CommentReplyPageProbe(
-    val requestSucceeded: Boolean,
-    val visible: Boolean,
-    val deletedHint: Boolean = false
-)
-
-fun shouldStartCommentFraudDetection(
-    enabled: Boolean,
-    rpid: Long
-): Boolean = enabled && rpid > 0L
-
-fun shouldContinueSubReplyFraudScan(
-    page: Int,
-    pageSize: Int,
-    receivedCount: Int,
-    totalCount: Int,
-    maxPages: Int
-): Boolean {
-    if (page >= maxPages || receivedCount <= 0) return false
-    return if (totalCount > 0) page * pageSize < totalCount else receivedCount >= pageSize
-}
-
-fun shouldShowCommentFraudResultDialog(status: CommentFraudStatus): Boolean {
-    return status != CommentFraudStatus.NORMAL
-}
-
-fun resolveCommentFraudLightMessage(status: CommentFraudStatus): String? {
-    return if (status == CommentFraudStatus.NORMAL) {
-        "评论已正常显示"
-    } else {
-        null
-    }
-}
-
 fun resolveReplyFraudStatus(
     guestProbe: CommentPresenceProbe,
     authProbe: CommentPresenceProbe,
@@ -83,7 +49,8 @@ fun resolveRootFraudStatus(
     guestSeekProbe: CommentPresenceProbe,
     authSeekProbe: CommentPresenceProbe,
     guestReplyPageVisible: Boolean?,
-    confirmedNotFoundAfterRetry: Boolean
+    confirmedNotFoundAfterRetry: Boolean,
+    manual: Boolean = false,
 ): CommentFraudStatus {
     if (guestSeekProbe.requestSucceeded && guestSeekProbe.found) {
         return if (guestSeekProbe.invisible) {
@@ -100,7 +67,7 @@ fun resolveRootFraudStatus(
             return CommentFraudStatus.INVISIBLE
         }
         return when (guestReplyPageVisible) {
-            true -> CommentFraudStatus.UNDER_REVIEW
+            true -> if (manual) CommentFraudStatus.NORMAL else CommentFraudStatus.UNDER_REVIEW
             false -> CommentFraudStatus.SHADOW_BANNED
             null -> CommentFraudStatus.UNKNOWN
         }

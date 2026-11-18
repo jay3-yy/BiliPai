@@ -8,12 +8,6 @@ import org.junit.Test
 class UserAgreementPolicyTest {
 
     @Test
-    fun requiresAgreementWhenNotAcknowledged_forOldAndNewUsers() {
-        assertTrue(isUserAgreementRequired(hasAcknowledgedUserAgreement = false))
-        assertFalse(isUserAgreementRequired(hasAcknowledgedUserAgreement = true))
-    }
-
-    @Test
     fun cannotAcknowledgeUntilAllClausesChecked() {
         assertFalse(
             canAcknowledgeUserAgreement(
@@ -71,7 +65,5 @@ class UserAgreementPolicyTest {
         assertTrue(links[0].url.contains("bilipai666"))
         assertTrue(links[1].url.contains("bilipai888"))
         assertTrue(links[2].url.contains("github.com"))
-        // UI only shows labels; urls stay internal for openUri.
-        assertEquals("user_agreement_ack_v1", USER_AGREEMENT_ACK_KEY)
     }
 }

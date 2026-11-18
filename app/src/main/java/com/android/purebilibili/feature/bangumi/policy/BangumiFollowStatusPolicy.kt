@@ -165,7 +165,7 @@ internal suspend fun preloadFollowedSeasonsForType(
 
         requestSucceeded = true
         if (page == 1) {
-            total = data.total.coerceAtLeast(0)
+            total = data.total?.coerceAtLeast(0) ?: 0
             if (data.ps > 0) {
                 effectivePageSize = data.ps
             }

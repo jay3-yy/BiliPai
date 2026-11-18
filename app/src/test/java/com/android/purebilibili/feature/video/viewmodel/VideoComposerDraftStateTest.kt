@@ -367,7 +367,7 @@ class VideoComposerDraftStateTest {
                 comments.init(101L)
                 backgroundScope.launch(dispatcher) {
                     playback.commentSentEvent.collect { event ->
-                        comments.onExternalCommentSent(event.aid, event.reply, false, event.account)
+                        comments.onExternalCommentSent(event.aid, event.reply, event.account)
                     }
                 }
                 runCurrent()
@@ -413,7 +413,7 @@ class VideoComposerDraftStateTest {
                 comments.init(101L)
                 backgroundScope.launch(dispatcher) {
                     playback.commentSentEvent.collect { event ->
-                        comments.onExternalCommentSent(event.aid, event.reply, false, event.account)
+                        comments.onExternalCommentSent(event.aid, event.reply, event.account)
                     }
                 }
                 runCurrent()

@@ -244,9 +244,15 @@ private fun streamCodecPriority(codecName: String): Int {
 internal fun resolveLivePreferredCandidateIndex(candidates: List<LivePlaybackCandidate>, preference: String?): Int {
     val names = preference?.split('|') ?: return 0
     if (names.size != 3) return 0
-    return candidates.indexOfFirst {
-        it.protocolName == names[0] && it.formatName == names[1] && it.codecName == names[2]
-    }.coerceAtLeast(0)
+    val (protocol, format, codec) = names
+    val protocolIndex = candidates.indexOfFirst { it.protocolName == protocol }
+    if (protocolIndex < 0) return 0
+    val formatIndex = candidates.indexOfFirst { it.protocolName == protocol && it.formatName == format }
+    if (formatIndex < 0) return protocolIndex
+    val codecIndex = candidates.indexOfFirst {
+        it.protocolName == protocol && it.formatName == format && it.codecName == codec
+    }
+    return if (codecIndex >= 0) codecIndex else formatIndex
 }
 
 /** 自动小窗只接管仍有播放意图的有效直播，退出即停开关优先。 */

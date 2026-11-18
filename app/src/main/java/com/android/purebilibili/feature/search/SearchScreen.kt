@@ -5,10 +5,12 @@ import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.resolveAppCountedTabLabel
 import com.android.purebilibili.core.ui.components.appCountedTabOption
 import com.android.purebilibili.core.ui.AppContentColors
 
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import com.android.purebilibili.core.util.HtmlEntityUtils
@@ -86,7 +88,8 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.Layout
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.animation.core.animate
 import androidx.compose.ui.geometry.Offset
 import kotlinx.coroutines.Job
@@ -223,9 +226,17 @@ internal fun resolveSearchInputHeightDp(
 ): Int = maxOf(minHeightDp, ceil(maxOf(lineHeightDp, fontSizeDp) + 8f).toInt())
 
 @Composable
+internal fun searchInputTextStyle(): androidx.compose.ui.text.TextStyle =
+    if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+        top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.main
+    } else {
+        MaterialTheme.typography.bodyLarge
+    }
+
+@Composable
 internal fun rememberSearchInputHeightDp(minHeightDp: Int): Int {
     val density = LocalDensity.current
-    val fontSize = MaterialTheme.typography.bodyLarge.fontSize
+    val fontSize = searchInputTextStyle().fontSize
     return remember(minHeightDp, density, fontSize) {
         with(density) {
             resolveSearchInputHeightDp(
@@ -858,14 +869,16 @@ fun SearchScreen(
     val searchHeaderCollapseMode = homeSettings.commonListHeaderCollapseMode
     val headerScrollDirection = remember(searchHeaderCollapseMode, state.searchType) { floatArrayOf(0f) }
     val isSearchCollapseEnabled = searchHeaderCollapseMode != CommonListHeaderCollapseMode.ALWAYS_VISIBLE
-    var searchTopBarHeightPx by remember { mutableIntStateOf(0) }
-    var searchHeaderOffsetPx by remember { mutableFloatStateOf(0f) }
-    var searchHeaderSettleJob by remember { mutableStateOf<Job?>(null) }
-    var searchHeaderSettleTargetPx by remember { mutableFloatStateOf(0f) }
+    val pinSearchInput = LocalAppUiStyle.current == AppUiStyle.MIUIX &&
+        !appThemeConfig.liquidGlassEnabled
+    var searchCollapsibleHeightPx by remember(pinSearchInput) { mutableIntStateOf(0) }
+    var searchHeaderOffsetPx by remember(pinSearchInput) { mutableFloatStateOf(0f) }
+    var searchHeaderSettleJob by remember(pinSearchInput) { mutableStateOf<Job?>(null) }
+    var searchHeaderSettleTargetPx by remember(pinSearchInput) { mutableFloatStateOf(0f) }
     val searchStatusBarHeightPx = with(density) {
         WindowInsets.statusBars.asPaddingValues().calculateTopPadding().toPx()
     }
-    val searchCollapseDistancePx = searchTopBarHeightPx.toFloat().coerceAtLeast(0f)
+    val searchCollapseDistancePx = searchCollapsibleHeightPx.toFloat()
     val searchHeaderSettleMotionSpec = AppMotionTokens.emphasizedSpec<Float>()
 
     val isSearchResultsAtTop by remember(
@@ -912,14 +925,14 @@ fun SearchScreen(
         }
     }
 
-    LaunchedEffect(isSearchCollapseEnabled, isSearchResultsAtTop) {
+    LaunchedEffect(pinSearchInput, isSearchCollapseEnabled, isSearchResultsAtTop) {
         if (!isSearchCollapseEnabled || isSearchResultsAtTop) {
             animateSearchHeaderOffsetTo(0f)
         }
     }
 
     LaunchedEffect(
-        searchHeaderCollapseMode, searchCollapseDistancePx, state.showResults, state.searchType,
+        pinSearchInput, searchHeaderCollapseMode, searchCollapseDistancePx, state.showResults, state.searchType,
         resultGridState, resultListState,
     ) {
         snapshotFlow {
@@ -947,7 +960,9 @@ fun SearchScreen(
             }
         }
     }
-    val searchHeaderScrollConnection = remember(searchHeaderCollapseMode, searchCollapseDistancePx, isSearchResultsAtTop, headerScrollDirection) {
+    val searchHeaderScrollConnection = remember(
+        pinSearchInput, searchHeaderCollapseMode, searchCollapseDistancePx, isSearchResultsAtTop, headerScrollDirection,
+    ) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (!isSearchCollapseEnabled || searchCollapseDistancePx <= 0f) return Offset.Zero
@@ -1390,16 +1405,12 @@ fun SearchScreen(
                                 topControlContentBackdrop,
                                 com.android.purebilibili.core.ui.components.LocalAppTopBarSurfaceColor.current,
                             )
-                            val searchCollapseFraction = if (isSearchCollapseEnabled && searchCollapseDistancePx > 0f) {
-                                (-searchHeaderOffsetPx / searchCollapseDistancePx).coerceIn(0f, 1f)
-                            } else {
-                                0f
-                            }
                             Layout(
-                                modifier = if (searchCollapseFraction > 0f) {
-                                    // Hide chrome above the status-bar boundary, but retain
-                                    // a halo below/alongside the header for elastic controls.
-                                    Modifier.drawWithContent {
+                                modifier = if (pinSearchInput || !isSearchCollapseEnabled) Modifier
+                                else Modifier.drawWithContent {
+                                    if (searchHeaderOffsetPx >= 0f) {
+                                        drawContent()
+                                    } else {
                                         val top = searchStatusBarHeightPx.coerceIn(0f, size.height)
                                         if (size.height > top) {
                                             val overflow = AppChromeSizeTokens.MinimumTouchTarget.toPx()
@@ -1411,17 +1422,15 @@ fun SearchScreen(
                                             ) { this@drawWithContent.drawContent() }
                                         }
                                     }
-                                } else Modifier,
+                                },
                                 content = {
                                     Spacer(modifier = Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
                                         Column(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .onGloballyPositioned { coordinates ->
-                                                    if (coordinates.size.height > 0 && searchCollapseFraction <= 0.05f) {
-                                                        searchTopBarHeightPx = coordinates.size.height
-                                                    }
-                                                }
+                                                .then(if (pinSearchInput) Modifier else Modifier.onSizeChanged {
+                                                    searchCollapsibleHeightPx = it.height
+                                                }),
                                         ) {
                                             searchTopBarContent(
                                                 searchInputState,
@@ -1563,7 +1572,25 @@ fun SearchScreen(
                                                     }
                                                 }
                                             }
-                                            if (lowerChromeSource != null) {
+                                            if (pinSearchInput && isSearchCollapseEnabled) {
+                                                // 分类、排序和提示从输入框下方收起，搜索操作始终可用。
+                                                Column(
+                                                    modifier = Modifier
+                                                        .clipToBounds()
+                                                        .layout { measurable, constraints ->
+                                                            val placeable = measurable.measure(constraints)
+                                                            val height = (placeable.height + searchHeaderOffsetPx.roundToInt())
+                                                                .coerceIn(0, placeable.height)
+                                                            layout(placeable.width, height) {
+                                                                if (height > 0) {
+                                                                    placeable.placeRelative(0, height - placeable.height)
+                                                                }
+                                                            }
+                                                        }
+                                                        .onSizeChanged { searchCollapsibleHeightPx = it.height },
+                                                    content = { lowerChromeContent() },
+                                                )
+                                            } else if (lowerChromeSource != null) {
                                                 Column(modifier = lowerChromeSource.modifier) { lowerChromeContent() }
                                             } else {
                                                 lowerChromeContent()
@@ -1575,7 +1602,9 @@ fun SearchScreen(
                                 val width = placeables.maxOfOrNull { it.width }?.coerceIn(constraints.minWidth, constraints.maxWidth)
                                     ?: constraints.minWidth
                                 val topInset = placeables.firstOrNull()?.height ?: 0
-                                val offset = if (isSearchCollapseEnabled) searchHeaderOffsetPx.toInt() else 0
+                                val offset = if (isSearchCollapseEnabled && !pinSearchInput) {
+                                    searchHeaderOffsetPx.toInt()
+                                } else 0
                                 val height = (placeables.sumOf { it.height } + offset)
                                     .coerceIn(topInset.coerceAtLeast(constraints.minHeight), constraints.maxHeight)
                                 layout(width, height) {
@@ -1590,7 +1619,6 @@ fun SearchScreen(
                         }
                     },
                 ) { resultChromePadding ->
-                    val resultTopPadding = resultChromePadding.calculateTopPadding()
                     com.android.purebilibili.core.ui.adaptive.AppHingeSafeContent(
                         modifier = Modifier.fillMaxSize(),
                     ) {
@@ -1605,11 +1633,12 @@ fun SearchScreen(
                         } else requestedSkeletonColumns
                         HorizontalPager(
                             state = searchPagerState,
-                            userScrollEnabled = true,
+                            userScrollEnabled = false,
                             modifier = Modifier
                                 .fillMaxSize()
                                 .then(searchChromeSource?.modifier ?: Modifier)
-                                .globalWallpaperAwareBackground(),
+                                .globalWallpaperAwareBackground()
+                                .verticalPriorityHorizontalPagerSwipe(searchPagerState),
                             beyondViewportPageCount = 1,
                             key = { page -> resolveSearchTypeForPagerPage(page, searchTabs) },
                         ) { page ->
@@ -1649,7 +1678,7 @@ fun SearchScreen(
                                         isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                                     ),
                                     hazeState = hazeState,
-                                    resultTopPadding = resultTopPadding,
+                                    resultChromePadding = resultChromePadding,
                                     resultBottomPadding = resultBottomPadding,
                                     onLoadMore = viewModel::loadMoreResults,
                                     onRetrySearch = { viewModel.search(it, updateDraft = false) },

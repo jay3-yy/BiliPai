@@ -55,7 +55,8 @@ fun StoryScreen(
     onVideoClick: (String, Long, String) -> Unit = { _, _, _ -> },
     onUserClick: (Long) -> Unit = {},
     onSearchClick: () -> Unit = {},
-    onRotateToLandscape: () -> Unit = {}
+    onRotateToLandscape: () -> Unit = {},
+    onOpenBilibiliLink: ((String) -> Unit)? = null,
 ) {
     @Suppress("UNUSED_PARAMETER")
     val unusedSourceRoute = sourceRoute
@@ -175,6 +176,7 @@ fun StoryScreen(
                             },
                             onSearchClick = onSearchClick,
                             onUserClick = onUserClick,
+                            onOpenBilibiliLink = onOpenBilibiliLink,
                             onExitFullscreen = {
                                 val snapshot = latestExitSnapshot
                                 if (snapshot != null) {

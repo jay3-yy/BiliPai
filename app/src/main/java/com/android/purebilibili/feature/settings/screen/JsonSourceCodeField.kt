@@ -85,28 +85,30 @@ internal fun JsonSourceCodeField(
             shape = MaterialTheme.shapes.small,
             border = BorderStroke(1.dp, if (currentDiagnostic != null) errorColor else MaterialTheme.colorScheme.outlineVariant),
         ) {
-            BasicTextField(
-                value = editor,
-                onValueChange = {
-                    editor = it
-                    if (it.text != value) onValueChange(it.text)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
-                    .focusRequester(focusRequester)
-                    .semantics {
-                        contentDescription = label
-                        currentDiagnostic?.let { error(it.message) }
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                BasicTextField(
+                    value = editor,
+                    onValueChange = {
+                        editor = it
+                        if (it.text != value) onValueChange(it.text)
                     },
-                readOnly = readOnly,
-                minLines = minLines,
-                maxLines = maxLines,
-                textStyle = MaterialTheme.typography.bodySmall.copy(color = textColor, fontFamily = FontFamily.Monospace),
-                cursorBrush = SolidColor(accentColor),
-                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
-                visualTransformation = transformation,
-            )
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                        .focusRequester(focusRequester)
+                        .semantics {
+                            contentDescription = label
+                            currentDiagnostic?.let { error(it.message) }
+                        },
+                    readOnly = readOnly,
+                    minLines = minLines,
+                    maxLines = maxLines,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(color = textColor, fontFamily = FontFamily.Monospace),
+                    cursorBrush = SolidColor(accentColor),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false),
+                    visualTransformation = transformation,
+                )
+            }
         }
         val beforeCursor = editor.text.substring(0, editor.selection.start)
         AppText(

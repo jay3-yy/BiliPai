@@ -194,7 +194,7 @@ fun TopControlBar(
     onCoinClick: () -> Unit = {},
     shareMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
     onShareClick: () -> Unit = {},
-    onCommentClick: () -> Unit = {},
+    onCommentClick: (() -> Unit)? = null,
     onCastClick: () -> Unit = {}, // Added Cast callback
     showCastButton: Boolean = true,
     onMoreClick: () -> Unit = {},
@@ -553,16 +553,18 @@ fun TopControlBar(
                         )
                     }
 
-                    ActionIcon(
-                        glassEnabled = isFullscreen || glassControls,
-                        icon = Icons.Outlined.Comment,
-                        contentDescription = "评论区",
-                        count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.COMMENT, commentCount),
-                        isActive = false,
-                        onClick = onCommentClick,
-                        buttonSizeDp = layoutPolicy.buttonSizeDp,
-                        iconSizeDp = layoutPolicy.iconSizeDp
-                    )
+                    if (onCommentClick != null) {
+                        ActionIcon(
+                            glassEnabled = isFullscreen || glassControls,
+                            icon = Icons.Outlined.Comment,
+                            contentDescription = "评论区",
+                            count = visibleCount(com.android.purebilibili.core.store.FullscreenActionCount.COMMENT, commentCount),
+                            isActive = false,
+                            onClick = onCommentClick,
+                            buttonSizeDp = layoutPolicy.buttonSizeDp,
+                            iconSizeDp = layoutPolicy.iconSizeDp
+                        )
+                    }
 
                     // More (Three dots)
                     if (!separateGlassMore) {

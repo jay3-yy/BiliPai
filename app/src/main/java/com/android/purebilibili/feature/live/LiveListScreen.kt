@@ -8,7 +8,7 @@ import com.android.purebilibili.core.ui.adaptive.onSecondaryClick
 import android.app.Application
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.channels.Channel
@@ -54,6 +55,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
@@ -81,8 +84,9 @@ import com.android.purebilibili.core.ui.AppChromeSizeTokens
 import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import com.android.purebilibili.core.ui.rememberAppTopChromePolicy
-import com.android.purebilibili.core.ui.components.notifyAppScrollToTop
-import com.android.purebilibili.core.util.animateScrollToTop
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
+import com.android.purebilibili.core.util.animateScrollWhileActive
 import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.data.model.response.LiveAreaParent
 import com.android.purebilibili.data.repository.LiveRepository
@@ -582,6 +586,9 @@ fun LiveListScreen(
     val feedScrolling = com.android.purebilibili.feature.home.LocalHomeFeedScrollInProgress.current
     val setBottomBarVisible = com.android.purebilibili.core.ui.LocalSetBottomBarVisible.current
     val scrollWorkActive = isCurrentPage && com.android.purebilibili.core.ui.rememberVisualWorkActive()
+    val latestReturnMotionAllowed by rememberUpdatedState(
+        scrollWorkActive && LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current,
+    )
     val bottomBarScrollConnection = com.android.purebilibili.core.ui.rememberBottomBarScrollHideConnection(
         chromeScrollOffset = chromeScrollOffset,
         autoHideEnabled = com.android.purebilibili.core.ui.shouldAutoHideBottomBarOnScroll(navigationSettings.bottomBarVisibilityMode),
@@ -611,14 +618,16 @@ fun LiveListScreen(
     suspend fun scrollLiveHomeToTop(refreshAtTop: Boolean = true) {
         val atTop = liveGridState.firstVisibleItemIndex == 0 &&
             liveGridState.firstVisibleItemScrollOffset < 50
-        if (!refreshAtTop) {
-            val wasScrolled = liveGridState.canScrollBackward
-            liveGridState.scrollToItem(0)
-            if (wasScrolled) liveGridState.notifyAppScrollToTop()
-        } else if (!atTop) {
-            liveGridState.animateScrollToTop()
-        } else {
+        if (refreshAtTop && atTop) {
             viewModel.refresh()
+        } else if (liveGridState.canScrollBackward) {
+            if (latestReturnMotionAllowed) {
+                animateScrollWhileActive(isActive = { latestReturnMotionAllowed }) {
+                    liveGridState.animateScrollToItem(0)
+                }
+            } else {
+                liveGridState.scrollToItem(0)
+            }
         }
     }
     LaunchedEffect(scrollToTopRequestId) {
@@ -631,6 +640,13 @@ fun LiveListScreen(
         }
     }
 
+    fun resetLiveCategoryScroll() {
+        val category = liveGridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == LIVE_HOME_CATEGORY_KEY }
+        if (category != null && category.offset.y <= 0) {
+            liveGridState.requestScrollToItem(category.index)
+        }
+    }
+
     // 顶部避让属于可滚动内容；视口保持全高，让卡片经过顶栏下方供模糊采样。
     val liveContent: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { topInset ->
         AdaptivePullToRefreshBox(
@@ -639,6 +655,13 @@ fun LiveListScreen(
             modifier = Modifier.fillMaxSize().then(if (embeddedInHome) Modifier else Modifier.nestedScroll(bottomBarScrollConnection)),
             indicatorTopInset = topInset,
         ) {
+            LiveGridPagination(
+                grid = liveGridState,
+                enabled = scrollWorkActive && state.hasMore && !state.isLoading && !state.isLoadingMore &&
+                    state.error == null && state.loadMoreError == null,
+                nextPage = state.page + 1,
+                onLoadMore = viewModel::loadMore,
+            )
             LiveHomeContent(
                 gridState = liveGridState,
                 followRowState = followRowState,
@@ -673,7 +696,7 @@ fun LiveListScreen(
                     // 静默丢弃会让拖动松手后的选中被吞掉，指示器弹回旧分 Tab。
                     if (index != state.selectedAreaIndex) {
                         viewModel.selectHomeArea(index)
-                        coroutineScope.launch { liveGridState.scrollToItem(0) }
+                        resetLiveCategoryScroll()
                     }
                 },
                 onToggleFirstFrame = viewModel::toggleShowFirstFrame,
@@ -682,7 +705,7 @@ fun LiveListScreen(
                 onSortTagSelected = { sort ->
                     if (!state.isLoading) {
                         viewModel.selectSortTag(sort)
-                        coroutineScope.launch { liveGridState.scrollToItem(0) }
+                        resetLiveCategoryScroll()
                     }
                 },
                 onLoadMore = viewModel::loadMore,
@@ -750,6 +773,8 @@ fun LiveListScreen(
     coverToSave?.let { card -> LiveCoverSaveDialog(card) { coverToSave = null } }
 
 }
+
+private const val LIVE_HOME_CATEGORY_KEY = "live_categories"
 
 @Composable
 internal fun LiveHomeContent(
@@ -854,19 +879,34 @@ internal fun LiveHomeContent(
                     AppTextButton(onClick = onRetry) { AppText("重试") }
                 }
             }
-            item(key = "live_categories", span = { GridItemSpan(maxLineSpan) }) {
-                LiveAreaHomeChipRow(
-                    areaEntries = resolveLiveHomeAreaEntries(areaEntries, areaList),
-                    selectedAreaIndex = selectedAreaIndex,
-                    showFirstFrame = showFirstFrame,
-                    onAreaSelected = onAreaSelected,
-                    onToggleFirstFrame = onToggleFirstFrame,
-                    onAreaListClick = onAreaListClick,
-                    onMatchClick = onMatchClick,
-                )
-            }
-            if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
+            stickyHeader(key = LIVE_HOME_CATEGORY_KEY) { headerIndex ->
+                val headerBackground = rememberLiveChromePalette().backgroundTop
+                Column(
+                    modifier = Modifier
+                        .zIndex(1f)
+                        .offset {
+                            // 顶栏覆盖列表视口。夹住指示条的最终位置，卡片仍可经过顶栏下方。
+                            val layout = gridState.layoutInfo
+                            val header = layout.visibleItemsInfo.firstOrNull { it.index == headerIndex }
+                            val offset = header?.let {
+                                topPadding.roundToPx() - (it.offset.y - layout.viewportStartOffset)
+                            } ?: 0
+                            IntOffset(0, offset.coerceAtLeast(0))
+                        }
+                        .fillMaxWidth()
+                        .background(headerBackground),
+                    verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
+                ) {
+                    LiveAreaHomeChipRow(
+                        areaEntries = resolveLiveHomeAreaEntries(areaEntries, areaList),
+                        selectedAreaIndex = selectedAreaIndex,
+                        showFirstFrame = showFirstFrame,
+                        onAreaSelected = onAreaSelected,
+                        onToggleFirstFrame = onToggleFirstFrame,
+                        onAreaListClick = onAreaListClick,
+                        onMatchClick = onMatchClick,
+                    )
+                    if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
                         LiveSortTagChipRow(
                             tags = sortTags,
                             selectedSortType = selectedSortType,
@@ -874,6 +914,7 @@ internal fun LiveHomeContent(
                         )
                     }
                 }
+            }
             when {
                 isLoading && contentItems.isEmpty() -> {
                     liveRoomSkeletonItems(skeletonLayout.cardCount, metrics, skeletonColor)
@@ -905,12 +946,13 @@ internal fun LiveHomeContent(
                 }
             }
             if (hasMore && !isLoading && error == null) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
+                item(key = LIVE_GRID_LOAD_MORE_KEY, span = { GridItemSpan(maxLineSpan) }) {
                     LiveHomeLoadMoreFooter(
                         isLoadingMore = isLoadingMore,
                         contentCount = contentItems.size,
                         hasMore = hasMore,
                         error = loadMoreError,
+                        autoLoad = false,
                         onLoadMore = onLoadMore,
                     )
                 }
@@ -1100,7 +1142,7 @@ private fun LiveFollowAvatarRow(
                 modifier = Modifier
                     .width(metrics.followItemExtentDp.dp)
                     .onSecondaryClick { if (item.uid > 0) onUserClick(item.uid) }
-                    .combinedClickable(
+                    .appCombinedClickable(
                         onClick = { onLiveClick(item.roomId, item.title, item.uname) },
                         onLongClick = { if (item.uid > 0) onUserClick(item.uid) },
                     ),
