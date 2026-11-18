@@ -500,7 +500,7 @@ open class VideoActivity : ComponentActivity() {
                 if (intent.getBooleanExtra("video_parent_is_video", false)) {
                     manager.markLeavingByNavigation(expectedBvid = bvid, forceStop = true)
                 } else if (manager.prepareAudioNowPlayingForNavigationExit(bvid)) {
-                    manager.markLeavingByNavigation(expectedBvid = bvid)
+                    manager.markLeavingByNavigation(expectedBvid = bvid, audioNowPlayingPrepared = true)
                 } else if (manager.shouldShowInAppMiniPlayer()) {
                     manager.enterMiniMode()
                 } else {

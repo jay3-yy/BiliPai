@@ -2,13 +2,13 @@ package com.android.purebilibili.core.ui.animation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.structuralEqualityPolicy
 import top.yukonga.miuix.kmp.nav.core.LocalNavTransitionScope
 import top.yukonga.miuix.kmp.nav.transition.NavRole
@@ -16,7 +16,7 @@ import top.yukonga.miuix.kmp.nav.transition.NavRole
 private val ReadyOutsideNavigation: State<Boolean> = mutableStateOf(true)
 
 // 不在导航 entry 内的内容保留立即入场；只传 State 容器，避免导航宿主订阅动画进度。
-internal val LocalAppNavigationEntranceReady = staticCompositionLocalOf { ReadyOutsideNavigation }
+internal val LocalAppNavigationEntranceReady = compositionLocalOf { ReadyOutsideNavigation }
 
 internal fun isNavigationEntryReadyForEntrance(role: NavRole, isRunning: Boolean): Boolean =
     role == NavRole.Top && !isRunning
@@ -32,11 +32,13 @@ internal fun rememberEntryContentReady(entryKey: Any, contentReady: Boolean): Bo
 
 @Composable
 internal fun ProvideNavigationEntranceState(content: @Composable () -> Unit) {
-    val scope = LocalNavTransitionScope.current
-    val ready = remember(scope) {
+    val scope = rememberUpdatedState(LocalNavTransitionScope.current)
+    // 保留同一 entry 的 State 身份；push/pop 更换 scope 时只更新就绪值。
+    val ready = remember {
         derivedStateOf(structuralEqualityPolicy()) {
             // 新页首个准备帧可能尚未启动 settle，必须同时检查角色，不能只看 isRunning。
-            isNavigationEntryReadyForEntrance(scope.role, scope.isRunning)
+            val transition = scope.value
+            isNavigationEntryReadyForEntrance(transition.role, transition.isRunning)
         }
     }
     CompositionLocalProvider(LocalAppNavigationEntranceReady provides ready, content = content)

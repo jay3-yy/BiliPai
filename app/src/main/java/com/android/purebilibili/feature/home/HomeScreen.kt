@@ -133,6 +133,7 @@ import com.android.purebilibili.core.ui.transition.videoCardTransitionBackground
 import com.android.purebilibili.core.ui.transition.videoCardTransitionOverlayDepthEffect
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockEdge
 import com.android.purebilibili.feature.home.components.BottomBarMatchedDockVisibility
+import com.android.purebilibili.core.ui.animation.LocalAppNavigationEntranceReady
 import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
 import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.ui.blur.recoverableBlurEnabled
@@ -621,8 +622,10 @@ fun HomeScreen(
             }
         }
     }
-    // Retained home must not issue scroll/chrome/image work while another page or morph owns the UI.
-    val homeFeedUpdatesAllowed = isTopLevelActive &&
+    // 普通返回也先绘制保留列表。落位后再收取新列表和恢复封面请求；
+    // 玻璃、MD3、Miuix 共用这个许可，滚动位置和实际曝光继续独立维护。
+    val homeNavigationReady = isTopLevelActive && LocalAppNavigationEntranceReady.current.value
+    val homeFeedUpdatesAllowed = homeNavigationReady &&
         !isReturningFromVideoDetail &&
         !deferHomeHeavyWork
     // Data may be needed to restore a pending scroll anchor. Only navigation freezes
@@ -2236,6 +2239,7 @@ fun HomeScreen(
                                          },
                                          isActive = pageWork.runActiveWork,
                                          pageOnScreen = pageOnScreen && pageWork.visible,
+                                         coverRequestsAllowed = homeNavigationReady,
                                          visibleDuringNavigation = visibleDuringNavigation && pageWork.visible &&
                                              homeFeedWorkAllowed,
                                          gridState = contentGridState,

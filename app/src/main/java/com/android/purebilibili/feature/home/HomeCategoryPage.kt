@@ -191,8 +191,9 @@ internal fun HomeCategoryPageContent(
     memoryRecovery: HomeFeedMemorySnapshot? = null,
     onMemoryRecoveryConsumed: (String, Boolean) -> Unit = { _, _ -> },
     isActive: Boolean,
-    /** 页面是否在屏幕上。图片加载只看这个，不看数据同步是否就绪。 */
+    /** 页面是否在屏幕上，仍可在返回落位前恢复列表位置。 */
     pageOnScreen: Boolean = isActive,
+    coverRequestsAllowed: Boolean,
     visibleDuringNavigation: Boolean = false,
     gridState: HomeFeedGridState,
     gridColumns: Int,
@@ -486,7 +487,7 @@ internal fun HomeCategoryPageContent(
             )
         }
     }
-    val coverLoadingActive = pageOnScreen || visibleDuringNavigation
+    val coverLoadingActive = (pageOnScreen && coverRequestsAllowed) || visibleDuringNavigation
     val pageImageWorkAllowed = LocalPageImageLoadingAllowed.current && isActive
     val visualWorkActive = rememberVisualWorkActive()
     val reduceMotion = com.android.purebilibili.core.ui.LocalSystemReduceMotion.current

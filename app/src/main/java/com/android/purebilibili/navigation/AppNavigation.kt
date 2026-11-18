@@ -241,6 +241,7 @@ import com.android.purebilibili.navigation3.BiliPaiProgrammaticBackDispatcher
 import com.android.purebilibili.navigation3.BiliPaiNavCardSourceDirection
 import com.android.purebilibili.navigation3.BiliPaiNavEntryContentRole
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.BiliPaiNavSourceMetadata
 import com.android.purebilibili.navigation3.BiliPaiReturnSessionState
 import com.android.purebilibili.navigation3.BiliPaiVideoSource
 import com.android.purebilibili.navigation3.RETURN_SESSION_RECONCILE_GRACE_MS
@@ -1119,6 +1120,7 @@ fun AppNavigation(
             sourceChromeSnapshot = navigation3ReturnSession.transitionSession?.sourceChromeSnapshot,
         )
         fun refreshVideoCardReturnGeometry() {
+            if (!sharedVideoCardTransitionEnabled) return
             navigation3ReturnSession = navigation3ReturnSession.copy(
                 transitionSession = navigation3ReturnSession.transitionSession?.refreshedForReturn()
                     ?.copy(hostOriginInRoot = navigationHostOriginInRoot),
@@ -1223,6 +1225,7 @@ fun AppNavigation(
             if (manager.prepareAudioNowPlayingForNavigationExit(videoKey.bvid)) {
                 manager.markLeavingByNavigation(
                     expectedBvid = videoKey.bvid,
+                    audioNowPlayingPrepared = true,
                     deferPlaybackStop = com.android.purebilibili.feature.video.screen
                         .shouldDeferPlaybackStopForSharedLiveReturn(
                             cardTransitionEnabled = cardTransitionEnabled,
@@ -1962,11 +1965,16 @@ fun AppNavigation(
         fun navigateToHomeVideoInNavigation3(request: HomeVideoClickRequest) {
             latestNavigateToHomeVideo.value(request)
         }
-        val navigation3SourceMetadata = currentNavigation3SourceMetadata()
-            .relativeToHost(
+        // 普通导航沿用路由和返回会话，卡片的几何变化不再使来源页和退出页一起失效。
+        // 玻璃、MD3、Miuix 共用此边界，各自的普通页面转场照常运行。
+        val navigation3SourceMetadata = if (sharedVideoCardTransitionEnabled) {
+            currentNavigation3SourceMetadata().relativeToHost(
                 navigation3ReturnSession.transitionSession?.hostOriginInRoot
                     ?: navigationHostOriginInRoot,
             )
+        } else {
+            remember { BiliPaiNavSourceMetadata() }
+        }
         val previousNavigation3Key = navigation3BackStack.getOrNull(navigation3BackStack.lastIndex - 1)
         val activeBottomTabRoute = resolveActiveBottomTabRoute(
             currentKey = currentNavigation3Key,
@@ -1977,7 +1985,7 @@ fun AppNavigation(
         // the page retained inside MainHost instead, even while VideoDetail is on top.
         val activeMainHostRoute = currentBottomNavItem.route
         val backGestureDecision = remember(
-            cardTransitionEnabled,
+            sharedVideoCardTransitionEnabled,
             systemBackAction,
             currentNavigation3Key,
             previousNavigation3Key,
@@ -2765,7 +2773,10 @@ fun AppNavigation(
                 popAction: () -> Unit
             ) {
                 markNavigation3VideoReturnBeforeBackAction(targetKey = targetKey)
-                prepareVideoPlaybackForNavigationExit(videoKey, targetKey)
+                com.android.purebilibili.core.ui.transition.VideoCardTransitionDiagnostics
+                    .measureWork("playback_exit_cleanup") {
+                        prepareVideoPlaybackForNavigationExit(videoKey, targetKey)
+                    }
                 val before = navigation3BackStack.toList()
                 popAction()
                 repeat(

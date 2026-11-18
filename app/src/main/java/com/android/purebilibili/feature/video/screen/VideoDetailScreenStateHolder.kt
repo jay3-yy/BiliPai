@@ -3784,15 +3784,17 @@ internal fun VideoDetailScreenStateHolder(
     val continuousPlayerUnitState = remember { mutableFloatStateOf(1f) }
     // Entry lifetime, not BVID lifetime: once attached, never defer the player again.
     val continuousPlayerHostMounted = remember { mutableStateOf(false) }
+    val deferInlinePlayerHost = deferVideoDetailEntryLoad && !useTabletLayout &&
+        (!transitionEnabled || shellSharedBoundsLikely)
+    val playerHostReady = entryPlaybackReady || uiState is VideoPlaybackUiState.Error
     var collapsedPlayerMoreRequested by remember(currentBvid) { mutableStateOf(false) }
     val collapsedPlayerMoreSource = rememberAppGlassMenuSource()
     val continuousPlayerRenderer = rememberUpdatedState<@Composable (ContinuousPlayerHostLayout) -> Unit> { layout ->
         val mountPlayerHost = shouldMountVideoDetailPlayerHost(
             alreadyMounted = continuousPlayerHostMounted.value,
-            // Source identity is available before the first navigation scope is bound.
-            deferEntryLoad = deferVideoDetailEntryLoad && shellSharedBoundsLikely &&
-                !useTabletLayout,
-            entryPlaybackReady = entryPlaybackReady || uiState is VideoPlaybackUiState.Error,
+            // 普通导航也在已有的播放阶段挂载重控件。分栏、复用播放器和全屏走原有路径。
+            deferEntryLoad = deferInlinePlayerHost,
+            entryPlaybackReady = playerHostReady,
             hasResidentCover = hasResidentReturnCover,
             preserveLivePlayer = reuseFromMiniPlayerAtEntry || hasRenderedFirstFrameForReturn ||
                 layout.isFullscreen || isPipMode,
@@ -5025,6 +5027,11 @@ internal fun VideoDetailScreenStateHolder(
                                 videoCardDepthBackgroundState.isReturnGestureInProgressProvider() ||
                                     videoCardDepthBackgroundState
                                         .isGestureRestoreInProgressProvider()
+                            // 普通入场只在播放器尚未挂载时用常驻封面填充已有视口。
+                            // 挂载后立即由播放器恢复原有封面、起播按钮和加载反馈。
+                            val holdingPlainEntryCover = !transitionEnabled && deferInlinePlayerHost &&
+                                !continuousPlayerHostMounted.value && !playerHostReady &&
+                                !isFullscreenMode && !isPipMode
                             resolveVideoDetailReturnMediaFrame(
                                 transitionProgress = resolveVideoDetailReturnVisualProgress(
                                     animatedVisibilityProgress = detailTransitionProgress.value,
@@ -5038,7 +5045,7 @@ internal fun VideoDetailScreenStateHolder(
                                 progressiveResidentCover = progressiveResidentCoverReturn,
                                 isReturnGestureInProgress = returnGestureInProgress,
                                 showResidentCoverUntilFirstFrame =
-                                    (entryOwnsMiuixCardTransition ||
+                                    (holdingPlainEntryCover || entryOwnsMiuixCardTransition ||
                                         (deferVideoDetailEntryLoad && shellSharedBoundsLikely)) &&
                                         currentBvid == bvid &&
                                         !hasRenderedFirstFrameForReturn,
