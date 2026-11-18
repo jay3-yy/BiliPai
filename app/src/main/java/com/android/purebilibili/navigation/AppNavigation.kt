@@ -245,7 +245,13 @@ import com.android.purebilibili.navigation3.BiliPaiNavEntryContentRole
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.BiliPaiReturnSessionState
 import com.android.purebilibili.navigation3.BiliPaiVideoSource
+import com.android.purebilibili.navigation3.RETURN_SESSION_RECONCILE_GRACE_MS
+import com.android.purebilibili.navigation3.RETURN_SESSION_STALE_TIMEOUT_MS
+import com.android.purebilibili.navigation3.ReturnSessionReconciliationAction
 import com.android.purebilibili.navigation3.VideoCardTransitionSession
+import com.android.purebilibili.navigation3.hasCardMorphDestination
+import com.android.purebilibili.navigation3.hasReturningDetailDestination
+import com.android.purebilibili.navigation3.resolveReturnSessionReconciliationAction
 import com.android.purebilibili.navigation3.legacyRouteToBiliPaiNavKey
 import com.android.purebilibili.navigation3.popBiliPaiNavKey
 import com.android.purebilibili.navigation3.popBiliPaiNavKeyToRoot
@@ -462,11 +468,44 @@ fun AppNavigation(
     val hostActivity = context.findActivity() as androidx.activity.ComponentActivity
     var officialVideoChildActive by rememberSaveable { mutableStateOf(false) }
     val hostWindowFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    val navigationWindowLifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val navigationWindowLifecycleOwner = LocalLifecycleOwner.current
+    val navigationWindowLifecycle by navigationWindowLifecycleOwner.lifecycle.currentStateAsState()
     // Activity 之间的转场保留 STARTED 时仍露出的来源窗口，停止后暂停图片与采样。
     val navigationWindowVisible = navigationWindowLifecycle.isAtLeast(Lifecycle.State.STARTED)
+    val hostWindowResumed = navigationWindowLifecycle.isAtLeast(Lifecycle.State.RESUMED)
     LaunchedEffect(hostWindowFocused) {
         if (hostWindowFocused) officialVideoChildActive = false
+    }
+    DisposableEffect(navigationWindowLifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                officialVideoChildActive = false
+            }
+        }
+        navigationWindowLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { navigationWindowLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(officialVideoChildActive, hostWindowFocused, hostWindowResumed) {
+        if (shouldClearOfficialVideoChildActiveOnWindowState(
+                officialVideoChildActive = officialVideoChildActive,
+                hostWindowFocused = hostWindowFocused,
+                hostResumed = hostWindowResumed,
+            )
+        ) {
+            kotlinx.coroutines.delay(OFFICIAL_VIDEO_CHILD_STALE_TIMEOUT_MS)
+            if (shouldClearOfficialVideoChildActiveOnWindowState(
+                    officialVideoChildActive = officialVideoChildActive,
+                    hostWindowFocused = hostWindowFocused,
+                    hostResumed = hostWindowResumed,
+                )
+            ) {
+                com.android.purebilibili.core.util.Logger.w(
+                    "AppNavigation",
+                    "officialVideoChildActive remained true while host stayed focused & resumed; resetting",
+                )
+                officialVideoChildActive = false
+            }
+        }
     }
     val homeViewModel by remember(hostActivity) {
         lazy { androidx.lifecycle.ViewModelProvider(hostActivity)[HomeViewModel::class.java] }
@@ -2356,24 +2395,102 @@ fun AppNavigation(
         // 转场时钟卡在非 IDLE 超过 1.5s 就当作空闲。
         // 卡片转场一旦没回到 IDLE（平板多卡片时更容易发生），
         // 整页的后台工作会被永久挡住，封面也不再加载。
+        var forceCardTransitionResetSignal by remember { mutableIntStateOf(0) }
         val cardTransitionIdleNow = videoCardTransitionClock.phase ==
             com.android.purebilibili.core.ui.transition.VideoCardTransitionBackgroundPhase.IDLE &&
             videoCardTransitionClock.settleState == VideoCardTransitionSettleState.Idle
+        val cardTransitionGestureActive =
+            videoCardTransitionClock.settleState == VideoCardTransitionSettleState.InteractiveSeek
+        val hasCardMorphTargetOnStack = hasCardMorphDestination(navigation3BackStack)
         var cardTransitionTimedOut by remember { androidx.compose.runtime.mutableStateOf(false) }
-        LaunchedEffect(cardTransitionIdleNow) {
-            if (cardTransitionIdleNow) {
+        LaunchedEffect(cardTransitionIdleNow, hasCardMorphTargetOnStack, cardTransitionGestureActive) {
+            if (cardTransitionIdleNow || hasCardMorphTargetOnStack) {
                 cardTransitionTimedOut = false
                 return@LaunchedEffect
             }
+            if (cardTransitionGestureActive) return@LaunchedEffect
             kotlinx.coroutines.delay(CARD_TRANSITION_STUCK_TIMEOUT_MS)
+            com.android.purebilibili.core.util.Logger.w(
+                "AppNavigation",
+                "Card transition timed out (${CARD_TRANSITION_STUCK_TIMEOUT_MS}ms); releasing background work gate",
+            )
             cardTransitionTimedOut = true
         }
         val mainHostNavigationReady = remember { mutableStateOf<androidx.compose.runtime.State<Boolean>?>(null) }
+        val isMainHostTop = navigation3BackStack.lastOrNull() == BiliPaiNavKey.MainHost
+        val navSettledNow = mainHostNavigationReady.value?.value == true
+        var navigationSettleTimedOut by remember { mutableStateOf(false) }
+        LaunchedEffect(
+            isMainHostTop,
+            navSettledNow,
+            mainBottomPagerState.isNavigating,
+            cardTransitionGestureActive,
+        ) {
+            if (!isMainHostTop || navSettledNow) {
+                navigationSettleTimedOut = false
+                return@LaunchedEffect
+            }
+            if (!shouldArmNavigationSettleTimeout(
+                    isMainHostTop = isMainHostTop,
+                    isNavigationSettled = navSettledNow,
+                    isPagerNavigating = mainBottomPagerState.isNavigating,
+                    isCardGestureInProgress = cardTransitionGestureActive,
+                )
+            ) {
+                return@LaunchedEffect
+            }
+            kotlinx.coroutines.delay(CARD_TRANSITION_STUCK_TIMEOUT_MS)
+            com.android.purebilibili.core.util.Logger.w(
+                "AppNavigation",
+                "MainHost navigation settle timed out (${CARD_TRANSITION_STUCK_TIMEOUT_MS}ms); releasing background work gate",
+            )
+            navigationSettleTimedOut = true
+        }
+        val hasReturningDetailOnStack = hasReturningDetailDestination(navigation3BackStack)
+        val effectiveNavSettled = navSettledNow || navigationSettleTimedOut
+        val effectiveCardIdle = cardTransitionIdleNow || cardTransitionTimedOut
+        val returnReconcileAction = resolveReturnSessionReconciliationAction(
+            isReturningFromDetail = navigation3ReturnSession.isReturningFromDetail,
+            hasReturningDetailOnStack = hasReturningDetailOnStack,
+            isNavigationSettled = effectiveNavSettled,
+            isCardTransitionIdle = effectiveCardIdle,
+            isCardGestureInProgress = cardTransitionGestureActive,
+        )
+        LaunchedEffect(returnReconcileAction, navigation3ReturnSession.isReturningFromDetail) {
+            if (returnReconcileAction != ReturnSessionReconciliationAction.WAIT_FOR_SUPPRESSION_WINDOW) {
+                return@LaunchedEffect
+            }
+            kotlinx.coroutines.delay(RETURN_SESSION_RECONCILE_GRACE_MS)
+            if (navigation3ReturnSession.isReturningFromDetail &&
+                !hasReturningDetailDestination(navigation3BackStack)
+            ) {
+                com.android.purebilibili.core.util.Logger.w(
+                    "AppNavigation",
+                    "Reconciling stale returning session after stack & transition settled",
+                )
+                navigation3ReturnSession = navigation3ReturnSession.clearReturning()
+            }
+        }
+        LaunchedEffect(navigation3ReturnSession.isReturningFromDetail, hasReturningDetailOnStack) {
+            if (!navigation3ReturnSession.isReturningFromDetail || hasReturningDetailOnStack) {
+                return@LaunchedEffect
+            }
+            kotlinx.coroutines.delay(RETURN_SESSION_STALE_TIMEOUT_MS)
+            if (navigation3ReturnSession.isReturningFromDetail &&
+                !hasReturningDetailDestination(navigation3BackStack)
+            ) {
+                com.android.purebilibili.core.util.Logger.w(
+                    "AppNavigation",
+                    "Returning session timed out (${RETURN_SESSION_STALE_TIMEOUT_MS}ms); forcing clearReturning",
+                )
+                navigation3ReturnSession = navigation3ReturnSession.clearReturning()
+            }
+        }
         fun bottomPagerBackgroundWorkAllowedNow() = shouldAllowBottomPagerBackgroundWork(
-            isMainHostTop = navigation3BackStack.lastOrNull() == BiliPaiNavKey.MainHost,
-            isCardTransitionIdle = cardTransitionIdleNow || cardTransitionTimedOut,
+            isMainHostTop = isMainHostTop,
+            isCardTransitionIdle = effectiveCardIdle,
             isPagerNavigating = mainBottomPagerState.isNavigating,
-            isNavigationSettled = mainHostNavigationReady.value?.value == true,
+            isNavigationSettled = effectiveNavSettled,
         )
         val bottomPagerBackgroundWorkAllowed = bottomPagerBackgroundWorkAllowedNow()
         LaunchedEffect(currentRoute, currentBottomNavItem) {
@@ -3419,7 +3536,14 @@ fun AppNavigation(
                         isQuickReturningFromVideoDetail = navigation3ReturnSession.isQuickReturnFromDetail,
                         onVideoDetailReturnAnimationConsumed = {
                             navigation3ReturnSession = navigation3ReturnSession.clearReturning()
-                        }
+                        },
+                        onRecoverStaleTransitionGate = {
+                            if (navigation3ReturnSession.isReturningFromDetail) {
+                                navigation3ReturnSession = navigation3ReturnSession.clearReturning()
+                            }
+                            forceCardTransitionResetSignal += 1
+                            navigationSettleTimedOut = true
+                        },
                     )
                 }
 
@@ -5638,6 +5762,18 @@ fun AppNavigation(
                 @Composable
                 fun RenderArticleDetailEntryContent(key: BiliPaiNavKey) {
                     val articleKey = key as BiliPaiNavKey.ArticleDetail
+                    val latestNavTopStillDetail by rememberUpdatedState(
+                        navigation3BackStack.lastOrNull().let {
+                            it is BiliPaiNavKey.ArticleDetail || it is BiliPaiNavKey.VideoDetail
+                        }
+                    )
+                    DisposableEffect(articleKey.articleId) {
+                        onDispose {
+                            if (!latestNavTopStillDetail && navigation3ReturnSession.isReturningFromDetail) {
+                                navigation3ReturnSession = navigation3ReturnSession.clearReturning()
+                            }
+                        }
+                    }
                     ArticleDetailScreen(
                         articleId = articleKey.articleId,
                         backHandlerEnabled = false,
@@ -6127,6 +6263,8 @@ fun AppNavigation(
                         } else false
                     },
                     videoSourceGeneration = navigation3ReturnSession.sourceGeneration,
+                    isTopEntryNavigationSettled = isMainHostTop && navSettledNow,
+                    forceCardTransitionResetSignal = forceCardTransitionResetSignal,
                     modifier = Modifier
                         .fillMaxSize()
                         .then(

@@ -1,16 +1,10 @@
 package com.android.purebilibili.feature.home
 
-import android.os.SystemClock
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.map
@@ -48,34 +42,4 @@ internal fun StateFlow<CategoryContent>.collectHomeChromeContentReady(
         }
         updates.collectAsStateWithLifecycle(initialValue = isHomeChromeContentReady(source.value))
     }
-}
-
-/**
- * 单个瞬态门控的看门狗：门控持续超过 [HOME_STALE_RETURN_GATE_RECOVERY_MS] 且没有
- * 进行中的返回手势时，强制按已恢复处理。
- *
- * 每个门控独立计时，互不继承对方的恢复结果，否则一个卡住的标记会连带跳过另一个
- * 门控下一次合法保护窗。门控清除时 [active] 变化会同步重置，避免多放行一帧；
- * [paused]（手势进行中或首页不在顶层）期间不计时，恢复计时从暂停结束重新累计。
- */
-@Composable
-internal fun rememberStaleGateRecovered(
-    active: Boolean,
-    paused: Boolean,
-): Boolean {
-    var recovered by remember(active) { mutableStateOf(false) }
-    LaunchedEffect(active, paused) {
-        if (!active || paused) return@LaunchedEffect
-        val armedAtMs = SystemClock.elapsedRealtime()
-        delay(HOME_STALE_RETURN_GATE_RECOVERY_MS)
-        if (shouldRecoverStaleHomeGate(
-                active = active,
-                elapsedMs = SystemClock.elapsedRealtime() - armedAtMs,
-                gestureInProgress = paused,
-            )
-        ) {
-            recovered = true
-        }
-    }
-    return recovered
 }

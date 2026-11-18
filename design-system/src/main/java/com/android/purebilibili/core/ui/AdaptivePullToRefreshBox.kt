@@ -90,8 +90,16 @@ fun AdaptivePullToRefreshBox(
                     )
                 }
             }
+            val mountMiuixRefresh = shouldMountMiuixPullToRefresh(
+                enabled = enabled,
+                isRefreshing = isRefreshing,
+                allowContentScrollWhileRefreshing = allowContentScrollWhileRefreshing,
+                reduceMotion = reduceMotion,
+                inViewport = refreshGate.inViewport,
+                resumed = refreshGate.resumed,
+            )
             Box(modifier = modifier.then(refreshGate.modifier), contentAlignment = contentAlignment) {
-                if (enabled && refreshGate.active && !((allowContentScrollWhileRefreshing || reduceMotion) && isRefreshing)) {
+                if (mountMiuixRefresh) {
                     // The native container owns its drag/refresh animation scope. Discard that
                     // state with the container when player expansion temporarily disables refresh;
                     // otherwise a cancelled Pulling/RefreshComplete session can consume later
@@ -130,7 +138,14 @@ fun AdaptivePullToRefreshBox(
                             stableContent(contentAlignment, content)
                         }
                         // 非阻塞刷新或减少动态效果时，静态提示与列表分开，避免保留旋转任务。
-                        if (refreshGate.active && (allowContentScrollWhileRefreshing || reduceMotion) && isRefreshing) {
+                        if (shouldShowMiuixNonBlockingRefreshHint(
+                                allowContentScrollWhileRefreshing = allowContentScrollWhileRefreshing,
+                                reduceMotion = reduceMotion,
+                                isRefreshing = isRefreshing,
+                                inViewport = refreshGate.inViewport,
+                                resumed = refreshGate.resumed,
+                            )
+                        ) {
                             com.android.purebilibili.core.ui.components.AppText(
                                 text = "正在刷新…",
                                 color = AppSurfaceTokens.primary(),
@@ -153,9 +168,16 @@ fun AdaptivePullToRefreshBox(
                     modifier = modifier.then(refreshGate.modifier),
                     state = state,
                     contentAlignment = contentAlignment,
-                    enabled = enabled && refreshGate.active,
+                    enabled = enabled,
                     indicator = {
-                        if (refreshGate.active) {
+                        if (shouldRenderMaterialPullToRefreshIndicator(
+                                gateActive = refreshGate.active,
+                                distanceFraction = state.distanceFraction,
+                                isRefreshing = isRefreshing,
+                                inViewport = refreshGate.inViewport,
+                                resumed = refreshGate.resumed,
+                            )
+                        ) {
                             if (reduceMotion && isRefreshing) {
                                 com.android.purebilibili.core.ui.components.AppText(
                                     text = "正在刷新…",

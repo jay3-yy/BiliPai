@@ -2,8 +2,6 @@ package com.android.purebilibili.feature.home
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class HomeReturnAnimationPolicyTest {
 
@@ -83,45 +81,6 @@ class HomeReturnAnimationPolicyTest {
                 isTabletLayout = true,
                 cardAnimationEnabled = true,
                 cardTransitionEnabled = false,
-            )
-        )
-    }
-
-    @Test
-    fun staleGate_recoversOnlyAfterTimeoutWithoutReturnGesture() {
-        // 门控未挂起或手势进行中时永不强制恢复：用户按住预测性返回可以远超期限。
-        assertFalse(
-            shouldRecoverStaleHomeGate(active = false, elapsedMs = 9_999L, gestureInProgress = false)
-        )
-        assertFalse(
-            shouldRecoverStaleHomeGate(active = true, elapsedMs = 9_999L, gestureInProgress = true)
-        )
-        // 恢复期限内保持门控：任何合法返回动画（含平板 buffer）都短于该值。
-        assertFalse(
-            shouldRecoverStaleHomeGate(active = true, elapsedMs = 1_999L, gestureInProgress = false)
-        )
-        // 期限到达即判定失联，恢复门控。
-        assertTrue(
-            shouldRecoverStaleHomeGate(active = true, elapsedMs = 2_000L, gestureInProgress = false)
-        )
-    }
-
-    @Test
-    fun staleGate_honorsExplicitTimeout() {
-        assertFalse(
-            shouldRecoverStaleHomeGate(
-                active = true,
-                elapsedMs = 499L,
-                gestureInProgress = false,
-                timeoutMs = 500L,
-            )
-        )
-        assertTrue(
-            shouldRecoverStaleHomeGate(
-                active = true,
-                elapsedMs = 500L,
-                gestureInProgress = false,
-                timeoutMs = 500L,
             )
         )
     }
