@@ -178,4 +178,13 @@ class VideoAspectRatioLayoutPolicyTest {
         assertEquals(Anime4KDisplayScaleMode.FIT, VideoAspectRatio.RATIO_4_3.toAnime4KDisplayScaleMode())
         assertEquals(Anime4KDisplayScaleMode.STRETCH, VideoAspectRatio.STRETCH.toAnime4KDisplayScaleMode())
     }
+
+    @Test
+    fun `compose surface sync workaround targets Android 14 through Android 17 plus SurfaceViews`() {
+        assertFalse(shouldRunComposeSurfaceSyncWorkaround(sdkInt = 33, isSurfaceView = true))
+        listOf(34, 35, 36, 37).forEach { sdkInt ->
+            assertTrue(shouldRunComposeSurfaceSyncWorkaround(sdkInt = sdkInt, isSurfaceView = true))
+            assertFalse(shouldRunComposeSurfaceSyncWorkaround(sdkInt = sdkInt, isSurfaceView = false))
+        }
+    }
 }

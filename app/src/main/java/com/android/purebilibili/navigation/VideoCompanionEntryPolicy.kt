@@ -10,6 +10,17 @@ import com.android.purebilibili.feature.audio.screen.isAudioNowPlayingPlayerDest
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.toLegacyRoute
 
+internal fun isPlayerDestinationKey(key: BiliPaiNavKey?): Boolean = when (key) {
+    is BiliPaiNavKey.VideoDetail,
+    is BiliPaiNavKey.BangumiPlayer,
+    is BiliPaiNavKey.Live,
+    is BiliPaiNavKey.Story,
+    is BiliPaiNavKey.AudioMode,
+    is BiliPaiNavKey.OfflineVideoPlayer,
+    is BiliPaiNavKey.NativeMusic -> true
+    else -> isAudioNowPlayingPlayerDestination(key?.toLegacyRoute())
+}
+
 /** 列表、搜索和空间等来源共用资格；播放器内继续沿用原有导航。 */
 internal fun shouldOpenVideoCompanion(
     key: BiliPaiNavKey,
@@ -19,9 +30,9 @@ internal fun shouldOpenVideoCompanion(
     posture: AppFoldPosture,
     shouldAvoidHinge: Boolean,
 ): Boolean {
-    if (!enabled || key !is BiliPaiNavKey.VideoDetail ||
-        isAudioNowPlayingPlayerDestination(origin?.toLegacyRoute())
-    ) return false
+    if (!enabled || key !is BiliPaiNavKey.VideoDetail || isPlayerDestinationKey(origin)) {
+        return false
+    }
     return resolveVideoDetailPresentation(
         VideoDetailPresentationInput(
             isExpandedWindow = window.isExpandedScreen && window.heightSizeClass != WindowHeightSizeClass.Compact,
