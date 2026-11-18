@@ -19,12 +19,15 @@ private const val FEED_BODY_LIMIT_BYTES = 2 * 1024 * 1024
 private const val FEED_REQUEST_TIMEOUT_MS = 8_000L
 
 internal class NativeArticleRedirect(val targetUrl: String) : java.io.IOException("此链接应由 B 站原生页面打开")
+internal class ArticleHttpFailure(val statusCode: Int) : java.io.IOException("原文请求失败 $statusCode")
+internal class ArticleContentUnavailable(val userMessage: String) : java.io.IOException(userMessage)
 
 suspend fun fetchArticleHtml(url: String): Result<String> = fetchReadableArticle(url).map { it.html }
 
 suspend fun fetchReadableArticle(url: String): Result<ReadableArticle> = withContext(Dispatchers.IO) {
     val call = if (isHttpFeedUrl(url)) {
-        publicContentHttpClient.newCall(Request.Builder().url(url.trim()).header("User-Agent", "Mozilla/5.0 BiliPai Reader").build())
+        // 使用 HTTP 客户端的默认标识，避免站点拒绝自定义的阅读器标识。
+        publicContentHttpClient.newCall(Request.Builder().url(url.trim()).build())
     } else null
     if (call == null) return@withContext Result.failure(IllegalArgumentException("原文地址无效"))
     runCatching {
@@ -40,13 +43,14 @@ suspend fun fetchReadableArticle(url: String): Result<ReadableArticle> = withCon
                 override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                     val result = runCatching {
                         response.use {
-                            if (com.android.purebilibili.core.util.isBilibiliWebHost(response.request.url.host)) {
-                                throw NativeArticleRedirect(response.request.url.toString())
+                            val finalUrl = sanitizePublicContentUrl(response.request.url)
+                            if (com.android.purebilibili.core.util.isBilibiliWebHost(finalUrl.host)) {
+                                throw NativeArticleRedirect(finalUrl.toString())
                             }
-                            if (!response.isSuccessful) error("原文请求失败 ${response.code}")
+                            if (!response.isSuccessful) throw ArticleHttpFailure(response.code)
                             val mediaType = response.body.contentType()
                             if (mediaType != null && mediaType.subtype != "html" && mediaType.subtype != "xhtml+xml") {
-                                error("此链接不是可阅读的网页")
+                                throw ArticleContentUnavailable("此链接不是可阅读的网页")
                             }
                             val stream = response.body.byteStream()
                             val buffer = ByteArray(8 * 1024)
@@ -54,14 +58,16 @@ suspend fun fetchReadableArticle(url: String): Result<ReadableArticle> = withCon
                             while (continuation.isActive) {
                                 val read = stream.read(buffer)
                                 if (read < 0) break
-                                if (output.size() + read > FEED_BODY_LIMIT_BYTES) error("原文内容超过 2MB")
+                                if (output.size() + read > FEED_BODY_LIMIT_BYTES) {
+                                    throw ArticleContentUnavailable("原文内容超过 2MB")
+                                }
                                 output.write(buffer, 0, read)
                             }
                             if (!continuation.isActive) throw kotlinx.coroutines.CancellationException()
                             val charset = response.body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8
                             val page = output.toString(charset.name())
-                            extractReadableArticle(page, response.request.url.toString())
-                                ?: error("暂时无法提取原文正文")
+                            extractReadableArticle(page, finalUrl.toString())
+                                ?: throw ArticleContentUnavailable("暂时无法提取原文正文")
                         }
                     }
                     continuation.resumeWith(result)

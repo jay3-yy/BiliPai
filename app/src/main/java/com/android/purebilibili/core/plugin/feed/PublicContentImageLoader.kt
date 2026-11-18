@@ -17,6 +17,17 @@ import coil3.request.maxBitmapSize
  */
 internal object PublicContentImageLoader {
     @Volatile private var instance: ImageLoader? = null
+    @Volatile private var previewInstance: ImageLoader? = null
+
+    fun forLinkPreview(context: Context): ImageLoader = previewInstance ?: synchronized(this) {
+        previewInstance ?: ImageLoader.Builder(context.applicationContext)
+            .components {
+                add(OkHttpNetworkFetcherFactory(callFactory = { publicLinkPreviewHttpClient }))
+            }
+            .diskCache(null)
+            .maxBitmapSize(coil3.size.Size(1280, 1280))
+            .build().also { previewInstance = it }
+    }
 
     fun get(context: Context): ImageLoader = instance ?: synchronized(this) {
         instance ?: ImageLoader.Builder(context.applicationContext)
