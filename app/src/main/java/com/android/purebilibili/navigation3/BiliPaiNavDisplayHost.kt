@@ -147,6 +147,8 @@ internal fun BiliPaiNavDisplayHost(
     relatedReturnRequestId: Long = 0L,
     onRelatedVideoDetailReturned: (Long, Long) -> Boolean = { _, _ -> false },
     videoSourceGeneration: Long = 0L,
+    isTopEntryNavigationSettled: Boolean = false,
+    forceCardTransitionResetSignal: Int = 0,
     modifier: Modifier = Modifier,
     content: @Composable (BiliPaiNavKey) -> Unit,
 ) = BoxWithConstraints(modifier = modifier) {
@@ -550,6 +552,106 @@ internal fun BiliPaiNavDisplayHost(
             VideoCardTransitionDiagnostics.onMotionPhase(
                 state, heroMotion, sourceMetadata.sourceLayout, diagnosticConfiguration,
             )
+        }
+    }
+    val stackHasCardMorphDestination = hasCardMorphDestination(stackSnapshot)
+    val cardTransitionProgressSettle = videoCardTransitionProgress.settleStateOrNull()
+    val cardTransitionGestureActive = videoCardTransitionProgress.isGestureInProgress()
+    val cardTransitionDriverIdle =
+        videoCardClock.phase == VideoCardTransitionBackgroundPhase.IDLE &&
+            cardTransitionProgressSettle == null &&
+            videoCardClock.settleState == VideoCardTransitionSettleState.Idle
+    // Plan A: Reconcile from current state when no card morph destination remains on the stack
+    // and the host navigation has already settled, catching dropped NavDisplay Idle transforms.
+    LaunchedEffect(
+        cardMorphAvailable,
+        stackHasCardMorphDestination,
+        isTopEntryNavigationSettled,
+        cardTransitionDriverIdle,
+        cardTransitionGestureActive,
+    ) {
+        if (!cardMorphAvailable) return@LaunchedEffect
+        if (!shouldResetStuckCardTransition(
+                hasCardMorphDestinationOnStack = stackHasCardMorphDestination,
+                isCardTransitionIdle = cardTransitionDriverIdle,
+                isCardGestureInProgress = cardTransitionGestureActive,
+                isHostNavigationSettled = isTopEntryNavigationSettled,
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        withFrameNanos { }
+        val stillIdle = videoCardClock.phase == VideoCardTransitionBackgroundPhase.IDLE &&
+            videoCardTransitionProgress.settleStateOrNull() == null &&
+            videoCardClock.settleState == VideoCardTransitionSettleState.Idle
+        if (shouldResetStuckCardTransition(
+                hasCardMorphDestinationOnStack = hasCardMorphDestination(backStack),
+                isCardTransitionIdle = stillIdle,
+                isCardGestureInProgress = videoCardTransitionProgress.isGestureInProgress(),
+                isHostNavigationSettled = isTopEntryNavigationSettled,
+            )
+        ) {
+            com.android.purebilibili.core.util.Logger.w(
+                "BiliPaiNavDisplayHost",
+                "Reconciling stale card transition state after stack settled: phase=${videoCardClock.phase}, settle=${videoCardTransitionProgress.settleStateOrNull()}",
+            )
+            videoCardClock.landingFeedback.publish(
+                sourceKey = sourceMetadata.sourceKey,
+                sourceLayout = sourceMetadata.sourceLayout,
+                committedReturn = videoCardClock.phase == VideoCardTransitionBackgroundPhase.RETURNING,
+            )
+            videoCardClock.followNavigationDriver(VideoCardTransitionSettleState.Idle)
+            videoCardTransitionProgress.clear()
+        }
+    }
+    // Plan C: Source-level timeout watchdog if NavDisplay neither settled nor delivered Idle.
+    LaunchedEffect(
+        cardMorphAvailable,
+        stackHasCardMorphDestination,
+        cardTransitionDriverIdle,
+        cardTransitionGestureActive,
+    ) {
+        if (!cardMorphAvailable) return@LaunchedEffect
+        if (!shouldForceResetCardTransitionOnTimeout(
+                hasCardMorphDestinationOnStack = stackHasCardMorphDestination,
+                isCardTransitionIdle = cardTransitionDriverIdle,
+                isCardGestureInProgress = cardTransitionGestureActive,
+            )
+        ) {
+            return@LaunchedEffect
+        }
+        kotlinx.coroutines.delay(CARD_TRANSITION_STUCK_RECOVERY_TIMEOUT_MS)
+        val stillIdle = videoCardClock.phase == VideoCardTransitionBackgroundPhase.IDLE &&
+            videoCardTransitionProgress.settleStateOrNull() == null &&
+            videoCardClock.settleState == VideoCardTransitionSettleState.Idle
+        if (shouldForceResetCardTransitionOnTimeout(
+                hasCardMorphDestinationOnStack = hasCardMorphDestination(backStack),
+                isCardTransitionIdle = stillIdle,
+                isCardGestureInProgress = videoCardTransitionProgress.isGestureInProgress(),
+            )
+        ) {
+            com.android.purebilibili.core.util.Logger.w(
+                "BiliPaiNavDisplayHost",
+                "Card transition timed out (${CARD_TRANSITION_STUCK_RECOVERY_TIMEOUT_MS}ms) without destination on stack; forcing Idle (phase=${videoCardClock.phase}, settle=${videoCardTransitionProgress.settleStateOrNull()})",
+            )
+            videoCardClock.followNavigationDriver(VideoCardTransitionSettleState.Idle)
+            videoCardTransitionProgress.clear()
+        }
+    }
+    LaunchedEffect(forceCardTransitionResetSignal) {
+        if (forceCardTransitionResetSignal <= 0) return@LaunchedEffect
+        if (!videoCardTransitionProgress.isGestureInProgress() &&
+            !hasCardMorphDestination(backStack) &&
+            (videoCardClock.phase != VideoCardTransitionBackgroundPhase.IDLE ||
+                videoCardTransitionProgress.settleStateOrNull() != null ||
+                videoCardClock.settleState != VideoCardTransitionSettleState.Idle)
+        ) {
+            com.android.purebilibili.core.util.Logger.w(
+                "BiliPaiNavDisplayHost",
+                "User interaction forced card transition reset (phase=${videoCardClock.phase}, settle=${videoCardTransitionProgress.settleStateOrNull()})",
+            )
+            videoCardClock.followNavigationDriver(VideoCardTransitionSettleState.Idle)
+            videoCardTransitionProgress.clear()
         }
     }
 

@@ -533,4 +533,123 @@ class BiliPaiReturnSessionStateTest {
         ))
         assertEquals("home:BV_A", next.restorePendingRelatedReturns().lastVideoSourceKey)
     }
+
+    @Test
+    fun returningDetailAndCardMorphDestinationDetectionCoversVideoAndArticle() {
+        val mainOnly = listOf(BiliPaiNavKey.MainHost)
+        val withVideo = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.VideoDetail(bvid = "BV1xx", sourceRoute = "home"))
+        val withArticle = listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.ArticleDetail(articleId = 42L))
+
+        assertFalse(hasReturningDetailDestination(mainOnly))
+        assertTrue(hasReturningDetailDestination(withVideo))
+        assertTrue(hasReturningDetailDestination(withArticle))
+
+        assertFalse(hasCardMorphDestination(mainOnly))
+        assertTrue(hasCardMorphDestination(withVideo))
+        assertFalse(hasCardMorphDestination(withArticle))
+    }
+
+    @Test
+    fun returnSessionReconciliationWaitsOnlyWhenDetailIsGoneAndTransitionsAreSettled() {
+        assertEquals(
+            ReturnSessionReconciliationAction.NONE,
+            resolveReturnSessionReconciliationAction(
+                isReturningFromDetail = false,
+                hasReturningDetailOnStack = false,
+                isNavigationSettled = true,
+                isCardTransitionIdle = true,
+                isCardGestureInProgress = false,
+            )
+        )
+        assertEquals(
+            ReturnSessionReconciliationAction.NONE,
+            resolveReturnSessionReconciliationAction(
+                isReturningFromDetail = true,
+                hasReturningDetailOnStack = true,
+                isNavigationSettled = true,
+                isCardTransitionIdle = true,
+                isCardGestureInProgress = false,
+            )
+        )
+        assertEquals(
+            ReturnSessionReconciliationAction.NONE,
+            resolveReturnSessionReconciliationAction(
+                isReturningFromDetail = true,
+                hasReturningDetailOnStack = false,
+                isNavigationSettled = true,
+                isCardTransitionIdle = true,
+                isCardGestureInProgress = true,
+            )
+        )
+        assertEquals(
+            ReturnSessionReconciliationAction.NONE,
+            resolveReturnSessionReconciliationAction(
+                isReturningFromDetail = true,
+                hasReturningDetailOnStack = false,
+                isNavigationSettled = false,
+                isCardTransitionIdle = true,
+                isCardGestureInProgress = false,
+            )
+        )
+        assertEquals(
+            ReturnSessionReconciliationAction.WAIT_FOR_SUPPRESSION_WINDOW,
+            resolveReturnSessionReconciliationAction(
+                isReturningFromDetail = true,
+                hasReturningDetailOnStack = false,
+                isNavigationSettled = true,
+                isCardTransitionIdle = true,
+                isCardGestureInProgress = false,
+            )
+        )
+    }
+
+    @Test
+    fun stuckCardTransitionResetsWhenHostSettledOrTimedOutWithoutDestination() {
+        assertFalse(
+            shouldResetStuckCardTransition(
+                hasCardMorphDestinationOnStack = true,
+                isCardTransitionIdle = false,
+                isCardGestureInProgress = false,
+                isHostNavigationSettled = true,
+            )
+        )
+        assertFalse(
+            shouldResetStuckCardTransition(
+                hasCardMorphDestinationOnStack = false,
+                isCardTransitionIdle = false,
+                isCardGestureInProgress = true,
+                isHostNavigationSettled = true,
+            )
+        )
+        assertFalse(
+            shouldResetStuckCardTransition(
+                hasCardMorphDestinationOnStack = false,
+                isCardTransitionIdle = false,
+                isCardGestureInProgress = false,
+                isHostNavigationSettled = false,
+            )
+        )
+        assertTrue(
+            shouldResetStuckCardTransition(
+                hasCardMorphDestinationOnStack = false,
+                isCardTransitionIdle = false,
+                isCardGestureInProgress = false,
+                isHostNavigationSettled = true,
+            )
+        )
+        assertTrue(
+            shouldForceResetCardTransitionOnTimeout(
+                hasCardMorphDestinationOnStack = false,
+                isCardTransitionIdle = false,
+                isCardGestureInProgress = false,
+            )
+        )
+        assertFalse(
+            shouldForceResetCardTransitionOnTimeout(
+                hasCardMorphDestinationOnStack = true,
+                isCardTransitionIdle = false,
+                isCardGestureInProgress = false,
+            )
+        )
+    }
 }

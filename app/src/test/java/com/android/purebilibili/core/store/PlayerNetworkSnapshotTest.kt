@@ -12,7 +12,7 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import kotlin.test.Test
+import org.junit.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import org.junit.runner.RunWith
@@ -30,10 +30,13 @@ class PlayerNetworkSnapshotTest {
         preferences.edit().putInt("mode", SettingsManager.DataSaverMode.MOBILE_ONLY.value).commit()
         val wifi = mockk<Network>()
         val mobile = mockk<Network>()
-        val wifiCapabilities = NetworkCapabilities.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
-        val mobileCapabilities = NetworkCapabilities.Builder()
-            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR).build()
+        // NetworkCapabilities.Builder 是 @TestApi，公开 android.jar 不导出；stub 传输类型即可。
+        val wifiCapabilities = mockk<NetworkCapabilities>()
+        val mobileCapabilities = mockk<NetworkCapabilities>()
+        every { wifiCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) } returns true
+        every { wifiCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) } returns false
+        every { mobileCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) } returns false
+        every { mobileCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) } returns true
         val callback = slot<ConnectivityManager.NetworkCallback>()
         val connectivity = mockk<ConnectivityManager>()
         every { connectivity.activeNetwork } returns wifi

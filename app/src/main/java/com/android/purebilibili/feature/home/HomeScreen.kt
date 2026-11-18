@@ -267,7 +267,8 @@ fun HomeScreen(
     visibleDuringNavigation: Boolean = false,
     isReturningFromVideoDetail: Boolean = false,
     isQuickReturningFromVideoDetail: Boolean = false,
-    onVideoDetailReturnAnimationConsumed: () -> Unit = {}
+    onVideoDetailReturnAnimationConsumed: () -> Unit = {},
+    onRecoverStaleTransitionGate: () -> Unit = {},
 ) {
     if (!rememberHomeMemoryRecoveryReady(viewModel)) return
     com.android.purebilibili.core.performance.PerformanceScreenProbe("home")
@@ -574,9 +575,48 @@ fun HomeScreen(
             )
         }
     }
+    val videoCardReturnGestureInProgress =
+        videoCardTransitionBackgroundState.isReturnGestureInProgressProvider()
+    val latestIsTopLevelActive by rememberUpdatedState(isTopLevelActive)
+    val latestIsReturningFromDetail by rememberUpdatedState(isReturningFromVideoDetail)
+    val latestDeferHomeHeavyWork by rememberUpdatedState(deferHomeHeavyWork)
+    val latestReturnGestureInProgress by rememberUpdatedState(videoCardReturnGestureInProgress)
+    val latestOnReturnConsumed by rememberUpdatedState(onVideoDetailReturnAnimationConsumed)
+    val latestOnRecoverStaleTransitionGate by rememberUpdatedState(onRecoverStaleTransitionGate)
+    val recoverHomeInteractionGates = remember {
+        {
+            if (latestIsTopLevelActive &&
+                !latestReturnGestureInProgress &&
+                (latestIsReturningFromDetail || latestDeferHomeHeavyWork)
+            ) {
+                com.android.purebilibili.core.util.Logger.w(
+                    "HomeReturnGate",
+                    "用户下拉/刷新触发门控恢复 (returning=$latestIsReturningFromDetail, defer=$latestDeferHomeHeavyWork)",
+                )
+                latestOnReturnConsumed()
+                latestOnRecoverStaleTransitionGate()
+            }
+        }
+    }
+    val pullRecoveryNestedScroll = remember(recoverHomeInteractionGates) {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPreScroll(
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
+            ): androidx.compose.ui.geometry.Offset {
+                if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput &&
+                    available.y > 0f
+                ) {
+                    recoverHomeInteractionGates()
+                }
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
     // Retained home must not issue scroll/chrome/image work while another page or morph owns the UI.
     val homeFeedUpdatesAllowed = isTopLevelActive &&
-        !isReturningFromVideoDetail && !deferHomeHeavyWork
+        !isReturningFromVideoDetail &&
+        !deferHomeHeavyWork
     // Data may be needed to restore a pending scroll anchor. Only navigation freezes
     // displayed feed data; pager synchronization and anchor recovery gate work below.
     val homeFeedWorkAllowed = homeFeedUpdatesAllowed &&
@@ -587,8 +627,6 @@ fun HomeScreen(
         .collectAsStateWithLifecycle()
     val homeCoverPreloadAllowed = homeFeedWorkAllowed && homeVisualWorkActive &&
         com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed.current
-    val videoCardReturnGestureInProgress =
-        videoCardTransitionBackgroundState.isReturnGestureInProgressProvider()
     var settledShowHomeUpAvatars by rememberSaveable {
         mutableStateOf(homeSettings.showHomeUpAvatars)
     }
@@ -1867,8 +1905,19 @@ fun HomeScreen(
                             indicatorStyle = pullRefreshIndicatorStyle,
                             reduceMotion = systemReduceMotion ||
                                 !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled,
-                            active = pageWork.runActiveWork && homeVisualWorkActive,
+                            active = pageWork.visible &&
+                                ((pageWork.runActiveWork && homeVisualWorkActive) ||
+                                    pullRefreshState.distanceFraction > 0f ||
+                                    isPageRefreshing),
                         )
+                        LaunchedEffect(pullRefreshState, isTopLevelActive) {
+                            if (!isTopLevelActive) return@LaunchedEffect
+                            snapshotFlow { pullRefreshState.distanceFraction > 0f }
+                                .distinctUntilChanged()
+                                .collect { pulling ->
+                                    if (pulling) recoverHomeInteractionGates()
+                                }
+                        }
 
                         //  Defers calculation to graphicsLayer
                         val calculateDragOffset: androidx.compose.ui.unit.Density.() -> Float = remember(
@@ -1896,11 +1945,14 @@ fun HomeScreen(
                         HomeFeedPullToRefreshBox(
                             isRefreshing = isRefreshing && currentCategory == category,
                             onRefresh = {
+                                recoverHomeInteractionGates()
                                 viewModel.refresh(category)
                             },
                             state = pullRefreshState,
                             indicatorTopInset = embeddedPageTopPadding,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .nestedScroll(pullRecoveryNestedScroll),
                              //  不同原生外观使用不同下拉刷新指示器，位移策略仍由 policy 统一控制。
                              //  Custom indicators must include the same top inset as MIUIX contentPadding.
                              indicator = { homeRefreshIndicatorTopInset ->
