@@ -4564,7 +4564,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     }
     
     fun retry() {
-        val bvid = currentBvid.takeIf { it.isNotBlank() } ?: return
+        val currentSuccess = _uiState.value as? VideoPlaybackUiState.Success
+        val bvid = currentSuccess?.info?.bvid?.takeIf { it.isNotBlank() }
+            ?: currentBvid.takeIf { it.isNotBlank() }
+            ?: return
+        // 403 可能来自旧播放器实例，优先用当前成功态的 cid。
+        val targetCid = currentSuccess?.info?.cid?.takeIf { it > 0L }
+            ?: currentCid.takeIf { it > 0L }
+            ?: _detailState.value.info?.cid?.takeIf { it > 0L }
+            ?: 0L
         val fallbackResumePositionMs = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
         val resumePlaybackAfterRetry = exoPlayer?.let { player ->
             resolvePlaybackIntentForSourceReplacement(
@@ -4572,7 +4580,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 isPlaying = player.isPlaying
             )
         } ?: true
-        val currentAudioLang = (_uiState.value as? VideoPlaybackUiState.Success)?.currentAudioLang
+        val currentAudioLang = currentSuccess?.currentAudioLang
         
         //  检查当前错误类型，如果是全局冷却则清除所有冷却
         val currentState = _uiState.value
@@ -4584,12 +4592,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             PlaybackCooldownManager.clearForVideo(bvid)
         }
         
-        PlayUrlCache.invalidate(bvid, currentCid)
+        PlayUrlCache.invalidate(bvid, targetCid)
         playbackSessionStore.clearCurrentMedia()
         loadVideo(
             bvid = bvid,
             autoPlay = resumePlaybackAfterRetry,
-            cid = currentCid,
+            cid = targetCid,
             audioLang = currentAudioLang,
             fallbackResumePositionMs = fallbackResumePositionMs,
             force = true,
