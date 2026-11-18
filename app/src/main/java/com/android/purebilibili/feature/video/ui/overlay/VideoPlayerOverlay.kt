@@ -2138,7 +2138,8 @@ private fun VideoPlayerOverlayContent(
                 playWhenReady = player.playWhenReady,
                 hasRenderedFirstFrame = hasRenderedFirstFrame,
                 suppressTransientOverlays = suppressTransientOverlaysForTransition,
-            ) && centerLoadingUiState == null && !showCenterPlaybackControl,
+            ) && centerLoadingUiState == null && !showCenterPlaybackControl &&
+                !state.startupLoadingActive,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。

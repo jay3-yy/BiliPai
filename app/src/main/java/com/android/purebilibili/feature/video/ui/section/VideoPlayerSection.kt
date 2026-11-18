@@ -1117,6 +1117,12 @@ private fun VideoPlayerSectionContent(
             playbackCid = success?.info?.cid
         )
     }
+    var hasStartedPlayback by remember(currentPlaybackIdentity, playerState.player) {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(observedIsPlaying) {
+        if (observedIsPlaying) hasStartedPlayback = true
+    }
 
     // 控制器显示状态
     var showControls by remember(currentPlaybackIdentity) {
@@ -5252,16 +5258,23 @@ private fun VideoPlayerSectionContent(
             }
         }
 
-        if (playerVisualWorkActive && uiState is VideoPlaybackUiState.Loading && !isInPipMode &&
-            !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition &&
-            !isFirstFrameRendered && !observedIsPlaying
-        ) {
+        val showStartupLoadingIndicator = playerVisualWorkActive && !isInPipMode &&
+            !hasStartedPlayback && !observedIsPlaying &&
+            !state.forceCoverOnly && !state.liveBackPreview &&
+            !suppressTransientOverlaysForTransition && !keepCoverForManualStart &&
+            (uiState is VideoPlaybackUiState.Loading ||
+                (isBuffering && playerState.player.playWhenReady))
+        if (showStartupLoadingIndicator) {
             Column(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(tint = Color.White)
-                AppText("正在加载", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                AppText(
+                    text = if (isBuffering) "正在缓冲" else "正在加载",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
         }
 
@@ -5327,6 +5340,7 @@ private fun VideoPlayerSectionContent(
                     //  [新增] 传入清晰度切换状态和会员状态
                     isQualitySwitching = uiState.isQualitySwitching,
                     isBuffering = isBuffering,
+                    startupLoadingActive = showStartupLoadingIndicator,
                     hasRenderedFirstFrame = isFirstFrameRendered,
                     suppressTransientOverlaysForTransition = suppressTransientOverlaysForTransition,
                     isLoggedIn = uiState.isLoggedIn,
@@ -5698,21 +5712,6 @@ private fun VideoPlayerSectionContent(
                         pageChromeBackdrop,
                 ) {
                     renderVideoPlayerOverlay()
-                }
-            }
-
-            // 起播反馈独立于控制栏透明度；暂停、离页、离屏或返回预览时停止。
-            if (playerVisualWorkActive && !isFirstFrameRendered && isBuffering &&
-                playerState.player.playWhenReady && !observedIsPlaying &&
-                !keepCoverForManualStart &&
-                !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition
-            ) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center).padding(top = 88.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(tint = Color.White)
-                    AppText("正在缓冲", color = Color.White, style = MaterialTheme.typography.labelMedium)
                 }
             }
 

@@ -64,6 +64,8 @@ data class VideoPlayerOverlayState(
     val realResolution: String = "",
     val isQualitySwitching: Boolean = false,
     val isBuffering: Boolean = false,
+    /** section 起播加载层正在显示时，控制层不重复显示缓冲。 */
+    val startupLoadingActive: Boolean = false,
     /** 首帧是否已渲染。进场前的 BUFFERING 不应叠转圈：加载表达由封面承担。 */
     val hasRenderedFirstFrame: Boolean = true,
     /** 转场/返回动画期间抑制瞬时 overlay（缓冲圈等），与 section 的门控同语义。 */
