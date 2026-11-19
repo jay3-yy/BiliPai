@@ -3,13 +3,17 @@ package com.android.purebilibili.feature.agreement
 import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
@@ -21,19 +25,33 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.R
+import com.android.purebilibili.app.PureApplication
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppDialogAction
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppCard
+import com.android.purebilibili.core.ui.components.AppHorizontalDivider
+import com.android.purebilibili.core.ui.components.AppSwitch
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.util.AnalyticsHelper
+import com.android.purebilibili.core.util.CrashReporter
+import kotlinx.coroutines.launch
 
 /**
  * First-launch agreement gate: the app renders only after the user agrees to the
@@ -43,21 +61,60 @@ import com.android.purebilibili.core.ui.components.AppTextButton
 @Composable
 fun UserAgreementGate(content: @Composable () -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var accepted by remember { mutableStateOf(UserAgreementStore.isAccepted(context)) }
+    val initialChoice = remember { readInitialUserAgreementTelemetryChoice(context) }
+    var crashTrackingEnabled by remember { mutableStateOf(initialChoice.crashTrackingEnabled) }
+    var analyticsEnabled by remember { mutableStateOf(initialChoice.analyticsEnabled) }
+    var isSaving by remember { mutableStateOf(false) }
+
     if (accepted) {
         content()
     } else {
         UserAgreementGateScreen(
+            crashTrackingEnabled = crashTrackingEnabled,
+            onCrashTrackingChange = { crashTrackingEnabled = it },
+            analyticsEnabled = analyticsEnabled,
+            onAnalyticsChange = { analyticsEnabled = it },
+            isSaving = isSaving,
             onAgree = {
-                UserAgreementStore.accept(context)
-                accepted = true
+                if (isSaving) return@UserAgreementGateScreen
+                isSaving = true
+                scope.launch {
+                    try {
+                        UserAgreementStore.accept(context)
+                        SettingsManager.setCrashTrackingEnabled(context, crashTrackingEnabled)
+                        SettingsManager.setAnalyticsEnabled(context, analyticsEnabled)
+                        SettingsManager.setCrashTrackingConsentShown(context, true)
+                        val app = context.applicationContext as? PureApplication
+                        if (app != null) {
+                            app.onUserAgreementAccepted(
+                                crashTrackingEnabled = crashTrackingEnabled,
+                                analyticsEnabled = analyticsEnabled,
+                            )
+                        } else {
+                            CrashReporter.setEnabled(crashTrackingEnabled)
+                            AnalyticsHelper.setEnabled(analyticsEnabled)
+                        }
+                        accepted = true
+                    } finally {
+                        isSaving = false
+                    }
+                }
             },
         )
     }
 }
 
 @Composable
-private fun UserAgreementGateScreen(onAgree: () -> Unit) {
+private fun UserAgreementGateScreen(
+    crashTrackingEnabled: Boolean,
+    onCrashTrackingChange: (Boolean) -> Unit,
+    analyticsEnabled: Boolean,
+    onAnalyticsChange: (Boolean) -> Unit,
+    isSaving: Boolean,
+    onAgree: () -> Unit,
+) {
     val activity = LocalActivity.current
     val darkTheme = com.android.purebilibili.core.ui.isAppInDarkTheme()
     val titleColor = if (darkTheme) MaterialTheme.colorScheme.onBackground
@@ -100,8 +157,17 @@ private fun UserAgreementGateScreen(onAgree: () -> Unit) {
                     modifier = Modifier.fillMaxSize().padding(4.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    item { UserAgreementBody() }
-                    item {
+                    item(key = "agreement_body") { UserAgreementBody() }
+                    item(key = "telemetry_preferences") {
+                        UserAgreementTelemetryPreferences(
+                            crashTrackingEnabled = crashTrackingEnabled,
+                            onCrashTrackingChange = onCrashTrackingChange,
+                            analyticsEnabled = analyticsEnabled,
+                            onAnalyticsChange = onAnalyticsChange,
+                            enabled = !isSaving,
+                        )
+                    }
+                    item(key = "agreement_end") {
                         AppText(
                             stringResource(com.android.purebilibili.R.string.user_agreement_read_to_end),
                             style = MaterialTheme.typography.labelSmall,
@@ -114,7 +180,7 @@ private fun UserAgreementGateScreen(onAgree: () -> Unit) {
             }
             AppButton(
                 onClick = onAgree,
-                enabled = reachedBottom,
+                enabled = reachedBottom && !isSaving,
                 modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             ) {
                 AppText(
@@ -126,9 +192,97 @@ private fun UserAgreementGateScreen(onAgree: () -> Unit) {
             }
             AppTextButton(
                 onClick = { activity?.finishAffinity() },
+                enabled = !isSaving,
                 modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp),
             ) { AppText(stringResource(com.android.purebilibili.R.string.user_agreement_decline_exit)) }
         }
+    }
+}
+
+@Composable
+private fun UserAgreementTelemetryPreferences(
+    crashTrackingEnabled: Boolean,
+    onCrashTrackingChange: (Boolean) -> Unit,
+    analyticsEnabled: Boolean,
+    onAnalyticsChange: (Boolean) -> Unit,
+    enabled: Boolean,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        AppHorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
+        AppText(
+            text = stringResource(R.string.user_agreement_telemetry_section_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = AppContentColors.accent(),
+        )
+        AppText(
+            text = stringResource(R.string.user_agreement_telemetry_section_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = AppContentColors.secondaryText(),
+        )
+        UserAgreementTelemetryToggleRow(
+            title = stringResource(R.string.user_agreement_crash_tracking_title),
+            subtitle = stringResource(R.string.user_agreement_crash_tracking_subtitle),
+            checked = crashTrackingEnabled,
+            enabled = enabled,
+            onCheckedChange = onCrashTrackingChange,
+        )
+        UserAgreementTelemetryToggleRow(
+            title = stringResource(R.string.user_agreement_analytics_title),
+            subtitle = stringResource(R.string.user_agreement_analytics_subtitle),
+            checked = analyticsEnabled,
+            enabled = enabled,
+            onCheckedChange = onAnalyticsChange,
+        )
+    }
+}
+
+@Composable
+private fun UserAgreementTelemetryToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(AppShapes.container(ContainerLevel.Field))
+            .clickable(
+                enabled = enabled,
+                role = Role.Switch,
+                onClick = { onCheckedChange(!checked) },
+            )
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            AppText(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = AppContentColors.primaryText(),
+            )
+            AppText(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = AppContentColors.secondaryText(),
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        AppSwitch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            enabled = enabled,
+        )
     }
 }
 

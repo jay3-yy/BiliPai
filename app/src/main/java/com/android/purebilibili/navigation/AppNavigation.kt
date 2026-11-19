@@ -4606,17 +4606,7 @@ fun AppNavigation(
                 @Composable
                 fun RenderOnboardingEntryContent(key: BiliPaiNavKey) {
                     com.android.purebilibili.feature.onboarding.OnboardingScreen(
-                        onFinish = {
-                            replaceNavigation3BackStack(
-                                resolveInitialBiliPaiBackStack(
-                                    openPortraitFeedOnStartup = launchToPortraitFeedOnStartupAtInit
-                                )
-                            )
-                        },
-                        onDisagree = {
-                            // Leave no residual task: disagree means exit the app.
-                            context.findActivity()?.finishAffinity()
-                        },
+                        onBack = { performSystemBackAction() },
                     )
                 }
 

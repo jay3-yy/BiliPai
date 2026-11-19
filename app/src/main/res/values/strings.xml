@@ -175,6 +175,11 @@
     <string name="onboarding_acknowledge">我已知晓</string>
     <string name="onboarding_notice_title">使用须知</string>
     <string name="onboarding_notice_intro">进入应用前，请阅读并勾选以下使用约定。</string>
+    <string name="onboarding_notice_review_intro">以下是 BiliPai 的开源使用约定与官方渠道，方便随时查阅。</string>
+    <string name="onboarding_section_guidelines">使用约定</string>
+    <string name="onboarding_section_agreement">协议与隐私</string>
+    <string name="onboarding_view_user_agreement">用户协议与隐私政策</string>
+    <string name="onboarding_view_user_agreement_summary">查看完整条款</string>
     <string name="onboarding_official_channels">官方渠道</string>
     <string name="onboarding_channels_description">更新与交流请仅通过以下官方渠道。</string>
     <string name="onboarding_telegram_channel">Telegram 频道</string>
@@ -241,6 +246,12 @@
     <string name="user_agreement_user_responsibility_3">3. 本应用仅供学习交流与个人使用，因使用本应用产生的一切后果由您自行承担。</string>
     <string name="user_agreement_section_changes">五、协议的生效与变更</string>
     <string name="user_agreement_changes_1">本协议在您首次启动本应用并确认同意后生效。开发者有权根据法律法规变化、产品更新或运营需要随时对本协议进行修改、补充或更新，修改后的协议将随应用版本发布并在应用内展示；协议更新后应用会重新征求您的同意。若您不同意更新后的协议，应立即停止使用并卸载本应用；若您在协议更新后继续使用本应用，即视为您已接受修改后的协议。请您定期查阅本协议以了解最新内容。</string>
+    <string name="user_agreement_telemetry_section_title">诊断与统计偏好（可选）</string>
+    <string name="user_agreement_telemetry_section_hint">可按需开启或关闭，之后随时可在「设置」中调整。</string>
+    <string name="user_agreement_crash_tracking_title">启用崩溃追踪</string>
+    <string name="user_agreement_crash_tracking_subtitle">崩溃时自动上报错误日志，帮助快速修复问题</string>
+    <string name="user_agreement_analytics_title">匿名使用统计</string>
+    <string name="user_agreement_analytics_subtitle">收集匿名活跃与基础功能统计，不含个人身份信息</string>
     <string name="settings_category_appearance_title">外观与动画</string>
     <string name="settings_category_appearance_summary">主题、文字大小、图标、动画与振动</string>
     <string name="settings_category_playback_title">播放设置</string>
