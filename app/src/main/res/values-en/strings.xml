@@ -170,8 +170,13 @@
     <string name="common_open">Open</string>
     <string name="onboarding_disagree">I Disagree</string>
     <string name="onboarding_acknowledge">I Understand</string>
-    <string name="onboarding_notice_title">Before You Continue</string>
+    <string name="onboarding_notice_title">Usage Notice</string>
     <string name="onboarding_notice_intro">Please read and check each item below before entering the app.</string>
+    <string name="onboarding_notice_review_intro">Review BiliPai\'s open-source usage guidelines and official channels anytime.</string>
+    <string name="onboarding_section_guidelines">Usage Guidelines</string>
+    <string name="onboarding_section_agreement">Agreement &amp; Privacy</string>
+    <string name="onboarding_view_user_agreement">User Agreement &amp; Privacy Policy</string>
+    <string name="onboarding_view_user_agreement_summary">View full terms</string>
     <string name="onboarding_official_channels">Official Channels</string>
     <string name="onboarding_channels_description">Use these official channels for updates and discussion.</string>
     <string name="onboarding_telegram_channel">Telegram Channel</string>
@@ -238,6 +243,12 @@
     <string name="user_agreement_user_responsibility_3">3. This app is for learning, discussion, and personal use. You are responsible for all consequences arising from your use of it.</string>
     <string name="user_agreement_section_changes">5. Effective Date and Changes</string>
     <string name="user_agreement_changes_1">This agreement takes effect when you accept it on your first launch of the app. The developer may revise, supplement, or update it at any time due to changes in laws or regulations, product updates, or operational needs. Updated terms will be released with an app version and shown in the app; you will be asked to accept them again. If you do not agree to an update, stop using the app and uninstall it. Continuing to use the app after an update means you accept the revised agreement. Please review this agreement periodically for the latest terms.</string>
+    <string name="user_agreement_telemetry_section_title">Diagnostics &amp; Analytics (Optional)</string>
+    <string name="user_agreement_telemetry_section_hint">Choose what to share. You can change these anytime in Settings.</string>
+    <string name="user_agreement_crash_tracking_title">Crash Tracking</string>
+    <string name="user_agreement_crash_tracking_subtitle">Send crash reports to help fix stability issues</string>
+    <string name="user_agreement_analytics_title">Anonymous Usage Statistics</string>
+    <string name="user_agreement_analytics_subtitle">Share anonymous activity and feature usage without personal identifiers</string>
     <string name="settings_category_appearance_title">Appearance &amp; Animation</string>
     <string name="settings_category_appearance_summary">Themes, text size, icons, motion, and vibration</string>
     <string name="settings_category_playback_title">Playback</string>

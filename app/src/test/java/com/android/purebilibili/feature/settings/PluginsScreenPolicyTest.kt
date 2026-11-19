@@ -11,6 +11,7 @@ import com.android.purebilibili.core.plugin.skin.UiSkinPackagePreview
 import com.android.purebilibili.core.plugin.skin.UiSkinSurface
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PluginsScreenPolicyTest {
@@ -91,6 +92,18 @@ class PluginsScreenPolicyTest {
         val uiModel = buildInstalledExternalPluginUiModels(listOf(installed)).single()
 
         assertEquals("云推荐", uiModel.title)
+        assertEquals("dev.example.cloud", uiModel.pluginId)
+        assertEquals("abcdef123456", uiModel.packageSha256)
+    }
+
+    @Test
+    fun externalKotlinPluginEntry_isLockedAndMarkedInDevelopment() {
+        val state = resolveExternalKotlinPluginEntryUiState()
+
+        assertFalse(state.enabled)
+        assertEquals("开发中", state.badgeText)
+        assertTrue(state.subtitle.contains("开发中"))
+        assertTrue(state.subtitle.contains("锁定"))
     }
 
     @Test

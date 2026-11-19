@@ -25,7 +25,24 @@ data class ExternalPluginInstallPreviewUiModel(
     val sensitiveCapabilityLabels: List<String>
 )
 
+data class ExternalKotlinPluginEntryUiState(
+    val title: String,
+    val subtitle: String,
+    val badgeText: String,
+    val enabled: Boolean,
+)
+
+fun resolveExternalKotlinPluginEntryUiState(): ExternalKotlinPluginEntryUiState =
+    ExternalKotlinPluginEntryUiState(
+        title = "Kotlin 插件包（.bpplugin）",
+        subtitle = "开发中功能：暂无法修改软件机制或运行插件代码，已暂时锁定",
+        badgeText = "开发中",
+        enabled = false,
+    )
+
 data class InstalledExternalPluginPackageUiModel(
+    val pluginId: String,
+    val packageSha256: String,
     val title: String,
     val subtitle: String,
     val stateText: String,
@@ -163,6 +180,8 @@ fun buildInstalledExternalPluginUiModels(
         .sortedBy { it.manifest.displayName }
         .map { installed ->
             InstalledExternalPluginPackageUiModel(
+                pluginId = installed.manifest.pluginId,
+                packageSha256 = installed.packageSha256,
                 title = installed.manifest.displayName,
                 subtitle = "${installed.manifest.pluginId} · v${installed.manifest.version}",
                 stateText = if (installed.enabled) "已启用" else "已保存，暂不运行",

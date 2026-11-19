@@ -2664,8 +2664,6 @@ fun HomeScreen(
         onBottomBarVisibleChange = setBottomBarVisible,
     )
 
-    HomeConsentDialogHost(crashTrackingConsentShown = homeSettings.crashTrackingConsentShown)
-
     //  滚动方向（简化版 - 不再需要复杂检测，因为标签页只在顶部显示）
     val isScrollingUp = true  // 保留参数兼容性
 

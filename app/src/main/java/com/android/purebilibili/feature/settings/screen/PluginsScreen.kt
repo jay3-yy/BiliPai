@@ -20,11 +20,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -327,6 +330,7 @@ fun PluginsContent(
     val jsRuntime = remember(context) {
         BiliPaiJsRuntime(context)
     }
+    val kotlinPluginEntryState = remember { resolveExternalKotlinPluginEntryUiState() }
     var installedKotlinPackages by remember {
         mutableStateOf(kotlinPluginStore.listInstalledPackages())
     }
@@ -803,12 +807,45 @@ fun PluginsContent(
 
             item(key = "kotlin-import") {
                 Spacer(Modifier.height(12.dp))
-                AppPreferenceGroup(modifier = Modifier.padding(horizontal = 16.dp)) {
+                AppPreferenceGroup(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .then(if (!kotlinPluginEntryState.enabled) Modifier.alpha(0.55f) else Modifier),
+                ) {
                     AppPreference(
                         icon = rememberSettingsVector(R.drawable.ph_file_arrow_up_24, R.drawable.ms_upload_file_fill_24),
-                        title = "安装 Kotlin 插件包",
-                        subtitle = if (isKotlinPackageLoading) "正在读取插件包…" else "选择本地 .bpplugin 文件，预览后安装",
-                        onClick = if (isKotlinPackageLoading) null else ({ kotlinPackagePicker.launch("*/*") }),
+                        title = kotlinPluginEntryState.title,
+                        subtitle = if (kotlinPluginEntryState.enabled && isKotlinPackageLoading) {
+                            "正在读取插件包…"
+                        } else {
+                            kotlinPluginEntryState.subtitle
+                        },
+                        iconTint = if (kotlinPluginEntryState.enabled) {
+                            AppContentColors.secondaryText()
+                        } else {
+                            AppContentColors.secondaryText().copy(alpha = 0.6f)
+                        },
+                        textColor = if (kotlinPluginEntryState.enabled) {
+                            AppContentColors.primaryText()
+                        } else {
+                            AppContentColors.secondaryText()
+                        },
+                        subtitleColor = if (kotlinPluginEntryState.enabled) {
+                            AppContentColors.secondaryText()
+                        } else {
+                            AppContentColors.secondaryText().copy(alpha = 0.85f)
+                        },
+                        showChevron = kotlinPluginEntryState.enabled,
+                        onClick = if (kotlinPluginEntryState.enabled && !isKotlinPackageLoading) {
+                            { kotlinPackagePicker.launch("*/*") }
+                        } else {
+                            null
+                        },
+                        trailingContent = if (!kotlinPluginEntryState.enabled) {
+                            { LockedFeatureBadge(kotlinPluginEntryState.badgeText) }
+                        } else {
+                            null
+                        },
                     )
                 }
             }
@@ -836,27 +873,45 @@ fun PluginsContent(
                         Column {
                             buildInstalledExternalPluginUiModels(installedKotlinPackages)
                                 .forEachIndexed { index, installed ->
-                                    Column(
+                                    Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        verticalAlignment = Alignment.CenterVertically,
                                     ) {
-                                        AppText(
-                                            text = installed.title,
-                                            style = MaterialTheme.typography.bodyLarge,
-                                            color = AppContentColors.primaryText()
-                                        )
-                                        AppText(
-                                            text = "${installed.subtitle} · ${installed.stateText}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = AppContentColors.secondaryText()
-                                        )
-                                        AppText(
-                                            text = installed.packageHashText,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = AppContentColors.secondaryText()
-                                        )
+                                        Column(
+                                            modifier = Modifier.weight(1f),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            AppText(
+                                                text = installed.title,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = AppContentColors.primaryText()
+                                            )
+                                            AppText(
+                                                text = "${installed.subtitle} · ${installed.stateText}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = AppContentColors.secondaryText()
+                                            )
+                                            AppText(
+                                                text = installed.packageHashText,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = AppContentColors.secondaryText()
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        AppTextButton(
+                                            onClick = {
+                                                kotlinPluginStore.removeInstalledPackage(installed.pluginId)
+                                                kotlinPluginStore.revokeAuthorization(
+                                                    installed.pluginId,
+                                                    installed.packageSha256,
+                                                )
+                                                installedKotlinPackages = kotlinPluginStore.listInstalledPackages()
+                                            }
+                                        ) {
+                                            AppText("移除")
+                                        }
                                     }
                                     if (index < installedKotlinPackages.lastIndex) {
                                         Box(
@@ -1410,7 +1465,8 @@ fun PluginsContent(
         }
     }
 
-    kotlinPreview?.let { (preview, decision) ->
+    if (kotlinPluginEntryState.enabled) {
+        kotlinPreview?.let { (preview, decision) ->
         val previewModel = buildExternalPluginInstallPreview(decision)
         AppAlertDialog(
             onDismissRequest = {
@@ -1495,6 +1551,7 @@ fun PluginsContent(
                 }
             }
         )
+    }
     }
 
     uiSkinPreview?.let { preview ->
@@ -2850,4 +2907,30 @@ private fun TestResultDialog(
  */
 private fun formatDuration(seconds: Int): String {
     return FormatUtils.formatDuration(seconds)
+}
+
+@Composable
+private fun LockedFeatureBadge(text: String) {
+    AppSurface(
+        shape = AppShapes.container(ContainerLevel.Tag),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            AppIcon(
+                imageVector = Icons.Outlined.Lock,
+                contentDescription = null,
+                tint = AppContentColors.secondaryText(),
+                modifier = Modifier.size(12.dp),
+            )
+            AppText(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = AppContentColors.secondaryText(),
+            )
+        }
+    }
 }

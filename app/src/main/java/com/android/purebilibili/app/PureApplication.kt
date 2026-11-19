@@ -60,6 +60,8 @@ import com.android.purebilibili.core.util.CacheUtils
 import com.android.purebilibili.core.util.CrashReporter
 import com.android.purebilibili.core.util.LogCollector
 import com.android.purebilibili.core.util.Logger
+import com.android.purebilibili.feature.agreement.UserAgreementStore
+import com.android.purebilibili.feature.agreement.shouldEnableStartupTelemetry
 import com.android.purebilibili.feature.settings.applyAppLanguage
 import com.android.purebilibili.feature.settings.AppThemeMode
 import com.android.purebilibili.feature.settings.resolveThemeModePreference
@@ -80,6 +82,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal fun shouldRefreshLauncherIconForNightModeChange(
     previousUiMode: Int,
@@ -104,6 +107,7 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     private var imageMemoryBudget: BackgroundImageCacheBudget? = null
     private var fairMemoryTrimReceiver: android.content.BroadcastReceiver? = null
     private var launcherIconUiModeSnapshot: Int? = null
+    private val telemetryInitialized = AtomicBoolean(false)
 
     private val backgroundImageTrimHandler by lazy { Handler(Looper.getMainLooper()) }
     private var enteredBackgroundForImageTrimAtMs = 0L
@@ -271,14 +275,21 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         com.android.purebilibili.core.performance.ProcessExitContextRecorder.initialize(this)
         CrashReporter.installGlobalExceptionHandler()
         // Apply stored collection choices before startup work or the first screen can report.
+        val agreementAccepted = UserAgreementStore.isAccepted(this)
         CrashReporter.prepare(
-            getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
-                .getBoolean("enabled", DEFAULT_CRASH_TRACKING_ENABLED)
+            shouldEnableStartupTelemetry(
+                agreementAccepted = agreementAccepted,
+                preferenceEnabled = getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
+                    .getBoolean("enabled", DEFAULT_CRASH_TRACKING_ENABLED),
+            )
         )
         AnalyticsHelper.prepare(
             this,
-            getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
-                .getBoolean("enabled", DEFAULT_ANALYTICS_ENABLED)
+            shouldEnableStartupTelemetry(
+                agreementAccepted = agreementAccepted,
+                preferenceEnabled = getSharedPreferences("analytics_tracking", Context.MODE_PRIVATE)
+                    .getBoolean("enabled", DEFAULT_ANALYTICS_ENABLED),
+            )
         )
         StartupRecovery.beginLaunch(this)
         if (StartupRecovery.isRecoveryMode) {
@@ -523,6 +534,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
     }
 
     private fun initTelemetryNow() {
+        if (!UserAgreementStore.isAccepted(this)) return
+        if (!telemetryInitialized.compareAndSet(false, true)) return
         initCrashlytics()
         val crashDiagnosticsEnabled = getSharedPreferences("crash_tracking", Context.MODE_PRIVATE)
             .getBoolean("enabled", DEFAULT_CRASH_TRACKING_ENABLED)
@@ -532,6 +545,19 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
         )
         initAnalytics()
         attachTelemetryListener()
+    }
+
+    fun onUserAgreementAccepted(
+        crashTrackingEnabled: Boolean,
+        analyticsEnabled: Boolean,
+    ) {
+        initTelemetryNow()
+        CrashReporter.setEnabled(crashTrackingEnabled)
+        com.android.purebilibili.core.performance.Android17Diagnostics.updateEnabled(
+            this,
+            crashTrackingEnabled,
+        )
+        AnalyticsHelper.setEnabled(analyticsEnabled)
     }
 
     private fun initPluginStackNow() {
