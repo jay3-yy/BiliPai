@@ -101,6 +101,8 @@ import com.android.purebilibili.core.ui.performance.AppRuntimeVisualGuardTracker
 import com.android.purebilibili.core.ui.performance.applyPreferredDisplayMode
 import com.android.purebilibili.core.ui.wallpaper.SplashWallpaperLayout
 import com.android.purebilibili.core.ui.wallpaper.resolveSplashWallpaperLayout
+import com.android.purebilibili.core.ui.wallpaper.splashWallpaperContentScale
+import com.android.purebilibili.core.store.resolveSplashWallpaperScale
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.core.util.WindowWidthSizeClass
@@ -2092,6 +2094,13 @@ class MainActivity : AppCompatActivity() {
                             tabletBias = tabletBias
                         )
                     }
+                    val splashWallpaperScale = remember(readCustomSplashPrefs, windowSizeClass.widthSizeClass) {
+                        resolveSplashWallpaperScale(
+                            isTabletLayout = windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact,
+                            mobileScale = SettingsManager.getSplashScaleSync(context, isTablet = false),
+                            tabletScale = SettingsManager.getSplashScaleSync(context, isTablet = true),
+                        )
+                    }
                     val showCustomSplashInitially = remember(runColdStartSplash, splashUri) {
                         runColdStartSplash && shouldShowCustomSplashOverlay(
                             customSplashEnabled = SettingsManager.isSplashEnabledSync(context),
@@ -2151,7 +2160,7 @@ class MainActivity : AppCompatActivity() {
                                         model = splashUri,
                                         contentDescription = "Splash Wallpaper",
                                         alignment = BiasAlignment(0f, splashAlignmentBias),
-                                        contentScale = ContentScale.Crop,
+                                        contentScale = splashWallpaperContentScale(splashWallpaperScale),
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .graphicsLayer(
@@ -2167,7 +2176,7 @@ class MainActivity : AppCompatActivity() {
                                         model = splashUri,
                                         contentDescription = null,
                                         alignment = BiasAlignment(0f, splashAlignmentBias),
-                                        contentScale = ContentScale.Crop,
+                                        contentScale = splashWallpaperContentScale(splashWallpaperScale),
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .graphicsLayer(
@@ -2213,7 +2222,7 @@ class MainActivity : AppCompatActivity() {
                                             model = splashUri,
                                             contentDescription = "Splash Wallpaper Poster",
                                             alignment = BiasAlignment(0f, splashAlignmentBias),
-                                            contentScale = ContentScale.Crop,
+                                            contentScale = splashWallpaperContentScale(splashWallpaperScale),
                                             modifier = Modifier
                                                 .fillMaxSize()
                                                 .graphicsLayer(

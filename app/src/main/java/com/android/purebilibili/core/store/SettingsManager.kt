@@ -1582,6 +1582,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_SPLASH_ICON_ANIMATION_ENABLED = booleanPreferencesKey("splash_icon_animation_enabled")
     private val KEY_SPLASH_ALIGNMENT_MOBILE = floatPreferencesKey("splash_alignment_mobile")
     private val KEY_SPLASH_ALIGNMENT_TABLET = floatPreferencesKey("splash_alignment_tablet")
+    private val KEY_SPLASH_SCALE_MOBILE = floatPreferencesKey("splash_scale_mobile")
+    private val KEY_SPLASH_SCALE_TABLET = floatPreferencesKey("splash_scale_tablet")
     private const val SPLASH_PREFS = "splash_prefs"
     private const val SPLASH_PREFS_KEY_WALLPAPER_URI = "wallpaper_uri"
     private const val SPLASH_PREFS_KEY_WALLPAPER_HISTORY = "wallpaper_history"
@@ -1592,6 +1594,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private const val SPLASH_PREFS_KEY_ICON_ANIMATION_ENABLED = "icon_animation_enabled"
     private const val SPLASH_PREFS_KEY_ALIGNMENT_MOBILE = "alignment_mobile"
     private const val SPLASH_PREFS_KEY_ALIGNMENT_TABLET = "alignment_tablet"
+    private const val SPLASH_PREFS_KEY_SCALE_MOBILE = "scale_mobile"
+    private const val SPLASH_PREFS_KEY_SCALE_TABLET = "scale_tablet"
 
     //  [New] 解锁高画质 (Bypass client-side checks) - REVERTED
     // private val KEY_UNLOCK_HIGH_QUALITY = booleanPreferencesKey("unlock_high_quality")
@@ -4257,6 +4261,33 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         val prefsKey = if (isTablet) SPLASH_PREFS_KEY_ALIGNMENT_TABLET else SPLASH_PREFS_KEY_ALIGNMENT_MOBILE
         return context.getSharedPreferences(SPLASH_PREFS, Context.MODE_PRIVATE)
             .getFloat(prefsKey, 0f)
+    }
+
+    fun getSplashScale(context: Context, isTablet: Boolean): Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            val key = if (isTablet) KEY_SPLASH_SCALE_TABLET else KEY_SPLASH_SCALE_MOBILE
+            sanitizeSplashWallpaperScale(preferences[key] ?: 1f)
+        }
+
+    suspend fun setSplashScale(context: Context, isTablet: Boolean, scale: Float) {
+        val coerced = sanitizeSplashWallpaperScale(scale)
+        context.settingsDataStore.edit { preferences ->
+            val key = if (isTablet) KEY_SPLASH_SCALE_TABLET else KEY_SPLASH_SCALE_MOBILE
+            preferences[key] = coerced
+        }
+        val prefsKey = if (isTablet) SPLASH_PREFS_KEY_SCALE_TABLET else SPLASH_PREFS_KEY_SCALE_MOBILE
+        context.getSharedPreferences(SPLASH_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putFloat(prefsKey, coerced)
+            .apply()
+    }
+
+    fun getSplashScaleSync(context: Context, isTablet: Boolean): Float {
+        val prefsKey = if (isTablet) SPLASH_PREFS_KEY_SCALE_TABLET else SPLASH_PREFS_KEY_SCALE_MOBILE
+        return sanitizeSplashWallpaperScale(
+            context.getSharedPreferences(SPLASH_PREFS, Context.MODE_PRIVATE)
+                .getFloat(prefsKey, 1f)
+        )
     }
 
 

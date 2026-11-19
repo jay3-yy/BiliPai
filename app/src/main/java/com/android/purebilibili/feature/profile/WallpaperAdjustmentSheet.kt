@@ -1,5 +1,9 @@
 package com.android.purebilibili.feature.profile
 
+import com.android.purebilibili.core.store.SPLASH_WALLPAPER_SCALE_MAX
+import com.android.purebilibili.core.store.SPLASH_WALLPAPER_SCALE_MIN
+import com.android.purebilibili.core.store.sanitizeSplashWallpaperScale
+import com.android.purebilibili.core.ui.wallpaper.splashWallpaperContentScale
 import com.android.purebilibili.core.ui.AppContentColors
 
 import coil3.request.crossfade
@@ -55,7 +59,9 @@ fun WallpaperAdjustmentSheet(
     imageUri: String,
     initialMobileBias: Float = 0f,
     initialTabletBias: Float = 0f,
-    onSave: (mobileBias: Float, tabletBias: Float) -> Unit,
+    initialMobileScale: Float = 1f,
+    initialTabletScale: Float = 1f,
+    onSave: (mobileBias: Float, tabletBias: Float, mobileScale: Float, tabletScale: Float) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -73,8 +79,20 @@ fun WallpaperAdjustmentSheet(
     var selectedTab by remember { mutableIntStateOf(if (isTabletWindow) 1 else 0) }
     var mobileBias by remember { mutableFloatStateOf(initialMobileBias) }
     var tabletBias by remember { mutableFloatStateOf(initialTabletBias) }
+    var mobileScale by remember { mutableFloatStateOf(sanitizeSplashWallpaperScale(initialMobileScale)) }
+    var tabletScale by remember { mutableFloatStateOf(sanitizeSplashWallpaperScale(initialTabletScale)) }
 
     val currentBias = if (selectedTab == 0) mobileBias else tabletBias
+    val currentScale = if (selectedTab == 0) mobileScale else tabletScale
+    val resetCurrent = {
+        if (selectedTab == 0) {
+            mobileBias = 0f
+            mobileScale = 1f
+        } else {
+            tabletBias = 0f
+            tabletScale = 1f
+        }
+    }
 
     // Bottom Sheet
     AppModalBottomSheet(
@@ -104,14 +122,14 @@ fun WallpaperAdjustmentSheet(
                 )
 
                 AppText(
-                    text = "调整壁纸位置",
+                    text = "调整壁纸",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.Center)
                 )
 
                 AppTextButton(
-                    onClick = { onSave(mobileBias, tabletBias) },
+                    onClick = { onSave(mobileBias, tabletBias, mobileScale, tabletScale) },
                     enabled = previewLoaded && !previewFailed,
                     modifier = Modifier.align(Alignment.CenterEnd).sizeIn(minWidth = 48.dp, minHeight = 48.dp),
                 ) {
@@ -163,26 +181,28 @@ fun WallpaperAdjustmentSheet(
                         .shadow(8.dp, RoundedCornerShape(previewCornerRadius)),
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        AsyncImage(
-                            model = previewRequest,
-                            onLoading = {
-                                previewLoaded = false
-                                previewFailed = false
-                            },
-                            onSuccess = {
-                                previewLoaded = true
-                                previewFailed = false
-                            },
-                            onError = {
-                                previewLoaded = false
-                                previewFailed = true
-                                Logger.w("WallpaperAdjustment", "Wallpaper preview failed", it.result.throwable)
-                            },
-                            contentDescription = null,
-                            alignment = androidx.compose.ui.BiasAlignment(0f, currentBias),
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        key(currentScale, currentBias) {
+                            AsyncImage(
+                                model = previewRequest,
+                                onLoading = {
+                                    previewLoaded = false
+                                    previewFailed = false
+                                },
+                                onSuccess = {
+                                    previewLoaded = true
+                                    previewFailed = false
+                                },
+                                onError = {
+                                    previewLoaded = false
+                                    previewFailed = true
+                                    Logger.w("WallpaperAdjustment", "Wallpaper preview failed", it.result.throwable)
+                                },
+                                contentDescription = null,
+                                alignment = androidx.compose.ui.BiasAlignment(0f, currentBias),
+                                contentScale = splashWallpaperContentScale(currentScale),
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
 
                         // Fake UI Overlay to help context
                         // Gradient Overlay
@@ -258,7 +278,36 @@ fun WallpaperAdjustmentSheet(
                 )
 
                 AppText(
-                    text = "上下拖动滑块调整图片显示区域",
+                    text = "上下拖动调整位置",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppText("缩放", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                    Spacer(modifier = Modifier.weight(1f))
+                    AppText("${"%.2f".format(currentScale)}x", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                    AppTextButton(onClick = resetCurrent) { AppText("重置") }
+                }
+
+                AppSlider(
+                    value = currentScale,
+                    onValueChange = { newValue ->
+                        if (selectedTab == 0) mobileScale = newValue else tabletScale = newValue
+                    },
+                    valueRange = SPLASH_WALLPAPER_SCALE_MIN..SPLASH_WALLPAPER_SCALE_MAX,
+                    steps = 0,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                AppText(
+                    text = "左右拖动调整大小",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 8.dp)
