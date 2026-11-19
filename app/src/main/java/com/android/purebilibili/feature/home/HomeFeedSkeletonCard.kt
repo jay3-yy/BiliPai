@@ -58,6 +58,7 @@ internal fun HomeFeedSkeletonCard(
     compactStatsOnCover: Boolean = false,
     titleMinLines: Int = 2,
     showPublishTime: Boolean = true,
+    compactCornerFooter: Boolean = false,
     storyStyle: Boolean = false,
     storyHorizontalPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
@@ -128,12 +129,23 @@ internal fun HomeFeedSkeletonCard(
             else com.android.purebilibili.core.ui.FeedTitleHierarchy.Compact,
         )
         val bottomPadding = if (compactMetadata) 6.dp else 8.dp
+        val nativeMiuix = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
+        val horizontalPadding = when {
+            storyStyle -> 0.dp
+            nativeMiuix -> AppSpacingTokens.Small
+            else -> 10.dp
+        }
+        val topPadding = when {
+            storyStyle -> 0.dp
+            nativeMiuix -> AppSpacingTokens.Small
+            else -> bottomPadding
+        }
         val blockColor = homeFeedSkeletonFill(pulse, blockBaseColor, isDarkCardTheme)
         Column(
             modifier = infoModifier.padding(
-                start = if (storyStyle) 0.dp else 10.dp,
-                end = if (storyStyle) 0.dp else 10.dp,
-                top = if (storyStyle) 0.dp else bottomPadding,
+                start = horizontalPadding,
+                end = horizontalPadding,
+                top = topPadding,
                 bottom = if (storyStyle) 0.dp else bottomPadding,
             ),
         ) {
@@ -186,7 +198,12 @@ internal fun HomeFeedSkeletonCard(
                     )
                 }
                 if (showPublishTime && !storyStyle) {
-                    Spacer(Modifier.height(if (compactMetadata) 4.dp else 6.dp))
+                    val footerSpacing = when {
+                        compactCornerFooter -> AppSpacingTokens.Micro
+                        compactMetadata -> AppSpacingTokens.ExtraSmall
+                        else -> AppSpacingTokens.ExtraSmall + AppSpacingTokens.Micro
+                    }
+                    Spacer(Modifier.height(footerSpacing))
                     com.android.purebilibili.core.ui.skeleton.ContentSkeletonText(
                         "00-00", typography.statistic, blockColor,
                     )

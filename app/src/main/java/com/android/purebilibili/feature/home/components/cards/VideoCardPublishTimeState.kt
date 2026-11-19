@@ -20,6 +20,9 @@ import kotlinx.coroutines.sync.withPermit
 
 private val publishTimeRequests = Semaphore(2)
 
+internal fun VideoItem.canFetchVideoCardPublishTime(): Boolean =
+    contentType.isBlank() || contentType == "av"
+
 /** 缺失时间只为当前可见视频按需补取，复用账号隔离的详情缓存。 */
 @Composable
 internal fun rememberVideoCardPublishTimeText(
@@ -42,10 +45,9 @@ private fun rememberMissingVideoCardPublishTimeText(
     var attempted by remember(video.bvid, video.aid, accountIdentity) { mutableStateOf(false) }
     val cachedPubdate = SharedContentRepository.cachedDetailInfo(video.bvid, video.aid)?.pubdate ?: 0L
     val pubdate = cachedPubdate.takeIf { it > 0L } ?: fetchedPubdate
-    val isVideo = video.contentType.isBlank() || video.contentType == "av"
     val pageAllowsWork = LocalPageImageLoadingAllowed.current
     val visualWorkActive = rememberVisualWorkActive()
-    val workAllowed = isVideo && isVisibleInWindow &&
+    val workAllowed = video.canFetchVideoCardPublishTime() && isVisibleInWindow &&
         pageAllowsWork && visualWorkActive && LocalHomeCardAuxiliaryWorkAllowed.current
 
     LaunchedEffect(video.bvid, video.aid, accountIdentity, pubdate, workAllowed) {

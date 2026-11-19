@@ -3,6 +3,7 @@ package com.android.purebilibili.data.repository
 
 import com.android.purebilibili.core.cache.PlayUrlCache
 import com.android.purebilibili.core.coroutines.AppScope
+import com.android.purebilibili.core.network.AccountCookieSession
 import com.android.purebilibili.core.network.AppSignUtils
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.network.TokenRefreshHelper
@@ -612,6 +613,7 @@ object VideoRepository {
         refreshCount: Int = com.android.purebilibili.core.store.DEFAULT_HOME_REFRESH_COUNT,
         columns: Int = 4,
         flush: Int = HOME_FEED_FLUSH_DEFAULT,
+        hdFeedIndex: Int = idx,
     ): Result<HomeFeedPage> = withContext(Dispatchers.IO) {
         TokenManager.awaitRestore()
         val session = homePreloadState.captureSession()
@@ -623,7 +625,7 @@ object VideoRepository {
                 return@withContext preloaded
             }
         }
-        getHomeVideosInternal(idx, refreshCount, columns, flush).also {
+        getHomeVideosInternal(idx, refreshCount, columns, flush, hdFeedIndex).also {
             currentCoroutineContext().ensureActive()
             homePreloadState.ensureCurrent(session)
         }
@@ -635,6 +637,7 @@ object VideoRepository {
         refreshCount: Int,
         columns: Int,
         flush: Int,
+        hdFeedIndex: Int = idx,
     ): Result<HomeFeedPage> {
         try {
             //  读取推荐流类型设置
@@ -651,12 +654,11 @@ object VideoRepository {
                 " getHomeVideos: feedApiType=$feedApiType, idx=$idx, refreshCount=$refreshCount"
             )
             
-            val mobileSource = homeMobileFeedSource(TokenManager.accessTokenPlatformCache)
             return when (feedApiType) {
                 SettingsManager.FeedApiType.MOBILE -> {
-                    val mobileResult = fetchMobileFeed(idx, columns, flush)
+                    val mobileResult = fetchMobileFeed(idx, columns, flush, hdFeedIndex, allowAnonymous = true)
                     if (mobileResult.getOrNull()?.isNotEmpty() == true) {
-                        Result.success(HomeFeedPage(mobileResult.getOrThrow(), setOf(mobileSource)))
+                        Result.success(HomeFeedPage(mobileResult.getOrThrow(), setOf(HomeFeedSource.MOBILE)))
                     } else {
                         fetchWebFeed(idx, refreshCount).map {
                             HomeFeedPage(it, setOf(HomeFeedSource.WEB), "手机端推荐不可用，已使用网页端推荐")
@@ -665,9 +667,9 @@ object VideoRepository {
                 }
                 SettingsManager.FeedApiType.MERGED -> coroutineScope {
                     val web = async { fetchMergedWebFeed(idx, refreshCount) }
-                    // 与独立移动端使用相同的凭证检查，禁止无 access_key 的内容混入。
-                    val mobile = async { fetchMobileFeed(idx, columns, flush) }
-                    mergeHomeFeedResults(web.await(), mobile.await(), mobileSource)
+                    // 合并推荐只混入已登录的移动端结果。
+                    val mobile = async { fetchMobileFeed(idx, columns, flush, hdFeedIndex, allowAnonymous = false) }
+                    mergeHomeFeedResults(web.await(), mobile.await())
                 }
                 else -> fetchWebFeed(idx, refreshCount).map {
                     HomeFeedPage(it, setOf(HomeFeedSource.WEB))
@@ -741,23 +743,40 @@ object VideoRepository {
         }
     }
     
-    // 推荐凭证在签名前固定；HD 授权走兼容通道，其他授权使用手机端请求。
+    // 推荐凭证在签名前固定；查询参数与账号身份使用同一会话。
     private suspend fun fetchMobileFeed(
         idx: Int,
-        columns: Int = 4,
-        flush: Int = HOME_FEED_FLUSH_DEFAULT,
+        columns: Int,
+        flush: Int,
+        hdFeedIndex: Int,
+        allowAnonymous: Boolean,
     ): Result<List<VideoItem>> {
         TokenManager.awaitRestore()
         val account = try {
             com.android.purebilibili.core.network.purposeAccount(com.android.purebilibili.core.store.AccountPurpose.RECOMMENDATION)
         } catch (e: java.io.IOException) { return Result.failure(e) }
-        val token = (if (account != null) account.accessToken else TokenManager.accessTokenCache)?.takeIf { it.isNotBlank() }
-            ?: return Result.failure(IllegalStateException("推荐账号需要移动端登录凭证，可重新登录或使用网页推荐"))
-        val platform = account?.accessTokenPlatform ?: TokenManager.accessTokenPlatformCache
-        val session = account?.let { com.android.purebilibili.core.network.AccountCookieSession.from(it) }
-            ?: com.android.purebilibili.core.network.AccountCookieSession.main()
+        val (token, platform, session) = if (account != null) {
+            Triple(
+                account.accessToken.takeIf { it.isNotBlank() },
+                account.accessTokenPlatform,
+                AccountCookieSession.from(account),
+            )
+        } else synchronized(TokenManager) {
+            Triple(
+                TokenManager.accessTokenCache?.takeIf { it.isNotBlank() },
+                TokenManager.accessTokenPlatformCache,
+                AccountCookieSession.main(),
+            )
+        }
+        if (token == null) {
+            return if (allowAnonymous) {
+                fetchHdMobileFeed(hdFeedIndex, null, session)
+            } else {
+                Result.failure(IllegalStateException("推荐账号需要移动端登录凭证，可重新登录或使用网页推荐"))
+            }
+        }
         if (platform == TokenManager.ACCESS_TOKEN_PLATFORM_ANDROID_HD) {
-            return fetchHdMobileFeed(idx, token, session, columns, flush)
+            return fetchHdMobileFeed(hdFeedIndex, token, session)
         }
         return try {
             var response = api.getMobileFeed(
@@ -853,65 +872,17 @@ object VideoRepository {
         }
     }
 
-    // HD 授权使用匹配的请求身份及签名，禁止匿名调用。
     private suspend fun fetchHdMobileFeed(
-        idx: Int,
-        accessToken: String,
-        session: com.android.purebilibili.core.network.AccountCookieSession,
-        columns: Int = 4,
-        flush: Int = HOME_FEED_FLUSH_DEFAULT,
+        pageIndex: Int,
+        accessToken: String?,
+        session: AccountCookieSession,
     ): Result<List<VideoItem>> {
         try {
-            // app 取流依赖 buvid 会话, 缺失时先通过 SPI 获取
-            // 先等会话备份异步恢复完成，避免启动窗口内误判 buvid 缺失而多打一次 SPI。
-            TokenManager.awaitRestore()
-            if (TokenManager.buvid3Cache.isNullOrEmpty()) {
-                ensurePlaybackBuvid()
-            }
-            val params = mutableMapOf(
-                "build" to "2001100",
-                "c_locale" to "zh_CN",
-                "channel" to "master",
-                "column" to columns.toString(),
-                "device" to "pad",
-                "device_name" to "android",
-                "device_type" to "0",
-                "disable_rcmd" to "0",
-                // 5=首次进入，6=下拉刷新，8=上滑加载更多。
-                // 原先写死 5，连续翻页时也一直告诉服务端「首次进入」。
-                "flush" to flush.toString(),
-                "fnval" to "976",
-                "fnver" to "0",
-                "force_host" to "2",
-                "fourk" to "1",
-                "guidance" to "0",
-                "https_url_req" to "0",
-                "idx" to idx.toString(),
-                "mobi_app" to "android_hd",
-                "network" to "wifi",
-                "platform" to "android",
-                "player_net" to "1",
-                "pull" to if (flush == HOME_FEED_FLUSH_PULL_UP) "false" else "true",
-                "qn" to "32",
-                "recsys_mode" to "0",
-                "s_locale" to "zh_CN",
-                "splash_id" to "",
-                "statistics" to "{\"appId\":5,\"platform\":3,\"version\":\"2.0.1\",\"abtest\":\"\"}",
-                "ts" to AppSignUtils.getTimestamp().toString(),
-                "voice_balance" to "0"
-            )
-            params["access_key"] = accessToken
-
-            // key/value percent-encode 后拼接签名,
-            // 再用 encoded=true 端点原样发送, 保证签名与线上 query 完全一致
-            val signedParams = AppSignUtils.signForAndroidHdLogin(params)
-            val encodedParams = signedParams.mapValues { (_, value) -> AppSignUtils.percentEncode(value) }
-
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " Merged Mobile feed request: idx=$idx")
-            val feedResp = api.getMobileFeedEncoded(encodedParams, session)
+            val params = buildSignedHomeHdCredentialFeedParams(pageIndex, accessToken)
+            val feedResp = api.getMobileFeedEncoded(params, session)
 
             if (feedResp.code != 0) {
-                com.android.purebilibili.core.util.Logger.d("VideoRepo", " Merged Mobile feed error: code=${feedResp.code}, msg=${feedResp.message}")
+                com.android.purebilibili.core.util.Logger.d("VideoRepo", " App feed error: code=${feedResp.code}, msg=${feedResp.message}")
                 return Result.failure(Exception(feedResp.message))
             }
 
@@ -921,13 +892,13 @@ object VideoRepository {
                 ?.filter { it.bvid.isNotEmpty() }
                 ?: emptyList()
 
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " Merged Mobile推荐: total=${list.size}")
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", " App 推荐: total=${list.size}")
 
             return Result.success(list)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            com.android.purebilibili.core.util.Logger.d("VideoRepo", " Merged Mobile feed exception: ${e.message}")
+            com.android.purebilibili.core.util.Logger.d("VideoRepo", " App feed exception: ${e.message}")
             return Result.failure(e)
         }
     }

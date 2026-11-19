@@ -2347,23 +2347,30 @@ private fun LightweightHomeTopTabs(
             }
 
             if (showPartitionAction) {
+                val partitionShape = RoundedCornerShape(actionButtonCorner)
+                val partitionControl = com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl(
+                    com.android.purebilibili.navigation3.BiliPaiNavKey.Partition,
+                    partitionShape,
+                    onPartitionClick,
+                )
                 Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
 
                 Box(
                     modifier = Modifier
                         .size(actionButtonSize)
+                        .then(partitionControl.modifier)
                         .then(
                             if (skinPlainStyle) {
                                 Modifier
                             } else {
-                                Modifier.clip(RoundedCornerShape(actionButtonCorner))
+                                Modifier.clip(partitionShape)
                             }
                         )
                         .appActionClickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = LocalIndication.current
                         ) {
-                            performHomeTopBarTap(haptic = haptic, onClick = onPartitionClick)
+                            performHomeTopBarTap(haptic = haptic, onClick = partitionControl.onClick)
                         },
                     contentAlignment = Alignment.Center
                 ) {

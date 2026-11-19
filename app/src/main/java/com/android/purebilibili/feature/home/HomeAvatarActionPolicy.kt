@@ -11,8 +11,8 @@ fun resolveHomeAvatarAction(
     isHomeDrawerEnabled: Boolean
 ): HomeAvatarAction {
     return when {
-        isLoggedIn && isHomeDrawerEnabled -> HomeAvatarAction.OPEN_DRAWER
-        isLoggedIn -> HomeAvatarAction.OPEN_PROFILE
+        !isHomeDrawerEnabled -> HomeAvatarAction.OPEN_PROFILE
+        isLoggedIn -> HomeAvatarAction.OPEN_DRAWER
         else -> HomeAvatarAction.OPEN_LOGIN
     }
 }

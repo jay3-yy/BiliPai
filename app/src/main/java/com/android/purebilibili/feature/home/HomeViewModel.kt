@@ -1508,18 +1508,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         liveRooms = emptyList<LiveRoom>().toImmutableList(),
                         isLoading = false,
                         error = null,
-                        pageIndex = if (useIncrementalRecommendRefresh) {
-                            oldState.pageIndex
-                        } else {
-                            resolvePagedFeedPageIndexAfterFetch(
-                                isLoadMore = isLoadMore,
-                                isManualRefresh = isManualRefresh,
-                                advanceOnManualRefresh = advanceOnManualRefresh,
-                                pageToFetch = pageToFetch,
-                                incomingCount = incomingVideos.size,
-                                previousPageIndex = oldState.pageIndex
-                            )
-                        },
+                        pageIndex = resolvePagedFeedPageIndexAfterFetch(
+                            isLoadMore = isLoadMore,
+                            isManualRefresh = isManualRefresh,
+                            advanceOnManualRefresh = advanceOnManualRefresh,
+                            pageToFetch = pageToFetch,
+                            incomingCount = incomingVideos.size,
+                            previousPageIndex = oldState.pageIndex,
+                        ),
                         hasMore = if (currentCategory == HomeCategory.POPULAR) {
                             supportsPopularLoadMore(popularSubCategory)
                         } else {

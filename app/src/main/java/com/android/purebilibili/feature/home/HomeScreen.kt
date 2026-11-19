@@ -193,19 +193,19 @@ val LocalHomeFeedScrollInProgress = compositionLocalOf { mutableStateOf(false) }
 @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
 @Composable
-fun HomeScreen(
+internal fun HomeScreen(
     viewModel: HomeViewModel = viewModel(),
     homeTopTabSettings: com.android.purebilibili.core.store.HomeTopTabSettings,
     onVideoClick: (HomeVideoClickRequest) -> Unit,
     onCompanionVideoClick: (HomeVideoClickRequest) -> Unit = {},
     availableFeedWidth: Dp? = null,
     companionPaneEnabled: Boolean = true,
-    onAvatarClick: () -> Unit,
     onProfileClick: () -> Unit,
     onLogout: (() -> Unit)? = null,
     onAccountSwitchClick: (() -> Unit)? = null,
     onSettingsClick: () -> Unit,
-    onSearchClick: () -> Unit,
+    onHeaderNavigate: (com.android.purebilibili.navigation3.BiliPaiNavKey, HomeHeaderControl, () -> Boolean) -> Unit,
+    headerReturn: HomeHeaderReturn?,
     //  新增：动态页面回调
     onDynamicClick: () -> Unit = {},
     //  新增：历史记录回调
@@ -967,17 +967,7 @@ fun HomeScreen(
     val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.ADJUSTMENT)
 
 
-    val homeFeedCardLayout = remember(
-        homeFeedCardStyle,
-        effectiveGridColumns,
-        windowSizeClass.widthSizeClass,
-    ) {
-        resolveHomeFeedCardLayout(
-            style = homeFeedCardStyle,
-            gridColumns = effectiveGridColumns,
-            widthSizeClass = windowSizeClass.widthSizeClass,
-        )
-    }
+    val nativeMiuixFeed = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
     val density = LocalDensity.current
 
 
@@ -990,7 +980,7 @@ fun HomeScreen(
         tabletUseSidebar = tabletUseSidebar,
         foldPosture = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.posture,
     )
-    val isHomeDrawerEnabled = com.android.purebilibili.core.util.shouldEnableHomeDrawer(
+    val isHomeDrawerEnabled = homeSettings.homeAvatarDrawerEnabled && com.android.purebilibili.core.util.shouldEnableHomeDrawer(
         useSideNavigation = useSideNavigation
     )
 
@@ -1070,26 +1060,6 @@ fun HomeScreen(
         }
     }
 
-    val homeCoverRequestSpec = remember(
-        contentWidth,
-        effectiveGridColumns,
-        homeFeedCardLayout,
-        density.density,
-        isDataSaverActive,
-        homeSettings.lowQualityHomeCoverInDataSaver,
-    ) {
-        val cardWidthDp = (
-            contentWidth.value -
-                homeFeedCardLayout.outerPaddingDp * 2f -
-                homeFeedCardLayout.itemSpacingDp * (effectiveGridColumns - 1).coerceAtLeast(0)
-            ) / effectiveGridColumns.coerceAtLeast(1)
-        resolveHomeCoverRequestSpec(
-            cardWidthDp = cardWidthDp,
-            density = density.density,
-            useLowQualityCover =
-                isDataSaverActive && homeSettings.lowQualityHomeCoverInDataSaver,
-        )
-    }
     //  [修复] 动态计算内容顶部边距，防止被头部遮挡
     // 首页在沉浸播放页下仍保留状态栏占位，返回时顶栏、列表和卡片落点不随可见性跳动。
     val statusBarHeight = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
@@ -1204,6 +1174,11 @@ fun HomeScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     var bottomBarVisibleBeforeDrawer by remember { mutableStateOf<Boolean?>(null) }
     var drawerOpenRequested by remember { mutableStateOf(false) }
+    var drawerWasOpen by remember { mutableStateOf(false) }
+    var activeHeaderReturn by remember { mutableStateOf(headerReturn) }
+    LaunchedEffect(headerReturn) {
+        if (headerReturn != null) activeHeaderReturn = headerReturn
+    }
 
     // 抽屉打开时隐藏全局底栏，避免覆盖侧边栏底部内容
     val isDrawerStateOpenOrOpening = shouldEnableHomeDrawerGestures(
@@ -1212,8 +1187,13 @@ fun HomeScreen(
     )
     val shouldKeepDrawerBottomBarHidden = drawerOpenRequested || isDrawerStateOpenOrOpening
     LaunchedEffect(drawerState.currentValue, drawerState.targetValue) {
+        if (drawerState.currentValue == DrawerValue.Open) drawerWasOpen = true
         if (drawerState.currentValue == DrawerValue.Closed && drawerState.targetValue == DrawerValue.Closed) {
             drawerOpenRequested = false
+            if (drawerWasOpen) {
+                drawerWasOpen = false
+                activeHeaderReturn = HomeHeaderReturn(HomeHeaderControl.AVATAR)
+            }
         }
     }
     LaunchedEffect(shouldKeepDrawerBottomBarHidden, isGlobalBottomBarVisible, useSideNavigation) {
@@ -1769,7 +1749,21 @@ fun HomeScreen(
                                 style = homeFeedCardStyle,
                                 gridColumns = effectiveGridColumns,
                                 widthSizeClass = windowSizeClass.widthSizeClass,
+                                nativeMiuix = nativeMiuixFeed,
                             )
+                            val gridContentWidthDp = maxWidth.value - homeFeedCardLayout.outerPaddingDp * 2f
+                            val gridGapsDp = homeFeedCardLayout.itemSpacingDp * (effectiveGridColumns - 1)
+                            val cardWidthDp = ((gridContentWidthDp - gridGapsDp) / effectiveGridColumns)
+                                .coerceAtLeast(0f)
+                            val useLowQualityCover =
+                                isDataSaverActive && homeSettings.lowQualityHomeCoverInDataSaver
+                            val homeCoverRequestSpec = remember(cardWidthDp, density.density, useLowQualityCover) {
+                                resolveHomeCoverRequestSpec(
+                                    cardWidthDp = cardWidthDp,
+                                    density = density.density,
+                                    useLowQualityCover = useLowQualityCover,
+                                )
+                            }
                             val homeFeedCoverAspectRatio = homeFeedCardLayout.coverAspectRatio
                             val pinchColumnBounds = resolveHomeFeedPinchColumnBounds(
                                 widthSizeClass = windowSizeClass.widthSizeClass,
@@ -1835,6 +1829,10 @@ fun HomeScreen(
                                             end = AppSpacingTokens.Large
                                         ),
                                         sideRailTopPaddingProvider = { embeddedPageTopPadding.value },
+                                        rightGlassRailBottomPadding = if (isBottomBarFloating) {
+                                            WindowInsets.navigationBarsIgnoringVisibility
+                                                .asPaddingValues().calculateBottomPadding() + AppSpacingTokens.Small
+                                        } else homeListBottomPadding,
                                         onVideoClick = onPartitionVideoClick,
                                         onBangumiClick = onBangumiClick,
                                         onBangumiSeasonClick = onBangumiSeasonClick,
@@ -2157,6 +2155,7 @@ fun HomeScreen(
                                               compactStatsOnCover = homeSettings.compactVideoStatsOnCover || homeFeedCardLayout.compactStatsOnCover,
                                               titleMinLines = if (useRegularHomeGrid) homeFeedCardLayout.titleMaxLines else homeFeedCardLayout.titleMinLines,
                                               showPublishTime = homeSettings.showHomePublishTime,
+                                              compactCornerFooter = displayMode != 1,
                                               storyStyle = displayMode == 1,
                                               storyHorizontalPadding = homeFeedCardLayout.storyCardHorizontalPaddingDp.dp,
                                           )
@@ -2247,6 +2246,8 @@ fun HomeScreen(
                                              derivedStateOf { pagerState.isScrollInProgress }
                                          },
                                          gridColumns = effectiveGridColumns,
+                                         cardLayout = homeFeedCardLayout,
+                                         cardWidthDp = cardWidthDp,
                                          contentPadding = pageContentPadding,
                                          dissolvingVideos = dissolvingVideos,
                                          followingMids = followingMids,
@@ -2291,7 +2292,6 @@ fun HomeScreen(
                                          showUpAvatars = settledShowHomeUpAvatars,
                                          showPublishTime = homeSettings.showHomePublishTime,
                                          homeDurationStyle = homeSettings.homeDurationStyle,
-                                         homeFeedCardStyle = homeFeedCardStyle,
                                          showFullVideoCardContent = homeSettings.showFullVideoCardContent,
                                          homeHeroCarouselEnabled = homeSettings.homeHeroCarouselEnabled,
                                          homeHeroCarouselAutoplayEnabled = homeSettings.homeHeroCarouselAutoplayEnabled,
@@ -2477,33 +2477,30 @@ fun HomeScreen(
                 exitFadeDurationMillis = 160,
             ) {
             HomeUnreadBadgeUpdates(viewModel.messageUnreadCount, messageBadgeMode) { messageUnreadDisplay ->
+            val avatarTarget = when (resolveHomeAvatarAction(user.isLogin, isHomeDrawerEnabled)) {
+                HomeAvatarAction.OPEN_DRAWER -> null
+                HomeAvatarAction.OPEN_PROFILE -> com.android.purebilibili.navigation3.BiliPaiNavKey.Profile
+                HomeAvatarAction.OPEN_LOGIN -> com.android.purebilibili.navigation3.BiliPaiNavKey.Login
+            }
+            val searchEntry = resolveHomeTopTabEntryOrNull(topTabEntries, pagerState.currentPage)
+            val searchTarget = if (searchEntry is HomeTopTabEntry.Category && shouldEmbedLivePageInHomeTopTab(searchEntry.category)) {
+                com.android.purebilibili.navigation3.BiliPaiNavKey.LiveSearch
+            } else {
+                com.android.purebilibili.navigation3.BiliPaiNavKey.Search()
+            }
             HomeHeader(
             headerOffsetProvider = headerOffsetProvider,
             isHeaderCollapseEnabled = collapseSearchOnScroll,
             isTopTabsAutoCollapseEnabled = collapseTabsOnScroll,
             isTopTabsManualCollapseEnabled = false,
             user = user,
-            onAvatarClick = {
-                when (
-                    resolveHomeAvatarAction(
-                        isLoggedIn = user.isLogin,
-                        isHomeDrawerEnabled = isHomeDrawerEnabled
-                    )
-                ) {
-                    HomeAvatarAction.OPEN_DRAWER -> openHomeDrawer()
-                    HomeAvatarAction.OPEN_PROFILE -> onProfileClick()
-                    HomeAvatarAction.OPEN_LOGIN -> onAvatarClick()
-                }
-            },
-            onSettingsClick = onSettingsClick,
-            onInboxClick = onInboxClick,
+            avatarTarget = avatarTarget,
+            searchTarget = searchTarget,
+            onOpenDrawer = openHomeDrawer,
+            onNavigate = onHeaderNavigate,
+            headerReturn = activeHeaderReturn,
+            headerActive = isTopLevelActive && pageOnScreen && !drawerMounted,
             topRightUnreadCount = messageUnreadDisplay,
-            onSearchClick = {
-                val searchEntry = resolveHomeTopTabEntryOrNull(topTabEntries, pagerState.currentPage)
-                if (searchEntry is HomeTopTabEntry.Category && shouldEmbedLivePageInHomeTopTab(searchEntry.category)) {
-                    onLiveSearchClick()
-                } else onSearchClick()
-            },
             topCategories = localizedTopTabLabels,
             topCategoryKeys = topTabKeys,
             categoryIndex = displayedTabIndex,

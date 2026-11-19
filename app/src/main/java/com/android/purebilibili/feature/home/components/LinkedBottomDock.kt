@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -45,12 +46,13 @@ import com.android.purebilibili.core.ui.components.rememberAppElasticPressState
 import androidx.compose.animation.core.EaseInCubic
 import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.ui.graphics.TransformOrigin
-import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.feature.audio.screen.AUDIO_NOW_PLAYING_PRESENCE_ENTER_SLIDE_DP
 import com.android.purebilibili.feature.audio.screen.resolveAudioNowPlayingPresenceAlpha
 import com.android.purebilibili.feature.audio.screen.resolveAudioNowPlayingPresenceAnimationSpec
 import com.android.purebilibili.feature.audio.screen.resolveAudioNowPlayingPresenceEnterSpringSpec
 import com.android.purebilibili.feature.home.LocalHomeScrollOffset
+import com.android.purebilibili.feature.home.LocalHomeFeedScrollInProgress
 import kotlinx.coroutines.flow.collect
 import dev.chrisbanes.haze.HazeState
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -71,7 +73,6 @@ internal fun LinkedBottomDock(
     firstItem: BottomNavItem,
     firstLabel: String,
     searchEnabled: Boolean,
-    isFeedScrollInProgress: Boolean,
     collapseRequested: Boolean,
     onSearchClick: () -> Unit,
     onSearchKeywordSubmit: (String) -> Unit,
@@ -95,7 +96,7 @@ internal fun LinkedBottomDock(
     modifier: Modifier = Modifier,
     blurEnabled: Boolean = false,
     hazeState: HazeState? = null,
-    navigationContent: @Composable () -> Unit,
+    navigationContent: @Composable (allocatedWidth: Dp) -> Unit,
 ) {
     com.android.purebilibili.core.ui.components.ProvideAppElasticFeedback {
         val searchHaptic = com.android.purebilibili.core.util.rememberHapticFeedback(
@@ -138,9 +139,12 @@ internal fun LinkedBottomDock(
         LaunchedEffect(phase) {
             if (phase == LinkedDockPhase.Search) compactNavigation = false
         }
-        LaunchedEffect(hasAudio, searchMergeEnabled) {
-            val reconciled = resolveLinkedDockPhaseOnAudioChange(phase, hasAudio, searchMergeEnabled)
-            if (reconciled != phase) updatePhase(reconciled)
+        LaunchedEffect(hasAudio, searchMergeEnabled, dockPhase != null) {
+            // 外部相位由实际播放会话驱动，导航暂时撤掉播放槽时保留原来的合体落点。
+            if (dockPhase == null) {
+                val reconciled = resolveLinkedDockPhaseOnAudioChange(phase, hasAudio, searchMergeEnabled)
+                if (reconciled != phase) updatePhase(reconciled)
+            }
         }
         var query by remember { mutableStateOf("") }
         LaunchedEffect(phase) {
@@ -152,14 +156,14 @@ internal fun LinkedBottomDock(
         val focusManager = LocalFocusManager.current
         val keyboardController = LocalSoftwareKeyboardController.current
         val scroll = LocalHomeScrollOffset.current
+        val scrolling = LocalHomeFeedScrollInProgress.current
         val currentPhase by rememberUpdatedState(phase)
         val latestUpdatePhase by rememberUpdatedState(updatePhase)
-        val scrolling by rememberUpdatedState(isFeedScrollInProgress)
         val threshold = with(LocalDensity.current) { 24.dp.toPx() }
-        LaunchedEffect(currentItem, hasAudio, searchEnabled, scroll, threshold, isTopLevelDestination, mergeOnScrollDownEnabled, glassEnabled, useNavigationCompact) {
+        LaunchedEffect(currentItem, hasAudio, searchEnabled, scroll, scrolling, threshold, isTopLevelDestination, mergeOnScrollDownEnabled, glassEnabled, useNavigationCompact) {
             var previous = scroll.floatValue
             var accumulated = 0f
-            snapshotFlow { scroll.floatValue to scrolling }.collect { (offset, active) ->
+            snapshotFlow { scroll.floatValue to scrolling.value }.collect { (offset, active) ->
                 val delta = offset - previous
                 previous = offset
                 if (!active || !isTopLevelDestination || currentPhase == LinkedDockPhase.Search) {
@@ -194,12 +198,12 @@ internal fun LinkedBottomDock(
         // by isTopLevelDestination made the returning page re-expand/re-collapse the playback strip,
         // which also shifted the predictive-back target after the gesture had started.
         // Skip while the list is scrolling so resting phase does not fight scroll-driven search size.
-        LaunchedEffect(currentItem, collapseRequested, hasAudio, useNavigationCompact, searchMergeEnabled, mergeOnScrollDownEnabled) {
+        LaunchedEffect(currentItem, useNavigationCompact, searchMergeEnabled, mergeOnScrollDownEnabled) {
             if (
                 isTopLevelDestination && !useNavigationCompact &&
                 currentItem != BottomNavItem.HOME &&
                 currentPhase != LinkedDockPhase.Search &&
-                !isFeedScrollInProgress
+                !scrolling.value
             ) {
                 updatePhase(resolveLinkedDockRestingPhase(
                     collapseRequested && mergeOnScrollDownEnabled, hasAudio, searchMergeEnabled,
@@ -221,7 +225,7 @@ internal fun LinkedBottomDock(
             keyboardController?.hide()
             updatePhase(resolveLinkedDockPhaseOnSearchDismiss(hasAudio, phaseBeforeSearch, searchMergeEnabled))
         }
-        val reduceMotion = rememberSystemReduceMotion() ||
+        val reduceMotion = LocalSystemReduceMotion.current ||
             !com.android.purebilibili.core.ui.LocalComponentMotionEnabled.current
         val dockMotionStyle = rememberGlassDockMotionStyle(
             enabled = glassEnabled && !hasUiSkinDecoration,
@@ -260,7 +264,8 @@ internal fun LinkedBottomDock(
         // handoff alpha hides it; replaying an entrance spring causes a second landing.
         val presence = remember { Animatable(if (hasAudio) 1f else 0f) }
         val slotEntering = remember { mutableStateOf(false) }
-        val nowPlayingLayoutStable = !transition.isRunning && !presence.isRunning && imeSettled
+        val nowPlayingLayoutStable = transition.currentState == transition.targetState &&
+            !transition.isRunning && !presence.isRunning && imeSettled
         LaunchedEffect(hasAudio, animateNowPlayingPresence, reduceMotion) {
             val target = if (hasAudio) 1f else 0f
             when {
@@ -395,6 +400,7 @@ internal fun LinkedBottomDock(
                 (maximumWidth - reservedSearchWidth).coerceAtLeast(0)
             )
             val navWidth = expandedNavigationWidth.coerceAtMost(maximumWidth)
+            val allocatedNavigationWidth = with(density) { navWidth.toDp() }
             val navigationX = resolveLinkedDockNavigationX(
                 maximumWidth = maximumWidth,
                 navigationWidth = navWidth,
@@ -422,7 +428,7 @@ internal fun LinkedBottomDock(
                         modifier = Modifier
                             .offset { IntOffset(navigationX, navRowY) }
                             .size(
-                                with(density) { navWidth.toDp() },
+                                allocatedNavigationWidth,
                                 with(density) { barHeight.toDp() },
                             )
                             .then(
@@ -481,9 +487,9 @@ internal fun LinkedBottomDock(
                                 hazeState = hazeState,
                                 liquidGlassTuning = liquidGlassTuning,
                                 onExpand = { compactNavigation = false },
-                                content = navigationContent,
+                                content = { navigationContent(allocatedNavigationWidth) },
                             )
-                        } else navigationContent()
+                        } else navigationContent(allocatedNavigationWidth)
                     }
                 }
                 val homeElasticState = rememberAppElasticPressState(
@@ -503,7 +509,9 @@ internal fun LinkedBottomDock(
                         .layout { measurable, _ ->
                             val size = compactControlSize()
                             val child = measurable.measure(Constraints.fixed(size, size))
-                            layout(size, size) { child.placeRelative(0, 0) }
+                            layout(size, size) {
+                                if (merge.value > 0f) child.placeRelative(0, 0)
+                            }
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -665,11 +673,9 @@ internal fun LinkedBottomDock(
                                 zeroProgressProvider,
                                 if (shouldExpandPlaybackFromSearch(phase, hasAudio)) {
                                     {
-                                        if (!transition.isRunning) {
-                                            focusManager.clearFocus()
-                                            keyboardController?.hide()
-                                            updatePhase(LinkedDockPhase.Playback)
-                                        }
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                        updatePhase(LinkedDockPhase.Playback)
                                     }
                                 } else {
                                     null

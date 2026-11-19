@@ -45,7 +45,7 @@ import com.android.purebilibili.core.ui.motion.BottomBarMotionSpec
 import com.android.purebilibili.core.ui.motion.continuityTween
 import com.android.purebilibili.core.ui.motion.emphasizedEnterTween
 import com.android.purebilibili.core.ui.motion.emphasizedExitTween
-import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.motion.softLandingSpring
 import dev.chrisbanes.haze.HazeState
 import top.yukonga.miuix.kmp.blur.Backdrop
@@ -548,7 +548,7 @@ internal fun BottomBarMatchedDockVisibility(
     animateScale: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val reduceMotion = rememberSystemReduceMotion()
+    val reduceMotion = LocalSystemReduceMotion.current
     val direction = if (edge == BottomBarMatchedDockEdge.BOTTOM) 1 else -1
     val transformOrigin = if (edge == BottomBarMatchedDockEdge.BOTTOM) {
         TransformOrigin(0.5f, 1f)
@@ -604,7 +604,7 @@ internal fun BottomBarMatchedDockVisibility(
     animateScale: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val reduceMotion = rememberSystemReduceMotion()
+    val reduceMotion = LocalSystemReduceMotion.current
     val direction = if (edge == BottomBarMatchedDockEdge.BOTTOM) 1 else -1
     val transformOrigin = if (edge == BottomBarMatchedDockEdge.BOTTOM) {
         TransformOrigin(0.5f, 1f)

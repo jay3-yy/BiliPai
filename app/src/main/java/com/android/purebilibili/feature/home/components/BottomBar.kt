@@ -2472,7 +2472,6 @@ private fun MaterialBottomBar(
                     itemLabels
                 ),
                 searchEnabled = searchEnabled,
-                isFeedScrollInProgress = isFeedScrollInProgress,
                 collapseRequested = collapseLinkedDock,
                 onSearchClick = onSearchClick,
                 onSearchKeywordSubmit = onSearchKeywordSubmit,
@@ -3683,7 +3682,6 @@ private fun BiliPaiFloatingBottomBar(
             currentLabel = resolveBottomNavItemLabel(currentItem, itemLabels),
             animateNowPlayingPresence = animateNowPlayingPresence,
             searchEnabled = bottomBarSearchEnabled,
-            isFeedScrollInProgress = isFeedScrollInProgress,
             collapseRequested = collapseLinkedDock,
             onSearchClick = onSearchClick,
             onSearchKeywordSubmit = onSearchKeywordSubmit,
@@ -3700,7 +3698,7 @@ private fun BiliPaiFloatingBottomBar(
             hasUiSkinDecoration = uiSkinDecoration != null,
             nowPlayingContent = nowPlayingContent,
             modifier = modifier,
-            navigationContent = {
+            navigationContent = { allocatedWidth ->
                 BiliPaiFloatingBottomBarChrome(
                     currentItem = currentItem,
                     onItemClick = onItemClick,
@@ -3742,7 +3740,7 @@ private fun BiliPaiFloatingBottomBar(
                     pagerTargetPositionProvider = pagerTargetPositionProvider,
                     isPagerNavigatingProvider = isPagerNavigatingProvider,
                     uiSkinDecoration = uiSkinDecoration,
-                    embeddedDock = true,
+                    embeddedDockWidth = allocatedWidth,
                 )
             },
         )
@@ -3797,7 +3795,7 @@ private fun BiliPaiFloatingBottomBarChrome(
     currentItem: BottomNavItem,
     onItemClick: (BottomNavItem) -> Unit,
     modifier: Modifier = Modifier,
-    embeddedDock: Boolean = false,
+    embeddedDockWidth: Dp? = null,
     visibleItems: List<BottomNavItem>,
     itemLabels: Map<String, String> = emptyMap(),
     itemColorIndices: Map<String, Int> = emptyMap(),
@@ -4041,18 +4039,11 @@ private fun BiliPaiFloatingBottomBarChrome(
 
     Box(
         modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.BottomCenter
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    bottom = if (embeddedDock) 0.dp else AppSpacingTokens.ExtraLarge +
-                        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding()
-                )
-        ) {
+        val chromeContent: @Composable BoxScope.(Dp) -> Unit = { containerWidth ->
             val searchLayoutState = rememberBiliPaiBottomBarSearchLayoutState(
-                containerWidth = maxWidth,
+                containerWidth = containerWidth,
                 itemCount = totalItems,
                 minEdgePadding = tuning.outerHorizontalPaddingDp.dp,
                 searchEnabled = searchLayoutReserved,
@@ -4060,7 +4051,7 @@ private fun BiliPaiFloatingBottomBarChrome(
                 labelMode = labelMode,
                 searchLayoutMode = bottomBarSearchLayoutMode,
                 hasUiSkinDecoration = uiSkinDecoration != null,
-                fillAllocatedDockWidth = embeddedDock,
+                fillAllocatedDockWidth = embeddedDockWidth != null,
                 nativeMiuixNavigation = useNativeMiuixNavigation,
                 glassMotionEnabled = effectiveGlassEnabled,
             )
@@ -4480,6 +4471,19 @@ private fun BiliPaiFloatingBottomBarChrome(
                     liquidGlassTuning = liquidGlassTuning,
                     iconStyle = iconStyle
                 )
+            }
+        }
+        if (embeddedDockWidth != null) {
+            // 合并底栏已分配导航行宽度；只在独立底栏中通过约束取得窗口宽度。
+            Box(Modifier.fillMaxWidth()) { chromeContent(embeddedDockWidth) }
+        } else {
+            BoxWithConstraints(
+                Modifier.fillMaxWidth().padding(
+                    bottom = AppSpacingTokens.ExtraLarge +
+                        WindowInsets.navigationBarsIgnoringVisibility.asPaddingValues().calculateBottomPadding(),
+                ),
+            ) {
+                chromeContent(maxWidth)
             }
         }
     }

@@ -534,27 +534,28 @@ internal fun StoryVideoCard(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (scrollLitePolicy.showSecondaryStatsRow && video.stat.view > 0) {
+            val showPlaybackStats = scrollLitePolicy.showSecondaryStatsRow && video.stat.view > 0
+            val showPublishTimeWithStats = scrollLitePolicy.showSecondaryStatsRow && publishTimeRowText.isNotBlank()
+            if (showPlaybackStats || showPublishTimeWithStats) {
                 FlowRow(
                     itemVerticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_ROW_SPACING_DP.dp),
                     verticalArrangement = Arrangement.spacedBy(HORIZONTAL_VIDEO_STAT_WRAP_SPACING_DP.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    HorizontalVideoStatRow(
-                        playText = viewText,
-                        danmakuText = if (video.stat.danmaku > 0) {
-                            danmakuText
-                        } else {
-                            ""
-                        },
-                    )
-                    if (publishTimeRowText.isNotBlank()) {
+                    if (showPlaybackStats) {
+                        HorizontalVideoStatRow(
+                            playText = viewText,
+                            danmakuText = danmakuText.takeIf { video.stat.danmaku > 0 }.orEmpty(),
+                        )
+                    }
+                    if (showPublishTimeWithStats) {
                         AppText(
                             text = publishTimeRowText,
                             color = AppContentColors.secondaryText(),
                             style = contentTypography.statistic,
-                            overflow = TextOverflow.Visible,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }

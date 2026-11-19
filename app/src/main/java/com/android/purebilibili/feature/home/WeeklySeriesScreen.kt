@@ -179,6 +179,7 @@ private fun WeeklySeriesContent(
                 style = homeSettings.homeFeedCardStyle,
                 gridColumns = gridColumns,
                 widthSizeClass = windowSizeClass.widthSizeClass,
+                nativeMiuix = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled(),
             )
             when {
                 state.loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) { AppCircularProgressIndicator() }

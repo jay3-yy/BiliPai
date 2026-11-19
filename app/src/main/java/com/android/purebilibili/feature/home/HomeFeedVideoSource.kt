@@ -25,6 +25,7 @@ internal suspend fun loadHomeFeedVideos(
             refreshCount = resolveHomeFeedPageSize(columns),
             columns = columns,
             flush = resolveHomeFeedFlush(isLoadMore, isManualRefresh),
+            hdFeedIndex = pageToFetch - 1,
         ).map { HomeFeedVideoResponse(it.videos, it.notice) }
     }
     val videos = if (category == HomeCategory.POPULAR) {
