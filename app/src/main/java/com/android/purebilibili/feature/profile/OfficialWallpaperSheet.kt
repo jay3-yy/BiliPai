@@ -295,6 +295,8 @@ fun OfficialWallpaperSheet(
         )
                         val initialSplashTabletBias by viewModel.getSplashAlignment(true).collectAsStateWithLifecycle(initialValue = 0f
         )
+                        val initialSplashMobileScale by viewModel.getSplashScale(false).collectAsStateWithLifecycle(initialValue = 1f)
+                        val initialSplashTabletScale by viewModel.getSplashScale(true).collectAsStateWithLifecycle(initialValue = 1f)
 
                         // [New] Adjustment Sheet
                          if (showAdjustmentSheet && selectedUrl != null) {
@@ -325,15 +327,19 @@ fun OfficialWallpaperSheet(
                                 imageUri = fixWallpaperUrl(selectedUrl),
                                 initialMobileBias = initialSplashMobileBias,
                                 initialTabletBias = initialSplashTabletBias,
+                                initialMobileScale = initialSplashMobileScale,
+                                initialTabletScale = initialSplashTabletScale,
                                 onDismiss = { showSplashAdjustmentSheet = false },
-                                onSave = { mBias, tBias ->
+                                onSave = { mBias, tBias, mScale, tScale ->
                                     showSplashAdjustmentSheet = false
                                     selectedUrl?.let { url ->
                                         viewModel.setAsSplashWallpaper(
                                             url = url,
                                             saveToGallery = saveToGallery,
                                             mobileBias = mBias,
-                                            tabletBias = tBias
+                                            tabletBias = tBias,
+                                            mobileScale = mScale,
+                                            tabletScale = tScale
                                         ) {
                                             onDismiss()
                                             Toast.makeText(context, "开屏壁纸设置成功", Toast.LENGTH_SHORT).show()
