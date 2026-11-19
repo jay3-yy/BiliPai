@@ -93,6 +93,7 @@ fun DynamicCommentOverlayHost(
     secondaryItems: List<DynamicItem> = emptyList(),
     toastContext: Context,
     onUserClick: (Long) -> Unit,
+    onUrlClick: (String) -> Unit,
 ) {
     val selectedDynamicId by viewModel.selectedDynamicId.collectAsStateWithLifecycle()
     // 评论区一次性读取单一状态，避免 5 个独立 flow 分别发射造成中间帧。
@@ -168,6 +169,7 @@ fun DynamicCommentOverlayHost(
             },
             onLoadMore = { viewModel.loadMoreComments() },
             onUserClick = onUserClick,
+            onUrlClick = onUrlClick,
             subReplyState = subReplyState,
             onCloseSubReply = { viewModel.closeSubReply() },
             onLoadMoreSubReplies = { viewModel.loadMoreSubReplies() },
@@ -236,6 +238,7 @@ fun DynamicCommentSheet(
     onReport: (ReplyItem, Int) -> Unit = { _, _ -> },
     onLoadMore: () -> Unit = {},
     onUserClick: (Long) -> Unit,
+    onUrlClick: (String) -> Unit,
     subReplyState: SubReplyUiState = SubReplyUiState(),
     onCloseSubReply: () -> Unit = {},
     onLoadMoreSubReplies: () -> Unit = {},
@@ -532,6 +535,7 @@ fun DynamicCommentSheet(
                                             onReportClick = { reason -> onReport(reply, reason) },
                                             canToggleTop = actionCapabilities.canToggleTop,
                                             onToggleTopClick = { onToggleTop(reply) },
+                                            onUrlClick = onUrlClick,
                                             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
                                             onImagePreview = { images, index, rect, textContent ->
                                                 previewImages = images
@@ -605,6 +609,7 @@ fun DynamicCommentSheet(
                                     showImagePreview = true
                                 },
                                 onReplyClick = { reply -> onReply(reply) },
+                                onUrlClick = onUrlClick,
                                 dissolvingIds = subReplyState.dissolvingIds,
                                 currentMid = currentUserMid ?: 0L,
                                 onDeleteComment = onThreadCommentDelete,

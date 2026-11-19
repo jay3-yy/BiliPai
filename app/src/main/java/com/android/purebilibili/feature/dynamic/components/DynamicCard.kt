@@ -34,6 +34,8 @@ import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.foundation.shape.RoundedCornerShape
 //  Material Icons
 import androidx.compose.material.icons.Icons
@@ -570,55 +572,67 @@ fun DynamicCardV2(
                 }
             }
 
+            val authorControl = authorClickMid?.let {
+                rememberSystemWindowNavigationControl(
+                    BiliPaiNavKey.Space(it),
+                    AppShapes.container(ContainerLevel.Card),
+                    onAuthorHeaderClick,
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 头像
-                DynamicAuthorFace(
-                    faceUrl = author.face,
-                    officialType = author.official_verify?.type,
-                    vipStatus = author.vip?.status,
-                    faceSize = AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Small,
-                    modifier = Modifier
-                        .size(AppChromeSizeTokens.MinimumTouchTarget)
-                        .semantics { contentDescription = "查看${author.name}的个人主页" }
-                        .appActionClickable(enabled = authorClickMid != null || (ugcSeason != null && ugcSeason.id > 0L && onCollectionClick != null)) {
-                            onAuthorHeaderClick()
-                        },
-                )
-
-                Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    AppText(
-                        author.name,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = MaterialTheme.typography.bodyMedium.fontSize,
-                        color = resolveUpNameColor(
-                            vipStatus = author.vip?.status ?: 0,
-                            vipType = author.vip?.type ?: 0,
-                            onSurface = AppContentColors.primaryText(),
-                            secondary = com.android.purebilibili.core.ui.components.userVipPink(),
-                        ),
-                        modifier = Modifier.appActionClickable(enabled = authorClickMid != null || (ugcSeason != null && ugcSeason.id > 0L && onCollectionClick != null)) {
-                            onAuthorHeaderClick()
-                        }
+                Row(
+                    modifier = Modifier.weight(1f).then(authorControl?.modifier ?: Modifier),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // 头像
+                    DynamicAuthorFace(
+                        faceUrl = author.face,
+                        officialType = author.official_verify?.type,
+                        vipStatus = author.vip?.status,
+                        faceSize = AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Small,
+                        modifier = Modifier
+                            .size(AppChromeSizeTokens.MinimumTouchTarget)
+                            .semantics { contentDescription = "查看${author.name}的个人主页" }
+                            .appActionClickable(enabled = authorClickMid != null || (ugcSeason != null && ugcSeason.id > 0L && onCollectionClick != null)) {
+                                (authorControl?.onClick ?: onAuthorHeaderClick)()
+                            },
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+
+                    Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
+
+                    Column(modifier = Modifier.weight(1f)) {
                         AppText(
-                            text = authorTimeText + author.pub_action.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty(),
-                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                            color = AppContentColors.secondaryText().copy(0.6f),
-                            maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
+                            author.name,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = MaterialTheme.typography.bodyMedium.fontSize,
+                            color = resolveUpNameColor(
+                                vipStatus = author.vip?.status ?: 0,
+                                vipType = author.vip?.type ?: 0,
+                                onSurface = AppContentColors.primaryText(),
+                                secondary = com.android.purebilibili.core.ui.components.userVipPink(),
+                            ),
+                            modifier = Modifier.appActionClickable(enabled = authorClickMid != null || (ugcSeason != null && ugcSeason.id > 0L && onCollectionClick != null)) {
+                                (authorControl?.onClick ?: onAuthorHeaderClick)()
+                            }
                         )
-                        author.decorate?.let { decorate ->
-                            DynamicAuthorDecoration(
-                                decorate = decorate,
-                                modifier = Modifier.padding(start = AppSpacingTokens.ExtraSmall),
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            AppText(
+                                text = authorTimeText + author.pub_action.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty(),
+                                fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                                color = AppContentColors.secondaryText().copy(0.6f),
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
                             )
+                            author.decorate?.let { decorate ->
+                                DynamicAuthorDecoration(
+                                    decorate = decorate,
+                                    modifier = Modifier.padding(start = AppSpacingTokens.ExtraSmall),
+                                )
+                            }
                         }
                     }
                 }
@@ -2598,7 +2612,9 @@ private fun dispatchDynamicRichTextLinkPayload(
                         BilibiliNavigationTargetParser.resolve(rawUrl)
                     } else null
                 if (target != null) {
-                    val handled = if (target.hasCommentLocation) false else when (target) {
+                    val handled = if (target.hasCommentLocation ||
+                        (target is BilibiliNavigationTarget.Video && target.hasPlaybackLocation)
+                    ) false else when (target) {
                         is BilibiliNavigationTarget.Dynamic -> {
                             if (onDynamicDetailClick != null) {
                                 onDynamicDetailClick(target.dynamicId)
@@ -2637,6 +2653,8 @@ private fun dispatchDynamicRichTextLinkPayload(
                         }
                         // 文集交给宿主链接分发，保留文集身份进入对应页面。
                         is BilibiliNavigationTarget.ArticleCollection -> false
+                        is BilibiliNavigationTarget.Topic,
+                        is BilibiliNavigationTarget.FavoriteFolder -> false
                         is BilibiliNavigationTarget.PopularFeed -> false
                         is BilibiliNavigationTarget.CommentDetail -> false
                         is BilibiliNavigationTarget.Live -> {
@@ -2795,6 +2813,11 @@ fun DynamicCardCompact(
 
     val authorClickMid = remember(item) { resolveDynamicAuthorClickMid(item) }
 
+    val authorControl = authorClickMid?.let { mid ->
+        rememberSystemWindowNavigationControl(BiliPaiNavKey.Space(mid), AppShapes.container(ContainerLevel.Card)) {
+            onUserClick(mid)
+        }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2803,63 +2826,68 @@ fun DynamicCardCompact(
                 content?.major?.archive
                     ?.let(::resolveArchivePlayableBvid)
                     ?.let(onVideoClick)
-                    ?: authorClickMid?.let(onUserClick)
+                    ?: authorControl?.onClick?.invoke()
             }
             .padding(horizontal = AppSpacingTokens.Large, vertical = AppSpacingTokens.Medium),  //  优化间距
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 头像
-        if (author != null) {
-            DynamicAuthorFace(
-                faceUrl = author.face,
-                officialType = author.official_verify?.type,
-                vipStatus = author.vip?.status,
-                faceSize = AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Medium,
-                modifier = Modifier
-                    .size(AppChromeSizeTokens.MinimumTouchTarget)
-                    .semantics { contentDescription = "查看${author.name}的个人主页" }
-                    .appActionClickable(enabled = authorClickMid != null) {
-                        authorClickMid?.let(onUserClick)
-                    },
-            )
-
-            Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
-        }
-
-        // 内容区
-        Column(modifier = Modifier.weight(1f)) {
-            // 用户名 + 时间
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AppText(
-                    author?.name ?: "",
-                    fontWeight = FontWeight.Medium,
-                    fontSize = MaterialTheme.typography.labelMedium.fontSize,
-                    color = AppContentColors.primaryText(),
-                    maxLines = 1
+        Row(
+            modifier = Modifier.weight(1f).then(authorControl?.modifier ?: Modifier),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // 头像
+            if (author != null) {
+                DynamicAuthorFace(
+                    faceUrl = author.face,
+                    officialType = author.official_verify?.type,
+                    vipStatus = author.vip?.status,
+                    faceSize = AppSpacingTokens.DoubleExtraLarge + AppSpacingTokens.Medium,
+                    modifier = Modifier
+                        .size(AppChromeSizeTokens.MinimumTouchTarget)
+                        .semantics { contentDescription = "查看${author.name}的个人主页" }
+                        .appActionClickable(enabled = authorClickMid != null) {
+                            authorControl?.onClick?.invoke()
+                        },
                 )
-                Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
-                AppText(
-                    author?.let {
-                        resolveDynamicAuthorTimeText(
-                            pubTime = it.pub_time,
-                            pubTs = it.pub_ts
-                        )
-                    }.orEmpty(),
-                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                    color = AppContentColors.secondaryText().copy(0.5f)
-                )
+
+                Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
             }
 
-            Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+            // 内容区
+            Column(modifier = Modifier.weight(1f)) {
+                // 用户名 + 时间
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    AppText(
+                        author?.name ?: "",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = MaterialTheme.typography.labelMedium.fontSize,
+                        color = AppContentColors.primaryText(),
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.width(AppSpacingTokens.Small))
+                    AppText(
+                        author?.let {
+                            resolveDynamicAuthorTimeText(
+                                pubTime = it.pub_time,
+                                pubTs = it.pub_ts
+                            )
+                        }.orEmpty(),
+                        fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                        color = AppContentColors.secondaryText().copy(0.5f)
+                    )
+                }
 
-            // 内容预览
-            AppText(
-                previewText,
-                fontSize = MaterialTheme.typography.labelMedium.fontSize,
-                color = AppContentColors.secondaryText(),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
+                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
+
+                // 内容预览
+                AppText(
+                    previewText,
+                    fontSize = MaterialTheme.typography.labelMedium.fontSize,
+                    color = AppContentColors.secondaryText(),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
         }
 
         // 封面缩略图（如果有视频）

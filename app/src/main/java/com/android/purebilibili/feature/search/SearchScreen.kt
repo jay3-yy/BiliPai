@@ -77,6 +77,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -181,9 +182,13 @@ import com.android.purebilibili.data.model.response.SearchLiveUserItem
 import com.android.purebilibili.data.model.response.SearchPhotoItem
 import com.android.purebilibili.data.model.response.SearchType
 import com.android.purebilibili.data.model.response.SearchTopicItem
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import kotlinx.coroutines.launch
 
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 
 
@@ -237,10 +242,15 @@ internal fun searchInputTextStyle(): androidx.compose.ui.text.TextStyle =
 internal fun rememberSearchInputHeightDp(minHeightDp: Int): Int {
     val density = LocalDensity.current
     val fontSize = searchInputTextStyle().fontSize
-    return remember(minHeightDp, density, fontSize) {
+    // 原生输入框与搜索页占位使用同一高度，玻璃胶囊继续使用自己的尺寸。
+    val nativeMinimum = if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+        top.yukonga.miuix.kmp.basic.SearchBarDefaults.InputFieldMinHeight.value.toInt()
+    } else minHeightDp
+    val minimum = maxOf(minHeightDp, nativeMinimum)
+    return remember(minimum, density, fontSize) {
         with(density) {
             resolveSearchInputHeightDp(
-                minHeightDp = minHeightDp,
+                minHeightDp = minimum,
                 lineHeightDp = SEARCH_INPUT_LINE_HEIGHT_SP.sp.toDp().value,
                 fontSizeDp = fontSize.toDp().value,
             )
@@ -381,18 +391,6 @@ internal fun shouldApplyInitialSearchKeyword(
     val normalizedKeyword = initialKeyword.trim()
     if (normalizedKeyword.isBlank()) return false
     return normalizedKeyword != currentQuery || !showResults
-}
-
-internal fun shouldResetSearchResultScroll(
-    searchSessionId: Long,
-    showResults: Boolean,
-    lastResetSessionId: Long,
-    isReturningFromVideoDetail: Boolean = false,
-): Boolean {
-    return !isReturningFromVideoDetail &&
-        showResults &&
-        searchSessionId > 0L &&
-        searchSessionId != lastResetSessionId
 }
 
 internal fun shouldShowSearchBackToTop(
@@ -652,9 +650,15 @@ fun SearchScreen(
     val listLayout = rememberVideoListLayoutControl()
     // Entry-scoped: consuming the initial keyword or returning from a detail must not add a landing.
     val openedWithKeyword = rememberSaveable { initialKeyword.isNotBlank() }
+    var consumedInitialKeyword by rememberSaveable { mutableStateOf<String?>(null) }
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val searchWindowInteractive = backEnabled && LocalWindowInfo.current.isWindowFocused &&
+        lifecycleState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)
+    var restoreVisibleSearchIme by rememberSaveable { mutableStateOf(false) }
+    var pendingSearchImeRestore by remember { mutableStateOf(restoreVisibleSearchIme) }
     val configuration = LocalConfiguration.current
     val windowSizeClass = LocalWindowSizeClass.current
     val startupSettled by com.android.purebilibili.core.ui.animation.LocalAppNavigationEntranceReady.current
@@ -677,6 +681,7 @@ fun SearchScreen(
 
     // 1. 滚动状态监听 (用于列表)
     val historyListState = rememberLazyListState()
+    // A new session gets new scroll state. Restoring the same entry keeps its saved position.
     val resultStateKey = remember(state.searchSessionId, state.searchType) {
         state.searchSessionId to state.searchType
     }
@@ -686,9 +691,6 @@ fun SearchScreen(
     val resultListState = rememberSaveable(resultStateKey, saver = LazyListState.Saver) {
         LazyListState()
     }
-    // A fresh SearchScreen entry starts at the top. Keep this non-saveable so leaving
-    // search and opening it again does not inherit the previous result position.
-    var lastResetSearchSessionId by remember { mutableLongStateOf(0L) }
     val shouldShowBackToTop by remember(
         state.showResults,
         state.isSearching,
@@ -711,24 +713,6 @@ fun SearchScreen(
                     )
                 }
         }
-    }
-
-    LaunchedEffect(resultStateKey, state.showResults) {
-        if (!shouldResetSearchResultScroll(
-                searchSessionId = state.searchSessionId,
-                showResults = state.showResults,
-                lastResetSessionId = lastResetSearchSessionId,
-                isReturningFromVideoDetail = isReturningFromVideoDetail,
-            )
-        ) {
-            if (isReturningFromVideoDetail && state.showResults && state.searchSessionId > 0L) {
-                lastResetSearchSessionId = state.searchSessionId
-            }
-            return@LaunchedEffect
-        }
-        resultListState.scrollToItem(0)
-        resultGridState.scrollToItem(0)
-        lastResetSearchSessionId = state.searchSessionId
     }
 
     // ✨ Haze State
@@ -847,8 +831,10 @@ fun SearchScreen(
             widthSizeClass = windowSizeClass.widthSizeClass
         )
     }
+    val nativeMiuixGrid = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
     val cardLayout = remember(
         homeFeedCardStyle,
+        nativeMiuixGrid,
         videoGridColumns,
         windowSizeClass.widthSizeClass,
     ) {
@@ -856,6 +842,7 @@ fun SearchScreen(
             style = homeFeedCardStyle,
             gridColumns = videoGridColumns,
             widthSizeClass = windowSizeClass.widthSizeClass,
+            nativeMiuix = nativeMiuixGrid,
         )
     }
     val isSearchResultsScrolling by remember(historyListState, resultGridState, resultListState, searchPagerState) {
@@ -1069,6 +1056,8 @@ fun SearchScreen(
         useHeaderBlur = shouldUseSearchTopBarBlur
     )
     val dismissSearchKeyboardAndFocus = {
+        pendingSearchImeRestore = false
+        restoreVisibleSearchIme = false
         pendingLandingFocusRestore = false
         retainSearchImeAfterClear = false
         keyboardController?.hide()
@@ -1196,6 +1185,21 @@ fun SearchScreen(
         pendingLandingFocusRestore = false
     }
 
+    val searchImeVisible = WindowInsets.isImeVisible
+    androidx.compose.runtime.SideEffect {
+        if (searchWindowInteractive && !pendingSearchImeRestore) {
+            restoreVisibleSearchIme = !state.showResults && searchFieldFocused && searchImeVisible
+        }
+    }
+    LaunchedEffect(searchWindowInteractive, startupSettled, state.showResults, pendingSearchImeRestore) {
+        if (!searchWindowInteractive || !startupSettled || state.showResults || !pendingSearchImeRestore) {
+            return@LaunchedEffect
+        }
+        androidx.compose.runtime.withFrameNanos { }
+        if (searchFocusRequester.requestFocus()) keyboardController?.show()
+        pendingSearchImeRestore = false
+    }
+
     //  [埋点] 页面浏览追踪
     LaunchedEffect(Unit) {
         com.android.purebilibili.core.util.AnalyticsHelper.logScreenView("SearchScreen")
@@ -1237,10 +1241,14 @@ fun SearchScreen(
     LaunchedEffect(initialKeyword) {
         val normalizedKeyword = initialKeyword.trim()
         if (normalizedKeyword.isNotBlank()) {
-            if (shouldApplyInitialSearchKeyword(normalizedKeyword, searchState.value.query, state.showResults)) {
-                searchInputState.setTextAndPlaceCursorAtEnd(normalizedKeyword)
-                viewModel.onQueryChange(normalizedKeyword)
-                submitSearch(normalizedKeyword)
+            if (consumedInitialKeyword != normalizedKeyword) {
+                consumedInitialKeyword = normalizedKeyword
+                val currentSearch = viewModel.uiState.value
+                if (shouldApplyInitialSearchKeyword(normalizedKeyword, currentSearch.query, currentSearch.showResults)) {
+                    searchInputState.setTextAndPlaceCursorAtEnd(normalizedKeyword)
+                    viewModel.onQueryChange(normalizedKeyword)
+                    submitSearch(normalizedKeyword)
+                }
             }
             onInitialKeywordConsumed(normalizedKeyword)
         }
@@ -1703,6 +1711,7 @@ fun SearchScreen(
                 val useSplitLayout = shouldUseSearchSplitLayout(
                     widthDp = windowSizeClass.widthDp.value.toInt()
                 )
+                val openHistoryTransfer = rememberSearchHistoryTransfer(viewModel)
                 SearchLandingStateHost(
                     source = searchState,
                     historyListState = historyListState,
@@ -1741,6 +1750,10 @@ fun SearchScreen(
                         ) {
                             submitSearch(keyword)
                         }
+                    },
+                    historyTransfer = {
+                        dismissSearchKeyboardAndFocus()
+                        openHistoryTransfer()
                     },
                     onClearHistory = viewModel::clearHistory,
                     onDeleteHistory = viewModel::deleteHistory,
@@ -2678,6 +2691,7 @@ private fun SearchResultCardSurface(
     appearance: SearchResultCardAppearance,
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
+    navigationTarget: BiliPaiNavKey? = null,
     content: @Composable () -> Unit
 ) {
     val surfaceSpec = rememberContentCardSurfaceSpec()
@@ -2703,9 +2717,10 @@ private fun SearchResultCardSurface(
         else -> null
     }
     if (onClick != null) {
+        val control = navigationTarget?.let { rememberSystemWindowNavigationControl(it, shape, onClick) }
         AppSurface(
-            modifier = modifier.fillMaxWidth(),
-            onClick = onClick,
+            modifier = modifier.fillMaxWidth().then(control?.modifier ?: Modifier),
+            onClick = control?.onClick ?: onClick,
             color = color,
             shape = shape,
             tonalElevation = if (surfaceSpec.usesTonalContainerTreatment) {
@@ -3253,7 +3268,8 @@ internal fun MatchSearchResultCard(
 ) {
     SearchResultCardSurface(
         appearance = appearance,
-        onClick = onClick
+        onClick = onClick,
+        navigationTarget = BiliPaiNavKey.MatchInfo(item.id),
     ) {
         Row(
             modifier = Modifier
@@ -3360,7 +3376,8 @@ internal fun LiveSearchResultCard(
     val useMiuixPresentation = LocalAppUiStyle.current == AppUiStyle.MIUIX
     SearchResultCardSurface(
         appearance = appearance,
-        onClick = onClick
+        onClick = onClick,
+        navigationTarget = BiliPaiNavKey.Live(roomId = item.roomid.toString(), title = item.title, uname = item.uname),
     ) {
         Row(
             modifier = Modifier
@@ -3555,13 +3572,21 @@ internal fun SearchNativeMessageState(
 internal fun LiveUserSearchResultCard(
     item: SearchLiveUserItem,
     appearance: SearchResultCardAppearance,
+    target: SearchResultNavigationTarget,
     onClick: () -> Unit
 ) {
     val useMiuixPresentation = LocalAppUiStyle.current == AppUiStyle.MIUIX
     val cleaned = remember(item.uid, item.uname, item.uface) { item.cleanupFields() }
+    val navigationTarget = when (target) {
+        is SearchResultNavigationTarget.LiveRoom ->
+            BiliPaiNavKey.Live(roomId = target.roomId.toString(), title = target.title, uname = target.uname)
+        is SearchResultNavigationTarget.Space -> BiliPaiNavKey.Space(target.mid)
+        else -> null
+    }
     SearchResultCardSurface(
         appearance = appearance,
-        onClick = onClick
+        onClick = onClick,
+        navigationTarget = navigationTarget,
     ) {
         Row(
             modifier = Modifier
@@ -3634,7 +3659,8 @@ internal fun TopicSearchResultCard(
     val cleaned = remember(item.topicId, item.title, item.cover) { item.cleanupFields() }
     SearchResultCardSurface(
         appearance = appearance,
-        onClick = onClick
+        onClick = onClick,
+        navigationTarget = BiliPaiNavKey.TopicDetail(cleaned.topicId),
     ) {
         Row(
             modifier = Modifier

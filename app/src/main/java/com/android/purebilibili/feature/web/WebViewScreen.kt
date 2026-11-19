@@ -47,7 +47,6 @@ import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
-import com.android.purebilibili.core.util.hasCommentLocation
 
 /**
  * WebViewScreen - 应用内浏览器
@@ -77,7 +76,7 @@ fun WebViewScreen(
     onMusicClick: ((musicId: String) -> Unit)? = null,
     onMatchClick: ((contestId: Long) -> Unit)? = null,
     onArticleCollectionClick: ((collectionId: Long) -> Unit)? = null,
-    onCommentLink: ((url: String) -> Unit)? = null,
+    onNativeLink: ((url: String) -> Unit)? = null,
     topBarActions: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -304,9 +303,9 @@ fun WebViewScreen(
                                             android.util.Log.d("WebViewScreen", "🔍 Scheme: $scheme, Host: $host")
 
                                             fun dispatchTarget(target: BilibiliNavigationTarget): Boolean {
-                                                if (target.hasCommentLocation) {
-                                                    if (onCommentLink != null) {
-                                                        onCommentLink(urlString)
+                                                if (target.requiresNativeLinkHandler) {
+                                                    if (onNativeLink != null) {
+                                                        onNativeLink(urlString)
                                                     } else {
                                                         val intent = android.content.Intent(
                                                             android.content.Intent.ACTION_VIEW,
@@ -365,6 +364,8 @@ fun WebViewScreen(
                                                     }
                                                     is BilibiliNavigationTarget.Search -> false
                                                     is BilibiliNavigationTarget.Article -> false
+                                                    is BilibiliNavigationTarget.Topic,
+                                                    is BilibiliNavigationTarget.FavoriteFolder -> false
                                                     is BilibiliNavigationTarget.PopularFeed -> false
                                                     is BilibiliNavigationTarget.CommentDetail -> false
                                                 }

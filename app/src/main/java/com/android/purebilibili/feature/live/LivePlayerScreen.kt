@@ -192,6 +192,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlin.math.roundToInt
 import androidx.lifecycle.compose.currentStateAsState
+import com.android.purebilibili.feature.video.playback.session.PlaybackWindowLifecycle
+import com.android.purebilibili.feature.video.playback.session.isInMultiWindowPlaybackMode
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 private const val TAG = "LivePlayerScreen"
@@ -967,9 +969,10 @@ private fun LiveRoomScreen(
 
     // 生命周期管理
     val currentIsLiveAudioOnly by rememberUpdatedState(isLiveAudioOnly)
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, activity) {
+        val playbackLifecycle = PlaybackWindowLifecycle()
         val observer = LifecycleEventObserver { _, event ->
-            when (event) {
+            when (playbackLifecycle.playbackEvent(event, activity.isInMultiWindowPlaybackMode())) {
                 Lifecycle.Event.ON_PAUSE -> {
                     val isInPictureInPictureMode =
                         android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N &&

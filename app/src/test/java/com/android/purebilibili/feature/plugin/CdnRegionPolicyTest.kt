@@ -494,6 +494,38 @@ class CdnRegionPolicyTest {
     }
 
     @Test
+    fun `current test line moves ahead of finished lines when its live speed rises`() {
+        val finished = CdnSpeedResult(PlaybackCdnPreference.HW, 400_000, 30)
+        val waiting = CdnSpeedTestUpdate.Testing(
+            preference = PlaybackCdnPreference.BASE_URL,
+            tested = listOf(finished),
+            total = 2,
+            host = "base.bilivideo.com",
+        )
+        val faster = waiting.copy(downloaded = 32_768, bytesPerSecond = 600_000)
+
+        assertEquals(finished, rankCdnSpeedResults(waiting.tested + waiting.currentResult).first())
+        assertEquals(faster.currentResult, rankCdnSpeedResults(faster.tested + faster.currentResult).first())
+        assertEquals("base.bilivideo.com", faster.currentResult.host)
+    }
+
+    @Test
+    fun `speed and usage sort measure different properties of the same lines`() {
+        val base = CdnSpeedResult(PlaybackCdnPreference.BASE_URL, 200_000, 50, "base.bilivideo.com")
+        val hw = CdnSpeedResult(PlaybackCdnPreference.HW, 400_000, 30)
+        val cos = CdnSpeedResult(PlaybackCdnPreference.COS, 800_000, 60)
+        val failed = CdnSpeedResult(PlaybackCdnPreference.ALI, null, null)
+        val results = listOf(base, failed, hw, cos)
+        val completed = mapOf("base.bilivideo.com" to 10, requireNotNull(hw.host) to 3, requireNotNull(cos.host) to 3)
+
+        assertEquals(listOf(cos, hw, base, failed), rankCdnSpeedResults(results))
+        assertEquals(
+            listOf(base, cos, hw, failed),
+            rankCdnSpeedResults(results, CdnResultSort.MOST_USED, completed),
+        )
+    }
+
+    @Test
     fun `automatic selection prefers the fastest measured safe line and retains the originals`() {
         val measured = rankCdnSpeedResults(listOf(
             CdnSpeedResult(PlaybackCdnPreference.HW, 400_000, 30),

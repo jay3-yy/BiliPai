@@ -6,6 +6,7 @@ import com.android.purebilibili.feature.home.resolveIsVerticalForNavigation
 import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.videoListItemModifier
 import com.android.purebilibili.core.ui.components.AnimatedVideoListItem
@@ -129,6 +130,7 @@ internal fun SearchResultPageContent(
     val windowSizeClass = LocalWindowSizeClass.current
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
+    val nativeMiuixGrid = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
     val singleColumn = appearance.singleColumn
     val searchLayoutPolicy = appearance.searchLayoutPolicy
     val cardAnimationEnabled = appearance.cardAnimationEnabled
@@ -259,6 +261,7 @@ internal fun SearchResultPageContent(
                     coverAspectRatio = cardLayout.coverAspectRatio,
                     contentPadding = resultPadding.copy(horizontal = cardLayout.outerPaddingDp.dp),
                     spacing = cardLayout.itemSpacingDp.dp,
+                    infoHorizontalPadding = if (nativeMiuixGrid) AppSpacingTokens.Small else 0.dp,
                     modifier = skeletonModifier,
                 )
             }
@@ -360,6 +363,7 @@ internal fun SearchResultPageContent(
                 }
                 val searchGridCardLayout = remember(
                     homeFeedCardStyle,
+                    nativeMiuixGrid,
                     effectiveSearchGridColumns,
                     windowSizeClass.widthSizeClass,
                 ) {
@@ -367,21 +371,21 @@ internal fun SearchResultPageContent(
                         style = homeFeedCardStyle,
                         gridColumns = effectiveSearchGridColumns,
                         widthSizeClass = windowSizeClass.widthSizeClass,
+                        nativeMiuix = nativeMiuixGrid,
                     )
                 }
                 val searchGridHorizontalArrangement =
                     Arrangement.spacedBy(searchGridCardLayout.itemSpacingDp.dp)
-                val searchCoverRequestSpec = remember(
-                    maxWidth, density.density, searchGridCardLayout, searchLayoutPolicy, effectiveSearchGridColumns
-                ) {
+                val searchCardWidthDp = resolveSearchGridCardWidthDp(
+                    availableWidthDp = maxWidth.value,
+                    minItemWidthDp = searchLayoutPolicy.resultGridMinItemWidthDp.toFloat(),
+                    horizontalPaddingDp = searchGridCardLayout.outerPaddingDp.toFloat(),
+                    spacingDp = searchGridCardLayout.itemSpacingDp.toFloat(),
+                    fixedColumnCount = effectiveSearchGridColumns,
+                )
+                val searchCoverRequestSpec = remember(searchCardWidthDp, density.density) {
                     resolveHomeCoverRequestSpec(
-                        cardWidthDp = resolveSearchGridCardWidthDp(
-                            availableWidthDp = maxWidth.value,
-                            minItemWidthDp = searchLayoutPolicy.resultGridMinItemWidthDp.toFloat(),
-                            horizontalPaddingDp = searchGridCardLayout.outerPaddingDp.toFloat(),
-                            spacingDp = searchGridCardLayout.itemSpacingDp.toFloat(),
-                            fixedColumnCount = effectiveSearchGridColumns,
-                        ),
+                        cardWidthDp = searchCardWidthDp,
                         density = density.density,
                         useLowQualityCover = false,
                     )
@@ -421,7 +425,7 @@ internal fun SearchResultPageContent(
                 state = activePageGridState,
                 contentPadding = resultPadding.copy(horizontal = searchGridCardLayout.outerPaddingDp.dp),
                 horizontalArrangement = searchGridHorizontalArrangement,
-                verticalItemSpacing = searchGridCardLayout.itemSpacingDp.dp,
+                verticalItemSpacing = searchGridCardLayout.verticalItemSpacingDp.dp,
                 modifier = videoGridModifier
     ) {
             if (targetSearchType == SearchType.ALL) {
@@ -440,7 +444,7 @@ internal fun SearchResultPageContent(
                 }
                 if (pageResultState.upResults.isNotEmpty()) {
                     itemsIndexed(pageResultState.upResults, key = { _, up -> "all_up_${up.mid}" }, span = { _, _ -> StaggeredGridItemSpan.FullLine }) { _, up ->
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(searchGridCardLayout.verticalItemSpacingDp.dp)) {
                             UpSearchResultCard(
                                 upItem = up,
                                 appearance = genericResultCardAppearance,
@@ -456,13 +460,16 @@ internal fun SearchResultPageContent(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(
+                                        if (nativeMiuixGrid) searchGridCardLayout.itemSpacingDp.dp else 10.dp,
+                                    ),
                                 ) {
                                     relatedVideos.forEachIndexed { relatedIndex, video ->
                                         ElegantVideoCard(
                                             video = video,
                                             index = relatedIndex,
                                             modifier = Modifier.width(160.dp),
+                                            cardWidthDp = 160f.takeIf { nativeMiuixGrid },
                                             animationEnabled = false,
                                             motionTier = cardMotionTier,
                                             transitionEnabled = effectiveCardTransitionEnabled,
@@ -581,6 +588,7 @@ internal fun SearchResultPageContent(
                             isQuickReturningFromVideoDetail = isQuickReturningFromVideoDetail,
                             showPublishTime = true,
                             coverRequestSpec = searchCoverRequestSpec,
+                            cardWidthDp = searchCardWidthDp.takeIf { nativeMiuixGrid },
                             glassEnabled = videoCardAppearance.glassEnabled,
                             blurEnabled = videoCardAppearance.blurEnabled,
                             showCoverGlassBadges = videoCardAppearance.showCoverGlassBadges,
@@ -992,17 +1000,19 @@ internal fun SearchResultPageContent(
                     },
                     contentType = { _, _ -> "search_live_user_card" }
                 ) { index, item ->
+                    val target = resolveLiveUserSearchNavigationTarget(
+                        roomId = item.roomid,
+                        uid = item.uid,
+                        isLive = item.isLive || item.liveStatus == 1,
+                        title = item.uname,
+                        uname = item.uname,
+                    )
                     LiveUserSearchResultCard(
                         item = item,
                         appearance = genericResultCardAppearance,
+                        target = target,
                         onClick = {
-                            when (val target = resolveLiveUserSearchNavigationTarget(
-                                roomId = item.roomid,
-                                uid = item.uid,
-                                isLive = item.isLive || item.liveStatus == 1,
-                                title = item.uname,
-                                uname = item.uname
-                            )) {
+                            when (target) {
                                 is SearchResultNavigationTarget.LiveRoom -> onLiveClick(target.roomId, target.title, target.uname)
                                 is SearchResultNavigationTarget.Space -> onUpClick(target.mid)
                                 else -> Unit

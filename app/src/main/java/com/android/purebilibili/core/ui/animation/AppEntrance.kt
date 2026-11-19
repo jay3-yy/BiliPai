@@ -65,6 +65,7 @@ class AppEntranceController internal constructor(
 }
 
 internal val LocalAppEntrance = staticCompositionLocalOf<AppEntranceController?> { null }
+internal val LocalNavigationOwnsContentEntrance = staticCompositionLocalOf { false }
 
 /**
  * 解析当前生效的入场参数:设备动效档 ⊕ App「界面入场动画」开关 ⊕ 系统 reduce-motion。
@@ -96,6 +97,10 @@ fun EntranceGroup(
     startWhen: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    if (LocalNavigationOwnsContentEntrance.current) {
+        CompositionLocalProvider(LocalAppEntrance provides null, content = content)
+        return
+    }
     val spec = rememberEffectiveEntranceMotionSpec()
     val controller = remember(spec) { AppEntranceController(spec) }
     val navigationReady = LocalAppNavigationEntranceReady.current

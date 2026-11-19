@@ -674,6 +674,7 @@ data class HomeSettings(
     val partitionSideRailOnRight: Boolean = false,
     val hideTopTabs: Boolean = false,
     val homeTopRightAction: HomeTopRightAction = HomeTopRightAction.SETTINGS,
+    val homeAvatarDrawerEnabled: Boolean = false,
     val homeTopLayoutOrder: HomeTopLayoutOrder = HomeTopLayoutOrder.SEARCH_THEN_TABS,
     val isHeaderBlurEnabled: Boolean = false,
     val headerBlurMode: HomeHeaderBlurMode = HomeHeaderBlurMode.ALWAYS_OFF,
@@ -1553,6 +1554,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     private val KEY_PARTITION_SIDE_RAIL_ON_RIGHT = booleanPreferencesKey("partition_side_rail_on_right")
     private val KEY_HIDE_TOP_TABS = booleanPreferencesKey("hide_top_tabs")
     private val KEY_HOME_TOP_RIGHT_ACTION = intPreferencesKey("home_top_right_action")
+    private val KEY_HOME_AVATAR_DRAWER_ENABLED = booleanPreferencesKey("home_avatar_drawer_enabled")
     //  [新增] 顶部标签自定义 - 顺序和可见性
     private val KEY_TOP_TAB_ORDER = stringPreferencesKey("top_tab_order")
     private val KEY_TOP_TAB_VISIBLE_TABS = stringPreferencesKey("top_tab_visible_tabs")
@@ -1818,6 +1820,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     /** 偏好的调用方作用域之外落盘专用；进程存续期即作用域生命期。 */
     private val commentPreferenceWriteScope =
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private val KEY_SUB_REPLY_THREADED_ENABLED = booleanPreferencesKey("sub_reply_threaded_enabled")
     private val KEY_SUB_REPLY_LOADED_COUNT_ENABLED =
         booleanPreferencesKey("sub_reply_loaded_count_enabled")
     private val KEY_IMAGE_PREVIEW_LONG_PRESS_SAVE_ENABLED =
@@ -1907,6 +1910,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeTopRightAction = HomeTopRightAction.fromValue(
                 preferences[KEY_HOME_TOP_RIGHT_ACTION] ?: HomeTopRightAction.SETTINGS.value
             ),
+            homeAvatarDrawerEnabled = preferences[KEY_HOME_AVATAR_DRAWER_ENABLED] ?: false,
             homeTopLayoutOrder = HomeTopLayoutOrder.fromValue(
                 preferences[KEY_HOME_TOP_LAYOUT_ORDER] ?: HomeTopLayoutOrder.SEARCH_THEN_TABS.value
             ),
@@ -4413,6 +4417,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         }
     }
 
+    fun getHomeAvatarDrawerEnabled(context: Context): Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences -> preferences[KEY_HOME_AVATAR_DRAWER_ENABLED] ?: false }
+        .distinctUntilChanged()
+
+    suspend fun setHomeAvatarDrawerEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_HOME_AVATAR_DRAWER_ENABLED] = enabled
+        }
+    }
+
     fun getHomeTopLayoutOrder(context: Context): Flow<HomeTopLayoutOrder> = context.settingsDataStore.data
         .map { preferences ->
             HomeTopLayoutOrder.fromValue(
@@ -6325,11 +6339,11 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     /**
      *  推荐流 API 类型
      * - WEB: 平板端/Web API (x/web-interface/wbi/index/top/feed/rcmd)，使用 WBI 签名
-     * - MOBILE: 移动端 API (x/v2/feed/index)，使用 appkey+sign 签名，需要 access_token
+     * - MOBILE: 移动端 API (x/v2/feed/index)，按登录凭证选择签名，也支持匿名请求
      */
     enum class FeedApiType(val value: Int, val label: String, val description: String) {
         WEB(0, "网页端", "使用 B 站网页端的推荐内容"),
-        MOBILE(1, "手机端", "需移动端登录凭证；按授权来源使用手机端或平板兼容推荐，不可用时提示并使用网页端"),
+        MOBILE(1, "手机端", "使用手机端推荐，缺少移动端凭证时请求匿名推荐，不可用时提示并使用网页端"),
         MERGED(2, "合并推荐", "合并网页端与当前登录授权支持的移动端推荐；缺少移动端凭证时仅使用网页端");
         
         companion object {
@@ -6949,6 +6963,16 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
     fun setDetailedCommentTimeEnabledDetached(context: Context, enabled: Boolean) {
         commentPreferenceWriteScope.launch {
             setDetailedCommentTimeEnabled(context.applicationContext, enabled)
+        }
+    }
+
+    fun getSubReplyThreadedEnabled(context: Context): Flow<Boolean> =
+        context.settingsDataStore.data
+            .map { preferences -> preferences[KEY_SUB_REPLY_THREADED_ENABLED] ?: false }
+
+    suspend fun setSubReplyThreadedEnabled(context: Context, enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_SUB_REPLY_THREADED_ENABLED] = enabled
         }
     }
 
@@ -8886,6 +8910,7 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             BooleanShareablePreferenceDefinition(KEY_PARTITION_SIDE_RAIL_ON_RIGHT, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_HIDE_TOP_TABS, SettingsShareSection.APPEARANCE),
             IntShareablePreferenceDefinition(KEY_HOME_TOP_RIGHT_ACTION, SettingsShareSection.APPEARANCE),
+            BooleanShareablePreferenceDefinition(KEY_HOME_AVATAR_DRAWER_ENABLED, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_ORDER, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_TOP_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),
             StringShareablePreferenceDefinition(KEY_DYNAMIC_TAB_VISIBLE_TABS, SettingsShareSection.APPEARANCE),

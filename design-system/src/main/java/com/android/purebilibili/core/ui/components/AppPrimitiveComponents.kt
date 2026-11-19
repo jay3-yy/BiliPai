@@ -935,10 +935,12 @@ fun AppDropdownMenuItem(
     val menuModifier = modifier.glassMenuItem(enabled, dismissOnClick, feedbackClick).glassMenuSelectedItem(selected == true)
     val menuClick = { if (glassScope != null) glassScope.dispatch(feedbackClick, dismissOnClick) else feedbackClick() }
     val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
-    // 原生窗口使用菜单专用间距与选中反馈；其他材质保留各自条目布局。
-    if (glassScope == null && com.android.purebilibili.core.ui.isMiuixNonGlassEnabled() &&
-        LocalAppThemeConfig.current.nativeMiuixPopupsEnabled
-    ) {
+    val nativeMiuix = glassScope == null && com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
+    // 窗口菜单与非玻璃备用菜单使用同一份默认内边距，显式传入的内边距继续生效。
+    val rowPadding = if (nativeMiuix && contentPadding == MenuDefaults.DropdownMenuItemContentPadding) {
+        PaddingValues(horizontal = DropdownDefaults.InsideHorizontalPadding, vertical = DropdownDefaults.MiddleVerticalPadding)
+    } else contentPadding
+    if (nativeMiuix && LocalAppThemeConfig.current.nativeMiuixPopupsEnabled) {
         AppNativeDropdownMenuItem(
             text = text,
             onClick = menuClick,
@@ -947,9 +949,7 @@ fun AppDropdownMenuItem(
             trailingIcon = trailingIcon,
             enabled = enabled,
             selected = selected,
-            contentPadding = if (contentPadding == MenuDefaults.DropdownMenuItemContentPadding) {
-                PaddingValues(horizontal = DropdownDefaults.InsideHorizontalPadding, vertical = DropdownDefaults.MiddleVerticalPadding)
-            } else contentPadding,
+            contentPadding = rowPadding,
             interactionSource = resolvedInteractionSource,
         )
         return
@@ -966,7 +966,7 @@ fun AppDropdownMenuItem(
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier
                     .heightIn(min = AppChromeSizeTokens.CompactRowMinHeightDp.dp)
-                    .padding(contentPadding),
+                    .padding(rowPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {

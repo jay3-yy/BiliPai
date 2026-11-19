@@ -3,15 +3,16 @@ package com.android.purebilibili.feature.audio.screen
 import com.android.purebilibili.core.ui.AppContentColors
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import com.android.purebilibili.core.ui.components.appElasticPress
 import com.android.purebilibili.core.ui.components.rememberAppElasticPressState
 import com.android.purebilibili.core.ui.components.LocalElasticPressEnabled
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -39,7 +40,7 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppText
-import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.animation.gl.ThanosEffectView
 import com.android.purebilibili.core.ui.animation.gl.isThanosEffectSupported
 import com.android.purebilibili.core.ui.findHostActivity
@@ -48,6 +49,7 @@ import com.android.purebilibili.core.ui.transition.captureNativeVideoCardBitmap
 import com.android.purebilibili.core.ui.transition.recordNativeVideoCardLayer
 import com.android.purebilibili.core.ui.transition.rememberNativeVideoCardLayer
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -56,9 +58,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import com.android.purebilibili.core.ui.transition.NowPlayingBarHandoffState
+import com.android.purebilibili.core.ui.transition.LocalVideoCardSourceTrackingEnabled
 import com.android.purebilibili.core.ui.transition.VideoCardSourceChromeSnapshot
 import com.android.purebilibili.core.ui.transition.VideoCardSourceLayout
 import com.android.purebilibili.core.ui.transition.resolveNowPlayingBarReturnVisibility
@@ -75,6 +80,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
 import com.android.purebilibili.feature.audio.lyrics.halcyon.darken
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -99,7 +105,12 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import coil3.BitmapImage
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Scale
 import com.android.purebilibili.feature.home.components.LiquidGlassTuning
 import com.android.purebilibili.feature.home.components.LocalLiquidGlassRenderConfig
 import com.android.purebilibili.feature.home.components.biliPaiFloatingDockShell
@@ -110,23 +121,61 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 
+private const val NOW_PLAYING_CAPTURE_TIMEOUT_MILLIS = 500L
+
 internal data class AudioNowPlayingBarState(
     val bvid: String = "",
     val title: String,
     val artist: String,
     val artistAvatarUrl: String = "",
-    val coverUrl: String,
+    val cover: AudioNowPlayingCover,
     val isPlaying: Boolean,
     val playbackSpeed: Float = 1f
 )
 
+internal class AudioNowPlayingCover(val request: ImageRequest) {
+    // 当前播放项只保留一张已解码的静态封面，供独立条和合并底栏交接。
+    var bitmap: ImageBitmap? = null
+}
+
+@Composable
+internal fun rememberAudioNowPlayingCover(bvid: String, url: String): AudioNowPlayingCover {
+    val context = LocalContext.current
+    val sizePx = with(LocalDensity.current) { resolveAudioNowPlayingCoverSizeDp(0f, 0f).dp.roundToPx() }
+    return remember(context, bvid, url, sizePx) {
+        AudioNowPlayingCover(
+            ImageRequest.Builder(context).data(url).size(sizePx).scale(Scale.FILL).build()
+        )
+    }
+}
+
+@Composable
+private fun AudioNowPlayingCoverImage(cover: AudioNowPlayingCover, modifier: Modifier) {
+    // 本宿主继续展示自己已启动的请求，交接后的宿主才直接使用已解码结果。
+    val bitmap = remember(cover) { cover.bitmap }
+    if (bitmap != null) {
+        Image(bitmap, contentDescription = null, modifier = modifier, contentScale = ContentScale.Crop)
+    } else {
+        AsyncImage(
+            model = cover.request,
+            contentDescription = null,
+            modifier = modifier,
+            contentScale = ContentScale.Crop,
+            onSuccess = { success ->
+                val image = success.result.image as? BitmapImage
+                if (image != null && image.shareable) cover.bitmap = image.bitmap.asImageBitmap()
+            },
+        )
+    }
+}
+
 @Composable
 internal fun AudioNowPlayingBar(
     state: AudioNowPlayingBarState,
-    onExpand: () -> Unit,
+    showDeleteButton: Boolean,
+    onExpand: (hasRecordedSource: Boolean) -> Unit,
     onCompactClick: (() -> Unit)? = null,
     isLayoutStable: Boolean = true,
-    captureCardSourceOnExpand: Boolean = true,
     pauseArtworkRotation: Boolean = false,
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
@@ -134,7 +183,7 @@ internal fun AudioNowPlayingBar(
     onCancelPlayback: () -> Unit,
     onDismiss: () -> Unit,
     expandDestinationLabel: String = "听视频",
-    sourceRoute: String? = null,
+    sourceRoute: String,
     handoff: NowPlayingBarHandoffState = NowPlayingBarHandoffState.Idle,
     glassEnabled: Boolean = LocalSettingsLiquidGlassEnabled.current,
     blurEnabled: Boolean = false,
@@ -163,23 +212,28 @@ internal fun AudioNowPlayingBar(
             CardPositionManager.invalidateVideoSourceIfWindowChanged(screenWidthPx, screenHeightPx)
         }
 
-        val nativeBarLayer = rememberNativeVideoCardLayer()
-        val snapshotScope = rememberCoroutineScope()
-        var captureInProgress by remember(state.bvid) { mutableStateOf(false) }
+        // 视频详情和听视频共用小横条的系统窗口来源。
+        val nativeBarLayer = if (LocalVideoCardSourceTrackingEnabled.current) {
+            rememberNativeVideoCardLayer()
+        } else null
+        val snapshotScope = key(state.bvid, sourceRoute) { rememberCoroutineScope() }
+        val latestLayoutStable by rememberUpdatedState(isLayoutStable)
+        var captureInProgress by remember(state.bvid, sourceRoute) { mutableStateOf(false) }
+        var freezeSourceLayer by remember(state.bvid, sourceRoute) { mutableStateOf(false) }
+        var pendingSourceFrame by remember(state.bvid, sourceRoute) {
+            mutableStateOf<CompletableDeferred<Unit>?>(null)
+        }
         val barCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
         val closeCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
         val coverCoordsRef = remember { arrayOfNulls<LayoutCoordinates>(1) }
         val dissolveContext = LocalContext.current
         val artworkGate = com.android.purebilibili.core.ui.rememberDecorativeAnimationGate()
-        val reduceMotion = rememberSystemReduceMotion()
+        val reduceMotion = LocalSystemReduceMotion.current
         val cancelCaptureJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
 
         // 从窗口已绘制的像素截取横条，避免离屏重绘实时模糊/旋转图层。
         // 点按取消立即暂停；粒子首帧隐藏本体，消散完成后再关闭会话。
         val dismissAfterCancel by rememberUpdatedState(onDismiss)
-        val showDeleteButton by remember(dissolveContext) {
-            com.android.purebilibili.core.store.SettingsManager.getAudioNowPlayingBarDeleteButton(dissolveContext)
-        }.collectAsStateWithLifecycle(initialValue = true)
         var cancelDissolving by remember(state.bvid) { mutableStateOf(false) }
         var dissolveContentHidden by remember(state.bvid) { mutableStateOf(false) }
         var dissolveEffectView by remember { mutableStateOf<ThanosEffectView?>(null) }
@@ -206,7 +260,7 @@ internal fun AudioNowPlayingBar(
                             withFrameNanos { }
                             val windowBounds = barCoordsRef[0]?.takeIf { it.isAttached }?.boundsInWindow()
                             val snapshot = if (windowBounds != null && !windowBounds.isEmpty) {
-                                withTimeoutOrNull(500L) {
+                                withTimeoutOrNull(NOW_PLAYING_CAPTURE_TIMEOUT_MILLIS) {
                                     captureAudioNowPlayingWindowSnapshot(hostWindow, windowBounds)
                                 }
                             } else {
@@ -267,79 +321,91 @@ internal fun AudioNowPlayingBar(
             }
         }
 
+        suspend fun expandFromBar(layer: GraphicsLayer) {
+            // 布局落位只保证坐标已更新。等录制层真正绘完同一尺寸后再冻结像素。
+            val renderedFrame = CompletableDeferred<Unit>()
+            pendingSourceFrame = renderedFrame
+            val recorded = withTimeoutOrNull(NOW_PLAYING_CAPTURE_TIMEOUT_MILLIS) {
+                renderedFrame.await()
+            } != null
+            if (recorded) yield()
+            if (CardPositionManager.isVideoNavigationDebounceActive()) return
+            if (!recorded) {
+                onExpand(false)
+                return
+            }
+            val bounds = barCoordsRef[0]?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
+            if (bounds == null ||
+                !bounds.left.isFinite() || !bounds.top.isFinite() ||
+                !bounds.right.isFinite() || !bounds.bottom.isFinite() || bounds.isEmpty
+            ) {
+                onExpand(false)
+                return
+            }
+            CardPositionManager.recordVideoCardPosition(
+                bvid = state.bvid,
+                sourceRoute = sourceRoute,
+                bounds = bounds,
+                screenWidth = screenWidthPx,
+                screenHeight = screenHeightPx,
+                density = density.density,
+                sourceCornerDp = com.android.purebilibili.core.ui.transition
+                    .resolveNowPlayingBarSourceCornerDp(bounds.width, bounds.height, density.density),
+                coverBounds = coverCoordsRef[0]?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot(),
+                sourceLayout = if (iconOnlyProgress() >= 0.99f) {
+                    VideoCardSourceLayout.COVER_ONLY
+                } else {
+                    VideoCardSourceLayout.SIDE_BY_SIDE
+                },
+                sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
+                    title = state.title,
+                    ownerName = state.artist,
+                    ownerFaceUrl = state.artistAvatarUrl,
+                    viewText = "",
+                    danmakuText = "",
+                    durationText = "",
+                    followed = false,
+                    isNowPlayingBar = true,
+                ),
+            )
+            CardPositionManager.clearNativeVideoCardLayers()
+            captureNativeVideoCardImage(layer)
+            freezeSourceLayer = true
+            val expectedSourceKey = CardPositionManager.lastClickedVideoSourceKey
+            val sourceOwner = CardPositionManager.videoCardPixelOwnerFor(expectedSourceKey)
+            try {
+                captureNativeVideoCardBitmap(layer, expectedSourceKey)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                com.android.purebilibili.core.util.Logger.w(
+                    "AudioNowPlayingBar", "Could not freeze return snapshot: ${error.message}",
+                )
+            }
+            if (CardPositionManager.isActiveVideoCardPixelOwner(sourceOwner)) {
+                onExpand(true)
+            }
+        }
         val handleExpand = nowPlayingBarExpand@{
             if (onCompactClick != null) {
                 onCompactClick()
-            } else if (!captureCardSourceOnExpand && !captureInProgress &&
-                canOpenAudioNowPlayingBarSource(isLayoutStable)
-            ) {
-                if (CardPositionManager.isVideoNavigationDebounceActive()) {
-                    // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
-                    return@nowPlayingBarExpand
-                }
-                // 听视频页使用普通导航，不等待仅供视频详情形变使用的来源快照。
-                onExpand()
-            } else if (captureCardSourceOnExpand && !captureInProgress &&
-                canOpenAudioNowPlayingBarSource(isLayoutStable)
-            ) {
-                if (CardPositionManager.isVideoNavigationDebounceActive()) {
-                    // 防抖窗口内的点击注定被导航层拒绝；不得覆写在飞转场的全局记录与冻结像素。
-                    return@nowPlayingBarExpand
-                }
-                barCoordsRef[0]?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()?.let { bounds ->
-                    val sourceCoverBounds = coverCoordsRef[0]?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
-                    val effectiveSourceLayout = if (iconOnlyProgress() >= 0.99f) {
-                        VideoCardSourceLayout.COVER_ONLY
-                    } else {
-                        VideoCardSourceLayout.SIDE_BY_SIDE
-                    }
-                    if (state.bvid.isNotBlank() &&
-                        bounds.left.isFinite() && bounds.top.isFinite() &&
-                        bounds.right.isFinite() && bounds.bottom.isFinite() &&
-                        bounds.width > 0f && bounds.height > 0f
-                    ) {
-                        CardPositionManager.recordVideoCardPosition(
-                            bvid = state.bvid,
-                            sourceRoute = sourceRoute,
-                            bounds = bounds,
-                            screenWidth = screenWidthPx,
-                            screenHeight = screenHeightPx,
-                            density = density.density,
-                            sourceCornerDp = com.android.purebilibili.core.ui.transition
-                                .resolveNowPlayingBarSourceCornerDp(bounds.width, bounds.height, density.density),
-                            coverBounds = sourceCoverBounds,
-                            sourceLayout = effectiveSourceLayout,
-                            sourceChromeSnapshot = VideoCardSourceChromeSnapshot(
-                                title = state.title,
-                                ownerName = state.artist,
-                                ownerFaceUrl = state.artistAvatarUrl,
-                                viewText = "",
-                                danmakuText = "",
-                                durationText = "",
-                                followed = false,
-                                isNowPlayingBar = true,
-                            )
-                        )
-                    }
-                }
-                // Finish freezing before navigation removes the bar's graphics layer.
-                CardPositionManager.clearNativeVideoCardLayers()
-                captureNativeVideoCardImage(nativeBarLayer)
-                val expectedSourceKey = CardPositionManager.lastClickedVideoSourceKey
-                captureInProgress = true
-                snapshotScope.launch {
-                    try {
-                        captureNativeVideoCardBitmap(nativeBarLayer, expectedSourceKey)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (error: Exception) {
-                        com.android.purebilibili.core.util.Logger.w(
-                            "AudioNowPlayingBar", "Could not freeze return snapshot: ${error.message}",
-                        )
-                    } finally {
-                        captureInProgress = false
-                    }
-                    onExpand()
+                return@nowPlayingBarExpand
+            }
+            if (captureInProgress || CardPositionManager.isVideoNavigationDebounceActive()) {
+                return@nowPlayingBarExpand
+            }
+            if (nativeBarLayer == null || state.bvid.isBlank()) {
+                onExpand(false)
+                return@nowPlayingBarExpand
+            }
+            captureInProgress = true
+            snapshotScope.launch {
+                try {
+                    expandFromBar(nativeBarLayer)
+                } finally {
+                    pendingSourceFrame = null
+                    freezeSourceLayer = false
+                    captureInProgress = false
                 }
             }
         }
@@ -389,11 +455,6 @@ internal fun AudioNowPlayingBar(
         Box(
             modifier = modifier
                 .then(artworkGate.modifier)
-                .appElasticPress(
-                    enabled = !sourceInActiveReturn && !captureInProgress && !cancelDissolving,
-                    state = elasticState,
-                    transformInBackdrop = glassMotion,
-                )
                 .fillMaxWidth()
                 .then(if (consumeNavigationBarsPadding) Modifier.navigationBarsPadding() else Modifier)
                 .padding(
@@ -408,10 +469,15 @@ internal fun AudioNowPlayingBar(
                         else -> 8.dp
                     }
                 )
-                .videoCardSourceAnchor(state.bvid, shape, enabled = captureCardSourceOnExpand)
-                .onGloballyPositioned { coordinates ->
+                .videoCardSourceAnchor(state.bvid, shape, enabled = nativeBarLayer != null) { coordinates ->
                     barCoordsRef[0] = coordinates
                 }
+                // 源锚点和录制层使用同一个未缩放的胶囊尺寸，松手回弹不会改变系统落点。
+                .appElasticPress(
+                    enabled = !sourceInActiveReturn && !captureInProgress && !cancelDissolving,
+                    state = elasticState,
+                    transformInBackdrop = glassMotion,
+                )
                 .graphicsLayer {
                     // The transition host owns the source pixels during return; do not
                     // start a second settle animation when the real bar is revealed.
@@ -423,11 +489,20 @@ internal fun AudioNowPlayingBar(
                 .recordNativeVideoCardLayer(
                     layer = nativeBarLayer,
                     freezeProvider = {
-                        (captureInProgress || sourceInActiveReturn) &&
+                        nativeBarLayer != null && (freezeSourceLayer || sourceInActiveReturn) &&
                             CardPositionManager.isNativeVideoCardLayerCurrentOwner(nativeBarLayer)
                     },
                     // Visibility is owned by the explicit now-playing handoff above.
                     sourceRoute = sourceRoute,
+                    onRecorded = {
+                        val frame = pendingSourceFrame
+                        val coordinates = barCoordsRef[0]
+                        if (frame != null && latestLayoutStable && coordinates?.isAttached == true &&
+                            coordinates.size == nativeBarLayer?.size
+                        ) {
+                            frame.complete(Unit)
+                        }
+                    },
                 )
                 .semantics {
                     customActions = listOf(CustomAccessibilityAction("删除听视频条") {
@@ -486,16 +561,14 @@ internal fun AudioNowPlayingBar(
                         searchProgress = iconOnlyProgress,
                         showDeleteButton = showDeleteButton,
                         cover = {
-                            AsyncImage(
-                                model = state.coverUrl,
-                                contentDescription = null,
+                            AudioNowPlayingCoverImage(
+                                cover = state.cover,
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .onGloballyPositioned { coordinates ->
                                         coverCoordsRef[0] = coordinates
                                     }
                                     .clip(RoundedCornerShape(6.dp)),
-                                contentScale = ContentScale.Crop
                             )
                         },
                         title = {
@@ -665,44 +738,46 @@ private fun AudioNowPlayingBarContentRow(
             Box(content = { next() })
         },
     ) { measurables, constraints ->
-        val rowHeight = constraints.constrainHeight(
-            resolveAudioNowPlayingBarHeightDp(mergeProgress(), searchProgress()).dp.roundToPx()
-        )
+        val merge = mergeProgress()
+        val search = searchProgress()
         val metrics = resolveAudioNowPlayingBarRowMetrics(
             maxWidthPx = (constraints.maxWidth - if (showDeleteButton) {
-                (16.dp.toPx() * resolveAudioNowPlayingPrimaryProgress(searchProgress())).roundToInt()
+                (16.dp.toPx() * resolveAudioNowPlayingPrimaryProgress(search)).roundToInt()
             } else 0).coerceAtLeast(0),
-            mergeProgress = mergeProgress(),
-            searchProgress = searchProgress(),
+            mergeProgress = merge,
+            searchProgress = search,
             density = density,
         )
+        val rowHeight = constraints.constrainHeight(metrics.controlHeightPx)
         val coverPlaceable = measurables[0].measure(
             Constraints.fixed(metrics.coverPx, metrics.coverPx)
         )
-        val titlePlaceable = measurables[1].measure(
+        val titlePlaceable = if (metrics.titleWidthPx > 0) measurables[1].measure(
             Constraints(
                 minWidth = 0,
                 maxWidth = metrics.titleWidthPx,
                 minHeight = 0,
                 maxHeight = rowHeight,
             )
-        )
-        val playPlaceable = measurables[2].measure(
+        ) else null
+        val playPlaceable = if (metrics.playWidthPx > 0) measurables[2].measure(
             Constraints.fixed(metrics.playWidthPx, metrics.controlHeightPx)
-        )
-        val nextPlaceable = measurables[3].measure(
+        ) else null
+        val nextPlaceable = if (metrics.extraWidthPx > 0) measurables[3].measure(
             Constraints.fixed(metrics.extraWidthPx, metrics.controlHeightPx)
-        )
+        ) else null
         layout(constraints.maxWidth, rowHeight) {
             var x = metrics.contentStartPx
             coverPlaceable.placeRelative(x, (rowHeight - coverPlaceable.height) / 2)
             x += metrics.coverPx + metrics.spacerPx
-            titlePlaceable.placeRelative(x, (rowHeight - titlePlaceable.height) / 2)
-            x += titlePlaceable.width
+            titlePlaceable?.let {
+                it.placeRelative(x, (rowHeight - it.height) / 2)
+                x += it.width
+            }
             val buttonY = (rowHeight - metrics.controlHeightPx) / 2
-            playPlaceable.placeRelative(x, buttonY)
+            playPlaceable?.placeRelative(x, buttonY)
             x += metrics.playWidthPx
-            nextPlaceable.placeRelative(x, buttonY)
+            nextPlaceable?.placeRelative(x, buttonY)
         }
     }
 }
@@ -735,9 +810,9 @@ internal fun AudioNowPlayingBarPresenceHost(
     visible: Boolean,
     modifier: Modifier = Modifier,
     animatePresence: Boolean = true,
-    content: @Composable () -> Unit,
+    content: @Composable AnimatedVisibilityScope.() -> Unit,
 ) {
-    val reduceMotion = rememberSystemReduceMotion()
+    val reduceMotion = LocalSystemReduceMotion.current
     val parentVisualWorkAllowed = com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current
     val alphaEnterSpec = resolveAudioNowPlayingPresenceAnimationSpec(
         active = true,

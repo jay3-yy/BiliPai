@@ -3,6 +3,8 @@ package com.android.purebilibili.feature.web
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.core.util.hasCommentLocation
+import com.android.purebilibili.navigation.BilibiliLinkNavigationAction
+import com.android.purebilibili.navigation.resolveBilibiliLinkNavigationAction
 
 internal sealed interface WebViewNavigationAction {
     data object AllowWebLoad : WebViewNavigationAction
@@ -11,6 +13,11 @@ internal sealed interface WebViewNavigationAction {
     data class DispatchTarget(val target: BilibiliNavigationTarget) : WebViewNavigationAction
     data class OpenExternal(val url: String) : WebViewNavigationAction
 }
+
+internal val BilibiliNavigationTarget.requiresNativeLinkHandler: Boolean
+    get() = hasCommentLocation || this is BilibiliNavigationTarget.Topic ||
+        this is BilibiliNavigationTarget.FavoriteFolder ||
+        (this is BilibiliNavigationTarget.Video && hasPlaybackLocation)
 
 internal fun resolveWebViewNavigationAction(
     urlString: String,
@@ -41,10 +48,14 @@ internal fun resolveWebViewNavigationAction(
         }
 
         val target = BilibiliNavigationTargetParser.parse(urlString)
-        if (target != null && (target is BilibiliNavigationTarget.Dynamic || target.hasCommentLocation)) {
+        if (target != null && (target is BilibiliNavigationTarget.Dynamic || target.requiresNativeLinkHandler)) {
             return WebViewNavigationAction.DispatchTarget(target)
         }
 
+        val action = resolveBilibiliLinkNavigationAction(trimmedUrl)
+        if (action is BilibiliLinkNavigationAction.InAppWeb) {
+            return WebViewNavigationAction.LoadInWebView(action.url)
+        }
         val convertedUrl = convertDeepLinkToWebUrl(urlString)
         return if (convertedUrl != null) {
             WebViewNavigationAction.LoadInWebView(convertedUrl)
@@ -55,7 +66,8 @@ internal fun resolveWebViewNavigationAction(
 
     val target = BilibiliNavigationTargetParser.parse(urlString)
     // 显式网页入口的自动重定向保留在网页内，点击文集链接时才进入原生页面。
-    if (target is BilibiliNavigationTarget.ArticleCollection && !hasUserGesture) {
+    if (!hasUserGesture && (target is BilibiliNavigationTarget.ArticleCollection ||
+            target is BilibiliNavigationTarget.Topic || target is BilibiliNavigationTarget.FavoriteFolder)) {
         return WebViewNavigationAction.AllowWebLoad
     }
     return if (target != null) {

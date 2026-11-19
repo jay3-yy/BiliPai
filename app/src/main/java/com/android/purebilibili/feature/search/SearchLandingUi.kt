@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appActionClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -20,15 +21,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.ClearAll
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.SwapVert
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.structuralEqualityPolicy
@@ -40,9 +45,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -52,6 +58,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import coil3.compose.AsyncImage
+import com.android.purebilibili.R
 import com.android.purebilibili.core.database.entity.SearchHistory
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
@@ -159,6 +166,7 @@ internal fun SearchLandingStateHost(
     onOpenTrending: () -> Unit,
     onRefreshDiscover: () -> Unit,
     onKeywordClick: (String) -> Unit,
+    historyTransfer: () -> Unit,
     onClearHistory: () -> Unit,
     onDeleteHistory: (SearchHistory) -> Unit,
     modifier: Modifier = Modifier
@@ -194,6 +202,7 @@ internal fun SearchLandingStateHost(
         onOpenTrending = onOpenTrending,
         onRefreshDiscover = onRefreshDiscover,
         onKeywordClick = onKeywordClick,
+        historyTransfer = historyTransfer,
         onClearHistory = onClearHistory,
         onDeleteHistory = onDeleteHistory,
         modifier = modifier,
@@ -229,6 +238,7 @@ fun SearchLandingContent(
     onOpenTrending: () -> Unit,
     onRefreshDiscover: () -> Unit,
     onKeywordClick: (String) -> Unit,
+    historyTransfer: () -> Unit,
     onClearHistory: () -> Unit,
     onDeleteHistory: (SearchHistory) -> Unit,
     modifier: Modifier = Modifier
@@ -268,18 +278,32 @@ fun SearchLandingContent(
         )
     }
 
-    @Composable
-    fun HistorySection() {
-        SearchHistorySectionModern(
-            historyList = historyList,
-            recordSearchHistory = recordSearchHistory,
-            globalPrivacyMode = globalPrivacyMode,
-            onToggleHistoryRecording = onToggleHistoryRecording,
-            columns = layoutPolicy.hotSearchColumns,
-            onItemClick = onKeywordClick,
-            onClear = onClearHistory,
-            onDelete = onDeleteHistory
-        )
+    val historyColumns = resolveSearchKeywordSectionColumns(
+        layoutPolicy.hotSearchColumns,
+        showTrendingAction = false,
+    )
+    val historyRows = remember(historyList, historyColumns) { historyList.chunked(historyColumns) }
+
+    fun LazyListScope.historySection() {
+        item(key = SearchLandingSection.HISTORY.name) {
+            SearchHistoryHeader(
+                hasHistory = historyRows.isNotEmpty(),
+                recordSearchHistory = recordSearchHistory,
+                globalPrivacyMode = globalPrivacyMode,
+                onToggleHistoryRecording = onToggleHistoryRecording,
+                onTransfer = historyTransfer,
+                onClear = onClearHistory,
+            )
+        }
+        items(historyRows, key = { row -> "history:${row.first().keyword}" }) { row ->
+            SearchHistoryRow(
+                rowItems = row,
+                columns = historyColumns,
+                onItemClick = onKeywordClick,
+                onDelete = onDeleteHistory,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 
     if (useSplitLayout) {
@@ -315,7 +339,7 @@ fun SearchLandingContent(
                     end = layoutPolicy.splitOuterPaddingDp.dp
                 )
             ) {
-                item { HistorySection() }
+                historySection()
             }
         }
     } else {
@@ -330,20 +354,22 @@ fun SearchLandingContent(
                 start = layoutPolicy.resultHorizontalPaddingDp.dp,
                 end = layoutPolicy.resultHorizontalPaddingDp.dp
             ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            sectionOrder.forEach { section ->
-                val visible = when (section) {
+            val visibleSections = sectionOrder.filter { section ->
+                when (section) {
                     SearchLandingSection.TRENDING -> showHotSection
                     SearchLandingSection.HISTORY -> showHistorySection
                     SearchLandingSection.DISCOVER -> showDiscoverSection
                 }
-                if (visible) item(key = section.name) {
-                    when (section) {
-                        SearchLandingSection.TRENDING -> TrendingSection()
-                        SearchLandingSection.HISTORY -> HistorySection()
-                        SearchLandingSection.DISCOVER -> DiscoverSection()
-                    }
+            }
+            visibleSections.forEachIndexed { index, section ->
+                if (index > 0) {
+                    item(key = "spacing:${section.name}") { Spacer(Modifier.height(16.dp)) }
+                }
+                when (section) {
+                    SearchLandingSection.TRENDING -> item(key = section.name) { TrendingSection() }
+                    SearchLandingSection.HISTORY -> historySection()
+                    SearchLandingSection.DISCOVER -> item(key = section.name) { DiscoverSection() }
                 }
             }
         }
@@ -425,11 +451,11 @@ private fun SearchKeywordSection(
         SearchKeywordSectionHeader(
             title = title,
             enabled = enabled,
-            useOriginalDiscoverStyle = useOriginalDiscoverStyle,
             showTrendingAction = showTrendingAction,
             onToggleEnabled = onToggleEnabled,
             onOpenTrending = onOpenTrending,
-            onRefresh = onRefresh
+            onRefresh = onRefresh,
+            modifier = if (showTrendingAction) Modifier.padding(top = AppSpacingTokens.ExtraSmall) else Modifier,
         )
         val sectionMode = resolveSearchLandingSectionMode(
             enabled = enabled,
@@ -549,109 +575,130 @@ private fun SearchInlineMessage(
 private fun SearchKeywordSectionHeader(
     title: String,
     enabled: Boolean,
-    useOriginalDiscoverStyle: Boolean,
     showTrendingAction: Boolean,
     onRefresh: () -> Unit,
     onToggleEnabled: (() -> Unit)?,
-    onOpenTrending: (() -> Unit)?
+    onOpenTrending: (() -> Unit)?,
+    modifier: Modifier = Modifier,
 ) {
-    val outline = MaterialTheme.colorScheme.outline
-    val secondary = MaterialTheme.colorScheme.secondary
-    val useCompactActions = shouldUseCompactSearchSectionActions(
-        widthDp = LocalConfiguration.current.screenWidthDp,
-        fontScale = LocalDensity.current.fontScale,
-    )
+    val actionColor = AppContentColors.secondaryText()
+    val refreshLabel = stringResource(R.string.common_refresh)
+    val iconActionSize = if (com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()) {
+        top.yukonga.miuix.kmp.basic.IconButtonDefaults.MinHeight
+    } else 48.dp
+    val openTrending = onOpenTrending.takeIf { showTrendingAction && enabled }
 
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
+        val useCompactActions = shouldUseCompactSearchSectionActions(
+            widthDp = maxWidth.value.toInt(),
+            fontScale = LocalDensity.current.fontScale,
+        )
         Row(
-            modifier = Modifier.weight(1f),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppText(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (!useCompactActions && showTrendingAction && enabled && onOpenTrending != null) {
-                Spacer(modifier = Modifier.width(AppSpacingTokens.ExtraSmall))
-                AppTextButton(onClick = onOpenTrending) {
-                    AppText(
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Medium),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppText(
+                    text = title,
+                    modifier = Modifier.weight(1f, fill = false),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!useCompactActions && openTrending != null) {
+                    SearchKeywordHeaderTextAction(
                         text = "完整榜单",
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                        onClick = openTrending,
                     )
-                    AppIcon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
+                }
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (useCompactActions && openTrending != null) {
+                    AppIconButton(onClick = openTrending, modifier = Modifier.size(iconActionSize)) {
+                        AppIcon(
+                            imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            contentDescription = "完整榜单",
+                            tint = actionColor,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+                if (enabled) {
+                    if (useCompactActions) {
+                        AppIconButton(onClick = onRefresh, modifier = Modifier.size(iconActionSize)) {
+                            AppIcon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = refreshLabel,
+                                tint = actionColor,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    } else {
+                        SearchKeywordHeaderTextAction(
+                            text = refreshLabel,
+                            icon = Icons.Rounded.Refresh,
+                            iconAtStart = true,
+                            onClick = onRefresh,
+                        )
+                    }
+                }
+                val showVisibilityToggle = shouldShowSearchKeywordSectionVisibilityToggle(
+                    hasToggleHandler = onToggleEnabled != null,
+                )
+                if (showVisibilityToggle && onToggleEnabled != null) {
+                    AppIconButton(onClick = onToggleEnabled, modifier = Modifier.size(iconActionSize)) {
+                        AppIcon(
+                            imageVector = if (enabled) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                            contentDescription = resolveSearchKeywordSectionToggleContentDescription(enabled, title),
+                            tint = actionColor,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }
+    }
+}
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (useCompactActions && showTrendingAction && enabled && onOpenTrending != null) {
-                AppIconButton(onClick = onOpenTrending, modifier = Modifier.size(48.dp)) {
-                    AppIcon(
-                        imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                        contentDescription = "完整榜单",
-                        tint = AppContentColors.secondaryText(),
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-            if (enabled) {
-                if (useCompactActions) {
-                    AppIconButton(onClick = onRefresh, modifier = Modifier.size(48.dp)) {
-                        AppIcon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = "刷新",
-                            tint = AppContentColors.secondaryText(),
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                } else {
-                    AppTextButton(onClick = onRefresh) {
-                        AppIcon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = "刷新",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        AppText(
-                            text = "刷新",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                }
-            }
-            val showVisibilityToggle = shouldShowSearchKeywordSectionVisibilityToggle(
-                hasToggleHandler = onToggleEnabled != null,
-            )
-            if (showVisibilityToggle && onToggleEnabled != null) {
-                AppIconButton(onClick = onToggleEnabled, modifier = Modifier.size(48.dp)) {
-                    AppIcon(
-                        imageVector = if (enabled) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
-                        contentDescription = resolveSearchKeywordSectionToggleContentDescription(
-                            enabled = enabled,
-                            title = title,
-                        ),
-                        tint = AppContentColors.secondaryText(),
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
+@Composable
+private fun SearchKeywordHeaderTextAction(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    iconAtStart: Boolean = false,
+) {
+    AppTextButton(
+        onClick = onClick,
+        modifier = modifier,
+        colors = ButtonDefaults.textButtonColors(
+            containerColor = Color.Transparent,
+            contentColor = AppContentColors.secondaryText(),
+        ),
+        contentPadding = PaddingValues(horizontal = AppSpacingTokens.ExtraSmall),
+    ) {
+        if (iconAtStart) {
+            AppIcon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(AppSpacingTokens.ExtraSmall))
+        }
+        AppText(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+        )
+        if (!iconAtStart) {
+            Spacer(Modifier.width(AppSpacingTokens.Micro))
+            AppIcon(imageVector = icon, contentDescription = null, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -787,32 +834,42 @@ internal fun SearchKeywordBadge(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun SearchHistorySectionModern(
-    historyList: List<SearchHistory>,
+private fun SearchHistoryHeader(
+    hasHistory: Boolean,
     recordSearchHistory: Boolean,
     globalPrivacyMode: Boolean,
     onToggleHistoryRecording: () -> Unit,
-    columns: Int,
-    onItemClick: (String) -> Unit,
+    onTransfer: () -> Unit,
     onClear: () -> Unit,
-    onDelete: (SearchHistory) -> Unit
+    modifier: Modifier = Modifier,
 ) {
-    val safeColumns = resolveSearchKeywordSectionColumns(columns, showTrendingAction = false)
-
-    Column {
-        Row(
+    Column(modifier) {
+        FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            AppText(
-                text = "搜索历史",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.SemiBold
-                )
-            )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                AppText(
+                    text = "搜索历史",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+                AppIconButton(onClick = onTransfer) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.SwapVert,
+                        contentDescription = stringResource(R.string.search_history_transfer),
+                    )
+                }
+            }
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
                 AppTextButton(
                     onClick = onToggleHistoryRecording,
                     enabled = !globalPrivacyMode,
@@ -833,7 +890,7 @@ private fun SearchHistorySectionModern(
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
-                if (historyList.isNotEmpty()) {
+                if (hasHistory) {
                     AppTextButton(onClick = onClear) {
                         AppIcon(
                             imageVector = Icons.Outlined.ClearAll,
@@ -847,57 +904,64 @@ private fun SearchHistorySectionModern(
             }
         }
         Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-        if (historyList.isEmpty()) {
+        if (!hasHistory) {
             AppText(
                 text = if (recordSearchHistory && !globalPrivacyMode) "暂无搜索历史" else "新搜索不会记录到历史，已有记录会保留",
                 style = MaterialTheme.typography.bodyMedium,
                 color = AppContentColors.secondaryText(),
             )
         }
-        // 与「搜索发现」同构的两列网格，正文使用 bodyMedium，保留删除入口。
-        historyList.chunked(safeColumns).forEach { rowItems ->
+    }
+}
+
+@Composable
+private fun SearchHistoryRow(
+    rowItems: List<SearchHistory>,
+    columns: Int,
+    onItemClick: (String) -> Unit,
+    onDelete: (SearchHistory) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
+    ) {
+        rowItems.forEach { history ->
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small)
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(AppShapes.container(ContainerLevel.Chip))
+                    .appActionClickable { onItemClick(history.keyword) }
+                    .heightIn(min = 44.dp)
+                    .padding(horizontal = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                rowItems.forEach { history ->
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(AppShapes.container(ContainerLevel.Chip))
-                            .appActionClickable { onItemClick(history.keyword) }
-                            .heightIn(min = 44.dp)
-                            .padding(horizontal = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppText(
-                            text = history.keyword,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = AppContentColors.primaryText(),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(AppShapes.container(ContainerLevel.Chip))
-                                .appActionClickable { onDelete(history) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            AppIcon(
-                                imageVector = Icons.Outlined.Close,
-                                contentDescription = "删除",
-                                tint = AppContentColors.secondaryText().copy(0.5f),
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-                if (rowItems.size < safeColumns) {
-                    Spacer(modifier = Modifier.weight(1f))
+                AppText(
+                    text = history.keyword,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = AppContentColors.primaryText(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(AppShapes.container(ContainerLevel.Chip))
+                        .appActionClickable { onDelete(history) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AppIcon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "删除",
+                        tint = AppContentColors.secondaryText().copy(0.5f),
+                        modifier = Modifier.size(14.dp)
+                    )
                 }
             }
+        }
+        repeat(columns - rowItems.size) {
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }

@@ -17,6 +17,8 @@ import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVe
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Apps
@@ -959,6 +961,9 @@ private fun LiveListHeader(
 ) {
     val palette = rememberLiveChromePalette()
     val compactChrome = rememberAppTopChromePolicy().compactChromeSpec
+    val searchShape = AppShapes.container(ContainerLevel.Pill)
+    val search = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveSearch, searchShape, onSearchClick)
+    val areas = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveArea, CircleShape, onAreaListClick)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -988,8 +993,11 @@ private fun LiveListHeader(
                 }
             } else {
                 // 头像在玻璃与原生主题中共用账号来源和尺寸，材质由顶栏容器负责。
+                val avatar = if (user.isLogin) {
+                    rememberSystemWindowNavigationControl(BiliPaiNavKey.Profile, CircleShape, onAvatarClick)
+                } else null
                 AppSurface(
-                    onClick = onAvatarClick,
+                    onClick = avatar?.onClick ?: onAvatarClick,
                     color = Color.Transparent,
                     shape = CircleShape,
                     modifier = Modifier.size(48.dp),
@@ -998,14 +1006,14 @@ private fun LiveListHeader(
                         user = user,
                         shape = CircleShape,
                         fallbackBackgroundColor = palette.surface,
-                        modifier = Modifier.padding(4.dp),
+                        modifier = Modifier.padding(4.dp).then(avatar?.modifier ?: Modifier),
                     )
                 }
             }
             // 中间槽位弹性占位，胶囊本身限制宽度；手机、窄分屏会按可用宽度收缩。
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock(
-                    shape = AppShapes.container(ContainerLevel.Pill),
+                    shape = searchShape,
                     modifier = Modifier.widthIn(max = 220.dp).fillMaxWidth(),
                     backdrop = searchBackdrop,
                     reuseEnabled = true,
@@ -1016,10 +1024,10 @@ private fun LiveListHeader(
                 ) { liquidChromeActive ->
                     // 玻璃外壳拥有材质；关闭时保留原生 Surface 的颜色、形状与点击行为。
                     AppSurface(
-                        onClick = onSearchClick,
+                        onClick = search.onClick,
                         color = if (liquidChromeActive) Color.Transparent else palette.searchField,
-                        shape = AppShapes.container(ContainerLevel.Pill),
-                        modifier = Modifier.fillMaxWidth().height(compactChrome.primaryHeightDp.dp),
+                        shape = searchShape,
+                        modifier = Modifier.fillMaxWidth().height(compactChrome.primaryHeightDp.dp).then(search.modifier),
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = compactChrome.inputHorizontalPaddingDp.dp),
@@ -1046,11 +1054,12 @@ private fun LiveListHeader(
             // 关注直播入口收敛到页内「已关注」分类与关注主播行，头部不再重复；
             // 分区入口使用诚实的分区图标，不再用关注主播头像伪装。
             AppSurface(
-                onClick = onAreaListClick,
+                onClick = areas.onClick,
                 color = Color.Transparent,
                 shape = CircleShape,
                 modifier = Modifier
                     .size(AppSpacingTokens.TripleExtraLarge)
+                    .then(areas.modifier)
                     .semantics { contentDescription = "全部直播分区" }
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -1123,12 +1132,19 @@ private fun LiveFollowAvatarRow(
     val palette = rememberLiveChromePalette()
     LazyRow(state = listState) {
         items(items, key = { it.roomId }) { item ->
+            val room = rememberSystemWindowNavigationControl(
+                BiliPaiNavKey.Live(roomId = item.roomId.toString(), title = item.title, uname = item.uname),
+                AppShapes.container(ContainerLevel.Card),
+            ) {
+                onLiveClick(item.roomId, item.title, item.uname)
+            }
             Column(
                 modifier = Modifier
                     .width(metrics.followItemExtentDp.dp)
+                    .then(room.modifier)
                     .onSecondaryClick { if (item.uid > 0) onUserClick(item.uid) }
                     .appCombinedClickable(
-                        onClick = { onLiveClick(item.roomId, item.title, item.uname) },
+                        onClick = room.onClick,
                         onLongClick = { if (item.uid > 0) onUserClick(item.uid) },
                     ),
                 horizontalAlignment = Alignment.CenterHorizontally

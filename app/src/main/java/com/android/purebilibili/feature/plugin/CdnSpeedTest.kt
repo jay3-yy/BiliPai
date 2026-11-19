@@ -28,7 +28,13 @@ internal data class CdnSpeedResult(
     val preference: PlaybackCdnPreference,
     val bytesPerSecond: Long?,
     val responseMs: Long?,
+    val host: String? = preference.host,
 )
+
+internal enum class CdnResultSort(val label: String) {
+    FASTEST("从快到慢"),
+    MOST_USED("最常用"),
+}
 
 internal sealed interface CdnSpeedTestUpdate {
     data object Preparing : CdnSpeedTestUpdate
@@ -36,18 +42,39 @@ internal sealed interface CdnSpeedTestUpdate {
         val preference: PlaybackCdnPreference,
         val tested: List<CdnSpeedResult>,
         val total: Int,
+        val host: String,
         val downloaded: Int = 0,
         val bytesPerSecond: Long? = null,
-    ) : CdnSpeedTestUpdate
+    ) : CdnSpeedTestUpdate {
+        val currentResult: CdnSpeedResult
+            get() = CdnSpeedResult(preference, bytesPerSecond, responseMs = null, host = host)
+    }
     data object Finished : CdnSpeedTestUpdate
     data class Failed(val message: String) : CdnSpeedTestUpdate
 }
 
-internal fun rankCdnSpeedResults(results: List<CdnSpeedResult>): List<CdnSpeedResult> =
+internal fun rankCdnSpeedResults(
+    results: List<CdnSpeedResult>,
+    sort: CdnResultSort = CdnResultSort.FASTEST,
+    completedByHost: Map<String, Int> = emptyMap(),
+): List<CdnSpeedResult> =
     results.sortedWith(
-        compareByDescending<CdnSpeedResult> { it.bytesPerSecond }
-            .thenBy { it.responseMs },
+        cdnResultComparator<CdnSpeedResult>(sort, { result ->
+            result.host?.let(completedByHost::get) ?: 0
+        }, CdnSpeedResult::bytesPerSecond).thenBy { it.responseMs },
     )
+
+internal fun <T> cdnResultComparator(
+    sort: CdnResultSort,
+    completedRequests: (T) -> Int,
+    bytesPerSecond: (T) -> Long?,
+): Comparator<T> {
+    val bySpeed = compareByDescending(bytesPerSecond)
+    return when (sort) {
+        CdnResultSort.FASTEST -> bySpeed
+        CdnResultSort.MOST_USED -> compareByDescending(completedRequests).then(bySpeed)
+    }
+}
 
 internal object CdnSpeedTest {
     private data class Report(
@@ -142,15 +169,16 @@ internal object CdnSpeedTest {
                 send(CdnSpeedTestUpdate.Failed("网络已切换，请重新测速"))
                 return
             }
-            val current = CdnSpeedTestUpdate.Testing(preference, results, targets.size)
+            val host = hostFromCdnUrl(url)
+            val current = CdnSpeedTestUpdate.Testing(preference, results, targets.size, host)
             send(current)
             val result = try {
                 val measured = readExactCdnRange(client, url, range) { bytes, elapsedMs ->
                     trySend(current.copy(downloaded = bytes, bytesPerSecond = bytes * 1_000L / elapsedMs))
                 }
-                CdnSpeedResult(preference, measured.bytes.size * 1_000L / measured.elapsedMs, measured.firstByteMs)
+                CdnSpeedResult(preference, measured.bytes.size * 1_000L / measured.elapsedMs, measured.firstByteMs, host)
             } catch (_: IOException) {
-                CdnSpeedResult(preference, null, null)
+                CdnSpeedResult(preference, null, null, host)
             }
             results = results + result
         }

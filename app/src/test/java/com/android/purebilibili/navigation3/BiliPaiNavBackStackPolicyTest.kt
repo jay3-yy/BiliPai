@@ -53,13 +53,13 @@ class BiliPaiNavBackStackPolicyTest {
     fun push_existingSearchPopsToItsUniqueBackStackInstance() {
         val stack = listOf(
             BiliPaiNavKey.MainHost,
-            BiliPaiNavKey.Search,
+            BiliPaiNavKey.Search(),
             BiliPaiNavKey.VideoDetail("BV1", sourceRoute = "search", openId = 1L),
         )
 
         assertEquals(
-            listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Search),
-            pushBiliPaiNavKey(stack, BiliPaiNavKey.Search),
+            listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Search()),
+            pushBiliPaiNavKey(stack, BiliPaiNavKey.Search()),
         )
     }
 
@@ -140,7 +140,7 @@ class BiliPaiNavBackStackPolicyTest {
             popBiliPaiNavKeyToRoot(
                 listOf(
                     BiliPaiNavKey.MainHost,
-                    BiliPaiNavKey.Search,
+                    BiliPaiNavKey.Search(),
                     BiliPaiNavKey.VideoDetail("BV1", sourceRoute = "search")
                 )
             )

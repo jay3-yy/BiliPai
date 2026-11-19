@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.structuralEqualityPolicy
-import top.yukonga.miuix.kmp.nav.core.LocalNavTransitionScope
 import top.yukonga.miuix.kmp.nav.transition.NavRole
 
 private val ReadyOutsideNavigation: State<Boolean> = mutableStateOf(true)
@@ -31,15 +30,14 @@ internal fun rememberEntryContentReady(entryKey: Any, contentReady: Boolean): Bo
 }
 
 @Composable
-internal fun ProvideNavigationEntranceState(content: @Composable () -> Unit) {
-    val scope = rememberUpdatedState(LocalNavTransitionScope.current)
+internal fun ProvideNavigationEntranceState(
+    isEntryReady: () -> Boolean,
+    content: @Composable () -> Unit,
+) {
+    val readyProvider = rememberUpdatedState(isEntryReady)
     // 保留同一 entry 的 State 身份；push/pop 更换 scope 时只更新就绪值。
     val ready = remember {
-        derivedStateOf(structuralEqualityPolicy()) {
-            // 新页首个准备帧可能尚未启动 settle，必须同时检查角色，不能只看 isRunning。
-            val transition = scope.value
-            isNavigationEntryReadyForEntrance(transition.role, transition.isRunning)
-        }
+        derivedStateOf(structuralEqualityPolicy()) { readyProvider.value() }
     }
     CompositionLocalProvider(LocalAppNavigationEntranceReady provides ready, content = content)
 }

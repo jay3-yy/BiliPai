@@ -1,6 +1,7 @@
 <resources>
     <string name="dynamic_live_photo_badge">Live Photo</string>
     <string name="link_preview_card_label">Link preview</string>
+    <string name="video_link_part_unavailable">Couldn’t open the video part specified in the link</string>
     <string name="history_activity_stats">Reading and Viewing Stats</string>
     <string name="app_name">BiliPai</string>
 
@@ -21,6 +22,7 @@
     <string name="keyboard_shortcut_player_seek_long_keys">Shift+← / Shift+→</string>
     <string name="keyboard_shortcut_player_volume">Volume up / down</string>
     <string name="keyboard_shortcut_player_volume_keys">↑ / ↓</string>
+    <string name="player_exit_fullscreen">Exit fullscreen</string>
     <string name="keyboard_shortcut_player_fullscreen">Toggle fullscreen</string>
     <string name="keyboard_shortcut_player_fullscreen_keys">F / Enter</string>
     <string name="keyboard_shortcut_player_mute">Toggle mute</string>
@@ -145,7 +147,7 @@
     <string name="settings_search_placeholder">Search settings</string>
     <string name="settings_search_results_title">Search Results</string>
     <string name="settings_search_empty_title">No matches found</string>
-    <string name="settings_search_empty_subtitle">Try another keyword</string>
+    <string name="settings_search_empty_subtitle">Some settings may not appear in search. Try another keyword or browse the settings categories.</string>
     <string name="app_language_restart_dialog_title">Restart to apply language</string>
     <string name="app_language_restart_dialog_message">Language changes will take effect after the app restarts. Restart now?</string>
     <string name="app_language_restart_dialog_confirm">Restart Now</string>
@@ -367,7 +369,7 @@
     <string name="animation_maid_summary">Hides maid animations and static images when turned off</string>
     <string name="animation_card_entrance_summary">Fade cards in one at a time when opening Home</string>
     <string name="animation_card_transition_summary">Use system animation to expand details and return to the source card; fall back to regular page transitions when unsupported</string>
-    <string name="animation_card_transition_source_official">Use system one-take animation; fall back to regular page transitions when the device, card or system interface is unavailable</string>
+    <string name="animation_card_transition_source_official">Expand from visible cards or buttons and return to their original position. Use regular navigation when system transitions are unavailable.</string>
     <string name="animation_card_transition_source_fallback">This device does not support system one-take animation; regular page transitions are used</string>
     <string name="animation_card_transition_source_reduced_motion">Reduced motion is enabled in system settings; card transitions are currently inactive</string>
     <string name="animation_transition_blur_official_supported">Control background blur for the system one-take animation</string>
@@ -1075,4 +1077,6 @@
     <string name="filtered_content_reason_plugin">Plugin filter</string>
     <string name="hot_danmaku_send_plus_one">Plus one, send the same danmaku</string>
     <string name="hot_danmaku_send_error">Could not send. Try again.</string>
+    <string name="message_select_conversation">Select a conversation</string>
+    <string name="message_close_conversation">Close conversation</string>
 </resources>

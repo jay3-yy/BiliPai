@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -94,7 +95,7 @@ fun SearchVideoFilterBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .padding(bottom = 4.dp)
+            .padding(top = if (miuixNonGlass) AppSpacingTokens.ExtraSmall else 0.dp, bottom = 4.dp)
             .horizontalScroll(rememberScrollState()),
         // Row's viewport minimum centers fitting content; overflowing labels still scroll from the start.
         horizontalArrangement = if (centerWideFilters) Arrangement.Center else Arrangement.Start,
@@ -104,7 +105,10 @@ fun SearchVideoFilterBar(
             val selected = currentOrder == order
             Box(
                 modifier = Modifier
-                    .height(40.dp)
+                    .then(
+                        if (miuixNonGlass) Modifier.heightIn(min = AppChromeSizeTokens.MiuixNativeCompactControlHeightDp.dp)
+                        else Modifier.height(40.dp)
+                    )
                     .semantics { this.selected = selected }
                     .clip(com.android.purebilibili.core.ui.AppShapes.container(
                         com.android.purebilibili.core.ui.ContainerLevel.Tag
@@ -114,7 +118,10 @@ fun SearchVideoFilterBar(
                         com.android.purebilibili.core.ui.AppSurfaceTokens.secondaryContainer()
                     ) else Modifier)
                     .appActionClickable(role = Role.Button, onClick = { onOrderChange(order) })
-                    .padding(horizontal = 11.dp),
+                    .padding(
+                        horizontal = 11.dp,
+                        vertical = if (miuixNonGlass) 6.dp else 0.dp,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 AppText(

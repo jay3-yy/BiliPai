@@ -60,6 +60,9 @@ object AppShapes {
                 ContainerLevel.ProminentCard -> return 20.dp
                 ContainerLevel.Chip -> return 10.dp
                 ContainerLevel.Dialog -> return 32.dp
+                ContainerLevel.Sheet -> if (!liquidGlassEnabled) {
+                    return top.yukonga.miuix.kmp.layout.BottomSheetDefaults.cornerRadius
+                }
                 else -> Unit
             }
         }

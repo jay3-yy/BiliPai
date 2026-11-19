@@ -91,6 +91,7 @@ import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import com.android.purebilibili.core.ui.rememberCompatibleStaggeredGridState
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.geometry.Offset
@@ -159,6 +160,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 
@@ -322,6 +324,7 @@ fun SpaceScreen(
     targetBvid: String? = null,
     onBack: () -> Unit,
     onVideoClick: (String, Long, Long) -> Unit,
+    onCommentLinkClick: (String) -> Unit,
     onAudioClick: (Long) -> Unit = {},
     onBangumiClick: (Long) -> Unit = {},
     onCheeseClick: (Long) -> Unit = onBangumiClick,
@@ -460,7 +463,7 @@ fun SpaceScreen(
     val isSpaceScrolling by remember(gridState) {
         derivedStateOf { gridState.isScrollInProgress }
     }
-    val pinnedTopChromeScrim by remember(gridState, pinContentTabs, spaceDensity) {
+    val pinnedTopChromeScrim = remember(gridState, pinContentTabs, spaceDensity) {
         derivedStateOf {
             if (pinContentTabs) {
                 val header = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == 0 }
@@ -550,8 +553,17 @@ fun SpaceScreen(
         ?.takeIf { it.isNotBlank() }
         ?: stringResource(R.string.space_title)
     val backLabel = stringResource(R.string.common_back)
+    val showCollapsedTitle by remember(pinContentTabs, pinnedTopChromeScrim) {
+        derivedStateOf(structuralEqualityPolicy()) { pinContentTabs && pinnedTopChromeScrim.value >= 1f }
+    }
+    val showTopBarTitle by remember(pinContentTabs, pinnedTopChromeScrim) {
+        derivedStateOf(structuralEqualityPolicy()) { pinContentTabs || pinnedTopChromeScrim.value > 0.4f }
+    }
+    val showTopChromeScrim by remember(pinnedTopChromeScrim) {
+        derivedStateOf(structuralEqualityPolicy()) { pinnedTopChromeScrim.value > 0f }
+    }
     val collapsedTitleAlpha = animateFloatAsState(
-        targetValue = if (pinContentTabs && pinnedTopChromeScrim >= 1f) 1f else 0f,
+        targetValue = if (showCollapsedTitle) 1f else 0f,
         animationSpec = tween(500, easing = AppMotionEasing.Md3Standard),
         label = "space_collapsed_title",
     )
@@ -575,13 +587,18 @@ fun SpaceScreen(
     val spaceHeaderBlurActive = spaceThemeConfig.headerBlurEnabled &&
         hazeState?.let { recoverableBlurEnabled(it) } == true &&
         !spaceProgressiveBlur
-    val spaceTopChromeSurfaceColor =
-        if (spaceProgressiveBlur || spaceHeaderBlurActive || spaceFadeActive) Color.Transparent
-        else com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.surface)
-            .copy(alpha = pinnedTopChromeScrim)
+    val drawTopChromeScrim = !spaceProgressiveBlur && !spaceHeaderBlurActive && !spaceFadeActive
+    val chromeSurfaceColor =
+        com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.surface)
     // 仅按钮采样合入顶栏实际遮色；列表与返回顶部按钮仍采样各自位置的内容。
-    // 共享顶栏颜色来源，关闭玻璃时沿用原生 MD3 / Miuix 的背景与布局。
-    val spaceTopBarIconBackdrop = com.android.purebilibili.core.ui.blur.rememberSurfaceOverlayBackdrop(spaceChromeBackdrop, spaceTopChromeSurfaceColor)
+    // 顶栏与玻璃按钮采样在绘制时读取透明度，原生 MD3 / Miuix 沿用各自的材质。
+    val spaceTopBarIconBackdrop = if (drawTopChromeScrim && showTopChromeScrim) {
+        remember(spaceChromeBackdrop, chromeSurfaceColor, pinnedTopChromeScrim) {
+            com.android.purebilibili.core.ui.blur.SurfaceOverlayBackdrop(spaceChromeBackdrop) {
+                chromeSurfaceColor.copy(alpha = pinnedTopChromeScrim.value)
+            }
+        }
+    } else spaceChromeBackdrop
     AppScaffold(
         topBarIconBackdropSource = spaceChromeSource,
         topBar = {
@@ -589,10 +606,12 @@ fun SpaceScreen(
                 backdrop = spaceChromeBackdrop,
                 enabled = spaceProgressiveBlur,
                 headerBlurActive = spaceHeaderBlurActive,
-                surfaceColor = com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.surface),
+                surfaceColor = chromeSurfaceColor,
                 fadeEnabled = spaceFadeActive,
                 opaqueBackgroundFallback = false,
-                modifier = Modifier.background(spaceTopChromeSurfaceColor),
+                modifier = if (drawTopChromeScrim) Modifier.drawBehind {
+                    drawRect(chromeSurfaceColor.copy(alpha = pinnedTopChromeScrim.value))
+                } else Modifier,
             ) {
             Column(
                 modifier = Modifier
@@ -607,18 +626,21 @@ fun SpaceScreen(
                                         hazeState = it,
                                         surfaceType = BlurSurfaceType.HEADER,
                                         isScrolling = isSpaceScrolling,
-                                        enabled = pinnedTopChromeScrim > 0f
+                                        enabled = showTopChromeScrim
                                     )
-                                    .background(
-                                        com.android.purebilibili.core.ui.globalWallpaperAwareChromeColor(MaterialTheme.colorScheme.surface)
-                                            .copy(alpha = AppSurfaceTokens.FrostedScrimAlpha * pinnedTopChromeScrim)
-                                    )
+                                    .drawBehind {
+                                        drawRect(
+                                            chromeSurfaceColor.copy(
+                                                alpha = AppSurfaceTokens.FrostedScrimAlpha * pinnedTopChromeScrim.value,
+                                            ),
+                                        )
+                                    }
                             } ?: Modifier
                         }
                     )
             ) {
                 AppTopBar(
-                    title = if (pinContentTabs || pinnedTopChromeScrim > 0.4f) screenTitle else "",
+                    title = if (showTopBarTitle) screenTitle else "",
                     smallTitleColor = if (pinContentTabs) {
                         AppContentColors.primaryText().copy(alpha = collapsedTitleAlpha.value)
                     } else Color.Unspecified,
@@ -666,7 +688,7 @@ fun SpaceScreen(
                                     modifier = if (spaceThemeConfig.liquidGlassEnabled) {
                                         Modifier.size(com.android.purebilibili.core.ui.AppChromeSizeTokens.TopBarIconVisualSize)
                                     } else Modifier,
-                                    groups = buildList {
+                                    actionGroups = { buildList {
                                         if (showContributionVideoMenuActions) {
                                             add(
                                                 listOf(
@@ -743,7 +765,10 @@ fun SpaceScreen(
                                                     onWebVideosClick(profile?.userInfo?.name.orEmpty(), type, id)
                                                 }),
                                             AppWindowAction(label = "添加至桌面", icon = Icons.Outlined.AddToHomeScreen,
-                                                enabled = context.getSystemService(android.content.pm.ShortcutManager::class.java).isRequestPinShortcutSupported,
+                                                enabled = remember(context) {
+                                                    context.getSystemService(android.content.pm.ShortcutManager::class.java)
+                                                        .isRequestPinShortcutSupported
+                                                },
                                                 onClick = {
                                                     if (!pinSpaceShortcut(context, mid, profile?.userInfo?.name?.ifBlank { "UID $mid" } ?: "UID $mid")) {
                                                         android.widget.Toast.makeText(context, "未能添加桌面快捷方式", android.widget.Toast.LENGTH_SHORT).show()
@@ -835,7 +860,7 @@ fun SpaceScreen(
                                                 ),
                                             )
                                         )
-                                    },
+                                    } },
                                 ) {
                                     AppIcon(
                                         imageVector = Icons.Outlined.MoreVert,
@@ -885,13 +910,13 @@ fun SpaceScreen(
         Box(modifier = Modifier.fillMaxSize().graphicsLayer {
             alpha = if (uiState is SpaceUiState.Loading) 1f else contentRevealAlpha.value
         }) {
-                // Loading 不再单独渲染一棵骨架网格：它和 Success 共用同一个 SpaceContent
-                // 调用点（同一棵 LazyVerticalStaggeredGrid）。Loading 时喂一个占位 Success 并把
-                // isInitialLoading 传下去，由内容网格在原地铺骨架 item；数据到达后是
-                // item 原地替换，网格与滚动状态都不会重建，首屏不跳。
+                // 骨架共用 SpaceContent 的网格排版。正式内容就绪时替换骨架 Pager 的槽位，
+                // 页面外层持有各标签的网格滚动状态。
                 val isLoadingSpace = uiState is SpaceUiState.Loading
-                val spaceState: SpaceUiState = (uiState as? SpaceUiState.Success)
-                    ?: remember { SpaceUiState.Success(userInfo = SpaceUserInfo()) }
+                val spaceState = when (val state = uiState) {
+                    SpaceUiState.Loading -> remember { SpaceUiState.Success(userInfo = SpaceUserInfo()) }
+                    else -> state
+                }
                 when (val state = spaceState) {
                     is SpaceUiState.Loading -> {
                         // Loading 已被上面的占位 Success 取代，此分支仅为穷尽 when 保留。
@@ -1052,6 +1077,7 @@ fun SpaceScreen(
                             primaryItems = dynamicCardItems,
                             toastContext = context,
                             onUserClick = onUserClick,
+                            onUrlClick = onCommentLinkClick,
                         )
                     }
                 }
@@ -1454,11 +1480,7 @@ private fun SpaceContent(
     chromeTopInset: Dp = 0.dp,
     pinContentTabs: Boolean = false,
     contributionGridStateFor: (String) -> LazyStaggeredGridState,
-    /**
-     * 首屏加载中：在同一个内容网格里铺骨架 item，而不是另起一棵独立的骨架网格。
-     * 骨架与真实卡片共用同一个 LazyVerticalStaggeredGrid / gridState，数据到达时是 item
-     * 原地替换，网格不重建、滚动锚点不丢。
-     */
+    /** 首屏骨架沿用内容网格的排版，各标签滚动状态由外层保留。 */
     isInitialLoading: Boolean = false,
     spaceContentActive: Boolean = true,
     modifier: Modifier = Modifier
@@ -1531,8 +1553,7 @@ private fun SpaceContent(
     val selectedPage = displayedMainTabs.indexOfFirst {
         it.tab == resolveSpacePrimaryTab(selectedMainTab)
     }.coerceAtLeast(0)
-    // 骨架的主页只是占位；资料就绪后按默认/恢复标签初始化分页，避免把初始化播放成切页动画。
-    // 只替换分页状态，各标签的列表位置仍由外层 pageGridStates 保留。
+    // 骨架的主页只是占位。正式内容按默认或恢复的标签初始化分页。
     val pagerState = key(isInitialLoading) {
         rememberContentTabPager(
             pageCount = displayedMainTabs.size,
@@ -1754,6 +1775,12 @@ private fun SpaceContent(
                 )
             },
         ) { mainTabsSlot ->
+        // 仅换 PagerState 会保留骨架的主页槽位。它收到正式数据后，会与默认标签一起
+        // 挂载正式网格。隔离骨架槽位，滚动状态仍由外层 pageGridStates 管理。
+        key(isInitialLoading) {
+        val skeletonGridState = if (isInitialLoading) {
+            rememberCompatibleStaggeredGridState()
+        } else null
         HorizontalPager(
             state = pagerState,
             userScrollEnabled = false,
@@ -1785,12 +1812,22 @@ private fun SpaceContent(
         val isSelectedPage = page == selectedPage
         val isPageActive = spaceContentActive && isSelectedPage
         val pageTab = if (isSelectedPage) selectedMainTab else primaryTab
-        val state = state.copy(
-            tabShellState = state.tabShellState.withSelectedTab(pageTab),
-            isSearchMode = state.isSearchMode && isPageActive,
-        )
+        val pageSearchMode = state.isSearchMode && isPageActive
+        val state = if (pageTab == state.tabShellState.selectedTab && pageSearchMode == state.isSearchMode) {
+            state
+        } else {
+            remember(state, pageTab, pageSearchMode) {
+                state.copy(
+                    tabShellState = state.tabShellState.withSelectedTab(pageTab),
+                    isSearchMode = pageSearchMode,
+                )
+            }
+        }
         val selectedMainTab = pageTab
-        val gridState = pageGridStates.getValue(primaryTab)
+        val selectedContributionTabId = state.selectedContributionTabId
+        val hasCheese = state.hasCheeseTab || state.cheeseItems.isNotEmpty()
+        // 骨架条目少，不能用其测量结果覆盖正式主页恢复后的滚动位置。
+        val gridState = skeletonGridState ?: pageGridStates.getValue(primaryTab)
         // 外层回弹可共享，事件包装仍包含可挂载的节点，必须由各个 Pager 页分别持有。
         // 否则保留页与当前页会重复挂载、卸载同一节点，退出页面时可能崩溃。
         val sharedGridOverscrollEffect = remember(sharedSpaceOverscrollEffect) {
@@ -1930,8 +1967,7 @@ private fun SpaceContent(
             widthSizeClass = windowSizeClass.widthSizeClass,
         )
         val spaceFeedCoverAspectRatio = spaceFeedCardLayout.coverAspectRatio
-        // 首屏骨架与真实卡片共用同一个网格、同一种排版：色块用固定色（不呼吸），
-        // 骨架只负责占位，数据到达时是 item 原地替换而不是整棵网格重建。
+        // 骨架沿用真实卡片排版，色块使用固定颜色。
         val spaceSkeletonBlockColor = rememberStaticSkeletonBlockColor()
         val spaceSkeletonBannerHeightDp = remember(
             windowWidthDp,
@@ -1966,7 +2002,12 @@ private fun SpaceContent(
                     .background(MaterialTheme.colorScheme.surface),
             ) {
                 SpaceContentTabs(
-                    state = state,
+                    mainTabs = state.mainTabs,
+                    selectedMainTab = selectedMainTab,
+                    hasCheese = hasCheese,
+                    contributionTabs = state.contributionTabs,
+                    totalAudios = state.totalAudios,
+                    selectedContributionTabId = selectedContributionTabId,
                     onMainTabSelected = onMainTabSelected,
                     onMainTabReselected = {
                         if (gridState.firstVisibleItemIndex > 0) {
@@ -1974,7 +2015,7 @@ private fun SpaceContent(
                         }
                     },
                     onContributionTabSelected = { id ->
-                        if (id != state.selectedContributionTabId) {
+                        if (id != selectedContributionTabId) {
                             alignSpacePageHeader(gridState, contributionGridStateFor(id))
                         }
                         onContributionTabSelected(id)
@@ -2042,8 +2083,7 @@ private fun SpaceContent(
             horizontalArrangement = Arrangement.spacedBy(spaceFeedCardLayout.itemSpacingDp.dp),
             verticalItemSpacing = spaceFeedCardLayout.verticalItemSpacingDp.dp
         ) LazyVerticalStaggeredGrid@{
-            // 首屏骨架直接铺在内容网格里：与真实卡片共用同一个 LazyVerticalStaggeredGrid 与同一个
-            // gridState，数据到达后是 item 原地替换，网格本身不重建、也不丢滚动锚点。
+            // 骨架直接使用内容网格的列数和间距。
             // （显式标签：LazyVerticalStaggeredGrid 是 AppLazyVerticalStaggeredGrid 的导入别名，避免隐式
             // 标签名与别名不一致导致 return@ 解析到别处。）
             if (isInitialLoading) {
@@ -2108,7 +2148,12 @@ private fun SpaceContent(
                     }
                 } else {
                     SpaceContentTabs(
-                        state = state,
+                        mainTabs = state.mainTabs,
+                        selectedMainTab = selectedMainTab,
+                        hasCheese = hasCheese,
+                        contributionTabs = state.contributionTabs,
+                        totalAudios = state.totalAudios,
+                        selectedContributionTabId = selectedContributionTabId,
                         onMainTabSelected = onMainTabSelected,
                         onContributionTabSelected = onContributionTabSelected,
                         pagerState = pagerState,
@@ -3428,6 +3473,7 @@ private fun SpaceContent(
         )
         } // 每页内容及吸顶层
         } // HorizontalPager
+        } // 首屏骨架与正式分页
         } // SpaceMainTabsHost
         } // 小店刷新容器
 
@@ -3740,11 +3786,7 @@ private fun SpaceHeader(
                         ?: liveRoom?.url?.substringBefore('?')?.trimEnd('/')
                             ?.substringAfterLast('/')?.toLongOrNull()
                     if (liveRoom?.liveStatus == 1 && liveRoomId != null && liveRoomId > 0L) {
-                        val headerVisible by remember(collapseFractionProvider) {
-                            derivedStateOf { collapseFractionProvider() < 1f }
-                        }
-                        // 头像预览、隐藏的 Pager 页与完全折叠的头部不运行音柱。
-                        // 音柱组件另行统一控制视口、窗口焦点、前台生命周期与减少动态效果。
+                        // 空间头像用静态音柱标记直播状态，避免停留在资料页时逐帧绘制。
                         Box(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
@@ -3763,8 +3805,7 @@ private fun SpaceHeader(
                             contentAlignment = Alignment.Center,
                         ) {
                             com.android.purebilibili.core.ui.components.PlaybackBarsIndicator(
-                                isPlaying = bannerPageActive && !contentPageMoving &&
-                                    headerVisible && !avatarHidden && !topPhotoHidden,
+                                isPlaying = false,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 contentDescription = "正在直播，点击进入直播间",
                                 modifier = Modifier.size(14.dp),
@@ -4034,7 +4075,12 @@ private fun SpaceSearchEntryChip(
 
 @Composable
 private fun SpaceContentTabs(
-    state: SpaceUiState.Success,
+    mainTabs: List<SpaceMainTabItem>,
+    selectedMainTab: SpaceMainTab,
+    hasCheese: Boolean,
+    contributionTabs: List<SpaceContributionTab>,
+    totalAudios: Int,
+    selectedContributionTabId: String,
     onMainTabSelected: (SpaceMainTab) -> Unit,
     onContributionTabSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -4043,19 +4089,17 @@ private fun SpaceContentTabs(
     onMainTabReselected: (() -> Unit)? = null,
     mainTabsSlot: (@Composable () -> Unit)? = null,
 ) {
-    val selectedMainTab = state.tabShellState.selectedTab
-    val hasCheese = state.hasCheeseTab || state.cheeseItems.isNotEmpty()
-    val displayedMainTabs = remember(state.mainTabs, selectedMainTab, hasCheese) {
+    val displayedMainTabs = remember(mainTabs, selectedMainTab, hasCheese) {
         resolveSpaceDisplayedMainTabs(
-            tabs = state.mainTabs,
+            tabs = mainTabs,
             selectedTab = selectedMainTab,
             hasCheese = hasCheese,
         )
     }
-    val displayedContributionTabs = remember(state.contributionTabs, state.totalAudios) {
+    val displayedContributionTabs = remember(contributionTabs, totalAudios) {
         resolveDisplayedSpaceContributionTabs(
-            tabs = state.contributionTabs,
-            totalAudios = state.totalAudios
+            tabs = contributionTabs,
+            totalAudios = totalAudios
         )
     }
     val secondarySwitchItems = remember(displayedContributionTabs) {
@@ -4066,11 +4110,11 @@ private fun SpaceContentTabs(
     }
     val selectedSecondarySwitchId = remember(
         selectedMainTab,
-        state.selectedContributionTabId,
+        selectedContributionTabId,
     ) {
         resolveSelectedSpaceSecondarySwitchId(
             selectedTab = selectedMainTab,
-            selectedContributionTabId = state.selectedContributionTabId,
+            selectedContributionTabId = selectedContributionTabId,
         )
     }
     val onSecondarySwitchSelected: (String) -> Unit = { id ->

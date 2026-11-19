@@ -49,6 +49,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
@@ -58,9 +59,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -75,6 +78,7 @@ import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.theme.resolveAndroidNativeChromeTokens
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.layout.BottomSheetDefaults as MiuixBottomSheetDefaults
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -88,6 +92,21 @@ enum class AppModalPresentation {
     BottomSheet,
     CenteredDialog,
     SideSheet,
+}
+
+/** Native windows accept a fixed shared radius. Centered windows round all four corners. */
+private fun Shape.miuixWindowCornerRadius(density: Density, centered: Boolean): Dp? = when (this) {
+    is MiuixContainerShape -> radius
+    is RoundedCornerShape -> {
+        if (topStart != topEnd || (centered && (bottomStart != topStart || bottomEnd != topStart))) {
+            null
+        } else {
+            val px = topStart.toPx(Size.Zero, density)
+            // Percentage corners depend on the measured surface and keep the native window default.
+            px.takeIf { it == topStart.toPx(Size(1f, 1f), density) }?.let { with(density) { it.toDp() } }
+        }
+    }
+    else -> null
 }
 
 data class AppModalLayoutSpec(
@@ -318,6 +337,7 @@ fun AppModalBottomSheet(
         if (!visible && !retained) return@popupScene
         val uiStyle = LocalAppUiStyle.current
         val miuix = uiStyle == AppUiStyle.MIUIX
+        val nativeMiuix = isMiuixNonGlassEnabled()
         // Collection-style sheets keep the covered page sharp in glass, MD3 and Miuix,
         // including centered/hinge-safe hosts. Surface material and scrim stay independent.
         val blurBehind = backgroundBlurBehind
@@ -328,7 +348,7 @@ fun AppModalBottomSheet(
         }
         val centered = (presentationOverride ?: layoutSpec.presentation) == AppModalPresentation.CenteredDialog
         val resolvedColor = if (containerColor == MaterialTheme.colorScheme.surface) {
-            if (isMiuixNonGlassEnabled()) top.yukonga.miuix.kmp.layout.BottomSheetDefaults.backgroundColor()
+            if (nativeMiuix) MiuixBottomSheetDefaults.backgroundColor()
             else if (miuix) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow
         } else containerColor
         // 仅背景模糊已获调用方启用的玻璃面板透出下层；原生拖动与清晰背景策略保持原样。
@@ -402,7 +422,11 @@ fun AppModalBottomSheet(
                 onDismissStarted = { latestDismissStarted() },
                 onDismissFinished = finishDismiss,
                 modifier = modifier,
-                shape = shape ?: if (miuix) RoundedCornerShape(28.dp) else BottomSheetDefaults.ExpandedShape,
+                shape = shape ?: when {
+                    nativeMiuix -> AppShapes.topRounded(MiuixBottomSheetDefaults.cornerRadius)
+                    miuix -> RoundedCornerShape(28.dp)
+                    else -> BottomSheetDefaults.ExpandedShape
+                },
                 containerColor = windowColor,
                 contentColor = contentColor,
                 scrimColor = scrimColor,
@@ -416,6 +440,9 @@ fun AppModalBottomSheet(
         }
 
         if (miuix && hingeSafeRegions == null) {
+            val nativeRadius = if (nativeMiuix) {
+                shape?.miuixWindowCornerRadius(LocalDensity.current, centered)
+            } else null
             var show by remember { mutableStateOf(visible) }
             LaunchedEffect(visible) {
                 // 业务收起与手势收起共用开始通知；已进入收起时不重复通知。
@@ -471,6 +498,7 @@ fun AppModalBottomSheet(
                     backgroundColor = windowColor,
                     maxWidth = layoutSpec.maxWidthDp.dp,
                     largeScreen = true,
+                    cornerRadius = nativeRadius,
                     insideMargin = DpSize(0.dp, 0.dp),
                     onDismissRequest = requestNativeDismiss,
                     onDismissFinished = { if (!show) finishDismiss() },
@@ -481,6 +509,7 @@ fun AppModalBottomSheet(
                     show = show,
                     modifier = modifier,
                     backgroundColor = windowColor,
+                    cornerRadius = nativeRadius ?: MiuixBottomSheetDefaults.cornerRadius,
                     insideMargin = DpSize(0.dp, 0.dp),
                     onDismissRequest = requestNativeDismiss,
                     onDismissFinished = { if (!show) finishDismiss() },
@@ -512,10 +541,15 @@ fun AppModalBottomSheet(
                                     Column(Modifier.then(sheetSurfaceModifier), content = content)
                                 }
                                 if (miuix || glassWindowMaterial) {
+                                    val surfaceShape = shape ?: when {
+                                        nativeMiuix -> MiuixContainerShape(top.yukonga.miuix.kmp.layout.DialogDefaults.CornerRadius)
+                                        miuix -> RoundedCornerShape(28.dp)
+                                        else -> MaterialTheme.shapes.extraLarge
+                                    }
                                     AppPopupSurface(
                                         type = AppPopupSurfaceType.DIALOG,
                                         modifier = surfaceModifier,
-                                        shape = shape ?: if (miuix) RoundedCornerShape(28.dp) else MaterialTheme.shapes.extraLarge,
+                                        shape = surfaceShape,
                                         containerColor = resolvedColor,
                                         contentColor = contentColor,
                                         tonalElevation = if (miuix) 0.dp else tonalElevation,

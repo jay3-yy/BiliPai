@@ -19,6 +19,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalMediaQueryApi
+import androidx.compose.ui.UiMediaScope
+import androidx.compose.ui.mediaQuery
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
@@ -227,14 +230,14 @@ val LocalAppWindowAdaptiveInfo = compositionLocalOf {
  * Returns true only while the current activity is on a foldable's fully opened inner display.
  *
  * A window's width cannot distinguish an unfolded foldable from a tablet (or a large phone), and
- * it also changes while the activity rotates. WindowManager's folding posture is therefore the
- * only input used for foldable-specific orientation behavior.
+ * it also changes while the activity rotates. A flat posture requires a reported folding feature.
  */
 @Composable
 fun rememberIsFlatFoldable(): Boolean {
     return LocalAppWindowAdaptiveInfo.current.posture == AppFoldPosture.Flat
 }
 
+@OptIn(ExperimentalMediaQueryApi::class)
 @Composable
 fun rememberAppWindowAdaptiveInfo(
     windowSizeClass: WindowSizeClass,
@@ -242,8 +245,9 @@ fun rememberAppWindowAdaptiveInfo(
 ): AppWindowAdaptiveInfo {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
-    val foldingFeatureInfo = remember(windowPosture) {
-        windowPosture.toAppFoldingFeatureInfo()
+    val mediaPosture = mediaQuery { this.windowPosture }
+    val foldingFeatureInfo = remember(windowPosture, mediaPosture) {
+        windowPosture.toAppFoldingFeatureInfo(mediaPosture)
     }
     val activity = remember(context) { context.findHostActivity() }
     val displayContext = remember(
@@ -322,7 +326,10 @@ private tailrec fun Context.findHostActivity(): Activity? = when (this) {
     else -> null
 }
 
-private fun androidx.compose.material3.adaptive.Posture.toAppFoldingFeatureInfo(): AppFoldingFeatureInfo {
+@OptIn(ExperimentalMediaQueryApi::class)
+private fun androidx.compose.material3.adaptive.Posture.toAppFoldingFeatureInfo(
+    mediaPosture: UiMediaScope.Posture,
+): AppFoldingFeatureInfo {
     val hinges = hingeList.map { hinge ->
         AppHingeFeature(
             orientation = if (hinge.isVertical) {
@@ -341,9 +348,26 @@ private fun androidx.compose.material3.adaptive.Posture.toAppFoldingFeatureInfo(
             isFlat = hinge.isFlat,
         )
     }
-    val primary = selectPrimaryHingeFeature(hinges) ?: return AppFoldingFeatureInfo()
+    val halfOpenedHinges = hinges.filterNot { hinge -> hinge.isFlat }
+    val queriedOrientation = when (mediaPosture) {
+        UiMediaScope.Posture.Tabletop -> AppHingeOrientation.Horizontal
+        UiMediaScope.Posture.Book -> AppHingeOrientation.Vertical
+        else -> AppHingeOrientation.None
+    }
+    // The two APIs collect window layout independently. Use the reported geometry while the
+    // posture query is catching up, so a half-open window is never treated as fully unfolded.
+    val postureHinge = halfOpenedHinges.firstOrNull { hinge -> hinge.orientation == queriedOrientation }
+        ?: halfOpenedHinges.firstOrNull { hinge -> hinge.orientation == AppHingeOrientation.Horizontal }
+        ?: halfOpenedHinges.firstOrNull()
+    val primary = postureHinge ?: selectPrimaryHingeFeature(hinges)
+        ?: return AppFoldingFeatureInfo()
+    val posture = when (postureHinge?.orientation) {
+        AppHingeOrientation.Horizontal -> AppFoldPosture.Tabletop
+        AppHingeOrientation.Vertical -> AppFoldPosture.Book
+        else -> AppFoldPosture.Flat
+    }
     return AppFoldingFeatureInfo(
-        posture = resolveAppFoldPosture(isTabletop = isTabletop, hinges = hinges),
+        posture = posture,
         hingeOrientation = primary.orientation,
         hingeBounds = primary.bounds,
         isSeparating = hinges.any { hinge -> hinge.isSeparating },

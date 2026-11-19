@@ -27,12 +27,19 @@ class VideoCardReturnGeometryTest {
     }
 
     @Test
-    fun missingOriginalCardDisablesMorphInsteadOfReusingClickCoordinates() {
+    fun temporarilyMissingSourceDisablesMorphUntilTheSameCardReturns() {
         val refreshed = session.copy(hasCompleteSourcePixels = true).withReturnBounds(null)
         assertFalse(refreshed.hasUsableSourceGeometry)
         assertNull(refreshed.cardBounds)
         assertNull(refreshed.coverBounds)
         assertNull(refreshed.infoBounds)
+
+        val returnedBounds = Rect(25f, 50f, 225f, 450f)
+        val returned = refreshed.withReturnBounds(returnedBounds)
+        assertTrue(returned.hasUsableSourceGeometry)
+        assertEquals(returnedBounds, returned.cardBounds)
+        assertEquals(Rect(25f, 50f, 225f, 170f), returned.coverBounds)
+        assertEquals(Rect(25f, 170f, 225f, 450f), returned.infoBounds)
     }
 
     @Test

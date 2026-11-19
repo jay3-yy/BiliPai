@@ -8,7 +8,13 @@ sealed interface BilibiliNavigationTarget {
         val videoId: String,
         val commentRootRpid: Long = 0L,
         val commentTargetRpid: Long = 0L,
-    ) : BilibiliNavigationTarget
+        val cid: Long = 0L,
+        val page: Int = 0,
+        val startPositionMs: Long? = null,
+    ) : BilibiliNavigationTarget {
+        val hasPlaybackLocation: Boolean
+            get() = cid > 0L || page > 0 || startPositionMs != null
+    }
     data class Dynamic(
         val dynamicId: String,
         val commentRootRpid: Long = 0L,
@@ -34,6 +40,8 @@ sealed interface BilibiliNavigationTarget {
         val commentTargetRpid: Long = 0L,
     ) : BilibiliNavigationTarget
     data class ArticleCollection(val collectionId: Long) : BilibiliNavigationTarget
+    data class Topic(val topicId: Long) : BilibiliNavigationTarget
+    data class FavoriteFolder(val mediaId: Long, val ownerMid: Long = 0L) : BilibiliNavigationTarget
 
     /** 赛事比赛详情页，contestId 即 cid。 */
     data class Match(val contestId: Long) : BilibiliNavigationTarget
@@ -79,16 +87,16 @@ object BilibiliNavigationTargetParser {
     fun parse(input: String): BilibiliNavigationTarget? {
         if (input.isBlank()) return null
 
-        parseSingleCandidate(input)?.let { return withCommentLocation(it, input) }
+        parseSingleCandidate(input)?.let { return withLinkLocation(it, input) }
 
         BilibiliUrlParser.extractUrls(input).forEach { url ->
-            parseSingleCandidate(url)?.let { return withCommentLocation(it, url) }
+            parseSingleCandidate(url)?.let { return withLinkLocation(it, url) }
         }
 
         return null
     }
 
-    private fun withCommentLocation(target: BilibiliNavigationTarget, input: String): BilibiliNavigationTarget {
+    private fun withLinkLocation(target: BilibiliNavigationTarget, input: String): BilibiliNavigationTarget {
         if (target !is BilibiliNavigationTarget.Article &&
             target !is BilibiliNavigationTarget.Video &&
             target !is BilibiliNavigationTarget.Dynamic
@@ -100,6 +108,15 @@ object BilibiliNavigationTargetParser {
         ) return target
         val query = extractQueryParameters(uri.rawQuery)
         val location = resolveCommentLocation(uri, query)
+        if (target is BilibiliNavigationTarget.Video) {
+            return target.copy(
+                commentRootRpid = location?.root ?: target.commentRootRpid,
+                commentTargetRpid = location?.target ?: target.commentTargetRpid,
+                cid = query["cid"]?.toLongOrNull()?.takeIf { it > 0L } ?: target.cid,
+                page = query["p"]?.toIntOrNull()?.takeIf { it > 0 } ?: target.page,
+                startPositionMs = resolveVideoProgress(query) ?: target.startPositionMs,
+            )
+        }
         if (target is BilibiliNavigationTarget.Dynamic &&
             query["tab"]?.trim()?.equals("comment", ignoreCase = true) == true
         ) return target.copy(
@@ -113,14 +130,20 @@ object BilibiliNavigationTargetParser {
             is BilibiliNavigationTarget.Article -> target.copy(
                 commentRootRpid = location.root, commentTargetRpid = location.target
             )
-            is BilibiliNavigationTarget.Video -> target.copy(
-                commentRootRpid = location.root, commentTargetRpid = location.target
-            )
             is BilibiliNavigationTarget.Dynamic -> target.copy(
                 commentRootRpid = location.root, commentTargetRpid = location.target
             )
             else -> target
         }
+    }
+
+    private fun resolveVideoProgress(query: Map<String, String>): Long? {
+        query["start_progress"]?.toLongOrNull()?.takeIf { it >= 0L }?.let { return it }
+        query["dm_progress"]?.toLongOrNull()?.takeIf { it >= 0L }?.let {
+            return (it - 3_000L).coerceAtLeast(0L)
+        }
+        return query["t"]?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+            ?.let { (it * 1_000.0).toLong() }
     }
 
     suspend fun resolve(input: String): BilibiliNavigationTarget? {
@@ -215,9 +238,20 @@ object BilibiliNavigationTargetParser {
             }
 
             host == "following" && pathSegments.firstOrNull()?.equals("detail", ignoreCase = true) == true -> {
-                pathSegments.getOrNull(1)?.takeIf(::isNumericId)?.let {
-                    return BilibiliNavigationTarget.Dynamic(it)
+                pathSegments.getOrNull(1)?.let { id ->
+                    if (id.startsWith("cv", ignoreCase = true)) {
+                        parseArticleId(id)?.let { return BilibiliNavigationTarget.Article(it) }
+                    }
+                    if (isNumericId(id)) return BilibiliNavigationTarget.Dynamic(id)
                 }
+            }
+
+            host == "medialist" -> {
+                resolveFavoriteFolder(pathSegments, queryMap, allowBareId = true)?.let { return it }
+            }
+
+            host == "m.bilibili.com" && pathSegments == listOf("topic-detail") -> {
+                resolveTopic(queryMap)?.let { return it }
             }
 
             host == "opus" -> {
@@ -310,8 +344,15 @@ object BilibiliNavigationTargetParser {
             }
 
             isBilibiliHost(host) -> {
-                if (pathSegments == listOf("h5", "note-app", "view")) {
-                    queryMap["cvid"]?.let(::parseArticleId)?.let {
+                val area = if (pathSegments.firstOrNull() in listOf("h5", "mobile", "v")) {
+                    pathSegments.getOrNull(1)
+                } else {
+                    pathSegments.firstOrNull()
+                }
+                when (area) {
+                    "topic", "topic-detail" -> resolveTopic(queryMap)?.let { return it }
+                    "medialist" -> resolveFavoriteFolder(pathSegments, queryMap)?.let { return it }
+                    "note", "note-app" -> queryMap["cvid"]?.let(::parseArticleId)?.let {
                         return BilibiliNavigationTarget.Article(it)
                     }
                 }
@@ -323,6 +364,22 @@ object BilibiliNavigationTargetParser {
         }
 
         return null
+    }
+
+    private fun resolveTopic(query: Map<String, String>): BilibiliNavigationTarget.Topic? =
+        query["topic_id"]?.toLongOrNull()?.takeIf { it > 0L }?.let { BilibiliNavigationTarget.Topic(it) }
+
+    private fun resolveFavoriteFolder(
+        pathSegments: List<String>,
+        query: Map<String, String>,
+        allowBareId: Boolean = false,
+    ): BilibiliNavigationTarget.FavoriteFolder? {
+        val mediaId = pathSegments.firstNotNullOfOrNull { segment ->
+            segment.takeIf { allowBareId || it.startsWith("ml") }
+                ?.removePrefix("ml")?.takeIf(::isNumericId)?.toLongOrNull()
+        } ?: return null
+        val ownerMid = query["mid"]?.toLongOrNull()?.takeIf { it > 0L } ?: 0L
+        return BilibiliNavigationTarget.FavoriteFolder(mediaId, ownerMid)
     }
 
     private fun resolveCommentTarget(

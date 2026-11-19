@@ -323,7 +323,9 @@ internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLi
     val url = card.jumpUrl.trim()
     if (url.isBlank()) return DynamicOpusLinkCardAction.None
     val target = BilibiliNavigationTargetParser.parse(url)
-    if (target?.hasCommentLocation == true) return DynamicOpusLinkCardAction.OpenExternalUrl(url)
+    if (target?.hasCommentLocation == true ||
+        (target is BilibiliNavigationTarget.Video && target.hasPlaybackLocation)
+    ) return DynamicOpusLinkCardAction.OpenExternalUrl(url)
     return when (target) {
         is BilibiliNavigationTarget.Video -> DynamicOpusLinkCardAction.OpenVideo(target.videoId)
         is BilibiliNavigationTarget.Dynamic -> DynamicOpusLinkCardAction.OpenDynamicDetail(target.dynamicId)
@@ -343,6 +345,8 @@ internal fun resolveDynamicOpusLinkCardAction(card: OpusLinkCard): DynamicOpusLi
         )
         is BilibiliNavigationTarget.Match -> DynamicOpusLinkCardAction.OpenMatch(target.contestId)
         is BilibiliNavigationTarget.ArticleCollection,
+        is BilibiliNavigationTarget.Topic,
+        is BilibiliNavigationTarget.FavoriteFolder,
         is BilibiliNavigationTarget.CommentDetail,
         is BilibiliNavigationTarget.Music,
         is BilibiliNavigationTarget.Search,

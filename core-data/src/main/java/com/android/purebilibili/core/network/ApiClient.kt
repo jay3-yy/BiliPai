@@ -2,6 +2,7 @@
 package com.android.purebilibili.core.network
 
 import android.content.Context
+import com.android.purebilibili.core.network.policy.isHdSignedHomeFeedRequest
 import com.android.purebilibili.core.network.policy.shouldEnableTrustAllCertificates
 import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.store.AccountSessionStore
@@ -35,11 +36,9 @@ const val BANGUMI_PLAY_URL_PATH = "pgc/player/web/v2/playurl"
 const val BANGUMI_PLAY_URL_LEGACY_PATH = "pgc/player/web/playurl"
 const val FORCE_COOKIE_HEADER = "X-BiliPai-Force-Cookie"
 
-//  合并模式 App 半边身份头取值 — 对齐 PiliNara 原版 app 端点请求头
-//  (原版 fp_local/fp_remote 使用同一组固定值, session_id 为固定占位)
-private const val MERGED_APP_FEED_FP =
+private const val HOME_FEED_FP =
     "1111111111111111111111111111111111111111111111111111111111111111"
-private const val MERGED_APP_FEED_SESSION_ID = "11111111"
+private const val HOME_FEED_SESSION_ID = "11111111"
 
 fun applyForcedCookieHeader(request: okhttp3.Request): okhttp3.Request {
     val forcedCookie = request.header(FORCE_COOKIE_HEADER) ?: return request
@@ -578,8 +577,7 @@ interface BilibiliApi {
     @GET("https://app.bilibili.com/x/v2/feed/index")
     suspend fun getMobileFeed(@QueryMap params: Map<String, String>, @retrofit2.http.Tag accountSession: AccountCookieSession? = null): MobileFeedResponse
 
-    //  合并模式 App 半边专用: 参数已按 BiliPai/BiliPai 规范 percent-encode 后签名,
-    //  用 encoded=true 原样发送, 避免 Retrofit 二次编码导致签名不一致(-403/-400)
+    // 保留签名使用的百分号编码，避免 Retrofit 二次编码。
     @GET("https://app.bilibili.com/x/v2/feed/index")
     suspend fun getMobileFeedEncoded(
         @QueryMap(encoded = true) params: @JvmSuppressWildcards Map<String, String>,
@@ -3589,14 +3587,13 @@ object NetworkModule {
 
                 val androidHdLoginAppKeyHeader = resolveAndroidHdLoginAppKeyHeader(url.encodedPath)
                 val loginBuvid = original.header("X-BiliPai-Login-Buvid")
-                //  合并模式 App 半边(匿名 android_hd 取流)同样需要 HD 身份头(UA/app-key/buvid),
-                //  仅当请求带 mobi_app=android_hd 时命中, 不影响原 TV 取流(mobi_app=android)
-                val isHdFeedRequest = url.encodedPath == "/x/v2/feed/index" &&
-                    url.queryParameter("mobi_app") == "android_hd"
-                val isAndroidHdLoginEndpoint = androidHdLoginAppKeyHeader != null || isHdFeedRequest
+                val isHdFeedRequest = isHdSignedHomeFeedRequest(
+                    url.host, url.encodedPath, url.queryParameter("mobi_app"),
+                )
+                val usesHdUserAgent = androidHdLoginAppKeyHeader != null || isHdFeedRequest
                 val isSpaceAppRequest = url.host == "app.bilibili.com" &&
                     (url.encodedPath == "/x/v2/space" || url.encodedPath == "/x/v2/space/likearc")
-                val isAppBiliEndpoint = url.host == "app.bilibili.com" || isAndroidHdLoginEndpoint
+                val isAppBiliEndpoint = url.host == "app.bilibili.com" || androidHdLoginAppKeyHeader != null
                 val explicitReferer = original.header("Referer")
                 val explicitUserAgent = original.header("User-Agent")
                 val useBilibiliHeaders = usesDefaultBilibiliHeaders(url.host)
@@ -3605,7 +3602,7 @@ object NetworkModule {
                         "User-Agent",
                         when {
                             !explicitUserAgent.isNullOrBlank() -> explicitUserAgent
-                            isAndroidHdLoginEndpoint -> "Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd build/2001100 channel/master innerVer/2001100 osVer/15 network/2"
+                            usesHdUserAgent -> "Mozilla/5.0 BiliDroid/2.0.1 (bbcallen@gmail.com) os/android model/android_hd mobi_app/android_hd build/2001100 channel/master innerVer/2001100 osVer/15 network/2"
                             url.host == "app.bilibili.com" -> "Mozilla/5.0 BiliDroid/8.43.0 (bbcallen@gmail.com) os/android model/android mobi_app/android build/8430300 channel/master innerVer/8430300 osVer/15 network/2"
                             else -> "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
                         }
@@ -3613,9 +3610,9 @@ object NetworkModule {
                 if (useBilibiliHeaders && !isAppBiliEndpoint && explicitReferer.isNullOrBlank()) {
                     builder.header("Origin", origin) //  动态 Origin 头
                 }
-                if (androidHdLoginAppKeyHeader != null || isHdFeedRequest) {
+                if (androidHdLoginAppKeyHeader != null) {
                     builder
-                        .header("app-key", androidHdLoginAppKeyHeader ?: "android_hd")
+                        .header("app-key", androidHdLoginAppKeyHeader)
                         .header("buvid", loginBuvid ?: TokenManager.buvid3Cache.orEmpty())
                         .removeHeader("X-BiliPai-Login-Buvid")
                         .header("bili-http-engine", "cronet")
@@ -3634,14 +3631,21 @@ object NetworkModule {
                         .header("x-bili-aurora-zone", "sh001")
                 }
                 if (isHdFeedRequest) {
-                    //  合并模式 App 半边: 补齐 PiliNara 原版 app 端点身份头
-                    //  (该端点由 CookieJar 剥离 cookie, 身份完全由此处请求头承担)
+                    val account = original.tag(AccountCookieSession::class.java)?.seed
+                    val mid = account?.get("DedeUserID")
                     builder
-                        .header("fp_local", MERGED_APP_FEED_FP)
-                        .header("fp_remote", MERGED_APP_FEED_FP)
-                        .header("session_id", MERGED_APP_FEED_SESSION_ID)
-                        .header("x-bili-aurora-eid", "")
-                        .header("x-bili-aurora-zone", "")
+                        .header("app-key", "android64")
+                        .header("buvid", account?.get("buvid3") ?: TokenManager.buvid3Cache.orEmpty())
+                        .header("fp_local", HOME_FEED_FP)
+                        .header("fp_remote", HOME_FEED_FP)
+                        .header("session_id", HOME_FEED_SESSION_ID)
+                        .header("env", "prod")
+                        .header("bili-http-engine", "cronet")
+                        .header("x-bili-trace-id", "11111111111111111111111111111111:1111111111111111:0:0")
+                        .header("x-bili-aurora-eid", mid?.let(::encodeBiliAuroraEid).orEmpty())
+                        .header("x-bili-aurora-zone", "sh001")
+                    if (mid != null) builder.header("x-bili-mid", mid)
+                    if (explicitReferer.isNullOrBlank()) builder.header("Referer", "https://www.bilibili.com")
                 }
                 if (androidHdLoginAppKeyHeader != null) {
                     // Match PiliPlus LoginHttp.headers exactly for Passport App requests.

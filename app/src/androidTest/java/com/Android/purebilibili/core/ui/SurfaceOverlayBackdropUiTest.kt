@@ -54,6 +54,20 @@ class SurfaceOverlayBackdropUiTest {
         assertColor(Color.Black, render(SurfaceOverlayBackdrop(null, Color.Black)))
     }
 
+    @Test
+    fun sameBackdropFollowsChangingHeaderColor() {
+        val content = Content()
+        var surface = Color.Transparent
+        val backdrop = SurfaceOverlayBackdrop(content) { surface }
+
+        assertColor(Color.Red, render(backdrop))
+        surface = Color.Black.copy(alpha = 0.5f)
+        assertColor(surface.compositeOver(Color.Red), render(backdrop))
+        surface = Color.Black
+        assertColor(Color.Black, render(backdrop))
+        assertEquals(2, content.draws)
+    }
+
     private fun render(backdrop: Backdrop, factor: Int = 1): Color {
         val bitmap = ImageBitmap(16, 16)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(16f, 16f)) {

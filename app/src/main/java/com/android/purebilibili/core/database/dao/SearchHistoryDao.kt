@@ -7,8 +7,14 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface SearchHistoryDao {
     // 1. 查询所有历史，按时间倒序
-    @Query("SELECT * FROM search_history ORDER BY timestamp DESC LIMIT 20")
+    @Query("SELECT * FROM search_history ORDER BY timestamp DESC")
     fun getAll(): Flow<List<SearchHistory>>
+
+    @Query("SELECT keyword FROM search_history ORDER BY timestamp DESC")
+    suspend fun getKeywords(): List<String>
+
+    @Insert
+    suspend fun insertAll(history: List<SearchHistory>)
 
     // 2. 插入或替换
     @Insert(onConflict = OnConflictStrategy.REPLACE)

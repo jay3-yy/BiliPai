@@ -52,7 +52,7 @@ fun StoryScreen(
     isActive: Boolean = true,
     isFeedEntrySelected: Boolean = true,
     onBack: () -> Unit,
-    onVideoClick: (String, Long, String) -> Unit = { _, _, _ -> },
+    onOpenVideoDetail: (bvid: String, cid: Long, coverUrl: String, positionMs: Long) -> Unit = { _, _, _, _ -> },
     onUserClick: (Long) -> Unit = {},
     onSearchClick: () -> Unit = {},
     onRotateToLandscape: () -> Unit = {},
@@ -167,11 +167,12 @@ fun StoryScreen(
                             onVideoChange = viewModel::updateCurrentVideo,
                             viewModel = playerViewModel,
                             engagementViewModel = engagementViewModel,
-                            onExitSnapshot = { bvid, _, cid, coverUrl ->
+                            onExitSnapshot = { bvid, positionMs, cid, coverUrl ->
                                 latestExitSnapshot = StoryPortraitExitSnapshot(
                                     bvid = bvid,
                                     cid = cid,
                                     coverUrl = coverUrl,
+                                    positionMs = positionMs,
                                 )
                             },
                             onSearchClick = onSearchClick,
@@ -180,8 +181,9 @@ fun StoryScreen(
                             onExitFullscreen = {
                                 val snapshot = latestExitSnapshot
                                 if (snapshot != null) {
-                                    // 带上当前页封面，避免横屏详情首帧闪成 Story 入口种子封面
-                                    onVideoClick(snapshot.bvid, snapshot.cid, snapshot.coverUrl)
+                                    onOpenVideoDetail(
+                                        snapshot.bvid, snapshot.cid, snapshot.coverUrl, snapshot.positionMs,
+                                    )
                                 } else {
                                     onRotateToLandscape()
                                 }
@@ -246,4 +248,5 @@ private data class StoryPortraitExitSnapshot(
     val bvid: String,
     val cid: Long,
     val coverUrl: String = "",
+    val positionMs: Long,
 )

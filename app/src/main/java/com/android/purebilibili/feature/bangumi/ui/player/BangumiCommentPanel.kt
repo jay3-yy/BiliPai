@@ -222,6 +222,23 @@ internal fun BangumiCommentPanel(
                 floatingHeaderContentPaddingPx = visibleHeaderHeight,
                 onSearchClick = { showSearch = true },
             )
+            if (progressiveHeaderEnabled || solidHeaderEnabled) {
+                // 渐变从标签顶部开始，延伸到排序栏的可见底边，整段只采样评论列表。
+                // 原生标签在分页外，传入的顶部占位为 0，渐变从排序栏开始。
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .videoContentHeight { topContentInsetPx() + visibleHeaderHeight() }
+                        .biliPaiProgressiveTopBlur(
+                            backdrop = backdrop,
+                            enabled = progressiveHeaderEnabled,
+                        )
+                        .topSolidProgressiveFade(
+                            surfaceColor = MaterialTheme.colorScheme.surface,
+                            enabled = solidHeaderEnabled,
+                        ),
+                )
+            }
             // 所有材质共用标题显隐；排序 dock 由视频详情滚动隐藏设置控制。
             Box(
                 modifier = Modifier
@@ -231,18 +248,6 @@ internal fun BangumiCommentPanel(
                     .graphicsLayer { clip = true }
                     .then(if (floatingHeader) Modifier else Modifier.background(MaterialTheme.colorScheme.surface)),
             ) {
-                Box(
-                    modifier = Modifier.matchParentSize()
-                        .biliPaiProgressiveTopBlur(
-                            backdrop = backdrop,
-                            enabled = progressiveHeaderEnabled,
-                            surfaceColor = androidx.compose.ui.graphics.Color.Transparent,
-                        )
-                        .topSolidProgressiveFade(
-                            surfaceColor = MaterialTheme.colorScheme.surface,
-                            enabled = solidHeaderEnabled,
-                        ),
-                )
                 VideoCommentFloatingHeader(
                     count = state.replyCount,
                     sortMode = state.sortMode,

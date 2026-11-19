@@ -9,7 +9,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
-import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
 /**
  *  共享元素过渡作用域 Provider
@@ -34,7 +33,15 @@ val LocalAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> 
  * 当前视频详情 entry 的真实导航信号。独立 VideoActivity 不在 NavDisplay 内，保留 null 默认值。
  * 只在 observer 中读取进度/角色，避免让详情页订阅逐帧深度。
  */
-val LocalVideoDetailNavigationTransitionScope = compositionLocalOf<NavTransitionScope?> { null }
+internal val LocalVideoDetailNavigationTransitionScope =
+    compositionLocalOf<NavigationEntryTransition?> { null }
+
+internal interface NavigationEntryTransition {
+    val isTop: Boolean
+    val isRunning: Boolean
+    val isRemoving: Boolean
+    val relativeDepth: Float
+}
 
 /**
  * 全局共享元素动画开关，所有来源页和目标页必须共同遵守。

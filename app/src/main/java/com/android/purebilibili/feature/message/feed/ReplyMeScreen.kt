@@ -5,7 +5,6 @@ import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.runtime.*
 import com.android.purebilibili.feature.message.*
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -325,9 +324,10 @@ private fun ReplyMeCard(
             .messageSecondaryClick { confirmDelete = true }
     ) {
         Row(modifier = Modifier.padding(14.dp)) {
-            MessageFeedAvatar(
+            MessageFeedUserAvatar(
                 avatarUrl = item.user?.avatar.orEmpty(),
-                modifier = Modifier.clickable(onClick = onUserClick)
+                mid = item.user?.mid,
+                onClick = onUserClick,
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {

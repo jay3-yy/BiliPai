@@ -355,6 +355,7 @@ private fun SearchTopBarInputField(
     val contentColor = AppSurfaceTokens.onSurface()
     val placeholderColor = AppSurfaceTokens.onSurfaceVariantSummary()
     val focusBorderColor = AppSurfaceTokens.primary()
+    val nativeMiuix = com.android.purebilibili.core.ui.isMiuixNonGlassEnabled()
     val textStyle = searchInputTextStyle().copy(
         color = contentColor,
         // Explicit line height avoids type-scale clipping in single-line fields.
@@ -395,8 +396,7 @@ private fun SearchTopBarInputField(
             onKeyboardAction = { onSearch() },
             interactionSource = interactionSource,
             decorator = { innerTextField ->
-                // This is the search page's shared edit affordance, not a glass geometry override.
-                // Native MD3/Miuix and liquid chrome keep their existing field dimensions and padding.
+                // 原生 Miuix 使用控件默认按钮尺寸，玻璃和 MD3 保留各自的编辑区几何。
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
@@ -425,7 +425,10 @@ private fun SearchTopBarInputField(
                         CompositionLocalProvider(LocalAppTopBarIconDecorationEnabled provides false) {
                             AppIconButton(
                                 onClick = onClear,
-                                modifier = Modifier.size(32.dp),
+                                modifier = Modifier.size(
+                                    if (nativeMiuix) top.yukonga.miuix.kmp.basic.IconButtonDefaults.MinHeight
+                                    else 32.dp
+                                ),
                                 colors = AppIconButtonDefaults.colors(
                                     containerColor = Color.Transparent,
                                     disabledContainerColor = Color.Transparent,

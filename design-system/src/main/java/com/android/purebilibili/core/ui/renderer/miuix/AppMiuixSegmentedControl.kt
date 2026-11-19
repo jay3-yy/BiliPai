@@ -80,6 +80,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.MIUIX_NON_GLASS_TAB_ITEM_SPACING_DP
 import com.android.purebilibili.core.ui.components.resolveMiuixNonGlassContentTabItemWidths
 import com.android.purebilibili.core.ui.components.resolveElasticTabIndicatorBounds
 
@@ -300,19 +301,21 @@ private fun <T> AppMiuixNonGlassTabs(
         fontWeight = FontWeight.Bold,
     )
     val labelSizes = remember(labels, measurementLabels, style, measurer, density) {
+        val normalStyle = style.copy(fontWeight = FontWeight.Normal)
+        fun measureLabel(text: String): IntSize {
+            val label = AnnotatedString(text)
+            val normal = measurer.measure(label, normalStyle, maxLines = 1, softWrap = false).size
+            val bold = measurer.measure(label, style, maxLines = 1, softWrap = false).size
+            return IntSize(maxOf(normal.width, bold.width), maxOf(normal.height, bold.height))
+        }
         labels.mapIndexed { index, label ->
-            // Selected and unselected labels use different weights. Reserve the
-            // larger width so switching selection cannot truncate either variant.
-            val sizes = listOf(label, measurementLabels[index]).flatMap { text ->
-                listOf(FontWeight.Normal, FontWeight.Bold).map { weight ->
-                    measurer.measure(
-                        AnnotatedString(text), style.copy(fontWeight = weight),
-                        maxLines = 1, softWrap = false,
-                    ).size
-                }
+            val current = measureLabel(label)
+            val measurementLabel = measurementLabels[index]
+            // 当前文字和不同的测量种子都按两种字重预留空间。
+            if (measurementLabel == label) current else {
+                val seed = measureLabel(measurementLabel)
+                IntSize(maxOf(current.width, seed.width), maxOf(current.height, seed.height))
             }
-            // 当前文字与测量种子都参与宽高预留，切换字重或计数后不截断。
-            IntSize(sizes.maxOf { it.width }, sizes.maxOf { it.height })
         }
     }
     // Match the two independently rounded 12dp edges in the native item layout.
@@ -613,7 +616,7 @@ private fun <T> AppMiuixSizedTabs(
         val padding = minOf(containerHorizontalPadding, maxWidth / 2)
         val gap = when {
             fixedItemWidth != null -> 0.dp
-            nativeStyle -> 9.dp
+            nativeStyle -> MIUIX_NON_GLASS_TAB_ITEM_SPACING_DP.dp
             else -> AppSpacingTokens.Small
         }
         val readableWidths = measuredItemWidths.map { maxOf(it, fixedItemWidth ?: 0.dp) }
@@ -633,19 +636,26 @@ private fun <T> AppMiuixSizedTabs(
         }
         val contentWidth = widths.fold(padding * 2 + gap * (options.size - 1)) { total, width -> total + width }
         val viewportWidth = minOf(contentWidth, maxWidth)
-        LaunchedEffect(selectedIndex, widths, viewportWidth, scrollState.maxValue, motionEnabled, density, needsScroll, centerSelectedTab) {
-            if (needsScroll) {
+        if (needsScroll) {
+            LaunchedEffect(scrollState, selectedIndex, widths, lefts, motionEnabled, density, centerSelectedTab) {
                 val left = with(density) { lefts[selectedIndex].roundToPx() }
                 val right = left + with(density) { widths[selectedIndex].roundToPx() }
-                val viewport = with(density) { viewportWidth.roundToPx() }
-                val target = when {
-                    centerSelectedTab -> left + (right - left) / 2 - viewport / 2
-                    right - left >= viewport -> left
-                    left < scrollState.value -> left
-                    right > scrollState.value + viewport -> right - viewport
-                    else -> scrollState.value
-                }.coerceIn(0, scrollState.maxValue)
-                if (motionEnabled) scrollState.animateScrollTo(target) else scrollState.scrollTo(target)
+                // 横向布局写入滚动范围和视口。只在定位协程订阅，测量不会让标签重新组合。
+                snapshotFlow { scrollState.maxValue to scrollState.viewportSize }
+                    .filter { (maxScroll, viewport) -> maxScroll != Int.MAX_VALUE && viewport > 0 }
+                    .collectLatest { (maxScroll, viewport) ->
+                        val offset = scrollState.value
+                        val target = when {
+                            centerSelectedTab -> left + (right - left) / 2 - viewport / 2
+                            right - left >= viewport -> left
+                            left < offset -> left
+                            right > offset + viewport -> right - viewport
+                            else -> offset
+                        }.coerceIn(0, maxScroll)
+                        if (target != offset) {
+                            if (motionEnabled) scrollState.animateScrollTo(target) else scrollState.scrollTo(target)
+                        }
+                    }
             }
         }
         val indicatorLefts = remember(lefts) { lefts.map { it.value } }

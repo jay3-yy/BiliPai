@@ -1,6 +1,7 @@
 <resources>
     <string name="dynamic_live_photo_badge">实况</string>
     <string name="link_preview_card_label">链接预览</string>
+    <string name="video_link_part_unavailable">无法打开链接指定的分 P</string>
     <string name="history_activity_stats">阅读与观看统计</string>
     <string name="mini_player_notification_channel">小窗播放</string>
     <string name="app_name">BiliPai</string>
@@ -24,6 +25,7 @@
     <string name="keyboard_shortcut_player_seek_long_keys">Shift+← / Shift+→</string>
     <string name="keyboard_shortcut_player_volume">音量增 / 减</string>
     <string name="keyboard_shortcut_player_volume_keys">↑ / ↓</string>
+    <string name="player_exit_fullscreen">退出全屏</string>
     <string name="keyboard_shortcut_player_fullscreen">全屏切换</string>
     <string name="keyboard_shortcut_player_fullscreen_keys">F / Enter</string>
     <string name="keyboard_shortcut_player_mute">静音切换</string>
@@ -147,7 +149,7 @@
     <string name="settings_search_placeholder">搜索设置</string>
     <string name="settings_search_results_title">搜索结果</string>
     <string name="settings_search_empty_title">未找到匹配项</string>
-    <string name="settings_search_empty_subtitle">试试其他关键词</string>
+    <string name="settings_search_empty_subtitle">部分设置可能尚未收录。可以试试其他关键词，或在设置分类中查找。</string>
     <string name="app_language_restart_dialog_title">重启应用以应用语言</string>
     <string name="app_language_restart_dialog_message">语言设置会在应用重启后生效，是否现在重启？</string>
     <string name="app_language_restart_dialog_confirm">立即重启</string>
@@ -370,7 +372,7 @@
     <string name="animation_maid_summary">关闭后隐藏女仆动画和静态图</string>
     <string name="animation_card_entrance_summary">打开首页时卡片依次淡入</string>
     <string name="animation_card_transition_summary">使用系统动画展开详情并返回来源卡片；不支持时回退普通页面转场</string>
-    <string name="animation_card_transition_source_official">使用系统一镜到底动画；设备、卡片或系统接口不可用时回退普通页面转场</string>
+    <string name="animation_card_transition_source_official">从可见的卡片或按钮展开页面并返回原位；系统转场不可用时使用普通导航</string>
     <string name="animation_card_transition_source_fallback">当前设备不支持系统一镜到底动画，使用普通页面转场</string>
     <string name="animation_card_transition_source_reduced_motion">系统已开启减少动态效果，当前不使用卡片过渡动画</string>
     <string name="animation_transition_blur_official_supported">控制系统一镜到底动画的背景模糊</string>
@@ -1077,4 +1079,6 @@
     <string name="filtered_content_reason_plugin">插件过滤</string>
     <string name="hot_danmaku_send_plus_one">加一，发送同款弹幕</string>
     <string name="hot_danmaku_send_error">发送失败，请重试</string>
+    <string name="message_select_conversation">选择一个会话</string>
+    <string name="message_close_conversation">关闭会话</string>
 </resources>

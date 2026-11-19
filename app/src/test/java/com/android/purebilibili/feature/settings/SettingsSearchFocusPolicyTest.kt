@@ -17,6 +17,30 @@ class SettingsSearchFocusPolicyTest {
     }
 
     @Test
+    fun homeSearchCanReachCardAndRefreshRowsAfterTheGridOptions() {
+        assertEquals(2, resolveSettingsSectionFocusIndex(
+            homeSettingsScrollItemKeys, "appearance.home_duration_style", "home_list_title"
+        ))
+        assertEquals(3, resolveSettingsSectionFocusIndex(
+            homeSettingsScrollItemKeys, ContentDisplaySetting.KEEP_RECOMMEND, "home_list_title"
+        ))
+        assertEquals(0, resolveSettingsSectionFocusIndex(
+            homeSettingsScrollItemKeys, null, "home_list_title"
+        ))
+    }
+
+    @Test
+    fun animationSearchFindsPreviewAndRespectsAdvancedOnlyPageContents() {
+        val normal = animationSettingsScrollItemKeys(advancedOnly = false)
+        val advanced = animationSettingsScrollItemKeys(advancedOnly = true)
+        assertEquals(2, resolveSettingsSectionFocusIndex(normal, "glass.popup_motion_style", "animation_glass"))
+        assertEquals(2, resolveSettingsSectionFocusIndex(advanced, "glass.progressive_blur_radius", "animation_glass"))
+        assertEquals(3, resolveSettingsSectionFocusIndex(normal, PROGRESSIVE_BLUR_RENDERER_SETTING_ID, "animation_glass"))
+        assertEquals(4, resolveSettingsSectionFocusIndex(normal, "animation.bottom_bar_blur_enabled", "animation_glass"))
+        assertNull(resolveSettingsSectionFocusIndex(advanced, "animation.bottom_bar_blur_enabled", "animation_glass"))
+    }
+
+    @Test
     fun pageTimeoutDoesNotClearRowThatAlreadyOwnsRequest() {
         try {
             SettingsSearchFocusController.submit(SettingsSearchTarget.PLAYBACK, SettingsSearchFocusIds.PLAYBACK_DECODER, "playback.hw_decode")
@@ -61,12 +85,31 @@ class SettingsSearchFocusPolicyTest {
     }
 
     @Test
-    fun playbackFocusIndex_mapsSectionsByActualLazyColumnOrder() {
-        assertEquals(8, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_NETWORK))
-        assertEquals(10, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_DATA_SAVER))
-        assertEquals(12, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_INTERACTION))
-        assertEquals(14, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_COMMENTS))
-        assertEquals(16, resolvePlaybackSettingsScrollIndex(SettingsSearchFocusIds.PLAYBACK_FULLSCREEN))
+    fun playbackSearchLocatesMiniPlayerGroupsAndLaterSections() {
+        val page = PlaybackSettingsPage.PLAYBACK
+        val focusId = SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER
+        assertEquals(5, resolvePlaybackSettingsItemScrollIndex(page, focusId, "playback.mini_player_mode"))
+        assertEquals(6, resolvePlaybackSettingsItemScrollIndex(page, focusId, "playback.audio_now_playing_bar_delete_button"))
+        assertEquals(7, resolvePlaybackSettingsItemScrollIndex(page, focusId, "playback.music_lyrics_ui_style"))
+        assertEquals(8, resolvePlaybackSettingsItemScrollIndex(page, focusId, "playback.audio_mode_auto_pip_enabled"))
+        assertEquals(12, resolvePlaybackSettingsItemScrollIndex(page, SettingsSearchFocusIds.PLAYBACK_NETWORK, null))
+        assertEquals(18, resolvePlaybackSettingsItemScrollIndex(page, SettingsSearchFocusIds.PLAYBACK_COMMENTS, null))
+    }
+
+    @Test
+    fun fullscreenSearchLocatesOffscreenItemsInBothPlaybackPages() {
+        val focusId = SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
+        assertEquals(20, resolvePlaybackSettingsItemScrollIndex(PlaybackSettingsPage.PLAYBACK, focusId, null))
+        assertEquals(1, resolvePlaybackSettingsItemScrollIndex(PlaybackSettingsPage.FULLSCREEN, focusId, null))
+        assertEquals(22, resolvePlaybackSettingsItemScrollIndex(
+            PlaybackSettingsPage.PLAYBACK, focusId, "playback.set_system_brightness_enabled"
+        ))
+        assertEquals(10, resolvePlaybackSettingsItemScrollIndex(
+            PlaybackSettingsPage.FULLSCREEN, focusId, "playback.progress_peak_danmaku_enabled"
+        ))
+        assertNull(resolvePlaybackSettingsItemScrollIndex(
+            PlaybackSettingsPage.COMMENTS, focusId, "playback.progress_peak_danmaku_enabled"
+        ))
     }
 
     @Test

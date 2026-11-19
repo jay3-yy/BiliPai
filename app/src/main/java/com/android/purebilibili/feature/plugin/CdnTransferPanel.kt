@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
@@ -23,8 +25,10 @@ import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppCard
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 import com.android.purebilibili.core.ui.components.AppLinearProgressIndicator
+import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppSwitch
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.feature.settings.AppSegmentedControl
 import java.util.Locale
 
 /** Plain native UI: no network, player or storage access inside this section. */
@@ -44,9 +48,20 @@ internal fun CdnTransferPanel(
     modifier: Modifier = Modifier
 ) {
     var expandedHost by remember { mutableStateOf<String?>(null) }
+    var sort by rememberSaveable { mutableStateOf(CdnResultSort.FASTEST) }
     val active = state.nodes.sumOf { it.active }
     val nodeByHost = state.nodes.associateBy { it.host }
-    val hosts = (diagnostics.map { it.host } + state.nodes.map { it.host }).distinct()
+    val diagnosticByHost = diagnostics.distinctBy { it.host }.associateBy { it.host }
+    val hosts = (diagnosticByHost.keys + nodeByHost.keys).sortedWith(
+        cdnResultComparator(
+            sort = sort,
+            completedRequests = { nodeByHost[it]?.completed ?: 0 },
+            bytesPerSecond = {
+                nodeByHost[it]?.speedBps?.takeIf { speed -> speed > 0 }
+                    ?: diagnosticByHost[it]?.speedKbps?.times(125L)
+            },
+        ),
+    )
     val highestSpeed = state.nodes.maxOfOrNull { it.speedBps }?.coerceAtLeast(1) ?: 1L
     AppCard(modifier = modifier) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -109,44 +124,50 @@ internal fun CdnTransferPanel(
             AppText("授权节点", style = MaterialTheme.typography.titleSmall)
             if (hosts.isEmpty()) {
                 AppText("播放视频后显示节点表现；缓存命中时不会额外测速。", style = MaterialTheme.typography.bodySmall)
+            } else {
+                CdnResultSortSelector(sort) { sort = it }
             }
             hosts.forEach { host ->
-                val node = nodeByHost[host]
-                val diagnostic = diagnostics.firstOrNull { it.host == host }
-                val cooling = (node?.cooldownUntilMs ?: 0) > state.updatedAtMs
-                AppCard(
-                    onClick = { expandedHost = if (expandedHost == host) null else host },
-                    modifier = Modifier.fillMaxWidth().semantics {
-                        stateDescription = if (expandedHost == host) "节点详情已展开" else "点按查看节点详情"
-                    }
-                ) {
-                    Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AppText(host, style = MaterialTheme.typography.bodySmall)
-                        AppText(
-                            when {
-                                node != null && node.active > 0 -> "取流中 · ${node.active} 个请求 · ${cdnSpeed(node.speedBps)}"
-                                cooling -> "暂时降低优先级"
-                                node != null && node.completed > 0 -> "可用 · 最近 ${cdnSpeed(node.speedBps)}"
-                                diagnostic?.speedKbps != null -> "手动测速 ${diagnostic.speedKbps} Kbps"
-                                else -> "等待传输样本"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (cooling) AppContentColors.error() else AppContentColors.secondaryText()
-                        )
-                        AppLinearProgressIndicator(
-                            progress = { ((node?.speedBps ?: 0).toFloat() / highestSpeed).coerceIn(0f, 1f) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (expandedHost == host) {
+                key(host) {
+                    val node = nodeByHost[host]
+                    val diagnostic = diagnosticByHost[host]
+                    val cooling = (node?.cooldownUntilMs ?: 0) > state.updatedAtMs
+                    AppCard(
+                        onClick = { expandedHost = if (expandedHost == host) null else host },
+                        modifier = Modifier.fillMaxWidth().semantics {
+                            stateDescription = if (expandedHost == host) "节点详情已展开" else "点按查看节点详情"
+                        }
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            AppText(host, style = MaterialTheme.typography.bodySmall)
                             AppText(
-                                "首字节 ${node?.firstByteMs?.let { "$it ms" } ?: "未采样"} · 完成 ${node?.completed ?: 0} · 失败 ${node?.failures ?: 0}",
-                                style = MaterialTheme.typography.bodySmall
+                                when {
+                                    node != null && node.active > 0 -> "取流中 · ${node.active} 个请求 · ${cdnSpeed(node.speedBps)}"
+                                    cooling -> "暂时降低优先级"
+                                    node != null && node.speedBps > 0 -> "可用 · 最近 ${cdnSpeed(node.speedBps)}"
+                                    diagnostic?.speedKbps != null -> "手动测速 ${diagnostic.speedKbps} Kbps"
+                                    node != null && node.completed > 0 -> "可用 · 当前网络未测速"
+                                    else -> "等待传输样本"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (cooling) AppContentColors.error() else AppContentColors.secondaryText()
                             )
-                            AppText(
-                                "累计 ${cdnBytes(node?.bytes ?: 0)}${node?.lastStatus?.let { " · 最近响应 HTTP $it" }.orEmpty()}",
-                                style = MaterialTheme.typography.labelSmall
+                            if (sort == CdnResultSort.MOST_USED) CdnCompletedRequestsLabel(node?.completed)
+                            AppLinearProgressIndicator(
+                                progress = { ((node?.speedBps ?: 0).toFloat() / highestSpeed).coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            AppButton(onClick = { onAvoid(host) }, enabled = !cooling) { AppText("降低优先级 1 分钟") }
+                            if (expandedHost == host) {
+                                AppText(
+                                    "首字节 ${node?.firstByteMs?.let { "$it ms" } ?: "未采样"} · 完成 ${node?.completed ?: 0} · 失败 ${node?.failures ?: 0}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                AppText(
+                                    "累计 ${cdnBytes(node?.bytes ?: 0)}${node?.lastStatus?.let { " · 最近响应 HTTP $it" }.orEmpty()}",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                AppButton(onClick = { onAvoid(host) }, enabled = !cooling) { AppText("降低优先级 1 分钟") }
+                            }
                         }
                     }
                 }
@@ -173,6 +194,25 @@ internal fun CdnTransferPanel(
             )
         }
     }
+}
+
+@Composable
+internal fun CdnResultSortSelector(sort: CdnResultSort, onSortChange: (CdnResultSort) -> Unit) {
+    AppSegmentedControl(
+        options = remember { CdnResultSort.entries.map { AppSegmentOption(it, it.label) } },
+        selectedValue = sort,
+        modifier = Modifier.fillMaxWidth(),
+        onSelectionChange = onSortChange,
+    )
+}
+
+@Composable
+internal fun CdnCompletedRequestsLabel(completed: Int?) {
+    AppText(
+        completed?.let { "本次运行已完成 $it 次播放传输请求" } ?: "暂无播放传输记录",
+        style = MaterialTheme.typography.labelSmall,
+        color = AppContentColors.secondaryText(),
+    )
 }
 
 @Composable

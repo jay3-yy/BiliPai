@@ -535,6 +535,7 @@ fun DynamicDetailScreen(
                             }
                         },
                         onUserClick = onUserClick,
+                        onUrlClick = onOpenLink,
                         onImagePreview = { images, index, sourceRect, textContent ->
                             previewImages = images
                             previewInitialIndex = index
@@ -754,6 +755,7 @@ fun DynamicDetailScreen(
                     onRefresh = interactionViewModel::refreshSubReplies,
                     onSortModeChange = interactionViewModel::setSubReplySortMode,
                     onUserClick = onUserClick,
+                    onUrlClick = onOpenLink,
                     onReplyClick = { reply ->
                         // 保持楼中楼可见，避免输入弹层出现前先闪回主评论列表。
                         interactionViewModel.startCommentReply(reply)

@@ -103,14 +103,12 @@ class HingeLayoutPolicyTest {
         assertEquals(IntRect(670, 0, 1000, 800), regions[2])
         val primary = selectPrimaryHingeFeature(hinges)
         assertEquals(hinges.first().bounds, primary?.bounds)
-        assertEquals(AppFoldPosture.Flat, resolveAppFoldPosture(isTabletop = false, hinges = hinges))
     }
 
     @Test
     fun `flat windows without a hinge keep a single full-window region`() {
         val regions = resolveHingeSafeContentRegions(1000, 800, emptyList())
         assertEquals(listOf(IntRect(0, 0, 1000, 800)), regions)
-        assertEquals(AppFoldPosture.None, resolveAppFoldPosture(isTabletop = false, hinges = emptyList()))
         assertFalse(
             AppFoldingFeatureInfo().hasObstructingHinge
         )

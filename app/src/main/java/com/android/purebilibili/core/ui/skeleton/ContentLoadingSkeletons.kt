@@ -167,6 +167,7 @@ fun ContentVideoGridSkeletonFixedColumns(
     rows: Int = 4,
     contentPadding: PaddingValues = PaddingValues(12.dp),
     spacing: Dp = 8.dp,
+    infoHorizontalPadding: Dp = 0.dp,
 ) {
     val safeColumns = columns.coerceAtLeast(1)
     val skeletonKeys = List(safeColumns * rows.coerceAtLeast(1)) { it }
@@ -190,6 +191,7 @@ fun ContentVideoGridSkeletonFixedColumns(
         ) {
             ContentVideoGridItemSkeleton(
                 coverAspectRatio = coverAspectRatio,
+                infoHorizontalPadding = infoHorizontalPadding,
                 blockColorProvider = blockColor,
             )
         }
@@ -201,6 +203,7 @@ fun ContentVideoGridItemSkeleton(
     coverAspectRatio: Float = 4f / 3f,
     blockColor: Color = Color.Unspecified,
     modifier: Modifier = Modifier,
+    infoHorizontalPadding: Dp = 0.dp,
     blockColorProvider: (() -> Color)? = null,
 ) {
     val colorProvider = blockColorProvider ?: { blockColor }
@@ -217,19 +220,21 @@ fun ContentVideoGridItemSkeleton(
                 .aspectRatio(coverAspectRatio),
         )
         Spacer(modifier = Modifier.height(8.dp))
-        ContentSkeletonBlock(
-            color = colorProvider,
-            modifier = Modifier
-                .fillMaxWidth(0.9f)
-                .height(16.dp),
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        ContentSkeletonBlock(
-            color = colorProvider,
-            modifier = Modifier
-                .fillMaxWidth(0.5f)
-                .height(12.dp),
-        )
+        Column(modifier = Modifier.padding(horizontal = infoHorizontalPadding)) {
+            ContentSkeletonBlock(
+                color = colorProvider,
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(16.dp),
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            ContentSkeletonBlock(
+                color = colorProvider,
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(12.dp),
+            )
+        }
     }
 }
 

@@ -548,6 +548,7 @@ fun PartitionContent(
         end = 16.dp
     ),
     sideRailTopPaddingProvider: () -> Dp = { contentPadding.calculateTopPadding() },
+    rightGlassRailBottomPadding: Dp = contentPadding.calculateBottomPadding(),
     hazeState: HazeState? = null,
     onVideoClick: (VideoItem) -> Unit = {},
     onBangumiClick: (Int) -> Unit = {},
@@ -654,10 +655,14 @@ fun PartitionContent(
                                 rail.placeRelative(0, top)
                             }
                         }
-                        // 横向外边距和底部避让仅用于玻璃；原生侧栏继续使用列表内边距。
+                        // 右侧玻璃 dock 可独立于视频列表占位，左侧保留底部浮钮的空间。
                         .then(
                             if (liquidGlassIndicatorEnabled) {
-                                Modifier.padding(start = 4.dp, end = 4.dp, bottom = bottomPadding)
+                                Modifier.padding(
+                                    start = 4.dp,
+                                    end = 4.dp,
+                                    bottom = if (sideRailOnRight) rightGlassRailBottomPadding else bottomPadding,
+                                )
                             } else Modifier
                         )
                         .zIndex(if (liquidGlassIndicatorEnabled) 1f else 0f),

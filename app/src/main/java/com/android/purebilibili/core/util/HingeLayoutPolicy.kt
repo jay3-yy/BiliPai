@@ -191,22 +191,6 @@ internal fun resolveOccludingHingeBounds(
     }
 }
 
-internal fun resolveAppFoldPosture(
-    isTabletop: Boolean,
-    hinges: List<AppHingeFeature>,
-): AppFoldPosture {
-    if (hinges.isEmpty()) return AppFoldPosture.None
-    if (isTabletop) return AppFoldPosture.Tabletop
-    val halfOpened = hinges.filterNot { hinge -> hinge.isFlat }
-    if (halfOpened.any { hinge -> hinge.orientation == AppHingeOrientation.Vertical }) {
-        return AppFoldPosture.Book
-    }
-    if (halfOpened.any { hinge -> hinge.orientation == AppHingeOrientation.Horizontal }) {
-        return AppFoldPosture.Tabletop
-    }
-    return AppFoldPosture.Flat
-}
-
 private fun sortedUniqueEdges(
     start: Int,
     end: Int,
