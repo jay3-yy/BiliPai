@@ -39,8 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.R
-import com.android.purebilibili.core.plugin.ExternalPluginInstallDecision
-import com.android.purebilibili.core.plugin.evaluateExternalPluginInstall
 import com.android.purebilibili.core.plugin.js.BiliPaiJsPluginInstallStore
 import com.android.purebilibili.core.plugin.js.BiliPaiJsPluginManifest
 import com.android.purebilibili.core.plugin.js.BiliPaiJsRuntime
@@ -50,7 +48,6 @@ import com.android.purebilibili.core.plugin.js.InstalledBiliPaiJsPlugin
 import com.android.purebilibili.core.plugin.js.isPlayable
 import com.android.purebilibili.core.plugin.js.resolveBiliPaiJsPluginCapabilities
 import com.android.purebilibili.core.plugin.kotlinpkg.ExternalKotlinPluginInstallStore
-import com.android.purebilibili.core.plugin.kotlinpkg.ExternalKotlinPluginPackagePreview
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.core.plugin.skin.UiSkinImportPackageResolver
 import com.android.purebilibili.core.plugin.skin.UiSkinImportMode
@@ -337,12 +334,6 @@ fun PluginsContent(
     var installedJsPlugins by remember {
         mutableStateOf(jsPluginStore.listInstalledPlugins())
     }
-    var kotlinPreview by remember {
-        mutableStateOf<Pair<ExternalKotlinPluginPackagePreview, ExternalPluginInstallDecision>?>(null)
-    }
-    var kotlinPackageBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var kotlinImportError by remember { mutableStateOf<String?>(null) }
-    var isKotlinPackageLoading by remember { mutableStateOf(false) }
     var showJsImportDialog by remember { mutableStateOf(false) }
     var jsImportUrl by remember { mutableStateOf("") }
     var jsImportError by remember { mutableStateOf<String?>(null) }
@@ -405,34 +396,6 @@ fun PluginsContent(
     var testingPluginId by remember { mutableStateOf<String?>(null) }
     var testResult by remember { mutableStateOf<Triple<Int, Int, List<com.android.purebilibili.data.model.response.VideoItem>>?>(null) }
     var testingSampleVideos by remember { mutableStateOf<List<com.android.purebilibili.data.model.response.VideoItem>>(emptyList()) }
-    val kotlinPackagePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        isKotlinPackageLoading = true
-        kotlinImportError = null
-        scope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                        ?: throw IllegalArgumentException("无法读取插件包")
-                    val preview = kotlinPluginStore.previewPackage(bytes).getOrThrow()
-                    val decision = evaluateExternalPluginInstall(
-                        packageDescriptor = preview.descriptor,
-                        trustedSignerSha256 = emptySet()
-                    )
-                    bytes to (preview to decision)
-                }
-            }
-            isKotlinPackageLoading = false
-            result.onSuccess { (bytes, previewAndDecision) ->
-                kotlinPackageBytes = bytes
-                kotlinPreview = previewAndDecision
-            }.onFailure { error ->
-                kotlinImportError = error.message ?: "预览失败"
-            }
-        }
-    }
     val jsPluginPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -810,52 +773,18 @@ fun PluginsContent(
                 AppPreferenceGroup(
                     modifier = Modifier
                         .padding(horizontal = 16.dp)
-                        .then(if (!kotlinPluginEntryState.enabled) Modifier.alpha(0.55f) else Modifier),
+                        .alpha(0.55f),
                 ) {
                     AppPreference(
                         icon = rememberSettingsVector(R.drawable.ph_file_arrow_up_24, R.drawable.ms_upload_file_fill_24),
                         title = kotlinPluginEntryState.title,
-                        subtitle = if (kotlinPluginEntryState.enabled && isKotlinPackageLoading) {
-                            "正在读取插件包…"
-                        } else {
-                            kotlinPluginEntryState.subtitle
-                        },
-                        iconTint = if (kotlinPluginEntryState.enabled) {
-                            AppContentColors.secondaryText()
-                        } else {
-                            AppContentColors.secondaryText().copy(alpha = 0.6f)
-                        },
-                        textColor = if (kotlinPluginEntryState.enabled) {
-                            AppContentColors.primaryText()
-                        } else {
-                            AppContentColors.secondaryText()
-                        },
-                        subtitleColor = if (kotlinPluginEntryState.enabled) {
-                            AppContentColors.secondaryText()
-                        } else {
-                            AppContentColors.secondaryText().copy(alpha = 0.85f)
-                        },
-                        showChevron = kotlinPluginEntryState.enabled,
-                        onClick = if (kotlinPluginEntryState.enabled && !isKotlinPackageLoading) {
-                            { kotlinPackagePicker.launch("*/*") }
-                        } else {
-                            null
-                        },
-                        trailingContent = if (!kotlinPluginEntryState.enabled) {
-                            { LockedFeatureBadge(kotlinPluginEntryState.badgeText) }
-                        } else {
-                            null
-                        },
-                    )
-                }
-            }
-            if (kotlinImportError != null) {
-                item {
-                    AppText(
-                        text = kotlinImportError ?: "",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.error(),
-                        modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+                        subtitle = kotlinPluginEntryState.subtitle,
+                        iconTint = AppContentColors.secondaryText().copy(alpha = 0.6f),
+                        textColor = AppContentColors.secondaryText(),
+                        subtitleColor = AppContentColors.secondaryText().copy(alpha = 0.85f),
+                        showChevron = false,
+                        onClick = null,
+                        trailingContent = { LockedFeatureBadge(kotlinPluginEntryState.badgeText) },
                     )
                 }
             }
@@ -1463,95 +1392,6 @@ fun PluginsContent(
                 }
             )
         }
-    }
-
-    if (kotlinPluginEntryState.enabled) {
-        kotlinPreview?.let { (preview, decision) ->
-        val previewModel = buildExternalPluginInstallPreview(decision)
-        AppAlertDialog(
-            onDismissRequest = {
-                if (!isImporting) {
-                    kotlinPreview = null
-                    kotlinPackageBytes = null
-                }
-            },
-            icon = { SettingsFunctionIcon(rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_fill_24), title = "Kotlin 插件包预览") },
-            title = { AppText("Kotlin 插件包预览") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppText(
-                        text = previewModel.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = AppContentColors.primaryText()
-                    )
-                    AppText(
-                        text = previewModel.subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText()
-                    )
-                    AppText(
-                        text = previewModel.packageHashText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText()
-                    )
-                    AppText(
-                        text = "${previewModel.signerText} · ${buildExternalPluginPayloadSummary(preview.payloadEntries)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText()
-                    )
-                    PluginCapabilityDetailSection(
-                        capabilities = preview.descriptor.manifest.capabilities
-                    )
-                    if (decision is ExternalPluginInstallDecision.Rejected) {
-                        AppText(
-                            text = decision.reason,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AppContentColors.error()
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                AppTextButton(
-                    enabled = decision is ExternalPluginInstallDecision.RequiresUserApproval,
-                    onClick = {
-                        val bytes = kotlinPackageBytes ?: return@AppTextButton
-                        val result = kotlinPluginStore.installPreview(
-                            preview = preview,
-                            packageBytes = bytes,
-                            grantedCapabilities = preview.descriptor.manifest.capabilities
-                        )
-                        result.onSuccess {
-                            installedKotlinPackages = kotlinPluginStore.listInstalledPackages()
-                            kotlinPreview = null
-                            kotlinPackageBytes = null
-                            android.widget.Toast.makeText(
-                                context,
-                                "插件包已保存，当前不会运行",
-                                android.widget.Toast.LENGTH_SHORT
-                            ).show()
-                        }.onFailure { error ->
-                            kotlinImportError = error.message ?: "安装失败"
-                            kotlinPreview = null
-                            kotlinPackageBytes = null
-                        }
-                    }
-                ) {
-                    AppText("保存授权")
-                }
-            },
-            dismissButton = {
-                AppTextButton(
-                    onClick = {
-                        kotlinPreview = null
-                        kotlinPackageBytes = null
-                    }
-                ) {
-                    AppText("取消")
-                }
-            }
-        )
-    }
     }
 
     uiSkinPreview?.let { preview ->
