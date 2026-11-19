@@ -88,6 +88,7 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppTextButton
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import com.android.purebilibili.R
 import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.video.progress.PbpProgressData
@@ -1117,6 +1118,12 @@ private fun VideoPlayerSectionContent(
             playbackCid = success?.info?.cid
         )
     }
+    var hasStartedPlayback by remember(currentPlaybackIdentity, playerState.player) {
+        mutableStateOf(false)
+    }
+    LaunchedEffect(observedIsPlaying) {
+        if (observedIsPlaying) hasStartedPlayback = true
+    }
 
     // 控制器显示状态
     var showControls by remember(currentPlaybackIdentity) {
@@ -1655,6 +1662,7 @@ private fun VideoPlayerSectionContent(
             }
         }
         isLongPressing = true
+        haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
         totalDragDistanceY = 0f
         totalDragDistanceX = 0f
         longPressSpeedStartedAtMs = android.os.SystemClock.elapsedRealtime()
@@ -2887,6 +2895,7 @@ private fun VideoPlayerSectionContent(
                             )
                         ) {
                             FullscreenDoubleTapAction.SeekForward -> {
+                                seekSceneHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 val seekMs = seekForwardSeconds * 1000L
                                 val newPos = resolveRelativeSeekTargetPosition(
                                     currentPositionMs = player.currentPosition,
@@ -2906,6 +2915,7 @@ private fun VideoPlayerSectionContent(
                                 }
                             }
                             FullscreenDoubleTapAction.SeekBackward -> {
+                                seekSceneHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 val seekMs = seekBackwardSeconds * 1000L
                                 val newPos = resolveRelativeSeekTargetPosition(
                                     currentPositionMs = player.currentPosition,
@@ -2925,6 +2935,7 @@ private fun VideoPlayerSectionContent(
                                 }
                             }
                             FullscreenDoubleTapAction.TogglePlayPause -> {
+                                haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                 togglePlayerPlaybackFromUserAction(player)
                                 com.android.purebilibili.core.util.Logger.d("VideoPlayerSection") {
                                     "⏯️ DoubleTap: toggle play/pause"
@@ -4547,6 +4558,15 @@ private fun VideoPlayerSectionContent(
         pipNoDanmakuEnabled = pipNoDanmakuEnabled,
         hostLifecycleStarted = hostLifecycleStarted
     )
+    val hotBarCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
+    val canShowHotBar = danmakuHotBarEnabled && shouldShowDanmakuLayer
+    val canSendHotBarDanmaku = canShowHotBar && !isInPipMode &&
+        com.android.purebilibili.core.ui.LocalVisualWorkAllowed.current
+    val sendSameDanmaku = actions.onSendSameDanmaku
+    val hotDanmakuSendFailureMessage = stringResource(R.string.hot_danmaku_send_error)
+    var sendingHotDanmaku by remember(danmakuManager, bvid, hotBarCid, canSendHotBarDanmaku) {
+        mutableStateOf(false)
+    }
         val advancedDanmakuList by danmakuManager.advancedDanmakuFlow.collectAsStateWithLifecycle()
         val basDanmakuList by danmakuManager.basDanmakuFlow.collectAsStateWithLifecycle()
         val commandDanmakuList by danmakuManager.commandDanmakuFlow.collectAsStateWithLifecycle()
@@ -4795,26 +4815,33 @@ private fun VideoPlayerSectionContent(
                     )
                 }
                 // 3.1 高赞弹幕悬浮条：当前时间窗内点赞 Top-N，支持一键跟发
-                if (danmakuHotBarEnabled && shouldShowDanmakuLayer && danmakuRenderWorkActive) {
+                if (canShowHotBar && danmakuRenderWorkActive) {
                     val hotBarLikedDanmakuIds by actions.likedDanmakuIds
                         .collectAsStateWithLifecycle()
-                    val hotBarCid = (uiState as? VideoPlaybackUiState.Success)?.info?.cid ?: 0L
                     key(danmakuManager, hotBarCid) {
                         HotDanmakuBar(
-                            getDanmakuList = { danmakuManager.getHotDanmakuList(hotBarCid) },
+                            getDanmakuIndex = { danmakuManager.getHotDanmakuIndex(hotBarCid) },
                             onPresentationChange = danmakuManager::updateHotDanmakuPresentation,
                             player = playerState.player,
                             likedDanmakuIds = hotBarLikedDanmakuIds,
                             onLikeDanmaku = actions.onLikeDanmakuToggle,
-                            isSending = isSendingDanmakuComposer,
-                            onSendSame = { message ->
-                                onSendDanmakuComposer(
-                                    message,
-                                    16777215,
-                                    1,
-                                    25,
-                                    false,
-                                )
+                            isSending = sendingHotDanmaku || isSendingDanmakuComposer,
+                            onSendSame = sendSameDanmaku?.takeIf { canSendHotBarDanmaku }?.let { send ->
+                                { message: String ->
+                                    if (!sendingHotDanmaku && !isSendingDanmakuComposer) {
+                                        sendingHotDanmaku = true
+                                        send(message) { result ->
+                                            sendingHotDanmaku = false
+                                            result.onFailure {
+                                                Toast.makeText(
+                                                    context,
+                                                    it.message ?: hotDanmakuSendFailureMessage,
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    }
+                                }
                             },
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
@@ -5252,16 +5279,23 @@ private fun VideoPlayerSectionContent(
             }
         }
 
-        if (playerVisualWorkActive && uiState is VideoPlaybackUiState.Loading && !isInPipMode &&
-            !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition &&
-            !isFirstFrameRendered && !observedIsPlaying
-        ) {
+        val showStartupLoadingIndicator = playerVisualWorkActive && !isInPipMode &&
+            !hasStartedPlayback && !observedIsPlaying &&
+            !state.forceCoverOnly && !state.liveBackPreview &&
+            !suppressTransientOverlaysForTransition && !keepCoverForManualStart &&
+            (uiState is VideoPlaybackUiState.Loading ||
+                (isBuffering && playerState.player.playWhenReady))
+        if (showStartupLoadingIndicator) {
             Column(
                 modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(tint = Color.White)
-                AppText("正在加载", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                AppText(
+                    text = if (isBuffering) "正在缓冲" else "正在加载",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
         }
 
@@ -5327,6 +5361,7 @@ private fun VideoPlayerSectionContent(
                     //  [新增] 传入清晰度切换状态和会员状态
                     isQualitySwitching = uiState.isQualitySwitching,
                     isBuffering = isBuffering,
+                    startupLoadingActive = showStartupLoadingIndicator,
                     hasRenderedFirstFrame = isFirstFrameRendered,
                     suppressTransientOverlaysForTransition = suppressTransientOverlaysForTransition,
                     isLoggedIn = uiState.isLoggedIn,
@@ -5698,21 +5733,6 @@ private fun VideoPlayerSectionContent(
                         pageChromeBackdrop,
                 ) {
                     renderVideoPlayerOverlay()
-                }
-            }
-
-            // 起播反馈独立于控制栏透明度；暂停、离页、离屏或返回预览时停止。
-            if (playerVisualWorkActive && !isFirstFrameRendered && isBuffering &&
-                playerState.player.playWhenReady && !observedIsPlaying &&
-                !keepCoverForManualStart &&
-                !state.forceCoverOnly && !state.liveBackPreview && !suppressTransientOverlaysForTransition
-            ) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center).padding(top = 88.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    com.android.purebilibili.feature.video.ui.overlay.BiliTvAnimatedBufferingIndicator(tint = Color.White)
-                    AppText("正在缓冲", color = Color.White, style = MaterialTheme.typography.labelMedium)
                 }
             }
 

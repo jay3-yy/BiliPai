@@ -6,9 +6,9 @@ import kotlin.test.assertFalse
 
 class LivePlayerGesturePolicyTest {
     @Test
-    fun `all live layouts keep playback and fullscreen gestures`() {
+    fun `live playback keeps fullscreen drag without double tap playback`() {
         val policy = LivePlayerGesturePolicy.Shared
-        assertTrue(policy.doubleTapPlayback)
+        assertFalse(policy.doubleTapPlayback)
         assertTrue(policy.centerDragFullscreen)
     }
 

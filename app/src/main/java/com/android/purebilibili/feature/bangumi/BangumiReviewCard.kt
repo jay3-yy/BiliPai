@@ -2,11 +2,11 @@
 
 package com.android.purebilibili.feature.bangumi
 
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.selection.SelectionContainer
+import com.android.purebilibili.core.ui.common.AppNativeSelectionContainer as SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarBorder
@@ -46,7 +46,7 @@ internal fun BangumiReviewCard(
     val secondary = AppContentColors.secondaryText()
     Column(
         modifier = modifier.fillMaxWidth()
-            .combinedClickable(
+            .appCombinedClickable(
                 enabled = !busy,
                 onClick = { if (longReview) onArticleClick() },
                 onLongClick = if (longReview) null else onShowMore,

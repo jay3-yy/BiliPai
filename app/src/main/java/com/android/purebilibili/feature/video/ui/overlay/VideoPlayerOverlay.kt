@@ -464,12 +464,14 @@ private fun VideoPlayerOverlayContent(
     actions: VideoPlayerOverlayActions,
     topBarExtraActions: (@Composable () -> Unit)?,
 ) {
-    val autoHide = com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(4_000L)
     val levelGestureActive = LocalPlayerLevelGestureActive.current
     val player = state.player
     val title = state.title
     val isVisible = state.isVisible
     val onToggleVisible = actions.onToggleVisible
+    val autoHide = if (onToggleVisible != null) {
+        com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(4_000L)
+    } else null
     val isFullscreen = state.isFullscreen
     val currentQualityLabel = state.currentQualityLabel
     val qualityLabels = state.qualityLabels
@@ -671,6 +673,14 @@ private fun VideoPlayerOverlayContent(
     val endDrawerCloseProgress = state.endDrawerCloseProgress ?: remember { mutableFloatStateOf(1f) }
     val onShowEndDrawer = actions.onShowEndDrawer
     val onDismissEndDrawer = actions.onDismissEndDrawer
+    val onFullscreenCommentClick = if (isFullscreen && bvid.isNotBlank()) {
+        onLandscapeCommentClick?.let { openComments ->
+            {
+                onDismissEndDrawer()
+                openComments()
+            }
+        }
+    } else null
     val relatedVideos = state.relatedVideos
     val ugcSeason = state.ugcSeason
     val isFollowed = state.isFollowed
@@ -1336,27 +1346,19 @@ private fun VideoPlayerOverlayContent(
     LaunchedEffect(floatingPanelVisible) { latestPanelVisibility(floatingPanelVisible) }
     DisposableEffect(Unit) { onDispose { latestPanelVisibility(false) } }
 
-    LaunchedEffect(
-        isVisible,
-        effectiveIsPlaying,
-        isSeekScrubbing,
-        playerMenuVisible,
-        showCdnDiagnostics,
-        danmakuComposerVisible,
-        levelGestureActive,
-        autoHide.timeoutMillis,
-    ) {
-        val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
-        if (!danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
-            shouldAutoHideInlineControlsAfterDelay(
-                controlsVisible = isVisible,
-                isPlaying = effectiveIsPlaying,
-                isSeekScrubbing = isSeekScrubbing,
-                floatingPanelVisible = playerMenuVisible
-            )
+    if (autoHide != null && onToggleVisible != null) {
+        LaunchedEffect(
+            isVisible,
+            effectiveIsPlaying,
+            isSeekScrubbing,
+            playerMenuVisible,
+            showCdnDiagnostics,
+            danmakuComposerVisible,
+            levelGestureActive,
+            autoHide.timeoutMillis,
         ) {
-            delay(timeout)
-            if (autoHide.canHide() && !danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
+            val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
+            if (!danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
                 shouldAutoHideInlineControlsAfterDelay(
                     controlsVisible = isVisible,
                     isPlaying = effectiveIsPlaying,
@@ -1364,7 +1366,17 @@ private fun VideoPlayerOverlayContent(
                     floatingPanelVisible = playerMenuVisible
                 )
             ) {
-                onToggleVisible()
+                delay(timeout)
+                if (autoHide.canHide() && !danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
+                    shouldAutoHideInlineControlsAfterDelay(
+                        controlsVisible = isVisible,
+                        isPlaying = effectiveIsPlaying,
+                        isSeekScrubbing = isSeekScrubbing,
+                        floatingPanelVisible = playerMenuVisible
+                    )
+                ) {
+                    onToggleVisible()
+                }
             }
         }
     }
@@ -1485,7 +1497,7 @@ private fun VideoPlayerOverlayContent(
 
     Box(
         modifier = Modifier
-            .then(autoHide.focusModifier)
+            .then(autoHide?.focusModifier ?: Modifier)
             .fillMaxSize()
             .onVisibilityChanged(minFractionVisible = 0f) { progressInViewport = it }
             .playerActionBounds { playerBoundsInWindow = it },
@@ -1687,12 +1699,9 @@ private fun VideoPlayerOverlayContent(
                     onShareClick = { onShare?.invoke() ?: openVideoShareSheet() },
                     onCastClick = onCastClickAction,
                     showCastButton = playerControlVisibility.showCastButton,
-                    onCommentClick = if (isFullscreen && bvid.isNotBlank()) ({
-                        onDismissEndDrawer()
-                        onLandscapeCommentClick()
-                    }) else null,
+                    onCommentClick = onFullscreenCommentClick,
                     onRelatedVideosClick = if (landscapeSidePanelsAvailable && relatedVideos.isNotEmpty()) ({
-                        if (landscapeCommentPanelVisible) onLandscapeCommentClick()
+                        if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
                         if (endDrawerVisible && endDrawerInitialTab == 0) onDismissEndDrawer()
                         else onShowEndDrawer(0)
                     }) else null,
@@ -1701,7 +1710,7 @@ private fun VideoPlayerOverlayContent(
                     onMoreClick = {
                         activeMoreSource = moreSource
                         onDismissEndDrawer()
-                        if (landscapeCommentPanelVisible) onLandscapeCommentClick()
+                        if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
                         showEpisodeMenu = false
                         if (simplifiedPortraitChrome) showPortraitMore = true else showVideoSettings = true
                     },
@@ -1746,11 +1755,12 @@ private fun VideoPlayerOverlayContent(
                                 onLike = onToggleLike,
                                 onTriple = actions.onTripleAction,
                                 onCoin = onCoin,
-                                onComment = { onDismissEndDrawer(); onLandscapeCommentClick() },
+                                onComment = onFullscreenCommentClick,
                                 onFavorite = onToggleFavorite,
                                 onQuickFavorite = actions.onQuickFavorite,
                                 onShare = { onShare?.invoke() ?: openVideoShareSheet() },
                                 shareMenuSource = shareMenuSource,
+                                whiteFilledIcons = true,
                                 modifier = Modifier
                                     .align(Alignment.BottomEnd)
                                     .windowInsetsPadding(playerControlHorizontalInsets(true, true).only(WindowInsetsSides.End))
@@ -1767,7 +1777,7 @@ private fun VideoPlayerOverlayContent(
                         onExternalPlaylistClick()
                     } else if (hasEpisodeEntry) {
                         onDismissEndDrawer()
-                        if (landscapeCommentPanelVisible) onLandscapeCommentClick()
+                        if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
                         showVideoSettings = false
                         showEpisodeMenu = true
                     }
@@ -1801,7 +1811,7 @@ private fun VideoPlayerOverlayContent(
                                     ?.let { season -> if (season.title.isBlank()) "合集" else "合集：${season.title}" },
                                 onCollectionClick = {
                                     onDismissEndDrawer()
-                                    if (landscapeCommentPanelVisible) onLandscapeCommentClick()
+                                    if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
                                     showVideoSettings = false
                                     showCollectionOnly = true
                                     showEpisodeMenu = true
@@ -2138,7 +2148,8 @@ private fun VideoPlayerOverlayContent(
                 playWhenReady = player.playWhenReady,
                 hasRenderedFirstFrame = hasRenderedFirstFrame,
                 suppressTransientOverlays = suppressTransientOverlaysForTransition,
-            ) && centerLoadingUiState == null && !showCenterPlaybackControl,
+            ) && centerLoadingUiState == null && !showCenterPlaybackControl &&
+                !state.startupLoadingActive,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。
@@ -2214,7 +2225,8 @@ private fun VideoPlayerOverlayContent(
             }
         }
 
-        // Glass is confined to the chrome's individual buttons; every menu is native.
+        val settingsUiStyle = com.android.purebilibili.core.theme.LocalAppUiStyle.current
+        // 通用播放菜单使用媒体样式，更多操作面板单独继承应用设定。
         com.android.purebilibili.feature.video.ui.components.PlayerNativeMenuTheme {
         VideoShareSheetHost(
             payload = pendingVideoShare,
@@ -2477,6 +2489,7 @@ private fun VideoPlayerOverlayContent(
         if (showVideoSettings) {
             CompositionLocalProvider(com.android.purebilibili.core.ui.components.LocalAppGlassMenuSource provides activeMoreSource) {
                 VideoSettingsPanel(
+                    uiStyle = settingsUiStyle,
                     playerDiagnosticsEnabled = insightMode != PlayerSettingsStore.PlayerInsightMode.OFF,
                     onPlayerDiagnosticsChange = { enabled ->
                         if (!enabled) showInsightDetails = false
@@ -2653,7 +2666,7 @@ private fun VideoPlayerOverlayContent(
                 onPartsClick = {
                     showCollectionOnly = false
                     onDismissEndDrawer()
-                    if (landscapeCommentPanelVisible) onLandscapeCommentClick()
+                    if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
                     showVideoSettings = false
                     showEpisodeMenu = true
                 },

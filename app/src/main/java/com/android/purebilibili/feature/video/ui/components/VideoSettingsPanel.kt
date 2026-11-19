@@ -9,6 +9,8 @@ import com.android.purebilibili.core.store.FullscreenActionCount
 import com.android.purebilibili.core.store.FullscreenActionCountSettings
 import com.android.purebilibili.core.store.ChapterDisplayMode
 import com.android.purebilibili.feature.settings.playbackSettingTitle
+import com.android.purebilibili.core.theme.AppUiStyle
+import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.motion.folmeExpandEnterTransition
@@ -336,10 +338,11 @@ fun VideoSettingsPanel(
     // 两种方向与材质共用已有的诊断显示设置；未接入的调用方不显示此入口。
     playerDiagnosticsEnabled: Boolean = false,
     onPlayerDiagnosticsChange: ((Boolean) -> Unit)? = null,
+    uiStyle: AppUiStyle = LocalAppUiStyle.current,
     // 关闭面板
     onDismiss: () -> Unit
 ) {
-    PlayerNativeMenuTheme {
+    PlayerNativeMenuTheme(uiStyle) {
     var page by remember { mutableStateOf("main") }
     var showPlayerVolumeDialog by remember { mutableStateOf(false) }
     val controlCenterMotion: VideoControlCenterMotion? = null

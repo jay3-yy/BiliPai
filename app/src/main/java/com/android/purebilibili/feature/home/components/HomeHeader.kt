@@ -36,14 +36,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.core.snap
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.CornerBasedShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -1561,7 +1561,6 @@ fun HomeHeader(
     onCategoryReselected: (() -> Unit)? = null,
     onPartitionClick: () -> Unit = {},  //  新增：分区按钮回调
     hazeState: HazeState? = null,  // 保留参数兼容性，但不用于模糊
-    onStatusBarDoubleTap: () -> Unit = {},
     //  [新增] 下拉刷新状态
     isRefreshing: Boolean = false,
     pullProgress: Float = 0f,  // 0.0 ~ 1.0+ 下拉进度
@@ -1571,6 +1570,7 @@ fun HomeHeader(
     homeSettings: com.android.purebilibili.core.store.HomeSettings? = null,
     topTabsVisible: Boolean = true,
     topTabsCollapsed: Boolean = false,
+    returnTabRevealFraction: Float? = null,
     onTopTabsCollapsedChange: (Boolean) -> Unit = {},
     motionTier: MotionTier = MotionTier.Normal,
     isScrolling: Boolean = false,
@@ -1657,8 +1657,7 @@ fun HomeHeader(
         homeSettings = homeSettings,
     )
     val nativeMiuixSearch = LocalAppUiStyle.current == AppUiStyle.MIUIX && !searchLiquidGlassEnabled
-    // Local search/settings surfaces follow their own header/glass switches.
-    // Progressive header blur and bottom dock blur must not frost these controls.
+    // 搜索入口的磨砂与液态玻璃独立于顶栏渐进模糊和底栏磨砂。
     val searchChromeMaterialMode = resolveHomeTopChromeMaterialMode(
         isHeaderBlurEnabled = isHeaderBlurEnabled,
         isBottomBarBlurEnabled = false,
@@ -1835,18 +1834,6 @@ fun HomeHeader(
         usesNativeContainerTreatment = usesNativeContainerTreatment,
         useUnifiedPanel = useUnifiedTopPanel
     )
-    val searchChromeBaseRenderMode = resolveHomeTopChromeRenderMode(
-        materialMode = searchChromeMaterialMode,
-        isGlassSupported = isGlassSupported,
-        hasBackdrop = miuixBackdrop != null,
-        hasHazeState = hazeState != null,
-        allowHazeLiquidGlassFallback = allowHazeLiquidGlassFallback
-    )
-    val searchChromeRenderMode = resolveHomeTopSearchChromeRenderMode(
-        renderMode = searchChromeBaseRenderMode,
-        useUnifiedPanel = useUnifiedTopPanel,
-        usesNativeContainerTreatment = usesNativeContainerTreatment,
-    )
     val useTopControlBlur = searchChromeMaterialMode == TopTabMaterialMode.BLUR
     // Only sample the sibling feed source supplied by HomeScreen. The navigation-wide
     // backdrop captures this header too, so using it as a fallback creates a RenderNode cycle.
@@ -1857,46 +1844,6 @@ fun HomeHeader(
     val topActionElasticState = rememberAppElasticPressState(
         visualSize = resolveHomeTopSettingsButtonSize(topChromePolicy),
     )
-    val topActionSurfaceModifier = if (topActionGlassActive) {
-        Modifier.biliPaiFloatingDockShell(
-            backdrop = topActionBackdrop,
-            interactionLayerBlock = topActionElasticState.layerBlock,
-            interactionState = topActionElasticState,
-            containerColor = AppSurfaceTokens.surfaceContainerHigh(),
-            pressProgress = 0f,
-            shape = edgeButtonShape,
-            lensIntensity = resolveFloatingDockGeometryScale(
-                resolveHomeTopSettingsButtonSize(topChromePolicy).value,
-            ),
-            liquidGlassTuning = liquidGlassTuning,
-        )
-    } else {
-        Modifier.homeTopChromeSurface(
-            renderMode = if (topChromeLiquidGlassEnabled || isTopChromeBlurEnabled) {
-                HomeTopChromeRenderMode.BLUR
-            } else {
-                topChromeRenderMode
-            },
-            shape = edgeButtonShape,
-            surfaceColor = resolveHomeTopEdgeControlContainerColor(
-                isLightMode = isLightMode,
-                renderMode = if (topChromeLiquidGlassEnabled || isTopChromeBlurEnabled) {
-                    HomeTopChromeRenderMode.BLUR
-                } else {
-                    topChromeRenderMode
-                },
-            ),
-            hazeState = hazeState,
-            miuixBackdrop = topActionBackdrop,
-            liquidStyle = liquidStyle,
-            liquidGlassTuning = liquidGlassTuning,
-            liquidGlassPreset = bottomBarLiquidGlassPreset,
-            motionTier = motionTier,
-            isScrolling = topChromeMotionPolicy.isScrolling,
-            isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
-            forceLowBlurBudget = forceLowBlurBudget,
-        )
-    }
     // 顶栏按钮跟随顶栏场景，搜索胶囊另行读取搜索场景。
     val useBottomBarMatchedTopControls = topChromeLiquidGlassEnabled
     val localTopChromeRenderMode = resolveHomeTopLocalChromeRenderMode(
@@ -1917,6 +1864,7 @@ fun HomeHeader(
     val hideTopTabs = homeSettings?.hideTopTabs == true
     val bottomBarSearchEnabled = homeSettings?.isBottomBarSearchEnabled == true &&
         homeSettings?.keepHomeTopSearchWithBottomSearch != true
+    val topActionsBesideTabs = bottomBarSearchEnabled && !hideTopTabs
     val topSearchMetrics = resolveHomeTopSearchRowMetrics(
         configuredHeight = resolveHomeTopSearchBarHeight(topChromePolicy, nativeMiuixSearch),
         configuredTabsSpacing = resolveHomeTopSearchToTabsSpacing(topChromePolicy),
@@ -1968,23 +1916,30 @@ fun HomeHeader(
             with(density) { scrollLayout.value.tabRowHeightPx.toDp() }
         }
     }
+    val collapsedHandleHeight = if (isHeaderCollapseEnabled || isTopTabsAutoCollapseEnabled) {
+        AppSpacingTokens.None
+    } else {
+        resolveHomeTopCollapsedHandleHeight()
+    }
     val currentTabHeight by animateDpAsState(
         targetValue = if (hideTopTabs) {
             AppSpacingTokens.None
+        } else if (topTabsVisible && returnTabRevealFraction != null) {
+            collapsedHandleHeight + (expandedTabHeight - collapsedHandleHeight) * returnTabRevealFraction
         } else {
             resolveHomeTopTabPresentationHeight(
                 expandedHeight = expandedTabHeight,
                 isCollapsed = topTabsVisible && topTabsCollapsed,
-                collapsedHandleHeight = if (isHeaderCollapseEnabled || isTopTabsAutoCollapseEnabled) {
-                    AppSpacingTokens.None
-                } else {
-                    resolveHomeTopCollapsedHandleHeight()
-                }
+                collapsedHandleHeight = collapsedHandleHeight,
             )
         },
-        animationSpec = AppMotionTokens.standardSpec(),
+        animationSpec = if (returnTabRevealFraction != null) snap() else AppMotionTokens.standardSpec(),
         label = "currentTabHeight"
     )
+    val tabRowMounted by remember(density) {
+        derivedStateOf { with(density) { currentTabHeight.roundToPx() > 0 } }
+    }
+    val tabRowSavedState = rememberSaveableStateHolder()
     val tabAlpha by remember(scrollLayout) {
         derivedStateOf(structuralEqualityPolicy()) { scrollLayout.value.tabAlpha }
     }
@@ -2030,8 +1985,52 @@ fun HomeHeader(
     val searchRowRevealed by remember(revealFractionProvider) {
         derivedStateOf { revealFractionProvider() > 0f }
     }
+    val searchRowMounted by remember(searchBarHeightPx, revealFractionProvider) {
+        derivedStateOf { (searchBarHeightPx * revealFractionProvider()).roundToInt() > 0 }
+    }
     val searchRowFullyRevealed by remember(revealFractionProvider) {
         derivedStateOf { revealFractionProvider() >= 1f }
+    }
+    val topActionSurfaceModifier = if (!searchRowMounted && !(topActionsBesideTabs && tabRowMounted)) {
+        Modifier
+    } else if (topActionGlassActive) {
+        Modifier.biliPaiFloatingDockShell(
+            backdrop = topActionBackdrop,
+            interactionLayerBlock = topActionElasticState.layerBlock,
+            interactionState = topActionElasticState,
+            containerColor = AppSurfaceTokens.surfaceContainerHigh(),
+            pressProgress = 0f,
+            shape = edgeButtonShape,
+            lensIntensity = resolveFloatingDockGeometryScale(
+                resolveHomeTopSettingsButtonSize(topChromePolicy).value,
+            ),
+            liquidGlassTuning = liquidGlassTuning,
+        )
+    } else {
+        // Miuix 原生按钮的磨砂由顶部栏磨砂控制，玻璃回退与 MD3 沿用各自的顶栏材质。
+        val blurTopAction = if (useNativeTopAction) isHeaderBlurEnabled else isTopChromeBlurEnabled
+        val topActionRenderMode = if (blurTopAction) {
+            HomeTopChromeRenderMode.BLUR
+        } else {
+            HomeTopChromeRenderMode.PLAIN
+        }
+        Modifier.homeTopChromeSurface(
+            renderMode = topActionRenderMode,
+            shape = edgeButtonShape,
+            surfaceColor = resolveHomeTopEdgeControlContainerColor(
+                isLightMode = isLightMode,
+                renderMode = topActionRenderMode,
+            ),
+            hazeState = hazeState,
+            miuixBackdrop = topActionBackdrop,
+            liquidStyle = liquidStyle,
+            liquidGlassTuning = liquidGlassTuning,
+            liquidGlassPreset = bottomBarLiquidGlassPreset,
+            motionTier = motionTier,
+            isScrolling = topChromeMotionPolicy.isScrolling,
+            isTransitionRunning = topChromeMotionPolicy.isTransitionRunning,
+            forceLowBlurBudget = forceLowBlurBudget,
+        )
     }
     val unifiedPanelCornerRadius = resolveHomeTopUnifiedPanelCornerRadius(
         chromePolicy = topChromePolicy,
@@ -2087,8 +2086,12 @@ fun HomeHeader(
         containerAlpha = tabChromeColors.containerColor.alpha
     )
     val tabContentAlpha by animateFloatAsState(
-        targetValue = if (topTabsVisible && !topTabsCollapsed) 1f else 0f,
-        animationSpec = AppMotionTokens.standardSpec(),
+        targetValue = if (topTabsVisible) {
+            returnTabRevealFraction ?: if (topTabsCollapsed) 0f else 1f
+        } else {
+            0f
+        },
+        animationSpec = if (returnTabRevealFraction != null) snap() else AppMotionTokens.standardSpec(),
         label = "tabContentAlpha"
     )
     val effectiveContinuousSlabRenderMode = resolveEffectiveHomeTopContinuousSlabRenderMode(
@@ -2412,7 +2415,9 @@ fun HomeHeader(
             )
         }
     }
-    val topTabsContent: @Composable (Dp) -> Unit = { maxDockWidth ->
+    val topTabsContent: @Composable (Dp) -> Unit = tabs@{ maxDockWidth ->
+        // 高度与布局使用同一像素边界，退场仍可见时保留频道栏。
+        if (!tabRowMounted) return@tabs
         // 标签动画仅由标签与保护材质消费，不让每帧值回到整个顶栏的组合范围。
         val isTopTabViewportSyncEnabled = resolveHomeTopTabViewportSyncEnabled(
             currentTabHeightDp = currentTabHeight.value,
@@ -2496,7 +2501,7 @@ fun HomeHeader(
                     isTopTabsManualCollapseEnabled &&
                     !isHeaderCollapseEnabled &&
                     !isTopTabsAutoCollapseEnabled,
-                isTabsCollapsed = topTabsCollapsed,
+                isTabsCollapsed = topTabsCollapsed && returnTabRevealFraction == null,
                 onTabsCollapsedChange = onTopTabsCollapsedChange,
                 drawChromeSurface = !hasIllustratedHeader && shouldHomeTopTabChromeDrawOuterShell(
                     drawOuterChrome = drawTopTabDockChrome,
@@ -2512,54 +2517,57 @@ fun HomeHeader(
                 dockCategoryCount = topCategories.size,
                 dockLabelMode = topTabLabelMode,
             ) {
-                CategoryTabRow(
-                    categories = topCategories,
-                    categoryKeys = topCategoryKeys,
-                    selectedIndex = categoryIndex,
-                    onCategorySelected = { index ->
-                        if (topTabsVisible) onCategorySelected(index)
-                    },
-                    onCategoryReselected = onCategoryReselected,
-                    onPartitionClick = {
-                        if (topTabsVisible) onPartitionClick()
-                    },
-                    pagerState = pagerState,
-                    labelMode = if (hasIllustratedHeader) 2 else topTabLabelMode,
-                    isLiquidGlassEnabled = resolveHomeTopTabIndicatorLiquidGlassEnabled(
-                        homeSettings = homeSettings,
-                    ),
-                    liquidGlassStyle = liquidStyle,
-                    liquidGlassTuning = liquidGlassTuning,
-                    liquidGlassPreset = bottomBarLiquidGlassPreset,
-                    hazeState = hazeState,
-                    miuixBackdrop = miuixBackdrop,
-                    skinPlainStyle = hasIllustratedHeader,
-                    skinPlainContentColor = uiSkinDecoration?.takeIf { hasIllustratedHeader }?.let {
-                        resolveHomeSkinTopTabContentColor(
-                            topAtmosphereTint = it.topAtmosphereTint,
-                            hasTopAtmosphereImage = true,
-                            darkTheme = !isLightMode,
-                        )
-                    },
-                    isFloatingStyle = !hasIllustratedHeader && isTabFloating,
-                    edgeToEdge = integratedCollapsedTopBar,
-                    hasOuterChromeSurface = !hasIllustratedHeader && drawTopTabDockChrome,
-                    // Same wrap decision as HomeTopTabChrome so shell length matches tab content.
-                    wrapDockWidth = !hasIllustratedHeader && wrapTopTabDockWidth,
-                    interactionBudget = interactionBudget,
-                    motionTier = motionTier,
-                    isTransitionRunning = isTransitionRunning,
-                    forceLowBlurBudget = forceLowBlurBudget,
-                    isViewportSyncEnabled = isTopTabViewportSyncEnabled,
-                    maxDockWidthDp = maxDockWidth.value,
-                    forceMaterialUnderline = useLegacyHomeTopTabs &&
-                        LocalAppUiStyle.current == AppUiStyle.MATERIAL3
-                )
+                // 重新展开时由频道栏恢复保存的滚动位置。
+                tabRowSavedState.SaveableStateProvider("home_top_tabs") {
+                    CategoryTabRow(
+                        categories = topCategories,
+                        categoryKeys = topCategoryKeys,
+                        selectedIndex = categoryIndex,
+                        onCategorySelected = { index ->
+                            if (topTabsVisible) onCategorySelected(index)
+                        },
+                        onCategoryReselected = onCategoryReselected,
+                        onPartitionClick = {
+                            if (topTabsVisible) onPartitionClick()
+                        },
+                        pagerState = pagerState,
+                        labelMode = if (hasIllustratedHeader) 2 else topTabLabelMode,
+                        isLiquidGlassEnabled = resolveHomeTopTabIndicatorLiquidGlassEnabled(
+                            homeSettings = homeSettings,
+                        ),
+                        liquidGlassStyle = liquidStyle,
+                        liquidGlassTuning = liquidGlassTuning,
+                        liquidGlassPreset = bottomBarLiquidGlassPreset,
+                        hazeState = hazeState,
+                        miuixBackdrop = miuixBackdrop,
+                        skinPlainStyle = hasIllustratedHeader,
+                        skinPlainContentColor = uiSkinDecoration?.takeIf { hasIllustratedHeader }?.let {
+                            resolveHomeSkinTopTabContentColor(
+                                topAtmosphereTint = it.topAtmosphereTint,
+                                hasTopAtmosphereImage = true,
+                                darkTheme = !isLightMode,
+                            )
+                        },
+                        isFloatingStyle = !hasIllustratedHeader && isTabFloating,
+                        edgeToEdge = integratedCollapsedTopBar,
+                        hasOuterChromeSurface = !hasIllustratedHeader && drawTopTabDockChrome,
+                        // Same wrap decision as HomeTopTabChrome so shell length matches tab content.
+                        wrapDockWidth = !hasIllustratedHeader && wrapTopTabDockWidth,
+                        interactionBudget = interactionBudget,
+                        motionTier = motionTier,
+                        isTransitionRunning = isTransitionRunning,
+                        forceLowBlurBudget = forceLowBlurBudget,
+                        isViewportSyncEnabled = isTopTabViewportSyncEnabled,
+                        maxDockWidthDp = maxDockWidth.value,
+                        forceMaterialUnderline = useLegacyHomeTopTabs &&
+                            LocalAppUiStyle.current == AppUiStyle.MATERIAL3
+                    )
+                }
             }
         }
         }
 
-        if (bottomBarSearchEnabled && !hideTopTabs) {
+        if (topActionsBesideTabs) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -2674,20 +2682,7 @@ fun HomeHeader(
                 .fillMaxWidth()
                 .padding(bottom = AppSpacingTokens.None) // Reset padding, controlled by spacer
         ) {
-            // 1. Status Bar Placeholder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(statusBarHeight)
-                    .pointerInput(Unit) {
-                        detectTapGestures(
-                            onTap = {
-                                haptic(HapticType.LIGHT)
-                                onStatusBarDoubleTap()
-                            }
-                        )
-                    }
-            )
+            Spacer(Modifier.height(statusBarHeight))
 
             // 2. Search Bar + Avatar + right action
             // The panel material is a sibling behind the controls: clipping a material ancestor
@@ -2802,7 +2797,8 @@ fun HomeHeader(
                         }
                     }
 
-                    Box(
+                    // 完全收起时卸载搜索行的局部材质和交互；频道栏与共享顶栏材质在外层。
+                    if (searchRowMounted) Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .homeHeaderScrollWindowHeight(
@@ -2814,11 +2810,6 @@ fun HomeHeader(
                                 // avatar/action deformation must be allowed outside its layout bounds.
                                 if (!searchRowFullyRevealed) {
                                     Modifier.clip(androidx.compose.ui.graphics.RectangleShape)
-                                } else Modifier
-                            )
-                            .then(
-                                if (!searchRowRevealed) {
-                                    Modifier.clearAndSetSemantics {}
                                 } else Modifier
                             )
                     ) {

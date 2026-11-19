@@ -1,5 +1,7 @@
 package com.android.purebilibili.feature.video.player
 
+import com.android.purebilibili.feature.download.downloadAudioBackupUrls
+import com.android.purebilibili.feature.download.downloadVideoBackupUrls
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -27,6 +29,8 @@ import com.android.purebilibili.data.repository.VideoNoteSavePayload
 import com.android.purebilibili.data.repository.VideoRepository
 import com.android.purebilibili.feature.download.DownloadManager
 import com.android.purebilibili.feature.download.DownloadQualityDialog
+import com.android.purebilibili.feature.download.DownloadStreamUnavailableException
+import com.android.purebilibili.feature.download.observeDownloadStreamResolution
 import com.android.purebilibili.feature.download.DownloadTask
 import com.android.purebilibili.feature.video.note.VideoNoteBlock
 import com.android.purebilibili.feature.video.note.VideoNoteContentCodec
@@ -306,24 +310,32 @@ private fun rememberPiliVideoContentActionsForIdentity(
                     downloadBusy = true
                     scope.launch {
                         try {
-                            val info = targetInfo()
-                            val data = VideoRepository.getPlayUrlData(bvid, cid, quality)
-                                ?: error("无法获取下载地址，请检查登录状态和网络")
-                            val selection = playbackUseCase.resolvePlaybackSelection(data, quality)
-                                ?: error("当前账号无法下载此画质")
-                            require(data.dash?.video?.any { it.id == quality } == true) { "当前账号无法下载所选画质，请选择其他画质" }
-                            val audioUrl = selection.audioUrl.orEmpty()
-                            require(selection.videoUrl.isNotBlank() && audioUrl.isNotBlank()) { "未取得完整视频和音频流，无法下载" }
-                            val page = info.pages.firstOrNull { it.cid == cid }
-                            val task = DownloadTask(
-                                aid = info.aid, bvid = bvid, cid = cid,
-                                title = info.title, episodeLabel = page?.part?.takeIf { info.pages.size > 1 },
-                                cover = info.pic.ifBlank { coverUrl }, ownerName = info.owner.name, ownerFace = info.owner.face,
-                                duration = (page?.duration ?: (data.timelength / 1000L)).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
-                                quality = quality, qualityDesc = qualityOptions.firstOrNull { it.first == quality }?.second ?: "${quality}P",
-                                videoUrl = selection.videoUrl, audioUrl = audioUrl,
-                                isVerticalVideo = info.dimension?.isVertical == true, options = options
-                            )
+                            val task = observeDownloadStreamResolution {
+                                val info = targetInfo()
+                                val data = VideoRepository.getPlayUrlData(bvid, cid, quality, retainOriginalUrls = true)
+                                    ?: throw DownloadStreamUnavailableException("无法获取下载地址，请检查登录状态和网络")
+                                val selection = playbackUseCase.resolvePlaybackSelection(data, quality)
+                                    ?: throw DownloadStreamUnavailableException("当前账号无法下载此画质")
+                                if (data.dash?.video?.any { it.id == quality } != true) {
+                                    throw DownloadStreamUnavailableException("当前账号无法下载所选画质，请选择其他画质")
+                                }
+                                val audioUrl = selection.audioUrl.orEmpty()
+                                if (selection.videoUrl.isBlank() || audioUrl.isBlank()) {
+                                    throw DownloadStreamUnavailableException("未取得完整视频和音频流，无法下载")
+                                }
+                                val page = info.pages.firstOrNull { it.cid == cid }
+                                DownloadTask(
+                                    aid = info.aid, bvid = bvid, cid = cid,
+                                    title = info.title, episodeLabel = page?.part?.takeIf { info.pages.size > 1 },
+                                    cover = info.pic.ifBlank { coverUrl }, ownerName = info.owner.name, ownerFace = info.owner.face,
+                                    duration = (page?.duration ?: (data.timelength / 1000L)).coerceIn(0L, Int.MAX_VALUE.toLong()).toInt(),
+                                    quality = quality, qualityDesc = qualityOptions.firstOrNull { it.first == quality }?.second ?: "${quality}P",
+                                    videoUrl = selection.videoUrl, audioUrl = audioUrl,
+                                    videoBackupUrls = selection.cachedDashVideos.downloadVideoBackupUrls(selection.videoUrl),
+                                    audioBackupUrls = selection.cachedDashAudios.downloadAudioBackupUrls(audioUrl),
+                                    isVerticalVideo = info.dimension?.isVertical == true, options = options
+                                )
+                            }
                             feedback(if (DownloadManager.addTask(task)) "已加入下载队列：${task.title}" else "下载任务已存在")
                         } catch (error: Exception) {
                             if (error is CancellationException) throw error

@@ -1,7 +1,9 @@
 // 文件路径: feature/plugin/BiliPaiFeedFilterPlugin.kt
 package com.android.purebilibili.feature.plugin
 
+import com.android.purebilibili.core.filter.recordFilteredVideo
 import com.android.purebilibili.core.plugin.BuiltinPluginIds
+import com.android.purebilibili.core.store.ContentFilterReason
 
 import com.android.purebilibili.core.ui.AppContentColors
 
@@ -85,13 +87,9 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
     // ==================== 过滤规则(还原 BiliPai RecommendFilter) ====================
 
     override fun shouldShowItem(item: VideoItem, feedKind: FeedKind): Boolean {
-        return shouldShowFeedItem(
-            config = config,
-            item = item,
-            feedKind = feedKind,
-            rcmdRegExp = rcmdRegExp,
-            zoneRegExp = zoneRegExp
-        )
+        val reason = feedItemFilterReason(config, item, feedKind, rcmdRegExp, zoneRegExp) ?: return true
+        recordFilteredVideo(item, reason)
+        return false
     }
 
     // ==================== 配置持久化 ====================
@@ -135,17 +133,10 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
     // ==================== 设置 UI ====================
 
     @Composable
-    override fun SettingsContent() {
-        FeedFilterSettingsContent(Modifier.padding(16.dp))
-    }
-
-    @Composable
-    override fun SettingsContent(modifier: Modifier) {
-        FeedFilterSettingsContent(modifier)
-    }
-
-    @Composable
-    private fun FeedFilterSettingsContent(modifier: Modifier = Modifier) {
+    internal fun FeedFilterSettingsContent(
+        onOpenHistory: () -> Unit,
+        modifier: Modifier = Modifier,
+    ) {
         val context = androidx.compose.ui.platform.LocalContext.current
         val scope = rememberCoroutineScope()
         var loaded by remember { mutableStateOf(false) }
@@ -170,6 +161,9 @@ class BiliPaiFeedFilterPlugin : BuiltinPlugin, FeedPlugin<VideoItem> {
         Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
             FilterSection("跨页面屏蔽") {
                 SharedContentFilterPreferences()
+                AiReplyFilterPreference()
+                RepeatedReplyFilterPreference()
+                ContentFilterHistoryPreference(onClick = onOpenHistory)
                 AppText("手动拉黑的用户在首页、搜索、相关推荐、动态与评论中共用，不受本插件开关和视频白名单影响。")
             }
             FilterSection("过滤规则") {
@@ -450,7 +444,15 @@ internal fun shouldShowFeedItem(
     feedKind: FeedKind,
     rcmdRegExp: Regex?,
     zoneRegExp: Regex?
-): Boolean {
+): Boolean = feedItemFilterReason(config, item, feedKind, rcmdRegExp, zoneRegExp) == null
+
+private fun feedItemFilterReason(
+    config: BiliPaiFeedFilterConfig,
+    item: VideoItem,
+    feedKind: FeedKind,
+    rcmdRegExp: Regex?,
+    zoneRegExp: Regex?,
+): ContentFilterReason? {
     // 按来源开关: BiliPai 的「过滤器也应用于热门/排行/搜索」
     val allowedByKind = when (feedKind) {
         FeedKind.HOME_POPULAR -> config.applyToHotVideos
@@ -458,41 +460,43 @@ internal fun shouldShowFeedItem(
         FeedKind.SEARCH -> config.applyToSearch
         else -> true
     }
-    if (!allowedByKind) return true
+    if (!allowedByKind) return null
 
     val mid = item.owner.mid
     // 白名单: 最高优先级豁免
-    if (mid > 0L && config.whitelistMids.containsKey(mid)) return true
+    if (mid > 0L && config.whitelistMids.containsKey(mid)) return null
 
     // 已关注豁免(仅推荐流, 与 BiliPai filter() 一致; 其余来源用 filterAll 无豁免)
     if (feedKind == FeedKind.HOME_RECOMMEND && item.isFollowed && config.exemptFilterForFollowed) {
-        return true
+        return null
     }
 
     // 时长过滤: duration > 0 && < minDuration
     val hasVideoStatistics = item.contentType !in setOf("bangumi", "picture")
-    if (hasVideoStatistics && item.duration > 0 && item.duration < config.minDurationForRcmd) return false
+    if (hasVideoStatistics && item.duration > 0 && item.duration < config.minDurationForRcmd) {
+        return ContentFilterReason.DURATION
+    }
 
     // 播放量 / 点赞率(整数乘法, 避免浮点)
     val view = item.stat.view.toLong()
     val like = item.stat.like.toLong()
-    if (hasVideoStatistics && view >= 0 && (view < config.minPlayForRcmd ||
-            (like > -1 && like * 100L < config.minLikeRatioForRecommend * view))) {
-        return false
+    if (hasVideoStatistics && view >= 0) {
+        if (view < config.minPlayForRcmd) return ContentFilterReason.PLAY_COUNT
+        if (like > -1 && like * 100L < config.minLikeRatioForRecommend * view) return ContentFilterReason.LIKE_RATIO
     }
 
     // 标题关键词
-    if (rcmdRegExp != null && rcmdRegExp.containsMatchIn(item.title)) return false
+    if (rcmdRegExp != null && rcmdRegExp.containsMatchIn(item.title)) return ContentFilterReason.TITLE_PATTERN
 
     // 本地屏蔽用户
     if (mid > 0L && config.recommendBlockedMids.isNotEmpty() && config.recommendBlockedMids.containsKey(mid)) {
-        return false
+        return ContentFilterReason.BLOCKED_USER
     }
 
     // 分区关键词(tname)
     if (item.tname.isNotEmpty() && zoneRegExp != null && zoneRegExp.containsMatchIn(item.tname)) {
-        return false
+        return ContentFilterReason.CATEGORY
     }
 
-    return true
+    return null
 }

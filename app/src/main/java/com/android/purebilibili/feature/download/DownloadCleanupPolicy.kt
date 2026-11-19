@@ -27,7 +27,7 @@ internal fun resolveDownloadCleanupTargets(
         task.assets.mapNotNull { it.tempPath?.takeIf(String::isNotBlank) }.forEach(::add)
         directory.listFiles { file ->
             file.name.startsWith("${taskId}_") &&
-                (file.name.endsWith(".part") || file.name.contains(".part.chunk"))
+                (file.name.endsWith(".part") || file.name.endsWith(".source") || file.name.contains(".part.chunk"))
         }?.forEach { add(it.absolutePath) }
     }
     return DownloadCleanupTargets(

@@ -72,7 +72,7 @@ class CommentReadAccessPolicyTest {
             cursor = ReplyCursor(isEnd = false, next = 42),
             grpcNextOffset = "hot-ranking-cursor",
         )
-        val merged = mergeCommentReplyLocations(data, listOf(
+        val merged = mergeCommentReplyMetadata(data, listOf(
             ReplyItem(rpid = 1L, replyControl = ReplyControl(location = "IP属地：广东")),
             ReplyItem(rpid = 3L, like = 0, replyControl = ReplyControl(location = "IP属地：江苏")),
             ReplyItem(rpid = 999L, replyControl = ReplyControl(location = "IP属地：浙江")),
@@ -97,10 +97,10 @@ class CommentReadAccessPolicyTest {
             replies = listOf(ReplyItem(rpid = 2L, replyControl = ReplyControl(location = "IP属地：北京"))),
         )
         val candidates = collectReplyLocationCandidates(ReplyData(replies = listOf(root)))
-        val merged = mergeCommentReplyLocations(data, candidates)
+        val merged = mergeCommentReplyMetadata(data, candidates)
         assertEquals("IP属地：北京", merged.replies.orEmpty().single().replyControl?.location)
-        assertEquals(data, mergeCommentReplyLocations(data, listOf(root.copy(replies = null))))
-        assertEquals(data, mergeCommentReplyLocations(data, listOf(ReplyItem(rpid = 2L))))
+        assertEquals(data, mergeCommentReplyMetadata(data, listOf(root.copy(replies = null))))
+        assertEquals(data, mergeCommentReplyMetadata(data, listOf(ReplyItem(rpid = 2L))))
     }
 
     @Test

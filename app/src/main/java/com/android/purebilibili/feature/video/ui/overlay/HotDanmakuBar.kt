@@ -2,16 +2,19 @@ package com.android.purebilibili.feature.video.ui.overlay
 
 import com.android.purebilibili.core.ui.AppContentColors
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.geometry.Offset
@@ -22,18 +25,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import kotlin.math.ceil
 import androidx.media3.common.Player
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.components.AnimatedCountText
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.withTabularNumbers
+import com.android.purebilibili.feature.video.danmaku.HotDanmakuIndex
 import com.android.purebilibili.feature.video.danmaku.selectFittingHotDanmaku
-import com.android.purebilibili.feature.video.danmaku.selectHotDanmaku
-import com.android.purebilibili.feature.video.ui.components.DanmakuSameSendConfirmation
 import com.android.purebilibili.danmaku.engine.DanmakuItem
+
+private val hotDanmakuLikeSize = 20.dp
+private val hotDanmakuSendWidth = 36.dp
+private val hotDanmakuSendHeight = 24.dp
+private val hotDanmakuActionGap = 4.dp
+private val hotDanmakuItemPadding = 1.dp
+
+private fun countWithOneMore(count: Long): Long = count.coerceAtMost(Long.MAX_VALUE - 1L) + 1L
 
 private class HotDanmakuPresentation {
     var heightPx = 0
@@ -50,14 +64,13 @@ private class HotDanmakuPresentation {
     }
 }
 
-/** Poll fresh snapshots, including replacements with the same size and filter changes. */
 @Composable
-fun HotDanmakuBar(
-    getDanmakuList: () -> List<DanmakuItem>,
+internal fun HotDanmakuBar(
+    getDanmakuIndex: () -> HotDanmakuIndex?,
     player: Player?,
     likedDanmakuIds: Set<Long>,
     onLikeDanmaku: (Long, Boolean) -> Unit,
-    onSendSame: (String) -> Unit,
+    onSendSame: ((String) -> Unit)?,
     isSending: Boolean,
     modifier: Modifier = Modifier,
     onPresentationChange: (List<DanmakuItem>, Int) -> Unit,
@@ -72,7 +85,7 @@ fun HotDanmakuBar(
         fontWeight = FontWeight.Bold,
         fontStyle = FontStyle.Italic,
         shadow = Shadow(Color.Black, Offset(1f, 1f), 3f),
-    )
+    ).withTabularNumbers()
     val countWidths = remember(countStyle, density.density, density.fontScale) { mutableMapOf<Int, Dp>() }
     val countWidthFor: (Long) -> Dp = { count ->
         val digits = count.coerceAtLeast(0L).toString().length
@@ -87,21 +100,18 @@ fun HotDanmakuBar(
             with(density) { ceil((widestTextPx + 2 * 1.dp.roundToPx()) * 1.15f).toInt().toDp() }
         }
     }
-    val latestGetList by rememberUpdatedState(getDanmakuList)
-    var hotItems by remember(player) { mutableStateOf(emptyList<DanmakuItem>()) }
-    var pendingText by remember { mutableStateOf<String?>(null) }
-    val refresh = {
-        hotItems = player?.let { selectHotDanmaku(latestGetList(), it.currentPosition, maxItems = Int.MAX_VALUE) }.orEmpty()
-    }
-    val latestRefresh by rememberUpdatedState(refresh)
     val samplingActive = com.android.purebilibili.core.ui.rememberVisualWorkActive()
-    // A new loaded window must refresh even when playback is paused.
-    val danmakuSnapshot = getDanmakuList()
-    LaunchedEffect(player, samplingActive, danmakuSnapshot) {
-        if (player == null || !samplingActive) return@LaunchedEffect
-        // Playing refreshes the moving window; paused playback waits for seek/events.
+    val index = getDanmakuIndex()?.takeUnless { it.isEmpty }
+    var sampledItems by remember(player) { mutableStateOf(emptyList<DanmakuItem>()) }
+    val hotItems = if (index == null) emptyList() else sampledItems
+    // 分段和过滤结果更新时立即查询，播放中随进度查询，暂停时等待播放器事件。
+    LaunchedEffect(player, samplingActive, index) {
+        if (player == null || !samplingActive || index == null) {
+            sampledItems = emptyList()
+            return@LaunchedEffect
+        }
         observeVideoPlayerProgress(player, videoDuration = 0L, pollingIntervalMs = 1_000L) {
-            latestRefresh()
+            sampledItems = index.select(player.currentPosition)
         }
     }
     if (hotItems.isEmpty()) SideEffect {
@@ -122,18 +132,18 @@ fun HotDanmakuBar(
             val textStyle = MaterialTheme.typography.titleMedium.copy(
                 shadow = Shadow(Color.Black, Offset(1f, 1f), 3f),
             )
-            val visibleItems = remember(hotItems, likedDanmakuIds, maxWidth, textStyle, countStyle, density.density, density.fontScale) {
+            val visibleItems = remember(hotItems, maxWidth, textStyle, countStyle, density.density, density.fontScale) {
                 selectFittingHotDanmaku(
                     items = hotItems,
                     availableWidthPx = with(density) { maxWidth.toPx() - 2 * 1.dp.roundToPx() },
                     minimumGapPx = with(density) { 4.dp.roundToPx().toFloat() },
                 ) { item ->
-                    val liked = item.danmakuId in likedDanmakuIds
-                    val count = item.likeCount + if (liked && item.likeCount < Long.MAX_VALUE) 1L else 0L
                     val textWidth = textMeasurer.measure(AnnotatedString(item.text.orEmpty()), style = textStyle).size.width
-                    // Measured text/count slots, two 20dp buttons, a 2dp gap and 1dp item padding.
+                    val countWidth = countWidthFor(countWithOneMore(item.likeCount))
                     textWidth + with(density) {
-                        (2 * 20.dp.roundToPx() + 2.dp.roundToPx() + 2 * 1.dp.roundToPx() + countWidthFor(count).roundToPx()).toFloat()
+                        (hotDanmakuLikeSize.roundToPx() + hotDanmakuSendWidth.roundToPx() +
+                            hotDanmakuActionGap.roundToPx() + 2 * hotDanmakuItemPadding.roundToPx() +
+                            countWidth.roundToPx()).toFloat()
                     }
                 }
             }
@@ -158,7 +168,7 @@ fun HotDanmakuBar(
                         val liked = item.danmakuId in likedDanmakuIds
                         Row(
                             modifier = Modifier
-                                .padding(1.dp),
+                                .padding(hotDanmakuItemPadding),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             AppText(
@@ -170,11 +180,11 @@ fun HotDanmakuBar(
                                 softWrap = false,
                                 tapToCopyEnabled = false,
                             )
-                            val count = item.likeCount + if (liked && item.likeCount < Long.MAX_VALUE) 1L else 0L
-                            val countWidth = countWidthFor(count)
-                            // Reserve the measured maximum animated text width, not a fixed slot.
+                            val likedCount = countWithOneMore(item.likeCount)
+                            val count = if (liked) likedCount else item.likeCount
                             Box(
-                                modifier = Modifier.width(countWidth),
+                                // Keep room for the next digit even before the user taps like.
+                                modifier = Modifier.width(countWidthFor(likedCount)),
                                 contentAlignment = Alignment.CenterStart,
                             ) {
                                 AnimatedCountText(
@@ -189,7 +199,7 @@ fun HotDanmakuBar(
                             }
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
+                                    .size(hotDanmakuLikeSize)
                                     .clickable(role = Role.Button) { onLikeDanmaku(item.danmakuId, !liked) }
                                     .padding(1.dp),
                                 contentAlignment = Alignment.Center,
@@ -201,29 +211,29 @@ fun HotDanmakuBar(
                                     modifier = Modifier.size(18.dp),
                                 )
                             }
-                            Spacer(Modifier.width(2.dp))
+                            Spacer(Modifier.width(hotDanmakuActionGap))
                             Box(
                                 modifier = Modifier
-                                    .size(20.dp)
-                                    .clickable(enabled = !isSending, role = Role.Button) { pendingText = item.text }
-                                    .padding(1.dp),
+                                    .size(hotDanmakuSendWidth, hotDanmakuSendHeight)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.16f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.36f), CircleShape)
+                                    .clickable(enabled = onSendSame != null && !isSending, role = Role.Button) {
+                                        item.text?.let { onSendSame?.invoke(it) }
+                                    },
                                 contentAlignment = Alignment.Center,
                             ) {
-                                AppIcon(Icons.Filled.Send, contentDescription = "发一条同款弹幕",
-                                    tint = Color.White, modifier = Modifier.size(18.dp))
+                                AppIcon(
+                                    painter = painterResource(R.drawable.ic_hot_danmaku_send_plus_one),
+                                    contentDescription = stringResource(R.string.hot_danmaku_send_plus_one),
+                                    tint = Color.White.copy(alpha = if (isSending) 0.45f else 1f),
+                                    modifier = Modifier.size(width = 24.dp, height = 16.dp),
+                                )
                             }
                         }
                     }
                 }
             }
         }
-    }
-    pendingText?.let { text ->
-        DanmakuSameSendConfirmation(
-            text = text,
-            isSending = isSending,
-            onDismiss = { pendingText = null },
-            onConfirm = { pendingText = null; onSendSame(text) },
-        )
     }
 }

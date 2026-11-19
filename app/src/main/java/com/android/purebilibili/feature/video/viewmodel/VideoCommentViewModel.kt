@@ -4,6 +4,7 @@ import com.android.purebilibili.core.filter.contentFiltered
 
 import android.content.Context
 import android.net.Uri
+import com.android.purebilibili.feature.comment.CommentDetailFraudResult
 import android.provider.OpenableColumns
 import androidx.paging.LoadState
 import androidx.paging.PagingConfig
@@ -30,7 +31,6 @@ import com.android.purebilibili.data.repository.CommentGrpcRepository
 import com.android.purebilibili.data.repository.CommentRepository
 import com.android.purebilibili.data.repository.CommentReadException
 import com.android.purebilibili.data.repository.CommentFraudRepository
-import com.android.purebilibili.data.repository.shouldStartCommentFraudDetection
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -263,7 +263,7 @@ class VideoCommentViewModel : ViewModel() {
     val subReplyState = _subReplyState.filteredSubReplies(viewModelScope)
 
     // [新增] 评论反诈检测事件流（one-shot event）
-    private val _fraudEvent = MutableSharedFlow<CommentFraudStatus>(extraBufferCapacity = 1)
+    private val _fraudEvent = MutableSharedFlow<CommentDetailFraudResult>(extraBufferCapacity = 1)
     val fraudEvent = _fraudEvent.asSharedFlow()
 
     private var currentAid: Long = 0
@@ -278,7 +278,7 @@ class VideoCommentViewModel : ViewModel() {
     private val _fullSearchReplies = MutableStateFlow<List<ReplyItem>>(emptyList())
     private val fullSearchRepliesProjection = ReplyListProjection()
     val fullSearchReplies = _fullSearchReplies.contentFiltered(viewModelScope) { replies, rules ->
-        fullSearchRepliesProjection.project(replies, rules)
+        fullSearchRepliesProjection.project(replies, rules, _commentState.value.upMid)
     }
     private var fullSearchJob: Job? = null
     private val fullSearchWork = CommentSearchWorkGate()
@@ -534,6 +534,7 @@ class VideoCommentViewModel : ViewModel() {
                     ps = VIDEO_COMMENT_PAGE_SIZE, mode = currentState.sortMode.apiMode,
                     continuation = request.continuation, fallbackOnMissingLocation = requestSubject.type == 1,
                     expectedCount = currentState.replyCount.takeIf { currentState.replyCountSubject == requestSubject } ?: 0,
+                    continueAfterGoodsFilter = true,
                 ).getOrThrow()
             },
             onPage = success@ { request, data ->
@@ -795,7 +796,6 @@ class VideoCommentViewModel : ViewModel() {
     fun onExternalCommentSent(
         aid: Long,
         newReply: ReplyItem?,
-        fraudDetectionEnabled: Boolean = true,
         senderAccount: AccountSessionIdentity = TokenManager.accountIdentity.value
     ) {
         if (currentAid != aid || aid <= 0L || senderAccount != TokenManager.accountIdentity.value) return
@@ -824,20 +824,6 @@ class VideoCommentViewModel : ViewModel() {
                 requestComments(refresh = true, forceRefresh = true)
             }
             return
-        }
-
-        if (shouldStartCommentFraudDetection(fraudDetectionEnabled, newReply.rpid)) {
-            val sentAtSeconds = newReply.ctime
-                .takeIf { it > 0L }
-                ?: (System.currentTimeMillis() / 1000L)
-            launchFraudDetection(
-                aid = aid,
-                rpid = newReply.rpid,
-                rootId = newReply.root,
-                message = newReply.content.message,
-                hasPictures = !newReply.content.pictures.isNullOrEmpty(),
-                sentAtSeconds = sentAtSeconds
-            )
         }
 
         applySentMainListReply(newReply)
@@ -1194,7 +1180,6 @@ class VideoCommentViewModel : ViewModel() {
         message: String,
         imageUris: List<Uri> = emptyList(),
         syncToDynamic: Boolean = false,
-        fraudDetectionEnabled: Boolean = true
     ) {
         if (message.isBlank() && imageUris.isEmpty()) return
         val currentState = _commentState.value
@@ -1210,7 +1195,6 @@ class VideoCommentViewModel : ViewModel() {
         // switch must not let a late response update the newly selected comment thread.
         val sendSubject = currentSubject
         val sendAccount = TokenManager.accountIdentity.value
-        val sendCurrentAid = currentAid
         val sendReplyTarget = currentState.replyTarget
         val sendSubReplyState = _subReplyState.value
         val sendSubReplySession = subReplySession
@@ -1270,20 +1254,6 @@ class VideoCommentViewModel : ViewModel() {
                     current.replyTarget
                 }
 
-                // [新增] 启动评论反诈检测（后台协程，不阻塞 UI）
-                val rpidToCheck = newReply?.rpid ?: 0L
-                if (rpidToCheck > 0L) {
-                    // 成功发布的元数据由宿主回调统一保存，这里只发起可见性检测。
-                    val sentAtSeconds = newReply?.ctime?.takeIf { it > 0L } ?: (System.currentTimeMillis() / 1000L)
-                    if (sendSubject.type == 1) launchFraudDetection(
-                        aid = sendCurrentAid,
-                        rpid = rpidToCheck,
-                        rootId = root,
-                        message = message,
-                        sentAtSeconds = sentAtSeconds
-                    )
-                }
-                
                 val resolvedReply = newReply?.let {
                     if (root > 0L) resolveSentSubReply(
                         it, root, parent, sendReplyTarget, oid = sendSubject.oid, replyType = sendSubject.type
@@ -1505,78 +1475,30 @@ class VideoCommentViewModel : ViewModel() {
     /**
      * 启动评论反诈后台检测
      */
-    private fun launchFraudDetection(
-        aid: Long,
-        rpid: Long,
-        rootId: Long,
-        message: String = "",
-        hasPictures: Boolean = false,
-        sentAtSeconds: Long = 0,
-        waitMs: Long = -1L,
-        preserveInitialStatus: Boolean = false
-    ) {
-        _commentState.value = _commentState.value.copy(
-            isDetectingFraud = true,
-            fraudDetectResult = null,
-            fraudDetectRpid = rpid
-        )
-        viewModelScope.launch {
-            val result = CommentRepository.checkCommentStatus(
-                aid = aid,
-                rpid = rpid,
-                rootId = rootId,
-                hasPictures = hasPictures,
-                sentAtSeconds = sentAtSeconds,
-                waitMs = waitMs
-            )
-            result.onSuccess { status ->
-                android.util.Log.d("CommentVM", "评论反诈检测结果: $status (rpid=$rpid)")
-                CommentFraudRepository.saveRecord(
-                    rpid = rpid,
-                    oid = aid,
-                    type = 1,
-                    root = rootId,
-                    message = message,
-                    status = status,
-                    // 发评自动检测写入初始出生状态；手动复检保留历史 initial_status
-                    initialStatus = if (preserveInitialStatus) null else status
-                )
-                _commentState.value = _commentState.value.copy(
-                    isDetectingFraud = false,
-                    fraudDetectResult = status,
-                    fraudDetectRpid = rpid
-                )
-                // 发射 one-shot event 给 UI 弹窗
-                _fraudEvent.tryEmit(status)
-            }.onFailure { e ->
-                android.util.Log.e("CommentVM", "评论反诈检测失败: ${e.message}")
-                _commentState.value = _commentState.value.copy(
-                    isDetectingFraud = false
-                )
-            }
-        }
-    }
-    /**
-     * 手动触发某条自己评论的反诈检测（评论长按菜单「检测评论状态」入口）。
-     *
-     * 与发评自动检测的区别：
-     * - 不受 [fraudDetectionEnabled] 设置门控（用户主动触发）；
-     * - waitMs=0 立即检测（不是刚发的评论，无需等待主从同步缓冲）；
-     * - 仅更新 status，initialStatus 传 null 以保留历史记录中的初始出生状态。
-     */
     fun checkCommentFraud(reply: ReplyItem) {
-        val aid = currentAid
-        if (aid <= 0L || reply.rpid <= 0L) return
-        launchFraudDetection(
-            aid = aid,
-            rpid = reply.rpid,
-            rootId = reply.root,
-            message = reply.content.message,
-            hasPictures = !reply.content.pictures.isNullOrEmpty(),
-            sentAtSeconds = reply.ctime.takeIf { it > 0L } ?: 0L,
-            waitMs = 0L,
-            preserveInitialStatus = true
-        )
+        val subject = currentSubject
+        val account = TokenManager.accountIdentity.value
+        val rpid = reply.rpid
+        if (!subject.isValid || rpid <= 0L) return
+        _commentState.update {
+            it.copy(isDetectingFraud = true, fraudDetectResult = null, fraudDetectRpid = rpid)
+        }
+        viewModelScope.launch {
+            val status = CommentRepository.checkCommentStatus(
+                aid = subject.oid, rpid = rpid, rootId = reply.root, type = subject.type,
+            ).getOrThrow()
+            if (currentSubject != subject || TokenManager.accountIdentity.value != account) return@launch
+            CommentFraudRepository.saveRecord(
+                rpid = rpid, oid = subject.oid, type = subject.type, root = reply.root,
+                uid = account.mid ?: reply.mid, message = reply.content.message, status = status,
+            )
+            if (currentSubject != subject || TokenManager.accountIdentity.value != account ||
+                _commentState.value.fraudDetectRpid != rpid) return@launch
+            _commentState.update { it.copy(isDetectingFraud = false, fraudDetectResult = status) }
+            _fraudEvent.tryEmit(CommentDetailFraudResult(
+                rpid, subject.oid, subject.type, reply.content.message, status,
+            ))
+        }
     }
 
     /** 清除检测结果（用户关闭弹窗后调用） */

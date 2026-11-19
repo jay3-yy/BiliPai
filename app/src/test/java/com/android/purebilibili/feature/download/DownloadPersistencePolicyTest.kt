@@ -3,6 +3,10 @@ package com.android.purebilibili.feature.download
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlin.test.assertTrue
 
 class DownloadPersistencePolicyTest {
@@ -34,6 +38,23 @@ class DownloadPersistencePolicyTest {
 
         assertEquals(completedTask, normalizeRestoredDownloadTask(completedTask))
         assertEquals(pausedTask, normalizeRestoredDownloadTask(pausedTask))
+    }
+
+    @Test
+    fun restoreKeepsWaitingTaskAndRemainingRetryBudget() {
+        val running = baseTask.copy(status = DownloadStatus.DOWNLOADING, workToken = "transfer")
+        val firstRetry = assertNotNull(running.deferAutomaticRetry(nowMs = 1_000L))
+        val restored = normalizeRestoredDownloadTask(
+            Json.decodeFromString<DownloadTask>(Json.encodeToString(firstRetry)),
+        )
+        assertEquals(31_000L, restored.retryNotBeforeMs)
+        assertTrue(resolveNextQueuedDownloadTaskIds(listOf(restored)).isEmpty())
+
+        val ready = assertNotNull(restored.makeRetryReady("transfer")).copy(status = DownloadStatus.DOWNLOADING)
+        val secondRetry = assertNotNull(ready.deferAutomaticRetry(nowMs = 31_000L))
+        assertEquals(91_000L, secondRetry.retryNotBeforeMs)
+        val lastAttempt = assertNotNull(secondRetry.makeRetryReady("transfer")).copy(status = DownloadStatus.DOWNLOADING)
+        assertNull(lastAttempt.deferAutomaticRetry(nowMs = 91_000L))
     }
 
     @Test

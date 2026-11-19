@@ -69,6 +69,7 @@ class AppThemeSettingsMappingPolicyTest {
         )
         assertEquals(AppScreenshotCaptureMode.FULL_WINDOW, result.appScreenshotCaptureMode)
         assertEquals(AppIconStyle.AUTO, result.appIconStyle)
+        assertEquals(SettingsIconGlyphs.PHOSPHOR, result.settingsIconGlyphs)
         assertEquals(AppListItemStyle.AUTO, result.appListItemStyle)
     }
 
@@ -98,6 +99,7 @@ class AppThemeSettingsMappingPolicyTest {
                 intPreferencesKey("app_screenshot_capture_mode") to
                     AppScreenshotCaptureMode.SELECT_REGION.value,
                 stringPreferencesKey("app_icon_style") to AppIconStyle.THEME_CONTAINER.name,
+                stringPreferencesKey("settings_icon_glyphs") to SettingsIconGlyphs.ORIGINAL.name,
                 stringPreferencesKey("app_list_item_style") to AppListItemStyle.NATIVE.name
             )
         )
@@ -119,6 +121,7 @@ class AppThemeSettingsMappingPolicyTest {
         assertEquals(AppUiScalePreset.LARGE, result.appUiScalePreset)
         assertEquals(115, result.appDpiOverridePercent)
         assertEquals(AppIconStyle.THEME_CONTAINER, result.appIconStyle)
+        assertEquals(SettingsIconGlyphs.ORIGINAL, result.settingsIconGlyphs)
         assertEquals(AppListItemStyle.NATIVE, result.appListItemStyle)
         assertEquals(true, result.appGestureScreenshotEnabled)
         assertEquals(AppScreenshotGestureMode.THREE_FINGER_SWIPE_DOWN, result.appScreenshotGestureMode)

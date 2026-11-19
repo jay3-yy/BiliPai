@@ -107,6 +107,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.web.PublicWebLinkText
 
 private val useMiuixSpring: Boolean
     @Composable get() = com.android.purebilibili.core.theme.LocalAppUiStyle.current ==
@@ -934,14 +935,21 @@ fun VideoDescriptionAndTags(
                 // 原生链接分发：链接点击在 Text 内部处理，与划选（SelectionContainer）
                 // 和外层手势不再竞争，恢复无条件划选容器。
                 SelectionContainer {
-                    AppText(
+                    PublicWebLinkText(
                         text = descriptionText,
-                        maxLines = if (expanded || !showCollapsedPreview) Int.MAX_VALUE else 3,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AppContentColors.secondaryText(),
-                        modifier = descriptionModifier
-                    )
+                        enabled = expanded || !showCollapsedPreview,
+                        resolveUrl = { it.tag },
+                    ) { previewModifier, onPreviewTextLayout ->
+                        AppText(
+                            text = descriptionText,
+                            maxLines = if (expanded || !showCollapsedPreview) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AppContentColors.secondaryText(),
+                            onTextLayout = onPreviewTextLayout,
+                            modifier = descriptionModifier.then(previewModifier)
+                        )
+                    }
                 }
             }
         }

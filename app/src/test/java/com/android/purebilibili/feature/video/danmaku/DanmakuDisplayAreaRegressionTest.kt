@@ -12,6 +12,42 @@ import org.robolectric.annotation.Config
 @Config(sdk = [35], manifest = Config.NONE, application = Application::class)
 class DanmakuDisplayAreaRegressionTest {
     @Test
+    fun countBarKeepsTheFirstRowClearInBothDensityModesAndRestoresItWhenHidden() {
+        val viewport = DanmakuViewport(1920, 1080, 1f)
+        for (massive in listOf(false, true)) {
+            val config = DanmakuConfig().apply {
+                massiveMode = massive
+                displayAreaRatio = .25f
+            }
+            val withoutBar = config.resolveRenderConfig(viewport, true)
+            config.hotBarReservedHeightPx = 64f
+            val withBar = config.resolveRenderConfig(viewport, true)
+
+            assertEquals(64f, withBar.topMarginPx, .001f)
+            assertEquals(withoutBar.bottomMarginPx, withBar.bottomMarginPx, .001f)
+            assertTrue(withBar.lineCount in 1 until withoutBar.lineCount)
+            assertTrue(withBar.topMarginPx + withBar.lineCount * withBar.lineHeightPx <= 270f)
+
+            config.hotBarReservedHeightPx = 0f
+            val restored = config.resolveRenderConfig(viewport, true)
+            assertEquals(0f, restored.topMarginPx, .001f)
+            assertEquals(withoutBar.lineCount, restored.lineCount)
+        }
+    }
+
+    @Test
+    fun countBarDoesNotForceAScrollingRowIntoAShortDisplayBand() {
+        val config = DanmakuConfig().apply {
+            massiveMode = true
+            displayAreaRatio = .25f
+            hotBarReservedHeightPx = 48f
+        }
+        val renderConfig = config.resolveRenderConfig(DanmakuViewport(480, 192, 1f), false)
+        assertEquals(48f, renderConfig.topMarginPx, .001f)
+        assertEquals(0, renderConfig.lineCount)
+    }
+
+    @Test
     fun changingAreaWhileMaskEnabledImmediatelyUpdatesTrackBudget() {
         val viewport = DanmakuViewport(1920, 1080, 1f)
         val config = DanmakuConfig().apply { smartOcclusionEnabled = true }

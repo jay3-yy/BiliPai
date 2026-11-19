@@ -182,6 +182,7 @@ internal fun LargeScreenVideoLayout(
             defaultTab = secondaryDefaultTab,
         )
         val includeRelatedTab = resolveIncludeRelatedTabInSecondary(metrics.mode)
+        val sideContentReady = if (relatedTabFirst && includeRelatedTab) relatedContentReady else commentsContentReady
         val success = detailContentState ?: (uiState as? VideoPlaybackUiState.Success)
         val player: @Composable (Modifier) -> Unit = { modifier ->
             LargeScreenPlayerHost(
@@ -270,9 +271,7 @@ internal fun LargeScreenVideoLayout(
                 VideoDetailSkeletonHandoff(
                     identity = bvid,
                     ready = success != null,
-                    entryContentReady = if (relatedTabFirst && includeRelatedTab) {
-                        relatedContentReady
-                    } else commentsContentReady,
+                    entryContentReady = sideContentReady,
                     loading = success == null && uiState is VideoPlaybackUiState.Loading,
                     modifier = Modifier.fillMaxSize(),
                     skeleton = {
@@ -407,7 +406,9 @@ internal fun LargeScreenVideoLayout(
                                     onLike = engagementActions.toggleLike,
                                     onTriple = engagementActions.doTripleAction,
                                     onCoin = engagementActions.openCoinDialog,
-                                    onComment = { requestedSideTabName = TabletSecondaryTab.COMMENTS.name },
+                                    onComment = if (sideContentReady) ({
+                                        requestedSideTabName = TabletSecondaryTab.COMMENTS.name
+                                    }) else null,
                                     onFavorite = { engagementActions.onFavoriteAction(false) },
                                     onQuickFavorite = { engagementActions.onFavoriteAction(true) },
                                     onShare = {
@@ -705,6 +706,7 @@ private fun LargeScreenPlayerHost(
                     onHomeClick = onHomeClick,
                     menuActions = playbackActions.menuActions,
                     onQuickFavorite = { engagementActions.onFavoriteAction(true) },
+                    onSendSameDanmaku = playbackActions.sendSameDanmaku,
                     onDoubleTapLike = engagementActions.toggleLike,
                     onToggleFollow = engagementActions.toggleFollow,
                     onFollow = engagementActions.followOwner,

@@ -1,5 +1,11 @@
 Third-party source notices
 
+Settings icon assets:
+Phosphor Icons, MIT, @phosphor-icons/core 2.1.1.
+https://github.com/phosphor-icons/core
+Selected assets/regular SVG paths converted to 24dp Android VectorDrawable resources.
+License retained in licenses/phosphor_icons.LICENSE.
+
 Image loading placeholder asset:
 PiliPlus contributors, GPL-3.0, revision d635f20e22becbc6587c05c7a03671a4a9a3db9f.
 https://github.com/bggRGjQaUbCoE/PiliPlus
@@ -325,3 +331,8 @@ lib/plugin/pl_player/view/widgets.dart, lib/pages/dynamics/widgets/author_panel.
 and lib/models/dynamics/result.dart.
 Source: https://github.com/bggRGjQaUbCoE/PiliPlus
 License copy: artwork/third-party/piliplus/LICENSE. Distributed under GPLv3.
+
+AI bot comment detection
+Source: https://github.com/liyupi/dafeiyu-cleaner/tree/v1.4.0
+Copyright (c) 2026 大肥鱼消除计划 contributors
+MIT license text: app/src/main/assets/licenses/dafeiyu-cleaner.LICENSE.

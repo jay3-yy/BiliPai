@@ -525,14 +525,14 @@ class ReplyComponentsPolicyTest {
     fun `resolveReplyContentUrlNavigationUrl prefers dynamic web url over misleading video schema`() {
         val url = ReplyContentUrl(
             title = "动态",
-            url = "https://t.bilibili.com/1199344045210468386",
+            url = "//www.bilibili.com/opus/1199344045210468386",
             appUrlSchema = "bilibili://video/1199344045210468386"
         )
 
         assertEquals(
-            "https://t.bilibili.com/1199344045210468386",
+            "https://www.bilibili.com/opus/1199344045210468386",
             resolveReplyContentUrlNavigationUrl(
-                rawToken = "https://t.bilibili.com/1199344045210468386",
+                rawToken = "https://b23.tv/opus",
                 url = url
             )
         )

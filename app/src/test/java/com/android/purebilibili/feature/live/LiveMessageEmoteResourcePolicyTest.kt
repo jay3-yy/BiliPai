@@ -20,10 +20,12 @@ class LiveMessageEmoteResourcePolicyTest {
     )
     private val packages = listOf(LiveEmoticonPackage(1, "房间表情", listOf(textEmote, largeEmote)))
 
+    private val resolver = LiveMessageEmoteResolver(packages)
+
     @Test
     fun localTextEchoCarriesImagesIntoOverlayWithoutGlobalCacheOrServerEcho() {
-        val resolved = resolveLiveMessageEmoteResources(
-            LiveDanmakuItem(text = "我：害怕", isSelf = true), packages,
+        val resolved = resolver.resolve(
+            LiveDanmakuItem(text = "我：害怕", isSelf = true),
         )
         assertEquals(textEmote.url, resolved.inlineEmotes["害怕"]?.url)
         assertEquals(90, resolved.inlineEmotes["害怕"]?.width)
@@ -34,9 +36,9 @@ class LiveMessageEmoteResourcePolicyTest {
 
     @Test
     fun standaloneEchoKeepsSelectedImageEvenIfPackageIsUnavailable() {
-        val resolved = resolveLiveMessageEmoteResources(LiveDanmakuItem(
+        val resolved = LiveMessageEmoteResolver(emptyList()).resolve(LiveDanmakuItem(
             text = largeEmote.displayText, isSelf = true, dmType = 1, emoticon = largeEmote.messageEmote(),
-        ), emptyList())
+        ))
         assertEquals(largeEmote.url, resolved.emoticonUrl)
         assertEquals(180, resolved.emoticon?.width)
         assertEquals(90, resolved.emoticon?.height)
@@ -44,15 +46,15 @@ class LiveMessageEmoteResourcePolicyTest {
 
     @Test
     fun standaloneServerMessageCanResolveItsSendIdentifier() {
-        val resolved = resolveLiveMessageEmoteResources(
-            LiveDanmakuItem(text = "official_1", dmType = 1), packages,
+        val resolved = resolver.resolve(
+            LiveDanmakuItem(text = "official_1", dmType = 1),
         )
         assertEquals(largeEmote.url, resolved.emoticon?.url)
     }
 
     @Test
     fun ordinaryTextDoesNotBecomeAnUnrelatedStandaloneImage() {
-        val resolved = resolveLiveMessageEmoteResources(LiveDanmakuItem(text = "大表情"), packages)
+        val resolved = resolver.resolve(LiveDanmakuItem(text = "大表情"))
         assertNull(resolved.emoticon)
         assertTrue(resolved.inlineEmotes.isEmpty())
     }
@@ -60,10 +62,10 @@ class LiveMessageEmoteResourcePolicyTest {
     @Test
     fun serverResourcesWinAndMissingRoomResourcesDoNotLeak() {
         val serverEmote = LiveMessageEmote("https://example.test/server.png", 48, 24)
-        val resolved = resolveLiveMessageEmoteResources(LiveDanmakuItem(
+        val resolved = resolver.resolve(LiveDanmakuItem(
             text = "害怕", inlineEmotes = mapOf("害怕" to serverEmote),
-        ), packages)
+        ))
         assertEquals(serverEmote, resolved.inlineEmotes["害怕"])
-        assertTrue(resolveLiveMessageEmoteResources(LiveDanmakuItem(text = "害怕"), emptyList()).inlineEmotes.isEmpty())
+        assertTrue(LiveMessageEmoteResolver(emptyList()).resolve(LiveDanmakuItem(text = "害怕")).inlineEmotes.isEmpty())
     }
 }

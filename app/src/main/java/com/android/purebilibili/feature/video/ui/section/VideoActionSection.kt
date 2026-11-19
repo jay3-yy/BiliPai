@@ -13,7 +13,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -440,7 +440,8 @@ private fun TripleProgressActionButton(
                 if (disableInternalClick) {
                     Modifier
                 } else {
-                    Modifier.combinedClickable(
+                    Modifier.appCombinedClickable(
+                        longPressScene = com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS,
                         interactionSource = interactionSource,
                         indication = null,
                         onClick = feedbackClick,
@@ -763,7 +764,8 @@ internal fun BiliActionButton(
                 scaleX = pulseScale
                 scaleY = pulseScale
             }
-            .combinedClickable(
+            .appCombinedClickable(
+                longPressScene = com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS,
                 enabled = enabled,
                 interactionSource = interactionSource,
                 indication = null,

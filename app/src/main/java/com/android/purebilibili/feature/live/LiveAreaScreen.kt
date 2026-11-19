@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.ui.*
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
@@ -177,7 +178,12 @@ internal fun LiveAreaScreen(
                     AppText(error.orEmpty(), color = palette.secondaryText)
                     AppTextButton(onClick = { reload++ }) { AppText("重新加载") }
                 }
-                else -> AppHorizontalPager(state = pager, modifier = Modifier.weight(1f)) { page ->
+                else -> AppHorizontalPager(
+                    state = pager,
+                    userScrollEnabled = false,
+                    modifier = Modifier.weight(1f)
+                        .verticalPriorityHorizontalPagerSwipe(pager),
+                ) { page ->
                     areas.getOrNull(page)?.let { parent ->
                         LazyVerticalGrid(
                             columns = LiveRoomGridCells(100.dp),

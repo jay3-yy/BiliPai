@@ -29,7 +29,10 @@ import androidx.compose.material.icons.outlined.*
 fun CommentFraudResultDialog(
     status: CommentFraudStatus,
     onDismiss: () -> Unit,
-    onDeleteComment: (() -> Unit)? = null
+    onDeleteComment: (() -> Unit)? = null,
+    message: String? = null,
+    onAppeal: (() -> Unit)? = null,
+    dismissOnClickOutside: Boolean = true,
 ) {
     val (icon, title, description, color) = remember(status) {
         when (status) {
@@ -41,26 +44,26 @@ fun CommentFraudResultDialog(
             )
             CommentFraudStatus.SHADOW_BANNED -> FraudDialogInfo(
                 icon = Icons.Outlined.VisibilityOff,
-                title = "评论被 ShadowBan",
-                description = "您的评论仅自己可见，其他用户无法看到。这可能是因为评论内容触发了阿瓦隆风控系统。\n\n建议：删除此评论并修改内容后重新发送。",
+                title = "评论仅自己可见",
+                description = "发表账号可以查到这条评论，游客无法查到。",
                 color = FraudStatusColor.RED
             )
             CommentFraudStatus.DELETED -> FraudDialogInfo(
                 icon = Icons.Outlined.Delete,
-                title = "评论被系统秒删",
-                description = "您的评论已被系统自动删除，包括您自己也无法看到。评论内容可能包含严格敏感词。",
+                title = "评论已不可见",
+                description = "发表账号查询时，接口返回评论或所在楼层已失效。",
                 color = FraudStatusColor.RED
             )
             CommentFraudStatus.UNDER_REVIEW -> FraudDialogInfo(
                 icon = Icons.Outlined.Schedule,
                 title = "评论疑似审核中",
-                description = "您的评论可能正在等待审核，目前其他用户暂时无法看到。审核通过后将自动显示。",
+                description = "游客在最新评论列表里没有找到这条评论，但可以打开它的回复页。",
                 color = FraudStatusColor.ORANGE
             )
             CommentFraudStatus.INVISIBLE -> FraudDialogInfo(
                 icon = Icons.Outlined.Visibility,
                 title = "评论被前端隐藏",
-                description = "您的评论数据存在，但已被前端隐藏，其他用户看不到。这通常是因为被 UP 主拉黑或评论被标记为隐身。\n\n建议：删除此评论。",
+                description = "接口返回了这条评论，并标记为隐藏。",
                 color = FraudStatusColor.ORANGE
             )
             CommentFraudStatus.UNKNOWN -> FraudDialogInfo(
@@ -74,6 +77,7 @@ fun CommentFraudResultDialog(
 
     AppAlertDialog(
         onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = dismissOnClickOutside),
         icon = {
             AppIcon(
                 imageVector = icon,
@@ -96,33 +100,28 @@ fun CommentFraudResultDialog(
             )
         },
         text = {
-            AppText(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = AppContentColors.secondaryText()
-            )
-        },
-        confirmButton = {
-            AppTextButton(onClick = onDismiss) {
-                AppText("知道了")
-            }
-        },
-        dismissButton = {
-            // 如果被 ShadowBan，提供快捷删除操作
-            if (status == CommentFraudStatus.SHADOW_BANNED && onDeleteComment != null) {
-                AppTextButton(
-                    onClick = {
+            Column {
+                AppText(
+                    text = if (message.isNullOrBlank()) description else "$description\n\n评论内容：$message",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = AppContentColors.secondaryText(),
+                )
+                if (onDeleteComment != null) {
+                    AppTextButton(onClick = {
                         onDeleteComment()
                         onDismiss()
-                    },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = AppContentColors.error()
-                    )
-                ) {
-                    AppText("删除评论")
+                    }) {
+                        AppText("删除评论", color = AppContentColors.error())
+                    }
                 }
             }
-        }
+        },
+        confirmButton = {
+            AppTextButton(onClick = onDismiss) { AppText("知道了") }
+        },
+        dismissButton = onAppeal?.let { appeal ->
+            { AppTextButton(onClick = appeal) { AppText("申诉") } }
+        },
     )
 }
 

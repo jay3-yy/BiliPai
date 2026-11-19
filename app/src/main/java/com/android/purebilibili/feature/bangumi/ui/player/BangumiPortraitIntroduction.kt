@@ -28,26 +28,14 @@ internal fun BangumiPortraitIntroduction(
     detail: BangumiDetail,
     heading: @Composable () -> Unit,
     onShowDetails: () -> Unit,
+    onPreviewCover: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Box(Modifier.width(112.dp).aspectRatio(0.75f)) {
-            AsyncImage(
-                model = FormatUtils.fixImageUrl(detail.cover),
-                contentDescription = detail.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().clip(AppShapes.container(ContainerLevel.Card)),
-            )
-            detail.rating?.let { rating ->
-                AppStatusBadge(
-                    label = "评分 ${rating.score}", emphasized = true,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
-                )
-            }
-        }
+        BangumiSeasonPoster(detail = detail, onPreviewCover = onPreviewCover, modifier = Modifier.width(112.dp))
         Column(Modifier.weight(1f).clickable(onClick = onShowDetails), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             heading()
             detail.stat?.let { stat ->
@@ -82,7 +70,34 @@ internal fun BangumiPortraitIntroduction(
 }
 
 @Composable
-internal fun BangumiPortraitSections(
+internal fun BangumiSeasonPoster(
+    detail: BangumiDetail,
+    onPreviewCover: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .aspectRatio(0.75f)
+            .clip(AppShapes.container(ContainerLevel.Card))
+            .clickable(enabled = detail.cover.isNotBlank(), onClickLabel = "预览封面", onClick = onPreviewCover),
+    ) {
+        AsyncImage(
+            model = FormatUtils.fixImageUrl(detail.cover),
+            contentDescription = detail.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize(),
+        )
+        detail.rating?.let { rating ->
+            AppStatusBadge(
+                label = "评分 ${rating.score}", emphasized = true,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+internal fun BangumiSupplementarySections(
     detail: BangumiDetail,
     currentEpisodeId: Long,
     onEpisodeClick: (BangumiEpisode) -> Unit,
@@ -90,20 +105,34 @@ internal fun BangumiPortraitSections(
 ) {
     val sections = detail.section.orEmpty().filter { it.episodes.orEmpty().isNotEmpty() }
     if (sections.isEmpty()) return
-    var selectedSection by rememberSaveable(detail.seasonId) { mutableIntStateOf(0) }
-    val selectedIndex = selectedSection.coerceIn(sections.indices)
-    LaunchedEffect(currentEpisodeId) {
-        val index = sections.indexOfFirst { it.episodes.orEmpty().any { episode -> episode.id == currentEpisodeId } }
-        if (index >= 0) selectedSection = index
+    val playingSection = sections.indexOfFirst { section ->
+        section.episodes.orEmpty().any { it.id == currentEpisodeId }
     }
+    var selectedSection by rememberSaveable(detail.seasonId) {
+        mutableIntStateOf(playingSection.coerceAtLeast(0))
+    }
+    LaunchedEffect(playingSection) {
+        if (playingSection >= 0) selectedSection = playingSection
+    }
+    val selectedIndex = selectedSection.coerceIn(sections.indices)
     val selectedEpisodes = sections[selectedIndex].episodes.orEmpty()
-    val episodeListState = key(selectedIndex) { rememberLazyListState() }
+    val sectionListState = rememberLazyListState(initialFirstVisibleItemIndex = selectedIndex)
+    val episodeListState = key(detail.seasonId, selectedIndex) {
+        rememberLazyListState(initialFirstVisibleItemIndex = selectedEpisodes.indexOfFirst { it.id == currentEpisodeId }.coerceAtLeast(0))
+    }
+    LaunchedEffect(selectedIndex) {
+        sectionListState.scrollToItem(selectedIndex)
+    }
     LaunchedEffect(currentEpisodeId, selectedIndex) {
         val index = selectedEpisodes.indexOfFirst { it.id == currentEpisodeId }
         episodeListState.scrollToItem(index.coerceAtLeast(0))
     }
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyRow(
+            state = sectionListState,
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             items(sections.size) { index ->
                 AppTextButton(onClick = { selectedSection = index }) {
                     AppText(
@@ -120,7 +149,12 @@ internal fun BangumiPortraitSections(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(selectedEpisodes, key = { it.id }) { episode ->
-                Column(Modifier.width(144.dp).clickable { onEpisodeClick(episode) }) {
+                val isPlaying = episode.id == currentEpisodeId
+                Column(
+                    Modifier
+                        .width(144.dp)
+                        .clickable(enabled = !isPlaying) { onEpisodeClick(episode) },
+                ) {
                     Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
                         AsyncImage(
                             model = FormatUtils.fixImageUrl(episode.cover), contentDescription = null,
@@ -145,6 +179,7 @@ internal fun BangumiPortraitSections(
                         listOf(episode.title, episode.longTitle).filter { it.isNotBlank() }.joinToString(" "),
                         modifier = Modifier.padding(top = 5.dp),
                         style = MaterialTheme.typography.bodySmall,
+                        color = if (isPlaying) AppContentColors.accent() else AppContentColors.primaryText(),
                         maxLines = 2, overflow = TextOverflow.Ellipsis,
                     )
                 }

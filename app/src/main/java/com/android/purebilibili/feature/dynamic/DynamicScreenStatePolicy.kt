@@ -281,8 +281,12 @@ internal fun shouldLoadMoreDynamicFeed(
     hasMore: Boolean,
     prefetchDistance: Int = 3,
     error: String? = null,
+    isSelectedUserFeedEmpty: Boolean = false,
 ): Boolean {
-    if (!allowAutomaticLoadMore || isLoading || !hasMore || totalItemsCount <= 0 || error != null) return false
+    if (!allowAutomaticLoadMore || isLoading || !hasMore || error != null) return false
+    // A category without results must advance even while skeleton items fill the viewport.
+    if (isSelectedUserFeedEmpty) return true
+    if (totalItemsCount <= 0) return false
     val visibleIndex = furthestVisibleItemIndex ?: return false
     return visibleIndex >= totalItemsCount - prefetchDistance.coerceAtLeast(1)
 }

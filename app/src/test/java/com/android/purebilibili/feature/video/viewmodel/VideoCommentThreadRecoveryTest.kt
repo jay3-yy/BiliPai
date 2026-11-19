@@ -68,7 +68,7 @@ class VideoCommentThreadRecoveryTest {
         coEvery {
             CommentRepository.getDialogCommentsForSubject(any(), any(), any(), any(), any(), any())
         } returns Result.success(ReplyData(cursor = ReplyCursor(isEnd = true)))
-        coEvery { CommentRepository.checkCommentStatus(any(), any(), any(), any(), any(), any()) } returns
+        coEvery { CommentRepository.checkCommentStatus(any(), any(), any(), any(), any()) } returns
             Result.failure(IllegalStateException("Detection disabled in this fixture"))
         model = VideoCommentViewModel()
         store.put("comments", model)
@@ -93,7 +93,7 @@ class VideoCommentThreadRecoveryTest {
         coEvery { CommentRepository.addCommentForSubject(any(), any(), any(), any(), any(), any(), any()) } returns
             Result.success(ReplyItem(rpid = 70L, content = ReplyContent(message = "sent reply")))
         model.replyTo(target)
-        model.sendComment("sent reply", fraudDetectionEnabled = false)
+        model.sendComment("sent reply")
         runCurrent()
         val state = model.subReplyState.value
         assertNull(state.rootReply)

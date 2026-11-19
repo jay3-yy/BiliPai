@@ -213,7 +213,7 @@ internal fun PerformanceHistoryContent(
         item(key = "comparison", contentType = "comparison") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppIcon(ImageVector.vectorResource(R.drawable.ms_compare_arrows_24), null, Modifier.size(24.dp))
+                    AppIcon(ImageVector.vectorResource(settingsIconResource(R.drawable.ph_arrows_horizontal_24, R.drawable.ms_compare_arrows_24)), null, Modifier.size(24.dp))
                     AppText("记录对比", style = MaterialTheme.typography.titleMedium)
                 }
                 PerformanceHistoryPicker("基准记录", selection.baselineId.orEmpty(),

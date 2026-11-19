@@ -861,10 +861,11 @@ internal fun shouldContinueSpaceBangumiPagination(
     incomingItemCount: Int,
     responsePage: Int,
     pageSize: Int,
-    total: Int,
+    total: Int?,
 ): Boolean {
     if (incomingItemCount <= 0 || mergedItemCount <= previousItemCount) return false
-    if (mergedItemCount >= total.coerceAtLeast(0)) return false
+    if (total == null) return incomingItemCount >= pageSize
+    if (mergedItemCount >= total) return false
     return responsePage.coerceAtLeast(1) * pageSize.coerceAtLeast(1) < total
 }
 

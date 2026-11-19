@@ -30,6 +30,7 @@ import com.android.purebilibili.data.model.response.DynamicModules
 import com.android.purebilibili.feature.dynamic.DynamicList
 import com.android.purebilibili.feature.dynamic.DynamicUiState
 import com.android.purebilibili.feature.dynamic.rememberDynamicUserGridState
+import com.android.purebilibili.feature.dynamic.resolveDynamicPagePresentation
 import com.android.purebilibili.feature.dynamic.components.DynamicCardActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardNavigationActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardPresentation
@@ -45,6 +46,47 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class DynamicAuthorSwitchUiRegressionTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun authorArticlesKeepTheLoadingPlaceholderBetweenPages() {
+        val state = mutableStateOf(DynamicUiState(userIsLoading = true))
+        compose.setContent {
+            val context = LocalContext.current
+            val loader = remember(context) { ImageLoader.Builder(context).build() }
+            val current = state.value
+            val presentation = resolveDynamicPagePresentation(current, logicalTab = 3, selectedUserId = 11L)
+            ProvideAppThemeConfig(AppThemeConfig()) {
+                MaterialTheme {
+                    DynamicList(
+                        state = current, activeLoading = presentation.isLoading, activeError = presentation.error,
+                        onRetry = {}, hasMore = presentation.hasMore, isSelectedUserTabActive = presentation.isSelectedUserFeed,
+                        selectedUserId = 11L, selectedUserName = "作者", logicalTab = 3,
+                        onOpenSelectedUser = {}, filteredItems = presentation.items, listState = rememberDynamicUserGridState(11L),
+                        statusBarHeight = 0.dp, topPaddingExtra = 0.dp, bottomPadding = 0.dp,
+                        oldContentDividerIndex = -1, oldContentDividerLabel = "",
+                        onVideoClick = {}, onBangumiClick = { _, _ -> }, onArticleClick = null,
+                        onDynamicDetailClick = {}, onUserClick = {}, onTopicClick = {},
+                        onLiveClick = { _, _, _ -> }, onMusicClick = null, onCollectionClick = null,
+                        onCourseClick = null, onOpenLink = null, onSaveDynamicClick = null,
+                        onShareToMessageClick = null, onCheckDynamicClick = null,
+                        onReserveClick = { _, _ -> }, onLoginClick = {}, gifImageLoader = loader,
+                    )
+                }
+            }
+        }
+        val loading = compose.onNodeWithContentDescription("正在加载该 UP 的动态")
+        val empty = compose.onNodeWithText("该 UP 暂无动态")
+        loading.assertIsDisplayed()
+        compose.runOnIdle { state.value = state.value.copy(userIsLoading = false, userLoadedPageCount = 1) }
+        loading.assertIsDisplayed()
+        empty.assertDoesNotExist()
+        compose.runOnIdle { state.value = state.value.copy(userIsLoading = true) }
+        loading.assertIsDisplayed()
+        compose.runOnIdle { state.value = state.value.copy(userIsLoading = false, userError = "请求超时") }
+        loading.assertDoesNotExist()
+        empty.assertDoesNotExist()
+        compose.runOnIdle { state.value = state.value.copy(userError = null, hasUserMore = false) }
+        empty.assertIsDisplayed()
+    }
 
     @Test fun forwardedHeaderAndNestedAuthorNavigateToTheirOwnSpacesInFeedAndDetail() {
         val detail = mutableStateOf(false)

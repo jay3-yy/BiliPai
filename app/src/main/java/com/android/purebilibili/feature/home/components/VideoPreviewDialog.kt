@@ -16,6 +16,8 @@ import com.android.purebilibili.core.ui.MediaContrastPalette
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppText
@@ -83,6 +85,8 @@ fun VideoPreviewDialog(
     onWatchLater: () -> Unit,
     onShare: () -> Unit,
     onSaveCover: (() -> Unit)? = null,
+    onDownloadVideo: (() -> Unit)? = null,
+    onStartBatchDownload: (() -> Unit)? = null,
     onPlay: () -> Unit, // Navigate to Full Screen
     onNotInterested: (() -> Unit)? = null,
     isNotInterestedDissolving: Boolean = false,
@@ -103,6 +107,8 @@ fun VideoPreviewDialog(
     val shareIcon = rememberAppShareIcon()
     val blockCreatorIcon = rememberAppVisibilityOffIcon()
     val watchLaterIcon = rememberAppWatchLaterIcon()
+    val downloadIcon = com.android.purebilibili.core.ui.rememberAppDownloadIcon()
+    val batchDownloadIcon = com.android.purebilibili.core.ui.rememberAppCollectionIcon()
     val allowBackgroundBlur = backgroundBlurEnabled &&
         shouldAllowRenderEffectBackedHazeEffect(android.os.Build.VERSION.SDK_INT) &&
         !isLowBlurBudgetForced()
@@ -197,7 +203,7 @@ fun VideoPreviewDialog(
                     color = AppSurfaceTokens.cardContainer(),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column {
+                    Column(Modifier.verticalScroll(rememberScrollState())) {
                             // 1. Media Area (Cover or Player)
                             Box(
                                 modifier = Modifier
@@ -300,6 +306,21 @@ fun VideoPreviewDialog(
                                     onDismiss()
                                 }
                             )
+
+                            if (onDownloadVideo != null) {
+                                MenuDivider()
+                                PreviewMenuItem(text = "下载此视频", icon = downloadIcon, onClick = {
+                                    onDismiss()
+                                    onDownloadVideo()
+                                })
+                            }
+                            if (onStartBatchDownload != null) {
+                                MenuDivider()
+                                PreviewMenuItem(text = "批量下载", icon = batchDownloadIcon, onClick = {
+                                    onDismiss()
+                                    onStartBatchDownload()
+                                })
+                            }
 
                             if (onSaveCover != null && shouldEnableSaveCoverAction(video.pic)) {
                                 MenuDivider()

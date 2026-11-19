@@ -9,13 +9,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
+import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.util.LocalWindowSizeClass
+import com.android.purebilibili.core.util.responsiveContentWidth
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -29,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -36,6 +45,8 @@ import com.android.purebilibili.feature.home.components.BiliPaiImmersiveTopBar
 import com.android.purebilibili.feature.home.components.shouldUseBiliPaiProgressiveTopBlur
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
@@ -57,7 +68,8 @@ import com.android.purebilibili.core.ui.LocalSetBottomBarVisible
 import com.android.purebilibili.core.ui.appTopBarNestedScroll
 import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 import com.android.purebilibili.core.ui.rememberAppTopBarCollapseBehavior
-import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.R
+import com.android.purebilibili.feature.settings.rememberSettingsVector
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppPreferenceIconTreatment
 import com.android.purebilibili.core.ui.components.AppPreferenceGroupPresentation
@@ -163,15 +175,26 @@ internal fun SettingsPageScaffold(
     }
     val headerBlurEnabled = topBarBlurEnabled ?: appThemeConfig.headerBlurEnabled
     val lowBlurBudget = isLowBlurBudgetForced()
-    val nonGlassMiuix = isMiuixNonGlassEnabled()
-    val collapseBehavior = if (
-        nonGlassMiuix &&
-        topBarStyle == AppTopBarStyle.LARGE &&
-        scrollHost == SettingsPageScrollHost.LazyColumn
-    ) {
+    val nativeLargeTitle = isMiuixNonGlassEnabled() && topBarStyle == AppTopBarStyle.LARGE
+    val collapseBehavior = if (nativeLargeTitle && scrollHost == SettingsPageScrollHost.LazyColumn) {
         rememberAppTopBarCollapseBehavior()
     } else {
         null
+    }
+    val isExpandedScreen = LocalWindowSizeClass.current.isExpandedScreen
+    val contentMaxWidth = 760.dp
+    val horizontalSafeArea = if (nativeLargeTitle) {
+        Modifier.windowInsetsPadding(
+            WindowInsets.displayCutout.union(WindowInsets.navigationBars).only(WindowInsetsSides.Horizontal)
+        )
+    } else Modifier
+    val nativeTitleWidth = if (isExpandedScreen) {
+        Modifier.responsiveContentWidth(maxWidth = contentMaxWidth)
+    } else Modifier.fillMaxWidth()
+    val settingsContentWidth = when {
+        nativeLargeTitle -> horizontalSafeArea.then(nativeTitleWidth)
+        isExpandedScreen -> Modifier.widthIn(max = contentMaxWidth).fillMaxWidth()
+        else -> Modifier.fillMaxWidth()
     }
     val progressiveBlurEnabled = shouldUseBiliPaiProgressiveTopBlur(
         enabled = appThemeConfig.progressiveTopBlurEnabled && !headerBlurEnabled,
@@ -194,6 +217,13 @@ internal fun SettingsPageScaffold(
         AppUiStyle.MIUIX -> AppSurfaceTokens.chromeBackground()
         AppUiStyle.MATERIAL3 -> AppSurfaceTokens.groupedListContainer()
     }
+    val headerMaterial = if (hazeState != null) {
+        Modifier
+            .unifiedBlur(hazeState = hazeState, surfaceType = BlurSurfaceType.HEADER)
+            .background(if (pageBackgroundModifier == null) {
+                pageContainerColor.copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
+            } else Color.Transparent)
+    } else Modifier
 
     CompositionLocalProvider(
         LocalAppPreferenceIconTreatment provides AppPreferenceIconTreatment.FILLED,
@@ -213,6 +243,7 @@ internal fun SettingsPageScaffold(
             topBar = {
                 BiliPaiImmersiveTopBar(
                     backdrop = backdrop,
+                    modifier = if (nativeLargeTitle) headerMaterial else Modifier,
                     enabled = progressiveBlurEnabled,
                     headerBlurActive = hazeReady,
                     surfaceColor = if (pageBackgroundModifier == null) pageContainerColor else Color.Transparent,
@@ -221,18 +252,10 @@ internal fun SettingsPageScaffold(
                 ) {
                     AppTopBar(
                         title = title,
-                        modifier = if (hazeState != null) {
-                            Modifier
-                                .unifiedBlur(
-                                    hazeState = hazeState,
-                                    surfaceType = BlurSurfaceType.HEADER,
-                                )
-                                .background(
-                                    if (pageBackgroundModifier == null) {
-                                        pageContainerColor.copy(alpha = AppSurfaceTokens.FrostedScrimAlpha)
-                                    } else Color.Transparent
-                                )
-                        } else Modifier,
+                        // 大屏标题和列表共用宽度，模糊与渐隐仍覆盖整个顶栏。
+                        modifier = if (nativeLargeTitle) {
+                            settingsContentWidth
+                        } else headerMaterial,
                         navigationIcon = {
                             // 设置页自行提供导航边距；不修改共用顶栏默认值，玻璃与原生路径共用。
                             Box(modifier = Modifier.padding(start = navigationStartInset)) {
@@ -242,7 +265,7 @@ internal fun SettingsPageScaffold(
                                 ) {
                                     AppIconButton(onClick = onBack) {
                                         AppIcon(
-                                            imageVector = rememberAppBackIcon(),
+                                            imageVector = rememberSettingsVector(R.drawable.ph_arrow_left_24) { rememberAppBackIcon() },
                                             contentDescription = backContentDescription,
                                         )
                                     }
@@ -285,9 +308,6 @@ internal fun SettingsPageScaffold(
                     else pageBackgroundModifier
                 )
 
-            val windowSizeClass = LocalWindowSizeClass.current
-            val isExpandedScreen = windowSizeClass.isExpandedScreen
-
             // 液态玻璃开启后的单选弹窗宿主：玻璃卡片与页面内容同窗渲染（Backdrop
             // 采样不跨平台窗口），关闭玻璃或设备不支持时不装配，条目回落原生弹窗。
             val glassPopupAvailable = appThemeConfig.popupGlassEnabled &&
@@ -301,6 +321,15 @@ internal fun SettingsPageScaffold(
             ) {
                 when (scrollHost) {
                     SettingsPageScrollHost.LazyColumn -> {
+                        val listPadding = remember(padding, resolvedBottomContentPadding) {
+                            object : PaddingValues {
+                                override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = 0.dp
+                                override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = 0.dp
+                                override fun calculateTopPadding(): Dp = padding.calculateTopPadding()
+                                override fun calculateBottomPadding(): Dp =
+                                    maxOf(resolvedBottomContentPadding, padding.calculateBottomPadding())
+                            }
+                        }
                         Box(
                             modifier = scrollModifier,
                             contentAlignment = Alignment.TopCenter
@@ -309,17 +338,8 @@ internal fun SettingsPageScaffold(
                                 state = listState,
                                 modifier = Modifier
                                     .fillMaxHeight()
-                                    .then(
-                                        if (isExpandedScreen) {
-                                            Modifier.widthIn(max = 760.dp).fillMaxWidth()
-                                        } else {
-                                            Modifier.fillMaxWidth()
-                                        }
-                                    ),
-                                contentPadding = PaddingValues(
-                                    top = padding.calculateTopPadding(),
-                                    bottom = maxOf(resolvedBottomContentPadding, padding.calculateBottomPadding()),
-                                ),
+                                    .then(settingsContentWidth),
+                                contentPadding = listPadding,
                             ) {
                                 if (header != null) {
                                     item {
@@ -353,13 +373,7 @@ internal fun SettingsPageScaffold(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxHeight()
-                                        .then(
-                                            if (isExpandedScreen) {
-                                                Modifier.widthIn(max = 760.dp).fillMaxWidth()
-                                            } else {
-                                                Modifier.fillMaxWidth()
-                                            }
-                                        )
+                                        .then(settingsContentWidth)
                                 ) {
                                     if (header != null) {
                                         Box(modifier = Modifier.padding(top = chromeTop)) {

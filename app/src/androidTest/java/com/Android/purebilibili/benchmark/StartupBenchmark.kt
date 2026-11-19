@@ -1,10 +1,8 @@
 package com.android.purebilibili.benchmark
 
-import android.content.Context
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.android.purebilibili.feature.onboarding.USER_AGREEMENT_ACK_KEY
-import com.android.purebilibili.feature.settings.RELEASE_DISCLAIMER_ACK_KEY
+import com.android.purebilibili.feature.agreement.UserAgreementStore
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,12 +20,7 @@ class StartupBenchmark {
 
     private fun prepareHomeEntry() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val prefs = context.getSharedPreferences("app_welcome", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean(USER_AGREEMENT_ACK_KEY, true)
-            .putBoolean("first_launch_shown", true)
-            .putBoolean(RELEASE_DISCLAIMER_ACK_KEY, true)
-            .commit()
+        UserAgreementStore.accept(context)
     }
 
     @Test

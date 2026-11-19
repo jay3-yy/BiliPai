@@ -126,8 +126,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.android.purebilibili.data.model.response.BgmInfo
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.repository.VideoRepository
-import com.android.purebilibili.data.repository.resolveCommentFraudLightMessage
-import com.android.purebilibili.data.repository.shouldShowCommentFraudResultDialog
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.Player
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -692,6 +690,7 @@ internal fun VideoDetailScreenStateHolder(
             dismissPartResumeNotice = viewModel::dismissPartResumeNotice,
             openDownloadDialog = viewModel::openDownloadDialog,
             showDanmakuSendDialog = viewModel::showDanmakuSendDialog,
+            sendSameDanmaku = viewModel::sendSameDanmaku,
             skipSponsorSegment = viewModel::skipCurrentSponsorSegment,
             dismissSponsorSkipButton = viewModel::dismissSponsorSkipButton,
             voteSponsorSegment = viewModel::voteCurrentSponsorSegment,
@@ -1326,12 +1325,6 @@ internal fun VideoDetailScreenStateHolder(
             initialValue = com.android.purebilibili.core.store.SettingsManager.getCommentDefaultSortModeSync(context),
             lifecycle = lifecycleOwner.lifecycle
         )
-    val commentFraudDetectionEnabled by remember(context) {
-        com.android.purebilibili.core.store.SettingsManager.getCommentFraudDetectionEnabled(context)
-    }.collectAsStateWithLifecycle(
-            initialValue = true,
-            lifecycle = lifecycleOwner.lifecycle
-        )
     val commentMemberDecorationsEnabled by remember(context) {
         com.android.purebilibili.core.store.SettingsManager.getCommentMemberDecorationsEnabled(context)
     }.collectAsStateWithLifecycle(
@@ -1363,11 +1356,9 @@ internal fun VideoDetailScreenStateHolder(
         CommentSortMode.fromApiMode(commentDefaultSortMode)
     }
     VideoDetailCommentFraudOverlayAdapter(
-        context = context,
         playbackViewModel = viewModel,
         commentViewModel = commentViewModel,
         aid = detailContentState?.info?.aid,
-        fraudDetectionEnabled = commentFraudDetectionEnabled,
     )
     val sortPreferenceScope = rememberCoroutineScope()
     val danmakuEnabledForDetail by remember(context) {
@@ -1538,7 +1529,10 @@ internal fun VideoDetailScreenStateHolder(
             ),
         )
     }
-    val canShowLandscapeComments = isFullscreenMode && isLandscape && !isPipMode && !isPortraitFullscreen
+    val landscapeCommentContent = (uiState as? VideoPlaybackUiState.Success)?.takeIf {
+        isFullscreenMode && isLandscape && !isPipMode && !isPortraitFullscreen
+    }
+    val canShowLandscapeComments = landscapeCommentContent != null
     LaunchedEffect(canShowLandscapeComments) {
         if (!canShowLandscapeComments) landscapeCommentPanelVisible = false
     }
@@ -3575,7 +3569,12 @@ internal fun VideoDetailScreenStateHolder(
             displayContext = displayContext,
             portraitExperienceEnabled = portraitExperienceEnabled,
             onEnterPortraitFullscreen = { enterPortraitFullscreen() },
-            onUserRequestedFullscreenChange = { requested -> userRequestedFullscreen = requested },
+            onUserRequestedFullscreenChange = { requested ->
+                userRequestedFullscreen = requested
+                if (!isOrientationDrivenFullscreen) {
+                    latestOnImmersivePlaybackChanged(requested || isPortraitFullscreen || isPipMode)
+                }
+            },
             onManualPortraitHoldActiveChange = { active -> manualPortraitHoldActive = active }
         )
     }
@@ -3616,7 +3615,7 @@ internal fun VideoDetailScreenStateHolder(
         directPortraitEntry = directPortraitEntryFromRoute,
         continuousPlayerPhase = continuousPlayerPhase.takeIf { continuousFullscreenTransitionEnabled },
         landscapeBackShowsComments = landscapeBackShowsComments,
-        canShowLandscapeComments = canShowLandscapeComments && uiState is VideoPlaybackUiState.Success,
+        canShowLandscapeComments = canShowLandscapeComments,
         landscapeCommentsVisible = landscapeCommentPanelVisible,
     )
     fun consumeLocalBack(): Boolean {
@@ -3785,15 +3784,17 @@ internal fun VideoDetailScreenStateHolder(
     val continuousPlayerUnitState = remember { mutableFloatStateOf(1f) }
     // Entry lifetime, not BVID lifetime: once attached, never defer the player again.
     val continuousPlayerHostMounted = remember { mutableStateOf(false) }
+    val deferInlinePlayerHost = deferVideoDetailEntryLoad && !useTabletLayout &&
+        (!transitionEnabled || shellSharedBoundsLikely)
+    val playerHostReady = entryPlaybackReady || uiState is VideoPlaybackUiState.Error
     var collapsedPlayerMoreRequested by remember(currentBvid) { mutableStateOf(false) }
     val collapsedPlayerMoreSource = rememberAppGlassMenuSource()
     val continuousPlayerRenderer = rememberUpdatedState<@Composable (ContinuousPlayerHostLayout) -> Unit> { layout ->
         val mountPlayerHost = shouldMountVideoDetailPlayerHost(
             alreadyMounted = continuousPlayerHostMounted.value,
-            // Source identity is available before the first navigation scope is bound.
-            deferEntryLoad = deferVideoDetailEntryLoad && shellSharedBoundsLikely &&
-                !useTabletLayout,
-            entryPlaybackReady = entryPlaybackReady || uiState is VideoPlaybackUiState.Error,
+            // 普通导航也在已有的播放阶段挂载重控件。分栏、复用播放器和全屏走原有路径。
+            deferEntryLoad = deferInlinePlayerHost,
+            entryPlaybackReady = playerHostReady,
             hasResidentCover = hasResidentReturnCover,
             preserveLivePlayer = reuseFromMiniPlayerAtEntry || hasRenderedFirstFrameForReturn ||
                 layout.isFullscreen || isPipMode,
@@ -3930,9 +3931,9 @@ internal fun VideoDetailScreenStateHolder(
                 onPageSelect = playbackActions.switchPage,
                 hasExternalPlaylist = shouldShowExternalPlaylistQueueBar,
                 onExternalPlaylistClick = { showExternalPlaylistQueueSheet = true },
-                onLandscapeCommentClick = {
+                onLandscapeCommentClick = if (canShowLandscapeComments) ({
                     landscapeCommentPanelVisible = !landscapeCommentPanelVisible
-                },
+                }) else null,
                 landscapeCommentPanelVisible = canShowLandscapeComments && landscapeCommentPanelVisible,
                 landscapeCommentPanelOnLeft = landscapeCommentPanelOnLeft,
                 landscapeCommentCloseProgressProvider = { landscapeCommentCloseProgress.floatValue },
@@ -4011,8 +4012,8 @@ internal fun VideoDetailScreenStateHolder(
                         )
                     }
                 }
-                val success = uiState as? VideoPlaybackUiState.Success
-                if (canShowLandscapeComments && landscapeCommentPanelVisible && success != null) {
+                val success = landscapeCommentContent
+                if (landscapeCommentPanelVisible && success != null) {
                     VideoDetailCommentStateScope(commentStateHandle, subReplyStateHandle) { commentState, subReplyState ->
                         LandscapeCommentPanel(
                             info = success.info, listState = landscapeCommentListState,
@@ -5026,6 +5027,11 @@ internal fun VideoDetailScreenStateHolder(
                                 videoCardDepthBackgroundState.isReturnGestureInProgressProvider() ||
                                     videoCardDepthBackgroundState
                                         .isGestureRestoreInProgressProvider()
+                            // 普通入场只在播放器尚未挂载时用常驻封面填充已有视口。
+                            // 挂载后立即由播放器恢复原有封面、起播按钮和加载反馈。
+                            val holdingPlainEntryCover = !transitionEnabled && deferInlinePlayerHost &&
+                                !continuousPlayerHostMounted.value && !playerHostReady &&
+                                !isFullscreenMode && !isPipMode
                             resolveVideoDetailReturnMediaFrame(
                                 transitionProgress = resolveVideoDetailReturnVisualProgress(
                                     animatedVisibilityProgress = detailTransitionProgress.value,
@@ -5039,7 +5045,7 @@ internal fun VideoDetailScreenStateHolder(
                                 progressiveResidentCover = progressiveResidentCoverReturn,
                                 isReturnGestureInProgress = returnGestureInProgress,
                                 showResidentCoverUntilFirstFrame =
-                                    (entryOwnsMiuixCardTransition ||
+                                    (holdingPlainEntryCover || entryOwnsMiuixCardTransition ||
                                         (deferVideoDetailEntryLoad && shellSharedBoundsLikely)) &&
                                         currentBvid == bvid &&
                                         !hasRenderedFirstFrameForReturn,
@@ -5792,6 +5798,7 @@ internal fun VideoDetailScreenStateHolder(
         val commentState by commentStateHandle
         VideoDetailPortraitOverlayAdapter(
             uiState = uiState,
+            onOpenBilibiliLink = openCommentUrl,
             portraitExperienceEnabled = portraitExperienceEnabled,
             isPortraitFullscreen = isPortraitFullscreen,
             // 竖屏全屏持有时进入系统小窗：保持 pager 挂载以承接播放面，由 pager 隐藏装饰层。
@@ -5799,6 +5806,8 @@ internal fun VideoDetailScreenStateHolder(
             useOfficialInlinePortraitDetailExperience = useOfficialInlinePortraitDetailExperience,
             isLandscape = isLandscape,
             shouldAnimatePortraitPager = shouldAnimatePortraitPager,
+            // 卡片变形先完成落位，再在已稳定的全屏边界挂载竖屏播放层。
+            entryTransitionFinished = entryTransitionFinished,
             motionSpec = portraitPagerMotionSpec,
             initialBvidOverride = pendingMainReloadBvidAfterPortrait,
             initialStartPositionMs = portraitSyncSnapshotPositionMs,

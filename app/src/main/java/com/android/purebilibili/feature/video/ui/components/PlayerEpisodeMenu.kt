@@ -11,7 +11,7 @@ import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.components.AppTabRowRole
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -394,7 +394,7 @@ internal fun PlayerPanelMediaRow(title: String, cover: String, durationSeconds: 
     Row(Modifier.fillMaxWidth()
         .then(if (expandTitle) Modifier.heightIn(min = 110.dp) else Modifier.height(110.dp))
         .semantics(mergeDescendants = true) { this.selected = selected }
-        .combinedClickable(onClick = onClick,
+        .appCombinedClickable(onClick = onClick,
             onLongClick = if (cover.isNotBlank() && onCoverLongPress != null) ({ onCoverLongPress(cover) }) else null)
         .padding(horizontal = 12.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {

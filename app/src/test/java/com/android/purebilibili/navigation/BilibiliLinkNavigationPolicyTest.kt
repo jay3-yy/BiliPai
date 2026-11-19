@@ -34,12 +34,18 @@ class BilibiliLinkNavigationPolicyTest {
     }
 
     @Test
-    fun `article link resolves to native target`() {
-        val action = resolveBilibiliLinkNavigationAction("https://www.bilibili.com/read/cv12345")
-
-        val native = assertIs<BilibiliLinkNavigationAction.NativeTarget>(action)
-        val target = assertIs<BilibiliNavigationTarget.Article>(native.target)
-        assertEquals(12345L, target.articleId)
+    fun `article identifiers and links resolve to the same native target`() {
+        val links = listOf(
+            "cv12345",
+            "https://www.bilibili.com/read/cv12345",
+            "https://www.bilibili.com/h5/note-app/view?cvid=12345",
+        )
+        links.forEach { link ->
+            val native = assertIs<BilibiliLinkNavigationAction.NativeTarget>(
+                resolveBilibiliLinkNavigationAction(link)
+            )
+            assertEquals(BilibiliNavigationTarget.Article(12345L), native.target)
+        }
     }
 
     @Test

@@ -7,42 +7,6 @@ import org.junit.Assert.assertEquals
 class CommentFraudDetectionPolicyTest {
 
     @Test
-    fun `sub reply scan follows known total and stops on final page`() {
-        assertEquals(true, shouldContinueSubReplyFraudScan(1, 20, 20, 41, 50))
-        assertEquals(false, shouldContinueSubReplyFraudScan(3, 20, 1, 41, 50))
-    }
-
-    @Test
-    fun `sub reply scan fallback remains bounded when total is absent`() {
-        assertEquals(true, shouldContinueSubReplyFraudScan(1, 20, 20, 0, 50))
-        assertEquals(false, shouldContinueSubReplyFraudScan(50, 20, 20, 0, 50))
-        assertEquals(false, shouldContinueSubReplyFraudScan(1, 20, 0, 0, 50))
-    }
-
-    @Test
-    fun `fraud detection should start only when enabled and reply id is valid`() {
-        assertEquals(true, shouldStartCommentFraudDetection(enabled = true, rpid = 123L))
-        assertEquals(false, shouldStartCommentFraudDetection(enabled = false, rpid = 123L))
-        assertEquals(false, shouldStartCommentFraudDetection(enabled = true, rpid = 0L))
-    }
-
-    @Test
-    fun `normal fraud result uses light message instead of dialog`() {
-        assertEquals(false, shouldShowCommentFraudResultDialog(CommentFraudStatus.NORMAL))
-        assertEquals("评论已正常显示", resolveCommentFraudLightMessage(CommentFraudStatus.NORMAL))
-    }
-
-    @Test
-    fun `abnormal fraud results use dialog instead of light message`() {
-        assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.SHADOW_BANNED))
-        assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.DELETED))
-        assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.UNDER_REVIEW))
-        assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.INVISIBLE))
-        assertEquals(true, shouldShowCommentFraudResultDialog(CommentFraudStatus.UNKNOWN))
-        assertEquals(null, resolveCommentFraudLightMessage(CommentFraudStatus.SHADOW_BANNED))
-    }
-
-    @Test
     fun `reply status should be normal when guest probe found`() {
         val status = resolveReplyFraudStatus(
             guestProbe = CommentPresenceProbe(requestSucceeded = true, found = true),
@@ -197,4 +161,16 @@ class CommentFraudDetectionPolicyTest {
         )
         assertEquals(CommentFraudStatus.DELETED, status)
     }
+    @Test
+    fun `manual check accepts a public reply page after the root leaves the latest list`() {
+        val status = resolveRootFraudStatus(
+            guestSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = false),
+            authSeekProbe = CommentPresenceProbe(requestSucceeded = true, found = true),
+            guestReplyPageVisible = true,
+            confirmedNotFoundAfterRetry = false,
+            manual = true,
+        )
+        assertEquals(CommentFraudStatus.NORMAL, status)
+    }
+
 }

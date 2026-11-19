@@ -3,6 +3,7 @@ package com.android.purebilibili.feature.audio.screen
 import com.android.purebilibili.navigation.tabSelectedPage
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import androidx.compose.foundation.clickable
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.appActionClickable
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -912,7 +913,9 @@ internal fun MusicPlayerContent(
                     )
                     HorizontalPager(
                         state = pagerState,
+                        userScrollEnabled = false,
                         modifier = Modifier.fillMaxSize()
+                            .verticalPriorityHorizontalPagerSwipe(pagerState),
                     ) { page ->
                         val childPageVisible by remember(pagerState, page) {
                             derivedStateOf {

@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings.screen
 
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppContentColors
 
 import android.content.ClipData
@@ -35,6 +36,7 @@ import com.android.purebilibili.core.ui.animation.entrance
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.data.repository.CommentFraudRepository
+import com.android.purebilibili.feature.settings.rememberSettingsVector
 import com.android.purebilibili.feature.settings.ui.SettingsPageScaffold
 import com.android.purebilibili.feature.settings.ui.settingsScrollContentPadding
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -149,16 +151,16 @@ fun CommentFraudHistoryScreen(
             scrollHost = com.android.purebilibili.feature.settings.SettingsPageScrollHost.External,
             actions = {
                 AppIconButton(onClick = { importLauncher.launch("application/json") }) {
-                    AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_file_download_24), contentDescription = "导入备份", tint = AppContentColors.primaryText())
+                    AppIcon(rememberSettingsVector(R.drawable.ph_file_arrow_down_24, R.drawable.ms_file_download_24), contentDescription = "导入备份", tint = AppContentColors.primaryText())
                 }
                 AppIconButton(enabled = loadedRecords != null, onClick = {
                     showExportFormat = true
                 }) {
-                    AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_file_upload_24), contentDescription = "导出备份", tint = AppContentColors.primaryText())
+                    AppIcon(rememberSettingsVector(R.drawable.ph_file_arrow_up_24, R.drawable.ms_file_upload_24), contentDescription = "导出备份", tint = AppContentColors.primaryText())
                 }
                 if (allRecords.isNotEmpty() && !archiveMode) {
                     AppIconButton(onClick = { showClearDialog = true }) {
-                        AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_delete_sweep_24), contentDescription = "清空全部", tint = AppContentColors.error())
+                        AppIcon(rememberSettingsVector(R.drawable.ph_broom_24, R.drawable.ms_delete_sweep_24), contentDescription = "清空全部", tint = AppContentColors.error())
                     }
                 }
             }
@@ -192,7 +194,7 @@ fun CommentFraudHistoryScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             AppIcon(
-                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_shield_24),
+                                rememberSettingsVector(R.drawable.ph_shield_24, R.drawable.ms_shield_24),
                                 contentDescription = null,
                                 modifier = Modifier.size(64.dp),
                                 tint = AppContentColors.secondaryText().copy(alpha = 0.4f)
@@ -250,7 +252,7 @@ fun CommentFraudHistoryScreen(
                                         commentArchiveSourceUrl(record)?.let { url -> { onOpenSource(url) } }
                                     } else null,
                                     canManageRemote = identity.mid != null && record.uid == identity.mid,
-                                    canRecheck = record.type == 1,
+                                    canRecheck = true,
                                     onDeleteBili = {
                                         recordToDeleteOnBili = record
                                     }
@@ -531,7 +533,7 @@ private fun CommentFraudItemCard(
                     modifier = Modifier.size(32.dp)
                 ) {
                     AppIcon(
-                        imageVector = if (isExpanded) com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_up_24) else com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_down_24),
+                        imageVector = if (isExpanded) rememberSettingsVector(R.drawable.ph_caret_up_24, R.drawable.ms_keyboard_arrow_up_24) else rememberSettingsVector(R.drawable.ph_caret_down_24, R.drawable.ms_keyboard_arrow_down_24),
                         contentDescription = if (isExpanded) "收起" else "展开详情",
                         tint = AppContentColors.secondaryText()
                     )

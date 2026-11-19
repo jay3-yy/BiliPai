@@ -483,12 +483,14 @@ private fun VideoPlayerOverlayContent(
     state: VideoPlayerOverlayState,
     actions: VideoPlayerOverlayActions,
 ) {
-    val autoHide = com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(4_000L)
     val levelGestureActive = LocalPlayerLevelGestureActive.current
     val player = state.player
     val title = state.title
     val isVisible = state.isVisible
     val onToggleVisible = actions.onToggleVisible
+    val autoHide = if (onToggleVisible != null) {
+        com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(4_000L)
+    } else null
     val isFullscreen = state.isFullscreen
     val currentQualityLabel = state.currentQualityLabel
     val qualityLabels = state.qualityLabels
@@ -1316,27 +1318,19 @@ private fun VideoPlayerOverlayContent(
     }
     val currentChapterProvider = remember(currentChapterState) { { currentChapterState.value } }
 
-    LaunchedEffect(
-        isVisible,
-        effectiveIsPlaying,
-        isSeekScrubbing,
-        bottomControlFloatingPanelVisible,
-        showCdnDiagnostics,
-        danmakuComposerVisible,
-        levelGestureActive,
-        autoHide.timeoutMillis,
-    ) {
-        val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
-        if (!danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
-            shouldAutoHideInlineControlsAfterDelay(
-                controlsVisible = isVisible,
-                isPlaying = effectiveIsPlaying,
-                isSeekScrubbing = isSeekScrubbing,
-                floatingPanelVisible = bottomControlFloatingPanelVisible
-            )
+    if (autoHide != null && onToggleVisible != null) {
+        LaunchedEffect(
+            isVisible,
+            effectiveIsPlaying,
+            isSeekScrubbing,
+            bottomControlFloatingPanelVisible,
+            showCdnDiagnostics,
+            danmakuComposerVisible,
+            levelGestureActive,
+            autoHide.timeoutMillis,
         ) {
-            delay(timeout)
-            if (autoHide.canHide() && !danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
+            val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
+            if (!danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
                 shouldAutoHideInlineControlsAfterDelay(
                     controlsVisible = isVisible,
                     isPlaying = effectiveIsPlaying,
@@ -1344,7 +1338,17 @@ private fun VideoPlayerOverlayContent(
                     floatingPanelVisible = bottomControlFloatingPanelVisible
                 )
             ) {
-                onToggleVisible()
+                delay(timeout)
+                if (autoHide.canHide() && !danmakuComposerVisible && !levelGestureActive && !showCdnDiagnostics &&
+                    shouldAutoHideInlineControlsAfterDelay(
+                        controlsVisible = isVisible,
+                        isPlaying = effectiveIsPlaying,
+                        isSeekScrubbing = isSeekScrubbing,
+                        floatingPanelVisible = bottomControlFloatingPanelVisible
+                    )
+                ) {
+                    onToggleVisible()
+                }
             }
         }
     }
@@ -1438,7 +1442,7 @@ private fun VideoPlayerOverlayContent(
 
     Box(
         modifier = Modifier
-            .then(autoHide.focusModifier)
+            .then(autoHide?.focusModifier ?: Modifier)
             .fillMaxSize()
             .onVisibilityChanged(minFractionVisible = 0f) { progressInViewport = it }
             .playerActionBounds { playerBoundsInWindow = it },
@@ -1743,7 +1747,7 @@ private fun VideoPlayerOverlayContent(
                     onCdnDiagnosticsClick = { showCdnDiagnostics = true },
                     onPlayerSettingsClick = {
                         onDismissEndDrawer()
-                        if (landscapeCommentPanelVisible) onLandscapeCommentClick()
+                        if (landscapeCommentPanelVisible) onLandscapeCommentClick?.invoke()
                         showVideoSettings = true
                     },
                     // 🔁 [新增] 播放模式
@@ -2035,7 +2039,8 @@ private fun VideoPlayerOverlayContent(
                 playWhenReady = player.playWhenReady,
                 hasRenderedFirstFrame = hasRenderedFirstFrame,
                 suppressTransientOverlays = suppressTransientOverlaysForTransition,
-            ) && centerLoadingUiState == null && !showCenterPlaybackControl,
+            ) && centerLoadingUiState == null && !showCenterPlaybackControl &&
+                !state.startupLoadingActive,
             modifier = Modifier.align(Alignment.Center),
             // 首帧前整段不参与合成，出现时也硬切：淡入会让「已有画面后的再缓冲」
             // 看起来像又一次进场闪烁。

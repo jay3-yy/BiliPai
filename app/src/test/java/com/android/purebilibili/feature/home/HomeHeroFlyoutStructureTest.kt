@@ -73,7 +73,6 @@ class HomeHeroFlyoutStructureTest {
         assertFalse(carouselSource.contains("pointerInput(onGestureActiveChange)"))
         assertFalse(carouselSource.contains("PageSize.Fixed("))
         assertFalse(carouselSource.contains("contentPadding = PaddingValues(horizontal = sidePeek)"))
-        assertTrue(homeSource.contains("shouldYieldGesture = shouldYieldHomePagerToHeroCarousel"))
         assertTrue(homeSource.contains("onHeroCarouselGestureActiveChange = onHeroCarouselGestureActiveChange"))
         assertFalse(homeSource.contains("!isHeroCarouselGestureActive"))
         assertTrue(gestureSource.contains("shouldYield: () -> Boolean = { false }"))

@@ -1125,6 +1125,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
 
     override fun onEnterBackground() {
         if (remoteAudio.active) return
+        if (isLiveMode && shouldKeepPlaybackForPipTransition()) return
         tryTransferDetachedAudio()
         if (!isActive) return
         val currentPlayer = player ?: return
@@ -2140,6 +2141,7 @@ class MiniPlayerManager private constructor(private val context: Context) :
         expectedBvid: String? = null,
         forceStop: Boolean = false,
         deferPlaybackStop: Boolean = false,
+        audioNowPlayingPrepared: Boolean = false,
     ) {
         if (!shouldHandleNavigationLeaveForBvid(expectedBvid = expectedBvid, currentBvid = currentBvid)) {
             Logger.d(
@@ -2153,7 +2155,12 @@ class MiniPlayerManager private constructor(private val context: Context) :
             isLeavingByNavigation = false
             return
         }
-        if (!forceStop) prepareAudioNowPlayingForNavigationExit(expectedBvid)
+        // 返回提交、路由观察及详情销毁都可能到达这里。已停播的同一会话只清理一次。
+        // 延后停播仍保有活跃会话，离场收尾可以继续执行。
+        if (isLeavingByNavigation && !isActive && !forceStop) return
+        if (!forceStop && !audioNowPlayingPrepared) {
+            prepareAudioNowPlayingForNavigationExit(expectedBvid)
+        }
         isLeavingByNavigation = true
         Logger.d(
             TAG,

@@ -36,7 +36,7 @@ data class BangumiPlayerFeatures(
     val commentOnLeft: Boolean = false,
     val commentWidthDp: Int = 0,
     val commentCloseProgressProvider: () -> Float = { 0f },
-    val onCommentClick: () -> Unit = {},
+    val onCommentClick: (() -> Unit)? = null,
     val onDanmakuInputClick: () -> Unit = {},
     val isInPipMode: Boolean = false,
     val onPipClick: () -> Unit = {},

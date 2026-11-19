@@ -207,7 +207,7 @@ fun IconSettingsContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     AppIcon(
-                        com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_info_24),
+                        rememberSettingsVector(R.drawable.ph_info_24, R.drawable.ms_info_24),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.size(20.dp)
@@ -315,7 +315,7 @@ fun IconSettingsContent(
                                     .offset(x = 6.dp, y = 6.dp)
                             ) {
                                 AppIcon(
-                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_circle_fill_24),
+                                    rememberSettingsVector(R.drawable.ph_check_circle_24, R.drawable.ms_check_circle_fill_24),
                                     contentDescription = null,
                                     tint = AppContentColors.accent(),
                                     modifier = Modifier

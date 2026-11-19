@@ -102,53 +102,33 @@ class StartupSplashPolicyTest {
     }
 
     @Test
-    fun enablesSplashFlyoutOnlyAfterStartupPrivacyFlowCompleted() {
+    fun enablesSplashFlyoutOnlyAfterPrivacyAgreementOnSupportedAndroidWithAnimationEnabled() {
         assertFalse(
             shouldEnableSplashFlyoutAnimation(
-                sdkInt = 30,
-                hasCompletedOnboarding = false,
-                hasAcceptedReleaseDisclaimer = false,
+                sdkInt = 31,
+                agreementAccepted = false,
                 splashIconAnimationEnabled = true
             )
         )
         assertFalse(
             shouldEnableSplashFlyoutAnimation(
                 sdkInt = 30,
-                hasCompletedOnboarding = false,
-                hasAcceptedReleaseDisclaimer = true,
+                agreementAccepted = true,
                 splashIconAnimationEnabled = true
             )
         )
         assertFalse(
             shouldEnableSplashFlyoutAnimation(
-                sdkInt = 30,
-                hasCompletedOnboarding = true,
-                hasAcceptedReleaseDisclaimer = false,
-                splashIconAnimationEnabled = true
-            )
-        )
-        assertFalse(
-            shouldEnableSplashFlyoutAnimation(
-                sdkInt = 30,
-                hasCompletedOnboarding = true,
-                hasAcceptedReleaseDisclaimer = true,
-                splashIconAnimationEnabled = true
+                sdkInt = 31,
+                agreementAccepted = true,
+                splashIconAnimationEnabled = false
             )
         )
         assertTrue(
             shouldEnableSplashFlyoutAnimation(
                 sdkInt = 31,
-                hasCompletedOnboarding = true,
-                hasAcceptedReleaseDisclaimer = true,
+                agreementAccepted = true,
                 splashIconAnimationEnabled = true
-            )
-        )
-        assertFalse(
-            shouldEnableSplashFlyoutAnimation(
-                sdkInt = 31,
-                hasCompletedOnboarding = true,
-                hasAcceptedReleaseDisclaimer = true,
-                splashIconAnimationEnabled = false
             )
         )
     }

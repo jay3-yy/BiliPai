@@ -23,6 +23,7 @@ internal data class VideoDetailPlaybackActions(
     val dismissPartResumeNotice: () -> Unit = {},
     val openDownloadDialog: () -> Unit,
     val showDanmakuSendDialog: () -> Unit,
+    val sendSameDanmaku: (String, (Result<Unit>) -> Unit) -> Unit,
     val skipSponsorSegment: () -> Unit,
     val dismissSponsorSkipButton: () -> Unit,
     val voteSponsorSegment: (Int) -> Unit,

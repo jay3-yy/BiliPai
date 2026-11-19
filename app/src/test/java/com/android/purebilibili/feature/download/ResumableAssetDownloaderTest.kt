@@ -25,7 +25,11 @@ class ResumableAssetDownloaderTest {
     private val content = "0123456789".toByteArray()
     private val ranges = Collections.synchronizedList(mutableListOf<String>())
 
-    private fun client(ignoreRanges: Boolean = false, shortBody: Boolean = false) = OkHttpClient.Builder()
+    private fun client(
+        ignoreRanges: Boolean = false,
+        shortBody: Boolean = false,
+        changedContent: ByteArray = content,
+    ) = OkHttpClient.Builder()
         .addInterceptor { chain ->
             val request = chain.request()
             assertEquals("https://www.bilibili.com/", request.header("Referer"))
@@ -33,13 +37,13 @@ class ResumableAssetDownloaderTest {
             val bounds = range?.removePrefix("bytes=")?.split('-', limit = 2)
             if (range != null) ranges += range
             val start = bounds?.first()?.toInt() ?: 0
-            val end = bounds?.get(1)?.toIntOrNull() ?: content.lastIndex
+            val end = bounds?.get(1)?.toIntOrNull() ?: changedContent.lastIndex
             val partial = range != null && !ignoreRanges && request.method != "HEAD"
             val body = when {
                 request.method == "HEAD" -> byteArrayOf()
-                partial -> content.copyOfRange(start, end + 1)
-                shortBody -> content.copyOf(3)
-                else -> content
+                partial -> changedContent.copyOfRange(start, end + 1)
+                shortBody -> changedContent.copyOf(3)
+                else -> changedContent
             }
             Response.Builder().request(request).protocol(Protocol.HTTP_1_1)
                 .code(if (partial) 206 else 200).message("OK")
@@ -55,32 +59,49 @@ class ResumableAssetDownloaderTest {
         parallelThresholdBytes = 1, maxParallelChunks = chunks,
     )
 
+    private suspend fun leavePartialDownload(output: File) {
+        try {
+            ResumableAssetDownloader(client(shortBody = true)).download(request(output), {}, { _, _ -> })
+            fail("A short response must leave a partial download")
+        } catch (_: IOException) { }
+    }
+
     @Test fun resumesExistingTemporaryBytesWithoutDuplicatingThePrefix() = runTest {
         val output = File(files.root, "video")
-        File(files.root, "video.part").writeBytes(content.copyOf(4))
+        leavePartialDownload(output)
         val result = ResumableAssetDownloader(client()).download(request(output), {}, { _, _ -> })
         assertArrayEquals(content, output.readBytes())
         assertEquals(10L, result.downloadedBytes)
-        assertTrue(ranges.contains("bytes=4-"))
+        assertTrue(ranges.contains("bytes=3-"))
         assertFalse(File(files.root, "video.part").exists())
     }
 
-    @Test fun serverIgnoringRangeUsesTheDataSourcesSkipRatherThanAppendingItsWholeBody() = runTest {
+    @Test fun sameLengthReplacementDoesNotReuseTheOldPrefix() = runTest {
         val output = File(files.root, "video")
-        File(files.root, "video.part").writeBytes(content.copyOf(4))
-        ResumableAssetDownloader(client(ignoreRanges = true)).download(request(output), {}, { _, _ -> })
+        leavePartialDownload(output)
+        val replacement = "9876543210".toByteArray()
+        ResumableAssetDownloader(client(changedContent = replacement)).download(
+            request(output).copy(url = "https://media.example/replacement.m4s"), {}, { _, _ -> },
+        )
+        assertArrayEquals(replacement, output.readBytes())
+        assertFalse(ranges.contains("bytes=3-"))
+    }
+
+    @Test fun serverIgnoringParallelRangesFallsBackToASingleRequest() = runTest {
+        val output = File(files.root, "video")
+        val result = ResumableAssetDownloader(client(ignoreRanges = true))
+            .download(request(output, chunks = 3), {}, { _, _ -> })
+        assertEquals(1, result.segmentCount)
+        assertTrue(ranges.isNotEmpty())
         assertArrayEquals(content, output.readBytes())
     }
 
-    @Test fun resumesAndMergesParallelChunksInFileOrder() = runTest {
+    @Test fun mergesParallelChunksInFileOrder() = runTest {
         val output = File(files.root, "video")
-        File(files.root, "video.part.chunk0").writeBytes(content.copyOf(2))
         val result = ResumableAssetDownloader(client()).download(request(output, chunks = 3), {}, { _, _ -> })
         assertEquals(3, result.segmentCount)
         assertArrayEquals(content, output.readBytes())
-        assertTrue(ranges.contains("bytes=2-3"))
-        assertTrue(ranges.contains("bytes=4-6"))
-        assertTrue(ranges.contains("bytes=7-9"))
+        assertTrue(ranges.containsAll(listOf("bytes=0-3", "bytes=4-6", "bytes=7-9")))
     }
 
     @Test fun shortResponseKeepsThePartFileAndDoesNotPublishACompletedFile() = runTest {

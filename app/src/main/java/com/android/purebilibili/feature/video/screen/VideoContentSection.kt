@@ -33,7 +33,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -600,8 +599,7 @@ internal fun VideoContentSection(
     val commentListState = data.commentListState
     val pagerState = data.pagerState
     val contentPagerInteractions = remember(pagerState) { MutableInteractionSource() }
-    val nativePagerDragHeld by pagerState.interactionSource.collectIsDraggedAsState()
-    val customPagerDragHeld by contentPagerInteractions.collectIsDraggedAsState()
+    val pagerDragHeld by contentPagerInteractions.collectIsDraggedAsState()
     val relatedVideos = data.relatedVideos
     val replies = data.replies
     val replyCount = data.replyCount
@@ -783,10 +781,6 @@ internal fun VideoContentSection(
         )
     }
     val tabSelectionAnimationSpec = rememberVideoContentTabSelectionAnimationSpec()
-    // Only glass opts into shared tap/release timing. Native pagers keep their default fling.
-    val glassTabFlingBehavior = if (liquidGlassEnabled) {
-        PagerDefaults.flingBehavior(pagerState, snapAnimationSpec = tabSelectionAnimationSpec)
-    } else null
     val latestOnSelectedTabChange by rememberUpdatedState(onSelectedTabChange)
 
     val onTabSelected: (Int) -> Unit = { index ->
@@ -930,29 +924,15 @@ internal fun VideoContentSection(
 
             HorizontalPager(
                 state = pagerState,
-                flingBehavior = glassTabFlingBehavior,
                 beyondViewportPageCount = resolveVideoDetailBeyondViewportPageCount(
                     selectedTabIndex = pagerState.currentPage,
                     commentPagePreloadReady = presentationState.commentPagePreloadReady,
                 ),
-                userScrollEnabled = shouldEnableVideoContentHorizontalPagerSwipe(
-                            currentPage = pagerState.currentPage,
-                            commentPageIndex = 1,
-                            isPagerScrollInProgress = pagerState.isScrollInProgress,
-                        ) && !liquidGlassEnabled,
-                // Glass uses one child-first direction detector, rather than allowing the
-                // native pager / Miuix cross-axis recognizer to race the comment list.
-                // With glass off the native pager and its defaults are unchanged.
+                userScrollEnabled = false,
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalPriorityHorizontalPagerSwipe(
                         state = pagerState,
-                        enabled = liquidGlassEnabled && shouldEnableVideoContentHorizontalPagerSwipe(
-                            currentPage = pagerState.currentPage,
-                            commentPageIndex = 1,
-                            isPagerScrollInProgress = pagerState.isScrollInProgress,
-                        ),
-                        forceVerticalPriority = true,
                         dragInteractionSource = contentPagerInteractions,
                     )
                     .then(
@@ -1159,6 +1139,7 @@ internal fun VideoContentSection(
                     ),
                     forceVerticalPriority = liquidGlassEnabled,
                     dragInteractionSource = contentPagerInteractions,
+                    exposePageActions = false,
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1178,7 +1159,7 @@ internal fun VideoContentSection(
                     pagerState.tabIndicatorPosition
                 },
                 isScrollInProgressProvider = { pagerState.isScrollInProgress },
-                isPagerDraggingProvider = { nativePagerDragHeld || customPagerDragHeld },
+                isPagerDraggingProvider = { pagerDragHeld },
                 pagerTargetPositionProvider = { pagerState.targetPage.toFloat() },
             )
         }
@@ -1761,7 +1742,7 @@ internal fun VideoCommentTab(
                         isDissolving = reply.rpid in dissolvingIds,
                         onDissolveComplete = { onDeleteComment(reply.rpid) },
                         cardId = "comment_${reply.rpid}",
-                        // 小间距防止裁剪；animateItem 放在最前，保证位移/淡入淡出作用于整个槽位。
+                        // 小间距防止裁剪；淡入淡出作用于整个评论槽位。
                         modifier = videoCommentItemModifier().padding(bottom = 1.dp)
                     ) {
                         ReplyItemView(

@@ -119,6 +119,7 @@ import com.android.purebilibili.data.model.response.resolveDynamicCardButtonText
 import com.android.purebilibili.data.repository.DynamicRepository
 import com.android.purebilibili.feature.dynamic.DynamicDeleteAction
 import com.android.purebilibili.feature.dynamic.resolveDynamicDeleteAction
+import com.android.purebilibili.feature.web.PublicWebLinkText
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 @Immutable
@@ -1064,6 +1065,7 @@ fun DynamicCardV2(
                             onLinkClick = onOpenLink,
                             desc = desc,
                             collapseWebLinks = isDetail,
+                            showWebLinkPreviews = !menuCapabilities.isPrivate,
                             onUserClick = onUserClick,
                             onTopicClick = onTopicClick,
                             onTopicKeywordClick = onTopicKeywordClick,
@@ -1389,6 +1391,7 @@ fun DynamicCardV2(
                                         onLinkClick = onOpenLink,
                                         desc = richBlockDesc,
                                         collapseWebLinks = isDetail,
+                                        showWebLinkPreviews = !menuCapabilities.isPrivate,
                                         onUserClick = onUserClick,
                                         onTopicClick = onTopicClick,
                                         onTopicKeywordClick = onTopicKeywordClick,
@@ -2000,6 +2003,7 @@ fun DynamicCardV2(
                 gifImageLoader = gifImageLoader,
                 defaultPreviewTextVisible = dynamicPreviewTextVisible,
                 collapseWebLinks = isDetail,
+                showWebLinkPreviews = !menuCapabilities.isPrivate,
                 isDetail = isDetail,
             )
             Spacer(modifier = Modifier.height(AppSpacingTokens.Medium))
@@ -2378,6 +2382,7 @@ fun RichTextContent(
     overflow: TextOverflow = TextOverflow.Clip,
     extraEmoteUrlMap: Map<String, String> = emptyMap(),
     collapseWebLinks: Boolean = false,
+    showWebLinkPreviews: Boolean = false,
     onTextTap: (() -> Unit)? = null,
     onTextLayout: (androidx.compose.ui.text.TextLayoutResult) -> Unit = {},
 ) {
@@ -2474,18 +2479,27 @@ fun RichTextContent(
             onTap = textTap?.let { { _: Offset -> latestBlankTapWithFeedback() } },
         )
     }
-    AppText(
+    PublicWebLinkText(
         text = annotatedText,
-        inlineContent = inlineContent,
-        fontSize = fontSize,
-        fontWeight = fontWeight,
-        lineHeight = lineHeight,
-        maxLines = maxLines,
-        overflow = overflow,
-        onTextLayout = onTextLayout,
-        color = textColor,
-        modifier = modifier.then(textGestureModifier)
-    )
+        enabled = showWebLinkPreviews,
+        resolveUrl = { (resolveDynamicRichTextLinkAction(it.tag) as? DynamicRichTextLinkAction.Url)?.url },
+    ) { previewModifier, onPreviewTextLayout ->
+        AppText(
+            text = annotatedText,
+            inlineContent = inlineContent,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            lineHeight = lineHeight,
+            maxLines = maxLines,
+            overflow = overflow,
+            onTextLayout = {
+                onTextLayout(it)
+                onPreviewTextLayout(it)
+            },
+            color = textColor,
+            modifier = modifier.then(textGestureModifier).then(previewModifier)
+        )
+    }
 
     if (showTextSelectionSheet) {
         TextSelectionBottomSheet(

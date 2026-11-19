@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.8.6%20%28589%29-007AFF?style=flat-square" alt="Source 0.8.6 (589)" />
+<img src="https://img.shields.io/badge/Source-0.9.0%20%28591%29-007AFF?style=flat-square" alt="Source 0.9.0 (591)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -115,6 +115,7 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 - [Compose Rich Editor](https://github.com/MohamedRejeb/Compose-Rich-Editor) — 富文本编辑
 - [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine) — 弹幕渲染引擎
 - [BiliBili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) — B 站 API 文档
+- [大肥鱼消除计划](https://github.com/liyupi/dafeiyu-cleaner) — 评论区 AI 挂机账号识别规则
 - [BiliBiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) — 空降助手数据与 API
 - [Miuix](https://github.com/compose-miuix-ui/miuix) — 界面组件库
 - [Haze](https://github.com/chrisbanes/haze) — 毛玻璃效果
@@ -133,6 +134,6 @@ Miuix 依赖从 GitHub Packages 获取，需在本机 `~/.gradle/gradle.properti
 
 <div align="center">
 
-<sub>源码版本 0.8.6（589） · 更新于 2026-11-17 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>源码版本 0.9.0（591） · 更新于 2026-11-18 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

@@ -1,6 +1,7 @@
 // 文件路径: feature/video/screen/VideoDetailScreen.kt
 package com.android.purebilibili.feature.video.screen
 
+import com.android.purebilibili.feature.download.downloadAudioBackupUrls
 import com.android.purebilibili.core.ui.AppContentColors
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -149,7 +150,9 @@ internal fun VideoDetailDownloadOverlayAdapter(
                                 quality = 0,
                                 qualityDesc = "音频",
                                 videoUrl = "",
-                                audioUrl = successForDownload.audioUrl ?: "",
+                                audioUrl = successForDownload.audioUrl.orEmpty(),
+                                audioBackupUrls = successForDownload.cachedDashAudios
+                                    .downloadAudioBackupUrls(successForDownload.audioUrl.orEmpty()),
                                 isAudioOnly = true,
                                 isVerticalVideo = false,
                                 options = com.android.purebilibili.feature.download.DownloadOptions(

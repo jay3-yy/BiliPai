@@ -6,6 +6,7 @@ import json
 import re
 from pathlib import Path
 from PIL import Image
+from package_assets import render_preview
 
 def check_keyframes(value, end):
     if isinstance(value, dict):
@@ -87,7 +88,7 @@ for name,frames in [('welcome',60),('clean_complete',72),('cleaning',96),('retry
     print(f'{name}: {frames/60:g}s, {len(data["layers"])} layers, local WebP and references valid')
 for name in ['bilipai_maid_static','bilipai_maid_clean_static','bilipai_maid_retry_static','bilipai_maid_empty_static','bilipai_maid_search_empty_static','bilipai_maid_favorite_static','bilipai_maid_download_static','bilipai_maid_triple_static']:
     assert (ROOT/'brand-motion/src/main/res/drawable-nodpi'/f'{name}.webp').exists()
-preview=(Path(__file__).parent/'preview.html').read_text()
+preview=render_preview()
 assert '__ANIMATIONS__' not in preview
 assert 'https://' not in preview
 assert (Path(__file__).parent/'lottie.min.js').is_file()

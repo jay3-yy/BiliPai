@@ -368,13 +368,15 @@ fun ExternalPlaylistImportDialog(
                             color = AppContentColors.secondaryText(),
                         )
                         Spacer(Modifier.height(16.dp))
-                        OutlinedTextField(
-                            value = inputText,
-                            onValueChange = { inputText = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            label = { Text("歌单链接或 ID") },
-                            singleLine = true,
-                        )
+                        com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                            OutlinedTextField(
+                                value = inputText,
+                                onValueChange = { inputText = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text("歌单链接或 ID") },
+                                singleLine = true,
+                            )
+                        }
                         fetchError?.let { message ->
                             Spacer(Modifier.height(8.dp))
                             Text(message, color = AppContentColors.error(), style = MaterialTheme.typography.bodySmall)
@@ -681,13 +683,15 @@ fun ExternalPlaylistImportDialog(
 
                         if (editingIndex == index) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                OutlinedTextField(
-                                    value = manualKeyword,
-                                    onValueChange = { manualKeyword = it },
-                                    modifier = Modifier.weight(1f),
-                                    label = { Text("搜索 B 站视频") },
-                                    singleLine = true,
-                                )
+                                com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                                    OutlinedTextField(
+                                        value = manualKeyword,
+                                        onValueChange = { manualKeyword = it },
+                                        modifier = Modifier.weight(1f),
+                                        label = { Text("搜索 B 站视频") },
+                                        singleLine = true,
+                                    )
+                                }
                                 Spacer(Modifier.width(8.dp))
                                 Button(
                                     onClick = {

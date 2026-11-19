@@ -476,7 +476,7 @@ fun BottomBarSettingsContent(
                     AppPreferenceGroup {
                         SettingsItemAnchor("navigation.visibility_mode") {
                             SettingsSingleChoicePreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_visibility_24),
+                                icon = rememberSettingsVector(R.drawable.ph_eye_24, R.drawable.ms_visibility_24),
                                 iconTint = AppContentColors.secondaryText(),
                                 title = settingItemTitle("navigation.visibility_mode"),
                                 subtitle = visibilityMode.description,
@@ -491,7 +491,7 @@ fun BottomBarSettingsContent(
                         }
                         AppPreferenceDivider()
                         SettingsSingleChoicePreference(
-                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_label_24),
+                            icon = rememberSettingsVector(R.drawable.ph_tag_simple_24, R.drawable.ms_label_24),
                             iconTint = AppContentColors.secondaryText(),
                             title = "标签样式",
                             options = listOf(
@@ -521,7 +521,7 @@ fun BottomBarSettingsContent(
                     AppPreferenceGroup {
                         SettingsItemAnchor("navigation.hide_top_tabs") {
                             AppSwitchPreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_visibility_off_24),
+                                icon = rememberSettingsVector(R.drawable.ph_eye_slash_24, R.drawable.ms_visibility_off_24),
                                 iconTint = AppContentColors.secondaryText(),
                                 title = settingItemTitle("navigation.hide_top_tabs"),
                                 subtitle = "首页不显示推荐、热门等分类标签",
@@ -534,7 +534,7 @@ fun BottomBarSettingsContent(
                         if (!hideTopTabs) {
                             AppPreferenceDivider()
                             SettingsSingleChoicePreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_list_alt_24),
+                                icon = rememberSettingsVector(R.drawable.ph_list_bullets_24, R.drawable.ms_list_alt_24),
                                 iconTint = AppContentColors.secondaryText(),
                                 title = "顶部标签样式",
                                 options = listOf(
@@ -552,9 +552,9 @@ fun BottomBarSettingsContent(
                         AppPreferenceDivider()
                         SettingsSingleChoicePreference(
                             icon = if (homeTopRightAction == HomeTopRightAction.INBOX) {
-                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_mail_24)
+                                rememberSettingsVector(R.drawable.ph_envelope_simple_24, R.drawable.ms_mail_24)
                             } else {
-                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_settings_24)
+                                rememberSettingsVector(R.drawable.ph_gear_24, R.drawable.ms_settings_24)
                             },
                             iconTint = AppContentColors.secondaryText(),
                             title = "首页右上角入口",
@@ -569,7 +569,7 @@ fun BottomBarSettingsContent(
                         if (!hideTopTabs) {
                             AppPreferenceDivider()
                             SettingsSingleChoicePreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_reorder_24),
+                                icon = rememberSettingsVector(R.drawable.ph_list_24, R.drawable.ms_reorder_24),
                                 iconTint = AppContentColors.secondaryText(),
                                 title = "首页顶部布局",
                                 options = HomeTopLayoutOrder.entries.map { order ->
@@ -586,7 +586,7 @@ fun BottomBarSettingsContent(
                         }
                         AppPreferenceDivider()
                         SettingsSingleChoicePreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_troubleshoot_24),
+                                icon = rememberSettingsVector(R.drawable.ph_detective_24, R.drawable.ms_troubleshoot_24),
                                 iconTint = AppContentColors.secondaryText(),
                                 title = "首页顶栏显示",
                                 subtitle = homeHeaderCollapseMode.description,
@@ -666,7 +666,7 @@ fun BottomBarSettingsContent(
                                         enabled = !tab.fixedVisible && index > 0
                                     ) {
                                         AppIcon(
-                                            com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_up_24),
+                                            rememberSettingsVector(R.drawable.ph_caret_up_24, R.drawable.ms_keyboard_arrow_up_24),
                                             contentDescription = "上移",
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -676,7 +676,7 @@ fun BottomBarSettingsContent(
                                         enabled = !tab.fixedVisible && index < visibleTopOrder.lastIndex
                                     ) {
                                         AppIcon(
-                                            com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_down_24),
+                                            rememberSettingsVector(R.drawable.ph_caret_down_24, R.drawable.ms_keyboard_arrow_down_24),
                                             contentDescription = "下移",
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -808,7 +808,7 @@ fun BottomBarSettingsContent(
                                         enabled = index > 0
                                     ) {
                                         AppIcon(
-                                            com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_up_24),
+                                            rememberSettingsVector(R.drawable.ph_caret_up_24, R.drawable.ms_keyboard_arrow_up_24),
                                             contentDescription = "上移",
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -818,7 +818,7 @@ fun BottomBarSettingsContent(
                                         enabled = index < localSearchFilterTabOrder.lastIndex
                                     ) {
                                         AppIcon(
-                                            com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_down_24),
+                                            rememberSettingsVector(R.drawable.ph_caret_down_24, R.drawable.ms_keyboard_arrow_down_24),
                                             contentDescription = "下移",
                                             modifier = Modifier.size(16.dp)
                                         )
@@ -856,7 +856,7 @@ fun BottomBarSettingsContent(
                         }
                         SettingsItemAnchor("navigation.tablet_use_sidebar") {
                             AppSwitchPreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_view_sidebar_24),
+                                icon = rememberSettingsVector(R.drawable.ph_sidebar_simple_24, R.drawable.ms_view_sidebar_24),
                                 title = settingItemTitle("navigation.tablet_use_sidebar"),
                                 subtitle = if (isLargeScreenCapable) {
                                     "平板、大屏或展开后的折叠屏建议开启；仅在当前窗口足够宽时显示侧栏"
@@ -874,7 +874,7 @@ fun BottomBarSettingsContent(
                         }
                         SettingsItemAnchor("navigation.sidebar_account_switcher_enabled") {
                             AppSwitchPreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_swap_horiz_24),
+                                icon = rememberSettingsVector(R.drawable.ph_arrows_left_right_24, R.drawable.ms_swap_horiz_24),
                                 title = settingItemTitle("navigation.sidebar_account_switcher_enabled"),
                                 subtitle = "在平板首页侧边栏底部显示切换账号按钮",
                                 checked = sidebarAccountSwitcherEnabled,
@@ -1008,7 +1008,7 @@ fun BottomBarSettingsContent(
                                 contentColor = AppContentColors.accent()
                             )
                         ) {
-                            AppIcon(com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_refresh_24), contentDescription = null, modifier = Modifier.size(18.dp))
+                            AppIcon(rememberSettingsVector(R.drawable.ph_arrows_clockwise_24, R.drawable.ms_refresh_24), contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             AppText("重置为默认")
                         }
@@ -1332,7 +1332,7 @@ private fun BottomBarTabItem(
                             Spacer(modifier = Modifier.weight(1f))
                             if (index == colorIndex) {
                                 AppIcon(
-                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_24),
+                                    rememberSettingsVector(R.drawable.ph_check_24, R.drawable.ms_check_24),
                                     contentDescription = null,
                                     tint = AppContentColors.accent(),
                                     modifier = Modifier.size(20.dp)

@@ -32,7 +32,6 @@ class HomeEmbeddedTopTabPageStructureTest {
         assertTrue(!source.contains("Modifier.padding(top = contentTopPadding)"))
         assertTrue(source.contains("contentDescription = \"关注直播\""))
         assertTrue(source.contains("onFollowingClick = onFollowingClick"))
-        assertTrue(source.contains("item(key = \"live_categories\", span = { GridItemSpan(maxLineSpan) })"))
     }
 
 }

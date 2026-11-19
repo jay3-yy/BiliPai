@@ -1,9 +1,9 @@
 package com.android.purebilibili.feature.home
 
-import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
+import com.android.purebilibili.feature.agreement.UserAgreementStore
 
 @Composable
 internal fun HomeConsentDialogHost(crashTrackingConsentShown: Boolean) {
@@ -12,16 +12,9 @@ internal fun HomeConsentDialogHost(crashTrackingConsentShown: Boolean) {
     var consentDialogHandled by rememberSaveable { mutableStateOf(false) }
     var showConsentDialog by remember { mutableStateOf(false) }
 
-    // 使用须知确认后再展示崩溃统计同意（避免与门禁叠层）
-    val welcomePrefs = remember { context.getSharedPreferences("app_welcome", Context.MODE_PRIVATE) }
-    val userAgreementAcked = welcomePrefs.getBoolean(
-        com.android.purebilibili.feature.onboarding.USER_AGREEMENT_ACK_KEY,
-        false
-    ) || welcomePrefs.getBoolean("first_launch_shown", false)
-
-    // 检查是否需要显示弹窗（使用须知已确认 且 同意弹窗尚未显示过 且 本次会话未处理过）
+    // 在用户协议与隐私政策确认后，单独询问崩溃追踪设置。
     LaunchedEffect(crashTrackingConsentShown) {
-        if (userAgreementAcked && !crashTrackingConsentShown && !consentDialogHandled) {
+        if (UserAgreementStore.isAccepted(context) && !crashTrackingConsentShown && !consentDialogHandled) {
             showConsentDialog = true
         }
     }

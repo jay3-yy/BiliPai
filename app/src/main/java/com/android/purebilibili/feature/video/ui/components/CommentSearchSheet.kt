@@ -145,8 +145,10 @@ fun CommentSearchSheet(
     val allEntries = remember(searchPool) {
         val list = mutableListOf<CommentSearchEntry>()
         for (root in searchPool) {
+            if (root.aiBotFolded || root.repeatedReplyFolded) continue
             list.add(CommentSearchEntry(reply = root, rootReply = null, isSubReply = false))
             root.replies?.forEach { sub ->
+                if (sub.aiBotFolded || sub.repeatedReplyFolded) return@forEach
                 list.add(CommentSearchEntry(reply = sub, rootReply = root, isSubReply = true))
             }
         }

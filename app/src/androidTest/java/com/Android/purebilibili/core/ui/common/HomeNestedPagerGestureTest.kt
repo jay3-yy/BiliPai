@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.CompositionLocalProvider
@@ -17,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -28,6 +32,7 @@ import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.components.AppHorizontalPager
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,17 +51,24 @@ class HomeNestedPagerGestureTest {
     private fun checkNestedPaging(style: AppUiStyle) {
         lateinit var home: PagerState
         lateinit var hero: PagerState
+        lateinit var feed: LazyListState
+        var touchSlop = 0f
         var clicks = 0
         rule.setContent {
             CompositionLocalProvider(LocalAppUiStyle provides style) {
                 home = rememberPagerState { 2 }
                 hero = rememberPagerState { 3 }
+                feed = rememberLazyListState(initialFirstVisibleItemIndex = 20)
+                touchSlop = LocalViewConfiguration.current.touchSlop
                 val heroPointerActive = remember { mutableStateOf(false) }
                 AppHorizontalPager(
                     state = home,
-                    shouldYieldGesture = { heroPointerActive.value },
-                    useNativeGestures = true,
-                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = false,
+                    modifier = Modifier.fillMaxSize().verticalPriorityHorizontalPagerSwipe(
+                        state = home,
+                        horizontalLockSlopMultiplier = HOME_PAGER_HORIZONTAL_LOCK_SLOP_MULTIPLIER,
+                        shouldYield = { heroPointerActive.value },
+                    ),
                 ) { page ->
                     if (page == 0) {
                         Column(Modifier.fillMaxSize()) {
@@ -79,14 +91,18 @@ class HomeNestedPagerGestureTest {
                                     Box(Modifier.fillMaxSize().testTag("hero_$it").clickable { clicks++ })
                                 }
                             }
-                            Box(Modifier.fillMaxSize().testTag("feed"))
+                            LazyColumn(Modifier.fillMaxSize().testTag("feed"), state = feed) {
+                                items(80) {
+                                    Box(Modifier.fillMaxWidth().height(48.dp).clickable { clicks++ })
+                                }
+                            }
                         }
                     } else Box(Modifier.fillMaxSize())
                 }
             }
         }
 
-        // Split down/up across recomposition: yielding must not cancel the child's pointer cycle.
+        // Hold the carousel touch across frames to exercise the full pointer cycle.
         rule.onNodeWithTag("hero_0").performTouchInput { down(center) }
         rule.waitForIdle()
         rule.onNodeWithTag("hero_0").performTouchInput { up() }
@@ -103,6 +119,21 @@ class HomeNestedPagerGestureTest {
         rule.runOnIdle {
             assertEquals(1, hero.currentPage)
             assertEquals(0, home.currentPage)
+            assertEquals(1, clicks)
+        }
+
+        // A brief horizontal start crosses native touch slop before the gesture turns downward.
+        rule.onNodeWithTag("feed").performTouchInput {
+            val start = Offset(width * 0.75f, height * 0.2f)
+            down(start)
+            moveTo(start + Offset(-touchSlop * 1.25f, touchSlop * 0.25f))
+            moveTo(start + Offset(-touchSlop * 1.25f, touchSlop * 2f))
+            moveTo(Offset(width * 0.4f, height * 0.8f), 200)
+            up()
+        }
+        rule.runOnIdle {
+            assertTrue(feed.firstVisibleItemIndex < 20)
+            assertEquals(0, home.settledPage)
             assertEquals(1, clicks)
         }
 

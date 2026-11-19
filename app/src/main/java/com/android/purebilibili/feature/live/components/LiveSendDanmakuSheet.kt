@@ -39,6 +39,7 @@ fun LiveSendDanmakuSheet(
     emoticonContent: (@Composable () -> Unit)? = null,
     emoticonPackages: List<com.android.purebilibili.data.repository.LiveEmoticonPackage> = emptyList(),
     modifier: Modifier = Modifier,
+    medalContent: (@Composable () -> Unit)? = null,
 ) {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -111,6 +112,9 @@ fun LiveSendDanmakuSheet(
                         AppIcon(Icons.AutoMirrored.Outlined.Send, if (isSending) "发送中" else "发送",
                             tint = if (canSend) AppContentColors.accent() else AppContentColors.secondaryText())
                     }
+                }
+                if (medalContent != null) {
+                    Box(Modifier.padding(horizontal = 16.dp)) { medalContent() }
                 }
                 if (!permission.canSend || message.text.length > maxLength) {
                     AppText(

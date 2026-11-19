@@ -5,6 +5,7 @@
 
 package com.android.purebilibili.feature.video.ui.pager
 
+import com.android.purebilibili.feature.download.downloadAudioBackupUrls
 import com.android.purebilibili.core.player.withAppVideoDecoderDiagnostics
 import com.android.purebilibili.core.player.withAppVideoDecoderPreference
 
@@ -79,11 +80,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppWindowSystemUiController
-import com.android.purebilibili.core.ui.AppWindowSystemUiSnapshot
 import com.android.purebilibili.feature.video.screen.VideoDetailHiddenSystemBars
 import com.android.purebilibili.feature.video.screen.VideoDetailSystemBarsApplySpec
 import com.android.purebilibili.feature.video.screen.applyVideoDetailSystemBarsSpec
@@ -103,7 +102,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -128,6 +126,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.repeatOnLifecycle
@@ -300,6 +299,7 @@ fun PortraitVideoPager(
     onlyVerticalRecommendations: Boolean = true,
     isActive: Boolean = true,
     entryTransitionInProgress: Boolean = false,
+    ownsSystemBars: Boolean = true,
     onBack: () -> Unit,
     onHomeClick: () -> Unit = onBack,
     onVideoChange: (String) -> Unit,
@@ -328,6 +328,7 @@ fun PortraitVideoPager(
     onExitFullscreen: () -> Unit,
     menuActions: com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions =
         com.android.purebilibili.feature.video.ui.overlay.PiliPlayerMenuActions(),
+    onOpenBilibiliLink: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -339,20 +340,13 @@ fun PortraitVideoPager(
     val insetsController = remember(window, view) {
         if (window != null) WindowInsetsControllerCompat(window, view) else null
     }
-    // Immersive: hide status + nav bars while portrait pager is active (Story + detail overlay).
-    //  [修复] 沉浸前捕获系统栏快照，退出时还原进入前的真实外观（含图标明暗），
-    //  而不是硬编码透明色 + 深色图标，避免与进入前的页面外观不一致。
-    var preImmersiveSystemBarsSnapshot by remember(window) {
-        mutableStateOf<AppWindowSystemUiSnapshot?>(null)
-    }
-    LaunchedEffect(isActive, window, insetsController) {
-        if (!isActive || window == null || insetsController == null) return@LaunchedEffect
+    // 独立竖屏流自行管理系统栏；详情内的播放器由详情页统一管理。
+    DisposableEffect(ownsSystemBars, isActive, window, insetsController) {
+        if (!ownsSystemBars || !isActive || window == null || insetsController == null) {
+            return@DisposableEffect onDispose {}
+        }
         AppWindowSystemUiController.ensureEdgeToEdge(window)
-        preImmersiveSystemBarsSnapshot =
-            AppWindowSystemUiController.capture(window).let { snapshot ->
-                // 快照若在系统栏已被隐藏时取得，照实记录会让退出恢复走到 hide 分支。
-                if (snapshot.systemBarsVisible) snapshot else snapshot.copy(systemBarsVisible = true)
-            }
+        val snapshot = AppWindowSystemUiController.capture(window)
         val immersiveSpec = resolveVideoDetailSystemBarsApplySpec(
             visibilityPolicy = resolveVideoDetailSystemBarsVisibilityPolicy(
                 isFullscreenMode = false,
@@ -369,34 +363,19 @@ fun PortraitVideoPager(
             transientBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         )
         applyVideoDetailSystemBarsSpec(window, insetsController, immersiveSpec)
-    }
-    DisposableEffect(isActive, window, insetsController) {
         onDispose {
-            if (window == null || insetsController == null) return@onDispose
-            // Restore bars when leaving portrait immersive (detail returns to inline / Story pops).
-            val snapshot = preImmersiveSystemBarsSnapshot
-            if (snapshot != null) {
-                val restoreSpec = VideoDetailSystemBarsApplySpec(
+            applyVideoDetailSystemBarsSpec(
+                window,
+                insetsController,
+                VideoDetailSystemBarsApplySpec(
                     hiddenBars = VideoDetailHiddenSystemBars.NONE,
                     systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT,
                     statusBarColor = snapshot.statusBarColor,
                     navigationBarColor = snapshot.navigationBarColor,
                     lightStatusBars = snapshot.lightStatusBars,
-                    lightNavigationBars = snapshot.lightNavigationBars
-                )
-                applyVideoDetailSystemBarsSpec(window, insetsController, restoreSpec)
-            } else {
-                val restoreSpec = VideoDetailSystemBarsApplySpec(
-                    hiddenBars = VideoDetailHiddenSystemBars.NONE,
-                    systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT,
-                    statusBarColor = ComposeColor.Transparent.toArgb(),
-                    navigationBarColor = ComposeColor.Transparent.toArgb(),
-                    lightStatusBars = false,
-                    lightNavigationBars = false
-                )
-                applyVideoDetailSystemBarsSpec(window, insetsController, restoreSpec)
-            }
-            insetsController.show(WindowInsetsCompat.Type.systemBars())
+                    lightNavigationBars = snapshot.lightNavigationBars,
+                ),
+            )
         }
     }
     val composerViewModel: VideoComposerViewModel =
@@ -1254,6 +1233,7 @@ fun PortraitVideoPager(
         forceReload: Boolean = false,
         resumePositionMs: Long? = null,
         playWhenReadyOverride: Boolean? = null,
+        useMeasuredCdn: Boolean = true,
     ): Boolean {
         val item = pageItems.getOrNull(targetPage) ?: return false
         val playbackIdentity = resolvePortraitPagePlaybackIdentity(item) ?: return false
@@ -1428,6 +1408,11 @@ fun PortraitVideoPager(
                             targetQuality = targetQuality,
                             cdnPlugin = portraitPlaybackCdnPlugin,
                             preference = portraitCdnPreference,
+                            measuredPreference = if (useMeasuredCdn) {
+                                com.android.purebilibili.feature.plugin.CdnSpeedTest.recommendedPreference()
+                            } else {
+                                null
+                            },
                         )
                         val dashVideoIds = playData.playableVideoQualityIds()
                         portraitSwitchableQualityIds = dashVideoIds
@@ -2033,6 +2018,7 @@ fun PortraitVideoPager(
                 onExitSnapshot = onExitSnapshot,
                 onSearchClick = onSearchClick,
                 onUserClick = handleUserClick,
+                onOpenBilibiliLink = onOpenBilibiliLink,
                 onExitFullscreen = onExitFullscreen,
                 onProgressUpdate = onProgressUpdate,
                 watchLaterVideos = watchLaterVideos,
@@ -2183,7 +2169,8 @@ fun PortraitVideoPager(
                         applyInitialSeekOnFirstPage = false,
                         forceReload = true,
                         resumePositionMs = failure.snapshot.positionMs,
-                        playWhenReadyOverride = failure.snapshot.playWhenReady
+                        playWhenReadyOverride = failure.snapshot.playWhenReady,
+                        useMeasuredCdn = false,
                     )
                 }) {
                     AppText("重试播放")
@@ -2279,6 +2266,7 @@ private fun VideoPageItem(
     onExitSnapshot: (String, Long, Long, String) -> Unit,
     onSearchClick: () -> Unit,
     onUserClick: (Long) -> Unit,
+    onOpenBilibiliLink: ((String) -> Unit)?,
     onExitFullscreen: () -> Unit,
     onProgressUpdate: (String, Long, Long, String) -> Unit,
     watchLaterVideos: List<RelatedVideo>,
@@ -2963,18 +2951,7 @@ private fun VideoPageItem(
         }
     }
 
-    var controlsInteractionGeneration by remember(bvid) { mutableLongStateOf(0L) }
-    var controlsPointerPressed by remember(bvid) { mutableStateOf(false) }
-    var controlsLifecycleResumed by remember(lifecycleOwner) {
-        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
-    }
-    DisposableEffect(lifecycleOwner) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { owner, _ ->
-            controlsLifecycleResumed = owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    val playerLifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val controlsOverlayOpen = showCommentSheet || subReplyState.visible || showDetailSheet || detailSheetTransitionActive ||
         showUpPreview || commentSheetVisibilityProgress > 0.001f || upPreviewVisibilityProgress > 0.001f ||
         portraitAnyMenuVisible || portraitScreenLocked || portraitComposerVisible ||
@@ -2984,29 +2961,9 @@ private fun VideoPageItem(
     ) {
         onPortraitCleanScreenChange(false)
     }
-    val autoHidePortraitControls = shouldAutoHidePortraitControls(
-        isCurrentPage = isCurrentPage,
-        playbackActive = controlsLifecycleResumed && isPortraitPlaybackAllowed &&
-            isPlayerReadyForThisVideo && isPlaying && !isLoading,
-        controlsVisible = portraitOverlayVisible,
-        userInteracting = controlsPointerPressed || isLongPressing || seekSliderMoving,
-        overlayOpen = controlsOverlayOpen,
-    )
     val latestOnPortraitOverlayVisibleChange by rememberUpdatedState(onPortraitOverlayVisibleChange)
     LaunchedEffect(bvid, isCurrentPage) {
         if (isCurrentPage) latestOnPortraitOverlayVisibleChange(!portraitCleanScreen)
-    }
-    // User activity and blocking overlays restart the countdown; playback-position
-    // polling does not. Hidden controls stay hidden until the existing tap gesture.
-    val autoHide = com.android.purebilibili.feature.video.ui.overlay.rememberPlayerControlsAutoHide(PORTRAIT_CONTROLS_AUTO_HIDE_DELAY_MS)
-    LaunchedEffect(bvid, autoHidePortraitControls, controlsInteractionGeneration, autoHide.timeoutMillis) {
-        val timeout = autoHide.timeoutMillis ?: return@LaunchedEffect
-        if (!autoHidePortraitControls) return@LaunchedEffect
-        delay(timeout)
-        // A down event can arrive before recomposition cancels this effect.
-        if (autoHide.canHide() && !controlsPointerPressed && !isLongPressing && !seekSliderMoving) {
-            latestOnPortraitOverlayVisibleChange(false)
-        }
     }
 
     val latestIsLongPressing by rememberUpdatedState(isLongPressing)
@@ -3072,7 +3029,6 @@ private fun VideoPageItem(
     val danmakuTapCoordinates = remember { mutableStateOf<LayoutCoordinates?>(null) }
     Box(
         modifier = Modifier
-            .then(autoHide.focusModifier)
             .fillMaxSize()
             .background(Color.Black)
             .onGloballyPositioned {
@@ -3085,25 +3041,6 @@ private fun VideoPageItem(
             .onSizeChanged { size ->
                 portraitPageWidthPx = size.width
                 portraitPageHeightPx = size.height
-            }
-            .pointerInput(isCurrentPage, bvid) {
-                if (!isCurrentPage) return@pointerInput
-                // Observe controls and video gestures without taking their input.
-                // Initial-pass observation includes child buttons, progress scrubs,
-                // and menus whose own handlers consume the pointer in Main.
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    controlsPointerPressed = true
-                    controlsInteractionGeneration++
-                    try {
-                        do {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                        } while (event.changes.any { it.pressed })
-                    } finally {
-                        controlsPointerPressed = false
-                        controlsInteractionGeneration++
-                    }
-                }
             }
             .pointerInput(isCurrentPage, bvid, playerGesturesEnabled) {
                 if (!isCurrentPage || !playerGesturesEnabled) return@pointerInput
@@ -3221,6 +3158,7 @@ private fun VideoPageItem(
                             )
                         ) {
                             FullscreenDoubleTapAction.SeekBackward -> {
+                                seekGestureHaptic(HapticType.LIGHT)
                                 val seekMs = seekBackwardSeconds * 1000L
                                 val newPos = resolveRelativeSeekTargetPosition(
                                     currentPositionMs = exoPlayer.currentPosition,
@@ -3239,6 +3177,7 @@ private fun VideoPageItem(
                                 seekFeedbackVisible = true
                             }
                             FullscreenDoubleTapAction.SeekForward -> {
+                                seekGestureHaptic(HapticType.LIGHT)
                                 val seekMs = seekForwardSeconds * 1000L
                                 val newPos = resolveRelativeSeekTargetPosition(
                                     currentPositionMs = exoPlayer.currentPosition,
@@ -3257,6 +3196,7 @@ private fun VideoPageItem(
                                 seekFeedbackVisible = true
                             }
                             FullscreenDoubleTapAction.TogglePlayPause -> {
+                                portraitLockHaptic(HapticType.LIGHT)
                                 togglePlayerPlaybackFromUserAction(exoPlayer)
                             }
                         }
@@ -3277,6 +3217,7 @@ private fun VideoPageItem(
                         effectiveLongPressSpeed = longPressPlaybackParameters.speed
                         applyPortraitTemporaryPlaybackParameters(longPressPlaybackParameters)
                         isLongPressing = true
+                        portraitLockHaptic(HapticType.MEDIUM)
                         longPressSpeedHintDismissed = false
                         showLongPressSpeedFeedback = true
                     }
@@ -4026,7 +3967,8 @@ private fun VideoPageItem(
                 player = exoPlayer,
                 title = title,
                 playerDiagnosticLoggingEnabled = diagnosticLoggingEnabled && isCurrentPage &&
-                    isPlayerReadyForThisVideo && isPortraitPlaybackAllowed && controlsLifecycleResumed &&
+                    isPlayerReadyForThisVideo && isPortraitPlaybackAllowed &&
+                    playerLifecycleState.isAtLeast(Lifecycle.State.RESUMED) &&
                     !isInPipMode && !entryTransitionInProgress,
                 debugInfo = com.android.purebilibili.feature.video.ui.overlay.PlaybackDebugInfo(
                     firstFrame = if (hasRenderedFirstFrame) "rendered" else "",
@@ -4157,7 +4099,7 @@ private fun VideoPageItem(
                 fsrSharpness = enhancement.config.fsrSharpness,
             )
         val portraitOverlayActions = com.android.purebilibili.feature.video.ui.overlay.VideoPlayerOverlayActions(
-                onToggleVisible = { onPortraitOverlayVisibleChange(!portraitOverlayVisible) },
+                onToggleVisible = null,
                 onEnterCleanScreen = {
                     onPortraitCleanScreenChange(true)
                     android.widget.Toast.makeText(
@@ -4290,6 +4232,8 @@ private fun VideoPageItem(
                                 qualityDesc = "音频",
                                 videoUrl = "",
                                 audioUrl = audioUrl,
+                                audioBackupUrls = currentSuccess?.takeIf { hasMatchingPageState }
+                                    ?.cachedDashAudios.orEmpty().downloadAudioBackupUrls(audioUrl),
                                 isAudioOnly = true,
                                 isVerticalVideo = currentVideoAspect < 1f,
                             )
@@ -4598,7 +4542,8 @@ private fun VideoPageItem(
                 viewModel.setReplyingTo(reply)
                 viewModel.showCommentInputDialog()
             },
-            onUserClick = onUserClick
+            onUserClick = onUserClick,
+            onOpenBilibiliLink = onOpenBilibiliLink,
         )
 
         if (isCurrentPage) {
@@ -4618,17 +4563,11 @@ private fun VideoPageItem(
                 com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey(draftReplyRpid)
             ] ?: com.android.purebilibili.feature.video.viewmodel.CommentComposerDraft()
             val commentState by portraitCommentStateHandle
-            val commentFraudDetectionEnabled by com.android.purebilibili.core.store.SettingsManager
-                .getCommentFraudDetectionEnabled(context)
-                .collectAsStateWithLifecycle(initialValue = true
-        )
-
-            LaunchedEffect(activeAid, commentFraudDetectionEnabled) {
+            LaunchedEffect(activeAid) {
                 viewModel.commentSentEvent.collect { event ->
                     commentViewModel.onExternalCommentSent(
                         aid = event.aid,
                         newReply = event.reply,
-                        fraudDetectionEnabled = commentFraudDetectionEnabled,
                         senderAccount = event.account,
                     )
                 }

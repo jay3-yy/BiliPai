@@ -111,7 +111,6 @@ import com.android.purebilibili.feature.video.ui.gesture.GestureMode
 import com.android.purebilibili.feature.video.ui.gesture.GestureIndicator
 import com.android.purebilibili.feature.video.ui.gesture.rememberPlayerGestureState
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -548,37 +547,29 @@ private fun FullscreenPlayerOverlayContent(
         }
     }
 
-    // 监听播放器状态
-    LaunchedEffect(player, showControls, gestureMode, hostLifecycleStarted) {
-        if (!shouldPollFullscreenPlayerProgress(
-                playerExists = player != null,
-                hostLifecycleStarted = hostLifecycleStarted
+    val progressSamplingActive = rememberPlayerProgressSamplingActive()
+    val needsProgressTicks = showControls || gestureMode == FullscreenGestureMode.Seek ||
+        pendingGestureSeekPositionMs != null
+    val fallbackDuration = miniPlayerManager.duration
+    LaunchedEffect(player, progressSamplingActive, needsProgressTicks, fallbackDuration) {
+        if (player == null || !progressSamplingActive) return@LaunchedEffect
+        observeVideoPlayerProgress(
+            player = player,
+            videoDuration = fallbackDuration,
+            pollingIntervalMs = 100L.takeIf { needsProgressTicks },
+        ) { progress ->
+            isPlaying = resolveOverlayPlaybackButtonPlayingState(
+                player.isPlaying, player.playWhenReady, player.playbackState,
             )
-        ) {
-            return@LaunchedEffect
-        }
-        while (isActive) {
-            player?.let {
-                isPlaying = resolveOverlayPlaybackButtonPlayingState(it.isPlaying, it.playWhenReady, it.playbackState)
-                duration = resolveSeekableDurationMs(
-                    playbackDurationMs = it.duration,
-                    fallbackDurationMs = miniPlayerManager.duration
-                )
-                currentPosition = it.currentPosition
-                pendingGestureSeekPositionMs = resolveFullscreenPendingGestureSeekPosition(
-                    currentPositionMs = currentPosition,
-                    pendingSeekPositionMs = pendingGestureSeekPositionMs
-                )
-                if (gestureMode != FullscreenGestureMode.Seek && duration > 0L) {
-                    currentProgress = (currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-                }
+            duration = progress.duration
+            currentPosition = progress.current
+            pendingGestureSeekPositionMs = resolveFullscreenPendingGestureSeekPosition(
+                currentPositionMs = progress.current,
+                pendingSeekPositionMs = pendingGestureSeekPositionMs,
+            )
+            if (gestureMode != FullscreenGestureMode.Seek && duration > 0L) {
+                currentProgress = (progress.current.toFloat() / duration).coerceIn(0f, 1f)
             }
-            val pollInterval = resolveFullscreenPlayerPollingIntervalMs(
-                isPlaying = isPlaying,
-                showControls = showControls,
-                isSeekingGesture = gestureMode == FullscreenGestureMode.Seek
-            )
-            delay(pollInterval)
         }
     }
 
@@ -784,6 +775,7 @@ private fun FullscreenPlayerOverlayContent(
                                 )
                             ) {
                                 FullscreenDoubleTapAction.SeekBackward -> {
+                                    seekSceneHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                     val seekMs = seekBackwardSeconds * 1000L
                                     val newPos = (p.currentPosition - seekMs).coerceAtLeast(0L)
                                     pendingGestureSeekPositionMs = newPos
@@ -791,6 +783,7 @@ private fun FullscreenPlayerOverlayContent(
                                     danmakuManager.seekTo(newPos)
                                 }
                                 FullscreenDoubleTapAction.SeekForward -> {
+                                    seekSceneHaptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                     val seekMs = seekForwardSeconds * 1000L
                                     val durationLimit = p.duration.coerceAtLeast(0L)
                                     val target = p.currentPosition + seekMs
@@ -804,6 +797,7 @@ private fun FullscreenPlayerOverlayContent(
                                     danmakuManager.seekTo(newPos)
                                 }
                                 FullscreenDoubleTapAction.TogglePlayPause -> {
+                                    haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
                                     togglePlayerPlaybackFromUserAction(p)
                                 }
                             }
@@ -858,9 +852,10 @@ private fun FullscreenPlayerOverlayContent(
                                 FullscreenGestureMode.Volume
                             }
                             else -> {
-                                seekPreviewPosition = currentPosition
-                                gestureSeekStartPosition = currentPosition
-                                lastSeekHapticTargetMs = currentPosition
+                                val startPosition = player?.currentPosition?.coerceAtLeast(0L) ?: currentPosition
+                                seekPreviewPosition = startPosition
+                                gestureSeekStartPosition = startPosition
+                                lastSeekHapticTargetMs = startPosition
                                 FullscreenGestureMode.None
                             }
                         }

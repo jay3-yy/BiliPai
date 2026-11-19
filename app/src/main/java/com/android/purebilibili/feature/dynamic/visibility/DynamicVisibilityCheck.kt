@@ -30,6 +30,8 @@ internal data class DynamicVisibilityNotice(
     val identity: AccountSessionIdentity,
     val dynamicId: String,
     val status: DynamicVisibilityStatus,
+    val text: String?,
+    val manual: Boolean,
 )
 
 /** 仅保存已完成的检查结果；异步任务由各发布入口的账号作用域拥有。 */
@@ -65,6 +67,7 @@ internal object DynamicVisibilityCheck {
         context: Context,
         dynamicId: String,
         identity: AccountSessionIdentity,
+        text: String? = null,
         privatePublication: Boolean = false,
         scheduledPublication: Boolean = false,
     ) {
@@ -80,14 +83,14 @@ internal object DynamicVisibilityCheck {
             val status = check(dynamicId)
             currentCoroutineContext().ensureActive()
             if (TokenManager.accountIdentity.value == identity && ContentDisplayPreferences.dynamicVisibilityCheck(context).first()) {
-                DynamicVisibilityFeedback.offer(DynamicVisibilityNotice(identity, dynamicId, status))
+                DynamicVisibilityFeedback.offer(DynamicVisibilityNotice(identity, dynamicId, status, text, manual = false))
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             // 检查设置或查询失败不改变已经成功的发布结果。
             if (requested && TokenManager.accountIdentity.value == identity) {
-                DynamicVisibilityFeedback.offer(DynamicVisibilityNotice(identity, dynamicId, DynamicVisibilityStatus.UNKNOWN))
+                DynamicVisibilityFeedback.offer(DynamicVisibilityNotice(identity, dynamicId, DynamicVisibilityStatus.UNKNOWN, text, manual = false))
             }
         }
     }

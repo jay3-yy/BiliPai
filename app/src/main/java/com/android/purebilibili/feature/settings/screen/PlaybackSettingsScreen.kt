@@ -70,6 +70,7 @@ import com.android.purebilibili.feature.screenshot.AppScreenshotGestureMode
 import com.android.purebilibili.feature.video.subtitle.SubtitleAutoPreference
 import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledForUser
 import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
+import com.android.purebilibili.feature.settings.PlaybackCdnPreferenceMenu
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
@@ -219,11 +220,6 @@ fun PlaybackSettingsContent(
         .collectAsStateWithLifecycle(initialValue = PlaybackCdnPreference.DEFAULT.storageValue)
     val playbackCdnPreference = remember(playbackCdnPreferenceValue) {
         PlaybackCdnPreference.fromStorageValue(playbackCdnPreferenceValue)
-    }
-    val playbackCdnOptions = remember {
-        PlaybackCdnPreference.entries.map { preference ->
-            AppSegmentOption(preference, preference.displayName)
-        }
     }
 
     // ... [保留原有逻辑: checkPipPermission, gotoPipSettings] ...
@@ -892,7 +888,7 @@ SettingsItemAnchor("playback.music_lyrics_ui_style") {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 AppIcon(
-                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_warning_24),
+                                    rememberSettingsVector(R.drawable.ph_warning_24, R.drawable.ms_warning_24),
                                     contentDescription = null,
                                     tint = warningTint,
                                     modifier = Modifier.size(22.dp)
@@ -911,7 +907,7 @@ SettingsItemAnchor("playback.music_lyrics_ui_style") {
                                     )
                                 }
                                 AppIcon(
-                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                                    rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
                                     contentDescription = null,
                                     tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
                                     modifier = Modifier.size(20.dp)
@@ -1033,23 +1029,17 @@ SettingsItemAnchor("playback.music_lyrics_ui_style") {
 
                     AppPreferenceGroup {
                         SettingsItemAnchor("playback.playback_cdn_preference") {
-SettingsSingleChoicePreference(
-                            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_router_24),
-                            title = settingItemTitle("playback.playback_cdn_preference"),
-                            subtitle = "新视频优先使用此线路；不可用时换备用线路",
-                            options = playbackCdnOptions,
-                            selectedValue = playbackCdnPreference,
-                            onSelectionChange = { preference ->
-                                scope.launch {
-                                    SettingsManager.setPlaybackCdnPreference(
-                                        context,
-                                        preference.storageValue,
-                                    )
-                                }
-                            },
-                            iconTint = AppContentColors.secondaryText(),
-                        )
-}
+                            PlaybackCdnPreferenceMenu(
+                                icon = rememberSettingsVector(R.drawable.ms_router_24),
+                                title = settingItemTitle("playback.playback_cdn_preference"),
+                                preference = playbackCdnPreference,
+                                onPreferenceChange = { preference ->
+                                    scope.launch {
+                                        SettingsManager.setPlaybackCdnPreference(context, preference.storageValue)
+                                    }
+                                },
+                            )
+                        }
 
                         AppPreferenceDivider()
 
@@ -1378,7 +1368,7 @@ private fun PlaybackInteractionSettingsSection(
     val showVideoDetailCommentCount by remember(context) { SettingsManager.getShowVideoDetailCommentCount(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     val commentFraudDetectionEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getCommentFraudDetectionEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = true)
+        .collectAsStateWithLifecycle(initialValue = false)
     val commentAvatarPushEnabled by remember(context) { SettingsManager.getCommentAvatarPushEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val subReplyPreviewLikesEnabled by remember(context) { SettingsManager.getSubReplyPreviewLikesEnabled(context) }
@@ -1926,7 +1916,7 @@ SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
                 AppSwitchPreference(
                     icon = rememberSettingsSemanticIcon(SettingsIconRole.COMMENT_VISIBILITY_CHECK),
                 title = playbackSettingTitle("playback.comment_fraud_detection_enabled"),
-                subtitle = "发送成功后自动检查评论是否正常显示",
+                subtitle = "评论发送成功 8 秒后自动检查可见性",
                 checked = commentFraudDetectionEnabled,
                 onCheckedChange = { enabled ->
                     scope.launch {
@@ -2163,7 +2153,7 @@ private fun PlaybackFullscreenGestureSettingsSection(
             onValueChange = viewModel::setGestureSensitivity,
             valueRange = 0.5f..2.0f,
             steps = 5,
-            icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_gesture_24),
+            icon = rememberSettingsVector(R.drawable.ph_scribble_loop_24, R.drawable.ms_gesture_24),
             iconTint = AppContentColors.warning(),
             valueFormatter = { value -> "${(value * 100).toInt()}%" },
         )

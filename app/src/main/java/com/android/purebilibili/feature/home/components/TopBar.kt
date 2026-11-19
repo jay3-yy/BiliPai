@@ -134,7 +134,7 @@ import kotlin.math.sign
 import com.android.purebilibili.core.ui.components.KeepLazyTabSelectionVisible
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
-import androidx.compose.foundation.combinedClickable // [Added]
+import com.android.purebilibili.core.ui.components.appCombinedClickable // [Added]
 import java.io.File
 
 private const val IOS_TOP_TAB_CONTENT_PADDING_DP = 2f
@@ -3548,7 +3548,7 @@ fun CategoryTabItem(
              .clip(AppShapes.container(ContainerLevel.Pill))
              .then(
                  if (isInteractive) {
-                     Modifier.combinedClickable(
+                     Modifier.appCombinedClickable(
                          interactionSource = remember { MutableInteractionSource() },
                          indication = null,
                          onClick = com.android.purebilibili.core.ui.components.appActionWithFeedback { onClick() },

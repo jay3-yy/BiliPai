@@ -30,11 +30,11 @@ internal fun sanitizePublicContentUrl(url: HttpUrl): HttpUrl {
     return builder.build()
 }
 
-internal fun sanitizePublicContentRequest(request: Request): Request {
+internal fun sanitizePublicContentRequest(request: Request, includeBiliImageReferer: Boolean = true): Request {
     val builder = request.newBuilder().url(sanitizePublicContentUrl(request.url))
     request.headers.names().filter { it.lowercase() !in publicContentHeaders }.forEach(builder::removeHeader)
     // Bilibili CDN thumbnails need only a fixed public Referer, never account data.
-    if (request.url.host == "hdslb.com" || request.url.host.endsWith(".hdslb.com")) {
+    if (includeBiliImageReferer && (request.url.host == "hdslb.com" || request.url.host.endsWith(".hdslb.com"))) {
         builder.header("Referer", "https://www.bilibili.com/")
     }
     return builder.build()

@@ -13,7 +13,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -272,7 +272,7 @@ internal fun HomeStyleSingleColumnVideoCard(
                     cardShape,
                 )
             )
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = triggerClick,
                 onLongClick = if (isLongPressEnabled) onLongClick else null,
             ),

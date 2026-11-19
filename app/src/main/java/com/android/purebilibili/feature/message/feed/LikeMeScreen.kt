@@ -20,7 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.android.purebilibili.core.ui.components.AppIcon
 import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppText
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.android.purebilibili.feature.message.*
@@ -423,7 +423,7 @@ private fun LikeMeCard(
     MessageFeedCard(
         modifier = modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = { showMenu = true })
+            .appCombinedClickable(onClick = onClick, onLongClick = { showMenu = true })
             .messageSecondaryClick { showMenu = true }
     ) {
         Row(modifier = Modifier.padding(14.dp)) {

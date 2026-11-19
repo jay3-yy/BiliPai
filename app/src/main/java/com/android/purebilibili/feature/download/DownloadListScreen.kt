@@ -4,7 +4,6 @@ import com.android.purebilibili.core.util.responsiveContentWidth
 
 import com.android.purebilibili.core.ui.components.AppTextButton as TextButton
 
-import com.android.purebilibili.core.util.rememberHapticFeedback
 import com.android.purebilibili.core.util.HapticType
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -94,7 +93,7 @@ fun DownloadListScreen(
         com.android.purebilibili.core.ui.AppGlassPopupMotionSpec.UnanchoredExitMillis.toLong()
     } else 0L
     var deletingTaskId by remember { mutableStateOf<String?>(null) }
-    val downloadHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.REFRESH)
+    val downloadHaptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.REFRESH)
     val listLayout = rememberVideoListLayoutControl(defaultSingleColumn = true)
     val gridState = rememberLazyGridState()
     val columns = resolveVideoListColumns(
@@ -362,7 +361,7 @@ fun DownloadListScreen(
                             onPauseResume = {
                                 actionScope.launch {
                                     val currentTask = DownloadManager.tasks.value[task.id] ?: return@launch
-                                    if (currentTask.isDownloading) {
+                                    if (currentTask.isDownloading || currentTask.isWaitingForRetry) {
                                         DownloadManager.pauseDownload(task.id)
                                     } else if (currentTask.canResume) {
                                         DownloadManager.startDownload(task.id)
@@ -617,7 +616,11 @@ internal fun DownloadTaskItem(
                     ) {
                         when (task.status) {
                             DownloadStatus.QUEUED -> {
-                                AppText("排队中", color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                AppText(
+                                    if (task.isWaitingForRetry) "等待重试" else "排队中",
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
                             }
                             DownloadStatus.DOWNLOADING, DownloadStatus.MERGING -> {
                                 AppCircularProgressIndicator(
@@ -687,7 +690,7 @@ internal fun DownloadTaskItem(
         )
         val hasAssetSummary = assetTexts.isNotEmpty()
         val statusText = when (task.status) {
-            DownloadStatus.QUEUED -> "排队中..."
+            DownloadStatus.QUEUED -> if (task.isWaitingForRetry) "等待自动重试…" else "排队中..."
             DownloadStatus.PENDING -> "等待中..."
             DownloadStatus.DOWNLOADING -> buildString {
                 append("下载中 ${resolveDownloadTaskProgressPercent(task)}%")
@@ -758,11 +761,12 @@ internal fun DownloadTaskItem(
                     modifier = Modifier.size(48.dp),
                 )
             } else {
-                if (task.isDownloading || task.canResume) {
+                val canPause = task.isDownloading || task.isWaitingForRetry
+                if (canPause || task.canResume) {
                     AppIconButton(onClick = onPauseResume, modifier = Modifier.size(48.dp)) {
                         AppIcon(
-                            imageVector = if (task.isDownloading) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
-                            contentDescription = if (task.isDownloading) "暂停" else "继续",
+                            imageVector = if (canPause) Icons.Outlined.Pause else Icons.Outlined.PlayArrow,
+                            contentDescription = if (canPause) "暂停" else "继续",
                             tint = AppContentColors.accent()
                         )
                     }

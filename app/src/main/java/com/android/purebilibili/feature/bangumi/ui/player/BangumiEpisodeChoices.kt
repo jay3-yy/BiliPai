@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppInteractionColors
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.AppSurface
@@ -110,7 +111,8 @@ private fun BangumiEpisodeGridCard(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
-    val selectedColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
+    val selectedColors = AppInteractionColors.miuixContentSelection()
+        ?: resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
     AppSurface(
         onClick = onClick,
         modifier = modifier.semantics { selected = isSelected },

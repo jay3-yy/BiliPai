@@ -5,7 +5,7 @@ import com.android.purebilibili.core.ui.AppContentColors
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,7 +54,7 @@ internal data class LiveRoomCardUiModel(
     val title: String,
     val coverUrl: String,
     val hostName: String,
-    val viewerCount: Int,
+    val viewerCount: Int?,
     val areaName: String,
     val viewerText: String = "",
     val feedback: List<com.android.purebilibili.data.model.response.LiveFeedbackGroup> = emptyList(),
@@ -92,7 +92,7 @@ internal fun LiveRoomCard(
             .fillMaxWidth()
             .then(containerTransition.modifier)
             .onSecondaryClick(onLongPress?.let { callback -> { _: Offset -> callback() } })
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = containerTransition.onClick,
                 onLongClick = onLongPress,
                 role = Role.Button
@@ -162,18 +162,23 @@ internal fun LiveRoomCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
                     )
-                    Spacer(Modifier.width(AppSpacingTokens.Small))
-                    AppText(
-                        text = model.viewerText.ifBlank { "${formatLiveViewerCount(model.viewerCount)}人看过" },
-                        color = LiveStatusPalette.MediaContent,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            fontFeatureSettings = AppTypographyTokens.TabularNumerals
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(max = 110.dp),
-                    )
+                    val viewerLabel = model.viewerText.ifBlank {
+                        model.viewerCount?.let { "${formatLiveViewerCount(it)}人看过" }.orEmpty()
+                    }
+                    if (viewerLabel.isNotEmpty()) {
+                        Spacer(Modifier.width(AppSpacingTokens.Small))
+                        AppText(
+                            text = viewerLabel,
+                            color = LiveStatusPalette.MediaContent,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontFeatureSettings = AppTypographyTokens.TabularNumerals
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.widthIn(max = 110.dp),
+                        )
+                    }
                 }
             }
             Column(

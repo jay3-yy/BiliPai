@@ -797,6 +797,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 _uiState.value = _uiState.value.copy(
                     userItems = emptyList<DynamicItem>().toImmutableList(),
                     hasUserMore = true,
+                    userLoadedPageCount = 0,
                     userIsLoading = false,
                     userError = null
                 )
@@ -823,6 +824,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             _uiState.value = _uiState.value.copy(
                 userItems = emptyList<DynamicItem>().toImmutableList(),
                 hasUserMore = true,
+                userLoadedPageCount = 0,
                 userIsLoading = false,
                 userError = null
             )
@@ -887,7 +889,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         current.copy(
                             userItems = items,
                             userIsLoading = states?.refresh is LoadState.Loading || states?.append is LoadState.Loading,
-                            userError = failure?.message ?: failure?.let { "加载失败" },
+                            userError = failure?.let { it.message?.takeIf(String::isNotBlank) ?: "加载失败" },
+                            userLoadedPageCount = pages.size,
                             hasUserMore = states?.append?.endOfPaginationReached != true
                         )
                     }
@@ -896,7 +899,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             }
         )
         userPagingSession = session
-        _uiState.update { it.copy(userIsLoading = true, userError = null) }
+        _uiState.update { it.copy(userIsLoading = true, userError = null, userLoadedPageCount = 0) }
         userDynamicsJob = launchAccount { session.run() }
         session.awaitInitialLoad()
     }
@@ -1229,14 +1232,16 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
     
     // 评论区单一状态源：所有字段一次发射，避免「评论已到但 loading 还没关」这类中间帧。
     private val _commentUiState = MutableStateFlow(DynamicCommentUiState())
-    private val commentRepliesProjection = ReplyListProjection()
+    private val commentRepliesProjection = ReplyListProjection(foldDetectedReplies = true)
     internal val commentUiState: StateFlow<DynamicCommentUiState> = _commentUiState.contentFiltered(viewModelScope) { state, rules ->
-        state.copy(
-            comments = commentRepliesProjection.project(state.comments, rules).toImmutableList(),
-            pinnedReply = state.pinnedReply?.let {
-                com.android.purebilibili.data.repository.filterReplyForContent(it, rules)
-            },
+        val upMid = _selectedDynamic.value?.takeIf { it.id_str == state.dynamicId }
+            ?.modules?.module_author?.mid ?: 0L
+        val content = commentRepliesProjection.project(
+            ReplyListProjection.Content(state.comments, root = state.pinnedReply),
+            rules,
+            upMid,
         )
+        state.copy(comments = content.items.toImmutableList(), pinnedReply = content.root)
     }
 
     private val _dynamicCommentSortMode = MutableStateFlow(CommentSortMode.HOT)
@@ -1867,7 +1872,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             page = 1,
             ps = DYNAMIC_COMMENT_PAGE_SIZE,
             mode = sortMode.apiMode,
-            fallbackOnMissingLocation = target.type != 11
+            fallbackOnMissingLocation = target.type != 11,
+            continueAfterGoodsFilter = true,
         )
         return result.fold(
             onSuccess = { data ->
@@ -1991,7 +1997,8 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             initial = CommentPageRequest(state.nextPage, commentContinuation), mainList = true,
             load = { request -> CommentRepository.getMobileCommentsForSubject(applyDisplayFilter = false,
                 oid = target.oid, type = target.type, page = request.page, ps = DYNAMIC_COMMENT_PAGE_SIZE,
-                mode = sortMode.apiMode, continuation = request.continuation, fallbackOnMissingLocation = target.type != 11
+                mode = sortMode.apiMode, continuation = request.continuation, fallbackOnMissingLocation = target.type != 11,
+                continueAfterGoodsFilter = true,
             ).getOrThrow() },
             onPage = success@ { request, data ->
                 if (!currentRequest()) return@success
@@ -2823,17 +2830,15 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    fun checkDynamic(dynamicId: String, onResult: (Boolean, String) -> Unit) {
-        if (dynamicId.isBlank()) {
-            onResult(false, "无法识别该动态")
-            return
-        }
+    fun checkDynamic(dynamicId: String, text: String? = null) {
         val identity = activeAccountIdentity
         launchAccount {
             val status = com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.check(dynamicId)
-            if (identity == TokenManager.accountIdentity.value) {
-                onResult(status == com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityStatus.VISIBLE, status.message)
-            }
+            com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityFeedback.offer(
+                com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityNotice(
+                    identity, dynamicId, status, text, manual = true,
+                )
+            )
         }
     }
 
@@ -2944,6 +2949,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         appContext,
                         com.android.purebilibili.data.model.response.resolveCreatedDynamicId(response.data),
                         identity,
+                        text = content,
                     )
                 } else {
                     onResult(false, response.message.ifBlank { "转发失败" })
@@ -3038,6 +3044,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 if (draft.publishAtSeconds == null) refresh(selectedTab = _selectedTab.value)
                 com.android.purebilibili.feature.dynamic.visibility.DynamicVisibilityCheck.afterPublication(
                     appContext, createdId, identity,
+                    text = draft.text,
                     privatePublication = draft.private,
                     scheduledPublication = draft.publishAtSeconds != null,
                 )
@@ -3412,6 +3419,7 @@ data class DynamicUiState(
     val userError: String? = null,
     val hasMore: Boolean = true,
     val hasUserMore: Boolean = true, //  [新增] UP主动态是否有更多
+    val userLoadedPageCount: Int = 0,
     val incrementalRefreshBoundaryKey: String? = null,
     val incrementalPrependedCount: Int = 0,
     val errorSource: DynamicFeedErrorSource = DynamicFeedErrorSource.NONE,

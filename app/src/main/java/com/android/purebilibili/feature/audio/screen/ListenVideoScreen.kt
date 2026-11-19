@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -283,7 +284,9 @@ internal fun ListenVideoScreen(
             Spacer(modifier = Modifier.height(8.dp))
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = false,
                 modifier = Modifier.weight(1f)
+                    .verticalPriorityHorizontalPagerSwipe(pagerState),
             ) { page ->
                 ListenVideoPage(
                     section = ListenVideoSection.entries[page],

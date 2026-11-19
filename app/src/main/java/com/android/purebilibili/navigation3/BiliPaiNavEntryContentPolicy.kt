@@ -23,6 +23,7 @@ internal enum class BiliPaiNavEntryContentRole {
     LOGIN_ACTIVITY_SETTINGS,
     MESSAGE_NOTIFICATION_SETTINGS,
     PLUGINS_SETTINGS,
+    CONTENT_FILTER_HISTORY,
     JS_PLUGIN_CONTENT,
     EXTERNAL_MEDIA,
     BOTTOM_BAR_SETTINGS,
@@ -107,6 +108,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.LoginActivitySettings -> BiliPaiNavEntryContentRole.LOGIN_ACTIVITY_SETTINGS
         BiliPaiNavKey.MessageNotificationSettings -> BiliPaiNavEntryContentRole.MESSAGE_NOTIFICATION_SETTINGS
         is BiliPaiNavKey.PluginsSettings -> BiliPaiNavEntryContentRole.PLUGINS_SETTINGS
+        BiliPaiNavKey.ContentFilterHistory -> BiliPaiNavEntryContentRole.CONTENT_FILTER_HISTORY
         is BiliPaiNavKey.JsPluginContent -> BiliPaiNavEntryContentRole.JS_PLUGIN_CONTENT
         is BiliPaiNavKey.ExternalMedia -> BiliPaiNavEntryContentRole.EXTERNAL_MEDIA
         BiliPaiNavKey.BottomBarSettings -> BiliPaiNavEntryContentRole.BOTTOM_BAR_SETTINGS
@@ -122,7 +124,8 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         is BiliPaiNavKey.PersonalRecapUps -> BiliPaiNavEntryContentRole.PERSONAL_RECAP_UPS
         BiliPaiNavKey.History -> BiliPaiNavEntryContentRole.HISTORY
         is BiliPaiNavKey.HistorySearch -> BiliPaiNavEntryContentRole.HISTORY
-        BiliPaiNavKey.Favorite -> BiliPaiNavEntryContentRole.FAVORITE
+        BiliPaiNavKey.Favorite,
+        is BiliPaiNavKey.FavoritePgc -> BiliPaiNavEntryContentRole.FAVORITE
         BiliPaiNavKey.FavoriteSubscribed -> BiliPaiNavEntryContentRole.FAVORITE
         is BiliPaiNavKey.FavoriteSearch -> BiliPaiNavEntryContentRole.FAVORITE
         is BiliPaiNavKey.LikedVideos,

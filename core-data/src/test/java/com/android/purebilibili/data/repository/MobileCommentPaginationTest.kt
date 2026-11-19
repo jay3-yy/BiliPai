@@ -116,7 +116,7 @@ class MobileCommentPaginationTest {
             replies = listOf(ReplyItem(rpid = 2)), top = ReplyTop(upper = top),
             mainListContinuation = continuation,
         )
-        val merged = mergeCommentReplyLocations(data, listOf(
+        val merged = mergeCommentReplyMetadata(data, listOf(
             top.copy(like = 0, replyControl = ReplyControl(location = "IP属地：北京")),
         ))
         assertEquals(continuation, merged.mainListContinuation)

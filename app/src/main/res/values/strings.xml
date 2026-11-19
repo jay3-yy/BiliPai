@@ -1,4 +1,7 @@
 <resources>
+    <string name="dynamic_live_photo_badge">实况</string>
+    <string name="link_preview_card_label">链接预览</string>
+    <string name="history_activity_stats">阅读与观看统计</string>
     <string name="mini_player_notification_channel">小窗播放</string>
     <string name="app_name">BiliPai</string>
 
@@ -261,7 +264,7 @@
     <string name="tips_01_title">1. 浏览评论时缩小视频</string>
     <string name="tips_01_content">在“全屏与手势”中设置“浏览时缩小视频”，可选择适用的视频方向或仅在暂停时缩小。</string>
     <string name="tips_02_title">2. 快速回到顶部</string>
-    <string name="tips_02_content">首页刷太深时，双击底栏「首页」图标，或双击顶部频道标题，可快速回到列表顶部。</string>
+    <string name="tips_02_content">再次点按底栏「首页」或当前选中的顶部频道，可回到列表顶部。双击底栏「首页」可回顶并刷新。</string>
     <string name="tips_03_title">3. 封面长按有快捷操作</string>
     <string name="tips_03_content">长按视频卡片可快速预览，并直接执行「稍后再看」等常用动作。</string>
     <string name="tips_04_title">4. 搜索不只搜视频</string>
@@ -681,6 +684,10 @@
     <string name="appearance_list_item_style_summary">统一圆角条目，或跟随当前界面预设</string>
     <string name="appearance_icon_style_title">图标样式</string>
     <string name="appearance_icon_style_summary">柔和或鲜明的多色、主题色容器、单色线性；所有设置入口统一切换</string>
+    <string name="appearance_settings_icon_glyphs_title">设置图标字形</string>
+    <string name="appearance_settings_icon_glyphs_summary">选择设置页面使用的图标轮廓</string>
+    <string name="appearance_settings_icon_glyphs_phosphor">Phosphor</string>
+    <string name="appearance_settings_icon_glyphs_original">原版</string>
     <string name="appearance_single_choice_title">单选菜单样式</string>
     <string name="appearance_single_choice_summary">从条目旁展开，或居中弹出</string>
     <string name="appearance_animation_glass_title">动画、振动与玻璃效果</string>
@@ -1021,4 +1028,42 @@
     <string name="companion_show_video">仅显示视频</string>
     <string name="video_companion_title">大屏视频分栏</string>
     <string name="video_companion_summary">大屏下从各页面打开视频时保留来源页，可拖动调整宽度或切换单栏</string>
+    <string name="ai_reply_filter_title">AI 挂机评论过滤</string>
+    <string name="ai_reply_filter_description">在本机识别疑似 AI 挂机账号。随内容过滤插件启停</string>
+    <string name="ai_reply_filter_on">已开启</string>
+    <string name="ai_reply_filter_off">已关闭</string>
+    <string name="ai_reply_filter_hide">折叠疑似挂机账号的评论</string>
+    <string name="ai_reply_filter_allowlist">识别白名单 UID</string>
+    <string name="ai_reply_filter_allowlist_hint">每行一个 UID。白名单仅豁免 AI 挂机识别。</string>
+    <string name="ai_reply_filter_invalid_uid">请填写有效的正整数 UID</string>
+    <string name="ai_reply_filter_save">保存</string>
+    <string name="ai_reply_filter_expand">疑似 AI 挂机评论 · 点击展开</string>
+    <string name="ai_reply_filter_collapse">重新折叠</string>
+    <string name="ai_reply_filter_open_thread">疑似 AI 挂机回复 · 查看楼中楼</string>
+    <string name="repeated_reply_filter_title">重复刷评过滤</string>
+    <string name="repeated_reply_filter_description">同一评论区内，多个账号短时间发布相似长评时自动折叠</string>
+    <string name="repeated_reply_expand">疑似重复刷评 · 点击展开</string>
+    <string name="repeated_reply_open_thread">疑似重复刷评 · 查看楼中楼</string>
+    <string name="filtered_content_history_title">过滤记录</string>
+    <string name="filtered_content_history_entry">查看已折叠或隐藏的评论和视频</string>
+    <string name="filtered_content_history_limit">本次应用会话中，每类最多保留最近 %1$d 条</string>
+    <string name="filtered_content_history_comments">评论</string>
+    <string name="filtered_content_history_videos">视频</string>
+    <string name="filtered_content_history_empty">本次会话暂无记录</string>
+    <string name="filtered_content_history_no_text">无文字内容</string>
+    <string name="filtered_content_reason_user">用户黑名单</string>
+    <string name="filtered_content_reason_keyword">共享屏蔽词</string>
+    <string name="filtered_content_reason_pattern">视频标题正则</string>
+    <string name="filtered_content_reason_ad_title">广告标题屏蔽词</string>
+    <string name="filtered_content_reason_goods">带货评论</string>
+    <string name="filtered_content_reason_duration">视频时长过滤</string>
+    <string name="filtered_content_reason_plays">播放量过滤</string>
+    <string name="filtered_content_reason_likes">点赞率过滤</string>
+    <string name="filtered_content_reason_category">分区关键词</string>
+    <string name="filtered_content_reason_sponsored">推广内容</string>
+    <string name="filtered_content_reason_clickbait">标题党</string>
+    <string name="filtered_content_reason_tag">标签关键词</string>
+    <string name="filtered_content_reason_plugin">插件过滤</string>
+    <string name="hot_danmaku_send_plus_one">加一，发送同款弹幕</string>
+    <string name="hot_danmaku_send_error">发送失败，请重试</string>
 </resources>

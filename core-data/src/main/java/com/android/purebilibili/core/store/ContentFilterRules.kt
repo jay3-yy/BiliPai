@@ -34,6 +34,9 @@ data class ContentFilterSnapshot(
     val legacyDanmakuKeywords: List<String> = emptyList(),
     val danmakuFilteringEnabled: Boolean = false,
     val videoPolicy: ContentVideoKeywordPolicy = ContentVideoKeywordPolicy(),
+    val hideAiReplies: Boolean = false,
+    val filterRepeatedReplies: Boolean = false,
+    val aiReplyAllowedMids: Set<Long> = emptySet(),
 ) {
     private val titleRegex by lazy { compileContentTitlePattern(videoTitlePattern) }
     fun blocksText(text: String, scope: ContentFilterScope): Boolean =
@@ -51,14 +54,26 @@ data class ContentFilterSnapshot(
 
     fun blocksUser(mid: Long): Boolean = mid in blockedMids
 
-    fun blocksVideo(title: String, mid: Long, followed: Boolean = false,
-        surface: ContentVideoSurface = ContentVideoSurface.OTHER): Boolean {
-        if (blocksUser(mid)) return true
+    fun blocksVideo(
+        title: String, mid: Long, followed: Boolean = false,
+        surface: ContentVideoSurface = ContentVideoSurface.OTHER,
+    ): Boolean = videoFilterReason(title, mid, followed, surface) != null
+
+    fun videoFilterReason(
+        title: String, mid: Long, followed: Boolean = false,
+        surface: ContentVideoSurface = ContentVideoSurface.OTHER,
+    ): ContentFilterReason? {
         val contentAllowed = keywordFilteringEnabled && mid !in videoPolicy.whitelist &&
             !(surface == ContentVideoSurface.RECOMMEND && followed && videoPolicy.exemptFollowed)
-        return (contentAllowed && ContentFilterScope.VIDEO in scopes && keywords.any { title.contains(it, true) }) ||
-            (contentAllowed && videoPolicy.applies(surface) && titleRegex?.containsMatchIn(title) == true) ||
-            (adFilteringEnabled && adVideoKeywords.any { title.contains(it, true) })
+        return when {
+            blocksUser(mid) -> ContentFilterReason.BLOCKED_USER
+            contentAllowed && ContentFilterScope.VIDEO in scopes && keywords.any { title.contains(it, true) } ->
+                ContentFilterReason.KEYWORD
+            contentAllowed && videoPolicy.applies(surface) && titleRegex?.containsMatchIn(title) == true ->
+                ContentFilterReason.TITLE_PATTERN
+            adFilteringEnabled && adVideoKeywords.any { title.contains(it, true) } -> ContentFilterReason.AD_TITLE
+            else -> null
+        }
     }
 }
 
@@ -67,6 +82,9 @@ object ContentFilterRules {
     private val words = stringPreferencesKey("content.shared_keywords")
     private val scopeKey = stringSetPreferencesKey("content.shared_keyword_scopes")
     private val legacyWords = stringPreferencesKey(ContentDisplaySettings.COMMENT_BLOCKED_KEYWORDS)
+    private val repeatedReplies = booleanPreferencesKey("content.filter_repeated_replies")
+    private val hideAiReplies = booleanPreferencesKey("content.hide_ai_replies")
+    private val aiReplyAllowedMids = stringSetPreferencesKey("content.ai_reply_allowed_mids")
     private val goods = booleanPreferencesKey(ContentDisplaySettings.BLOCK_GOODS_REPLY)
     private val videoPattern = stringPreferencesKey("content.video_title_pattern")
     private val adWords = stringPreferencesKey("content.ad_video_keywords")
@@ -93,6 +111,9 @@ object ContentFilterRules {
             scopes = prefs[scopeKey]?.map { ContentFilterScope.valueOf(it) }?.toSet()
                 ?: setOf(ContentFilterScope.COMMENT),
             blockGoodsReplies = prefs[goods] ?: false,
+            hideAiReplies = prefs[hideAiReplies] ?: false,
+            filterRepeatedReplies = prefs[repeatedReplies] ?: false,
+            aiReplyAllowedMids = prefs[aiReplyAllowedMids].orEmpty().mapNotNull(String::toLongOrNull).toSet(),
             videoTitlePattern = prefs[videoPattern].orEmpty(),
             adVideoKeywords = parseCommentKeywords(prefs[adWords].orEmpty()),
             legacyDanmakuKeywords = parseCommentKeywords(prefs[danmakuWords].orEmpty()),
@@ -137,6 +158,17 @@ object ContentFilterRules {
 
     suspend fun saveAdKeywords(context: Context, text: String) {
         store(context).edit { it[adWords] = parseCommentKeywords(text).joinToString("\n") }
+    }
+
+    suspend fun saveRepeatedReplyFilter(context: Context, enabled: Boolean) {
+        store(context).edit { it[repeatedReplies] = enabled }
+    }
+
+    suspend fun saveAiReplyFilter(context: Context, hide: Boolean, allowedMids: Set<Long>) {
+        store(context).edit {
+            it[hideAiReplies] = hide
+            it[aiReplyAllowedMids] = allowedMids.map(Long::toString).toSet()
+        }
     }
 
     suspend fun save(context: Context, text: String, scopes: Set<ContentFilterScope>) {

@@ -21,7 +21,7 @@ internal fun resolveNextQueuedDownloadTaskIds(
 
     return tasks
         .asSequence()
-        .filter { it.status == DownloadStatus.QUEUED }
+        .filter { it.status == DownloadStatus.QUEUED && !it.isWaitingForRetry }
         .sortedWith(compareBy<DownloadTask> { it.createdAt }.thenBy { it.id })
         .take(slots)
         .map { it.id }
@@ -39,19 +39,3 @@ internal fun shouldRefreshStaleDownloadUrls(
 ): Boolean = createdAtMs in 1 until nowMs && (nowMs - createdAtMs) >= thresholdMs
 
 internal const val STALE_DOWNLOAD_URL_REFRESH_THRESHOLD_MS = 30L * 60_000L
-
-internal enum class DownloadWorkerCancellationDecision {
-    FINISH,
-    RETRY
-}
-
-internal fun resolveDownloadWorkerCancellationDecision(
-    status: DownloadStatus?
-): DownloadWorkerCancellationDecision {
-    return when (status) {
-        null,
-        DownloadStatus.PAUSED,
-        DownloadStatus.COMPLETED -> DownloadWorkerCancellationDecision.FINISH
-        else -> DownloadWorkerCancellationDecision.RETRY
-    }
-}

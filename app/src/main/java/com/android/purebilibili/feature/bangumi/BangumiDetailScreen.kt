@@ -1744,12 +1744,17 @@ internal fun EpisodeSelectionSheet(
     detail: BangumiDetail,
     onDismiss: () -> Unit,
     onEpisodeClick: (BangumiEpisode) -> Unit,
-    onSeasonClick: (Long) -> Unit
+    onSeasonClick: (Long) -> Unit,
+    currentEpisodeId: Long = 0L,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val sourceEpisodes = detail.episodes.orEmpty()
     var episodesDescending by remember(detail.seasonId) { mutableStateOf(false) }
-    var selectedPage by remember(detail.seasonId, sourceEpisodes.size) { mutableIntStateOf(0) }
+    val episodesPerPage = 50
+    val initialIndex = sourceEpisodes.indexOfFirst { it.id == currentEpisodeId }.coerceAtLeast(0)
+    var selectedPage by remember(detail.seasonId, currentEpisodeId, sourceEpisodes.size) {
+        mutableIntStateOf(initialIndex / episodesPerPage)
+    }
     val episodes = remember(sourceEpisodes, episodesDescending) {
         orderBangumiEpisodes(sourceEpisodes, episodesDescending)
     }
@@ -1853,11 +1858,11 @@ internal fun EpisodeSelectionSheet(
             )
 
             //  分页选择器（超过50集时显示）
-            val episodesPerPage = 50
             val totalPages = resolveBangumiEpisodePageCount(episodes.size, episodesPerPage)
 
             if (totalPages > 1) {
                 LazyRow(
+                    state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = selectedPage),
                     contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -1895,8 +1900,14 @@ internal fun EpisodeSelectionSheet(
                 episodes
             }
 
+            val episodeGridState = androidx.compose.runtime.key(selectedPage, episodesDescending) {
+                androidx.compose.foundation.lazy.grid.rememberLazyGridState(
+                    initialFirstVisibleItemIndex = displayEpisodes.indexOfFirst { it.id == currentEpisodeId }.coerceAtLeast(0),
+                )
+            }
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Adaptive(172.dp),
+                state = episodeGridState,
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1909,6 +1920,7 @@ internal fun EpisodeSelectionSheet(
                     val episode = displayEpisodes[index]
                     EpisodeListItem(
                         episode = episode,
+                        isPlaying = episode.id == currentEpisodeId,
                         progressFraction = rememberBangumiEpisodeProgressLookup()(episode),
                         onClick = { onEpisodeClick(episode) }
                     )
@@ -1924,13 +1936,14 @@ internal fun EpisodeSelectionSheet(
 @Composable
 private fun EpisodeListItem(
     episode: BangumiEpisode,
+    isPlaying: Boolean,
     progressFraction: Float? = null,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(enabled = !isPlaying, onClick = onClick)
             .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1986,10 +1999,10 @@ private fun EpisodeListItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // 集数
                 AppText(
-                    text = "第${episode.title}话",
+                    text = episode.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = AppContentColors.primaryText(),
+                    color = if (isPlaying) AppContentColors.accent() else AppContentColors.primaryText(),
                     maxLines = 1,
                     modifier = Modifier.weight(1f, fill = false)
                 )

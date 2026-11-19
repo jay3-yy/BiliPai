@@ -71,6 +71,7 @@ import com.android.purebilibili.core.store.HomeWallpaperEffectMode
 import com.android.purebilibili.core.store.CommonListHeaderCollapseMode
 import com.android.purebilibili.core.store.HomeWallpaperEffectScope
 import com.android.purebilibili.core.store.SettingsManager
+import com.android.purebilibili.core.store.SettingsIconGlyphs
 import com.android.purebilibili.core.store.ThemeModeRoleOverrides
 import com.android.purebilibili.core.store.ThemeRoleOverrides
 import coil3.compose.AsyncImage
@@ -298,6 +299,11 @@ fun AppearanceSettingsContent(
             AppSegmentOption(AppSingleChoicePresentation.WINDOW_POPUP, context.getString(R.string.appearance_display_choice_popup)),
             AppSegmentOption(AppSingleChoicePresentation.CENTERED_DIALOG, context.getString(R.string.appearance_display_choice_dialog)),
         )
+    }
+    val settingsIconGlyphOptions = remember(context) {
+        SettingsIconGlyphs.entries.map { glyphs ->
+            AppSegmentOption(glyphs, context.getString(glyphs.labelResId))
+        }
     }
     val listState = rememberLazyListState()
     val focusRequest by SettingsSearchFocusController.request.collectAsStateWithLifecycle()
@@ -699,6 +705,32 @@ fun AppearanceSettingsContent(
                             AppPreferenceDivider()
                         }
 
+                        SettingsItemAnchor(SETTINGS_ICON_GLYPHS_SETTING_ID) {
+                            SettingsSingleChoicePreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.SETTINGS_ICON_GLYPHS),
+                                title = settingItemTitle(SETTINGS_ICON_GLYPHS_SETTING_ID, context),
+                                subtitle = context.getString(R.string.appearance_settings_icon_glyphs_summary),
+                                options = settingsIconGlyphOptions,
+                                selectedValue = themeConfiguration.settingsIconGlyphs,
+                                optionLeading = { glyphs ->
+                                    AppIcon(
+                                        imageVector = rememberSettingsVector(
+                                            resolveSettingsIconResource(SettingsIconRole.NAVIGATION, glyphs),
+                                        ),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                },
+                                onSelectionChange = { glyphs ->
+                                    scope.launch {
+                                        SettingsManager.setSettingsIconGlyphs(context, glyphs)
+                                    }
+                                },
+                            )
+                        }
+
+                        AppPreferenceDivider()
+
                         SettingsItemAnchor("appearance.single_choice_presentation") {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.CHOICE_MENU_STYLE),
@@ -1024,7 +1056,7 @@ fun AppearanceSettingsContent(
                                 if (!state.seedPaletteStyle.enabled) {
                                     AppPreferenceDivider()
                                     ThemePresetChoiceSetting(
-                                        icon = rememberMaterialSymbol(R.drawable.ms_brightness_medium_24),
+                                        icon = rememberSettingsVector(R.drawable.ph_sun_dim_24, R.drawable.ms_brightness_medium_24),
                                         title = context.getString(R.string.appearance_color_contrast_title),
                                         subtitle = resolveColorContrastSubtitle(state.colorContrast),
                                         selectedValue = state.colorContrast,
@@ -1199,7 +1231,7 @@ fun AppearanceSettingsContent(
                                                                     contentAlignment = Alignment.Center
                                                                 ) {
                                                                     AppIcon(
-                                                                        com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_check_24),
+                                                                        rememberSettingsVector(R.drawable.ph_check_24, R.drawable.ms_check_24),
                                                                         contentDescription = null,
                                                                         tint = swatch.primary,
                                                                         modifier = Modifier.size(12.dp)
@@ -1626,7 +1658,7 @@ fun AppearanceSettingsContent(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             AppIcon(
-                                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_photo_24),
+                                                rememberSettingsVector(R.drawable.ph_image_24, R.drawable.ms_photo_24),
                                                 contentDescription = null,
                                                 tint = AppContentColors.secondaryText(),
                                                 modifier = Modifier.size(24.dp)
@@ -1651,7 +1683,7 @@ fun AppearanceSettingsContent(
                                 }
 
                                 AppIcon(
-                                    com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                                    rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
                                     contentDescription = null,
                                     tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
                                     modifier = Modifier.size(16.dp)
@@ -2156,7 +2188,7 @@ fun AppearanceSettingsContent(
                             }
 
                             AppIcon(
-                                com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_keyboard_arrow_right_24),
+                                rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
                                 contentDescription = null,
                                 tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
                                 modifier = Modifier.size(16.dp)
@@ -2465,7 +2497,7 @@ fun AppearanceSettingsContent(
                         AppPreferenceDivider(modifier = Modifier.padding(start = 16.dp))
                         SettingsItemAnchor("appearance.show_profile_edit_button") {
                             AppSwitchPreference(
-                                icon = com.android.purebilibili.feature.settings.rememberMaterialSymbol(com.android.purebilibili.R.drawable.ms_edit_note_24),
+                                icon = rememberSettingsVector(R.drawable.ph_note_pencil_24, R.drawable.ms_edit_note_24),
                                 title = settingItemTitle("appearance.show_profile_edit_button"),
                                 subtitle = if (showProfileEditButton) {
                                     context.getString(R.string.appearance_profile_edit_on)

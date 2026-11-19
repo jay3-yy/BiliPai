@@ -1,12 +1,8 @@
 package com.android.purebilibili.navigation3
 
 import com.android.purebilibili.feature.settings.SettingsRootCategory
-import com.android.purebilibili.navigation.ScreenRoutes
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class BiliPaiNavBackStackPolicyTest {
 
@@ -31,24 +27,10 @@ class BiliPaiNavBackStackPolicyTest {
     }
 
     @Test
-    fun initialBackStack_usesOnboardingWhenRequired() {
-        assertEquals(
-            listOf(BiliPaiNavKey.Onboarding),
-            resolveInitialBiliPaiBackStack(
-                firstRoute = ScreenRoutes.Home.route,
-                onboardingRequired = true
-            )
-        )
-    }
-
-    @Test
     fun initialBackStack_usesMainHostForMainApp() {
         assertEquals(
             listOf(BiliPaiNavKey.MainHost),
-            resolveInitialBiliPaiBackStack(
-                firstRoute = ScreenRoutes.Profile.route,
-                onboardingRequired = false
-            )
+            resolveInitialBiliPaiBackStack()
         )
     }
 
@@ -56,11 +38,7 @@ class BiliPaiNavBackStackPolicyTest {
     fun initialBackStack_opensPortraitFeedOnStartupWhenEnabled() {
         assertEquals(
             listOf(BiliPaiNavKey.MainHost, BiliPaiNavKey.Story()),
-            resolveInitialBiliPaiBackStack(
-                firstRoute = ScreenRoutes.Home.route,
-                onboardingRequired = false,
-                openPortraitFeedOnStartup = true
-            )
+            resolveInitialBiliPaiBackStack(openPortraitFeedOnStartup = true)
         )
     }
 
@@ -288,24 +266,5 @@ class BiliPaiNavBackStackPolicyTest {
                 category,
             )
         )
-    }
-
-    @Test
-    fun onboardingFinishEntersMainHostInsteadOfDirectHomeRoute() {
-        val sourceFile = listOf(
-            File("app/src/main/java/com/android/purebilibili/navigation/AppNavigation.kt"),
-            File("src/main/java/com/android/purebilibili/navigation/AppNavigation.kt")
-        ).first { it.exists() }
-        val source = sourceFile.readText()
-        val onboardingFinishBlock = source
-            .substringAfter("BiliPaiNavEntryContentRole.ONBOARDING")
-            .substringBefore("BiliPaiNavEntryContentRole.SETTINGS")
-
-        assertTrue(onboardingFinishBlock.contains("USER_AGREEMENT_ACK_KEY"))
-        assertTrue(onboardingFinishBlock.contains("onDisagree"))
-        assertTrue(onboardingFinishBlock.contains("finishAffinity()"))
-        assertTrue(onboardingFinishBlock.contains("resolveInitialBiliPaiBackStack("))
-        assertFalse(onboardingFinishBlock.contains("applyOnboardingSettingsGuidePreset("))
-        assertFalse(onboardingFinishBlock.contains("navigation3BackStack = listOf(BiliPaiNavKey.Home)"))
     }
 }

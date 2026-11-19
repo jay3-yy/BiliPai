@@ -25,6 +25,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
@@ -77,6 +78,7 @@ fun WebViewScreen(
     onMatchClick: ((contestId: Long) -> Unit)? = null,
     onArticleCollectionClick: ((collectionId: Long) -> Unit)? = null,
     onCommentLink: ((url: String) -> Unit)? = null,
+    topBarActions: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -150,6 +152,7 @@ fun WebViewScreen(
                     }
                 },
                 actions = {
+                    topBarActions?.invoke(this)
                     TextButton(onClick = { openExternal(externalUrl ?: currentPageUrl) }, modifier = Modifier.appElasticPress()) {
                         Text("外部打开")
                     }

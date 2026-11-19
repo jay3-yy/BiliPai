@@ -246,7 +246,10 @@ data class ReplyItem(
     // [新增] 评论类型 (1=视频, 11=动态, 17=专栏...)，用于翻译接口
     @Serializable(with = FlexibleIntSerializer::class)
     @SerialName("type")
-    val replyType: Int = 1
+    val replyType: Int = 1,
+
+    @Transient val aiBotFolded: Boolean = false,
+    @Transient val repeatedReplyFolded: Boolean = false,
 )
 
 //  UP主操作信息
@@ -343,7 +346,10 @@ data class ReplyMember(
 
     @SerialName("user_sailing_v2")
     @Serializable(with = ReplyUserSailingOrNullSerializer::class)
-    val userSailingV2: ReplyUserSailing? = null
+    val userSailingV2: ReplyUserSailing? = null,
+
+    @Serializable(with = FlexibleStringSerializer::class)
+    val sign: String = "",
 )
 
 @Serializable
@@ -637,6 +643,7 @@ data class ReplyContentUrl(
     @Serializable(with = FlexibleStringSerializer::class)
     val title: String = "",
     @Serializable(with = FlexibleStringSerializer::class)
+    @JsonNames("pc_url")
     val url: String = "",
     @Serializable(with = FlexibleStringSerializer::class)
     @JsonNames("appUrlSchema", "app_url_schema")

@@ -4,6 +4,7 @@ import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import com.android.purebilibili.core.ui.components.wallpaperMediaCardSurface
@@ -84,7 +85,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
@@ -178,6 +179,7 @@ import com.android.purebilibili.core.util.rememberResponsiveSpacing
 import com.android.purebilibili.data.model.response.HistoryBusiness
 import com.android.purebilibili.data.model.response.HistoryItem
 import com.android.purebilibili.data.model.response.FavoriteSection
+import com.android.purebilibili.data.model.response.FavoritePgcStatus
 import com.android.purebilibili.data.model.response.FavoriteSearchScope
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.article.ArticleSharedElementSlot
@@ -261,6 +263,7 @@ fun CommonListScreen(
     initialSearchQuery: String = "",
     initialFavoriteSearchScope: FavoriteSearchScope = FavoriteSearchScope.CURRENT_FOLDER,
     initialFavoriteSubscribed: Boolean = false,
+    initialFavoriteSection: FavoriteSection = FavoriteSection.VIDEO,
     isSearchDestination: Boolean = false,
     onOpenSearchDestination: ((String, Boolean) -> Unit)? = null,
     listScopedSearchChannel: kotlinx.coroutines.channels.Channel<String>? = null,
@@ -280,7 +283,19 @@ fun CommonListScreen(
     val subscribedFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val favoriteFolderListState = androidx.compose.foundation.lazy.rememberLazyListState()
     val favoritePagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState>() }
-    val historyPagerGridStates = remember { mutableStateMapOf<Int, androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState>() }
+    // 各分类在导航 entry 重挂载时恢复完整 lane 锚点，不能只保存在普通 remember 的映射中。
+    val historyPagerGridStates = if (viewModel is HistoryViewModel) {
+        HistoryContentFilter.entries.indices.associateWith { pageIndex ->
+            androidx.compose.runtime.key(pageIndex) {
+                rememberSaveable(
+                    accountIdentity,
+                    saver = com.android.purebilibili.core.ui.CompatibleStaggeredGridStateSaver,
+                ) {
+                    com.android.purebilibili.core.ui.createCompatibleStaggeredGridState()
+                }
+            }
+        }
+    } else emptyMap()
 
     // 📱 响应式布局参数
     // Fix: 手机端(Compact)使用较小的最小宽度以保证2列显示 (360dp / 170dp = 2.1 -> 2列)
@@ -567,7 +582,14 @@ fun CommonListScreen(
     }
     var showFavoriteCleanInvalidConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var showFavoriteDynamicShareConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
-    var favoriteSection by rememberSaveable { androidx.compose.runtime.mutableStateOf(FavoriteSection.VIDEO) }
+    var favoriteSection by rememberSaveable(initialFavoriteSection) { mutableStateOf(initialFavoriteSection) }
+    val favoriteCategoryViewModel = if (favoriteViewModel != null && favoriteSection != FavoriteSection.VIDEO) {
+        androidx.lifecycle.viewmodel.compose.viewModel<FavoriteCategoryViewModel>(
+            key = "favorite_category:${favoriteSection.name}",
+        )
+    } else null
+    val favoriteCategoryState = favoriteCategoryViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+    val isFavoriteCategorySelectionMode = favoriteCategoryState?.isSelecting == true
     var isFavoriteBatchMode by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var selectedFavoriteResourceIds by rememberSaveable { androidx.compose.runtime.mutableStateOf(setOf<Long>()) }
     var showFavoriteBatchDeleteConfirm by rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
@@ -682,7 +704,16 @@ fun CommonListScreen(
         }
     }
 
-    val favoriteCategoryGridState = com.android.purebilibili.core.ui.rememberCompatibleStaggeredGridState()
+    val genericFavoriteCategoryGridState = com.android.purebilibili.core.ui.rememberCompatibleStaggeredGridState()
+    val pgcGridState = if (favoriteViewModel != null) {
+        rememberFavoritePgcGridState(
+            section = favoriteSection,
+            status = favoriteCategoryState?.pgcStatus ?: FavoritePgcStatus.WATCHING,
+            accountMid = accountIdentity.mid,
+            accountGeneration = accountIdentity.generation,
+        )
+    } else null
+    val favoriteCategoryGridState = pgcGridState ?: genericFavoriteCategoryGridState
     val liveCommonListBottomPadding = LocalBottomBarContentPadding.current
     val isBottomBarVisibleForPadding = com.android.purebilibili.core.ui.LocalBottomBarVisible.current
     val bottomOverlayPadding = com.android.purebilibili.core.ui.rememberStickyBottomBarContentPadding(
@@ -708,7 +739,7 @@ fun CommonListScreen(
         subscribedFolderListState,
         favoriteFolderListState,
         favoriteCategoryGridState,
-        historyPagerGridStates.size
+        historyPagerGridStates
     ) {
         {
             when {
@@ -871,9 +902,9 @@ fun CommonListScreen(
         primaryGridState.scrollToItem(0)
         subscribedFolderListState.scrollToItem(0)
         favoriteFolderListState.scrollToItem(0)
-        favoriteCategoryGridState.scrollToItem(0)
+        genericFavoriteCategoryGridState.requestScrollToItem(0)
         favoritePagerGridStates.clear()
-        historyPagerGridStates.clear()
+        historyPagerGridStates.values.forEach { it.requestScrollToItem(0) }
     }
     val hideListTopSearchBar = shouldHideListTopSearchBar(
         bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
@@ -925,8 +956,15 @@ fun CommonListScreen(
     val headerScrollDirection = remember(commonListHeaderCollapseMode, activeCommonListScrollState) { floatArrayOf(0f) }
     val commonListHeaderCollapseEnabled = supportsCollapsibleCommonListHeader &&
         commonListHeaderCollapseMode != CommonListHeaderCollapseMode.ALWAYS_VISIBLE
+    // 历史页始终保留状态栏位置；竖屏播放器隐藏系统栏时，返回背景不能跟着收缩。
+    // 顶栏与折叠边界共用此值，玻璃、MD3 和 Miuix 均不随系统栏显隐改变列表起点。
+    val commonListStatusBarInsets = if (historyViewModel != null) {
+        WindowInsets.statusBarsIgnoringVisibility
+    } else {
+        WindowInsets.statusBars
+    }
     val statusBarHeightPx = with(LocalDensity.current) {
-        WindowInsets.statusBars.asPaddingValues().calculateTopPadding().toPx()
+        commonListStatusBarInsets.asPaddingValues().calculateTopPadding().toPx()
     }
     val commonListHeaderMaxCollapsePx = if (commonListHeaderCollapseEnabled) {
         (headerHeightPx.toFloat() - statusBarHeightPx).coerceAtLeast(0f)
@@ -1362,9 +1400,12 @@ fun CommonListScreen(
                         onPinchColumnsChange = onPinchColumnsChange,
                         onPinchColumnsEnd = onPinchColumnsEnd,
                     )
-                } else if (favoriteViewModel != null && favoriteSection != FavoriteSection.VIDEO) {
+                } else if (favoriteCategoryViewModel != null && favoriteCategoryState != null) {
                     FavoriteCategoryRoute(
                         section = favoriteSection,
+                        viewModel = favoriteCategoryViewModel,
+                        state = favoriteCategoryState,
+                        pageActive = isCurrentPage,
                         query = searchQuery,
                         contentPadding = PaddingValues(
                             top = headerHeightDp,
@@ -1455,8 +1496,9 @@ fun CommonListScreen(
                     if (historyViewModel != null) {
                         HorizontalPager(
                             state = historyPagerState,
-                            userScrollEnabled = !isHistoryBatchMode,
-                            modifier = Modifier.fillMaxSize(),
+                            userScrollEnabled = false,
+                            modifier = Modifier.fillMaxSize()
+                                .verticalPriorityHorizontalPagerSwipe(historyPagerState, enabled = !isHistoryBatchMode),
                             beyondViewportPageCount = 0,
                         ) { pageIndex ->
                             val pageFilter = historyFilters.getOrElse(pageIndex) { HistoryContentFilter.ALL }
@@ -1480,9 +1522,7 @@ fun CommonListScreen(
                                     }
                                 )
                             }
-                            val pageGridState = historyPagerGridStates.getOrPut(pageIndex) {
-                                com.android.purebilibili.core.ui.createCompatibleStaggeredGridState()
-                            }
+                            val pageGridState = historyPagerGridStates.getValue(pageIndex)
 
                             val recapHeader: (@Composable () -> Unit)? = if (
                                 pageFilter == HistoryContentFilter.ALL && personalRecapEnabled == true &&
@@ -1681,7 +1721,9 @@ fun CommonListScreen(
             }
 
             // 2. 顶层：悬浮顶栏 (使用 onGloballyPositioned 测量高度)
-            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode || isFavoriteDetailBatchMode || isFavoriteFolderSelectionMode || isLikedBatchMode
+            val isBatchActionMode = isFavoriteBatchMode || isHistoryBatchMode ||
+                isFavoriteDetailBatchMode || isFavoriteFolderSelectionMode || isLikedBatchMode ||
+                isFavoriteCategorySelectionMode
             val exitFavoriteBatchMode: () -> Unit = {
                 isFavoriteBatchMode = false
                 selectedFavoriteResourceIds = emptySet()
@@ -1694,14 +1736,18 @@ fun CommonListScreen(
                 isFavoriteDetailBatchMode = false
                 selectedFavoriteDetailKeys = emptySet()
             }
-            androidx.activity.compose.BackHandler(enabled = isBatchActionMode) {
+            val exitBatchActionMode: () -> Unit = {
                 when {
+                    isFavoriteCategorySelectionMode -> favoriteCategoryViewModel?.clearSelection()
                     isFavoriteFolderSelectionMode -> exitFavoriteFolderSelection()
                     isFavoriteBatchMode -> exitFavoriteBatchMode()
                     isHistoryBatchMode -> exitHistoryBatchMode()
                     isLikedBatchMode -> { isLikedBatchMode = false; selectedLikedKeys = emptySet() }
                     else -> exitFavoriteDetailBatchMode()
                 }
+            }
+            androidx.activity.compose.BackHandler(enabled = isCurrentPage && isBatchActionMode) {
+                exitBatchActionMode()
             }
             val batchActions: @Composable () -> Unit = {
                 if (isLikedBatchMode && likedVideosViewModel != null) {
@@ -1902,6 +1948,7 @@ fun CommonListScreen(
                     content = {
                     AppTopBar(
                         title = when {
+                            isFavoriteCategorySelectionMode -> "已选：${favoriteCategoryState?.selectedIds?.size ?: 0}"
                             isFavoriteFolderSelectionMode -> "已选收藏夹: ${selectedFavoriteFolderIds.size}"
                             isFavoriteBatchMode -> "已选: ${selectedFavoriteResourceIds.size}"
                             isHistoryBatchMode -> "已选: ${selectedHistoryKeys.size}"
@@ -1916,18 +1963,18 @@ fun CommonListScreen(
                         )
                             .onGloballyPositioned { coordinates ->
                                 fixedTopBarHeightPx = coordinates.size.height
-                            },
+                            }
+                            // 仅历史入口接管顶部 inset，并由 padding 消费，避免原生顶栏重复留白。
+                            .then(if (historyViewModel != null) {
+                                Modifier.windowInsetsPadding(
+                                    commonListStatusBarInsets.only(WindowInsetsSides.Top)
+                                )
+                            } else Modifier),
                         navigationIcon = {
                             AppIconButton(
                                 onClick = {
                                     if (isBatchActionMode) {
-                                        when {
-                                            isFavoriteFolderSelectionMode -> exitFavoriteFolderSelection()
-                                            isFavoriteBatchMode -> exitFavoriteBatchMode()
-                                            isHistoryBatchMode -> exitHistoryBatchMode()
-                                            isLikedBatchMode -> { isLikedBatchMode = false; selectedLikedKeys = emptySet() }
-                                            else -> exitFavoriteDetailBatchMode()
-                                        }
+                                        exitBatchActionMode()
                                     } else {
                                         onBack()
                                     }
@@ -2224,6 +2271,8 @@ fun CommonListScreen(
                                 selectedValue = favoriteSection,
                                 onSelectionChange = { section ->
                                     if (favoriteSection != section) {
+                                        favoriteCategoryViewModel?.clearSelection()
+                                        genericFavoriteCategoryGridState.requestScrollToItem(0)
                                         favoriteSection = section
                                         favoriteBrowseSection = FavoriteBrowseSection.OWNED
                                         searchQuery = ""
@@ -2391,7 +2440,7 @@ fun CommonListScreen(
                 }
             }
 
-            if (isBatchActionMode) {
+            if (isBatchActionMode && !isFavoriteCategorySelectionMode) {
                 AppFloatingToolbar(
                     modifier = Modifier.align(Alignment.BottomCenter)
                         .padding(start = 12.dp, end = 12.dp, bottom = bottomOverlayPadding + 12.dp),
@@ -3303,6 +3352,7 @@ internal fun CommonListContent(
                                         item = historyItem,
                                         modifier = if (alignRows) Modifier.fillMaxHeight() else Modifier,
                                         stacked = columns > 1,
+                                        matchRowHeight = alignRows,
                                         selected = isSelected,
                                         batchMode = historyBatchMode,
                                         transitionEnabled = cardTransitionEnabled,
@@ -3571,7 +3621,7 @@ private fun HistoryArticleCard(
             .onGloballyPositioned { coordinates ->
                 cardBoundsRef.value = coordinates.boundsInRoot()
             }
-            .combinedClickable(
+            .appCombinedClickable(
                 onClick = appActionWithFeedback(triggerArticleClick),
                 onLongClick = onLongClick
             ),

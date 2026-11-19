@@ -16,6 +16,15 @@ internal fun shouldPersistDownloadTaskUpdate(
     updated: DownloadTask
 ): Boolean {
     return previous.status != updated.status ||
+        previous.workToken != updated.workToken ||
+        previous.videoUrl != updated.videoUrl ||
+        previous.audioUrl != updated.audioUrl ||
+        previous.videoBackupUrls != updated.videoBackupUrls ||
+        previous.audioBackupUrls != updated.audioBackupUrls ||
+        previous.urlsRefreshedAt != updated.urlsRefreshedAt ||
+        previous.downloadAttempts != updated.downloadAttempts ||
+        previous.automaticRetries != updated.automaticRetries ||
+        previous.retryNotBeforeMs != updated.retryNotBeforeMs ||
         previous.filePath != updated.filePath ||
         previous.fileSize != updated.fileSize ||
         previous.downloadedSize != updated.downloadedSize ||

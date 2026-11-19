@@ -53,29 +53,30 @@ fun TipsSettingsScreen(
         extraBottomPadding = 32.dp
     )
 
+    val glyphs = currentSettingsIconGlyphs()
     val rememberedSecondaryTextColor = AppContentColors.secondaryText()
-    val basicTips = remember(rememberedSecondaryTextColor) {
+    val basicTips = remember(rememberedSecondaryTextColor, glyphs) {
         listOf(
             TipEntry(
-                iconResId = R.drawable.ms_draw_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_pencil_line_24, R.drawable.ms_draw_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_01_title,
                 contentResId = R.string.tips_01_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_keyboard_arrow_up_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_caret_up_24, R.drawable.ms_keyboard_arrow_up_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_02_title,
                 contentResId = R.string.tips_02_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_touch_app_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_vibrate_24, R.drawable.ms_touch_app_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_03_title,
                 contentResId = R.string.tips_03_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_find_in_page_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_file_magnifying_glass_24, R.drawable.ms_find_in_page_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_04_title,
                 contentResId = R.string.tips_04_content,
@@ -86,25 +87,25 @@ fun TipsSettingsScreen(
     val hiddenTips = remember(rememberedSecondaryTextColor) {
         listOf(
             TipEntry(
-                iconResId = R.drawable.ms_skip_next_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_skip_forward_24, R.drawable.ms_skip_next_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_05_title,
                 contentResId = R.string.tips_05_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_cameraswitch_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_camera_rotate_24, R.drawable.ms_cameraswitch_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_06_title,
                 contentResId = R.string.tips_06_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_picture_in_picture_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_picture_in_picture_24, R.drawable.ms_picture_in_picture_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_07_title,
                 contentResId = R.string.tips_07_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_thumb_up_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_thumbs_up_24, R.drawable.ms_thumb_up_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_08_title,
                 contentResId = R.string.tips_08_content,
@@ -121,19 +122,19 @@ fun TipsSettingsScreen(
                 contentResId = R.string.tips_09_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_label_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_tag_simple_24, R.drawable.ms_label_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_10_title,
                 contentResId = R.string.tips_10_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_card_giftcard_fill_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_gift_24, R.drawable.ms_card_giftcard_fill_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_11_title,
                 contentResId = R.string.tips_11_content,
             ),
             TipEntry(
-                iconResId = R.drawable.ms_link_24,
+                iconResId = glyphs.selectResource(R.drawable.ph_link_24, R.drawable.ms_link_24),
                 iconTint = rememberedSecondaryTextColor,
                 titleResId = R.string.tips_12_title,
                 contentResId = R.string.tips_12_content,
@@ -217,7 +218,7 @@ private fun TipItem(
 ) {
     val title = stringResource(titleResId)
     val content = stringResource(contentResId)
-    val icon = rememberMaterialSymbol(iconResId)
+    val icon = rememberSettingsVector(iconResId)
     val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
     val iconContentColor = rememberAdaptivePreferenceIconContentColor(effectiveIconTint)
     Row(

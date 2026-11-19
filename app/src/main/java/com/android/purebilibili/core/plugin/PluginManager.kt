@@ -2,6 +2,8 @@
 package com.android.purebilibili.core.plugin
 
 import com.android.purebilibili.core.filter.keepsVideo
+import com.android.purebilibili.core.filter.recordFilteredVideo
+import com.android.purebilibili.core.store.ContentFilterReason
 
 import android.content.Context
 import com.android.purebilibili.core.util.Logger
@@ -162,7 +164,11 @@ object PluginManager {
             rules?.keepsVideo(item, feedKind) != false &&
                 feedPlugins.all { plugin ->
                 try {
-                    plugin.shouldShowItem(item, feedKind)
+                    plugin.shouldShowItem(item, feedKind).also { show ->
+                        if (!show && plugin.id != BuiltinPluginIds.FEED_FILTER && plugin.id != BuiltinPluginIds.AD_FILTER) {
+                            recordFilteredVideo(item, ContentFilterReason.PLUGIN, plugin.name)
+                        }
+                    }
                 } catch (e: Exception) {
                     Logger.e(TAG, " Feed plugin failed: ${plugin.name}", e)
                     true

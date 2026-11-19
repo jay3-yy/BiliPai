@@ -322,6 +322,22 @@ data class LiveAreaListResponse(
 )
 
 @Serializable
+data class LiveAreaNavigationResponse(
+    val code: Int,
+    val message: String = "",
+    val data: List<LiveAreaNavigationTab>? = null,
+)
+
+@Serializable
+data class LiveAreaNavigationTab(
+    @Serializable(with = FlexibleIntSerializer::class) val id: Int,
+    @SerialName("parent_id") @Serializable(with = FlexibleIntSerializer::class) val parentId: Int = 0,
+    @SerialName("parent_name") val parentName: String = "",
+    val name: String = "",
+    val pic: String = "",
+)
+
+@Serializable
 data class LiveAreaParent(
     val id: Int = 0,
     val name: String = "",

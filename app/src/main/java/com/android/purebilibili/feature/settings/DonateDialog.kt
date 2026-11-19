@@ -9,7 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -352,7 +352,7 @@ private fun DonationQr(onEnlarge: () -> Unit, onLongPress: () -> Unit, modifier:
                 // 过渡层包住完整图片装饰；原图已有底色，不另绘制固定白色底板。
                 .then(imageModifier)
                 .clip(AppShapes.container(ContainerLevel.Card))
-                .combinedClickable(
+                .appCombinedClickable(
                     onClickLabel = stringResource(R.string.settings_donate_enlarge),
                     onClick = onEnlarge,
                     onLongClickLabel = stringResource(R.string.settings_donate_save),
@@ -428,6 +428,7 @@ private fun DonationActions(
 @Composable
 private fun DonationQrPreview(onBack: () -> Unit, onLongPress: () -> Unit, imageModifier: Modifier = Modifier) {
     val longPressLabel = stringResource(R.string.settings_donate_save)
+    val feedbackLongPress = com.android.purebilibili.core.ui.components.appLongClickWithFeedback(onLongClick = onLongPress)
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -444,8 +445,8 @@ private fun DonationQrPreview(onBack: () -> Unit, onLongPress: () -> Unit, image
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .pointerInput(onLongPress) { detectTapGestures(onLongPress = { onLongPress() }) }
-                .semantics { onLongClick(label = longPressLabel) { onLongPress(); true } }
+                .pointerInput(feedbackLongPress) { detectTapGestures(onLongPress = { feedbackLongPress() }) }
+                .semantics { onLongClick(label = longPressLabel) { feedbackLongPress(); true } }
                 .then(imageModifier),
         )
         AppText(

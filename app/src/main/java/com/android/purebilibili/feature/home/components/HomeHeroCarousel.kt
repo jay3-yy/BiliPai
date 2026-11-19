@@ -15,7 +15,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -459,13 +459,15 @@ private fun HomeHeroCarouselCard(
         label = "hero_card_press",
     )
     // 长按复用网格卡片的预览弹窗（立即播放/稍后再看/保存封面/分享/屏蔽/不感兴趣）。
-    val hapticFeedback = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
+    val hapticFeedback = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.LONG_PRESS)
     val longPressAction: (() -> Unit)? = onLongPress?.let { callback ->
         {
-            hapticFeedback.performHapticFeedback(
-                androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
-            )
-            if (!isDissolving) callback(video)
+            if (!isDissolving) {
+                hapticFeedback.performHapticFeedback(
+                    androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
+                )
+                callback(video)
+            }
         }
     }
 
@@ -514,7 +516,7 @@ private fun HomeHeroCarouselCard(
             .clip(cardShape)
             .onPlaced { coordinates -> cardCoordsRef.value = coordinates }
             .onSizeChanged { measuredCoverSize = it }
-            .combinedClickable(
+            .appCombinedClickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = requestCardClick,

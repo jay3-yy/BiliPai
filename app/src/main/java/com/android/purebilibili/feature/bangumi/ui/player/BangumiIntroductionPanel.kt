@@ -5,7 +5,7 @@ package com.android.purebilibili.feature.bangumi.ui.player
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.selection.SelectionContainer
+import com.android.purebilibili.core.ui.common.AppNativeSelectionContainer as SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +48,6 @@ internal fun BangumiIntroductionPanel(
 ) {
     val pagerState = rememberPagerState { 2 }
     val scope = rememberCoroutineScope()
-    val pagerDragged by pagerState.interactionSource.collectIsDraggedAsState()
     val customPagerInteractions = remember(pagerState) { MutableInteractionSource() }
     val customPagerDragged by customPagerInteractions.collectIsDraggedAsState()
     val tabAnimationSpec = rememberVideoContentTabSelectionAnimationSpec()
@@ -73,7 +72,7 @@ internal fun BangumiIntroductionPanel(
                 },
                 indicatorPositionProvider = { pagerState.tabIndicatorPosition },
                 isScrollInProgressProvider = { pagerState.isScrollInProgress },
-                isPagerDraggingProvider = { pagerDragged || customPagerDragged },
+                isPagerDraggingProvider = { customPagerDragged },
                 pagerTargetPositionProvider = { pagerState.targetPage.toFloat() },
                 role = AppTabRowRole.SECONDARY,
                 modifier = Modifier.weight(1f),
@@ -114,14 +113,9 @@ internal fun BangumiIntroductionPanel(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize().verticalPriorityHorizontalPagerSwipe(
                         state = pagerState,
-                        enabled = glass,
-                        forceVerticalPriority = true,
                         dragInteractionSource = customPagerInteractions,
                     ),
-                    userScrollEnabled = !glass,
-                    flingBehavior = if (glass) androidx.compose.foundation.pager.PagerDefaults.flingBehavior(
-                        pagerState, snapAnimationSpec = tabAnimationSpec,
-                    ) else null,
+                    userScrollEnabled = false,
                     beyondViewportPageCount = 1,
                 ) { page ->
                     when (page) {

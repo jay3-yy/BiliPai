@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.bangumi
 
+import com.android.purebilibili.core.ui.components.AppSnackbarHost
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import android.os.Build
 import com.android.purebilibili.core.ui.LocalNavigationBackHandler
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,7 +27,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.android.purebilibili.core.ui.rememberBackToTopButtonEnabled
 import com.android.purebilibili.core.ui.components.AppLiquidGlassBackToTopButton
@@ -70,8 +69,6 @@ import com.android.purebilibili.core.ui.components.AppSegmentOption
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppSearchIcon
 import com.android.purebilibili.core.util.responsiveContentWidth
-import com.android.purebilibili.feature.download.DownloadManager
-import kotlinx.coroutines.launch
 
 /** Navigation-compatible state holder for the Bangumi/Cinema hub. */
 @Composable
@@ -79,12 +76,12 @@ fun BangumiScreen(
     onBack: () -> Unit,
     onBangumiClick: (Long) -> Unit,
     onBangumiEpisodeClick: (Long, Long) -> Unit = { seasonId, _ -> onBangumiClick(seasonId) },
-    onPlayFollow: (Long) -> Unit = onBangumiClick,
     initialType: Int = 1,
     viewModel: BangumiHubViewModel = viewModel(),
     onPlayEpisode: ((Long, com.android.purebilibili.data.model.response.BangumiEpisode) -> Unit)? = null,
     onReviewsClick: (Long, String) -> Unit = { _, _ -> },
     onUserClick: (Long) -> Unit = {},
+    onOpenFavoritePgc: ((BangumiChannel) -> Unit)? = null,
 ) {
     BangumiCardTransitionHost(
         onBangumiClick = onBangumiClick,
@@ -97,10 +94,10 @@ fun BangumiScreen(
             onBack = onBack,
             onBangumiClick = openSeason,
             onBangumiEpisodeClick = openEpisode,
-            onPlayFollow = onPlayFollow,
             initialType = initialType,
             viewModel = viewModel,
             backEnabled = hubVisible,
+            onOpenFavoritePgc = onOpenFavoritePgc,
         )
     }
 }
@@ -110,10 +107,10 @@ private fun BangumiHubScreen(
     onBack: () -> Unit,
     onBangumiClick: (Long) -> Unit,
     onBangumiEpisodeClick: (Long, Long) -> Unit,
-    onPlayFollow: (Long) -> Unit,
     initialType: Int,
     viewModel: BangumiHubViewModel,
     backEnabled: Boolean,
+    onOpenFavoritePgc: ((BangumiChannel) -> Unit)?,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val channelPager = rememberBangumiChannelPagerState(
@@ -123,12 +120,11 @@ private fun BangumiHubScreen(
     )
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
     var searchQuery by rememberSaveable(state.accountGeneration) { mutableStateOf("") }
     val selectionActive = state.page == BangumiHubPage.FOLLOW &&
-        state.followStates[state.channel to state.followStatus]?.selectedIds?.isNotEmpty() == true
+        state.followStates[state.channel to state.followStatus]?.isSelecting == true
     var scrollToTopRequestId by rememberSaveable { mutableIntStateOf(0) }
     var homeScrollIndex by rememberSaveable { mutableIntStateOf(0) }
     var homeScrollOffset by rememberSaveable { mutableIntStateOf(0) }
@@ -198,7 +194,7 @@ private fun BangumiHubScreen(
     AppScaffold(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0.dp),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { AppSnackbarHost(snackbarHostState) },
         topBar = {
             BiliPaiImmersiveTopBar(
                 backdrop = chromeBackdrop.takeIf { progressiveActive },
@@ -272,7 +268,7 @@ private fun BangumiHubScreen(
                             ),
                         )
                     }
-                    if (state.page != BangumiHubPage.SEARCH) {
+                    if (state.page == BangumiHubPage.HOME || state.page == BangumiHubPage.FOLLOW) {
                         AppLiquidAwareTabRow(
                             // Glass indicator fills the measured slot; native geometry keeps its defaults.
                             liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
@@ -285,7 +281,7 @@ private fun BangumiHubScreen(
                             isScrollInProgressProvider = {
                                 state.page == BangumiHubPage.HOME && channelPager.isScrollInProgress
                             },
-                            enabled = !selectionActive,
+                            enabled = state.followStates[state.channel to state.followStatus]?.isMutating != true,
                             onSelectionChange = viewModel::selectChannel,
                             dragSelectionEnabled = true,
                             tapPressRefractionEnabled = true,
@@ -310,7 +306,10 @@ private fun BangumiHubScreen(
                             options = BangumiFollowStatus.entries.map { AppSegmentOption(it, it.label) },
                             selectedValue = state.followStatus,
                             enabled = state.followStates[state.channel to state.followStatus]?.isMutating != true,
-                            onSelectionChange = viewModel::selectFollowStatus,
+                            onSelectionChange = {
+                                if (it == state.followStatus) scrollToTopRequestId++
+                                else viewModel.selectFollowStatus(it)
+                            },
                             dragSelectionEnabled = true,
                             tapPressRefractionEnabled = true,
                             modifier = Modifier
@@ -358,14 +357,16 @@ private fun BangumiHubScreen(
                         onPrepareChannel = viewModel::prepareHomeChannel,
                         onBangumiClick = onBangumiClick,
                         onEpisodeClick = onBangumiEpisodeClick,
-                        onPlayFollow = onPlayFollow,
                         onRefreshHome = { viewModel.refreshHome() },
+                        onRefreshHomeFollows = viewModel::refreshHomeFollows,
                         onLoadMoreHomeRecommendations = viewModel::loadMoreHomeRecommendations,
                         onLoadMoreHomeFollows = viewModel::loadMoreHomeFollows,
                         onRetryTimeline = viewModel::retryTimeline,
-                        onTimelineRangeSelected = viewModel::selectTimelineRange,
                         onOpenIndex = viewModel::openIndex,
-                        onOpenFollow = viewModel::openFollowManager,
+                        onOpenFollow = {
+                            if (onOpenFavoritePgc != null) onOpenFavoritePgc(state.channel)
+                            else viewModel.openFollowManager()
+                        },
                         onIndexCategorySelected = viewModel::selectIndexCategory,
                         onIndexFilterSelected = viewModel::selectIndexFilter,
                         onToggleFiltersExpanded = viewModel::toggleIndexFiltersExpanded,
@@ -383,12 +384,6 @@ private fun BangumiHubScreen(
                         onUnfollowSingle = viewModel::unfollowSingleItem,
                         onSearchCategorySelected = viewModel::selectSearchCategory,
                         onLoadMoreSearch = viewModel::loadMoreSearch,
-                        onSaveCover = { url, title ->
-                            scope.launch {
-                                val saved = DownloadManager.saveImageToGallery(context, url, title)
-                                snackbarHostState.showSnackbar(if (saved) "封面已保存" else "保存封面失败")
-                            }
-                        },
                         onHomeScrollChanged = { index, offset ->
                             homeScrollIndex = index
                             homeScrollOffset = offset

@@ -76,6 +76,7 @@ import com.android.purebilibili.feature.dynamic.components.prepareImagePreviewSo
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.appDesktopFocusableItemVisuals
+import com.android.purebilibili.feature.web.PublicWebLinkText
 
 private const val ARTICLE_BANNER_CORNER_RADIUS_DP = 20f
 private const val ARTICLE_BODY_IMAGE_CORNER_RADIUS_DP = 18f
@@ -675,19 +676,24 @@ private fun ArticleDetailContent(
                                     fontWeight = FontWeight.SemiBold
                                 )
                             } else {
-                                AppText(
-                                    text = buildArticleAnnotatedString(
-                                        spans = block.spans,
-                                        defaultColor = articleTextColor,
-                                        baseFontSize = headingStyle.fontSize,
-                                        linkListener = articleLinkListener,
-                                        explicitFontScale = readingPreferences.fontScale,
-                                        backgroundColor = articleBackground,
-                                    ),
-                                    style = headingStyle,
-                                    color = articleTextColor,
-                                    fontWeight = FontWeight.SemiBold
+                                val text = buildArticleAnnotatedString(
+                                    spans = block.spans,
+                                    defaultColor = articleTextColor,
+                                    baseFontSize = headingStyle.fontSize,
+                                    linkListener = articleLinkListener,
+                                    explicitFontScale = readingPreferences.fontScale,
+                                    backgroundColor = articleBackground,
                                 )
+                                PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
+                                    AppText(
+                                        text = text,
+                                        style = headingStyle,
+                                        color = articleTextColor,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = previewModifier,
+                                        onTextLayout = onPreviewTextLayout,
+                                    )
+                                }
                             }
                         }
 
@@ -699,18 +705,23 @@ private fun ArticleDetailContent(
                                     color = articleTextColor
                                 )
                             } else {
-                                AppText(
-                                    text = buildArticleAnnotatedString(
-                                        spans = block.spans,
-                                        defaultColor = articleTextColor,
-                                        baseFontSize = bodyStyle.fontSize,
-                                        linkListener = articleLinkListener,
-                                        explicitFontScale = readingPreferences.fontScale,
-                                        backgroundColor = articleBackground,
-                                    ),
-                                    style = bodyStyle,
-                                    color = articleTextColor,
+                                val text = buildArticleAnnotatedString(
+                                    spans = block.spans,
+                                    defaultColor = articleTextColor,
+                                    baseFontSize = bodyStyle.fontSize,
+                                    linkListener = articleLinkListener,
+                                    explicitFontScale = readingPreferences.fontScale,
+                                    backgroundColor = articleBackground,
                                 )
+                                PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
+                                    AppText(
+                                        text = text,
+                                        style = bodyStyle,
+                                        color = articleTextColor,
+                                        modifier = previewModifier,
+                                        onTextLayout = onPreviewTextLayout,
+                                    )
+                                }
                             }
                         }
 
@@ -723,19 +734,23 @@ private fun ArticleDetailContent(
                                     modifier = Modifier.padding(start = 12.dp)
                                 )
                             } else {
-                                AppText(
-                                    text = buildArticleAnnotatedString(
-                                        spans = block.spans,
-                                        defaultColor = articleQuoteColor,
-                                        baseFontSize = bodyStyle.fontSize,
-                                        linkListener = articleLinkListener,
-                                        explicitFontScale = readingPreferences.fontScale,
-                                        backgroundColor = articleBackground,
-                                    ),
-                                    style = bodyStyle,
-                                    color = articleQuoteColor,
-                                    modifier = Modifier.padding(start = 12.dp)
+                                val text = buildArticleAnnotatedString(
+                                    spans = block.spans,
+                                    defaultColor = articleQuoteColor,
+                                    baseFontSize = bodyStyle.fontSize,
+                                    linkListener = articleLinkListener,
+                                    explicitFontScale = readingPreferences.fontScale,
+                                    backgroundColor = articleBackground,
                                 )
+                                PublicWebLinkText(text) { previewModifier, onPreviewTextLayout ->
+                                    AppText(
+                                        text = text,
+                                        style = bodyStyle,
+                                        color = articleQuoteColor,
+                                        modifier = Modifier.padding(start = 12.dp).then(previewModifier),
+                                        onTextLayout = onPreviewTextLayout,
+                                    )
+                                }
                             }
                         }
 

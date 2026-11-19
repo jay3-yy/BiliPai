@@ -47,4 +47,11 @@ class DownloadResumePolicyTest {
         assertTrue(plan.alreadyComplete)
         assertEquals(100L, plan.initialDownloadedBytes)
     }
+    @Test
+    fun oversizedTemporaryFileRestartsInsteadOfBeingPublished() {
+        val plan = resolveResumableDownloadPlan(existingBytes = 101L, totalBytes = 100L, acceptsRanges = true)
+        assertFalse(plan.alreadyComplete)
+        assertFalse(plan.append)
+        assertEquals(0L, plan.rangeStartBytes)
+    }
 }

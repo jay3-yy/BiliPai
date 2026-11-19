@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,6 +40,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -71,6 +75,8 @@ fun LiveSuperChatFlashOverlay(
     persistUntilDismiss: Boolean = false,
     maxWidthDp: Int = 360,
     onCountdownPauseChange: (LiveDanmakuItem, Boolean) -> Unit = { _, _ -> },
+    opacity: Float = 1f,
+    cardScale: Float = 1f,
 ) {
     var current by remember { mutableStateOf<LiveDanmakuItem?>(null) }
     var remainingSec by remember { mutableIntStateOf(0) }
@@ -109,7 +115,7 @@ fun LiveSuperChatFlashOverlay(
                 .widthIn(max = maxWidthDp.coerceIn(260, 640).dp)
         ) {
             val item = current ?: return@AnimatedVisibility
-            Box {
+            Box(Modifier.liveSuperChatAppearance(opacity, cardScale)) {
                 LiveSuperChatCard(
                     item = item.copy(superChatEndTime = flashEndTime),
                     onExpired = { current = null },
@@ -130,4 +136,41 @@ fun LiveSuperChatFlashOverlay(
             }
         }
     }
+}
+
+@Composable
+internal fun LiveSuperChatPreview(
+    maxWidthDp: Int,
+    opacity: Float,
+    cardScale: Float,
+    modifier: Modifier = Modifier,
+) {
+    val example = remember {
+        LiveDanmakuItem(
+            text = "这是一条醒目留言示例",
+            uname = "全屏醒目留言预览",
+            isSuperChat = true,
+            superChatPrice = "¥30",
+        )
+    }
+    BoxWithConstraints(modifier, contentAlignment = Alignment.BottomStart) {
+        Box(Modifier.width(minOf(maxWidth, maxWidthDp.dp)).liveSuperChatAppearance(opacity, cardScale)) {
+            LiveSuperChatCard(
+                item = example,
+                persistent = true,
+                interactive = false,
+                onExpired = {},
+                onUserClick = {},
+                onReport = {},
+            )
+        }
+    }
+}
+
+private fun Modifier.liveSuperChatAppearance(opacity: Float, scale: Float): Modifier = graphicsLayer {
+    alpha = opacity
+    scaleX = scale
+    scaleY = scale
+    transformOrigin = TransformOrigin(0f, 1f)
+    compositingStrategy = CompositingStrategy.ModulateAlpha
 }

@@ -14,7 +14,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -96,7 +96,7 @@ internal fun PersonalMediaCardFrame(
             .clip(cardShape)
             .then(nativeSnapshotModifier)
             .then(cardSurface.modifier)
-            .combinedClickable(
+            .appCombinedClickable(
                 enabled = enabled,
                 onClick = appActionWithFeedback(onClick),
                 onLongClick = onLongClick,

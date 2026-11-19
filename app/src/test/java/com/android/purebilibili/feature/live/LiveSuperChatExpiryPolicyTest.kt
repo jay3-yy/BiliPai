@@ -93,38 +93,56 @@ class LiveSuperChatExpiryPolicyTest {
     }
 
     @Test
-    fun flashFollowsDanmakuSwitch() {
+    fun portraitFlashFollowsDanmakuSwitch() {
         assertTrue(
             shouldShowLiveSuperChatFlash(
                 showMediaOverlays = true,
+                isLandscape = false,
                 isDanmakuEnabled = true,
-                flashEnabled = true
+                flashEnabled = true,
             )
         )
         assertFalse(
             shouldShowLiveSuperChatFlash(
                 showMediaOverlays = true,
+                isLandscape = false,
                 isDanmakuEnabled = false,
-                flashEnabled = true
+                flashEnabled = true,
             )
         )
     }
 
     @Test
-    fun flashRespectsIndependentSettingAndClearScreen() {
-        assertFalse(
+    fun landscapeSuperChatsRemainVisibleWhenRegularDanmakuIsOff() {
+        assertTrue(
             shouldShowLiveSuperChatFlash(
                 showMediaOverlays = true,
-                isDanmakuEnabled = true,
-                flashEnabled = false
+                isLandscape = true,
+                isDanmakuEnabled = false,
+                flashEnabled = true,
             )
         )
-        assertFalse(
-            shouldShowLiveSuperChatFlash(
-                showMediaOverlays = false,
-                isDanmakuEnabled = true,
-                flashEnabled = true
+    }
+
+    @Test
+    fun flashRespectsIndependentSettingAndHiddenOverlays() {
+        for (isLandscape in listOf(false, true)) {
+            assertFalse(
+                shouldShowLiveSuperChatFlash(
+                    showMediaOverlays = true,
+                    isLandscape = isLandscape,
+                    isDanmakuEnabled = true,
+                    flashEnabled = false,
+                )
             )
-        )
+            assertFalse(
+                shouldShowLiveSuperChatFlash(
+                    showMediaOverlays = false,
+                    isLandscape = isLandscape,
+                    isDanmakuEnabled = true,
+                    flashEnabled = true,
+                )
+            )
+        }
     }
 }

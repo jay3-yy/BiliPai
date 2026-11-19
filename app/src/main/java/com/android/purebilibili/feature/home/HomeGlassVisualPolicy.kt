@@ -36,7 +36,7 @@ private val GLOBAL_WALLPAPER_PAGE_ROUTES = setOf(
     "home", "dynamic", "profile", "settings", "settings_category", "settings_search",
     "appearance_settings", "home_settings", "icon_settings", "animation_settings",
     "playback_settings", "permission_settings", "space_privacy_settings", "login_activity_settings", "message_notification_settings",
-    "plugins_settings", "bottom_bar_settings", "settings_share", "webdav_backup", "tips_settings",
+    "plugins_settings", "content_filter_history", "bottom_bar_settings", "settings_share", "webdav_backup", "tips_settings",
     "history", "history_search", "favorite", "favorite_subscribed", "favorite_search",
     "liked_videos", "watch_later", "watch_later_search", "following", "download_list",
     "live_list", "live_search", "live_area", "live_area_detail", "live_following",

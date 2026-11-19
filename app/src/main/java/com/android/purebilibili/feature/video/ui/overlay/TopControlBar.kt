@@ -15,7 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -45,6 +46,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.currentStateAsState
+import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppIcons
 import androidx.compose.ui.unit.constrainHeight
@@ -207,7 +210,7 @@ fun TopControlBar(
                 left = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(buttonSpacing)) {
                         HeaderIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回", onBack, iconSize = if (glass) 15 else 20)
-                        if (!simplifiedPortrait && policy.showHome && onHomeClick != null) {
+                        if (onHomeClick != null) {
                             HeaderIcon(Icons.Outlined.Home, "返回首页", onHomeClick)
                         }
                     }
@@ -501,12 +504,13 @@ internal fun PortraitEngagementRail(
     onLike: () -> Unit,
     onTriple: () -> Unit,
     onCoin: () -> Unit,
-    onComment: () -> Unit,
+    onComment: (() -> Unit)?,
     onFavorite: () -> Unit,
     onQuickFavorite: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
     shareMenuSource: com.android.purebilibili.core.ui.components.AppGlassMenuSource? = null,
+    whiteFilledIcons: Boolean = false,
 ) {
     val triplePress = rememberPiliHeaderTriplePressState()
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
@@ -525,34 +529,42 @@ internal fun PortraitEngagementRail(
         ) {
             Box(Modifier.likeBurstAnchor()) {
                 PortraitRailAction(
-                    icon = if (likeStatusKnown && isLiked) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                    icon = if (whiteFilledIcons || (likeStatusKnown && isLiked)) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
                     label = "点赞", onClick = onLike,
                     active = likeStatusKnown && isLiked,
+                    whiteFilledIcon = whiteFilledIcons,
                     gestureModifier = gesture, progress = triplePress.progress,
                     count = likeCount,
                     reserveCountSpace = true,
                 )
             }
+            if (onComment != null) {
+                PortraitRailAction(
+                    icon = if (whiteFilledIcons) Icons.Filled.ChatBubble else Icons.Outlined.Forum,
+                    label = "评论", onClick = onComment,
+                    count = commentCount,
+                    reserveCountSpace = true,
+                )
+            }
             PortraitRailAction(
-                icon = Icons.Outlined.Forum, label = "评论", onClick = onComment,
-                count = commentCount,
-                reserveCountSpace = true,
-            )
-            PortraitRailAction(
-                icon = AppIcons.BiliCoin, label = "投币", onClick = onCoin,
+                icon = if (whiteFilledIcons) ImageVector.vectorResource(R.drawable.ic_portrait_coin_filled_24) else AppIcons.BiliCoin,
+                label = "投币", onClick = onCoin,
                 active = isCoined, progress = triplePress.progress,
+                whiteFilledIcon = whiteFilledIcons,
                 count = coinCount, reserveCountSpace = true,
             )
             PortraitRailAction(
-                icon = if (isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                icon = if (whiteFilledIcons || isFavorited) Icons.Filled.Star else Icons.Outlined.StarBorder,
                 label = "收藏", onClick = onFavorite, active = isFavorited,
+                whiteFilledIcon = whiteFilledIcons,
                 onLongClick = onQuickFavorite, modifier = Modifier.favoriteFolderMenuSource(),
                 progress = triplePress.progress,
                 count = favoriteCount,
                 reserveCountSpace = true,
             )
             PortraitRailAction(
-                icon = Icons.Outlined.Share, label = "分享", onClick = onShare,
+                icon = if (whiteFilledIcons) ImageVector.vectorResource(R.drawable.ms_share_fill_24) else Icons.Outlined.Share,
+                label = "分享", onClick = onShare,
                 count = shareCount, reserveCountSpace = true,
                 modifier = shareMenuSource?.let { Modifier.appGlassMenuSource(it, onOpen = onShare) } ?: Modifier,
             )
@@ -569,6 +581,7 @@ private fun PortraitRailAction(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     active: Boolean = false,
+    whiteFilledIcon: Boolean = false,
     count: Long? = null,
     reserveCountSpace: Boolean = false,
     onLongClick: (() -> Unit)? = null,
@@ -589,7 +602,8 @@ private fun PortraitRailAction(
                     onClick(action = { feedbackClick(); true })
                 }
             }
-            .then(gestureModifier ?: Modifier.combinedClickable(
+            .then(gestureModifier ?: Modifier.appCombinedClickable(
+                longPressScene = com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS,
                 role = Role.Button, onClick = feedbackClick, onLongClick = onLongClick,
             ))
             .padding(vertical = 4.dp),
@@ -608,9 +622,16 @@ private fun PortraitRailAction(
             AppIcon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (active) accent else Color.White,
+                tint = if (active && !whiteFilledIcon) accent else Color.White,
                 modifier = Modifier.size(26.dp),
             )
+            if (active && whiteFilledIcon) {
+                Canvas(
+                    Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 4.dp).size(5.dp),
+                ) {
+                    drawCircle(accent)
+                }
+            }
         }
         if (count != null) {
             AppText(
@@ -788,7 +809,8 @@ private fun HeaderButton(
                         onClick(action = { feedbackClick(); true })
                     }
                 }
-                .then(gestureModifier ?: Modifier.combinedClickable(
+                .then(gestureModifier ?: Modifier.appCombinedClickable(
+                    longPressScene = com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS,
                     role = Role.Button, onClick = feedbackClick, onLongClick = onLongClick,
                 )),
             contentAlignment = Alignment.Center,

@@ -33,10 +33,13 @@ fun parseLiveMessageEmotes(value: JsonObject?): Map<String, LiveMessageEmote> =
     }.toMap()
 
 /** 最长标记优先，避免表情名重叠时先消费短标记。 */
-fun splitLiveMessageEmotes(text: String, keys: Set<String>): List<Pair<String, Boolean>> {
+fun compileLiveMessageEmotePattern(keys: Set<String>): Regex? {
     val valid = keys.filter { it.isNotEmpty() }.sortedByDescending { it.length }
-    if (valid.isEmpty()) return listOf(text to false)
-    val pattern = Regex(valid.joinToString("|") { Regex.escape(it) })
+    return if (valid.isEmpty()) null else Regex(valid.joinToString("|") { Regex.escape(it) })
+}
+
+fun splitLiveMessageEmotes(text: String, keys: Set<String>): List<Pair<String, Boolean>> {
+    val pattern = compileLiveMessageEmotePattern(keys) ?: return listOf(text to false)
     return buildList {
         var offset = 0
         pattern.findAll(text).forEach { match ->

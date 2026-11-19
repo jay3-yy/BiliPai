@@ -138,6 +138,11 @@ object BilibiliNavigationTargetParser {
         val normalizedInput = normalizeInput(input) ?: input.trim()
         val plainTextTarget = mapParseResult(BilibiliUrlParser.parse(normalizedInput))
         if ("://" !in normalizedInput) {
+            if (normalizedInput.startsWith("cv", ignoreCase = true)) {
+                normalizedInput.drop(2).takeIf(::isNumericId)?.let {
+                    return BilibiliNavigationTarget.Article(it.toLong())
+                }
+            }
             Regex("rl([0-9]+)", RegexOption.IGNORE_CASE).matchEntire(normalizedInput)
                 ?.groupValues?.get(1)?.toLongOrNull()?.takeIf { it > 0L }?.let {
                     return BilibiliNavigationTarget.ArticleCollection(it)
@@ -305,6 +310,11 @@ object BilibiliNavigationTargetParser {
             }
 
             isBilibiliHost(host) -> {
+                if (pathSegments == listOf("h5", "note-app", "view")) {
+                    queryMap["cvid"]?.let(::parseArticleId)?.let {
+                        return BilibiliNavigationTarget.Article(it)
+                    }
+                }
                 resolveMatchTarget(pathSegments, queryMap)?.let { return it }
                 resolveArticleCollectionTarget(pathSegments, queryMap)?.let { return it }
                 resolveArticleTarget(pathSegments, queryMap, allowBareReadPath = false)?.let { return it }

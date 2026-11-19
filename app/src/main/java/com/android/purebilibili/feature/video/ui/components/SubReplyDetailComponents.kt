@@ -931,7 +931,7 @@ internal fun SubReplyDetailContent(
                             onDissolveComplete = { if (pageActive) onDeleteComment?.invoke(item.rpid) },
                             cardId = "subreply_detail_${item.rpid}",
                             // 小间距防止裁剪；animateItem 放在最前，作用于整个槽位。
-                            modifier = videoCommentItemModifier().padding(bottom = 1.dp)
+                            modifier = videoCommentItemModifier(animatePlacement = true).padding(bottom = 1.dp)
                         ) {
                             val backgroundColor by animateColorAsState(
                                 targetValue = if (item.rpid == highlightedTargetId) {

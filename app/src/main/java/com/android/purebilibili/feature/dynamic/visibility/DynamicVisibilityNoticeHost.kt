@@ -5,6 +5,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.window.DialogProperties
+import com.android.purebilibili.feature.comment.visibility.VISIBILITY_APPEAL_URL
 import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -22,27 +25,32 @@ internal fun DynamicVisibilityNoticeHost() {
     val notices by DynamicVisibilityFeedback.notices.collectAsStateWithLifecycle()
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     val clipboard = LocalClipboardManager.current
+    val uriHandler = LocalUriHandler.current
     LaunchedEffect(identity) { DynamicVisibilityFeedback.retainAccount(identity) }
     val notice = notices.firstOrNull { it.identity == identity }
     if (notice != null && lifecycle.isAtLeast(Lifecycle.State.RESUMED)) {
         AppAlertDialog(
             onDismissRequest = { DynamicVisibilityFeedback.dismiss(notice) },
-            title = { AppText("发布后可见性检查") },
+            properties = DialogProperties(dismissOnClickOutside = notice.manual),
+            title = { AppText("动态检查结果") },
             text = {
                 Column {
                     AppText(notice.status.message)
-                    AppText("动态 ${notice.dynamicId}")
+                    notice.text?.takeIf { it.isNotBlank() }?.let { AppText("动态内容：$it") }
                 }
             },
             confirmButton = {
                 AppTextButton(onClick = { DynamicVisibilityFeedback.dismiss(notice) }) { AppText("知道了") }
             },
-            dismissButton = {
-                AppTextButton(onClick = {
-                    clipboard.setText(AnnotatedString("https://www.bilibili.com/opus/${notice.dynamicId}"))
-                    DynamicVisibilityFeedback.dismiss(notice)
-                }) { AppText("复制动态链接") }
-            },
+            dismissButton = if (notice.status == DynamicVisibilityStatus.UNAVAILABLE) {
+                {
+                    AppTextButton(onClick = {
+                        clipboard.setText(AnnotatedString("https://www.bilibili.com/opus/${notice.dynamicId}"))
+                        DynamicVisibilityFeedback.dismiss(notice)
+                        uriHandler.openUri(VISIBILITY_APPEAL_URL)
+                    }) { AppText("申诉") }
+                }
+            } else null,
         )
     }
 }

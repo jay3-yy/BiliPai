@@ -9,6 +9,7 @@ import com.android.purebilibili.feature.video.viewmodel.CommentSubjectKey
 import com.android.purebilibili.feature.video.viewmodel.resolveReplyCount
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppIcons
+import com.android.purebilibili.core.ui.AppInteractionColors
 import com.android.purebilibili.core.ui.rememberAppShareIcon
 import com.android.purebilibili.core.ui.rememberAppWatchLaterIcon
 import com.android.purebilibili.feature.video.ui.section.BiliActionButton
@@ -27,6 +28,7 @@ import com.android.purebilibili.core.ui.components.AppSingleChoiceRow
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppHorizontalDivider
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -36,6 +38,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.android.purebilibili.core.ui.AppShapes
@@ -47,6 +50,7 @@ import com.android.purebilibili.core.ui.components.AppButton
 import com.android.purebilibili.core.ui.components.AppOutlinedTextField
 import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.AppTextButtonDefaults
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -65,7 +69,6 @@ import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_OPTIONS
 import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_UNFOLLOW
 import com.android.purebilibili.feature.bangumi.BANGUMI_FOLLOW_STATUS_WATCHING
 import com.android.purebilibili.feature.bangumi.isBangumiFollowed
-import com.android.purebilibili.feature.bangumi.resolveBangumiFollowStatusLabel
 import com.android.purebilibili.feature.video.ui.components.CommentFraudFeedbackHost
 import com.android.purebilibili.feature.video.screen.VideoContentTabBar
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
@@ -154,6 +157,7 @@ fun BangumiPlayerContent(
     var showFollowStatusDialog by remember { mutableStateOf(false) }
     var showEpisodeSheet by rememberSaveable(detail.seasonId) { mutableStateOf(false) }
     var showDetailPanel by rememberSaveable(detail.seasonId) { mutableStateOf(false) }
+    var showCoverPreview by remember(detail.seasonId) { mutableStateOf(false) }
     val introductionListState = rememberLazyListState()
     val liquidGlassEnabled = LocalAppThemeConfig.current.liquidGlassEnabled
     val commentsOnly = contentMode == BangumiPlayerContentMode.Comments ||
@@ -162,11 +166,8 @@ fun BangumiPlayerContent(
         contentMode == BangumiPlayerContentMode.Comments
     val pagerState = rememberPagerState(pageCount = { if (contentMode == BangumiPlayerContentMode.Tabs) 2 else 1 })
     val tabSelectionAnimationSpec = com.android.purebilibili.feature.video.screen.rememberVideoContentTabSelectionAnimationSpec()
-    val tabFlingBehavior = androidx.compose.foundation.pager.PagerDefaults.flingBehavior(
-        pagerState,
-        snapAnimationSpec = tabSelectionAnimationSpec,
-    )
-    val pagerDragHeld by pagerState.interactionSource.collectIsDraggedAsState()
+    val pagerInteractions = remember(pagerState) { MutableInteractionSource() }
+    val pagerDragHeld by pagerInteractions.collectIsDraggedAsState()
     val scope = rememberCoroutineScope()
     val selectionBackdrop = rememberLayerBackdrop()
     val indicatorPositionProvider = remember(pagerState) {
@@ -268,6 +269,7 @@ fun BangumiPlayerContent(
         )
     }
 
+    val pgcFollowLabel = if (detail.seasonType in listOf(2, 3, 5, 7)) "追剧" else "追番"
     val followButton: @Composable () -> Unit = {
         AppButton(
             onClick = {
@@ -307,7 +309,7 @@ fun BangumiPlayerContent(
             val followLabel = if (isCourse) {
                 if (isFollowing) "已收藏" else "收藏"
             } else {
-                resolveBangumiFollowStatusLabel(detail.userStatus)
+                if (isFollowing) "已$pgcFollowLabel" else pgcFollowLabel
             }
             AppText(
                 text = followLabel,
@@ -386,6 +388,7 @@ fun BangumiPlayerContent(
                 showEpisodeSheet = false
             },
             onSeasonClick = onSeasonClick,
+            currentEpisodeId = currentEpisode.id,
         )
     }
     val episodeSelectionItems: LazyListScope.() -> Unit = {
@@ -470,17 +473,20 @@ fun BangumiPlayerContent(
                             val start = page * episodesPerPage + 1
                             val end = minOf((page + 1) * episodesPerPage, detail.episodes.orEmpty().size)
                             val isCurrentPage = page == selectedPage
+                            val selection = AppInteractionColors.miuixContentSelection()
 
                             AppSurface(
                                 onClick = { selectedPage = page },
-                                color = if (isCurrentPage) AppContentColors.accent() else MaterialTheme.colorScheme.surfaceVariant,
+                                color = if (isCurrentPage) selection?.backgroundColor ?: AppContentColors.accent()
+                                    else MaterialTheme.colorScheme.surfaceVariant,
                                 shape = AppShapes.container(ContainerLevel.Dialog)
                             ) {
                                 AppText(
                                     text = "$start-$end",
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isCurrentPage) AppContentColors.onAccent() else AppContentColors.secondaryText()
+                                    color = if (isCurrentPage) selection?.contentColor ?: AppContentColors.onAccent()
+                                        else AppContentColors.secondaryText(),
                                 )
                             }
                         }
@@ -559,9 +565,15 @@ fun BangumiPlayerContent(
 
         HorizontalPager(
             state = pagerState,
-            flingBehavior = if (liquidGlassEnabled) tabFlingBehavior else androidx.compose.foundation.pager.PagerDefaults.flingBehavior(pagerState),
-            userScrollEnabled = contentMode == BangumiPlayerContentMode.Tabs,
-            modifier = Modifier.weight(1f)
+            userScrollEnabled = false,
+            modifier = Modifier
+                .weight(1f)
+                .verticalPriorityHorizontalPagerSwipe(
+                    state = pagerState,
+                    enabled = contentMode == BangumiPlayerContentMode.Tabs,
+                    dragInteractionSource = pagerInteractions,
+                    settleAnimationSpec = tabSelectionAnimationSpec.takeIf { liquidGlassEnabled },
+                ),
         ) { page ->
             when (if (commentsOnly) 1 else page) {
                 0 -> LazyColumn(
@@ -571,7 +583,19 @@ fun BangumiPlayerContent(
                 ) {
         if (isLargeScreenLayout) {
             item(key = "playback_heading") {
-                Column(Modifier.fillMaxWidth().padding(16.dp)) { playbackHeading() }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (!isCourse && detail.cover.isNotBlank()) {
+                        BangumiSeasonPoster(
+                            detail = detail,
+                            onPreviewCover = { showCoverPreview = true },
+                            modifier = Modifier.width(68.dp),
+                        )
+                    }
+                    Column(Modifier.weight(1f)) { playbackHeading() }
+                }
             }
             episodeSelectionItems()
         }
@@ -582,6 +606,7 @@ fun BangumiPlayerContent(
                     detail = detail,
                     heading = playbackHeading,
                     onShowDetails = { showDetailPanel = true },
+                    onPreviewCover = { showCoverPreview = true },
                     modifier = Modifier.padding(16.dp),
                 )
             }
@@ -818,7 +843,16 @@ fun BangumiPlayerContent(
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(detail.seasons.orEmpty().filter { it.seasonId > 0L }.distinctBy { it.seasonId }, key = { it.seasonId }) { season ->
                             val selected = season.seasonId == detail.seasonId
-                            AppTextButton(onClick = { onSeasonClick(season.seasonId) }, enabled = !selected) {
+                            val selection = AppInteractionColors.miuixContentSelection()
+                            val buttonColors = AppTextButtonDefaults.colors()
+                            AppTextButton(
+                                onClick = { onSeasonClick(season.seasonId) },
+                                enabled = !selected,
+                                colors = if (selected && selection != null) buttonColors.copy(
+                                    disabledContainerColor = selection.backgroundColor,
+                                    disabledContentColor = selection.contentColor,
+                                ) else buttonColors,
+                            ) {
                                 val title = season.seasonTitle.ifBlank { season.title }.ifBlank { "季度" }
                                 // The current season is non-clickable but remains selected,
                                 // so preserve its accent instead of the disabled button tint.
@@ -827,7 +861,8 @@ fun BangumiPlayerContent(
                                 ) {
                                     AppText(
                                         if (selected) "$title · 当前" else title,
-                                        color = if (selected) AppContentColors.accent() else AppContentColors.primaryText(),
+                                        color = if (selected) selection?.contentColor ?: AppContentColors.accent()
+                                            else AppContentColors.primaryText(),
                                         maxLines = 1,
                                     )
                                 }
@@ -839,9 +874,9 @@ fun BangumiPlayerContent(
         }
 
         if (!isLargeScreenLayout) episodeSelectionItems()
-        if (usePortraitIntroduction) {
-            item {
-                BangumiPortraitSections(
+        if (!isCourse && detail.section.orEmpty().any { !it.episodes.isNullOrEmpty() }) {
+            item(key = "supplementary_episodes") {
+                BangumiSupplementarySections(
                     detail = detail,
                     currentEpisodeId = currentEpisode.id,
                     onEpisodeClick = onEpisodeClick,
@@ -991,12 +1026,13 @@ fun BangumiPlayerContent(
     if (showFollowStatusDialog) {
         AppAlertDialog(
             onDismissRequest = { showFollowStatusDialog = false },
-            title = { AppText("追番状态") },
+            title = { AppText("${pgcFollowLabel}状态") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BANGUMI_FOLLOW_STATUS_OPTIONS.forEach { option ->
+                    BANGUMI_FOLLOW_STATUS_OPTIONS.asReversed().forEach { option ->
                         AppSingleChoiceRow(
                             selected = detail.userStatus?.followStatus == option.status,
+                            enabled = detail.userStatus?.followStatus != option.status,
                             onClick = {
                                 showFollowStatusDialog = false
                                 onFollowStatusSelect(option.status)
@@ -1021,7 +1057,7 @@ fun BangumiPlayerContent(
                         onFollowStatusSelect(BANGUMI_FOLLOW_STATUS_UNFOLLOW)
                     }
                 ) {
-                    AppText("取消追番")
+                    AppText("取消$pgcFollowLabel")
                 }
             },
             dismissButton = {
@@ -1063,6 +1099,16 @@ fun BangumiPlayerContent(
             previewTextContent = textContent
         }
     )
+
+    if (showCoverPreview) {
+        ImagePreviewDialog(
+            images = listOf(FormatUtils.fixImageUrl(detail.cover)),
+            initialIndex = 0,
+            textContent = ImagePreviewTextContent(headline = detail.title),
+            publicContent = true,
+            onDismiss = { showCoverPreview = false },
+        )
+    }
 
     if (previewImages.isNotEmpty()) {
         ImagePreviewDialog(
@@ -1130,7 +1176,8 @@ fun EpisodeChipSelectable(
     isCourse: Boolean = false,
     onClick: () -> Unit
 ) {
-    val selectedColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
+    val selectedColors = AppInteractionColors.miuixContentSelection()
+        ?: resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
 
     if (isCourse) {
         AppSurface(

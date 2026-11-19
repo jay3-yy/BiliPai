@@ -594,10 +594,11 @@ private fun AnnotatedString.Builder.appendDynamicRichTextNode(
         }
 
         shouldRenderDynamicRichTextLink(nodeType, node) -> {
-            appendDynamicRichTextLink(
+            appendDynamicRichTextLinkNode(
                 displayText = displayToken,
                 targetUrl = resolveDynamicRichTextLinkTarget(node),
                 primaryColor = primaryColor,
+                textColor = textColor,
                 linkListener = linkListener,
                 collapseWebLinks = collapseWebLinks,
             )
@@ -760,7 +761,8 @@ private val DYNAMIC_RICH_TEXT_LINK_NODE_TYPES = setOf(
 
 private fun resolveDynamicRichTextLinkTarget(node: RichTextNode): String? {
     normalizeDynamicRichTextUrl(node.jump_url)?.let { return it }
-    return DYNAMIC_RICH_TEXT_URL_PATTERN.find(resolveDynamicRichTextNodeToken(node))?.value
+    return DYNAMIC_RICH_TEXT_URL_PATTERN.find(node.orig_text)?.value
+        ?: DYNAMIC_RICH_TEXT_URL_PATTERN.find(resolveDynamicRichTextNodeToken(node))?.value
 }
 
 /**
@@ -931,6 +933,40 @@ private fun AnnotatedString.Builder.appendDynamicRichTextPlainText(
     }
     if (lastIndex < text.length) {
         append(text.substring(lastIndex))
+    }
+}
+
+private fun AnnotatedString.Builder.appendDynamicRichTextLinkNode(
+    displayText: String,
+    targetUrl: String?,
+    primaryColor: Color,
+    textColor: Color,
+    linkListener: LinkInteractionListener?,
+    collapseWebLinks: Boolean,
+) {
+    val urls = DYNAMIC_RICH_TEXT_URL_PATTERN.findAll(displayText).toList()
+    if (urls.isEmpty()) {
+        appendDynamicRichTextLink(displayText, targetUrl, primaryColor, linkListener, collapseWebLinks)
+        return
+    }
+
+    // 部分富文本节点会把说明和网址一起返回。链接的点击范围只覆盖网址。
+    var cursor = 0
+    urls.forEach { url ->
+        withStyle(SpanStyle(color = textColor)) {
+            append(displayText.substring(cursor, url.range.first))
+        }
+        appendDynamicRichTextLink(
+            displayText = url.value,
+            targetUrl = if (urls.size == 1) targetUrl else url.value,
+            primaryColor = primaryColor,
+            linkListener = linkListener,
+            collapseWebLinks = collapseWebLinks,
+        )
+        cursor = url.range.last + 1
+    }
+    withStyle(SpanStyle(color = textColor)) {
+        append(displayText.substring(cursor))
     }
 }
 

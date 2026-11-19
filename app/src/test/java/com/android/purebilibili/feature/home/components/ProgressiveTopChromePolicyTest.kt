@@ -161,8 +161,6 @@ class ProgressiveTopChromePolicyTest {
     fun searchAndWatchLaterCaptureScrollableContentInsteadOfAnEmptyHeader() {
         val search = loadSource("feature/search/SearchScreen.kt")
         val watchLater = loadSource("feature/watchlater/WatchLaterScreen.kt")
-        assertTrue(search.contains("val resultTopPadding = resultChromePadding.calculateTopPadding()"))
-        assertTrue(search.contains("top = resultTopPadding"))
         assertTrue(search.contains("if (!state.showResults)"))
         assertTrue(search.contains("searchTopChromeGlass(inputShape, chromeSpec.inputHeightDp)"))
         assertTrue(search.contains("if (immersiveSearchChrome) Color.Transparent else searchTopBarHeaderColor"))

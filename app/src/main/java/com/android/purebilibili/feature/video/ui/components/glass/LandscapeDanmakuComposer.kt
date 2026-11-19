@@ -329,62 +329,64 @@ internal fun LandscapeDanmakuComposerEditor(
         ) {
             if (!narrowInputRow) styleControl()
 
-            BasicTextField(
-                value = text,
-                onValueChange = {
-                    if (it.length <= 100) {
-                        text = it
-                        onDraftChange(it, attentionCommandChecked)
-                    }
-                },
-                modifier = Modifier.weight(1f)
-                    .testTag("danmaku_landscape_composer_input")
-                    .focusRequester(focusRequester)
-                    .pointerInput(isSending) {
-                        if (!isSending) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                showStylePanel = false
-                            }
-                        }
-                    }
-                    .semantics {
-                        onClick {
-                            if (isSending) {
-                                false
-                            } else {
-                                showStylePanel = false
-                                focusRequester.requestFocus()
-                                keyboardController?.show()
-                                true
-                            }
+            com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+                BasicTextField(
+                    value = text,
+                    onValueChange = {
+                        if (it.length <= 100) {
+                            text = it
+                            onDraftChange(it, attentionCommandChecked)
                         }
                     },
-                enabled = visible && !isSending,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF242424)),
-                cursorBrush = inputCursor,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(onSend = { sendMessage() }),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier.clip(RoundedCornerShape(24.dp))
-                            .background(LandscapeDanmakuInputColor)
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        if (text.isEmpty()) {
-                            AppText(
-                                "发个友善的弹幕见证当下",
-                                color = Color(0xFFB9BABD),
-                                style = MaterialTheme.typography.bodyLarge,
-                                maxLines = 1,
-                            )
+                    modifier = Modifier.weight(1f)
+                        .testTag("danmaku_landscape_composer_input")
+                        .focusRequester(focusRequester)
+                        .pointerInput(isSending) {
+                            if (!isSending) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    showStylePanel = false
+                                }
+                            }
                         }
-                        innerTextField()
-                    }
-                },
-            )
+                        .semantics {
+                            onClick {
+                                if (isSending) {
+                                    false
+                                } else {
+                                    showStylePanel = false
+                                    focusRequester.requestFocus()
+                                    keyboardController?.show()
+                                    true
+                                }
+                            }
+                        },
+                    enabled = visible && !isSending,
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFF242424)),
+                    cursorBrush = inputCursor,
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { sendMessage() }),
+                    decorationBox = { innerTextField ->
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(24.dp))
+                                .background(LandscapeDanmakuInputColor)
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            contentAlignment = Alignment.CenterStart,
+                        ) {
+                            if (text.isEmpty()) {
+                                AppText(
+                                    "发个友善的弹幕见证当下",
+                                    color = Color(0xFFB9BABD),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    maxLines = 1,
+                                )
+                            }
+                            innerTextField()
+                        }
+                    },
+                )
+            }
 
             AppIconButton(
                 onClick = sendMessage,

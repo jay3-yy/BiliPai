@@ -6,9 +6,8 @@ import kotlin.test.assertTrue
 
 class TopControlBarPolicyTest {
     @Test
-    fun portraitInline_showsHomeAndPlayerActions() {
+    fun portraitInline_showsAudioAndCastWithoutTitleOrStatus() {
         val policy = resolveTopControlBarLayoutPolicy(isPortrait = true, isFullscreen = false)
-        assertTrue(policy.showHome)
         assertFalse(policy.showTitle)
         assertFalse(policy.showStatus)
         assertTrue(policy.showAudio)
@@ -20,7 +19,6 @@ class TopControlBarPolicyTest {
     @Test
     fun portraitFullscreen_showsTitleDanmakuAndSecondRowEngagement() {
         val policy = resolveTopControlBarLayoutPolicy(isPortrait = true, isFullscreen = true)
-        assertFalse(policy.showHome)
         assertTrue(policy.showTitle)
         assertFalse(policy.showStatus)
         assertFalse(policy.showAudio)
@@ -33,7 +31,6 @@ class TopControlBarPolicyTest {
     @Test
     fun landscapeInline_horizontalScreen_hidesTitleStatusAndEngagement() {
         val policy = resolveTopControlBarLayoutPolicy(isPortrait = false, isFullscreen = false)
-        assertTrue(policy.showHome)
         assertFalse(policy.showTitle)
         assertFalse(policy.showStatus)
         assertTrue(policy.showAudio)
@@ -45,7 +42,6 @@ class TopControlBarPolicyTest {
     @Test
     fun landscapeFullscreen_showsTitleStatusAndEngagementWithoutCastOrAudio() {
         val policy = resolveTopControlBarLayoutPolicy(isPortrait = false, isFullscreen = true)
-        assertTrue(policy.showHome)
         assertTrue(policy.showTitle)
         assertTrue(policy.showStatus)
         assertFalse(policy.showAudio)

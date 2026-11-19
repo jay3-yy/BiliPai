@@ -32,41 +32,6 @@ class AppSelectionPreferencePolicyTest {
     }
 
     @Test
-    fun sliderDialog_usesSelfSizedPlatformWidthForTabletSafety() {
-        val policy = resolveAppSliderDialogLayoutPolicy()
-
-        assertFalse(policy.usePlatformDefaultWidth)
-        assertEquals(24, policy.horizontalPaddingDp)
-        assertEquals(280, policy.minWidthDp)
-        assertEquals(420, policy.maxWidthDp)
-        assertTrue(policy.maxWidthDp >= policy.minWidthDp)
-    }
-
-    @Test
-    fun sliderDialogSource_avoidsExpandingDialogActions() {
-        val source = listOf(
-            java.io.File(
-                "design-system/src/main/java/com/android/purebilibili/core/ui/components/AppSelectionPreferenceComponents.kt"
-            ),
-            java.io.File(
-                "../design-system/src/main/java/com/android/purebilibili/core/ui/components/AppSelectionPreferenceComponents.kt"
-            ),
-            java.io.File(
-                "src/main/java/com/android/purebilibili/core/ui/components/AppSelectionPreferenceComponents.kt"
-            ),
-        ).first { it.exists() }.readText()
-        val start = source.indexOf("fun AppSliderDialog(")
-        val end = source.indexOf("fun <T> shouldDispatchAppChoiceSelection")
-        assertTrue(start >= 0 && end > start, "AppSliderDialog section markers missing")
-        val sliderDialogSection = source.substring(start, end)
-
-        assertTrue(sliderDialogSection.contains("usePlatformDefaultWidth = layoutPolicy.usePlatformDefaultWidth"))
-        assertTrue(sliderDialogSection.contains("appContentDialogWidth("))
-        assertTrue(sliderDialogSection.contains("AppTextButton("))
-        assertFalse(sliderDialogSection.contains("AppDialogAction("))
-    }
-
-    @Test
     fun singleChoicePreference_keepsMiuixSpinnerOnlyForMiuixStyleAndSharedRowOtherwise() {
         val source = listOf(
             java.io.File(

@@ -7,6 +7,8 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -71,6 +73,8 @@ data class AppSelectionToolbarState(
     val onSelectAll: (() -> Unit)? = null,
 )
 
+data class AppSelectedTextAction(val label: String, val onClick: (String) -> Unit)
+
 /**
  * 原地悬浮选择栏位置计算器，保证在选区正上方展示，顶边不够则翻转至正下方，水平自动留出边距居中
  */
@@ -113,7 +117,8 @@ internal fun AppFloatingSelectionToolbar(
     onCopy: (() -> Unit)?,
     onSelectAll: (() -> Unit)?,
     onOpenSheet: (() -> Unit)?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    additionalActions: List<AppSelectedTextAction> = emptyList(),
 ) {
     val context = LocalContext.current
     val haptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.TEXT)
@@ -141,7 +146,8 @@ internal fun AppFloatingSelectionToolbar(
             )
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                modifier = (if (additionalActions.isEmpty()) Modifier else Modifier.horizontalScroll(rememberScrollState()))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
@@ -193,7 +199,7 @@ internal fun AppFloatingSelectionToolbar(
                 }
 
                 // 2. 弹窗选择（作为额外 / 高级功能保留）
-                if (onOpenSheet != null) {
+                if (onOpenSheet != null && additionalActions.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .width(1.dp)
@@ -241,6 +247,15 @@ internal fun AppFloatingSelectionToolbar(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    }
+                }
+
+                additionalActions.forEach { action ->
+                    AppTextButton(onClick = {
+                        onDismiss()
+                        action.onClick(selectedText)
+                    }) {
+                        AppText(action.label, style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
@@ -308,11 +323,20 @@ internal class DefaultTextSelectionController : TextSelectionController {
  */
 val LocalTextSelectionController = staticCompositionLocalOf<TextSelectionController?> { null }
 
+/** 保留原生选择工具栏，只将文字选择触感绑定到文字场景。 */
+@Composable
+fun AppNativeSelectionContainer(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    com.android.purebilibili.core.ui.ProvideAppHapticScene(com.android.purebilibili.core.ui.AppHapticScene.TEXT) {
+        SelectionContainer(modifier = modifier, content = content)
+    }
+}
+
 /** 只为静态文本定制工具栏；输入框继续使用系统的剪切、粘贴和自动填充菜单。 */
 @Composable
 fun AppSelectionContainer(
     modifier: Modifier = Modifier,
     state: SelectionState = rememberSelectionState(),
+    additionalActions: (String) -> List<AppSelectedTextAction> = { emptyList() },
     content: @Composable () -> Unit,
 ) {
     val selection = state
@@ -343,7 +367,8 @@ fun AppSelectionContainer(
             }
         }
     }
-    CompositionLocalProvider(LocalTextToolbar provides customToolbar) {
+    val textHaptic = com.android.purebilibili.core.ui.rememberAppHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.TEXT)
+    CompositionLocalProvider(LocalTextToolbar provides customToolbar, LocalHapticFeedback provides textHaptic) {
         SelectionContainer(state = selection, modifier = modifier, content = content)
     }
     // 与官方复制行为相同，跨 Text 节点时用换行连接；始终读取当前容器的选区。
@@ -358,6 +383,7 @@ fun AppSelectionContainer(
                 { host.show(selectedText, "所选内容") }
             },
             onDismiss = customToolbar::hide,
+            additionalActions = additionalActions(selectedText),
         )
     }
 }

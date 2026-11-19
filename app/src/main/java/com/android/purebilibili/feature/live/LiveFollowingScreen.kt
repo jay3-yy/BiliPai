@@ -43,7 +43,6 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -145,26 +144,13 @@ fun LiveFollowingScreen(
         loadPage(refresh = true)
     }
 
-    // 在列表层观察实际视口，避免页脚预组合或加载文字变化触发分页。
-    // 页码也是观察依据：过滤未开播主播后的空页仍可继续，失败则等待手动重试。
-    LaunchedEffect(gridState, accountIdentity) {
-        snapshotFlow {
-            val layout = gridState.layoutInfo
-            val footerVisible = layout.visibleItemsInfo.any {
-                it.key == "following_load_more" &&
-                    it.offset.y < layout.viewportEndOffset &&
-                    it.offset.y + it.size.height > layout.viewportStartOffset
-            }
-            Triple(
-                nextPage,
-                footerVisible || items.isEmpty(),
-                hasMore && !isLoading && !isRefreshing && !isLoadingMore &&
-                    error == null && loadMoreError == null,
-            )
-        }.collect { (_, visible, canLoad) ->
-            if (visible && canLoad) loadPage(refresh = false)
-        }
-    }
+    LiveGridPagination(
+        grid = gridState,
+        enabled = hasMore && !isLoading && !isRefreshing && !isLoadingMore &&
+            error == null && loadMoreError == null,
+        nextPage = nextPage,
+        onLoadMore = { loadPage(refresh = false) },
+    )
 
     AppScaffold(
         blurContentReady = !isLoading,
@@ -199,13 +185,14 @@ fun LiveFollowingScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             )
-            error != null && items.isEmpty() && !hasMore -> Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+            error != null -> Box(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
                 contentAlignment = Alignment.Center,
             ) {
-                AppText(text = error ?: "", color = colorScheme.onSurfaceVariant)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    AppText(error.orEmpty(), color = colorScheme.onSurfaceVariant)
+                    AppButton(onClick = { loadPage(refresh = true) }) { AppText("重新加载") }
+                }
             }
             items.isEmpty() && !hasMore -> Box(Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -227,27 +214,24 @@ fun LiveFollowingScreen(
                     horizontalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
                     verticalArrangement = Arrangement.spacedBy(metrics.cardSpaceDp.dp),
                 ) {
-                    if (error != null) {
-                        item { AppText(error.orEmpty(), color = colorScheme.onSurfaceVariant) }
-                    }
                     items(items, key = { it.roomid }) { item ->
+                        val card = LiveRoomCardUiModel(
+                            roomId = item.roomid,
+                            title = item.title,
+                            coverUrl = item.displayCover(),
+                            hostName = item.uname,
+                            viewerCount = item.viewerCount(),
+                            viewerText = item.watchedShow?.textLarge.orEmpty(),
+                            areaName = item.areaName,
+                        )
                         LiveRoomCard(
-                            model = LiveRoomCardUiModel(
-                                roomId = item.roomid,
-                                title = item.title,
-                                coverUrl = listOf(item.cover, item.userCover, item.keyframe, item.face)
-                                    .firstOrNull { it.isNotBlank() }.orEmpty(),
-                                hostName = item.uname,
-                                viewerCount = item.viewerCount(),
-                                viewerText = item.watchedShow?.textLarge.orEmpty(),
-                                areaName = item.areaName,
-                            ),
+                            model = card,
                             enableSharedCoverTransition = true,
                             onClick = { onLiveClick(item.roomid, item.title, item.uname) },
-                            onLongPress = { coverToSave = LiveRoomCardUiModel(item.roomid, item.title, item.displayCover(), item.uname, item.online, item.areaName) },
+                            onLongPress = { coverToSave = card },
                         )
                     }
-                    item(key = "following_load_more", span = { GridItemSpan(maxLineSpan) }) {
+                    item(key = LIVE_GRID_LOAD_MORE_KEY, span = { GridItemSpan(maxLineSpan) }) {
                         LiveHomeLoadMoreFooter(
                             isLoadingMore = isLoadingMore,
                             contentCount = items.size,

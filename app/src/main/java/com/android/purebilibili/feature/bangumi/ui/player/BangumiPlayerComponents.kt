@@ -390,6 +390,7 @@ fun BangumiPlayerView(
     }
 
     val seekHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.PLAYER_SEEK)
+    val playerGestureHaptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES)
     val latestSeekHaptic by rememberUpdatedState(seekHaptic)
     val seekHaptics = remember(exoPlayer, epId, cid) { SeekTickHapticPolicy() }
 
@@ -453,6 +454,7 @@ fun BangumiPlayerView(
                             requestedSpeed = longPressSpeed,
                             currentAudioQuality = requestedAudioQuality
                         )
+                        playerGestureHaptic(HapticType.MEDIUM)
                     },
                     onDragEnd = {
                         exoPlayer.playbackParameters = longPressOriginalPlaybackParameters
@@ -471,6 +473,7 @@ fun BangumiPlayerView(
                     onDoubleTap = {
                         if (isScreenLocked) return@detectTapGestures
                         togglePlayerPlaybackFromUserAction(exoPlayer)
+                        playerGestureHaptic(HapticType.LIGHT)
                     }
                 )
             }

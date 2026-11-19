@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -29,7 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import com.android.purebilibili.core.ui.appDialogBackMotion
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawWithContent
@@ -41,18 +41,24 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
+import com.android.purebilibili.core.ui.AdaptiveAlertDialog
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppContentDialogLayoutPolicy
+import com.android.purebilibili.core.ui.AppDialogAction
+import com.android.purebilibili.core.ui.AppDialogBackState
+import com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler
 import com.android.purebilibili.core.ui.AppPopupSurface
 import com.android.purebilibili.core.ui.AppPopupSurfaceType
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.ContainerLevel
-import com.android.purebilibili.core.ui.LocalAppPopupSurfaceRenderer
+import com.android.purebilibili.core.ui.LocalAppPopupWindowHostRenderer
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
+import com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect
 import com.android.purebilibili.core.ui.appContentDialogWidth
+import com.android.purebilibili.core.ui.appDialogBackMotion
 import com.android.purebilibili.core.ui.resolveAppContentDialogLayoutPolicy
 import com.android.purebilibili.core.ui.resolveAppContentDialogProperties
 import kotlin.math.round
@@ -415,67 +421,63 @@ fun <T> AppSingleChoiceDialog(
     // 在“系统深色 + 应用手动浅色”时从窗口配置重新跟随系统。
     val dialogContentColor = AppContentColors.primaryText()
     val dialogSecondaryContentColor = AppContentColors.secondaryText()
-    Dialog(
-        onDismissRequest = onDismissRequest,
-        properties = resolveAppContentDialogProperties(
-            usePlatformDefaultWidth = layoutPolicy.usePlatformDefaultWidth,
-        ),
-    ) {
-        val back = remember { com.android.purebilibili.core.ui.AppDialogBackState() }
-        com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler(back, onBackCompleted = onDismissRequest)
-        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect(progress = { 1f - back.progress })
-        AppPopupSurface(
-            type = AppPopupSurfaceType.DIALOG,
-            modifier = modifier
-                .appDialogBackMotion(state = back) { back.progress }
+    val choices: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            options.forEach { option ->
+                AppSingleChoiceRow(
+                    selected = option.value == selectedValue,
+                    onClick = { onValueSelected(option.value) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    optionLeading?.invoke(option.value)
+                    Column(modifier = Modifier.weight(1f)) {
+                        AppText(
+                            text = option.label,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = dialogContentColor,
+                        )
+                        option.description?.let { description ->
+                            Spacer(modifier = Modifier.height(2.dp))
+                            AppText(
+                                text = description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = dialogSecondaryContentColor,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 同窗玻璃单选由设置宿主处理。已有玻璃窗口的回退继续使用原来的表面与排版。
+    if (LocalAppThemeConfig.current.popupGlassEnabled && LocalAppPopupWindowHostRenderer.current != null) {
+        PreferenceGlassDialog(
+            onDismissRequest = onDismissRequest,
+            layoutPolicy = layoutPolicy,
+            modifier = modifier,
+            surfaceModifier = Modifier
                 .appContentDialogWidth(policy = layoutPolicy, wrapHeight = false)
                 .heightIn(max = maxDialogHeight),
-            shape = AppShapes.container(ContainerLevel.Dialog),
-            // 层级用更高一档容器色表达，不用 tonalElevation：elevation 会把
-            // surfaceTint 混进容器色，自定义亮种子下弹窗会被染成过饱和色。
-            containerColor = AppSurfaceTokens.surfaceContainerHigh(),
         ) {
-            Column(modifier = Modifier.padding(vertical = 12.dp)) {
+            Column(Modifier.padding(vertical = 12.dp)) {
                 AppText(
                     text = title,
                     style = MaterialTheme.typography.headlineSmall,
                     color = dialogContentColor,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                 )
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    options.forEach { option ->
-                        val selected = option.value == selectedValue
-                        AppSingleChoiceRow(
-                            selected = selected,
-                            onClick = { onValueSelected(option.value) },
-                            modifier = Modifier
-                                .fillMaxWidth(),
-                        ) {
-                            optionLeading?.let { leading -> leading(option.value) }
-                            Column(modifier = Modifier.weight(1f)) {
-                                AppText(
-                                    text = option.label,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = dialogContentColor,
-                                )
-                                option.description?.let { description ->
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    AppText(
-                                        text = description,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = dialogSecondaryContentColor,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
+                choices()
             }
         }
+    } else {
+        NativePreferenceDialog(
+            title = title,
+            onDismissRequest = onDismissRequest,
+            layoutPolicy = layoutPolicy,
+            modifier = modifier.heightIn(max = maxDialogHeight),
+            content = choices,
+        )
     }
 }
 
@@ -524,30 +526,6 @@ fun AppSliderDialogPreference(
     }
 }
 
-/**
- * 滑块确认弹窗尺寸策略（委托统一内容 Dialog 策略）。
- *
- * 按钮区必须用内容尺寸按钮，不可复用 iOS Alert 的 [com.android.purebilibili.core.ui.AppDialogAction]
- * （会 fillMaxSize 撑满父级）。
- */
-@Immutable
-data class AppSliderDialogLayoutPolicy(
-    val usePlatformDefaultWidth: Boolean,
-    val horizontalPaddingDp: Int,
-    val minWidthDp: Int,
-    val maxWidthDp: Int,
-)
-
-fun resolveAppSliderDialogLayoutPolicy(): AppSliderDialogLayoutPolicy {
-    val base = resolveAppContentDialogLayoutPolicy(maxWidthDp = 420)
-    return AppSliderDialogLayoutPolicy(
-        usePlatformDefaultWidth = base.usePlatformDefaultWidth,
-        horizontalPaddingDp = base.horizontalPaddingDp,
-        minWidthDp = base.minWidthDp,
-        maxWidthDp = base.maxWidthDp,
-    )
-}
-
 @Composable
 fun AppSliderDialog(
     title: String,
@@ -562,72 +540,117 @@ fun AppSliderDialog(
     var draftValue by remember(value, valueRange, steps) {
         mutableFloatStateOf(resolveAppSliderDialogValue(value, valueRange, steps))
     }
-    val layoutPolicy = remember { resolveAppSliderDialogLayoutPolicy() }
-
-    Dialog(
-        onDismissRequest = onDismissRequest,
-        properties = resolveAppContentDialogProperties(
-            usePlatformDefaultWidth = layoutPolicy.usePlatformDefaultWidth,
-        ),
-    ) {
-        val back = remember { com.android.purebilibili.core.ui.AppDialogBackState() }
-        com.android.purebilibili.core.ui.AppDialogPredictiveBackHandler(back, onBackCompleted = onDismissRequest)
-        com.android.purebilibili.core.ui.ModalWindowBlurBehindEffect(progress = { 1f - back.progress })
-        AppPopupSurface(
-            type = AppPopupSurfaceType.DIALOG,
-            modifier = modifier.appDialogBackMotion(state = back) { back.progress }.appContentDialogWidth(
-                policy = resolveAppContentDialogLayoutPolicy(
-                    maxWidthDp = layoutPolicy.maxWidthDp,
-                    minWidthDp = layoutPolicy.minWidthDp,
-                    horizontalPaddingDp = layoutPolicy.horizontalPaddingDp,
-                ),
-            ),
-            shape = AppShapes.container(ContainerLevel.Dialog),
-            // 与 AppSingleChoiceDialog 一致：容器色表达层级，不用 tonalElevation tint。
-            containerColor = AppSurfaceTokens.surfaceContainerHigh(),
+    val layoutPolicy = remember { resolveAppContentDialogLayoutPolicy() }
+    val confirm = { onConfirm(resolveAppSliderDialogValue(draftValue, valueRange, steps)) }
+    val slider: @Composable () -> Unit = {
+        Column {
+            AppText(
+                text = valueFormatter(draftValue),
+                style = MaterialTheme.typography.titleMedium,
+                color = AppContentColors.link(),
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            AppSlider(
+                value = draftValue,
+                onValueChange = { draftValue = it },
+                valueRange = valueRange,
+                steps = steps,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+    if (LocalAppThemeConfig.current.popupGlassEnabled && LocalAppPopupWindowHostRenderer.current != null) {
+        PreferenceGlassDialog(
+            onDismissRequest = onDismissRequest,
+            layoutPolicy = layoutPolicy,
+            modifier = modifier,
+            surfaceModifier = Modifier.appContentDialogWidth(policy = layoutPolicy),
         ) {
-            Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+            Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
                 AppText(
                     text = title,
                     style = MaterialTheme.typography.headlineSmall,
                     color = AppContentColors.primaryText(),
                 )
                 Spacer(modifier = Modifier.height(18.dp))
-                AppText(
-                    text = valueFormatter(draftValue),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = AppContentColors.link(),
-                    modifier = Modifier.align(Alignment.CenterHorizontally),
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                AppSlider(
-                    value = draftValue,
-                    onValueChange = { draftValue = it },
-                    valueRange = valueRange,
-                    steps = steps,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                slider()
                 Spacer(modifier = Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // 内容尺寸按钮：避免 AppDialogAction 在 iOS 预设下 fillMaxSize 把弹窗撑满屏高
-                    AppTextButton(onClick = onDismissRequest) {
-                        AppText("取消")
-                    }
+                    AppTextButton(onClick = onDismissRequest) { AppText("取消") }
                     Spacer(modifier = Modifier.width(8.dp))
-                    AppTextButton(
-                        onClick = {
-                            onConfirm(resolveAppSliderDialogValue(draftValue, valueRange, steps))
-                        },
-                    ) {
-                        AppText("确定")
-                    }
+                    AppTextButton(onClick = confirm) { AppText("确定") }
                 }
             }
         }
+    } else {
+        NativePreferenceDialog(
+            title = title,
+            onDismissRequest = onDismissRequest,
+            layoutPolicy = layoutPolicy,
+            modifier = modifier,
+            confirmButton = { AppDialogAction(onClick = confirm) { AppText("确定") } },
+            dismissButton = { AppDialogAction(onClick = onDismissRequest) { AppText("取消") } },
+        ) {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) { slider() }
+        }
+    }
+}
+
+@Composable
+private fun NativePreferenceDialog(
+    title: String,
+    onDismissRequest: () -> Unit,
+    layoutPolicy: AppContentDialogLayoutPolicy,
+    modifier: Modifier = Modifier,
+    confirmButton: (@Composable () -> Unit)? = null,
+    dismissButton: (@Composable () -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
+    val config = LocalAppThemeConfig.current
+    // 弹窗玻璃关闭或当前窗口无法提供玻璃宿主时，容器与控件均按所选主题渲染。
+    CompositionLocalProvider(LocalAppThemeConfig provides config.copy(popupGlassEnabled = false)) {
+        AdaptiveAlertDialog(
+            onDismissRequest = onDismissRequest,
+            modifier = modifier.widthIn(max = layoutPolicy.maxWidthDp.dp),
+            title = { AppText(title) },
+            text = content,
+            confirmButton = confirmButton,
+            dismissButton = dismissButton,
+            contentLayout = layoutPolicy,
+            keepCenteredInMiuix = true,
+        )
+    }
+}
+
+@Composable
+private fun PreferenceGlassDialog(
+    onDismissRequest: () -> Unit,
+    layoutPolicy: AppContentDialogLayoutPolicy,
+    modifier: Modifier,
+    surfaceModifier: Modifier,
+    content: @Composable () -> Unit,
+) {
+    Dialog(
+        onDismissRequest = onDismissRequest,
+        properties = resolveAppContentDialogProperties(
+            usePlatformDefaultWidth = layoutPolicy.usePlatformDefaultWidth,
+        ),
+    ) {
+        val back = remember { AppDialogBackState() }
+        AppDialogPredictiveBackHandler(back, onBackCompleted = onDismissRequest)
+        ModalWindowBlurBehindEffect(progress = { 1f - back.progress })
+        AppPopupSurface(
+            type = AppPopupSurfaceType.DIALOG,
+            modifier = modifier.appDialogBackMotion(state = back) { back.progress }.then(surfaceModifier),
+            shape = AppShapes.container(ContainerLevel.Dialog),
+            containerColor = AppSurfaceTokens.surfaceContainerHigh(),
+            content = content,
+        )
     }
 }
 

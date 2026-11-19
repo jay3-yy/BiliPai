@@ -17,7 +17,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
@@ -674,7 +674,7 @@ fun SidebarUserItem(
                 .padding(vertical = AppSpacingTokens.ExtraSmall, horizontal = AppSpacingTokens.ExtraSmall)
                 // 玻璃与原生侧栏共用局部选中提示；整项裁切仅约束按压反馈。
                 .clip(RoundedCornerShape(12.dp))
-                .combinedClickable(
+                .appCombinedClickable(
                     onClick = appActionWithFeedback {
                         performDynamicSidebarUserAvatarClick(
                             haptic = haptic,

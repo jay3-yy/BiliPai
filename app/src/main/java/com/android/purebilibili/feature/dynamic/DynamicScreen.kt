@@ -2,6 +2,7 @@
 package com.android.purebilibili.feature.dynamic
 
 import com.android.purebilibili.navigation.tabIndicatorPosition
+import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -30,7 +31,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
-import androidx.compose.foundation.combinedClickable
+import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -78,6 +79,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -225,10 +228,8 @@ fun DynamicScreen(
             ).show()
         }
     }
-    val checkDynamicFallback: (String) -> Unit = { id ->
-        viewModel.checkDynamic(id) { _, message ->
-            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
-        }
+    val checkDynamicFallback: (String, String?) -> Unit = { id, text ->
+        onCheckDynamicClick?.invoke(id) ?: viewModel.checkDynamic(id, text)
     }
 
     val unfoldRelatedDynamics: (String) -> Unit = { id ->
@@ -555,6 +556,7 @@ fun DynamicScreen(
     val activeError = activePresentation.error
     // 分类直接过滤作者动态；当前页尚无匹配项时仍按原分页链路继续加载。
     val allowAutomaticLoadMore = isCurrentPage
+    val isSelectedUserFeedEmpty = isSelectedUserTabActive && filteredItems.isEmpty()
 
     var handledUserListRefreshBoundary by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(
@@ -584,6 +586,7 @@ fun DynamicScreen(
         activeError,
         currentHasMore,
         allowAutomaticLoadMore,
+        isSelectedUserFeedEmpty,
     ) {
         derivedStateOf {
             val state = activeListState ?: return@derivedStateOf false
@@ -599,6 +602,7 @@ fun DynamicScreen(
                 isLoading = activeLoading,
                 hasMore = currentHasMore,
                 error = activeError,
+                isSelectedUserFeedEmpty = isSelectedUserFeedEmpty,
             )
         }
     }
@@ -613,7 +617,9 @@ fun DynamicScreen(
         isCurrentPage,
         selectedUserId,
         isSelectedUserTabActive,
-        displayedLogicalTab
+        displayedLogicalTab,
+        // A page can advance without changing the filtered list or showing a loading frame.
+        state.userLoadedPageCount.takeIf { isSelectedUserTabActive },
     ) {
         if (isCurrentPage && shouldLoadMore) {
             if (isSelectedUserTabActive) {
@@ -856,9 +862,10 @@ fun DynamicScreen(
                             ) {
                             HorizontalPager(
                                 state = pagerState,
-                                userScrollEnabled = true,
+                                userScrollEnabled = false,
                                 modifier = Modifier
-                                    .fillMaxSize(),
+                                    .fillMaxSize()
+                                    .verticalPriorityHorizontalPagerSwipe(pagerState),
                                 key = { page -> resolveDynamicPagerTabKey(visibleTabs, page) }
                             ) { page ->
                                 val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
@@ -936,7 +943,7 @@ fun DynamicScreen(
                                         onOpenLink = onOpenLink,
                                         onSaveDynamicClick = onSaveDynamicClick ?: saveDynamicFallback,
                                         onShareToMessageClick = onShareToMessageClick ?: { pendingMessageShare = it },
-                                        onCheckDynamicClick = onCheckDynamicClick ?: checkDynamicFallback,
+                                        onCheckDynamicClick = checkDynamicFallback,
                                         onReserveClick = viewModel::toggleDynamicReserve,
                                         onLoginClick = onLoginClick,
                                         gifImageLoader = gifImageLoader,
@@ -1010,7 +1017,7 @@ fun DynamicScreen(
                                 onLoginClick = onLoginClick,
                                 onRetry = {
                                     if (isSelectedUserTabActive) {
-                                        selectedUserId?.let(viewModel::selectUser)
+                                        viewModel.retryDynamicFeed(displayedLogicalTab)
                                     } else {
                                         viewModel.refresh(displayedLogicalTab)
                                     }
@@ -1060,9 +1067,10 @@ fun DynamicScreen(
                         ) {
                         HorizontalPager(
                             state = pagerState,
-                            userScrollEnabled = true,
+                            userScrollEnabled = false,
                             modifier = Modifier
-                                .fillMaxSize(),
+                                .fillMaxSize()
+                                .verticalPriorityHorizontalPagerSwipe(pagerState),
                             key = { page -> resolveDynamicPagerTabKey(visibleTabs, page) }
                         ) { page ->
                             val tab = visibleTabs.getOrNull(page) ?: return@HorizontalPager
@@ -1140,7 +1148,7 @@ fun DynamicScreen(
                                     onOpenLink = onOpenLink,
                                     onSaveDynamicClick = onSaveDynamicClick ?: saveDynamicFallback,
                                     onShareToMessageClick = onShareToMessageClick ?: { pendingMessageShare = it },
-                                    onCheckDynamicClick = onCheckDynamicClick ?: checkDynamicFallback,
+                                    onCheckDynamicClick = checkDynamicFallback,
                                     onReserveClick = viewModel::toggleDynamicReserve,
                                     onLoginClick = onLoginClick,
                                     gifImageLoader = gifImageLoader,
@@ -1250,7 +1258,7 @@ fun DynamicScreen(
                             onLoginClick = onLoginClick,
                             onRetry = {
                                 if (isSelectedUserTabActive) {
-                                    selectedUserId?.let(viewModel::selectUser)
+                                    viewModel.retryDynamicFeed(displayedLogicalTab)
                                 } else {
                                     viewModel.refresh(displayedLogicalTab)
                                 }
@@ -1521,7 +1529,7 @@ internal fun DynamicList(
     onOpenLink: ((String) -> Unit)?,
     onSaveDynamicClick: ((com.android.purebilibili.data.model.response.DynamicItem) -> Unit)?,
     onShareToMessageClick: ((com.android.purebilibili.data.model.response.DynamicItem) -> Unit)?,
-    onCheckDynamicClick: ((String) -> Unit)?,
+    onCheckDynamicClick: ((String, String?) -> Unit)?,
     onReserveClick: (
         com.android.purebilibili.feature.dynamic.components.DynamicReserveAction,
         (Result<com.android.purebilibili.feature.dynamic.components.DynamicReserveResult>) -> Unit,
@@ -1586,7 +1594,7 @@ internal fun DynamicList(
                 interaction = DynamicCardInteractionActions(
                     onSaveDynamicClick = { onSaveDynamicClick?.invoke(item) },
                     onShareToMessageClick = { onShareToMessageClick?.invoke(item) },
-                    onCheckDynamicClick = { onCheckDynamicClick?.invoke(item.id_str) },
+                    onCheckDynamicClick = { onCheckDynamicClick?.invoke(item.id_str, item.modules.module_dynamic?.desc?.text) },
                     onReserveClick = onReserveClick,
                     onCommentClick = onCommentClick,
                     onRepostClick = onRepostClick,
@@ -1604,15 +1612,15 @@ internal fun DynamicList(
         )
         }
     }
-    val showSkeleton = filteredItems.isEmpty() && activeLoading
+    val showSkeleton = filteredItems.isEmpty() && activeError == null &&
+        (activeLoading || (isSelectedUserTabActive && hasMore))
     val dynamicGridKeys = remember(filteredItems) {
         filteredItems.map { "dynamic_${dynamicFeedItemKey(it)}" }
     }
     val useManualPrependAnchor = remember(feedLayoutMode) {
         shouldUseDynamicManualPrependAnchor(feedLayoutMode)
     }
-    // 骨架与真实卡片共用同一个瀑布流、同一个 contentType，并各自挂 animateItem：
-    // 色块用固定色而非呼吸脉冲，切换时只剩「卡片淡入」这一件事，不再有灰块闪烁。
+    // 骨架使用固定色，作者分类跨页查找时沿用同一批占位。
     val skeletonBlockColor = rememberStaticSkeletonBlockColor()
 
     val dynamicHorizontalArrangement = Arrangement.spacedBy(resolveDynamicTimelineHorizontalSpacing())
@@ -1660,35 +1668,32 @@ internal fun DynamicList(
             }
         }
 
-        // 首屏骨架屏（列表为空且加载中时显示，对齐 BiliPai dynSkeleton）
-        // contentType 与真实卡片统一为 dynamic_card，并各自挂 animateItem：
-        // 数据到达时骨架淡出、卡片淡入，不再是「整批删除 + 整批新增」的硬切。
         if (showSkeleton) {
             items(
                 count = com.android.purebilibili.feature.dynamic.components.DYNAMIC_FEED_SKELETON_ITEM_COUNT,
                 key = { index -> "dynamic_skeleton_$index" },
                 contentType = { "dynamic_card" }
-            ) { _ ->
+            ) { index ->
                 com.android.purebilibili.feature.dynamic.components.DynamicFeedSkeletonCard(
-                    modifier = Modifier.animateItem(),
+                    modifier = when {
+                        !isSelectedUserTabActive -> Modifier.animateItem()
+                        index == 0 -> Modifier.semantics { contentDescription = "正在加载该 UP 的动态" }
+                        else -> Modifier
+                    },
                     blockColor = skeletonBlockColor,
                 )
             }
         }
 
         // 空状态
-        if (filteredItems.isEmpty() && !activeLoading && activeError == null) {
+        if (filteredItems.isEmpty() && !showSkeleton && activeError == null) {
             item(
                 key = "dynamic_empty_state",
                 contentType = "dynamic_empty_state",
                 span = StaggeredGridItemSpan.FullLine
             ) {
                 DynamicEmptyState(
-                    title = when {
-                        isSelectedUserTabActive && hasMore -> "正在加载该 UP 的动态"
-                        isSelectedUserTabActive -> "该 UP 暂无动态"
-                        else -> "暂无动态"
-                    },
+                    title = if (isSelectedUserTabActive) "该 UP 暂无动态" else "暂无动态",
                     subtitle = if (isSelectedUserTabActive) {
                         "仅显示当前分类的内容"
                     } else {
@@ -1700,7 +1705,7 @@ internal fun DynamicList(
         }
 
         // 动态卡片列表
-        // 每张卡都挂 animateItem：骨架淡出与卡片淡入同时发生，形成交叉淡入而不是硬切。
+        // 每张卡都挂 animateItem，保持结果进入列表时的淡入。
         if (oldContentDividerIndex in 0..filteredItems.size) {
             items(
                 count = oldContentDividerIndex,
@@ -1959,7 +1964,7 @@ private fun HorizontalUserList(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .combinedClickable(
+                            .appCombinedClickable(
                                 onClick = appActionWithFeedback { onUserClick(user.uid) },
                                 onLongClick = if (glassMenuAvailable) null else ({ if (!isShortcut) showMenu = true })
                             )
@@ -2070,7 +2075,7 @@ private fun HorizontalUserList(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .padding(AppSpacingTokens.ExtraSmall)
-                            .combinedClickable(
+                            .appCombinedClickable(
                                 onClick = appActionWithFeedback(onToggleShowHidden),
                                 onLongClick = onToggleShowHidden
                             )

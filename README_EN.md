@@ -8,7 +8,7 @@
 
 [简体中文](README.md) · [English](README_EN.md)
 
-<img src="https://img.shields.io/badge/Source-0.8.6%20%28589%29-007AFF?style=flat-square" alt="Source 0.8.6 (589)" />
+<img src="https://img.shields.io/badge/Source-0.9.0%20%28591%29-007AFF?style=flat-square" alt="Source 0.9.0 (591)" />
 <img src="https://img.shields.io/badge/Android-8.0%2B-34C759?style=flat-square" alt="Android 8.0+" />
 <img src="https://img.shields.io/badge/License-GPLv3-FF3B30?style=flat-square" alt="GPLv3" />
 
@@ -115,6 +115,7 @@ Share bugs and ideas through [Issues](https://github.com/jay3-yy/BiliPai/issues/
 - [Compose Rich Editor](https://github.com/MohamedRejeb/Compose-Rich-Editor) — rich text editing
 - [DanmakuRenderEngine](https://github.com/bytedance/DanmakuRenderEngine) — danmaku rendering engine
 - [BiliBili-API-collect](https://github.com/SocialSisterYi/bilibili-API-collect) — BiliBili API reference
+- [大肥鱼消除计划](https://github.com/liyupi/dafeiyu-cleaner) — AI bot detection rules for comment sections
 - [BiliBiliSponsorBlock](https://github.com/hanydd/BilibiliSponsorBlock) — sponsor-skip data and API
 - [Miuix](https://github.com/compose-miuix-ui/miuix) — UI component library
 - [Haze](https://github.com/chrisbanes/haze) — blur effects
@@ -133,6 +134,6 @@ This is an unofficial client and is not affiliated with BiliBili. Content belong
 
 <div align="center">
 
-<sub>Source version 0.8.6 (589) · Updated 2026-11-17 · Made by [YangY](https://x.com/YangY_0x00)</sub>
+<sub>Source version 0.9.0 (591) · Updated 2026-11-18 · Made by [YangY](https://x.com/YangY_0x00)</sub>
 
 </div>

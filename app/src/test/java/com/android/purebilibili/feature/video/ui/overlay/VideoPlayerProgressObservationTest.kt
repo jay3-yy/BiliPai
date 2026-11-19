@@ -95,6 +95,25 @@ class VideoPlayerProgressObservationTest {
     }
 
     @Test
+    fun hiddenControls_waitForPlayerEventsEvenWhilePlaying() = runTest {
+        playing = true
+        val snapshots = mutableListOf<PlayerProgress>()
+        val job = launch {
+            observeVideoPlayerProgress(player, 60_000L, pollingIntervalMs = null) { snapshots += it }
+        }
+        runCurrent()
+        position = 10_000L
+        advanceTimeBy(10_000L)
+        runCurrent()
+        assertEquals(listOf(1_000L), snapshots.map { it.current })
+
+        listener.captured.onEvents(player, events)
+        runCurrent()
+        assertEquals(listOf(1_000L, 10_000L), snapshots.map { it.current })
+        job.cancelAndJoin()
+    }
+
+    @Test
     fun cancellingVisibleOwner_removesListener_andNewOwnerTakesFreshSnapshot() = runTest {
         playing = true
         val snapshots = mutableListOf<PlayerProgress>()

@@ -2,19 +2,48 @@ package com.android.purebilibili.feature.video.danmaku
 
 import com.android.purebilibili.danmaku.engine.DanmakuItem
 
-/** Only recent comments are eligible: never reveal a later scene's comments early. */
-internal fun selectHotDanmaku(
-    items: List<DanmakuItem>,
-    positionMs: Long,
-    maxItems: Int = 2,
-): List<DanmakuItem> = items.asSequence()
-    .filter { it.danmakuId > 0L && !it.text.isNullOrBlank() && it.likeCount >= 10L }
-    .filter { it.showAtTime in (positionMs.coerceAtLeast(0L) - 15_000L).coerceAtLeast(0L)..positionMs.coerceAtLeast(0L) }
-    .sortedWith(compareByDescending<DanmakuItem> { it.likeCount }.thenBy { it.danmakuId })
-    .distinctBy { it.danmakuId }
-    .distinctBy { it.text }
-    .take(maxItems.coerceAtLeast(0))
-    .toList()
+private val hotDanmakuRank = compareByDescending<IndexedValue<DanmakuItem>> { it.value.likeCount }
+    .thenBy { it.value.danmakuId }
+    .thenBy { it.index }
+
+/** 按当前分 P 的过滤结果建立索引，查询范围包含当前时间和前 15 秒的边界。 */
+internal class HotDanmakuIndex(items: List<DanmakuItem>) {
+    private val candidates = items.mapIndexedNotNull { index, item ->
+        if (item.danmakuId > 0L && !item.text.isNullOrBlank() && item.likeCount >= 10L) {
+            IndexedValue(index, item)
+        } else null
+    }.sortedBy { it.value.showAtTime }
+
+    val isEmpty: Boolean get() = candidates.isEmpty()
+
+    fun select(positionMs: Long): List<DanmakuItem> {
+        val endMs = positionMs.coerceAtLeast(0L)
+        val startMs = (endMs - 15_000L).coerceAtLeast(0L)
+        val start = timeBoundary(startMs, afterEqual = false)
+        val end = timeBoundary(endMs, afterEqual = true)
+        return candidates.subList(start, end).asSequence()
+            .sortedWith(hotDanmakuRank)
+            .map { it.value }
+            .distinctBy { it.danmakuId }
+            .distinctBy { it.text }
+            .toList()
+    }
+
+    private fun timeBoundary(timeMs: Long, afterEqual: Boolean): Int {
+        var low = 0
+        var high = candidates.size
+        while (low < high) {
+            val middle = low + (high - low) / 2
+            val itemTime = candidates[middle].value.showAtTime
+            if (itemTime < timeMs || (afterEqual && itemTime == timeMs)) {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        return low
+    }
+}
 
 /** Fit up to three complete entries, reserving an equal gap between entries and at both edges. */
 internal fun selectFittingHotDanmaku(

@@ -31,6 +31,22 @@ class DynamicWebLinkLabelPolicyTest {
     }
 
     @Test
+    fun structuredWebLabelKeepsUrlFromOriginalTextWhenJumpTargetIsMissing() {
+        val rendered = render(
+            DynamicDesc(
+                text = "介绍页：网页链接",
+                rich_text_nodes = listOf(
+                    RichTextNode(type = "TEXT", text = "介绍页："),
+                    RichTextNode(type = "WEB", text = "网页链接", orig_text = rawUrl),
+                ),
+            ),
+        )
+
+        assertEquals("介绍页：网页链接", rendered.text)
+        assertEquals(listOf("URL:$rawUrl"), rendered.linkTags())
+    }
+
+    @Test
     fun rawWebNodeKeepsItsJumpTarget() {
         val jumpUrl = "https://t.bilibili.com/1015637114125025318"
         val rendered = render(
@@ -44,6 +60,25 @@ class DynamicWebLinkLabelPolicyTest {
 
         assertEquals("网页链接", rendered.text)
         assertEquals(listOf("URL:$jumpUrl"), rendered.linkTags())
+    }
+
+    @Test
+    fun proseInTheSameNodeAsAUrlRemainsOutsideTheLinkRange() {
+        val prefix = "具体可以看这篇："
+        val suffix = "。下面是正文。"
+        val nodeText = "$prefix$rawUrl$suffix"
+        val desc = DynamicDesc(
+            text = nodeText,
+            rich_text_nodes = listOf(RichTextNode(type = "WEB", text = nodeText, jump_url = rawUrl)),
+        )
+
+        listOf(true to "网页链接", false to rawUrl).forEach { (collapse, label) ->
+            val rendered = render(desc, collapseWebLinks = collapse)
+            val link = rendered.getLinkAnnotations(0, rendered.length).single()
+            assertEquals("$prefix$label$suffix", rendered.text)
+            assertEquals(label, rendered.text.substring(link.start, link.end))
+            assertEquals(listOf("URL:$rawUrl"), rendered.linkTags())
+        }
     }
 
     @Test

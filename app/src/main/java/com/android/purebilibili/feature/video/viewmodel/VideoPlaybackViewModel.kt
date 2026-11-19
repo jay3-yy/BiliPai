@@ -2,12 +2,16 @@
 //  [重构] 简化版 VideoPlaybackViewModel - 使用 UseCase 层
 package com.android.purebilibili.feature.video.viewmodel
 
+import com.android.purebilibili.core.filter.keepsVideo
+import com.android.purebilibili.feature.download.downloadAudioBackupUrls
+import com.android.purebilibili.feature.download.downloadVideoBackupUrls
 import com.android.purebilibili.core.filter.contentFiltered
 
 import android.app.Application
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.annotation.SuppressLint
+import com.android.purebilibili.feature.download.observeDownloadStreamResolution
 import com.android.purebilibili.feature.video.usecase.*
 
 import androidx.lifecycle.AndroidViewModel
@@ -1466,7 +1470,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             if (state is VideoPlaybackUiState.Success) {
                 val label = labels[state.info.bvid to state.info.cid].orEmpty()
                 val related = if (rules == null) emptyList() else relatedUiProjection.filter(state.related, rules) {
-                    !rules.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED)
+                    rules.keepsVideo(
+                        it.bvid, it.aid, it.title, it.owner.mid, it.owner.name,
+                        com.android.purebilibili.core.store.ContentVideoSurface.RELATED,
+                    )
                 }
                 if (state.sponsorVideoLabel == label && related === state.related) state
                 else state.copy(sponsorVideoLabel = label, related = related)
@@ -1480,7 +1487,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     private val relatedDetailProjection = com.android.purebilibili.core.filter.ContentListProjection<RelatedVideo>()
     val detailState = _detailState.contentFiltered(viewModelScope) { state, rules ->
         state.copy(related = relatedDetailProjection.filter(state.related, rules) {
-            !rules.blocksVideo(it.title, it.owner.mid, surface = com.android.purebilibili.core.store.ContentVideoSurface.RELATED)
+            rules.keepsVideo(
+                it.bvid, it.aid, it.title, it.owner.mid, it.owner.name,
+                com.android.purebilibili.core.store.ContentVideoSurface.RELATED,
+            )
         })
     }
     private val playbackPreparationAllowed = MutableStateFlow(true)
@@ -4564,7 +4574,15 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
     }
     
     fun retry() {
-        val bvid = currentBvid.takeIf { it.isNotBlank() } ?: return
+        val currentSuccess = _uiState.value as? VideoPlaybackUiState.Success
+        val bvid = currentSuccess?.info?.bvid?.takeIf { it.isNotBlank() }
+            ?: currentBvid.takeIf { it.isNotBlank() }
+            ?: return
+        // 403 可能来自旧播放器实例，优先用当前成功态的 cid。
+        val targetCid = currentSuccess?.info?.cid?.takeIf { it > 0L }
+            ?: currentCid.takeIf { it > 0L }
+            ?: _detailState.value.info?.cid?.takeIf { it > 0L }
+            ?: 0L
         val fallbackResumePositionMs = exoPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L
         val resumePlaybackAfterRetry = exoPlayer?.let { player ->
             resolvePlaybackIntentForSourceReplacement(
@@ -4572,7 +4590,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                 isPlaying = player.isPlaying
             )
         } ?: true
-        val currentAudioLang = (_uiState.value as? VideoPlaybackUiState.Success)?.currentAudioLang
+        val currentAudioLang = currentSuccess?.currentAudioLang
         
         //  检查当前错误类型，如果是全局冷却则清除所有冷却
         val currentState = _uiState.value
@@ -4584,12 +4602,12 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             PlaybackCooldownManager.clearForVideo(bvid)
         }
         
-        PlayUrlCache.invalidate(bvid, currentCid)
+        PlayUrlCache.invalidate(bvid, targetCid)
         playbackSessionStore.clearCurrentMedia()
         loadVideo(
             bvid = bvid,
             autoPlay = resumePlaybackAfterRetry,
-            cid = currentCid,
+            cid = targetCid,
             audioLang = currentAudioLang,
             fallbackResumePositionMs = fallbackResumePositionMs,
             force = true,
@@ -5165,23 +5183,36 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         mode: Int = 1,
         fontSize: Int = 25,
         attentionCommand: Boolean = false
+    ) = submitDanmaku(message, color, mode, fontSize, attentionCommand)
+
+    fun sendSameDanmaku(message: String, onResult: (Result<Unit>) -> Unit) =
+        submitDanmaku(message, 16777215, 1, 25, attentionCommand = false, onResult = onResult)
+
+    private fun submitDanmaku(
+        message: String,
+        color: Int,
+        mode: Int,
+        fontSize: Int,
+        attentionCommand: Boolean,
+        onResult: ((Result<Unit>) -> Unit)? = null,
     ) {
-        if (_isSendingDanmaku.value) return
-        val requestCid = currentCid
-        val current = _uiState.value as? VideoPlaybackUiState.Success ?: run {
-            viewModelScope.launch { toast("视频未加载") }
+        fun reject(reason: String) {
+            if (onResult != null) onResult(Result.failure(IllegalStateException(reason)))
+            else toast(reason)
+        }
+        if (_isSendingDanmaku.value) {
+            if (onResult != null) reject("正在发送弹幕")
             return
         }
-        
-        if (currentCid == 0L) {
-            viewModelScope.launch { toast("视频未加载") }
+        val requestCid = currentCid
+        val current = _uiState.value as? VideoPlaybackUiState.Success
+        if (current == null || requestCid == 0L) {
+            reject("视频未加载")
             return
         }
 
-        if (com.android.purebilibili.data.repository.DanmakuRepository
-                .isDanmakuServerDisabled(currentCid)
-        ) {
-            viewModelScope.launch { toast("UP主已关闭弹幕") }
+        if (com.android.purebilibili.data.repository.DanmakuRepository.isDanmakuServerDisabled(requestCid)) {
+            reject("UP主已关闭弹幕")
             return
         }
         
@@ -5192,7 +5223,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         
         _isSendingDanmaku.value = true
         viewModelScope.launch {
-            try {
+            val outcome = try {
                 val result = if (attentionCommand) {
                     com.android.purebilibili.data.repository.DanmakuRepository
                         .sendAttentionCommandDanmaku(
@@ -5220,9 +5251,11 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                     .onSuccess {
                         if (currentCid != requestCid) return@onSuccess
                         toast("发送成功")
-                        hideDanmakuSendDialog()
-                        _composerDrafts.update {
-                            it.copy(danmaku = DanmakuComposerDraft())
+                        if (onResult == null) {
+                            hideDanmakuSendDialog()
+                            _composerDrafts.update {
+                                it.copy(danmaku = DanmakuComposerDraft())
+                            }
                         }
                     
                         // 本地即时显示弹幕
@@ -5233,12 +5266,13 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
                         }
                     }
                     .onFailure { error ->
-                        toast(error.message ?: "发送失败")
+                        if (onResult == null) toast(error.message ?: "发送失败")
                     }
             
             } finally {
                 _isSendingDanmaku.value = false
             }
+            onResult?.invoke(outcome)
         }
     }
     
@@ -6153,6 +6187,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             qualityDesc = "音频",
             videoUrl = "",
             audioUrl = audioUrl,
+            audioBackupUrls = current.cachedDashAudios.downloadAudioBackupUrls(audioUrl),
             isAudioOnly = true,
             isVerticalVideo = false
         )
@@ -7740,7 +7775,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
         qualityId: Int,
         options: com.android.purebilibili.feature.download.DownloadOptions = com.android.purebilibili.feature.download.DownloadOptions(),
         candidateOverride: com.android.purebilibili.feature.download.BatchDownloadCandidate? = null,
-    ): com.android.purebilibili.feature.download.DownloadTask? {
+    ): com.android.purebilibili.feature.download.DownloadTask? = observeDownloadStreamResolution {
         val qualityDesc = resolveDownloadQualityDescription(current, qualityId)
         val isCurrentTarget = targetBvid == currentBvid && targetCid == currentCid
         val candidate = candidateOverride ?: com.android.purebilibili.feature.download.resolveBatchDownloadCandidate(
@@ -7769,25 +7804,28 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             else -> ""
         }
 
-        val resolvedUrls = if (directVideoUrl.isNotBlank() && directAudioUrl.isNotBlank()) {
-            directVideoUrl to directAudioUrl
+        val videoUrl: String
+        val audioUrl: String
+        val videoBackups: List<String>
+        val audioBackups: List<String>
+        if (directVideoUrl.isNotBlank() && directAudioUrl.isNotBlank()) {
+            videoUrl = directVideoUrl
+            audioUrl = directAudioUrl
+            videoBackups = current.cachedDashVideos.downloadVideoBackupUrls(videoUrl)
+            audioBackups = current.cachedDashAudios.downloadAudioBackupUrls(audioUrl)
         } else {
-            val playUrlData = VideoRepository.getPlayUrlData(targetBvid, targetCid, qualityId)
-            val selection = playUrlData?.let {
-                playbackUseCase.resolvePlaybackSelection(
-                    playUrlData = it,
-                    targetQuality = qualityId
-                )
-            }
-            val videoUrl = selection?.videoUrl.orEmpty()
-            val audioUrl = selection?.audioUrl.orEmpty()
-            if (videoUrl.isBlank() || audioUrl.isBlank()) {
-                return null
-            }
-            videoUrl to audioUrl
+            val playUrlData = VideoRepository.getPlayUrlData(targetBvid, targetCid, qualityId, retainOriginalUrls = true)
+                ?: return@observeDownloadStreamResolution null
+            val selection = playbackUseCase.resolvePlaybackSelection(playUrlData, qualityId)
+                ?: return@observeDownloadStreamResolution null
+            videoUrl = selection.videoUrl
+            audioUrl = selection.audioUrl.orEmpty()
+            if (videoUrl.isBlank() || audioUrl.isBlank()) return@observeDownloadStreamResolution null
+            videoBackups = selection.cachedDashVideos.downloadVideoBackupUrls(videoUrl)
+            audioBackups = selection.cachedDashAudios.downloadAudioBackupUrls(audioUrl)
         }
 
-        return com.android.purebilibili.feature.download.DownloadTask(
+        com.android.purebilibili.feature.download.DownloadTask(
             aid = candidate?.aid?.takeIf { it > 0L }
                 ?: current.info.aid.takeIf { targetBvid == current.info.bvid } ?: 0L,
             bvid = targetBvid,
@@ -7804,8 +7842,10 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             duration = candidate?.durationSeconds ?: 0,
             quality = qualityId,
             qualityDesc = qualityDesc,
-            videoUrl = resolvedUrls.first,
-            audioUrl = resolvedUrls.second,
+            videoUrl = videoUrl,
+            audioUrl = audioUrl,
+            videoBackupUrls = videoBackups,
+            audioBackupUrls = audioBackups,
             isVerticalVideo = candidate?.isVerticalVideo ?: (current.info.dimension?.isVertical == true),
             options = options
         )
@@ -9755,6 +9795,7 @@ class VideoPlaybackViewModel(application: Application) : AndroidViewModel(applic
             candidates = cdnRewrite?.candidates ?: originalCandidates,
             preference = playbackCdnPreference.value,
             pluginApplied = cdnRewrite != null,
+            measuredPreference = com.android.purebilibili.feature.plugin.CdnSpeedTest.recommendedPreference(),
         )
         val allVideoUrls = preferredCandidates.map { it.videoUrl }
         val allAudioUrls = preferredCandidates.map { it.audioUrl.orEmpty() }

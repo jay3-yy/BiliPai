@@ -35,6 +35,7 @@ import com.android.purebilibili.data.model.response.Owner
 import com.android.purebilibili.data.model.response.VideoItem
 import com.android.purebilibili.feature.home.components.cards.ElegantVideoCard
 import com.android.purebilibili.feature.home.components.cards.VideoCardDurationPublishRow
+import com.android.purebilibili.feature.home.components.cards.rememberVideoCardPublishTimeText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -140,15 +141,18 @@ class HomeRegularCardMetadataTest {
     }
 
     @Test
-    fun publishTimeArrivalDoesNotAddAnotherFooterRowInNarrowColumns() {
-        var date by mutableStateOf("发布时间未知")
+    fun missingPublishTimeStaysHiddenUntilDateArrivesWithoutAddingAnotherFooterRow() {
+        var video by mutableStateOf(VideoItem(bvid = "BV_publish_time_fixture"))
+        val knownPubdate = 1_700_000_000L
         rule.setContent {
             MaterialTheme {
                 CompositionLocalProvider(LocalDensity provides Density(1f, 2f)) {
                     Column(Modifier.width(112.dp).testTag("footer")) {
                         VideoCardDurationPublishRow(
                             durationText = "12:34:56",
-                            publishTimeText = date,
+                            publishTimeText = rememberVideoCardPublishTimeText(
+                                video, enabled = true, isVisibleInWindow = false,
+                            ),
                             emphasizePublishTime = false,
                             publishTimeColor = Color.Gray,
                             topSpacing = 4.dp,
@@ -159,8 +163,10 @@ class HomeRegularCardMetadataTest {
             }
         }
         val initialHeight = rule.onNodeWithTag("footer").getUnclippedBoundsInRoot().height
-        rule.runOnIdle { date = "发布于 2026-11-01" }
+        rule.onNodeWithText("12:34:56").assertExists()
+        rule.onNodeWithText("发布时间未知", substring = true).assertDoesNotExist()
+        rule.runOnIdle { video = video.copy(pubdate = knownPubdate) }
         assertEquals(initialHeight, rule.onNodeWithTag("footer").getUnclippedBoundsInRoot().height)
-        rule.onNodeWithText("发布于 2026-11-01 · 12:34:56").assertExists()
+        rule.onNodeWithText("发布于 ${FormatUtils.formatPublishTime(knownPubdate)} · 12:34:56").assertExists()
     }
 }
