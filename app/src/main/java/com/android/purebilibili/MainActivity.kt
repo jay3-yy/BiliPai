@@ -1,6 +1,8 @@
 // 文件路径: app/src/main/java/com/android/purebilibili/MainActivity.kt
 package com.android.purebilibili
 
+import com.android.purebilibili.feature.privacy.authenticatePrivacyAccess
+
 import com.android.purebilibili.core.ui.components.AppSnackbarHost
 import com.android.purebilibili.core.ui.components.AppText
 
@@ -38,9 +40,6 @@ import androidx.annotation.OptIn
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.core.content.ContextCompat
 import com.android.purebilibili.core.performance.bindPerformanceCapture
 import com.android.purebilibili.core.performance.PerformanceCapture
 import androidx.lifecycle.lifecycleScope
@@ -74,6 +73,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ComposeView
@@ -169,9 +169,6 @@ import com.android.purebilibili.feature.screenshot.cropAppScreenshotBitmap
 import com.android.purebilibili.feature.screenshot.saveAppScreenshotBitmapToGalleryUri
 import com.android.purebilibili.feature.screenshot.shareAppScreenshot
 import com.android.purebilibili.feature.screenshot.shouldOfferAppScreenshotShare
-import com.android.purebilibili.feature.privacy.PrivacyAuthenticationReason
-import com.android.purebilibili.feature.privacy.PrivacyAuthenticationRequest
-import com.android.purebilibili.feature.privacy.PrivacyAuthenticationResult
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.core.player.PlaybackProgressManager
 import com.android.purebilibili.feature.video.handoff.PlaybackHandoffCodec
@@ -182,10 +179,18 @@ import com.android.purebilibili.feature.video.ui.overlay.FullscreenPlayerOverlay
 import com.android.purebilibili.feature.audio.player.AudioNowPlayingSession
 import com.android.purebilibili.feature.audio.screen.resolveAudioNowPlayingVisible
 import com.android.purebilibili.feature.video.player.PlaylistManager
+import com.android.purebilibili.feature.video.ui.overlay.LocalVideoMiniPlayerMotion
 import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerOverlay
+import com.android.purebilibili.feature.video.ui.overlay.VideoMiniPlayerMotion
+import com.android.purebilibili.feature.video.ui.overlay.VideoMiniPlayerMotionLayer
+import com.android.purebilibili.feature.video.ui.overlay.MiniPlayerFullscreenExpansionLayer
 import com.android.purebilibili.navigation.AppNavigation
+import com.android.purebilibili.navigation.BilibiliLinkNavigationAction
 import com.android.purebilibili.navigation.ScreenRoutes
 import com.android.purebilibili.navigation.VideoRoute
+import com.android.purebilibili.navigation.needsPageCid
+import com.android.purebilibili.navigation.resolveBilibiliLinkNavigationAction
+import com.android.purebilibili.navigation.resolvePageCid
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.toLegacyRoute
 import kotlinx.coroutines.delay
@@ -341,6 +346,10 @@ internal fun resolveIntentLinkFallbackRoute(rawInput: String): String? {
 }
 
 internal fun resolveIntentLinkFallbackUrl(rawInput: String): String? {
+    if (BilibiliNavigationTargetParser.unwrapBrowserUrl(rawInput) != null) {
+        val action = resolveBilibiliLinkNavigationAction(rawInput)
+        if (action is BilibiliLinkNavigationAction.InAppWeb) return action.url
+    }
     val directCandidate = normalizeIntentLinkWebCandidate(rawInput)
     if (directCandidate != null) return directCandidate
 
@@ -379,14 +388,15 @@ internal fun resolveMainActivityLinkNavigation(
 ): MainActivityLinkNavigation? {
     return when (target) {
         is BilibiliNavigationTarget.Video -> {
-            if (target.commentRootRpid > 0L || target.commentTargetRpid > 0L) {
+            if (target.commentRootRpid > 0L || target.commentTargetRpid > 0L || target.hasPlaybackLocation) {
                 MainActivityLinkNavigation(
                     pendingNavigationRoute = VideoRoute.resolveVideoRoutePath(
                         bvid = target.videoId,
-                        cid = 0L,
+                        cid = target.cid,
                         encodedCover = "",
                         startAudio = false,
                         autoPortrait = false,
+                        linkStartPositionMs = target.startPositionMs,
                         commentRootRpid = target.commentRootRpid,
                         commentTargetRpid = target.commentTargetRpid,
                     )
@@ -422,6 +432,12 @@ internal fun resolveMainActivityLinkNavigation(
         is BilibiliNavigationTarget.Search -> MainActivityLinkNavigation(
             pendingNavigationRoute = ScreenRoutes.Search.route,
             pendingSearchKeyword = target.keyword
+        )
+        is BilibiliNavigationTarget.Topic -> MainActivityLinkNavigation(
+            pendingNavigationRoute = ScreenRoutes.TopicDetail.createRoute(target.topicId)
+        )
+        is BilibiliNavigationTarget.FavoriteFolder -> MainActivityLinkNavigation(
+            pendingNavigationRoute = BiliPaiNavKey.SeasonSeriesDetail("favorite", target.mediaId, target.ownerMid).toLegacyRoute()
         )
 
         is BilibiliNavigationTarget.Space -> MainActivityLinkNavigation(
@@ -1025,61 +1041,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun authenticatePrivacyAccess(
-        request: PrivacyAuthenticationRequest,
-        onResult: (PrivacyAuthenticationResult) -> Unit
-    ) {
-        val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        val availability = BiometricManager.from(this).canAuthenticate(authenticators)
-        if (availability != BiometricManager.BIOMETRIC_SUCCESS) {
-            onResult(PrivacyAuthenticationResult.Failure(resolvePrivacyAuthenticationUnavailableMessage(request)))
-            return
-        }
-
-        var delivered = false
-        fun deliver(result: PrivacyAuthenticationResult) {
-            if (!delivered) {
-                delivered = true
-                onResult(result)
-            }
-        }
-
-        val prompt = BiometricPrompt(
-            this,
-            ContextCompat.getMainExecutor(this),
-            object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    deliver(PrivacyAuthenticationResult.Success)
-                }
-
-                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                    val message = when (errorCode) {
-                        BiometricPrompt.ERROR_CANCELED,
-                        BiometricPrompt.ERROR_NEGATIVE_BUTTON,
-                        BiometricPrompt.ERROR_USER_CANCELED -> "已取消解锁"
-                        else -> errString.toString().ifBlank { "解锁失败，请稍后重试" }
-                    }
-                    deliver(PrivacyAuthenticationResult.Failure(message))
-                }
-            }
-        )
-        val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(request.reason.title)
-            .setSubtitle(request.reason.subtitle)
-            .setAllowedAuthenticators(authenticators)
-            .build()
-        prompt.authenticate(promptInfo)
-    }
-
-    private fun resolvePrivacyAuthenticationUnavailableMessage(
-        request: PrivacyAuthenticationRequest
-    ): String {
-        return when (request.reason) {
-            PrivacyAuthenticationReason.OPEN_PRIVACY_CONTENT -> "请先设置系统锁屏后再解锁隐私内容"
-        }
-    }
-
     private fun refreshSystemThemeSnapshot(reason: String) {
         val currentSystemInDark = resolveMainActivitySystemInDarkTheme(
             resources.configuration.uiMode
@@ -1495,6 +1456,8 @@ class MainActivity : AppCompatActivity() {
                 .collectAsStateWithLifecycle(initialValue = false)
             val replyPreviewReactions: com.android.purebilibili.feature.video.viewmodel.ReplyPreviewReactionViewModel =
                 androidx.lifecycle.viewmodel.compose.viewModel()
+            val replyTranslations: com.android.purebilibili.feature.video.viewmodel.ReplyTranslationViewModel =
+                androidx.lifecycle.viewmodel.compose.viewModel()
             val subReplyPreviewLikesEnabled by remember(context) {
                 SettingsManager.getSubReplyPreviewLikesEnabled(context)
             }.collectAsStateWithLifecycle(initialValue = true)
@@ -1697,8 +1660,13 @@ class MainActivity : AppCompatActivity() {
                 ) {
                 ProvideUnifiedBlurIntensity {
                 ProvideAppTextSelectionHost {
+                    val motionHostView = androidx.compose.ui.platform.LocalView.current
+                    val miniPlayerMotion = remember(scope, motionHostView) {
+                        VideoMiniPlayerMotion(scope, motionHostView)
+                    }
                     //  📐 [平板适配] 提供全局 WindowSizeClass
                     CompositionLocalProvider(
+                        LocalVideoMiniPlayerMotion provides miniPlayerMotion,
                         com.android.purebilibili.core.ui.blur.LocalProgressiveBlurRenderer provides
                             com.android.purebilibili.core.ui.blur.rememberWindowProgressiveBlurRenderer(),
                         com.android.purebilibili.feature.settings.LocalSettingsThemeConfiguration provides appThemeSettings,
@@ -1710,6 +1678,7 @@ class MainActivity : AppCompatActivity() {
                         com.android.purebilibili.core.ui.components.LocalScrollFeedbackPreset provides scrollFeedbackPreset,
                         LocalDensity provides effectiveDensity,
                         com.android.purebilibili.feature.video.viewmodel.LocalReplyPreviewReactions provides replyPreviewReactions,
+                        com.android.purebilibili.feature.video.viewmodel.LocalReplyTranslation provides replyTranslations,
                         com.android.purebilibili.core.ui.LocalSubReplyPreviewLikesEnabled provides subReplyPreviewLikesEnabled,
                         com.android.purebilibili.core.ui.LocalCommentIpLocationEnabled provides commentIpLocationEnabled,
                         LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled,
@@ -1760,6 +1729,7 @@ class MainActivity : AppCompatActivity() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .onGloballyPositioned(miniPlayerMotion::recordOverlayHost)
                             .appScreenshotGestureDetector(
                                 enabled = appGestureScreenshotEnabled,
                                 mode = appScreenshotGestureMode,
@@ -1908,7 +1878,7 @@ class MainActivity : AppCompatActivity() {
                                     refreshAndroid17HandoffAvailability()
                                     Logger.d(TAG, "🎧 退出听视频页")
                                 },
-                                onPrivacyAuthenticationRequired = ::authenticatePrivacyAccess,
+                                onPrivacyAuthenticationRequired = this@MainActivity::authenticatePrivacyAccess,
                                 mainHazeState = mainHazeState, //  传递全局 Haze 状态
                                 onBrandFeedbackBottomInsetChanged = { brandFeedbackBottomInset = it }
                                 )
@@ -2041,6 +2011,16 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                     
+                    VideoMiniPlayerMotionLayer(
+                        motion = miniPlayerMotion,
+                        enabled = appThemeConfig.uiEntranceAnimationEnabled &&
+                            !com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion() &&
+                            com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
+                            !isPipRenderingActive,
+                        miniPlayerVisible = playbackOverlayState.showMiniPlayerOverlay && !showFullscreen &&
+                            miniPlayerMotion.handoff?.player === miniPlayerManager.player,
+                    )
+
                     //  全屏播放器覆盖层（包含亮度、音量、进度调节）
                     if (showFullscreen) {
                         FullscreenPlayerOverlay(
@@ -2062,6 +2042,13 @@ class MainActivity : AppCompatActivity() {
                             }
                         )
                     }
+                    MiniPlayerFullscreenExpansionLayer(
+                        motion = miniPlayerMotion,
+                        enabled = showFullscreen && !isPipRenderingActive &&
+                            miniPlayerMotion.fullscreenExpansion?.frame?.player === miniPlayerManager.player &&
+                            !com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion() &&
+                            com.android.purebilibili.core.ui.rememberVisualWorkActive(),
+                    )
                     
                     //  护眼模式覆盖层（最顶层，应用于所有内容）
                     EyeProtectionOverlay(
@@ -2981,9 +2968,10 @@ class MainActivity : AppCompatActivity() {
 
         // b23.tv 短链必须等异步展开出原生目标，不能先落 Web 兜底——
         // 否则 Web 路由被组合层抢先消费，原生视频页永远进不来。
-        val containsShortLink = BilibiliUrlParser.extractUrls(rawInput)
+        val linkToResolve = BilibiliNavigationTargetParser.unwrapBrowserUrl(rawInput) ?: rawInput
+        val containsShortLink = BilibiliUrlParser.extractUrls(linkToResolve)
             .any { it.contains("b23.tv", ignoreCase = true) } ||
-            rawInput.trim().startsWith("b23.tv/", ignoreCase = true)
+            linkToResolve.trim().startsWith("b23.tv/", ignoreCase = true)
         if (!containsShortLink) {
             resolveIntentLinkFallbackRoute(rawInput)?.let { route ->
                 Logger.d(TAG, "🌐 入口链接先回退到 WebView: $route")
@@ -2992,7 +2980,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         lifecycleScope.launch {
-            val target = BilibiliNavigationTargetParser.resolve(rawInput)
+            val target = BilibiliNavigationTargetParser.resolve(linkToResolve)
             if (target != null) {
                 applyIntentNavigationTarget(target)
             } else {
@@ -3007,6 +2995,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyIntentNavigationTarget(target: BilibiliNavigationTarget) {
+        if (target is BilibiliNavigationTarget.Video && target.needsPageCid) {
+            lifecycleScope.launch {
+                val resolved = target.resolvePageCid()
+                if (resolved != null) applyIntentNavigationTarget(resolved)
+                else android.widget.Toast.makeText(
+                    this@MainActivity, R.string.video_link_part_unavailable, android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+            return
+        }
         val navigation = resolveMainActivityLinkNavigation(target)
         if (navigation == null) {
             Logger.w(TAG, "⚠️ 暂不支持入口目标: $target")

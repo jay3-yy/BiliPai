@@ -81,10 +81,11 @@ internal fun resolveAudioNowPlayingBarExpandRoute(
     bvid: String,
     cid: Long,
     coverUrl: String,
+    title: String,
 ): String = if (opensAudioMode) {
     ScreenRoutes.AudioMode.createRoute(bvid = bvid, cid = cid)
 } else {
-    VideoRoute.createRoute(bvid = bvid, cid = cid, coverUrl = coverUrl)
+    VideoRoute.createRoute(bvid = bvid, cid = cid, coverUrl = coverUrl, title = title)
 }
 
 internal fun shouldEnableVideoDetailSharedTransition(

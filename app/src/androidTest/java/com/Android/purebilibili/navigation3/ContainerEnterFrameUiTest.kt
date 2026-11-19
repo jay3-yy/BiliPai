@@ -2,7 +2,7 @@ package com.android.purebilibili.navigation3
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.mutableStateListOf
+import androidx.navigation3.runtime.NavBackStack
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -11,8 +11,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
-import top.yukonga.miuix.kmp.nav.core.NavDisplay
-import top.yukonga.miuix.kmp.nav.core.NavKey
 import top.yukonga.miuix.kmp.nav.core.LocalNavTransitionScope
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
@@ -22,7 +20,7 @@ class ContainerEnterFrameUiTest {
 
     @Test
     fun incomingContainerLaysOutAtSourceBeforeItsOpeningClockAdvances() {
-        val stack = mutableStateListOf<NavKey>(BiliPaiNavKey.Settings)
+        val stack = NavBackStack<BiliPaiNavKey>(BiliPaiNavKey.Settings)
         var firstLayoutDepth: Float? = null
         val drawnDepths = mutableListOf<Float>()
         val transition = object : NavTransition {
@@ -33,13 +31,21 @@ class ContainerEnterFrameUiTest {
             }
         }
         rule.setContent {
-            NavDisplay(backStack = stack) {
-                entry<BiliPaiNavKey.Settings> { Box(Modifier.fillMaxSize()) }
-                entry<BiliPaiNavKey.AnimationSettings>(transition = transition) {
+            BiliPaiAndroidXNavDisplay(
+                backStack = stack,
+                onBack = { stack.removeLastOrNull() },
+                motion = {
+                    entry<BiliPaiNavKey.Settings> {}
+                    entry<BiliPaiNavKey.AnimationSettings>(transition = transition) {}
+                },
+            ) { route ->
+                if (route == BiliPaiNavKey.AnimationSettings) {
                     val scope = LocalNavTransitionScope.current
                     Box(Modifier.fillMaxSize().onGloballyPositioned {
                         if (firstLayoutDepth == null) firstLayoutDepth = scope.relativeDepth
                     })
+                } else {
+                    Box(Modifier.fillMaxSize())
                 }
             }
         }

@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.navigation3.runtime.NavBackStack
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.atomic.AtomicInteger
@@ -17,9 +18,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import top.yukonga.miuix.kmp.nav.core.LocalNavEntryContentVisible
-import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
-import top.yukonga.miuix.kmp.nav.core.navBackStackOf
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitions
 
@@ -29,15 +28,24 @@ class NavCoveredContentUiTest {
 
     @Test
     fun changingNavigationStyleKeepsCoveredWorkPausedAndModalBackgroundVisible() {
-        val stack = navBackStackOf(BiliPaiNavKey.Settings, BiliPaiNavKey.AnimationSettings)
+        val stack = NavBackStack<BiliPaiNavKey>(BiliPaiNavKey.Settings, BiliPaiNavKey.AnimationSettings)
         val transition = mutableStateOf<NavTransition>(NavTransitions.MiuixDefault)
         val sourceColor = mutableStateOf(Color.Red)
         val sourceDraws = AtomicInteger()
         var sourceVisible = true
         lateinit var sourceLifecycle: Lifecycle
         composeRule.setContent {
-            NavDisplay(backStack = stack, transition = transition.value, effects = NavDisplayEffects.None) {
-                entry<BiliPaiNavKey.Settings> {
+            BiliPaiAndroidXNavDisplay(
+                backStack = stack,
+                onBack = { stack.removeLastOrNull() },
+                transition = transition.value,
+                effects = NavDisplayEffects.None,
+                motion = {
+                    entry<BiliPaiNavKey.Settings> {}
+                    entry<BiliPaiNavKey.AnimationSettings> {}
+                },
+            ) { route ->
+                if (route == BiliPaiNavKey.Settings) {
                     val visible = LocalNavEntryContentVisible.current
                     val lifecycle = LocalLifecycleOwner.current.lifecycle
                     SideEffect {
@@ -49,8 +57,9 @@ class NavCoveredContentUiTest {
                         drawRect(sourceColor.value)
                         drawContent()
                     })
+                } else {
+                    Box(Modifier.fillMaxSize())
                 }
-                entry<BiliPaiNavKey.AnimationSettings> { Box(Modifier.fillMaxSize()) }
             }
         }
 

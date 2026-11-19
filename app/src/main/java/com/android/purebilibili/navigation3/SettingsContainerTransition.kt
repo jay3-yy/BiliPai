@@ -38,7 +38,7 @@ import top.yukonga.miuix.kmp.nav.transition.NavSettleSpec
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
-/** 设置与直播共用的来源容器过渡；页面始终按最终尺寸布局。 */
+/** 直播与内容卡片的来源容器过渡，页面始终按最终尺寸布局。 */
 internal class SettingsContainerTransition(
     private val source: SettingsContainerSource,
     private val pageColor: () -> Color,

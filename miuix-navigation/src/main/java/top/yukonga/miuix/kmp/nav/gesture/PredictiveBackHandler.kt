@@ -98,7 +98,6 @@ internal fun PredictiveBackHandlerWithSessions(
     onProgress: suspend (sessionId: Long, events: Flow<NavBackEvent>) -> Unit,
     onCommit: (sessionId: Long?) -> Unit,
     onCancel: (sessionId: Long) -> Unit,
-    drainEventsOnCancel: Boolean = false,
 ) {
     // No dispatcher owner means the host has no back-event source at all (never the case on
     // Android or under the multiplatform window hosts); the handler is simply inert then.
@@ -111,7 +110,6 @@ internal fun PredictiveBackHandlerWithSessions(
         handler.currentOnProgress = onProgress
         handler.currentOnCommit = onCommit
         handler.currentOnCancel = onCancel
-        handler.drainEventsOnCancel = drainEventsOnCancel
     }
     DisposableEffect(dispatcher, handler) {
         dispatcher.addHandler(handler)
@@ -132,7 +130,7 @@ internal fun PredictiveBackHandlerWithSessions(
  * Per gesture: [onBackStarted] opens an unbounded channel and launches the collector
  * ([currentOnProgress]); [onBackProgressed] enqueues; [onBackCompleted] closes the stream, waits
  * for the collector to drain the tail, then fires [currentOnCommit]; [onBackCancelled] cancels
- * the collector (or drains it for an opt-in release policy) and fires [currentOnCancel].
+ * the collector and fires [currentOnCancel].
  * Progress and terminal callbacks carry the originating
  * session ID so delayed work cannot resolve a newer gesture. A completed callback with no open
  * session (a discrete trigger such as a Desktop ESC press) reports a null ID and commits directly.
@@ -147,9 +145,6 @@ internal class NavigationEventFlowAdapter(
     var currentOnProgress: suspend (sessionId: Long, events: Flow<NavBackEvent>) -> Unit = { _, _ -> }
     var currentOnCommit: (sessionId: Long?) -> Unit = {}
     var currentOnCancel: (sessionId: Long) -> Unit = {}
-
-    var drainEventsOnCancel: Boolean = false
-    private var activeDrainEventsOnCancel: Boolean = false
 
     private var channel: Channel<NavBackEvent>? = null
     private var collector: Job? = null
@@ -167,7 +162,6 @@ internal class NavigationEventFlowAdapter(
     override fun onBackCancelled() = handleBackCancelled()
 
     internal fun handleBackStarted(event: NavigationEvent) {
-        activeDrainEventsOnCancel = drainEventsOnCancel
         val sessionId = ++nextSessionId
         val ch = Channel<NavBackEvent>(capacity = Channel.UNLIMITED)
         channel = ch
@@ -215,11 +209,8 @@ internal class NavigationEventFlowAdapter(
         if (ch == null || job == null || sessionId == null) return
         ch.close()
         val onCancel = currentOnCancel
-        val drainTail = activeDrainEventsOnCancel
         scope.launch {
-            // Floating-card release decisions need the final pose, including queued events.
-            // Ordinary routes retain the original cancel-and-join behavior.
-            if (drainTail) job.join() else job.cancelAndJoin()
+            job.cancelAndJoin()
             onCancel(sessionId)
         }
     }

@@ -148,40 +148,6 @@ internal fun resolveMiuixVideoCardGestureCornerPx(
 internal fun resolveMiuixVideoCardDepthProgress(relativeDepth: Float): Float =
     topProgress(relativeDepth)
 
-/**
- * Manual predictive-back drag may land the card fully. Reserving a visible portion
- * for the committed settle made full-finger landing impossible and replayed a second
- * flight after release; with cap 1f a full drag leaves the commit tween nothing to
- * animate (remaining = 0), while partial releases still settle smoothly.
- */
-internal const val MIUIX_VIDEO_CARD_GESTURE_MAX_RETURN = 1f
-internal fun resolveMiuixVideoCardSeekReturn(
-    startReturn: Float,
-    gestureProgress: Float,
-): Float = (startReturn + gestureProgress.coerceIn(0f, 1f)).coerceIn(0f, 1f)
-
-internal fun resolveMiuixVideoCardSettleReturn(
-    rawReturn: Float,
-    releaseRawReturn: Float,
-    releaseVisualReturn: Float,
-    committing: Boolean,
-): Float {
-    val raw = rawReturn.coerceIn(0f, 1f)
-    val releaseRaw = releaseRawReturn.coerceIn(0f, 1f)
-    val releaseVisual = releaseVisualReturn.coerceIn(0f, 1f)
-    return if (committing) {
-        val remaining = 1f - releaseRaw
-        if (remaining <= 0f) 1f else {
-            releaseVisual + (1f - releaseVisual) *
-                ((raw - releaseRaw) / remaining).coerceIn(0f, 1f)
-        }
-    } else {
-        if (releaseRaw <= 0f) 0f else {
-            releaseVisual * (raw / releaseRaw).coerceIn(0f, 1f)
-        }
-    }
-}
-
 internal fun resolveMiuixVideoCardOuterScale(sourceScale: Float, depth: Float, landingScale: Float): Float {
     val source = sourceScale.coerceIn(0.05f, 1f)
     return source + (1f - source) * depth.coerceIn(0f, 1f) - source * (1f - landingScale)
@@ -367,10 +333,7 @@ internal class MiuixVideoCardTransitionProgress(
         } == true
     }
     private val settleState by derivedStateOf(structuralEqualityPolicy()) { resolveSettleState() }
-    private var gestureStartReturn: Float? = null
-    private var lastSeekRawReturn = 0f
-    private var lastSeekVisualReturn = 0f
-    private var activeSettle: NavSettle? = null
+    private val returnProgress = VideoCardReturnProgress()
     private var physics = com.android.purebilibili.core.ui.transition.VideoCardMorphPhysics()
 
     private var spatialFrameSequence = Long.MIN_VALUE
@@ -416,13 +379,10 @@ internal class MiuixVideoCardTransitionProgress(
 
     fun maskDepthOrNull(): Float? = topScope?.let { spatialFrame(it).mask }
 
-    private var settleRawReturn = 0f
-    private var settleVisualReturn = 0f
-    private var lastVisualReturn = 0f
     /**
      * 帧内记忆：详情 entry 的 `transformEntry` 会在同一帧里挂多层 graphicsLayer，
      * 每层都会读一次 `visualDepth`。而 `visualDepth` 不是纯读函数——它会推进
-     * `gestureStartReturn` / `activeSettle` / `settleRawReturn` / `lastVisualReturn`
+     * [VideoCardReturnProgress] 的跟手和松手
      * 这套状态机。同帧重复调用等于把状态机推进多次，手势与落位判定互相污染，
      * 并在每帧重复读取状态。
      *
@@ -481,58 +441,25 @@ internal class MiuixVideoCardTransitionProgress(
         // from BGM (or another child) reveals this video at positive depth; it does not close
         // the video into its original feed card. Keep it fullscreen through the landing frame.
         if (isCoveredOrRevealedParent(scope)) {
-            gestureStartReturn = null
-            activeSettle = null
-            lastVisualReturn = 0f
-            settleVisualReturn = 0f
+            returnProgress.reset()
             return 1f
         }
-        val rawDepth = resolveMiuixVideoCardDepthProgress(scope.relativeDepth)
-        val rawReturn = 1f - rawDepth
+        val rawReturn = 1f - resolveMiuixVideoCardDepthProgress(scope.relativeDepth)
         val settle = scope.settle
         val gesture = scope.gesture
         val visualReturn = when {
-            gesture != null && settle == null && scope.role != NavRole.Outgoing -> {
-                if (activeSettle != null) {
-                    // A new grab interrupts a restoring spring at its visible position.
-                    gestureStartReturn = lastVisualReturn
-                    activeSettle = null
-                }
-                val start = gestureStartReturn ?: (rawReturn - gesture.progress).also {
-                    gestureStartReturn = it
-                }
-                resolveMiuixVideoCardSeekReturn(start, gesture.progress).also {
-                    lastSeekRawReturn = rawReturn
-                    lastSeekVisualReturn = it
-                }
-            }
+            gesture != null && settle == null && scope.role != NavRole.Outgoing ->
+                returnProgress.seek(rawReturn, gesture.progress)
             gesture != null && settle != null &&
-                (settle.phase == NavSettlePhase.Commit || settle.phase == NavSettlePhase.Cancel) -> {
-                if (activeSettle !== settle) {
-                    activeSettle = settle
-                    settleRawReturn = if (gestureStartReturn != null) lastSeekRawReturn else rawReturn
-                    settleVisualReturn = if (gestureStartReturn != null) lastSeekVisualReturn else {
-                        resolveMiuixVideoCardSeekReturn(
-                            rawReturn - gesture.progress,
-                            gesture.progress,
-                        )
-                    }
-                }
-                resolveMiuixVideoCardSettleReturn(
+                (settle.phase == NavSettlePhase.Commit || settle.phase == NavSettlePhase.Cancel) ->
+                returnProgress.settle(
                     rawReturn = rawReturn,
-                    releaseRawReturn = settleRawReturn,
-                    releaseVisualReturn = settleVisualReturn,
+                    gestureProgress = gesture.progress,
+                    settlement = settle,
                     committing = settle.phase == NavSettlePhase.Commit,
                 )
-            }
-            else -> rawReturn.also {
-                if (gesture == null) {
-                    gestureStartReturn = null
-                    activeSettle = null
-                }
-            }
+            else -> returnProgress.follow(rawReturn, gestureActive = gesture != null)
         }
-        lastVisualReturn = visualReturn
         return (1f - visualReturn).coerceIn(0f, 1f)
     }
 
@@ -574,8 +501,7 @@ internal class MiuixVideoCardTransitionProgress(
         physics = com.android.purebilibili.core.ui.transition.VideoCardMorphPhysics()
         spatialScope = null
         spatialFrameSequence = Long.MIN_VALUE
-        gestureStartReturn = null
-        activeSettle = null
+        returnProgress.reset()
     }
 
     fun depthOr(fallback: Float): Float = topScope

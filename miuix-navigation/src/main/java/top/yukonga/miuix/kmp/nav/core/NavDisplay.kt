@@ -107,7 +107,7 @@ internal const val NAV_SWIPE_DISMISS_METADATA_KEY: String = "top.yukonga.miuix.k
  * [NavEntry] for keys of that type. [build] materializes the registrations into a lookup function.
  */
 class NavEntryBuilder {
-    private val factories: MutableMap<KClass<*>, (NavKey) -> NavEntry<*>> = mutableMapOf()
+    private val factories: MutableMap<KClass<*>, (Any) -> NavEntry<*>> = mutableMapOf()
 
     /**
      * Registers how to render keys of type [T].
@@ -133,7 +133,7 @@ class NavEntryBuilder {
      * @param metadata extra per-entry metadata, merged with the transition / swipe-dismiss overrides.
      * @param content the composable rendering a key of type [T].
      */
-    inline fun <reified T : NavKey> entry(
+    inline fun <reified T : Any> entry(
         noinline contentKey: ((T) -> Any)? = null,
         transition: NavTransition? = null,
         swipeDismiss: NavSwipeDirection? = null,
@@ -160,7 +160,7 @@ class NavEntryBuilder {
      * reified [entry] can call it across the inline boundary; not intended for direct use.
      */
     @PublishedApi
-    internal fun register(clazz: KClass<*>, factory: (NavKey) -> NavEntry<*>) {
+    internal fun register(clazz: KClass<*>, factory: (Any) -> NavEntry<*>) {
         factories[clazz] = factory
     }
 
@@ -171,7 +171,7 @@ class NavEntryBuilder {
      * no portable superclass walk). Throws if a key has no registered [entry] of its exact type.
      */
     @PublishedApi
-    internal fun build(): (NavKey) -> NavEntry<*> = { key ->
+    internal fun build(): (Any) -> NavEntry<*> = { key ->
         val factory = factories[key::class]
             ?: error("No entry { } registered for ${key::class.simpleName ?: key::class}")
         factory(key)
@@ -184,20 +184,24 @@ class NavEntryBuilder {
  * The [NavDisplay] DSL overloads call this internally; the low-level [NavDisplay] overload accepts a
  * prebuilt lookup of this exact shape.
  */
-internal fun entryProvider(builder: NavEntryBuilder.() -> Unit): (NavKey) -> NavEntry<*> = NavEntryBuilder().apply(builder).build()
+internal fun entryProvider(builder: NavEntryBuilder.() -> Unit): (Any) -> NavEntry<*> = NavEntryBuilder().apply(builder).build()
 
 /**
- * Drives [NavPresentation.animatedTop] towards [target], unless a gesture currently owns the
- * float (in which case the gesture layer snaps it via `snapToFinger`). Implemented as a
- * [LaunchedEffect] keyed on [target] that defers to the driver's settle dispatch
- * (`settleProgrammatic`: the fixed-duration programmatic curve from rest over a full step, the
- * velocity-continuous shared spring otherwise) — the renderer never builds its own
- * [androidx.compose.animation.core.AnimationSpec].
+ * Drives [NavPresentation.animatedTop] towards the top route, unless a gesture currently owns the
+ * float (in which case the gesture layer snaps it via `snapToFinger`). The route list keys
+ * the [LaunchedEffect] so same-depth replacements can also retarget the driver.
  */
 @Composable
-private fun NavPresentation.animateTopTo(target: Float, motion: NavMotion, prepareEnterFrame: Boolean) {
+private fun NavPresentation.animateTopTo(
+    stack: List<Any>,
+    motion: NavMotion,
+    prepareEnterFrame: Boolean,
+    onRetarget: () -> Unit,
+) {
     val currentMotion = rememberUpdatedState(motion)
-    LaunchedEffect(target) {
+    LaunchedEffect(stack) {
+        onRetarget()
+        val target = stack.lastIndex.toFloat()
         // Consume the release velocity exactly once per retarget, whether or not it gets used.
         val released = pendingSettleVelocity
         pendingSettleVelocity = 0f
@@ -208,10 +212,6 @@ private fun NavPresentation.animateTopTo(target: Float, motion: NavMotion, prepa
             withFrameNanos { }
             withFrameNanos { }
         }
-        // A gesture-release settle toward this same target may already own the float (a swipe
-        // commit pops synchronously and queues its velocity-seeded settle ahead of this effect);
-        // defer to it instead of stomping the seeded spring with a fresh-from-rest curve.
-        if (animatedTop.isRunning && animatedTop.targetValue == target) return@LaunchedEffect
         val motionNow = currentMotion.value
         if (gesture != null && target < animatedTop.value) {
             // A gesture-driven back resolved into this retarget (the commit context stays frozen
@@ -316,6 +316,7 @@ internal class PredictiveBackOwnership {
 private class PredictiveBackSession(
     val ownershipLease: Long,
     val completionPolicy: NavBackCompletionPolicy?,
+    val stack: List<Any>,
     var peakProgress: Float = 0f,
     var progress: Float = 0f,
     var gesture: NavGesture? = null,
@@ -343,14 +344,17 @@ private class PredictiveBackSession(
  */
 @Composable
 private fun NavDisplayLayout(
-    backStack: NavBackStack,
-    entryProvider: (NavKey) -> NavEntry<*>,
+    backStack: List<Any>,
+    entryProvider: (Any) -> NavEntry<*>,
     onBack: () -> Unit,
     transition: NavTransition,
     effects: NavDisplayEffects,
     backCompletionPolicy: NavBackCompletionPolicy?,
     onBackStarted: () -> Unit,
+    onBackCancelled: () -> Unit = {},
+    liveBackStack: List<Any> = backStack,
     modifier: Modifier = Modifier,
+    onBackProgressStarted: ((() -> Float) -> Unit)? = null,
 ) {
     val presentation = rememberNavPresentation(backStack.lastIndex)
     val stateHolder = rememberNavSaveableStateHolder()
@@ -360,6 +364,14 @@ private fun NavDisplayLayout(
     val backScope = rememberCoroutineScope()
     val currentOnBack = rememberUpdatedState(onBack)
     val currentOnBackStarted = rememberUpdatedState(onBackStarted)
+    val currentOnBackProgressStarted = rememberUpdatedState(onBackProgressStarted)
+    fun notifyBackStarted() {
+        currentOnBackProgressStarted.value?.invoke {
+            (topIndex - presentation.animatedTop.value).coerceIn(0f, 1f)
+        }
+        currentOnBackStarted.value()
+    }
+    val currentOnBackCancelled = rememberUpdatedState(onBackCancelled)
     val currentBackCompletionPolicy = rememberUpdatedState(backCompletionPolicy)
     val focusManager = LocalFocusManager.current
 
@@ -371,8 +383,9 @@ private fun NavDisplayLayout(
     // recover an index (no O(n^2)). Declared ahead of the gesture wiring: the settle physics
     // resolution below feeds the gesture callbacks.
     val currentKeyList = backStack.toList()
+    val latestStack = rememberUpdatedState(liveBackStack)
     // Covered entries stay composed, so clear their focus when the top entry changes.
-    val previousTopKey = remember { arrayOfNulls<NavKey>(1) }
+    val previousTopKey = remember { arrayOfNulls<Any>(1) }
     val currentTopKey = currentKeyList.lastOrNull()
     SideEffect {
         val previous = previousTopKey[0]
@@ -477,6 +490,7 @@ private fun NavDisplayLayout(
     // an older delayed terminal callback making a newer active session appear idle.
     val predictiveBackOwnership = remember { PredictiveBackOwnership() }
     val predictiveBackSessions = remember { mutableMapOf<Long, PredictiveBackSession>() }
+    val pointerGestureStack = remember { arrayOfNulls<List<Any>>(1) }
     val cancelPredictiveBack: (Long) -> Unit = cancel@{ sessionId ->
         val session = predictiveBackSessions.remove(sessionId) ?: return@cancel
         // A delayed terminal callback from an older session must not settle or release the
@@ -485,13 +499,19 @@ private fun NavDisplayLayout(
         val restoreGeneration = predictiveBackOwnership.generation
         val restoringGesture = presentation.gesture
         presentation.pendingSettleVelocity = 0f
+        if (session.stack != latestStack.value) {
+            // The stack retarget owns convergence, including same-depth replacements.
+            if (presentation.gesture === session.gesture) presentation.gesture = null
+            return@cancel
+        }
+        currentOnBackCancelled.value()
         // Claim the Animatable before returning to the event dispatcher. A queued restore
         // could otherwise start AFTER a new finger has stopped the previous animation.
         backScope.launch(start = CoroutineStart.UNDISPATCHED) {
             if (predictiveBackOwnership.generation != restoreGeneration) return@launch
             presentation.trackSettle(phase = NavSettlePhase.Cancel, releaseVelocity = 0f) { onFrame ->
                 presentation.animatedTop.settleCancel(
-                    target = topIndex.toFloat(),
+                    target = latestStack.value.lastIndex.toFloat(),
                     spec = topMotion.cancel,
                     onFrame = onFrame,
                 )
@@ -504,7 +524,12 @@ private fun NavDisplayLayout(
         }
     }
     val commitPredictiveBack: (Long) -> Unit = commit@{ sessionId ->
-        val session = predictiveBackSessions.remove(sessionId) ?: return@commit
+        val session = predictiveBackSessions[sessionId] ?: return@commit
+        if (session.stack != latestStack.value) {
+            cancelPredictiveBack(sessionId)
+            return@commit
+        }
+        predictiveBackSessions.remove(sessionId)
         if (predictiveBackOwnership.generation != session.ownershipLease) return@commit
         val velocity = session.progressVelocity
         presentation.pendingSettleVelocity = if (session.completionPolicy != null) {
@@ -520,15 +545,24 @@ private fun NavDisplayLayout(
     }
     PredictiveBackHandlerWithSessions(
         enabled = backStack.size > 1,
-        drainEventsOnCancel = backCompletionPolicy != null,
-        onProgress = { sessionId, events ->
-            currentOnBackStarted.value()
+        onProgress = progress@{ sessionId, events ->
+            if (currentKeyList != latestStack.value) return@progress
+            notifyBackStarted()
+            pointerGestureStack[0] = null
             val session = PredictiveBackSession(
                 completionPolicy = currentBackCompletionPolicy.value,
                 ownershipLease = predictiveBackOwnership.acquire(),
+                stack = currentKeyList,
             )
             predictiveBackSessions[sessionId] = session
             presentation.pendingSettleVelocity = 0f
+            fun ownsPreview(): Boolean {
+                val currentStack = latestStack.value
+                return predictiveBackOwnership.generation == session.ownershipLease &&
+                    currentStack.size == session.stack.size &&
+                    currentStack[topIndex] == session.stack[topIndex] &&
+                    currentStack[topIndex - 1] == session.stack[topIndex - 1]
+            }
             // Per-gesture trackers: the initial touch anchors vertical-follow transitions, the
             // last two timestamped events estimate the release velocity (depth-units/sec).
             var initialTouchY = Float.NaN
@@ -538,13 +572,12 @@ private fun NavDisplayLayout(
                 // Mirror each event into the live gesture context for gesture-aware transitions
                 // (touch-following shifts etc.); NavBackEvent and NavGesture share field semantics.
                 events = events.onEach { event ->
+                    if (!ownsPreview()) return@onEach
                     if (initialTouchY.isNaN()) initialTouchY = event.touchY
                     if (event.frameTimeMillis > lastTimeMillis && lastTimeMillis != 0L) {
                         val progressVelocity = (event.progress - lastProgress) * 1000f / (event.frameTimeMillis - lastTimeMillis)
                         session.progressVelocity = progressVelocity
-                        if (predictiveBackOwnership.generation == session.ownershipLease) {
-                            presentation.pendingSettleVelocity = -progressVelocity
-                        }
+                        presentation.pendingSettleVelocity = -progressVelocity
                     }
                     if (event.frameTimeMillis != 0L) {
                         lastProgress = event.progress
@@ -557,13 +590,11 @@ private fun NavDisplayLayout(
                         initialTouchY = initialTouchY,
                     )
                     session.gesture = gesture
-                    if (predictiveBackOwnership.generation == session.ownershipLease) {
-                        presentation.gesture = gesture
-                    }
+                    presentation.gesture = gesture
                 },
                 animatedTop = presentation.animatedTop,
                 topIndex = topIndex,
-                isActive = { predictiveBackOwnership.generation == session.ownershipLease },
+                isActive = ::ownsPreview,
                 onProgressApplied = { progress ->
                     session.progress = progress
                     session.peakProgress = maxOf(session.peakProgress, progress)
@@ -574,7 +605,7 @@ private fun NavDisplayLayout(
             if (sessionId == null) {
                 // A bare completion (Desktop ESC / programmatic back) is discrete and must commit
                 // regardless of any pointer-dismiss gesture currently stored in presentation.
-                currentOnBack.value()
+                if (currentKeyList == latestStack.value) currentOnBack.value()
                 return@commit
             }
             val session = predictiveBackSessions[sessionId] ?: return@commit
@@ -592,18 +623,7 @@ private fun NavDisplayLayout(
                 cancelPredictiveBack(sessionId)
             }
         },
-        onCancel = { sessionId ->
-            val session = predictiveBackSessions[sessionId]
-            if (session?.completionPolicy?.shouldCommitOnCancel(
-                    progress = session.progress,
-                    peakProgress = session.peakProgress,
-                ) == true
-            ) {
-                commitPredictiveBack(sessionId)
-            } else {
-                cancelPredictiveBack(sessionId)
-            }
-        },
+        onCancel = cancelPredictiveBack,
     )
 
     // Unload entries that have finished leaving — either they slid fully off the front edge
@@ -613,10 +633,9 @@ private fun NavDisplayLayout(
     // the saved state, clear the entry's ViewModelStore in the display registry, and remove from the
     // presentation set + index map. The registry — not the host composition — owns store lifetime, so
     // a depth-culled entry that is still on the back stack keeps its ViewModels.
-    val finishedLeaving by remember(presentation, indexByContentKey) {
+    val finishedLeaving by remember(presentation, indexByContentKey, topIndex, transition) {
         derivedStateOf {
             val top = presentation.animatedTop.value
-            val currentSize = backStack.size
             val presented = presentation.presented
             // Hand-rolled scan: this calculation re-runs on every animation frame (it must, so the
             // derived state can compare results), and the common nothing-leaving case has to stay
@@ -628,7 +647,7 @@ private fun NavDisplayLayout(
                 val index = indexByContentKey[e.contentKey]
                 val springRunning = (e.transitionOrNull() ?: transition).retainsSpringOvershoot &&
                     presentation.animatedTop.isRunning
-                if (index == null || (top - index <= -1f && !springRunning) || index < currentSize) {
+                if (index == null || (top - index <= -1f && !springRunning) || index <= topIndex) {
                     (result ?: ArrayList<NavEntry<*>>(presented.size).also { result = it }).add(e)
                 }
             }
@@ -655,7 +674,20 @@ private fun NavDisplayLayout(
         indexByContentKey[entry.contentKey] == backStack.lastIndex &&
             (entry.transitionOrNull() ?: transition).preparesEnterFrame
     }
-    presentation.animateTopTo(backStack.lastIndex.toFloat(), topMotion, prepareEnterFrame)
+    presentation.animateTopTo(currentKeyList, topMotion, prepareEnterFrame) {
+        val obsoletePredictiveSession = predictiveBackSessions.values.firstOrNull {
+            it.ownershipLease == predictiveBackOwnership.generation && it.stack != currentKeyList
+        }
+        if (obsoletePredictiveSession != null) {
+            predictiveBackOwnership.release(obsoletePredictiveSession.ownershipLease)
+            presentation.gesture = null
+            presentation.pendingSettleVelocity = 0f
+        }
+        if (pointerGestureStack[0]?.let { it != currentKeyList } == true) {
+            pointerGestureStack[0] = null
+            presentation.gesture = null
+        }
+    }
 
     // Effective interactive dismiss direction of the CURRENT top entry: a per-route override wins,
     // else its governing transition declares the natural direction. Rebuilding one entry to read
@@ -690,10 +722,15 @@ private fun NavDisplayLayout(
                 motion = topMotion,
                 settleSink = presentation,
                 externalGestureOwnership = { predictiveBackOwnership.generation },
-                onCommit = currentOnBack.value,
-                onCancel = {},
+                isSequenceCurrent = { currentKeyList == latestStack.value },
+                onCommit = {
+                    pointerGestureStack[0] = null
+                    currentOnBack.value()
+                },
+                onCancel = { currentOnBackCancelled.value() },
                 onGesture = {
-                    if (it != null && presentation.gesture == null) currentOnBackStarted.value()
+                    if (it != null && presentation.gesture == null) notifyBackStarted()
+                    pointerGestureStack[0] = if (it != null) currentKeyList else null
                     presentation.gesture = it
                 },
             ),
@@ -1001,6 +1038,7 @@ private fun NavEntryHost(
                         movableContent {
                             CompositionLocalProvider(
                                 LocalNavTransitionScope provides transitionScope,
+                                LocalNavEntryTransition provides ownTransition,
                                 LocalNavEntryContentVisible provides contentVisible,
                             ) {
                                 entry.Content()
@@ -1020,7 +1058,7 @@ private fun NavEntryHost(
  * This is the primary overload: routes are registered via the [content] DSL ([NavEntryBuilder.entry]).
  * The [transition] is the global default; individual routes may override it via `entry(transition = …)`.
  *
- * @param backStack the live back stack to render (a [androidx.compose.runtime.snapshots.SnapshotStateList] of [NavKey]).
+ * @param backStack the live, snapshot-observable back stack to render.
  * @param modifier modifier applied to the host container.
  * @param onBack callback for a system/predictive back; defaults to popping the last entry.
  * @param transition the global default [NavTransition]; per-route overrides win.
@@ -1101,7 +1139,7 @@ fun NavDisplay(
 @Composable
 internal fun NavDisplay(
     backStack: NavBackStack,
-    entryProvider: (NavKey) -> NavEntry<*>,
+    entryProvider: (Any) -> NavEntry<*>,
     modifier: Modifier = Modifier,
     onBack: () -> Unit = { backStack.removeLastOrNull() },
     transition: NavTransition = NavTransitions.MiuixDefault,
@@ -1118,6 +1156,45 @@ internal fun NavDisplay(
         effects = effects,
         backCompletionPolicy = backCompletionPolicy,
         onBackStarted = onBackStarted,
+        modifier = modifier,
+    )
+}
+
+/**
+ * Presents entries supplied by a navigation Scene using continuous-depth transitions.
+ * The caller owns the entry content and back stack. This layer retains departing content
+ * until its exit finishes and reports gesture completion through [onBack].
+ */
+@Composable
+fun NavMotionLayout(
+    routes: List<Any>,
+    liveBackStack: List<Any>,
+    modifier: Modifier,
+    onBack: () -> Unit,
+    onBackStarted: () -> Unit,
+    onBackProgressStarted: ((() -> Float) -> Unit)? = null,
+    onBackCancelled: () -> Unit,
+    transition: NavTransition,
+    effects: NavDisplayEffects,
+    backCompletionPolicy: NavBackCompletionPolicy?,
+    motion: NavEntryBuilder.() -> Unit,
+    entryContent: (Any) -> (@Composable (Any) -> Unit),
+) {
+    val motionProvider = remember(motion) { entryProvider(motion) }
+    val provider: (Any) -> NavEntry<*> = remember(motionProvider, entryContent) {
+        { key -> motionProvider(key).withContent(entryContent(key)) }
+    }
+    NavDisplayLayout(
+        backStack = routes,
+        entryProvider = provider,
+        onBack = onBack,
+        transition = transition,
+        effects = effects,
+        backCompletionPolicy = backCompletionPolicy,
+        onBackStarted = onBackStarted,
+        onBackProgressStarted = onBackProgressStarted,
+        onBackCancelled = onBackCancelled,
+        liveBackStack = liveBackStack,
         modifier = modifier,
     )
 }

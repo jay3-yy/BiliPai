@@ -20,7 +20,7 @@ internal fun pushBiliPaiNavKey(
         areSameReusableBiliPaiDestination(existing, key)
     }
     return if (existingIndex >= 0) {
-        // Miuix NavDisplay requires every contentKey in the back stack to be unique. Reopening a
+        // Each entry on the back stack needs a unique content key. Reopening a
         // singleton destination (for example Search from a video that was opened from Search)
         // returns to its existing instance instead of producing [Search, VideoDetail, Search].
         base.take(existingIndex + 1)

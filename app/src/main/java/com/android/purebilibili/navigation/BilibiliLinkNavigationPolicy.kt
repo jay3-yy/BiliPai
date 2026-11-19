@@ -20,6 +20,11 @@ internal fun resolveBilibiliLinkNavigationAction(rawLink: String): BilibiliLinkN
         return BilibiliLinkNavigationAction.NativeTarget(it)
     }
 
+    BilibiliNavigationTargetParser.unwrapBrowserUrl(trimmed)?.let { destination ->
+        val url = normalizeBilibiliLinkCandidate(destination)
+        if (url != null) return BilibiliLinkNavigationAction.InAppWeb(url)
+    }
+
     val url = normalizeBilibiliLinkCandidate(trimmed)
         ?: BilibiliUrlParser.extractUrls(trimmed).firstNotNullOfOrNull(::normalizeBilibiliLinkCandidate)
         ?: return BilibiliLinkNavigationAction.None
@@ -55,7 +60,7 @@ private fun normalizeBilibiliLinkCandidate(rawLink: String): String? {
     }
     val uri = runCatching { URI(candidate) }.getOrNull() ?: return null
     val scheme = uri.scheme?.lowercase().orEmpty()
-    return candidate.takeIf { scheme == "http" || scheme == "https" }
+    return candidate.takeIf { (scheme == "http" || scheme == "https") && uri.host != null }
 }
 
 private fun isBilibiliWebLink(url: String): Boolean {

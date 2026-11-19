@@ -114,7 +114,7 @@
             android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:theme="@style/Theme.PureBiliBili"
-            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|mnc|colorMode|density|smallestScreenSize|uiMode"
             android:windowSoftInputMode="adjustResize"
             android:supportsPictureInPicture="true">
             <!-- 🔗 Deep Link: Video (/video/) -->
@@ -1176,7 +1176,16 @@
             android:name=".feature.video.VideoActivity"
             android:exported="true"
             android:resizeableActivity="true"
-            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboardHidden|uiMode"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboard|keyboardHidden|uiMode|density"
+            android:supportsPictureInPicture="true"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.PureBiliBili.Main" />
+
+        <activity
+            android:name=".navigation.NavigationCardActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|keyboard|keyboardHidden|uiMode|density"
             android:supportsPictureInPicture="true"
             android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.PureBiliBili.Main" />

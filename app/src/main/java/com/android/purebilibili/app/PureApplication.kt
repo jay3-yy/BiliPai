@@ -24,6 +24,8 @@ import android.os.StrictMode
 import android.os.SystemClock
 import androidx.compose.foundation.ComposeFoundationFlags
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.ui.ComposeUiFlags
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.profileinstaller.ProfileInstaller
 import com.android.purebilibili.BuildConfig
 import coil3.ImageLoader
@@ -241,7 +243,11 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             }
     }
     
-    @OptIn(ExperimentalFoundationApi::class, dev.chrisbanes.haze.ExperimentalHazeApi::class)
+    @OptIn(
+        ExperimentalComposeUiApi::class,
+        ExperimentalFoundationApi::class,
+        dev.chrisbanes.haze.ExperimentalHazeApi::class,
+    )
     override fun onCreate() {
         instance = this
         // 让 core-data 等下层模块的日志也进同一份日志文件（它们不能反向依赖 Logger）。
@@ -253,6 +259,8 @@ class PureApplication : Application(), SingletonImageLoader.Factory, ComponentCa
             com.android.purebilibili.feature.message.notification.initializeMessageNotificationProcess(this)
             return
         }
+
+        ComposeUiFlags.isMediaQueryIntegrationEnabled = true
 
         // 在效果节点挂载前开放官方窗口背景渲染；只有显式选择窗口背景的
         // 同窗口入口参与，指定源采样和 Miuix 渐进模糊继续使用各自路径。

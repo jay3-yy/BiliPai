@@ -5,6 +5,9 @@ import top.yukonga.miuix.kmp.nav.core.NavEntryBuilder
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import top.yukonga.miuix.kmp.nav.transition.NavTransition
 
+private val emptyRouteContent: @Composable (BiliPaiNavKey) -> Unit = {}
+
+// The scene supplies the page content. This registry only selects transition and swipe settings.
 internal fun NavEntryBuilder.biliPaiNavEntries(
     swipeBackDirection: NavSwipeDirection,
     settingsBackStack: List<BiliPaiNavKey> = emptyList(),
@@ -17,8 +20,8 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     predictiveBackExcludedTransition: NavTransition,
     videoCardTransition: NavTransition,
     fullscreenVideoCardTransition: NavTransition,
-    content: @Composable (BiliPaiNavKey) -> Unit,
 ) {
+    val content = emptyRouteContent
     entry<BiliPaiNavKey.MainHost>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.Home>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.ListenVideo>(swipeDismiss = NavSwipeDirection.None, content = content)
@@ -76,7 +79,6 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     entry<BiliPaiNavKey.FavoriteSubscribed>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.FavoriteSearch>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.LikedVideos>(swipeDismiss = swipeBackDirection, content = content)
-    entry<BiliPaiNavKey.LikedVideos.Companion>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.WatchLater>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.WatchLaterSearch>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Onboarding>(swipeDismiss = swipeBackDirection, content = content)

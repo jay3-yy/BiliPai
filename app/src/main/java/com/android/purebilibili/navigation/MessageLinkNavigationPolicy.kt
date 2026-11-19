@@ -2,13 +2,16 @@ package com.android.purebilibili.navigation
 
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
+import com.android.purebilibili.navigation3.BiliPaiNavKey
 
 internal sealed interface MessageLinkNavigationAction {
     data class Video(val videoId: String) : MessageLinkNavigationAction
     data class VideoComment(
         val videoId: String,
         val rootReplyId: Long,
-        val targetReplyId: Long = 0L
+        val targetReplyId: Long = 0L,
+        val cid: Long = 0L,
+        val startPositionMs: Long? = null,
     ) : MessageLinkNavigationAction
     data class Dynamic(val dynamicId: String) : MessageLinkNavigationAction
     data class DynamicComment(
@@ -35,6 +38,7 @@ internal sealed interface MessageLinkNavigationAction {
         val targetReplyId: Long = 0L,
     ) : MessageLinkNavigationAction
     data class ArticleCollection(val collectionId: Long) : MessageLinkNavigationAction
+    data class Destination(val key: BiliPaiNavKey) : MessageLinkNavigationAction
     data class Web(val url: String) : MessageLinkNavigationAction
 }
 
@@ -52,6 +56,9 @@ internal fun resolveMessageLinkNavigationAction(rawLink: String): MessageLinkNav
             val reply = target.commentTargetRpid
             val aid = target.videoId.removePrefix("av").removePrefix("AV").toLongOrNull()
             when {
+                target.hasPlaybackLocation -> MessageLinkNavigationAction.VideoComment(
+                    target.videoId, root, reply, target.cid, target.startPositionMs,
+                )
                 root > 0L && aid != null && aid > 0L -> MessageLinkNavigationAction.CommentDetail(
                     oid = aid,
                     rootReplyId = root,
@@ -83,6 +90,11 @@ internal fun resolveMessageLinkNavigationAction(rawLink: String): MessageLinkNav
             }
         }
         is BilibiliNavigationTarget.Space -> MessageLinkNavigationAction.Space(target.mid)
+        is BilibiliNavigationTarget.Search -> MessageLinkNavigationAction.Destination(BiliPaiNavKey.Search(target.keyword))
+        is BilibiliNavigationTarget.Topic -> MessageLinkNavigationAction.Destination(BiliPaiNavKey.TopicDetail(target.topicId))
+        is BilibiliNavigationTarget.FavoriteFolder -> MessageLinkNavigationAction.Destination(
+            BiliPaiNavKey.SeasonSeriesDetail("favorite", target.mediaId, target.ownerMid)
+        )
         is BilibiliNavigationTarget.Live -> MessageLinkNavigationAction.Live(target.roomId)
         is BilibiliNavigationTarget.BangumiSeason -> MessageLinkNavigationAction.BangumiSeason(
             seasonId = target.seasonId,

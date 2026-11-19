@@ -89,8 +89,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         BiliPaiNavKey.Home -> BiliPaiNavEntryContentRole.HOME
         BiliPaiNavKey.ListenVideo -> BiliPaiNavEntryContentRole.LISTEN_VIDEO
         BiliPaiNavKey.Dynamic -> BiliPaiNavEntryContentRole.DYNAMIC
-        is BiliPaiNavKey.Search,
-        BiliPaiNavKey.Search -> BiliPaiNavEntryContentRole.SEARCH
+        is BiliPaiNavKey.Search -> BiliPaiNavEntryContentRole.SEARCH
         BiliPaiNavKey.SearchTrending -> BiliPaiNavEntryContentRole.SEARCH_TRENDING
         is BiliPaiNavKey.TopicDetail -> BiliPaiNavEntryContentRole.TOPIC_DETAIL
         BiliPaiNavKey.Settings -> BiliPaiNavEntryContentRole.SETTINGS
@@ -128,8 +127,7 @@ internal fun resolveBiliPaiNavEntryContentRole(key: BiliPaiNavKey): BiliPaiNavEn
         is BiliPaiNavKey.FavoritePgc -> BiliPaiNavEntryContentRole.FAVORITE
         BiliPaiNavKey.FavoriteSubscribed -> BiliPaiNavEntryContentRole.FAVORITE
         is BiliPaiNavKey.FavoriteSearch -> BiliPaiNavEntryContentRole.FAVORITE
-        is BiliPaiNavKey.LikedVideos,
-        BiliPaiNavKey.LikedVideos -> BiliPaiNavEntryContentRole.LIKED_VIDEOS
+        is BiliPaiNavKey.LikedVideos -> BiliPaiNavEntryContentRole.LIKED_VIDEOS
         BiliPaiNavKey.WatchLater -> BiliPaiNavEntryContentRole.WATCH_LATER
         is BiliPaiNavKey.WatchLaterSearch -> BiliPaiNavEntryContentRole.WATCH_LATER
         BiliPaiNavKey.Onboarding -> BiliPaiNavEntryContentRole.ONBOARDING

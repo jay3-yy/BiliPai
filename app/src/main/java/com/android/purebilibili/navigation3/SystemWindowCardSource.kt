@@ -3,12 +3,17 @@ package com.android.purebilibili.navigation3
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
+import com.android.purebilibili.core.ui.transition.LocalVideoCardSourceTrackingEnabled
+import com.android.purebilibili.core.ui.transition.VideoCardSourceInstances
+import com.android.purebilibili.core.ui.transition.videoCardSourceAnchor
 import com.android.purebilibili.core.ui.transition.videoCardSourceBoundsInRoot
 import com.android.purebilibili.core.util.CardPositionManager
 import kotlin.math.roundToInt
@@ -29,8 +34,8 @@ internal class SystemWindowCardSource internal constructor(
     fun boundsInRoot(): Rect? = coordinates?.takeIf { it.isAttached }?.videoCardSourceBoundsInRoot()
 
     /** 点击时先于路由跳转调用；未登记成功时调用方继续原窗口内导航。 */
-    fun record(cornerRadiusPx: Float, layer: GraphicsLayer? = null) {
-        val bounds = boundsInRoot() ?: return
+    fun record(cornerRadiusPx: Float = 0f, layer: GraphicsLayer? = null): Boolean {
+        val bounds = boundsInRoot() ?: return false
         CardPositionManager.recordVideoCardPosition(
             bvid = identity,
             sourceRoute = sourceRoute,
@@ -45,18 +50,40 @@ internal class SystemWindowCardSource internal constructor(
         CardPositionManager.recordNativeCardLayer(
             layer?.takeIf { !it.isReleased && it.size == coordinates?.size },
         )
+        return true
     }
 }
 
 /** 窗口可承接的容器目标键；其余键返回 null，调用方保持原窗口内导航。 */
 internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = when (target) {
+    BiliPaiNavKey.Settings -> "settings"
+    BiliPaiNavKey.SettingsSearch -> "settings_search"
+    BiliPaiNavKey.Inbox -> "inbox"
+    BiliPaiNavKey.Profile -> "profile"
+    is BiliPaiNavKey.Search -> "search"
+    BiliPaiNavKey.LiveSearch -> "live_search"
+    BiliPaiNavKey.LiveArea -> "live_area"
+    BiliPaiNavKey.History -> "history"
+    BiliPaiNavKey.Favorite -> "favorite"
+    BiliPaiNavKey.FavoriteSubscribed -> "favorite_subscribed"
+    BiliPaiNavKey.WatchLater -> "watch_later"
+    BiliPaiNavKey.DownloadList -> "download_list"
+    BiliPaiNavKey.Partition -> "partition"
+    BiliPaiNavKey.ReplyMe -> "reply_me"
+    BiliPaiNavKey.AtMe -> "at_me"
+    BiliPaiNavKey.LikeMe -> "like_me"
+    BiliPaiNavKey.SystemNotice -> "system_notice"
+    is BiliPaiNavKey.Following -> target.mid.takeIf { it > 0L }?.let { "following_${it}_${target.fans}" }
+    is BiliPaiNavKey.TopicDetail -> target.topicId.takeIf { it > 0L }?.let { "topic_$it" }
+    is BiliPaiNavKey.MatchInfo -> target.cid.takeIf { it > 0L }?.let { "match_$it" }
+    is BiliPaiNavKey.SeasonSeriesDetail -> "series_${target.type}_${target.id}_${target.mid}"
     is BiliPaiNavKey.AudioMode -> target.sourceBvid.takeIf(String::isNotBlank)
     is BiliPaiNavKey.Live -> "live_${target.roomId}"
     is BiliPaiNavKey.BangumiPlayer -> "bangumi_${target.seasonId}"
     is BiliPaiNavKey.BangumiDetail -> "bangumi_${target.seasonId}"
     is BiliPaiNavKey.ArticleDetail -> "article_${target.articleId}"
     is BiliPaiNavKey.DynamicDetail -> "dynamic_${target.dynamicId}"
-    is BiliPaiNavKey.Space -> "space_${target.mid}"
+    is BiliPaiNavKey.Space -> target.mid.takeIf { it > 0L }?.let { "space_$it" }
     is BiliPaiNavKey.LiveAreaDetail -> "live_area_${target.parentAreaId}_${target.areaId}"
     is BiliPaiNavKey.Web -> if (com.android.purebilibili.feature.web.shouldOpenWebUrlExternally(target.url)) {
         null
@@ -64,6 +91,44 @@ internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = 
         "web_${java.util.UUID.nameUUIDFromBytes(target.url.toByteArray(Charsets.UTF_8))}"
     }
     else -> null
+}
+
+internal fun BiliPaiNavKey?.isPlaybackWindowKey(): Boolean =
+    this is BiliPaiNavKey.VideoDetail || this is BiliPaiNavKey.Live ||
+        this is BiliPaiNavKey.BangumiPlayer || this is BiliPaiNavKey.AudioMode ||
+        this is BiliPaiNavKey.Story || this is BiliPaiNavKey.OfflineVideoPlayer
+
+internal data class SystemWindowNavigationControl(val modifier: Modifier, val onClick: () -> Unit)
+
+@Composable
+internal fun rememberSystemWindowNavigationControl(
+    target: BiliPaiNavKey,
+    shape: Shape,
+    onClick: () -> Unit,
+): SystemWindowNavigationControl {
+    val source = rememberSystemWindowControlSource(target)
+    return SystemWindowNavigationControl(source.anchorModifier(shape)) {
+        if (source != null && source.record()) {
+            // 普通导航只在这次点击内认领来源，认证或后续跳转不能捡到旧锚点。
+            try {
+                onClick()
+            } finally {
+                VideoCardSourceInstances.clearClickedAnchor(source.identity)
+            }
+        } else {
+            onClick()
+        }
+    }
+}
+
+@Composable
+internal fun rememberSystemWindowControlSource(target: BiliPaiNavKey?): SystemWindowCardSource? =
+    if (LocalVideoCardSourceTrackingEnabled.current) rememberSystemWindowCardSource(target) else null
+
+@Composable
+internal fun SystemWindowCardSource?.anchorModifier(shape: Shape): Modifier {
+    if (this == null) return Modifier
+    return Modifier.videoCardSourceAnchor(identity, shape) { coordinates = it }
 }
 
 @Composable
