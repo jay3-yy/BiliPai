@@ -54,7 +54,10 @@ import com.android.purebilibili.feature.settings.share.SettingsShareEntryDefinit
 import com.android.purebilibili.feature.settings.share.SettingsShareSection
 import com.android.purebilibili.feature.settings.AppLanguage
 import com.android.purebilibili.feature.settings.AppThemeMode
+import com.android.purebilibili.feature.settings.AppUpdateMirror
+import com.android.purebilibili.feature.settings.AppUpdateMirrorPreference
 import com.android.purebilibili.feature.settings.DarkThemeSchedule
+import com.android.purebilibili.feature.settings.normalizeAppUpdateMirrorPrefix
 import com.android.purebilibili.feature.settings.normalizeDarkThemeSchedule
 import com.android.purebilibili.feature.settings.DarkThemeStyle
 import com.android.purebilibili.feature.settings.Md3ColorSource
@@ -7094,6 +7097,8 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     // ==========  应用更新 ==========
     private val KEY_APP_UPDATE_CHANNEL = intPreferencesKey("app_update_channel")
+    private val KEY_APP_UPDATE_MIRROR = stringPreferencesKey("app_update_mirror")
+    private val KEY_APP_UPDATE_CUSTOM_MIRROR = stringPreferencesKey("app_update_custom_mirror")
 
     /**
      *  更新检测渠道
@@ -7124,6 +7129,26 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setAppUpdateChannel(context: Context, channel: AppUpdateChannel) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_APP_UPDATE_CHANNEL] = channel.value }
+    }
+
+    internal fun getAppUpdateMirrorPreference(context: Context): Flow<AppUpdateMirrorPreference> =
+        context.settingsDataStore.data.map { preferences ->
+            AppUpdateMirrorPreference(
+                source = AppUpdateMirror.fromValue(preferences[KEY_APP_UPDATE_MIRROR]),
+                customPrefix = preferences[KEY_APP_UPDATE_CUSTOM_MIRROR].orEmpty(),
+            )
+        }.distinctUntilChanged()
+
+    internal suspend fun setAppUpdateMirror(context: Context, source: AppUpdateMirror) {
+        context.settingsDataStore.edit { preferences -> preferences[KEY_APP_UPDATE_MIRROR] = source.name }
+    }
+
+    internal suspend fun setAppUpdateCustomMirror(context: Context, prefix: String, useAsDefault: Boolean) {
+        val normalizedPrefix = requireNotNull(normalizeAppUpdateMirrorPrefix(prefix))
+        context.settingsDataStore.edit { preferences ->
+            preferences[KEY_APP_UPDATE_CUSTOM_MIRROR] = normalizedPrefix
+            if (useAsDefault) preferences[KEY_APP_UPDATE_MIRROR] = AppUpdateMirror.CUSTOM.name
+        }
     }
     
     // ==========  隐私无痕模式 ==========

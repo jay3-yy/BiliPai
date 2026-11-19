@@ -3,7 +3,7 @@ package com.android.purebilibili.feature.settings
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.appElasticPress
 
-
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
@@ -21,7 +19,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,7 +39,9 @@ import com.android.purebilibili.core.ui.ContainerLevel
 internal fun Material3AppUpdateDialog(
     state: AppUpdateDialogState,
     actions: AppUpdateDialogActions,
+    contentScrollState: ScrollState,
 ) {
+    val isDownloading = state.downloadState.isActiveDownload()
     AppAlertDialog(
         onDismissRequest = actions.onDismissRequest,
         title = {
@@ -79,13 +78,14 @@ internal fun Material3AppUpdateDialog(
             }
         },
         text = {
-            Material3UpdateContent(state = state, actions = actions)
+            Material3UpdateContent(state = state, actions = actions, scrollState = contentScrollState)
         },
         confirmButton = {
-            if (!state.showReleaseNotesOnly) {
+            if (state.showPrimaryAction) {
                 Button(
                     onClick = actions.onPrimaryAction,
-                    enabled = !state.downloadState.isActiveDownload(), modifier = Modifier.appElasticPress(enabled = !state.downloadState.isActiveDownload()),
+                    enabled = !isDownloading,
+                    modifier = Modifier.appElasticPress(enabled = !isDownloading),
                 ) {
                     Text(
                         text = appUpdatePrimaryLabel(state.downloadState, state.hasAsset),
@@ -95,12 +95,12 @@ internal fun Material3AppUpdateDialog(
                 }
             }
         },
-        dismissButton = if (state.showReleaseNotesOnly) {
+        dismissButton = if (!state.showSecondaryAction) {
             null
         } else {
             {
                 TextButton(
-                    onClick = if (state.downloadState.isActiveDownload()) {
+                    onClick = if (isDownloading) {
                         actions.onCancelDownload
                     } else {
                         actions.onDismissRequest
@@ -108,7 +108,7 @@ internal fun Material3AppUpdateDialog(
                     modifier = Modifier.appElasticPress(),
                 ) {
                     Text(
-                        text = if (state.downloadState.isActiveDownload()) "取消下载" else "稍后",
+                        text = if (isDownloading) "取消下载" else "稍后",
                         maxLines = 1,
                         softWrap = false,
                     )
@@ -123,6 +123,7 @@ internal fun Material3AppUpdateDialog(
 private fun Material3UpdateContent(
     state: AppUpdateDialogState,
     actions: AppUpdateDialogActions,
+    scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
@@ -144,16 +145,16 @@ private fun Material3UpdateContent(
                 // 容器高度受限时让出空间给下载渠道按钮，日志自身滚动。
                 .weight(1f, fill = false)
                 .heightIn(max = contentMaxHeightDp.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Material3VersionCard(state = state)
-            if (!state.showReleaseNotesOnly && state.downloadState.status != AppUpdateDownloadStatus.IDLE) {
+            if (state.downloadState.status != AppUpdateDownloadStatus.IDLE) {
                 Material3DownloadStatus(state = state.downloadState)
             }
+            Material3VersionCard(state = state)
             Material3ReleaseNotes(releaseNotes = state.update.releaseNotes)
         }
-        Material3DownloadChannels(actions = actions)
+        AppUpdateDownloadChannels(state = state, actions = actions)
     }
 }
 
@@ -311,45 +312,6 @@ private fun Material3ReleaseNotes(
                     style = MaterialTheme.typography.bodyMedium,
                     color = AppContentColors.secondaryText(),
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun Material3DownloadChannels(
-    actions: AppUpdateDialogActions,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = "其他下载渠道",
-            style = MaterialTheme.typography.labelLarge,
-            color = AppContentColors.secondaryText(),
-        )
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .widthIn(max = 320.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OutlinedButton(
-                onClick = actions.onOpenRelease,
-                modifier = Modifier
-                    .weight(1f)
-                    .sizeIn(minHeight = 48.dp)
-                    .appElasticPress(),
-            ) {
-                Text("正式版下载", maxLines = 1, softWrap = false)
-            }
-            OutlinedButton(
-                onClick = actions.onOpenTestRelease,
-                modifier = Modifier
-                    .weight(1f)
-                    .sizeIn(minHeight = 48.dp)
-                    .appElasticPress(),
-            ) {
-                Text("测试版下载", maxLines = 1, softWrap = false)
             }
         }
     }
