@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <plurals name="sub_reply_thread_expand">
+        <item quantity="other">展開 %d 則回覆</item>
+    </plurals>
+    <string name="sub_reply_thread_collapse">收起回覆</string>
+</resources>

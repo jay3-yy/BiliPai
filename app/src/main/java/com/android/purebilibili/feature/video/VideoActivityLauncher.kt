@@ -13,6 +13,9 @@ import java.util.WeakHashMap
 import java.lang.ref.WeakReference
 import java.util.UUID
 import com.android.purebilibili.core.util.applyPlayerRequestedOrientation
+import com.android.purebilibili.navigation.NavigationCardActivity
+import com.android.purebilibili.navigation3.isPlaybackWindowKey
+import com.android.purebilibili.navigation3.legacyRouteToBiliPaiNavKey
 
 /** 独立窗口入口；官方转场的启动配置与播放参数分别传递。 */
 internal object VideoActivityLauncher {
@@ -51,15 +54,22 @@ internal object VideoActivityLauncher {
             activity.lifecycle.withResumed { }
             currentCoroutineContext().ensureActive()
             if (!canLaunch()) return false
-            val intent = Intent(activity, VideoActivity::class.java).putExtras(request.toBundle())
+            val navigationCardWindow = officialTransitionToken != null && request.initialRoute.isNotBlank() &&
+                !legacyRouteToBiliPaiNavKey(request.initialRoute).isPlaybackWindowKey()
+            val windowClass = if (navigationCardWindow) NavigationCardActivity::class.java else VideoActivity::class.java
+            val intent = Intent(activity, windowClass).putExtras(request.toBundle())
+            if (navigationCardWindow) intent.addFlags(Intent.FLAG_ACTIVITY_NO_USER_ACTION)
             officialTransitionToken?.let { intent.putExtra(SystemVideoCardTransition.EXTRA_SESSION, it) }
-            val manager = MiniPlayerManager.getInstance(activity)
-            manager.isNavigatingToVideo = true
-            manager.haltForeignPlaybackForIncomingVideo(request.bvid)
-            manager.exitMiniMode(animate = false)
-            if (activity is VideoActivity) {
-                intent.putExtra("video_parent_is_video", true)
-                activity.onOpeningVideoChild()
+            val manager = if (navigationCardWindow) null else MiniPlayerManager.getInstance(activity)
+            val playbackParent = (activity as? VideoActivity)?.takeIf { it.managesPlayback }
+            if (manager != null) {
+                manager.isNavigatingToVideo = true
+                manager.haltForeignPlaybackForIncomingVideo(request.bvid)
+                manager.exitMiniMode(animate = false)
+                if (playbackParent != null) {
+                    intent.putExtra("video_parent_is_video", true)
+                    playbackParent.onOpeningVideoChild()
+                }
             }
             val parentSession = UUID.randomUUID().toString()
             intent.putExtra(EXTRA_PARENT_SESSION, parentSession)
@@ -68,8 +78,10 @@ internal object VideoActivityLauncher {
                 activity.startActivity(intent, transitionOptions)
             } catch (error: SecurityException) {
                 parentWindows.remove(parentSession)
-                if (activity is VideoActivity) activity.onVideoChildLaunchRejected()
-                manager.isNavigatingToVideo = false
+                if (manager != null) {
+                    playbackParent?.onVideoChildLaunchRejected()
+                    manager.isNavigatingToVideo = false
+                }
                 throw error
             }
             return true

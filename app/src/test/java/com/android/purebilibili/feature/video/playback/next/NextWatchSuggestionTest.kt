@@ -6,6 +6,7 @@ import com.android.purebilibili.data.model.response.ViewInfo
 import com.android.purebilibili.data.model.response.UgcSeason
 import com.android.purebilibili.data.model.response.UgcSection
 import com.android.purebilibili.data.model.response.UgcEpisode
+import com.android.purebilibili.data.model.response.UgcEpisodeArc
 import com.android.purebilibili.data.model.response.Page
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -65,15 +66,41 @@ class NextWatchSuggestionTest {
         assertEquals(30L, resolveSeasonWatchTarget(withParts)?.cid)
     }
 
+    @Test fun collectionUsesPublishOrderWhenServerReturnsNewestFirst() {
+        val first = UgcEpisode(bvid = "BV-first", cid = 10L, arc = UgcEpisodeArc(pubdate = 100L))
+        val second = UgcEpisode(bvid = "BV-second", cid = 20L, arc = UgcEpisodeArc(ctime = 200L))
+        val third = UgcEpisode(
+            bvid = "BV-third", cid = 30L, arc = UgcEpisodeArc(pubdate = 300L, ctime = 50L)
+        )
+        val info = ViewInfo(
+            bvid = second.bvid,
+            cid = second.cid,
+            ugc_season = UgcSeason(sections = listOf(
+                UgcSection(episodes = listOf(third)),
+                UgcSection(episodes = listOf(second, first)),
+            )),
+        )
+
+        assertEquals(third.bvid, resolveCollectionNextWatch(info)?.bvid)
+        assertEquals(first.bvid, resolveSeasonWatchTarget(info, forward = false)?.bvid)
+        val finalEpisode = info.copy(bvid = third.bvid, cid = third.cid)
+        assertNull(resolveCollectionNextWatch(finalEpisode))
+        assertEquals(first.bvid, resolveCollectionNextWatch(finalEpisode, loopAtEnd = true)?.bvid)
+    }
+
     @Test fun reversedPartsChangeActualLookaheadAndRemainIndependentOfSeasonOrder() {
         val info = ViewInfo(bvid = "BV-reverse-parts", cid = 20L,
             pages = listOf(Page(cid = 10L), Page(cid = 20L)),
-            ugc_season = UgcSeason(id = 77L))
+            ugc_season = UgcSeason(id = 77L, sections = listOf(UgcSection(episodes = listOf(
+                UgcEpisode(bvid = "BV-reverse-parts", cid = 10L),
+                UgcEpisode(bvid = "BV-next-episode", cid = 30L),
+            )))))
         PiliPlaybackOrder.setReversed(77L, info.bvid, false)
         PiliPlaybackOrder.setReversed(0L, info.bvid, true)
         try {
             assertEquals(10L, resolveCollectionNextWatch(info)?.cid)
             assertEquals(0, resolveCollectionNextWatch(info)?.pageIndex)
+            assertEquals("BV-next-episode", resolveCollectionNextWatch(info.copy(cid = 10L))?.bvid)
         } finally {
             PiliPlaybackOrder.setReversed(0L, info.bvid, false)
         }

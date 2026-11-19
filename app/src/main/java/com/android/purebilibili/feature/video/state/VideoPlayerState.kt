@@ -46,6 +46,9 @@ import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import com.android.purebilibili.feature.video.playback.audio.isPremiumAudioPlaybackFailure
 import com.android.purebilibili.feature.video.playback.session.resolvePlaybackPauseDecision
+import com.android.purebilibili.feature.video.playback.session.PlaybackWindowLifecycle
+import com.android.purebilibili.feature.video.playback.session.isInMultiWindowPlaybackMode
+import com.android.purebilibili.feature.video.screen.findActivity
 import com.android.purebilibili.feature.video.playback.session.resolvePlaybackResumeDecision
 import com.android.purebilibili.feature.video.playback.session.PlaybackPauseOwner
 import com.android.purebilibili.feature.video.playback.session.PendingPlaybackUserAction
@@ -1052,6 +1055,7 @@ fun rememberVideoPlayerState(
     bvid: String,
     cid: Long = 0L,
     fallbackResumePositionMs: Long = 0L,
+    linkStartPositionMs: Long? = null,
     startPaused: Boolean = false,
     entryTransitionFinished: Boolean = true,
     relatedPublicationAllowed: Boolean = true,
@@ -1225,11 +1229,18 @@ fun rememberVideoPlayerState(
     var hasTransientResumeIntent by remember { mutableStateOf(false) }
     
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val hostActivity = remember(context) { context.findActivity() }
     val lifecyclePlaybackSessionActive by rememberUpdatedState(playbackSessionActive)
-    DisposableEffect(lifecycleOwner, player) {
+    DisposableEffect(lifecycleOwner, player, hostActivity) {
+        val playbackLifecycle = PlaybackWindowLifecycle()
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             val miniPlayerManager = MiniPlayerManager.getInstance(context)
-            when (event) {
+            val playbackEvent = playbackLifecycle.playbackEvent(
+                event,
+                isInMultiWindow = lifecyclePlaybackSessionActive &&
+                    hostActivity.isInMultiWindowPlaybackMode(),
+            )
+            when (playbackEvent) {
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
                     viewModel.flushPlaybackHeartbeatSnapshot(reason = "pause")
                     //  [修复] 保存进度到 ViewModel 缓存（用于跨导航恢复）
@@ -1610,6 +1621,7 @@ fun rememberVideoPlayerState(
         cid,
         reuseFromMiniPlayerAtEntry,
         fallbackResumePositionMs,
+        linkStartPositionMs,
         playbackSessionActive,
         // A retained detail can recreate its player before the entry gate opens. Reconcile again
         // after attachPlayer runs; otherwise the cached restore targets the released instance.
@@ -1681,6 +1693,7 @@ fun rememberVideoPlayerState(
             bvid = bvid,
             cid = cid,
             fallbackResumePositionMs = if (resumeSameRemoteItem) remoteResume?.positionMs ?: fallbackResumePositionMs else fallbackResumePositionMs,
+            linkStartPositionMs = linkStartPositionMs,
             autoPlay = if (resumeSameRemoteItem) remoteResume?.playing
                 else playbackReturnState.resolveAutoPlay(
                     bvid, cid, reusedPlaybackIntentAtEntry ?: SettingsManager.getClickToPlaySync(context)

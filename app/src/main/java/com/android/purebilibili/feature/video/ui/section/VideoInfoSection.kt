@@ -26,6 +26,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -1166,9 +1168,15 @@ fun UpInfoSection(
     BoxWithConstraints(modifier = modifier) {
         val isCompact = maxWidth.isSpecified && shouldUseCompactUpInfoLayout(maxWidth.value.toInt())
 
+        val ownerControl = rememberSystemWindowNavigationControl(
+            BiliPaiNavKey.Space(info.owner.mid),
+            AppShapes.container(ContainerLevel.Card),
+            onClick = { onUpClick(info.owner.mid) },
+        )
+        val avatarSize = if (isCompact) 32.dp else 35.dp
+        val avatarGap = 10.dp
         val avatarContent: @Composable () -> Unit = {
             if (showOwnerAvatar) {
-                val avatarSize = if (isCompact) 32.dp else 35.dp
                 var sharedFaceModifier: Modifier = Modifier
                 if (metadataSharedEnabled) {
                     with(requireNotNull(sharedTransitionScope)) {
@@ -1408,76 +1416,55 @@ fun UpInfoSection(
             }
         }
 
-        Column(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (isCompact) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onUpClick(info.owner.mid) }
-                        .padding(horizontal = horizontalPadding, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    avatarContent()
-
-                    Spacer(Modifier.width(10.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        upNameContent(Modifier.fillMaxWidth())
-
-                        if (upStatsLabels.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            OwnerStatsRow(labels = upStatsLabels)
-                        }
-
-                        if (playerControlVisibility.showFollowButton || trailingContent != null) {
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                if (playerControlVisibility.showFollowButton) {
-                                    followButtonContent()
-                                }
-                                if (trailingContent != null) {
-                                    trailingContent()
-                                }
-                            }
-                        }
+        val ownerIdentity: @Composable (Modifier) -> Unit = { identityModifier ->
+            // 空间入口取整组作者信息，右侧或下方的独立操作仍各自响应点击。
+            Row(
+                modifier = identityModifier.then(ownerControl.modifier),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                avatarContent()
+                Spacer(Modifier.width(avatarGap))
+                Column(modifier = Modifier.weight(1f)) {
+                    upNameContent(if (isCompact) Modifier.fillMaxWidth() else Modifier)
+                    if (upStatsLabels.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        OwnerStatsRow(labels = upStatsLabels)
                     }
                 }
-            } else {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onUpClick(info.owner.mid) }
-                        .padding(horizontal = horizontalPadding, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    avatarContent()
+            }
+        }
 
-                    Spacer(Modifier.width(10.dp))
-
-                    // UP owner name row
-                    Column(modifier = Modifier.weight(1f)) {
-                        upNameContent(Modifier)
-                        if (upStatsLabels.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(2.dp))
-                            OwnerStatsRow(labels = upStatsLabels)
-                        }
+        val ownerRowModifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = ownerControl.onClick)
+            .padding(horizontal = horizontalPadding, vertical = 4.dp)
+        if (isCompact) {
+            Column(modifier = ownerRowModifier) {
+                ownerIdentity(Modifier.fillMaxWidth())
+                if (playerControlVisibility.showFollowButton || trailingContent != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.padding(start = avatarGap + (if (showOwnerAvatar) avatarSize else 0.dp)),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (playerControlVisibility.showFollowButton) followButtonContent()
+                        trailingContent?.invoke(this)
                     }
-
+                }
+            }
+        } else {
+            Row(
+                modifier = ownerRowModifier,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ownerIdentity(Modifier.weight(1f))
+                if (playerControlVisibility.showFollowButton) followButtonContent()
+                if (trailingContent != null) {
                     if (playerControlVisibility.showFollowButton) {
-                        followButtonContent()
+                        Spacer(modifier = Modifier.width(8.dp))
                     }
-                    if (trailingContent != null) {
-                        if (playerControlVisibility.showFollowButton) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-                        trailingContent()
-                    }
+                    trailingContent()
                 }
             }
         }
@@ -1590,64 +1577,71 @@ private fun CreatorTeamMemberChip(
             darkTheme = followDarkTheme,
         )
     }
+    val chipShape = AppShapes.container(ContainerLevel.Chip)
+    val memberControl = rememberSystemWindowNavigationControl(BiliPaiNavKey.Space(member.mid), chipShape, onClick)
     Row(
         modifier = Modifier
-            .clip(AppShapes.container(ContainerLevel.Chip))
-            .clickable(enabled = member.mid > 0L, onClick = onClick)
+            .clip(chipShape)
+            .clickable(enabled = member.mid > 0L, onClick = memberControl.onClick)
             .padding(end = 4.dp)
             .heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(36.dp)) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(FormatUtils.fixImageUrl(
-                        member.face
-                    ))
-                    .crossfade(false)
-                    .build(),
-                contentDescription = "${member.name} 头像",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-            )
-            UserAvatarCornerMarkBadge(
-                mark = resolveUserAvatarCornerMark(
-                    officialType = member.official.type,
-                    vipStatus = member.vip.status,
-                ),
-                modifier = Modifier.align(Alignment.BottomEnd),
-                badgeSize = 14.dp,
-            )
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Column(
-            modifier = Modifier.widthIn(min = 64.dp, max = 112.dp)
+        Row(
+            modifier = memberControl.modifier,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                AppText(
-                    text = member.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = AppContentColors.primaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
+            Box(modifier = Modifier.size(36.dp)) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(FormatUtils.fixImageUrl(
+                            member.face
+                        ))
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = "${member.name} 头像",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+                UserAvatarCornerMarkBadge(
+                    mark = resolveUserAvatarCornerMark(
+                        officialType = member.official.type,
+                        vipStatus = member.vip.status,
+                    ),
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                    badgeSize = 14.dp,
                 )
             }
-            if (member.title.isNotBlank()) {
-                AppText(
-                    text = member.title,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = AppContentColors.secondaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(
+                modifier = Modifier.widthIn(min = 64.dp, max = 112.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    AppText(
+                        text = member.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = AppContentColors.primaryText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                }
+                if (member.title.isNotBlank()) {
+                    AppText(
+                        text = member.title,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AppContentColors.secondaryText(),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         if (showFollow) {

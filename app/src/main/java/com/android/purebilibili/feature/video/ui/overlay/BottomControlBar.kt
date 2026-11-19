@@ -334,6 +334,7 @@ fun BottomControlBar(
                     subtitleControlState = subtitleControlState,
                     onSubtitleClick = { localMenu = PlayerControlAnchor.SUBTITLE },
                     subtitleModifier = anchor(PlayerControlAnchor.SUBTITLE, "player_subtitle_action"),
+                    onExitFullscreen = onToggleFullscreen,
                     modifier = Modifier.fillMaxWidth().testTag("player_control_row"),
                 )
             }

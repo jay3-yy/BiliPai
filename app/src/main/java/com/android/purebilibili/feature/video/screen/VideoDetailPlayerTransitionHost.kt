@@ -19,6 +19,7 @@ import com.android.purebilibili.data.model.response.ViewPoint
 import com.android.purebilibili.feature.video.progress.PbpProgressData
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
+import com.android.purebilibili.feature.video.ui.overlay.InlineVideoStatusBarState
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSection
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionActions
 import com.android.purebilibili.feature.video.ui.section.VideoPlayerSectionState
@@ -34,6 +35,7 @@ internal data class ContinuousPlayerHostLayout(
     val isFullscreen: Boolean,
     val contentTopInset: Dp = 0.dp,
     val viewportWidthProvider: (() -> Dp)? = null,
+    val statusBarBackdrop: InlineVideoStatusBarState? = null,
 )
 
 // 视口宽度 override 的量化步长：消费方策略全部断点式，量化后过渡期状态稳定。
@@ -224,6 +226,7 @@ internal fun PortraitInlineVideoPlayerHost(
     suppressTransientOverlaysForTransition: Boolean = false,
     showPlaybackErrorNotice: Boolean = false,
     viewportWidthProvider: (() -> Dp)? = null,
+    statusBarBackdrop: InlineVideoStatusBarState? = null,
 ) {
     val successState = uiState as? VideoPlaybackUiState.Success
     // 竖屏全屏由 PortraitVideoPager 接管播放面；内联 section 不得再合成。
@@ -260,6 +263,7 @@ internal fun PortraitInlineVideoPlayerHost(
                 isFullscreen = isFullscreen,
                 isInPipMode = isPipMode,
                 contentTopInset = contentTopInset,
+                statusBarBackdrop = statusBarBackdrop,
                 transitionEnabled = transitionEnabled,
                 transitionChromeAlphaProvider = transitionChromeAlphaProvider,
                 danmakuHostActive = danmakuHostActive,

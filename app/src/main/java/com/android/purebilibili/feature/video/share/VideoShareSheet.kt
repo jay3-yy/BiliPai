@@ -14,6 +14,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.FlowRowScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
@@ -26,15 +27,17 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.DynamicFeed
 import com.android.purebilibili.core.store.TokenManager
@@ -57,13 +60,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.purebilibili.core.ui.AppModalBottomSheet
+import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
 import com.android.purebilibili.core.ui.components.AppNativeSegmentedControl
 import com.android.purebilibili.core.ui.components.AppSegmentOption
+import com.android.purebilibili.core.ui.components.AppCheckbox
 import com.android.purebilibili.core.ui.LocalAppThemeConfig
 import com.android.purebilibili.feature.home.components.BottomBarLiquidSegmentedControl
 import com.android.purebilibili.core.ui.common.copyPlainTextToClipboard
@@ -93,7 +102,7 @@ internal fun VideoShareSheetHost(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun VideoShareSheet(
     payload: VideoSharePayload,
@@ -216,6 +225,7 @@ internal fun VideoShareSheet(
     val panelScrollState = rememberScrollState()
     val shareContent: @Composable () -> Unit = {
         val finishPanel = LocalAppGlassPanelDismissAction.current.takeIf { anchoredGlass }
+        val actionsEnabled = !switchingSheet && sharingTarget == null
         suspend fun hideSharePanel() {
             if (finishPanel == null) {
                 hideVideoShareSheet(sheetState)
@@ -234,7 +244,7 @@ internal fun VideoShareSheet(
         ) {
             if (isLandscape) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AppText(
@@ -248,14 +258,14 @@ internal fun VideoShareSheet(
                             if (anchoredGlass) shareScope.launch { hideSharePanel(); onDismiss() }
                             else onDismiss()
                         },
-                        enabled = !switchingSheet && sharingTarget == null,
+                        enabled = actionsEnabled,
                     ) { AppText("关闭") }
                 }
             }
             if (!isLandscape) {
                 AppText(
                     text = "分享",
-                    modifier = Modifier.padding(start = 20.dp, top = 22.dp, bottom = 14.dp),
+                    modifier = Modifier.padding(horizontal = 20.dp).padding(top = 12.dp, bottom = 12.dp),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
                 )
             }
@@ -264,42 +274,47 @@ internal fun VideoShareSheet(
                     .weight(1f, fill = isLandscape && !anchoredGlass)
                     .verticalScroll(panelScrollState)
                     .then(if (isLandscape && !anchoredGlass) Modifier.navigationBarsPadding() else Modifier)
+                    .padding(horizontal = 20.dp)
             ) {
-                val segmentModifier = Modifier.padding(horizontal = 20.dp).fillMaxWidth()
-                if (LocalAppThemeConfig.current.liquidGlassEnabled) {
-                    BottomBarLiquidSegmentedControl(
-                        // Glass indicator fills the measured slot; native geometry keeps its defaults.
-                        liquidGlassAdaptIndicatorToLabel = !com.android.purebilibili.core.ui.LocalAppThemeConfig.current.liquidGlassEnabled,
-                        items = styleOptions.map { it.label },
-                        selectedIndex = shareStyle.ordinal,
-                        onSelected = { shareStyle = VideoShareStyle.entries[it] },
-                        modifier = segmentModifier,
-                        forceEqualWidth = true,
-                    )
-                } else {
-                    AppNativeSegmentedControl(
-                        options = styleOptions,
-                        selectedValue = shareStyle,
-                        modifier = segmentModifier,
-                        onSelectionChange = { shareStyle = it },
-                    )
+                BoxWithConstraints(Modifier.widthIn(max = 216.dp).fillMaxWidth()) {
+                    if (LocalAppThemeConfig.current.liquidGlassEnabled) {
+                        BottomBarLiquidSegmentedControl(
+                            liquidGlassAdaptIndicatorToLabel = false,
+                            items = styleOptions.map { it.label },
+                            selectedIndex = shareStyle.ordinal,
+                            onSelected = { shareStyle = VideoShareStyle.entries[it] },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = actionsEnabled,
+                            forceEqualWidth = true,
+                        )
+                    } else {
+                        AppNativeSegmentedControl(
+                            options = styleOptions,
+                            selectedValue = shareStyle,
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = actionsEnabled,
+                            itemWidth = if (isMiuixNonGlassEnabled()) maxWidth / styleOptions.size else null,
+                            onSelectionChange = { shareStyle = it },
+                        )
+                    }
                 }
                 AppText(
                     text = if (shareStyle == VideoShareStyle.CARD) {
-                        "以封面卡片图分享，并附上标题与二维码"
+                        "封面、标题与二维码"
                     } else {
-                        "以标题 + 链接分享，方便直接打开"
+                        "标题与可直接打开的视频链接"
                     },
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(top = 8.dp, bottom = 12.dp),
                     color = AppContentColors.secondaryText(),
                     style = MaterialTheme.typography.bodySmall,
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
                 VideoShareTargets(sidePanel = isLandscape, modifier = Modifier.fillMaxWidth()) {
                     items.forEach { item ->
                         VideoShareSheetItemView(
                             item = item,
+                            modifier = Modifier.weight(1f).fillMaxRowHeight(),
+                            enabled = actionsEnabled,
                             onClick = {
                                 if (sharingTarget != null || switchingSheet) return@VideoShareSheetItemView
                                 when (item.target) {
@@ -390,26 +405,67 @@ internal fun VideoShareSheet(
                     }
                 }
 
+                AppHorizontalDivider(
+                    modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                )
                 if (sourcePayload.positionMs > 0) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        com.android.purebilibili.core.ui.components.AppCheckbox(
-                            checked = preciseShare, onCheckedChange = { preciseShare = it },
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .toggleable(
+                                value = preciseShare,
+                                enabled = actionsEnabled,
+                                role = Role.Checkbox,
+                                onValueChange = { preciseShare = it },
+                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AppCheckbox(
+                            checked = preciseShare,
+                            onCheckedChange = null,
+                            enabled = actionsEnabled,
+                            modifier = Modifier.clearAndSetSemantics {},
                         )
-                        AppText("从 ${sourcePayload.positionMs / 60000}:${(sourcePayload.positionMs / 1000 % 60).toString().padStart(2, '0')} 开始播放", modifier = Modifier.clickable { preciseShare = !preciseShare })
+                        AppText(
+                            "从 ${sourcePayload.positionMs / 60000}:${(sourcePayload.positionMs / 1000 % 60).toString().padStart(2, '0')} 开始播放",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
-                com.android.purebilibili.core.ui.components.AppTextButton(onClick = {
-                    shareScope.launch {
-                        if (anchoredGlass) hideSharePanel()
-                        try {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(effectivePayload.url)))
-                            onDismiss()
-                        } catch (_: ActivityNotFoundException) {
-                            Toast.makeText(context, "没有可打开此链接的应用", Toast.LENGTH_SHORT).show()
-                            if (anchoredGlass) onDismiss()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable(enabled = actionsEnabled, role = Role.Button) {
+                            shareScope.launch {
+                                if (anchoredGlass) hideSharePanel()
+                                try {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(effectivePayload.url)))
+                                    onDismiss()
+                                } catch (_: ActivityNotFoundException) {
+                                    Toast.makeText(context, "没有可打开此链接的应用", Toast.LENGTH_SHORT).show()
+                                    if (anchoredGlass) onDismiss()
+                                }
+                            }
                         }
-                    }
-                }) { AppText("其他应用打开") }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppIcon(
+                        Icons.Outlined.OpenInNew,
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
+                    )
+                    AppText("在其他应用中打开", style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(Modifier.height(8.dp))
             }
             if (!isLandscape) {
                 AppHorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
@@ -417,19 +473,20 @@ internal fun VideoShareSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .then(if (anchoredGlass) Modifier else Modifier.navigationBarsPadding())
-                        .height(56.dp)
-                        .clickable(enabled = !switchingSheet && sharingTarget == null) {
+                        .heightIn(min = 48.dp)
+                        .clickable(enabled = actionsEnabled, role = Role.Button) {
                             shareScope.launch {
                                 hideSharePanel()
                                 onDismiss()
                             }
-                        },
+                        }
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     AppText(
                         text = "取消",
                         color = AppContentColors.primaryText(),
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Medium)
+                        style = MaterialTheme.typography.labelLarge
                     )
                 }
             }
@@ -461,16 +518,22 @@ internal fun VideoShareSheet(
 private fun VideoShareTargets(
     sidePanel: Boolean,
     modifier: Modifier = Modifier,
-    content: @Composable () -> Unit,
+    content: @Composable FlowRowScope.() -> Unit,
 ) {
-    BoxWithConstraints(modifier.padding(horizontal = 16.dp)) {
-        val columns = if (!sidePanel && maxWidth >= 560.dp) 6 else 3
+    BoxWithConstraints(modifier) {
+        val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val columns = when {
+            !sidePanel && maxWidth >= 540.dp * fontScale -> 6
+            maxWidth >= 228.dp * fontScale -> 3
+            else -> 2
+        }
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             maxItemsInEachRow = columns,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) { content() }
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            content = content,
+        )
     }
 }
 
@@ -487,6 +550,7 @@ private data class VideoShareSheetItem(
 @Composable
 private fun VideoShareSheetItemView(
     item: VideoShareSheetItem,
+    enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -502,16 +566,18 @@ private fun VideoShareSheetItemView(
     }
     Column(
         modifier = modifier
-            .width(72.dp)
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .clip(MaterialTheme.shapes.medium)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 2.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(48.dp)
+                .size(44.dp)
                 .clip(CircleShape)
-                .background(if (appIcon == null) item.backgroundColor else Color.Transparent),
+                .background(if (appIcon == null) item.backgroundColor else Color.Transparent)
+                .clearAndSetSemantics {},
             contentAlignment = Alignment.Center
         ) {
             if (appIcon != null) {
@@ -521,22 +587,22 @@ private fun VideoShareSheetItemView(
                     } },
                     update = { it.setImageDrawable(appIcon) },
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(44.dp)
                         .clip(CircleShape),
                 )
             } else if (item.iconVector != null) {
                 if (item.target == VideoShareTarget.BILIBILI_FRIENDS) {
                     Icon(
                         imageVector = item.iconVector,
-                        contentDescription = item.label,
-                        modifier = Modifier.size(28.dp),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
                         tint = item.contentColor,
                     )
                 } else {
                     AppIcon(
                         imageVector = item.iconVector,
-                        contentDescription = item.label,
-                        modifier = Modifier.size(28.dp),
+                        contentDescription = null,
+                        modifier = Modifier.size(24.dp),
                         tint = item.contentColor,
                     )
                 }
@@ -548,13 +614,12 @@ private fun VideoShareSheetItemView(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
         AppText(
             text = item.label,
-            color = AppContentColors.secondaryText(),
+            color = AppContentColors.primaryText(),
             style = MaterialTheme.typography.labelMedium,
             maxLines = 2,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            textAlign = TextAlign.Center,
             overflow = TextOverflow.Ellipsis
         )
     }

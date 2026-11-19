@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -168,10 +169,14 @@ internal fun VideoDetailSystemBarsEffect(
     isScreenActive: Boolean,
     spec: VideoDetailSystemBarsApplySpec,
     reapplyGeneration: Int = 0,
+    playerBackdropDarkIcons: State<Boolean>? = null,
 ) {
     // The generation re-commits the same policy after a cancelled return or a retained route
     // becomes topmost again.
-    val effectiveSpec = remember(spec, reapplyGeneration) { spec }
+    val darkIcons = playerBackdropDarkIcons?.value == true
+    val effectiveSpec = remember(spec, reapplyGeneration, darkIcons) {
+        if (darkIcons) spec.copy(lightStatusBars = true) else spec
+    }
     SideEffect {
         if (view.isInEditMode || !isScreenActive || window == null || insetsController == null) return@SideEffect
         applyVideoDetailSystemBarsSpec(window, insetsController, effectiveSpec)

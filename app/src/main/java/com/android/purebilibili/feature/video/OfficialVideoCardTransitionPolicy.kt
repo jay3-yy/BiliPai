@@ -23,15 +23,13 @@ internal fun resolveOfficialReturnAnimType(
     metadata: String?,
     motionEnabled: Boolean,
     sourceAvailable: Boolean,
-    preferSystemPredictiveBack: Boolean = false,
 ): Int? {
     val preferredTypes = when {
         !motionEnabled -> listOf("VIEW_ANIM_NONE", "VIEW_ANIM_FOLLOW_SYSTEM")
         !sourceAvailable -> listOf(
             "VIEW_ANIM_FOLLOW_SYSTEM", "VIEW_ANIM_FADE_OUT", "VIEW_ANIM_EXPLODE_OUT", "VIEW_ANIM_NONE",
         )
-        // 预测返回仍优先使用有效卡片落点；FOLLOW_SYSTEM 会把回卡替换为普通窗口退场。
-        preferSystemPredictiveBack -> listOf("VIEW_ANIM_DEFAULT", "VIEW_ANIM_FOLLOW_SYSTEM")
+        // 已有有效落点时，设备未声明 DEFAULT 可写就保留打开时的返回配置。
         else -> listOf("VIEW_ANIM_DEFAULT")
     }
     return when (preferredTypes.firstOrNull { supportsOfficialBackType(metadata, it) }) {
@@ -58,17 +56,12 @@ internal fun resolveOfficialVideoCardReturnPlan(
     preparingToFinish: Boolean,
     motionEnabled: Boolean,
     sourceAvailable: Boolean,
-    preferSystemPredictiveBack: Boolean,
 ): OfficialVideoCardReturnPlan? {
     // 系统保留打开时的往返配置；播放与恢复过程中不改写，关闭时按最终状态提交。
     if (!preparingToFinish) return null
     val useSourceBounds = motionEnabled && sourceAvailable
     return OfficialVideoCardReturnPlan(
-        backAnimType = resolveOfficialReturnAnimType(
-            metadata, motionEnabled, sourceAvailable,
-            // 此门面的 FOLLOW_SYSTEM 会跳过回卡，正常来源仍交给其原生开合执行器。
-            preferSystemPredictiveBack = preferSystemPredictiveBack && !oplusSdkWindow,
-        ),
+        backAnimType = resolveOfficialReturnAnimType(metadata, motionEnabled, sourceAvailable),
         useSourceBounds = useSourceBounds,
         updateRadius = useSourceBounds && !oplusSdkWindow,
         updateEffects = !oplusSdkWindow,

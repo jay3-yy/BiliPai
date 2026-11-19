@@ -82,6 +82,7 @@ import com.android.purebilibili.feature.video.ui.components.AspectRatioMenu
 import com.android.purebilibili.feature.video.ui.components.VideoSettingsPanel
 import com.android.purebilibili.feature.video.ui.components.PlayerEpisodeMenu
 import com.android.purebilibili.feature.video.ui.components.PlayerEpisodeSourceMenu
+import com.android.purebilibili.feature.video.playback.next.episodesInPublishOrder
 import com.android.purebilibili.feature.video.ui.components.resolveCurrentUgcEpisodeLazyListIndex
 import com.android.purebilibili.feature.video.ui.components.LandscapeSidePanel
 import com.android.purebilibili.feature.video.ui.components.landscapeControlCenterGroup
@@ -704,9 +705,7 @@ private fun VideoPlayerOverlayContent(
     val hasExternalPlaylist = state.hasExternalPlaylist
     val onExternalPlaylistClick = actions.onExternalPlaylistClick
     val drawerHazeState = state.drawerHazeState
-    val statusBarAmbientFrame = state.statusBarAmbientFrame
     val statusBarBackdropHeight = state.statusBarBackdropHeight
-    val ambientVideoBoundsInWindow = state.ambientVideoBoundsInWindow
     val onShowDanmakuPool = actions.onShowDanmakuPool
 
     val actionAnchorBounds = remember(bvid, cid, isFullscreen) {
@@ -814,11 +813,18 @@ private fun VideoPlayerOverlayContent(
             onShowNotes = actions.menuActions.onShowNotes ?: contentActions.onShowNotes,
             onDownloadVideo = actions.menuActions.onDownloadVideo ?: contentActions.onDownloadVideo,
         ),
+        volumeControlsVisible = showVideoSettings,
     )
     val collectionSession = rememberPiliCollectionMenuSession(
-        ugcSeason, bvid, cid, loadSubscription = showEpisodeMenu && isLoggedIn, isParts = pages.size > 1,
+        ugcSeason, bvid, cid,
+        loadSubscription = showEpisodeMenu && isLoggedIn && (!showCollectionOnly || pages.size <= 1),
+        isParts = pages.size > 1,
     )
-    val sponsorSession = rememberPiliSponsorMenuSession(bvid)
+    val sponsorSession = rememberPiliSponsorMenuSession(
+        bvid = bvid,
+        visible = showSponsorSegments,
+        onConfigFailure = { showSponsorSegments = false },
+    )
     val registeredPlugins by com.android.purebilibili.core.plugin.PluginManager.pluginsFlow.collectAsStateWithLifecycle()
     val sponsorPluginInfo = registeredPlugins.firstOrNull {
         it.plugin.id == com.android.purebilibili.core.plugin.BuiltinPluginIds.SPONSOR_BLOCK
@@ -840,8 +846,8 @@ private fun VideoPlayerOverlayContent(
         if (hasExternalPlaylist) navigationPlaylist.map { PiliEpisodeNavigationEntry(it.bvid, it.cid) } else null
     }
     val navigationOuter = remember(ugcSeason, hasExternalPlaylist) {
-        if (hasExternalPlaylist) emptyList() else ugcSeason?.sections?.flatMap { section ->
-            section.episodes.map { PiliEpisodeNavigationEntry(it.bvid, it.cid) }
+        if (hasExternalPlaylist) emptyList() else ugcSeason?.episodesInPublishOrder()?.map {
+            PiliEpisodeNavigationEntry(it.bvid, it.cid)
         }.orEmpty()
     }
     val navigationRelated = remember(relatedVideos, hasExternalPlaylist) {
@@ -1528,16 +1534,6 @@ private fun VideoPlayerOverlayContent(
                 onDismiss = { showPlayerInformation = false },
             )
         }
-        if (!isFullscreen) {
-            ImmersiveStatusBarBackdrop(
-                ambientFrame = statusBarAmbientFrame,
-                height = statusBarBackdropHeight,
-                useAmbientHaze = immersiveVideoPageStatusBar,
-                videoBoundsInWindow = ambientVideoBoundsInWindow,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-        }
-
         // --- 1. 顶部渐变遮罩 ---
         AnimatedVisibility(
             visible = isVisible,
@@ -3052,51 +3048,50 @@ fun LandscapeEndDrawer(
     modifier: Modifier = Modifier,
     closeProgress: androidx.compose.runtime.MutableFloatState = remember { mutableFloatStateOf(1f) },
 ) {
-    val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val widthSizeClass = remember(configuration.screenWidthDp) {
-        com.android.purebilibili.core.util.resolveWindowWidthSizeClass(
-            configuration.screenWidthDp.dp
-        )
-    }
-    val foldPosture = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.posture
-    val deviceUiProfile = remember(widthSizeClass, foldPosture) {
-        resolveDeviceUiProfile(
-            widthSizeClass = widthSizeClass,
-            foldPosture = foldPosture,
-        )
-    }
-    val cardAnimationEnabled by remember(context) {
-        SettingsManager.getCardAnimationEnabled(context)
-    }.collectAsStateWithLifecycle(initialValue = true
-        )
-    val overlayMotionTier = resolveEffectiveMotionTier(
-        baseTier = deviceUiProfile.motionTier,
-        animationEnabled = cardAnimationEnabled
-    )
-    val layoutPolicy = remember(configuration.screenWidthDp) {
-        resolveLandscapeEndDrawerLayoutPolicy(
-            widthDp = configuration.screenWidthDp
-        )
-    }
-    val useDarkDrawerOverlay = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val drawerOverlayColor = if (useDarkDrawerOverlay) {
-        Color(0xCC11141A)
-    } else {
-        Color(0xBFF6F8FC)
-    }
-    val dividerColor = if (useDarkDrawerOverlay) {
-        Color.White.copy(alpha = 0.12f)
-    } else {
-        Color.Black.copy(alpha = 0.10f)
-    }
-    var requestDrawerDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(OverlayControlFadeSpec),
         exit = fadeOut(OverlayControlFadeSpec),
         modifier = modifier
     ) {
+        val context = LocalContext.current
+        val configuration = LocalConfiguration.current
+        val widthSizeClass = remember(configuration.screenWidthDp) {
+            com.android.purebilibili.core.util.resolveWindowWidthSizeClass(
+                configuration.screenWidthDp.dp
+            )
+        }
+        val foldPosture = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current.posture
+        val deviceUiProfile = remember(widthSizeClass, foldPosture) {
+            resolveDeviceUiProfile(
+                widthSizeClass = widthSizeClass,
+                foldPosture = foldPosture,
+            )
+        }
+        val cardAnimationEnabled by remember(context) {
+            SettingsManager.getCardAnimationEnabled(context)
+        }.collectAsStateWithLifecycle(initialValue = true)
+        val overlayMotionTier = resolveEffectiveMotionTier(
+            baseTier = deviceUiProfile.motionTier,
+            animationEnabled = cardAnimationEnabled
+        )
+        val layoutPolicy = remember(configuration.screenWidthDp) {
+            resolveLandscapeEndDrawerLayoutPolicy(
+                widthDp = configuration.screenWidthDp
+            )
+        }
+        val useDarkDrawerOverlay = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val drawerOverlayColor = if (useDarkDrawerOverlay) {
+            Color(0xCC11141A)
+        } else {
+            Color(0xBFF6F8FC)
+        }
+        val dividerColor = if (useDarkDrawerOverlay) {
+            Color.White.copy(alpha = 0.12f)
+        } else {
+            Color.Black.copy(alpha = 0.10f)
+        }
+        var requestDrawerDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
         Row(modifier = Modifier.fillMaxSize()) {
             // 点击空白处关闭
             Box(

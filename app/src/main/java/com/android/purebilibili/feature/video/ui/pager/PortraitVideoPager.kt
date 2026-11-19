@@ -87,6 +87,7 @@ import com.android.purebilibili.feature.video.screen.VideoDetailHiddenSystemBars
 import com.android.purebilibili.feature.video.screen.VideoDetailSystemBarsApplySpec
 import com.android.purebilibili.feature.video.screen.applyVideoDetailSystemBarsSpec
 import com.android.purebilibili.feature.video.screen.findActivity
+import com.android.purebilibili.feature.video.playback.session.isInMultiWindowPlaybackMode
 import com.android.purebilibili.feature.video.screen.resolveVideoDetailSystemBarsApplySpec
 import com.android.purebilibili.feature.video.screen.resolveVideoDetailSystemBarsVisibilityPolicy
 import androidx.compose.runtime.rememberCoroutineScope
@@ -934,8 +935,12 @@ fun PortraitVideoPager(
     var portraitOverlayVisible by rememberSaveable(initialInfo.bvid) { mutableStateOf(true) }
     var portraitCleanScreen by rememberSaveable(initialInfo.bvid) { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
-    var isLifecycleResumed by remember(lifecycleOwner) {
-        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    var canPlayInVisibleWindow by remember(lifecycleOwner, activity) {
+        val currentState = lifecycleOwner.lifecycle.currentState
+        mutableStateOf(
+            currentState.isAtLeast(Lifecycle.State.RESUMED) ||
+                (currentState.isAtLeast(Lifecycle.State.STARTED) && activity.isInMultiWindowPlaybackMode())
+        )
     }
     // 「后台播放」豁免：与横屏详情链路（VideoPlayerState.resolvePlaybackPauseDecision）
     // 共用 MiniPlayerManager.shouldContinueBackgroundAudio 的同一套策略，
@@ -943,7 +948,7 @@ fun PortraitVideoPager(
     var continueInBackgroundAudio by remember(lifecycleOwner) { mutableStateOf(false) }
     val isPortraitPlaybackAllowed = shouldAllowPortraitPlayback(
         isCurrentStoryTab = isActive,
-        isLifecycleResumed = isLifecycleResumed,
+        isLifecycleResumed = canPlayInVisibleWindow,
         continueInBackgroundAudio = continueInBackgroundAudio
     )
     val latestCurrentPlayingBvid by rememberUpdatedState(currentPlayingBvid)
@@ -963,22 +968,31 @@ fun PortraitVideoPager(
         } else requestedPlaybackSnapshot?.takeIf { it.bvid == bvid }
     }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, activity) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_RESUME -> {
-                    isLifecycleResumed = true
+                    canPlayInVisibleWindow = true
                     continueInBackgroundAudio = false
+                }
+                Lifecycle.Event.ON_START -> {
+                    if (activity.isInMultiWindowPlaybackMode()) {
+                        canPlayInVisibleWindow = true
+                        continueInBackgroundAudio = false
+                    }
                 }
                 Lifecycle.Event.ON_PAUSE,
                 Lifecycle.Event.ON_STOP,
                 Lifecycle.Event.ON_DESTROY -> {
+                    if (event == Lifecycle.Event.ON_PAUSE &&
+                        activity.isInMultiWindowPlaybackMode()
+                    ) return@LifecycleEventObserver
                     val canContinue =
                         MiniPlayerManager.getInstance(context).shouldContinueBackgroundAudio()
                     continueInBackgroundAudio = canContinue
                     if (!canContinue) {
                         capturePortraitInactivitySnapshot()
-                        isLifecycleResumed = false
+                        canPlayInVisibleWindow = false
                     }
                 }
                 else -> Unit
@@ -4648,17 +4662,17 @@ private fun VideoPageItem(
         )
 
         portraitDetailInfo?.takeIf { it.owner.mid > 0L }?.let { info ->
+            val ownerStats = currentSuccess?.takeIf { it.info.owner.mid == info.owner.mid }
             UpPreviewSheet(
                 visible = isCurrentPage && showUpPreview,
                 owner = info.owner,
                 isFollowing = isFollowing,
                 followStatusKnown = followStatusKnown,
-                followerCount = currentSuccess?.ownerFollowerCount,
-                videoCount = currentSuccess?.ownerVideoCount,
+                followerCount = ownerStats?.ownerFollowerCount,
+                videoCount = ownerStats?.ownerVideoCount,
                 seedVideos = upPreviewSeedVideos,
                 onDismiss = {
                     showUpPreview = false
-                    onUpPreviewActiveChange(false)
                 },
                 onFollowClick = {
                     if (canHandlePortraitInteraction) pageEngagementSession.toggleFollow()

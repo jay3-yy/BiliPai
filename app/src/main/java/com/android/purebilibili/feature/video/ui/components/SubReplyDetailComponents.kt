@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
@@ -50,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AdaptiveLoadingIndicator
 import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.animation.MaybeDissolvableVideoCard
@@ -260,11 +260,16 @@ internal fun resolveSubReplyDetailListScrollResetKey(
 internal fun resolveSubReplyTargetListIndex(
     rootReplyId: Long,
     visibleReplies: List<ReplyItem>,
-    targetReplyId: Long
+    targetReplyId: Long,
+    threadRows: List<SubReplyThreadRow> = emptyList(),
 ): Int? {
     if (targetReplyId <= 0L) return null
     if (targetReplyId == rootReplyId) return 0
-    val replyIndex = visibleReplies.indexOfFirst { it.rpid == targetReplyId }
+    val replyIndex = if (threadRows.isEmpty()) {
+        visibleReplies.indexOfFirst { it.rpid == targetReplyId }
+    } else {
+        threadRows.indexOfFirst { it.replyId == targetReplyId }
+    }
     return replyIndex.takeIf { it >= 0 }?.plus(1)
 }
 
@@ -424,6 +429,8 @@ private data class SubReplyDetailPage(
     val key: Triple<Long, Boolean, Long>,
     val rootReply: ReplyItem?,
     val replies: List<ReplyItem>,
+    val threadRows: List<SubReplyThreadRow>,
+    val collapsedBranches: Set<Long>,
     val conversationMode: Boolean,
     val listState: LazyListState,
     val isRefreshing: Boolean,
@@ -493,8 +500,9 @@ internal fun SubReplyDetailContent(
     val context = LocalContext.current
     val threadRootId = rootReply?.rpid?.takeIf { it > 0L }
         ?: subReplies.firstOrNull { it.root > 0L }?.root ?: 0L
-    val showLoadedReplyCount by com.android.purebilibili.core.store.SettingsManager
-        .getSubReplyLoadedCountEnabled(context)
+    val showLoadedReplyCount by SettingsManager.getSubReplyLoadedCountEnabled(context)
+        .collectAsStateWithLifecycle(initialValue = false)
+    val threadedRepliesEnabled by remember(context) { SettingsManager.getSubReplyThreadedEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val avatarPushEnabled = rememberCommentAvatarPushEnabled()
     var wasRefreshing by remember(threadRootId) { mutableStateOf(false) }
@@ -535,6 +543,27 @@ internal fun SubReplyDetailContent(
     val localConversationMode = conversationAnchor != null
     val effectiveConversationMode = isConversationMode || localConversationMode
     val activeConversationId = conversationAnchor?.rpid ?: conversationAnchorId
+    val showThreadedReplies = threadedRepliesEnabled && rootReply != null && !effectiveConversationMode
+    var collapsedBranches by remember(threadRootId, rootReply?.oid, targetReplyId) {
+        mutableStateOf(emptySet<Long>())
+    }
+    val threadRows = if (showThreadedReplies) {
+        // 内容更新可复用结构，父子关系或列表顺序变化时重新计算连线。
+        val threadLinks = remember(visibleReplies) { visibleReplies.subReplyThreadLinks() }
+        remember(threadRootId, threadLinks) { buildSubReplyThreadRows(threadRootId, threadLinks) }
+    } else {
+        emptyList()
+    }
+    val hidingTarget = remember(threadRows, targetReplyId, targetReplyHandled, collapsedBranches) {
+        if (targetReplyHandled) emptySet()
+        else threadRows.collapsedBranchesHiding(targetReplyId, collapsedBranches)
+    }
+    val displayedCollapsedBranches = remember(collapsedBranches, hidingTarget) { collapsedBranches - hidingTarget }
+    val displayedThreadRows = remember(threadRows, displayedCollapsedBranches) {
+        threadRows.visibleThreadRows(displayedCollapsedBranches)
+    }
+    // A collapsed branch can keep the footer in view while its next pages arrive.
+    val hasHiddenThreadReplies = displayedThreadRows.size < threadRows.size
     val allRepliesListState = key(threadRootId) { rememberLazyListState() }
     val conversationListState = key(threadRootId, activeConversationId) { rememberLazyListState() }
     // Keep separate states: the outgoing list must not jump when the next level resets.
@@ -573,10 +602,10 @@ internal fun SubReplyDetailContent(
             )
         }
     }
-    val shouldLoadMore by remember(listState, isLoading, isEnd, error, localConversationMode, isConversationMode) {
+    val shouldLoadMore by remember(listState, isLoading, isEnd, error, localConversationMode, hasHiddenThreadReplies) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
-            error == null && !localConversationMode &&
+            error == null && !localConversationMode && !hasHiddenThreadReplies &&
                 shouldLoadMoreSubReplyList(
                     lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1,
                     totalItemsCount = layoutInfo.totalItemsCount,
@@ -586,10 +615,10 @@ internal fun SubReplyDetailContent(
         }
     }
     val shouldPrefetchShortList by remember(
-        canScrollForwardState, isLoading, isEnd, error, localConversationMode, visibleReplies.size, detailReplyDisplayCount
+        canScrollForwardState, isLoading, isEnd, error, localConversationMode, hasHiddenThreadReplies
     ) {
         derivedStateOf {
-            error == null && !localConversationMode &&
+            error == null && !localConversationMode && !hasHiddenThreadReplies &&
                 shouldPrefetchSubRepliesWhenListNotScrollable(
                     isLoading = isLoading,
                     isEnd = isEnd,
@@ -654,7 +683,7 @@ internal fun SubReplyDetailContent(
         previousConversationMode = currentMode
         previousSortMode = sortMode.apiMode
     }
-    LaunchedEffect(threadRootId, targetReplyId, visibleReplies, isLoading, isEnd, effectiveConversationMode, activeConversationId, rootReply, error, paginationPage) {
+    LaunchedEffect(threadRootId, targetReplyId, visibleReplies, displayedThreadRows, isLoading, isEnd, effectiveConversationMode, activeConversationId, rootReply, error, paginationPage) {
         if (targetReplyId <= 0L) {
             highlightedTargetId = 0L
             return@LaunchedEffect
@@ -669,13 +698,15 @@ internal fun SubReplyDetailContent(
         val targetIndex = resolveSubReplyTargetListIndex(
             rootReplyId = threadRootId,
             visibleReplies = visibleReplies,
-            targetReplyId = targetReplyId
+            targetReplyId = targetReplyId,
+            threadRows = displayedThreadRows,
         )
         when {
             targetIndex != null -> {
                 // Commit the entry jump without a long animation that a page update
                 // could cancel after the navigation request has already been consumed.
                 listState.scrollToItem(targetIndex)
+                collapsedBranches = displayedCollapsedBranches
                 targetReplyHandled = true
                 highlightedTargetId = targetReplyId
             }
@@ -773,6 +804,8 @@ internal fun SubReplyDetailContent(
                 key = Triple(threadRootId, effectiveConversationMode, activeConversationId),
                 rootReply = rootReply,
                 replies = visibleReplies,
+                threadRows = displayedThreadRows,
+                collapsedBranches = displayedCollapsedBranches,
                 conversationMode = effectiveConversationMode,
                 listState = listState,
                 isRefreshing = isRefreshing,
@@ -812,42 +845,58 @@ internal fun SubReplyDetailContent(
                     contentPadding = PaddingValues(bottom = layoutPolicy.listBottomPaddingDp.dp)
                 ) {
                     item(key = "root_reply") {
+                        val connectRoot = page.threadRows.isNotEmpty()
+                        val sectionStartPadding = if (connectRoot) {
+                            resolveReplyItemLayoutPolicy().dividerStartPaddingDp.dp
+                        } else {
+                            16.dp
+                        }
                         if (rootReply != null) {
-                        // The page transition owns reveal; avoid resizing the lazy-list anchor again.
-                        Box(modifier = Modifier.testTag(SUB_REPLY_DETAIL_ROOT_TAG)) {
-                            ReplyItemView(
-                                avatarListState = listState.takeIf { avatarPushEnabled },
-                                avatarItemKey = "root_reply",
-                                item = rootReply,
-                                hideSubPreview = true,
-                                boundAvatarToItem = true,
-                                showIdentityDecorations = showIdentityDecorations,
-                                onClick = {},
-                                onSubClick = { _, _ -> onReplyClick?.invoke(rootReply) },
-                                upMid = upMid,
-                                emoteMap = emoteMap,
-                                showUpFlag = showUpFlag,
-                                onTimestampClick = onTimestampClick,
-                                onImagePreview = onImagePreview,
-                                onReplyClick = { onReplyClick?.invoke(rootReply) },
-                                onDeleteClick = onDeleteComment?.takeIf {
-                                    currentMid > 0 && rootReply.mid == currentMid
-                                }?.let { delete -> { delete(rootReply.rpid) } },
-                                onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && rootReply.mid == currentMid) {
-                                    { onCheckCommentFraud.invoke(rootReply) }
-                                } else null,
-                                onLikeClick = { onCommentLike?.invoke(rootReply.rpid) },
-                                onHateClick = { onCommentHate?.invoke(rootReply.rpid) },
-                                isLiked = rootReply.rpid in likedComments,
-                                isHated = rootReply.rpid in hatedComments,
-                                onUrlClick = onUrlClick,
-                                maxTimestampMs = maxTimestampMs,
-                                onReportClick = onReportComment?.let { report -> { reason -> report(rootReply.rpid, reason) } },
-                                onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
-                            )
+                            // The page transition owns reveal; avoid resizing the lazy-list anchor again.
+                            Box(
+                                modifier = Modifier.testTag(SUB_REPLY_DETAIL_ROOT_TAG).then(
+                                    if (connectRoot) Modifier.subReplyRootConnector(
+                                        color = appearance.dividerColor,
+                                        startBelowAvatar = true,
+                                    ) else Modifier,
+                                ),
+                            ) {
+                                ReplyItemView(
+                                    avatarListState = listState.takeIf { avatarPushEnabled && !connectRoot },
+                                    avatarItemKey = "root_reply",
+                                    item = rootReply,
+                                    hideSubPreview = true,
+                                    boundAvatarToItem = true,
+                                    showIdentityDecorations = showIdentityDecorations,
+                                    onClick = {},
+                                    onSubClick = { _, _ -> onReplyClick?.invoke(rootReply) },
+                                    upMid = upMid,
+                                    emoteMap = emoteMap,
+                                    showUpFlag = showUpFlag,
+                                    onTimestampClick = onTimestampClick,
+                                    onImagePreview = onImagePreview,
+                                    onReplyClick = { onReplyClick?.invoke(rootReply) },
+                                    onDeleteClick = onDeleteComment?.takeIf {
+                                        currentMid > 0 && rootReply.mid == currentMid
+                                    }?.let { delete -> { delete(rootReply.rpid) } },
+                                    onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && rootReply.mid == currentMid) {
+                                        { onCheckCommentFraud.invoke(rootReply) }
+                                    } else null,
+                                    onLikeClick = { onCommentLike?.invoke(rootReply.rpid) },
+                                    onHateClick = { onCommentHate?.invoke(rootReply.rpid) },
+                                    isLiked = rootReply.rpid in likedComments,
+                                    isHated = rootReply.rpid in hatedComments,
+                                    onUrlClick = onUrlClick,
+                                    maxTimestampMs = maxTimestampMs,
+                                    onReportClick = onReportComment?.let { report -> { reason -> report(rootReply.rpid, reason) } },
+                                    onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
+                                )
+                            }
                         }
-                        }
-                        Column {
+                        Column(
+                            modifier = if (connectRoot) Modifier.subReplyRootConnector(appearance.dividerColor)
+                            else Modifier,
+                        ) {
                             AppHorizontalDivider(
                                 thickness = layoutPolicy.sectionDividerThicknessDp.dp,
                                 color = appearance.sectionDividerColor
@@ -855,11 +904,17 @@ internal fun SubReplyDetailContent(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = layoutPolicy.sectionVerticalPaddingDp.dp)
+                                    .padding(
+                                        start = sectionStartPadding,
+                                        end = 16.dp,
+                                        top = layoutPolicy.sectionVerticalPaddingDp.dp,
+                                        bottom = layoutPolicy.sectionVerticalPaddingDp.dp,
+                                    )
                                     .testTag(SUB_REPLY_DETAIL_SECTION_TAG),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 AppText(
+                                    modifier = if (connectRoot) Modifier.weight(1f) else Modifier,
                                     text = when {
                                         effectiveConversationMode ->
                                             resolveSubReplyConversationSectionTitle(replyCount = visibleReplies.size)
@@ -873,7 +928,7 @@ internal fun SubReplyDetailContent(
                                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
                                     color = appearance.primaryTextColor
                                 )
-                                Spacer(modifier = Modifier.weight(1f))
+                                if (!connectRoot) Spacer(modifier = Modifier.weight(1f))
                                 if (effectiveConversationMode && rootReply != null) {
                                     AppText(
                                         text = "返回全部回复",
@@ -922,16 +977,23 @@ internal fun SubReplyDetailContent(
                         }
                     }
 
-                    itemsIndexed(
-                        items = visibleReplies,
-                        key = { _, item -> item.rpid }
-                    ) { _, item ->
+                    items(
+                        count = if (page.threadRows.isEmpty()) visibleReplies.size else page.threadRows.size,
+                        key = { index -> page.threadRows.getOrNull(index)?.replyId ?: visibleReplies[index].rpid },
+                        contentType = { "sub_reply" },
+                    ) { index ->
+                        val threadRow = page.threadRows.getOrNull(index)
+                        val item = visibleReplies[threadRow?.sourceIndex ?: index]
                         MaybeDissolvableVideoCard(
                             isDissolving = pageActive && item.rpid in dissolvingIds,
                             onDissolveComplete = { if (pageActive) onDeleteComment?.invoke(item.rpid) },
                             cardId = "subreply_detail_${item.rpid}",
-                            // 小间距防止裁剪；animateItem 放在最前，作用于整个槽位。
-                            modifier = videoCommentItemModifier(animatePlacement = true).padding(bottom = 1.dp)
+                            // 树状行共享连续的连接线，分支增减时跟随列表布局一次落位。
+                            modifier = if (threadRow == null) {
+                                videoCommentItemModifier(animatePlacement = true).padding(bottom = 1.dp)
+                            } else {
+                                Modifier
+                            },
                         ) {
                             val backgroundColor by animateColorAsState(
                                 targetValue = if (item.rpid == highlightedTargetId) {
@@ -942,46 +1004,64 @@ internal fun SubReplyDetailContent(
                                 animationSpec = tween(durationMillis = 280),
                                 label = "subReplyTargetHighlight",
                             )
-                            ReplyItemView(
-                                modifier = Modifier.testTag("$SUB_REPLY_DETAIL_ITEM_TAG_PREFIX${item.rpid}"),
-                                avatarListState = listState.takeIf { avatarPushEnabled },
-                                item = item,
-                                containerColor = backgroundColor,
-                                hideSubPreview = true,
-                                showIdentityDecorations = showIdentityDecorations,
-                                onClick = {},
-                                onSubClick = { _, _ -> onReplyClick?.invoke(item) },
-                                upMid = upMid,
-                                emoteMap = emoteMap,
-                                showUpFlag = showUpFlag,
-                                onTimestampClick = onTimestampClick,
-                                onImagePreview = onImagePreview,
-                                onReplyClick = { onReplyClick?.invoke(item) },
-                                onDeleteClick = (onDissolveStart ?: onDeleteComment)?.takeIf {
-                                    currentMid > 0 && item.mid == currentMid
-                                }?.let { delete -> { delete(item.rpid) } },
-                                onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && item.mid == currentMid) {
-                                    { onCheckCommentFraud.invoke(item) }
-                                } else null,
-                                onLikeClick = { onCommentLike?.invoke(item.rpid) },
-                                onHateClick = { onCommentHate?.invoke(item.rpid) },
-                                isLiked = item.rpid in likedComments,
-                                isHated = item.rpid in hatedComments,
-                                onUrlClick = onUrlClick,
-                                maxTimestampMs = maxTimestampMs,
-                                onReportClick = onReportComment?.let { report -> { reason -> report(item.rpid, reason) } },
-                                onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
-                                onConversationClick = if (shouldRenderSubReplyConversationAction(item, true)) {
-                                    {
-                                        captureListScrollForConversation()
-                                        if (onConversationClick != null) {
-                                            onConversationClick(item)
-                                        } else {
-                                            conversationAnchor = item
-                                        }
+                            SubReplyThreadRowContent(
+                                row = threadRow,
+                                collapsed = item.rpid in page.collapsedBranches,
+                                lineColor = appearance.dividerColor,
+                                actionColor = appearance.actionTint,
+                                onToggle = {
+                                    collapsedBranches = if (item.rpid in page.collapsedBranches) {
+                                        collapsedBranches - item.rpid
+                                    } else {
+                                        collapsedBranches + item.rpid
                                     }
-                                } else null,
-                            )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { indent ->
+                                ReplyItemView(
+                                    modifier = Modifier
+                                        .padding(start = indent)
+                                        .testTag("$SUB_REPLY_DETAIL_ITEM_TAG_PREFIX${item.rpid}"),
+                                    // 树状连线以头像为锚，子回复头像固定在行内。
+                                    avatarListState = listState.takeIf { avatarPushEnabled && threadRow == null },
+                                    item = item,
+                                    containerColor = backgroundColor,
+                                    hideSubPreview = true,
+                                    showIdentityDecorations = showIdentityDecorations,
+                                    onClick = {},
+                                    onSubClick = { _, _ -> onReplyClick?.invoke(item) },
+                                    upMid = upMid,
+                                    emoteMap = emoteMap,
+                                    showUpFlag = showUpFlag,
+                                    onTimestampClick = onTimestampClick,
+                                    onImagePreview = onImagePreview,
+                                    onReplyClick = { onReplyClick?.invoke(item) },
+                                    onDeleteClick = (onDissolveStart ?: onDeleteComment)?.takeIf {
+                                        currentMid > 0 && item.mid == currentMid
+                                    }?.let { delete -> { delete(item.rpid) } },
+                                    onCheckFraudClick = if (onCheckCommentFraud != null && currentMid > 0 && item.mid == currentMid) {
+                                        { onCheckCommentFraud.invoke(item) }
+                                    } else null,
+                                    onLikeClick = { onCommentLike?.invoke(item.rpid) },
+                                    onHateClick = { onCommentHate?.invoke(item.rpid) },
+                                    isLiked = item.rpid in likedComments,
+                                    isHated = item.rpid in hatedComments,
+                                    onUrlClick = onUrlClick,
+                                    maxTimestampMs = maxTimestampMs,
+                                    onReportClick = onReportComment?.let { report -> { reason -> report(item.rpid, reason) } },
+                                    onAvatarClick = { onAvatarClick?.invoke(it) ?: Unit },
+                                    onConversationClick = if (shouldRenderSubReplyConversationAction(item, true)) {
+                                        {
+                                            captureListScrollForConversation()
+                                            if (onConversationClick != null) {
+                                                onConversationClick(item)
+                                            } else {
+                                                conversationAnchor = item
+                                            }
+                                        }
+                                    } else null,
+                                )
+                            }
                         }
                     }
 

@@ -4,6 +4,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.data.model.response.ReplyMember
 import com.android.purebilibili.data.model.response.ReplyCardLabel
 import com.android.purebilibili.data.model.response.ReplyContent
@@ -20,6 +21,8 @@ import com.android.purebilibili.data.model.response.ReplySailingPendant
 import com.android.purebilibili.data.model.response.ReplyPicture
 import com.android.purebilibili.data.model.response.ReplyUpAction
 import com.android.purebilibili.data.model.response.ReplyUserSailing
+import com.android.purebilibili.navigation.BilibiliLinkNavigationAction
+import com.android.purebilibili.navigation.resolveBilibiliLinkNavigationAction
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import kotlin.test.assertContentEquals
@@ -478,6 +481,28 @@ class ReplyComponentsPolicyTest {
         assertEquals(
             "bilibili://video/BV1xx411c7mD",
             annotated.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX)
+        )
+    }
+
+    @Test
+    fun `video title short link with a BV path opens the native video`() {
+        val link = "https://b23.tv/BV1QasF6mE3w?spm_id_from=333.1368.comment.all.click"
+        val title = "【绘画】恋歌不止，爱意难却"
+        val annotated = buildRichCommentAnnotatedString(
+            text = link,
+            richUrls = mapOf(
+                link to ReplyContentUrl(
+                    title = title,
+                    appUrlSchema = "bilibili://video/117623836709363"
+                )
+            )
+        )
+
+        assertEquals(title, annotated.text)
+        val destination = assertNotNull(annotated.firstCommentLinkTag(RICH_COMMENT_LINK_URL_PREFIX))
+        assertEquals(
+            BilibiliLinkNavigationAction.NativeTarget(BilibiliNavigationTarget.Video("BV1QasF6mE3w")),
+            resolveBilibiliLinkNavigationAction(destination)
         )
     }
 

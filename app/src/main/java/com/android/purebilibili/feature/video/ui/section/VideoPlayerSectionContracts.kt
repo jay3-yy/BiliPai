@@ -14,6 +14,7 @@ import com.android.purebilibili.feature.video.player.PlayMode
 import com.android.purebilibili.feature.video.progress.PbpProgressData
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.subtitle.SubtitleDisplayMode
+import com.android.purebilibili.feature.video.ui.overlay.InlineVideoStatusBarState
 import com.android.purebilibili.feature.video.viewmodel.SponsorContributionUiState
 import com.android.purebilibili.feature.video.viewmodel.VideoPlaybackUiState
 
@@ -30,6 +31,7 @@ internal data class VideoPlayerSectionState(
     val isFullscreen: Boolean = false,
     val isInPipMode: Boolean = false,
     val contentTopInset: Dp = 0.dp,
+    val statusBarBackdrop: InlineVideoStatusBarState? = null,
     val transitionEnabled: Boolean = true,
     val transitionChromeAlphaProvider: () -> Float = { 1f },
     val danmakuHostActive: Boolean = true,

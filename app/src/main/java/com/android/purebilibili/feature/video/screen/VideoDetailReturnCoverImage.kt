@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -29,6 +31,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import coil3.BitmapImage
 import coil3.compose.rememberAsyncImagePainter
 import coil3.compose.rememberConstraintsSizeResolver
 import coil3.request.ImageRequest
@@ -79,6 +82,7 @@ internal fun VideoDetailReturnCoverImage(
     slotOriginProvider: () -> Offset = { Offset.Zero },
     backingColor: Color = Color.Unspecified,
     onDecoded: () -> Unit = {},
+    onCoverImageDecoded: ((ImageBitmap) -> Unit)? = null,
 ) {
     val sizeResolver = rememberConstraintsSizeResolver()
     val resolvedRequest = remember(request, sizeResolver) {
@@ -89,7 +93,13 @@ internal fun VideoDetailReturnCoverImage(
     val painter = rememberAsyncImagePainter(
         model = resolvedRequest,
         contentScale = contentScale,
-        onSuccess = { onDecoded() },
+        onSuccess = { success ->
+            onDecoded()
+            if (onCoverImageDecoded != null) {
+                val bitmap = (success.result.image as? BitmapImage)?.bitmap
+                if (bitmap != null) onCoverImageDecoded(bitmap.asImageBitmap())
+            }
+        },
     )
     val path = remember { Path() }
     val groupPaint = remember { Paint() }

@@ -34,11 +34,16 @@ fun rememberPiliCollectionMenuSession(
     val subscriptionHaptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.VIDEO_ACTIONS)
     val seasonId = remember(ugcSeason) { ugcSeason?.let(::resolveCollectionSubscriptionId) ?: 0L }
     val orderSeasonId = if (isParts) 0L else seasonId
-    val aid = remember(ugcSeason, bvid, cid) {
-        resolveCurrentUgcEpisodeAid(ugcSeason?.sections?.flatMap { it.episodes }.orEmpty(), bvid, cid)
-    }
-    val cachedSubscribed by remember(context, seasonId) { SettingsManager.isCollectionSubscribed(context, seasonId) }
-        .collectAsStateWithLifecycle(initialValue = false)
+    val canLoadSubscription = loadSubscription && seasonId > 0 && bvid.isNotBlank()
+    val aid = if (canLoadSubscription) {
+        remember(ugcSeason, bvid, cid) {
+            resolveCurrentUgcEpisodeAid(ugcSeason?.sections?.flatMap { it.episodes }.orEmpty(), bvid, cid)
+        }
+    } else 0L
+    val cachedSubscribed = if (canLoadSubscription) {
+        remember(context, seasonId) { SettingsManager.isCollectionSubscribed(context, seasonId) }
+            .collectAsStateWithLifecycle(initialValue = false).value
+    } else false
     var remoteSubscribed by remember(seasonId, bvid, cid) { mutableStateOf<Boolean?>(null) }
     var updating by remember(seasonId) { mutableStateOf(false) }
     val storedReversed by remember(context, orderSeasonId, bvid) {
@@ -49,8 +54,8 @@ fun rememberPiliCollectionMenuSession(
     val reversed = localReversed ?: storedReversed
     SideEffect { PiliPlaybackOrder.setReversed(orderSeasonId, bvid, reversed) }
     LaunchedEffect(storedReversed) { localReversed = null }
-    LaunchedEffect(seasonId, bvid, aid, loadSubscription) {
-        if (loadSubscription && seasonId > 0 && bvid.isNotBlank()) {
+    LaunchedEffect(seasonId, bvid, aid, canLoadSubscription) {
+        if (canLoadSubscription) {
             ActionRepository.checkCollectionSubscriptionStatus(bvid = bvid, aid = aid).onSuccess {
                 remoteSubscribed = it
                 SettingsManager.setCollectionSubscription(context, seasonId, it)
@@ -59,7 +64,7 @@ fun rememberPiliCollectionMenuSession(
     }
     return PiliCollectionMenuSession(
         isSubscribed = if (seasonId > 0) remoteSubscribed ?: cachedSubscribed.takeIf { it } else null,
-        onSubscriptionChange = if (loadSubscription && seasonId > 0 && !updating) ({ target ->
+        onSubscriptionChange = if (canLoadSubscription && !updating) ({ target ->
             scope.launch {
                 updating = true
                 try {

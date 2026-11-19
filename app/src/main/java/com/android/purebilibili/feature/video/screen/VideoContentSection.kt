@@ -519,7 +519,6 @@ internal class VideoContentPresentationState(
     val bottomContentPadding: Dp,
     val commentPullToRefreshEnabled: Boolean = true,
     val relatedContentReady: Boolean = true,
-    val commentPagePreloadReady: Boolean = true,
 )
 
 internal class VideoContentPrimaryActions(
@@ -924,10 +923,8 @@ internal fun VideoContentSection(
 
             HorizontalPager(
                 state = pagerState,
-                beyondViewportPageCount = resolveVideoDetailBeyondViewportPageCount(
-                    selectedTabIndex = pagerState.currentPage,
-                    commentPagePreloadReady = presentationState.commentPagePreloadReady,
-                ),
+                // 评论数据可提前获取。屏外评论行等翻页露出后再布局，避免与入场争用主线程。
+                beyondViewportPageCount = 0,
                 userScrollEnabled = false,
                 modifier = Modifier
                     .fillMaxSize()

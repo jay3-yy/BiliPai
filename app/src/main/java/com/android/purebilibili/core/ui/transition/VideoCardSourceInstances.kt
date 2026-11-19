@@ -123,6 +123,13 @@ internal object VideoCardSourceInstances {
         return source?.takeIf { it.bvid == bvid && it in sources }?.let(::VideoCardSourceAnchor)
     }
 
+    fun hasClickedAnchor(bvid: String): Boolean =
+        clickedSource?.get()?.let { it.bvid == bvid && it in sources } == true
+
+    fun clearClickedAnchor(bvid: String) {
+        if (clickedSource?.get()?.bvid == bvid) clickedSource = null
+    }
+
     fun isAttached(source: VideoCardSourceInstance): Boolean = source in sources
 }
 
@@ -133,8 +140,9 @@ internal fun Modifier.videoCardSourceAnchor(
     shape: Shape,
     // 导航内容外的横条显式启用；页面卡片仍沿用原有导航作用域开关。
     enabled: Boolean = LocalVideoCardSourceTrackingEnabled.current,
+    onPositioned: ((LayoutCoordinates) -> Unit)? = null,
 ): Modifier {
-    if (!enabled || bvid.isBlank()) return this
+    if (!enabled || bvid.isBlank()) return if (onPositioned == null) this else onPlaced(onPositioned)
     val view = LocalView.current
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -145,5 +153,8 @@ internal fun Modifier.videoCardSourceAnchor(
         VideoCardSourceInstances.attach(source)
         onDispose { VideoCardSourceInstances.detach(source) }
     }
-    return onPlaced { source.coordinates = it }
+    return onPlaced {
+        source.coordinates = it
+        onPositioned?.invoke(it)
+    }
 }

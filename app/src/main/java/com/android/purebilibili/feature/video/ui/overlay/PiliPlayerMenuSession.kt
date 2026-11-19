@@ -130,6 +130,7 @@ fun rememberPiliPlayerMenuSession(
     videoUrl: String,
     audioUrl: String,
     actions: PiliPlayerMenuActions = PiliPlayerMenuActions(),
+    volumeControlsVisible: Boolean = false,
 ): PiliPlayerMenuSession {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -191,7 +192,9 @@ fun rememberPiliPlayerMenuSession(
     // 起播选线由加载链路完成，菜单挂载不再替换播放源、重复 prepare。
     // 只有用户主动选择线路时才调用 applyCdn。
 
-    DisposableEffect(player) {
+    // 100% 不需要音效实例；保留已保存的非默认增益，打开设置时才查询设备能力。
+    val needsGainEffect = volumeControlsVisible || amplification > 1f
+    DisposableEffect(player, needsGainEffect) {
         fun releaseGainEffect() {
             val oldEffect = gainEffect
             gainEffect = null
@@ -204,7 +207,7 @@ fun rememberPiliPlayerMenuSession(
             releaseGainEffect()
             volumeAvailable = false
             volumeFailure = "音频会话尚未就绪"
-            if (sessionId <= 0) return
+            if (!needsGainEffect || sessionId <= 0) return
             runCatching {
                 LoudnessEnhancer(sessionId).also { effect ->
                     try {
@@ -266,8 +269,11 @@ fun rememberPiliPlayerMenuSession(
     val timerMinutes by remember(sleepTimer) {
         sleepTimer?.minutes ?: kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
     }.collectAsStateWithLifecycle(initialValue = null)
+    val timerActivity = remember(context) { context.findPiliActivity() }
+    LaunchedEffect(sleepTimer, timerActivity) {
+        sleepTimer?.attachActivity(timerActivity)
+    }
     SideEffect {
-        sleepTimer?.attachActivity(context.findPiliActivity())
         waitForEnd?.let { sleepTimer?.waitForEnd = it }
         exitApp?.let { sleepTimer?.exitApp = it }
     }

@@ -23,6 +23,7 @@ import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.provider.Settings
 import android.view.WindowManager
@@ -59,6 +60,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.Key
@@ -291,6 +294,10 @@ private fun FullscreenPlayerOverlayContent(
     val appWindowAdaptiveInfo = com.android.purebilibili.core.util.LocalAppWindowAdaptiveInfo.current
     val latestDisplayContext by rememberUpdatedState(appWindowAdaptiveInfo.displayContext)
     val configuration = LocalConfiguration.current
+    val fullscreenExpansion = LocalVideoMiniPlayerMotion.current?.fullscreenExpansion
+        ?.takeIf { it.frame.player === player }
+    val waitingForLandscape = fullscreenExpansion != null &&
+        configuration.orientation != Configuration.ORIENTATION_LANDSCAPE
     val tabletopLayoutPolicy = com.android.purebilibili.core.util.resolvePlayerTabletopLayoutPolicy(
         foldPosture = appWindowAdaptiveInfo.posture,
         hingeOrientation = appWindowAdaptiveInfo.foldingFeature.hingeOrientation,
@@ -301,6 +308,8 @@ private fun FullscreenPlayerOverlayContent(
     )
     val scope = rememberCoroutineScope()
     var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+    val latestPlayerView by rememberUpdatedState(playerViewRef)
+    val latestPlayer by rememberUpdatedState(player)
     var keepFullscreenPlaybackAwake by remember(player) {
         mutableStateOf(
             player?.let {
@@ -468,13 +477,12 @@ private fun FullscreenPlayerOverlayContent(
     }
 
     // 进入全屏时设置横屏和沉浸式
-    DisposableEffect(lifecycleOwner, player, playerViewRef) {
+    DisposableEffect(context, lifecycleOwner) {
         val activity = context.findHostActivity() ?: return@DisposableEffect onDispose {}
         val window = activity.window
         val originalOrientation = activity.requestedOrientation
         val originalSystemUi = AppWindowSystemUiController.capture(window).let { snapshot ->
-            //  [修复] 播放器实例重建会重启本 effect，此时系统栏已被本覆盖层隐藏；
-            //  快照若照实记录会把"隐藏"当原始状态，退出全屏后系统栏将无法恢复。
+            // 退出独立全屏时恢复小窗所在页面的系统栏。
             if (snapshot.systemBarsVisible) snapshot else snapshot.copy(systemBarsVisible = true)
         }
         val desktopFullscreenRequested =
@@ -487,8 +495,8 @@ private fun FullscreenPlayerOverlayContent(
         val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                 AppWindowSystemUiController.enterImmersive(window)
-                val view = playerViewRef
-                val exoPlayer = player
+                val view = latestPlayerView
+                val exoPlayer = latestPlayer
                 if (shouldRebindFullscreenSurfaceOnResume(
                         hasPlayerView = view != null,
                         hasPlayer = exoPlayer != null
@@ -620,11 +628,13 @@ private fun FullscreenPlayerOverlayContent(
         },
         onBackCompleted = closeTopLayerOrExit,
     )
-    LaunchedEffect(rootFocusRequester, inputDevicePolicy.enableKeyboardNavigation) {
-        if (inputDevicePolicy.enableKeyboardNavigation) {
+    LaunchedEffect(rootFocusRequester, inputDevicePolicy.enableKeyboardNavigation, waitingForLandscape) {
+        if (inputDevicePolicy.enableKeyboardNavigation && !waitingForLandscape) {
             runCatching { rootFocusRequester.requestFocus() }
         }
     }
+    // 横屏布局就绪前让点击时的小窗画面承接系统旋转。
+    if (waitingForLandscape) return
 
     // [问题8修复] 状态栏排除区域高度（像素）
     val statusBarExclusionZonePx = with(density) { 40.dp.toPx() }
@@ -1132,6 +1142,7 @@ private fun FullscreenPlayerOverlayContent(
                 AndroidView(
                     factory = { ctx ->
                         com.android.purebilibili.feature.video.ui.components.createVideoPlayerView(ctx, useTextureSurface).apply {
+                            fullscreenExpansion?.frame?.observeFirstFrame()
                             this.player = exoPlayer
                             useController = false
                             keepScreenOn = keepFullscreenPlaybackAwake
@@ -1151,7 +1162,11 @@ private fun FullscreenPlayerOverlayContent(
                         if (playerViewRef === view) playerViewRef = null
                         view.player = null
                     },
-                    modifier = viewportModifier
+                    modifier = if (fullscreenExpansion == null) viewportModifier else viewportModifier
+                        .onGloballyPositioned { coordinates ->
+                            val bounds = coordinates.boundsInWindow()
+                            if (!bounds.isEmpty) fullscreenExpansion.viewportBounds = bounds
+                        },
                 )
                 }
 

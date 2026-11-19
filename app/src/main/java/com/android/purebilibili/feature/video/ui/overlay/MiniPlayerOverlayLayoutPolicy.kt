@@ -241,3 +241,17 @@ fun resolveAdaptiveMiniPlayerDimensions(
     )
     return dimensions.copy(widthDp = dimensions.widthDp * fitScale, heightDp = dimensions.heightDp * fitScale)
 }
+
+internal fun MiniPlayerOverlayLayoutPolicy.dimensionsForWindow(
+    videoAspectRatio: Float,
+    widthDp: Float,
+    screenWidthDp: Int,
+    screenHeightDp: Int,
+): AdaptiveMiniPlayerDimensions = resolveAdaptiveMiniPlayerDimensions(
+    videoAspectRatio = videoAspectRatio,
+    currentWidthDp = widthDp,
+    defaultHeightDp = miniPlayerHeightDp.toFloat(),
+    maxWidthDp = (screenWidthDp - outerPaddingDp * 2).coerceAtLeast(1).toFloat(),
+    maxHeightDp = (screenHeightDp - outerPaddingDp * 2 - dragTopInsetDp - dragBottomInsetDp)
+        .coerceAtLeast(1).toFloat(),
+)

@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,7 +53,6 @@ import com.android.purebilibili.feature.video.share.buildVideoSharePayload
 import com.android.purebilibili.feature.video.danmaku.DanmakuManager
 import com.android.purebilibili.feature.video.state.VideoPlayerState
 import com.android.purebilibili.feature.video.ui.components.BottomInputBar
-import com.android.purebilibili.feature.video.ui.components.VideoDetailSkeleton
 import com.android.purebilibili.feature.video.ui.components.resolveBottomInputBarContentBottomPadding
 import com.android.purebilibili.feature.video.ui.components.shouldUseFloatingLiquidBottomInputBar
 import com.android.purebilibili.feature.home.components.BottomBarMatchedReusableLiquidDock
@@ -89,11 +89,10 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     playerState: VideoPlayerState,
     motionSpec: VideoDetailMotionSpec,
     hazeState: HazeState,
-    isTransitionFinished: Boolean,
+    detailContentVisible: Boolean,
     relatedContentReady: Boolean = true,
     isLeaving: Boolean,
-    rootTransitionOwnsContentAlpha: Boolean,
-    keepContentVisibleAfterBackPreview: Boolean = false,
+    navigationOwnsContentVisibility: Boolean,
     shouldShowExternalPlaylistQueueBar: Boolean,
     selectedVideoContentTabIndex: Int,
     useTabletLayout: Boolean,
@@ -132,10 +131,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
     commentThreadCoveredBlurProgressProvider: () -> Float = { 0f },
     commentPullToRefreshEnabled: Boolean = true,
     contentReveal: androidx.compose.runtime.State<Float>,
-    skeletonPulse: androidx.compose.runtime.State<Float>,
-    deferFreshEntryContent: Boolean = false,
-    navigationOwnsEntryMotion: Boolean = false,
-    commentPagePreloadReady: Boolean = true,
+    onBodyPlaced: () -> Unit,
 ) {
     val engagementSuccess = success.withEngagementUiState(engagementState)
     var pendingVideoShare by remember { mutableStateOf<VideoSharePayload?>(null) }
@@ -146,25 +142,9 @@ internal fun VideoDetailPhoneSuccessContentLayer(
         com.android.purebilibili.feature.video.share.LocalVideoShareAnchorState provides shareAnchorState,
     ) {
     key(success.info.bvid) {
-        // 页面导航与卡片形变均持有正文的离场生命周期，避免正文先于页面淡空。
-        val navigationOwnsContentVisibility = rootTransitionOwnsContentAlpha || navigationOwnsEntryMotion
-        val detailContentVisible = shouldShowVideoDetailContent(
-            isTransitionFinished = isTransitionFinished,
-            isLeaving = isLeaving,
-            rootTransitionOwnsContentAlpha = navigationOwnsContentVisibility,
-            keepContentVisibleAfterBackPreview = keepContentVisibleAfterBackPreview,
-            deferFreshEntryContent = deferFreshEntryContent,
-        )
-        // 正文被入场门控拦住时骨架垫底必须撑住（Loading 骨架此刻已卸载），
-        // 否则骨架结束到正文放行之间是一段纯黑空窗。
-        val holdSkeletonUnderlay = !detailContentVisible && !isLeaving
-        val lateContentReveal = contentReveal
-        val showLoadingUnderlay by remember(detailContentVisible, isLeaving) {
-            derivedStateOf { holdSkeletonUnderlay || lateContentReveal.value < 1f }
-        }
         Box(modifier = Modifier.fillMaxSize().videoInputDiagnostics("detail_body") {
             "fullscreen=$isFullscreenMode portraitFs=$isPortraitFullscreen " +
-                "leaving=$isLeaving transitionFinished=$isTransitionFinished thread=$isCommentThreadVisible " +
+                "leaving=$isLeaving contentVisible=$detailContentVisible thread=$isCommentThreadVisible " +
                 "commentInput=$showCommentInput favoriteDialog=$showFavoriteFolderDialog " +
                 "tab=${videoContentPagerState.currentPage} introScrolling=${introListState.isScrollInProgress} " +
                 "commentScrolling=${commentListState.isScrollInProgress} pagerScrolling=${videoContentPagerState.isScrollInProgress}"
@@ -172,13 +152,6 @@ internal fun VideoDetailPhoneSuccessContentLayer(
             Box(
                 modifier = Modifier.fillMaxSize()
             ) {
-                // 加载骨架与交接垫底共用扫光；正文完全覆盖后卸载，保留各材质布局。
-                if (showLoadingUnderlay) {
-                    // 正文在不透明骨架上淡入，避免两层同时降透明度时透出底色。
-                    Box(Modifier.fillMaxSize()) {
-                        VideoDetailSkeleton(sharedPulse = skeletonPulse)
-                    }
-                }
                 val detailContentRevealEnter = fadeIn(
                     com.android.purebilibili.core.ui.motion.continuityTween(
                         motionSpec.contentRevealFadeDurationMillis
@@ -192,7 +165,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                     )
                 )
                 AnimatedVisibility(
-                    modifier = Modifier.graphicsLayer { alpha = lateContentReveal.value },
+                    modifier = Modifier.graphicsLayer { alpha = contentReveal.value },
                     visible = detailContentVisible,
                     // 普通导航已负责整页入场，正文只保留一次骨架交接淡入。
                     enter = if (navigationOwnsContentVisibility) {
@@ -206,7 +179,7 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                         detailContentExitFade
                     }
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(modifier = Modifier.fillMaxSize().onPlaced { onBodyPlaced() }) {
                         val floatingLiquidBottomInputBar = shouldUseFloatingLiquidBottomInputBar(
                             androidNativeLiquidGlassEnabled = androidNativeLiquidGlassEnabled
                         )
@@ -336,7 +309,6 @@ internal fun VideoDetailPhoneSuccessContentLayer(
                                         bottomContentPadding = videoContentBottomPadding,
                                         commentPullToRefreshEnabled = commentPullToRefreshEnabled,
                                         relatedContentReady = relatedContentReady,
-                                        commentPagePreloadReady = commentPagePreloadReady,
                                     ),
                                     primaryActions = VideoContentPrimaryActions(
                                         onFollowClick = engagementActions.toggleFollow,

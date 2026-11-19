@@ -11,12 +11,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import com.android.purebilibili.core.ui.NavigationEntryTransition
 import com.android.purebilibili.core.ui.transition.MiuixVideoCardTransitionState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.nav.transition.NavRole
-import top.yukonga.miuix.kmp.nav.transition.NavTransitionScope
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -26,7 +25,7 @@ internal fun rememberVideoDetailEntryTransitionFinished(
     animatedVisibilityScope: AnimatedVisibilityScope?,
     fallbackDurationMillis: Int,
     heroDriver: MiuixVideoCardTransitionState? = null,
-    navigationTransitionScope: NavTransitionScope? = null,
+    navigationTransitionScope: NavigationEntryTransition? = null,
 ): Boolean {
     // 在分支外保存 entry 生命周期锁存，defer/返回标志变化不能删除已完成的状态。
     var finished by remember { mutableStateOf(!deferLoad) }
@@ -52,7 +51,7 @@ internal fun rememberVideoDetailEntryTransitionFinished(
             snapshotFlow {
                 // 先读边界信号，仅在导航 idle 时求角色，避免订阅整段逐帧 depth。
                 if (navigationTransitionScope.isRunning) return@snapshotFlow false
-                if (navigationTransitionScope.role != NavRole.Top) return@snapshotFlow false
+                if (!navigationTransitionScope.isTop) return@snapshotFlow false
                 shouldFinishVideoDetailNavigationEntry(
                     isNavigationRunning = false,
                     isEntryTop = true,

@@ -86,6 +86,46 @@ class BottomControlBarUiRegressionTest {
     }
 
     @Test
+    fun portraitFullscreenExitStaysAtTheEndOfANarrowControlBar() {
+        val style = mutableStateOf(AppUiStyle.MATERIAL3)
+        val glass = mutableStateOf(false)
+        var exits = 0
+        rule.setContent {
+            CompositionLocalProvider(
+                LocalAppUiStyle provides style.value,
+                LocalAppThemeConfig provides AppThemeConfig(liquidGlassEnabled = glass.value),
+            ) {
+                MaterialTheme { MiuixTheme {
+                    BottomControlBar(
+                        modifier = Modifier.width(320.dp),
+                        progress = PlayerProgress(500, 3000),
+                        isFullscreen = true,
+                        viewportIsLandscape = false,
+                        simplifiedPortrait = true,
+                        currentQualityLabel = "720P",
+                        onSeek = {},
+                        onToggleFullscreen = { exits++ },
+                    )
+                } }
+            }
+        }
+        for (uiStyle in AppUiStyle.entries) {
+            for (useGlass in listOf(false, true)) {
+                rule.runOnIdle {
+                    style.value = uiStyle
+                    glass.value = useGlass
+                    exits = 0
+                }
+                val exit = rule.onNodeWithTag("player_fullscreen_toggle").assertIsDisplayed()
+                val rowBounds = rule.onNodeWithTag("player_control_row").fetchSemanticsNode().boundsInRoot
+                assertEquals(rowBounds.right, exit.fetchSemanticsNode().boundsInRoot.right, 1f)
+                exit.performClick()
+                rule.runOnIdle { assertEquals(1, exits) }
+            }
+        }
+    }
+
+    @Test
     fun seekPreviewStaysAboveTrackWithoutMovingControlsAcrossOrientationsAndMaterials() {
         val scrubbing = mutableStateOf(false)
         val landscape = mutableStateOf(false)

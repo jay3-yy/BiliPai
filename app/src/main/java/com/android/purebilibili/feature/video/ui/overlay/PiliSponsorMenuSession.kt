@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.android.purebilibili.data.repository.SponsorBlockRepository
@@ -26,13 +27,22 @@ data class PiliSponsorMenuSession(
 )
 
 @Composable
-fun rememberPiliSponsorMenuSession(bvid: String): PiliSponsorMenuSession {
+fun rememberPiliSponsorMenuSession(
+    bvid: String,
+    visible: Boolean,
+    onConfigFailure: () -> Unit,
+): PiliSponsorMenuSession {
     val context = LocalContext.current.applicationContext
     val scope = rememberCoroutineScope()
     var config by remember(context) { mutableStateOf(SponsorBlockConfig()) }
-    var configReady by remember(context) { mutableStateOf(false) }
+    var configReady by remember(context, bvid) { mutableStateOf(false) }
+    val latestOnConfigFailure by rememberUpdatedState(onConfigFailure)
 
-    LaunchedEffect(context, bvid) {
+    LaunchedEffect(context, bvid, visible) {
+        if (!visible) {
+            configReady = false
+            return@LaunchedEffect
+        }
         try {
             config = loadSponsorBlockConfig(context, config)
             configReady = true
@@ -40,6 +50,7 @@ fun rememberPiliSponsorMenuSession(bvid: String): PiliSponsorMenuSession {
             throw cancelled
         } catch (error: Exception) {
             Toast.makeText(context, "读取空降助手设置失败: ${error.localizedMessage}", Toast.LENGTH_LONG).show()
+            latestOnConfigFailure()
         }
     }
 
@@ -53,7 +64,6 @@ fun rememberPiliSponsorMenuSession(bvid: String): PiliSponsorMenuSession {
                     // never send a vote to the previous server with a stale identity.
                     val current = loadSponsorBlockConfig(context, config)
                     config = current
-                    configReady = true
                     SponsorBlockRepository.voteOnSegment(
                         baseUrl = current.serverBaseUrl,
                         userId = current.userId,
