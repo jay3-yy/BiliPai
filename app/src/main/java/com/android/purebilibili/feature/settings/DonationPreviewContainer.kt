@@ -5,11 +5,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.lerp
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -21,6 +25,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.core.ui.transition.BlurRenderEffectCache
@@ -53,6 +59,8 @@ internal fun DonationPreviewContainer(
 ) {
     val anchors = remember { DonationQrAnchors() }
     val painter = painterResource(donationQrResource())
+    val qrPath = remember { Path() }
+    val compactQrCorner = AppShapes.containerCornerDp(ContainerLevel.Card)
     val compactBlur = remember { BlurRenderEffectCache() }
     val previewBlur = remember { BlurRenderEffectCache() }
     val textBlurEnabled = LocalComponentMotionEnabled.current &&
@@ -90,7 +98,13 @@ internal fun DonationPreviewContainer(
                     val end = anchors.imageBounds(anchors.preview)
                     if (start != null && end != null) {
                         val bounds = lerp(start, end, fraction)
-                        translate(bounds.left, bounds.top) { with(painter) { draw(bounds.size) } }
+                        val radius = donationCornerRadius(compactQrCorner.toPx(), 0f, fraction)
+                            .coerceAtMost(bounds.width / 2f)
+                        qrPath.rewind()
+                        qrPath.addRoundRect(RoundRect(bounds, CornerRadius(radius)))
+                        clipPath(qrPath) {
+                            translate(bounds.left, bounds.top) { with(painter) { draw(bounds.size) } }
+                        }
                     }
                 }
             }

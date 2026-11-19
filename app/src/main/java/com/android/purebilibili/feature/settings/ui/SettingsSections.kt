@@ -241,7 +241,7 @@ internal fun SettingsRootCategoryListSection(
                 category = category,
                 first = index == 0,
                 onClick = { onCategoryClick(category) },
-            ) { open ->
+            ) { contentModifier, open ->
                 SettingsRootCategoryRow(
                     title = stringResource(category.titleResource()),
                     subtitle = stringResource(category.subtitleResource()),
@@ -251,6 +251,7 @@ internal fun SettingsRootCategoryListSection(
                     iconTint = siblingTints[index],
                     iconSizeDp = visual.iconSizeDp,
                     onClick = open,
+                    contentModifier = contentModifier,
                 )
             }
             SettingsAdaptiveDivider()
@@ -269,15 +270,14 @@ internal fun SettingsRootCategoryListSection(
     }
 }
 
-/** 捕获单行自己的绘制；材质、字体和按压反馈仍由原设置行负责。 */
+/** 登记条目到详情页的共享边界。 */
 @Composable
 private fun SettingsCategoryContainerOrigin(
     category: SettingsRootCategory,
     first: Boolean,
     onClick: () -> Unit,
-    content: @Composable (() -> Unit) -> Unit,
+    content: @Composable (Modifier, () -> Unit) -> Unit,
 ) {
-    // 首页与子入口共用图层和底色同步，深浅色切换后不能重放旧主题底板。
     SettingsNavigationContainerOrigin(
         target = resolveSettingsCategoryNavKey(category),
         onClick = onClick,
@@ -299,6 +299,7 @@ private fun SettingsRootCategoryRow(
     iconSizeDp: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    contentModifier: Modifier = Modifier,
 ) {
     val visualSpec = resolveSettingsVisualSpec()
     val effectiveIconTint = rememberAdaptivePreferenceIconContainerColor(iconTint)
@@ -307,6 +308,8 @@ private fun SettingsRootCategoryRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
+            // 按压反馈留在原列表，只有行内容进入共享叠层。
+            .then(contentModifier)
             .padding(
                 horizontal = 16.dp,
                 vertical = visualSpec.categoryRowVerticalPadding,

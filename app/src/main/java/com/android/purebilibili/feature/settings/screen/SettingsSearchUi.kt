@@ -35,6 +35,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.R
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import com.android.purebilibili.core.ui.adaptiveSquircleBackground
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppPreference
@@ -90,52 +92,52 @@ internal fun SettingsHomeSearchEntry(
 ) {
     val visualSpec = resolveSettingsVisualSpec()
     val placeholder = stringResource(R.string.settings_search_placeholder)
-    val entryModifier = modifier.padding(horizontal = visualSpec.screenHorizontalPadding)
-    // Material boundary: keep the disabled MD3/Miuix entry and its defaults intact.
-    if (!LocalAppThemeConfig.current.liquidGlassEnabled) {
-        AppSearchEntry(
-            onClick = onClick,
-            placeholder = placeholder,
-            modifier = entryModifier,
-        )
-        return
-    }
-    BottomBarMatchedReusableLiquidDock(
-        shape = CircleShape,
-        modifier = entryModifier,
-        backdrop = settingsSearchWallpaperBackdrop(),
-        reuseEnabled = true,
-        elasticFeedbackEnabled = true,
-        elasticFeedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
-        useNeutralLiquidContainer = true,
-        captureShellForContent = false,
-        // 矮胶囊按实际高度相对 64dp 基准缩放 lens，避免上下折射在中线相撞成黑线。
-        shellLensIntensity = com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale(AppChromeSizeTokens.LiquidSearchFieldHeightDp.toFloat()),
-    ) {
-        // Glass entry is a compact click target, independent of native input-field metrics.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = AppChromeSizeTokens.LiquidSearchFieldHeightDp.dp)
-                .clip(CircleShape)
-                .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    val search = rememberSystemWindowNavigationControl(BiliPaiNavKey.SettingsSearch, CircleShape, onClick)
+    Box(modifier = modifier.padding(horizontal = visualSpec.screenHorizontalPadding).then(search.modifier)) {
+        // Material boundary: keep the disabled MD3/Miuix entry and its defaults intact.
+        if (!LocalAppThemeConfig.current.liquidGlassEnabled) {
+            AppSearchEntry(
+                onClick = search.onClick,
+                placeholder = placeholder,
+            )
+            return@Box
+        }
+        BottomBarMatchedReusableLiquidDock(
+            shape = CircleShape,
+            backdrop = settingsSearchWallpaperBackdrop(),
+            reuseEnabled = true,
+            elasticFeedbackEnabled = true,
+            elasticFeedbackStrength = com.android.purebilibili.core.ui.components.APP_SEARCH_ELASTIC_FEEDBACK_STRENGTH,
+            useNeutralLiquidContainer = true,
+            captureShellForContent = false,
+            // 矮胶囊按实际高度相对 64dp 基准缩放 lens，避免上下折射在中线相撞成黑线。
+            shellLensIntensity = com.android.purebilibili.feature.home.components.resolveFloatingDockGeometryScale(AppChromeSizeTokens.LiquidSearchFieldHeightDp.toFloat()),
         ) {
-            AppIcon(
-                Icons.Default.Search,
-                contentDescription = null,
-                tint = AppContentColors.secondaryText(),
-                modifier = Modifier.size(24.dp),
-            )
-            AppText(
-                text = placeholder,
-                color = AppContentColors.secondaryText(),
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            // Glass entry is a compact click target, independent of native input-field metrics.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = AppChromeSizeTokens.LiquidSearchFieldHeightDp.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = search.onClick)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppIcon(
+                    Icons.Default.Search,
+                    contentDescription = null,
+                    tint = AppContentColors.secondaryText(),
+                    modifier = Modifier.size(24.dp),
+                )
+                AppText(
+                    text = placeholder,
+                    color = AppContentColors.secondaryText(),
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

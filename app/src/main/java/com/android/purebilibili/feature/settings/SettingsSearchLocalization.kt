@@ -7,6 +7,16 @@ import com.android.purebilibili.R
 internal fun settingsSearchResultTitleResource(settingId: String): Int? = when (settingId) {
     "animation.predictive_back_enabled" -> R.string.animation_predictive_back_title
     "animation.card_transition_enabled" -> R.string.animation_title_card_transition
+    "animation.app_navigation_settings.settings_container_morph_enabled" -> R.string.animation_settings_container_title
+    "animation.page_transition_style" -> R.string.animation_back_title
+    "animation.back_preview_progress" -> R.string.animation_back_preview_title
+    "animation.back_exit_direction" -> R.string.animation_exit_direction_title
+    "animation.header_blur_enabled" -> R.string.animation_title_header_blur
+    "animation.progressive_top_blur_enabled" -> R.string.animation_title_progressive_blur
+    "animation.maid_lottie_animation_enabled" -> R.string.animation_title_maid
+    "appearance.splash_icon_animation_enabled" -> R.string.appearance_splash_animation_title
+    "appearance.startup_animation_style" -> R.string.appearance_startup_animation_style_title
+    PROGRESSIVE_BLUR_RENDERER_SETTING_ID -> R.string.animation_progressive_renderer_title
     SETTINGS_ICON_GLYPHS_SETTING_ID -> R.string.appearance_settings_icon_glyphs_title
     "legacy.001" -> R.string.settings_search_legacy_001_title
     "legacy.002" -> R.string.settings_search_legacy_002_title

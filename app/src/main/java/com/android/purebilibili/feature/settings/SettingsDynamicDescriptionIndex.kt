@@ -30,6 +30,10 @@ private val settingsDynamicDescriptionIndex = mapOf(
     "playback.bottom_progress_behavior" to BottomProgressBehavior.entries.joinToString("；") { it.description },
     "help.auto_check_update_enabled" to listOf(true, false).joinToString("；") { resolveAutoCheckUpdateSubtitle(it) },
     // 副标题来自字符串资源或运行时插值,静态索引扫描不到,这里按状态手工登记
+    "animation.page_transition_style" to "选择普通页面进入与返回的动画样式",
+    "animation.back_preview_progress" to "页面切换动画选择 Miuix 时，可调整滑动返回的预览幅度",
+    "animation.back_exit_direction" to "页面切换动画选择缩放时，可调整返回方向",
+    "animation.blur_intensity" to "开启顶部栏磨砂、顶栏渐进模糊或底栏磨砂后，可调整模糊强度",
     "appearance.back_to_top_button_enabled" to "已保存按钮位置，长按可拖动；在长页面显示回顶按钮",
     "appearance.home_publish_time_visible" to "发布时间显示在首页视频卡片上；隐藏发布时间，卡片信息更紧凑",
     "notification.resident_enabled" to "保持应用后台运行以更及时地收到通知；会增加耗电，系统仍可能终止；需要先开启后台消息通知和可用的通知权限",

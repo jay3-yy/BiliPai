@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.background
 import com.android.purebilibili.R
-import com.android.purebilibili.core.ui.blur.rememberRecoverableHazeState
 import com.android.purebilibili.core.util.CacheClearTarget
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.android.purebilibili.core.store.DEFAULT_ANALYTICS_ENABLED
@@ -62,7 +61,6 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.plugin.PluginManager
 
-import com.android.purebilibili.core.ui.blur.hazeSourceCompat
 import kotlinx.coroutines.launch
 
 import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
@@ -102,7 +100,6 @@ fun SettingsScreen(
     onCategoryClick: (SettingsRootCategory) -> Unit = {},
     onSearchOpen: () -> Unit = {},
     destination: SettingsNavDestination = SettingsNavDestination.Home,
-    mainHazeState: dev.chrisbanes.haze.HazeState? = null,
     forceSinglePaneContent: Boolean = false,
     rootEntranceEnabled: Boolean = true,
 ) {
@@ -265,16 +262,6 @@ fun SettingsScreen(
             hasAttestation = buildVerificationState.hasAttestation
         )
     }
-
-    // 设置首页为共享导航材质提供采样；分类页仅在缓存清理弹层显示时采样。
-    val localOverlayHazeState = rememberRecoverableHazeState()
-    val isSettingsHome = destination == SettingsNavDestination.Home
-    val activeHazeState = if (isSettingsHome) {
-        mainHazeState ?: localOverlayHazeState
-    } else {
-        localOverlayHazeState
-    }
-    val capturePageForHaze = isSettingsHome
 
     // Directory Picker - 使用文件系统 API
     val defaultPath = remember { SettingsManager.getDefaultDownloadPath(context) }
@@ -779,14 +766,8 @@ fun SettingsScreen(
             CommentFraudHistoryScreen(onBack = { showCommentFraudHistory = false })
         } else {
         // Layout Switching
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(
-                    if (capturePageForHaze) Modifier.hazeSourceCompat(state = activeHazeState)
-                    else Modifier,
-                )
-        ) {
+        // 底栏从导航内容层采样，顶栏由设置脚手架提供自己的来源。
+        Box(modifier = Modifier.fillMaxSize()) {
             if (shouldRenderSettingsSinglePaneContent(
                     widthDp = configuration.screenWidthDp,
                     forceSinglePaneContent = forceSinglePaneContent

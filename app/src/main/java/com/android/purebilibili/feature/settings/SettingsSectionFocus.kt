@@ -17,10 +17,12 @@ internal fun SettingsSectionFocusEffect(
     LaunchedEffect(request?.token, target, sectionKeys) {
         val current = request ?: return@LaunchedEffect
         if (current.target != target) return@LaunchedEffect
-        val sectionKey = resolveSettingsItemScrollKey(current.settingId)
-            ?: legacyKeys[current.focusId] ?: current.focusId
-        val index = sectionKeys.indexOf(sectionKey)
-        if (index < 0) {
+        val index = resolveSettingsSectionFocusIndex(
+            sectionKeys,
+            current.settingId,
+            fallbackKey = legacyKeys[current.focusId] ?: current.focusId,
+        )
+        if (index == null) {
             SettingsSearchFocusController.clear(current.token)
             return@LaunchedEffect
         }

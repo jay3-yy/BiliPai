@@ -566,6 +566,19 @@ fun BottomBarSettingsContent(
                                 scope.launch { SettingsManager.setHomeTopRightAction(context, action) }
                             },
                         )
+                        AppPreferenceDivider()
+                        SettingsItemAnchor("navigation.home_avatar_drawer") {
+                            AppSwitchPreference(
+                                icon = rememberSettingsSemanticIcon(SettingsIconRole.HOME_AVATAR_DRAWER),
+                                iconTint = AppContentColors.secondaryText(),
+                                title = settingItemTitle("navigation.home_avatar_drawer"),
+                                subtitle = "在底栏导航下，开启后点击首页头像打开侧边抽屉，关闭后进入个人主页",
+                                checked = homeConfiguration.homeAvatarDrawerEnabled,
+                                onCheckedChange = { enabled ->
+                                    scope.launch { SettingsManager.setHomeAvatarDrawerEnabled(context, enabled) }
+                                },
+                            )
+                        }
                         if (!hideTopTabs) {
                             AppPreferenceDivider()
                             SettingsSingleChoicePreference(

@@ -6,7 +6,6 @@ import com.android.purebilibili.feature.settings.SettingsNavDestination
 import com.android.purebilibili.feature.settings.SettingsRootCategory
 import com.android.purebilibili.feature.settings.SettingsScreen
 import com.android.purebilibili.feature.settings.SettingsViewModel
-import dev.chrisbanes.haze.HazeState
 
 @Composable
 fun SettingsCategoryScreen(
@@ -33,7 +32,6 @@ fun SettingsCategoryScreen(
     onReplayOnboardingClick: () -> Unit = {},
     onCategoryClick: (SettingsRootCategory) -> Unit = {},
     onSearchOpen: () -> Unit = {},
-    mainHazeState: HazeState? = null,
     forceSinglePaneContent: Boolean = false,
 ) {
     SettingsScreen(
@@ -60,7 +58,6 @@ fun SettingsCategoryScreen(
         onCategoryClick = onCategoryClick,
         onSearchOpen = onSearchOpen,
         destination = SettingsNavDestination.Category(category),
-        mainHazeState = mainHazeState,
         forceSinglePaneContent = forceSinglePaneContent,
     )
 }

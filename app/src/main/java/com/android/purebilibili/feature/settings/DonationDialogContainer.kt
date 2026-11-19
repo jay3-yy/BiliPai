@@ -39,11 +39,26 @@ internal class DonationDialogOrigin {
     var color = Color.Transparent
     var bottomRadius = 0f
     var recorded = false
+    var showingInDialog by mutableStateOf(false)
 
-    fun bounds(): Rect? = coordinates?.takeIf { it.isAttached }?.let {
-        Rect(it.localToScreen(Offset.Zero), Size(it.size.width.toFloat(), it.size.height.toFloat()))
+    fun capture(): DonationDialogSource? {
+        val layout = coordinates?.takeIf { it.isAttached } ?: return null
+        val snapshot = layer?.takeIf { recorded && it.size.width > 0 && it.size.height > 0 } ?: return null
+        val topLeft = layout.localToScreen(Offset.Zero)
+        val bottomRight = layout.localToScreen(Offset(layout.size.width.toFloat(), layout.size.height.toFloat()))
+        if (!topLeft.isFinite || !bottomRight.isFinite) return null
+        val bounds = Rect(topLeft.x, topLeft.y, bottomRight.x, bottomRight.y)
+        if (bounds.isEmpty) return null
+        return DonationDialogSource(bounds, snapshot, color, bottomRadius)
     }
 }
+
+internal data class DonationDialogSource(
+    val bounds: Rect,
+    val layer: GraphicsLayer,
+    val color: Color,
+    val bottomRadius: Float,
+)
 
 internal val LocalDonationDialogOrigin = staticCompositionLocalOf<DonationDialogOrigin?> { null }
 
@@ -73,9 +88,11 @@ internal fun DonationDialogOrigin(content: @Composable () -> Unit) {
         }
     }
     Box(Modifier.fillMaxWidth().onGloballyPositioned { origin.coordinates = it }.drawWithContent {
-        layer.record { this@drawWithContent.drawContent() }
-        origin.recorded = true
-        drawLayer(layer)
+        if (!origin.showingInDialog) {
+            layer.record { this@drawWithContent.drawContent() }
+            origin.recorded = true
+            drawLayer(layer)
+        }
     }) { content() }
 }
 
@@ -90,6 +107,7 @@ internal fun donationCornerRadius(start: Float, end: Float, progress: Float): Fl
 @Composable
 internal fun DonationDialogContainer(
     origin: DonationDialogOrigin,
+    onPositioned: () -> Unit,
     progress: () -> Float,
     previewProgress: () -> Float,
     compactRadiusPx: Float,
@@ -98,10 +116,16 @@ internal fun DonationDialogContainer(
     content: @Composable () -> Unit,
 ) {
     val coordinates = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    var positioned by remember { mutableStateOf(false) }
+    var capturedSource by remember { mutableStateOf<DonationDialogSource?>(null) }
     val path = remember { Path() }
     val paint = remember { Paint() }
     val latestProgress by rememberUpdatedState(progress)
     val interactive by remember(progress) { derivedStateOf { progress() >= 1f } }
+    DisposableEffect(origin, capturedSource?.layer) {
+        origin.showingInDialog = capturedSource != null
+        onDispose { origin.showingInDialog = false }
+    }
     Box(modifier
         .then(if (interactive) Modifier else Modifier.clearAndSetSemantics { })
         .pointerInput(Unit) {
@@ -112,13 +136,24 @@ internal fun DonationDialogContainer(
                 }
             }
         }
-        .onGloballyPositioned { coordinates[0] = it }.drawWithContent {
+        .onGloballyPositioned {
+            coordinates[0] = it
+            if (!positioned) {
+                capturedSource = origin.capture()
+                positioned = true
+                onPositioned()
+            }
+        }.drawWithContent {
         val t = progress().coerceIn(0f, 1f)
+        if (t >= 1f) {
+            drawContent()
+            return@drawWithContent
+        }
         val destination = Rect(Offset.Zero, size)
-        val sourceBounds = origin.bounds()
         val host = coordinates[0]?.takeIf { it.isAttached }?.localToScreen(Offset.Zero)
-        val source = if (sourceBounds != null && host != null && origin.recorded) sourceBounds.translate(-host) else null
-        val frame = if (source != null) androidx.compose.ui.geometry.lerp(source, destination, t) else destination
+        val anchor = capturedSource?.takeIf { host != null && it.layer === origin.layer }
+        val source = anchor?.bounds?.translate(-(host ?: Offset.Zero))
+        val frame = if (source != null) lerp(source, destination, t) else destination
         val preview = previewProgress().coerceIn(0f, 1f)
         val full = when (val outline = previewShape.createOutline(size, layoutDirection, this)) {
             is Outline.Rounded -> outline.roundRect
@@ -133,29 +168,46 @@ internal fun DonationDialogContainer(
         path.addRoundRect(RoundRect(
             frame,
             radius(full.topLeftCornerRadius, 0f), radius(full.topRightCornerRadius, 0f),
-            radius(full.bottomRightCornerRadius, origin.bottomRadius), radius(full.bottomLeftCornerRadius, origin.bottomRadius),
+            radius(full.bottomRightCornerRadius, anchor?.bottomRadius ?: 0f),
+            radius(full.bottomLeftCornerRadius, anchor?.bottomRadius ?: 0f),
         ))
         clipPath(path) {
-            // 来源底板只负责交接，结束时完全撤掉，保留玻璃材质自身的透明度。
-            if (t < 1f) drawRect(origin.color.copy(alpha = origin.color.alpha * (1f - t)), frame.topLeft, frame.size)
-            val sourceAlpha = if (source == null) 0f else (1f - t * 2f).coerceIn(0f, 1f)
-            val layer = origin.layer
-            if (sourceAlpha > 0f && layer != null && source != null) {
-                drawContext.canvas.saveLayer(frame, paint.apply { alpha = sourceAlpha })
-                translate(frame.left, frame.top) {
-                    scale(frame.width / source.width, frame.height / source.height, Offset.Zero) { drawLayer(layer) }
+            val contentAlpha = if (anchor == null) t else donationContentHandoff(t)
+            if (anchor != null && source != null && contentAlpha < 1f) {
+                // 图标与文字以统一比例跟随中心，横屏由宽行收窄时也不会拉伸。
+                val layer = anchor.layer
+                val rowScale = minOf(frame.width, source.width) / layer.size.width
+                val rowSize = Size(layer.size.width * rowScale, layer.size.height * rowScale)
+                drawRect(
+                    anchor.color.copy(alpha = anchor.color.alpha * (1f - contentAlpha)),
+                    frame.topLeft,
+                    frame.size,
+                )
+                if (contentAlpha > 0f) drawContext.canvas.saveLayer(frame, paint.apply { alpha = 1f - contentAlpha })
+                val rowTopLeft = frame.center - Offset(rowSize.width / 2f, rowSize.height / 2f)
+                translate(rowTopLeft.x, rowTopLeft.y) {
+                    scale(rowScale, rowScale, Offset.Zero) { drawLayer(layer) }
                 }
-                drawContext.canvas.restore()
+                if (contentAlpha > 0f) drawContext.canvas.restore()
             }
-            val contentAlpha = if (source == null) t else ((t - 0.15f) / 0.85f).coerceIn(0f, 1f)
             if (contentAlpha > 0f) {
                 if (contentAlpha < 1f) drawContext.canvas.saveLayer(frame, paint.apply { alpha = contentAlpha })
-                this@drawWithContent.drawContent()
+                // 正文与材质沿外壳移动，内层保持最终布局，二维码始终等比。
+                val panelScale = if (source != null) {
+                    maxOf(frame.width / destination.width, frame.height / destination.height, 0.9f)
+                } else 1f
+                val shift = frame.center - destination.center
+                translate(shift.x, shift.y) {
+                    scale(panelScale, panelScale, destination.center) { this@drawWithContent.drawContent() }
+                }
                 if (contentAlpha < 1f) drawContext.canvas.restore()
             }
         }
     }.graphicsLayer()) { content() }
 }
+
+internal fun donationContentHandoff(progress: Float): Float =
+    donationCornerRadius(0f, 1f, (progress - 0.12f) / 0.68f)
 
 /** 将二维码预览圆角的重组限制在材质外壳，不让整个弹窗订阅逐帧进度。 */
 @Composable

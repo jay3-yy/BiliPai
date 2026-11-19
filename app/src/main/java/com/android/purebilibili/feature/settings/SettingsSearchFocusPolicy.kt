@@ -51,6 +51,79 @@ data class SettingsSceneDetailFocus(
 internal fun resolveSettingsItemScrollKey(settingId: String?): String? =
     settingId?.let { id -> settingsItemDirectory.firstOrNull { it.settingId == id }?.sectionKey }
 
+internal const val HOME_LIST_CARD_ITEMS = "home_list_card_items"
+internal const val HOME_LIST_REFRESH_ITEMS = "home_list_refresh_items"
+internal const val ANIMATION_GLASS_PREVIEW = "animation_glass_preview"
+internal const val ANIMATION_GLASS_HEADER = "animation_glass_header"
+internal const val ANIMATION_GLASS_SURFACES = "animation_glass_surfaces"
+
+internal val homeSettingsScrollItemKeys = listOf(
+    "home_list_title", "home_list", HOME_LIST_CARD_ITEMS, HOME_LIST_REFRESH_ITEMS,
+    "home_wallpaper_title", "home_wallpaper",
+    "home_recommendation_title", "home_recommendation",
+    "home_browsing_title", "home_browsing",
+    "home_options",
+)
+
+internal fun animationSettingsScrollItemKeys(advancedOnly: Boolean): List<String> = buildList {
+    addAll(listOf("animation_glass_title", "animation_glass", ANIMATION_GLASS_PREVIEW))
+    if (!advancedOnly) {
+        addAll(listOf(
+            ANIMATION_GLASS_HEADER, ANIMATION_GLASS_SURFACES,
+            "animation_card_title", "animation_card",
+            "animation_page_title", "animation_page",
+            "animation_maid_lottie_title", "animation_maid_lottie",
+        ))
+    }
+}
+
+internal fun resolveSettingsSectionFocusIndex(
+    sectionKeys: List<String>,
+    settingId: String?,
+    fallbackKey: String,
+): Int? {
+    val itemKey = when (val sectionKey = resolveSettingsItemScrollKey(settingId)) {
+        "home_list" -> when (settingId) {
+            "appearance.full_video_card_content_visible",
+            "appearance.home_feed_card_style",
+            "appearance.compact_video_stats_on_cover",
+            "appearance.home_duration_style",
+            "appearance.home_publish_time_visible",
+            "appearance.home_up_avatars_visible",
+            "appearance.home_up_badges_visible" -> HOME_LIST_CARD_ITEMS
+            ContentDisplaySetting.KEEP_RECOMMEND,
+            "appearance.home_refresh_tip_visible",
+            "appearance.refresh_locator_duration",
+            "appearance.home_refresh_undo_visible",
+            "appearance.show_online_count" -> HOME_LIST_REFRESH_ITEMS
+            else -> sectionKey
+        }
+        "animation_glass" -> when (settingId) {
+            "animation.header_blur_enabled",
+            "animation.progressive_top_blur_enabled",
+            PROGRESSIVE_BLUR_RENDERER_SETTING_ID,
+            "animation.progressive_top_fade_enabled" -> ANIMATION_GLASS_HEADER
+            "animation.bottom_bar_blur_enabled",
+            "appearance.home_card_frosted_glass_enabled",
+            "animation.video_transition_realtime_blur_enabled",
+            "animation.blur_intensity" -> ANIMATION_GLASS_SURFACES
+            else -> if (settingId?.startsWith("glass.") == true) ANIMATION_GLASS_PREVIEW else sectionKey
+        }
+        else -> sectionKey ?: fallbackKey
+    }
+    return sectionKeys.indexOf(itemKey).takeIf { it >= 0 }
+}
+
+internal fun isLiquidGlassAdvancedSetting(settingId: String?): Boolean = when (settingId) {
+    "glass.progressive_blur_radius",
+    "glass.progressive_blur_extent",
+    "glass.progressive_blur_curve",
+    "glass.content_readability",
+    "glass.chromatic_aberration",
+    "glass.content_distortion" -> true
+    else -> false
+}
+
 internal object SettingsSearchHighlightTiming {
     const val HOLD_MILLIS = 1_600L
     const val FADE_MILLIS = 280
@@ -129,13 +202,38 @@ internal val playbackSettingsSectionKeys = listOf(
     SettingsSearchFocusIds.PLAYBACK_FULLSCREEN,
 )
 
-internal fun resolvePlaybackSettingsScrollIndex(focusId: String): Int? {
-    val sectionKey = if (focusId == SettingsSearchFocusIds.PLAYBACK_GESTURE) {
-        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
-    } else focusId
-    return playbackSettingsSectionKeys.indexOf(sectionKey)
-        .takeIf { it >= 0 }
-        ?.times(2)
+internal fun resolvePlaybackSettingsItemScrollIndex(
+    page: PlaybackSettingsPage,
+    focusId: String,
+    settingId: String?,
+): Int? {
+    val sections = when (page) {
+        PlaybackSettingsPage.PLAYBACK -> playbackSettingsSectionKeys
+        PlaybackSettingsPage.FULLSCREEN -> listOf(SettingsSearchFocusIds.PLAYBACK_FULLSCREEN)
+        PlaybackSettingsPage.COMMENTS -> listOf(SettingsSearchFocusIds.PLAYBACK_COMMENTS)
+        PlaybackSettingsPage.DECODER -> listOf(SettingsSearchFocusIds.PLAYBACK_DECODER)
+        PlaybackSettingsPage.DIAGNOSTICS -> listOf(SettingsSearchFocusIds.PLAYBACK_DEBUG)
+    }
+    val section = resolveSettingsItemScrollKey(settingId) ?: when (focusId) {
+        SettingsSearchFocusIds.PLAYBACK_GESTURE -> SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
+        else -> focusId
+    }
+    val itemKey = when (section) {
+        SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER -> PlaybackMiniPlayerGroup.forSetting(settingId).itemKey
+        SettingsSearchFocusIds.PLAYBACK_FULLSCREEN -> PlaybackFullscreenGroup.forSetting(settingId).itemKey
+        else -> section
+    }
+    val itemKeys = buildList {
+        for (key in sections) {
+            add(key + "_title")
+            when (key) {
+                SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER -> PlaybackMiniPlayerGroup.entries.forEach { add(it.itemKey) }
+                SettingsSearchFocusIds.PLAYBACK_FULLSCREEN -> PlaybackFullscreenGroup.entries.forEach { add(it.itemKey) }
+                else -> add(key)
+            }
+        }
+    }
+    return itemKeys.indexOf(itemKey).takeIf { it >= 0 }
 }
 
 internal fun resolveBottomBarSettingsScrollIndex(

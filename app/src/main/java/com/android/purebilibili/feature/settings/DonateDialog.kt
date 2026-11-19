@@ -8,6 +8,8 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animate
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -25,7 +27,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -49,13 +50,22 @@ import com.android.purebilibili.core.ui.components.AppTextButton
 import com.android.purebilibili.core.ui.util.rememberDeviceCornerShape
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.math.sqrt
+
+// 进度有物理边界，沿用触点速度时也不越过端点再折返。
+private const val DonationDialogStiffness = 500f
+private val DonationDialogSpring = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = DonationDialogStiffness,
+    visibilityThreshold = 0.001f,
+)
 
 @Composable
 internal fun DonateDialog(visible: Boolean, origin: DonationDialogOrigin, onDismiss: () -> Unit) {
     val progress = remember { mutableFloatStateOf(0f) }
     var mounted by remember { mutableStateOf(false) }
+    var positioned by remember { mutableStateOf(false) }
     val motionEnabled = LocalComponentMotionEnabled.current && !rememberSystemReduceMotion()
-    val spec = AppMotionTokens.spatialSpec<Float>()
     val scope = rememberCoroutineScope()
     val animation = remember { arrayOfNulls<Job>(1) }
     val gesture = remember {
@@ -66,29 +76,45 @@ internal fun DonateDialog(visible: Boolean, origin: DonationDialogOrigin, onDism
             var lastSampleNs = 0L
         }
     }
-    fun settle(target: Float) {
-        animation[0]?.cancel()
-        animation[0] = scope.launch {
-            if (motionEnabled) {
-                animate(progress.floatValue, target, initialVelocity = gesture.velocity, animationSpec = spec) { value, velocity ->
-                    progress.floatValue = value.coerceIn(0f, 1f)
-                    gesture.velocity = velocity
-                }
-            }
-            progress.floatValue = target
-            gesture.velocity = 0f
-            if (target == 0f) mounted = false
+    fun finish(target: Float) {
+        progress.floatValue = target
+        gesture.velocity = 0f
+        if (target == 0f) {
+            mounted = false
+            positioned = false
         }
     }
-    LaunchedEffect(visible, motionEnabled) {
+    fun settle(target: Float) {
+        animation[0]?.cancel()
+        if (!motionEnabled) {
+            finish(target)
+            return
+        }
+        animation[0] = scope.launch {
+            val start = progress.floatValue
+            val rate = sqrt(DonationDialogStiffness)
+            val velocity = gesture.velocity.coerceIn(-start * rate, (1f - start) * rate)
+            animate(start, target, initialVelocity = velocity, animationSpec = DonationDialogSpring) { value, sampleVelocity ->
+                progress.floatValue = value.coerceIn(0f, 1f)
+                gesture.velocity = sampleVelocity
+            }
+            finish(target)
+        }
+    }
+    LaunchedEffect(visible, motionEnabled, positioned) {
         if (!visible && !mounted) return@LaunchedEffect
         gesture.tracking = false
         if (visible) mounted = true
+        if (motionEnabled && !positioned) {
+            if (!visible) mounted = false
+            return@LaunchedEffect
+        }
         settle(if (visible) 1f else 0f)
     }
     DisposableEffect(Unit) { onDispose { animation[0]?.cancel() } }
     if (mounted) DonateDialogContent(
         origin = origin,
+        onPositioned = { positioned = true },
         entranceProgress = { progress.floatValue },
         backEnabled = visible,
         predictive = motionEnabled,
@@ -125,6 +151,7 @@ internal fun DonateDialog(visible: Boolean, origin: DonationDialogOrigin, onDism
 @Composable
 private fun DonateDialogContent(
     origin: DonationDialogOrigin,
+    onPositioned: () -> Unit,
     entranceProgress: () -> Float,
     backEnabled: Boolean,
     predictive: Boolean,
@@ -141,6 +168,14 @@ private fun DonateDialogContent(
     var showSaveConfirmation by remember { mutableStateOf(false) }
     val requestLongPressSave: () -> Unit = { if (!saving) showSaveConfirmation = true }
     val previewMotion = rememberDonationPreviewMotion()
+    val dismissTopLayer: () -> Unit = {
+        when {
+            showSaveConfirmation -> showSaveConfirmation = false
+            previewMotion.expanded -> previewMotion.close()
+            else -> onDismiss()
+        }
+    }
+    val latestDismissTopLayer by rememberUpdatedState(dismissTopLayer)
     // 紧凑态采用当前材质弹窗圆角，二维码展开态才逐角过渡到设备形状。
     val containerShape = rememberDeviceCornerShape(
         defaultRadius = AppShapes.containerCornerDp(ContainerLevel.Dialog),
@@ -180,10 +215,7 @@ private fun DonateDialogContent(
         }
     }
     Dialog(
-        onDismissRequest = {
-            if (showSaveConfirmation) showSaveConfirmation = false
-            else if (previewMotion.expanded) previewMotion.close() else onDismiss()
-        },
+        onDismissRequest = dismissTopLayer,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
         // 同一手势只操作一层：二维码预览优先，其次收回外层弹窗。
@@ -203,7 +235,7 @@ private fun DonateDialogContent(
                 if (backTargetsPreview[0]) previewMotion.onBackCancelled() else onBackCancelled()
             },
             // 按键返回没有 started/progress，也沿用当前可见层的优先级。
-            onCompleted = { if (previewMotion.expanded) previewMotion.close() else onDismiss() },
+            onCompleted = dismissTopLayer,
         )
         // 窗口留到收回结束；背景与容器共用同一有限进度，避免窗口自带动画叠加。
         val dialogView = LocalView.current
@@ -223,7 +255,7 @@ private fun DonateDialogContent(
             Box(Modifier.fillMaxSize()) {
                 Box(Modifier.matchParentSize()
                     .drawBehind { drawRect(Color.Black.copy(alpha = 0.32f * entranceProgress().coerceIn(0f, 1f))) }
-                    .pointerInput(Unit) { detectTapGestures { if (previewMotion.expanded) previewMotion.close() else onDismiss() } })
+                    .pointerInput(Unit) { detectTapGestures { latestDismissTopLayer() } })
                 BoxWithConstraints(
                     modifier = Modifier
                         .fillMaxSize()
@@ -236,6 +268,7 @@ private fun DonateDialogContent(
                     val compactRadius = AppShapes.containerCornerDp(ContainerLevel.Dialog)
                     DonationDialogContainer(
                         origin = origin,
+                        onPositioned = onPositioned,
                         progress = entranceProgress,
                         previewProgress = { previewMotion.progress.value },
                         compactRadiusPx = with(density) { compactRadius.toPx() },

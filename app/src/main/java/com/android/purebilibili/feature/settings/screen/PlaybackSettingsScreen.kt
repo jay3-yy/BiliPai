@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -72,6 +74,7 @@ import com.android.purebilibili.feature.video.subtitle.isSubtitleFeatureEnabledF
 import com.android.purebilibili.feature.plugin.PlaybackCdnPreference
 import com.android.purebilibili.feature.settings.PlaybackCdnPreferenceMenu
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.core.ui.animation.EntranceGroup
@@ -157,17 +160,8 @@ fun PlaybackSettingsContent(
                 ?.takeIf { it.target == SettingsSearchTarget.PLAYBACK }
                 ?.focusId
         } ?: return@LaunchedEffect
-        val keys = when (page) {
-            PlaybackSettingsPage.PLAYBACK -> playbackSettingsSectionKeys
-            PlaybackSettingsPage.FULLSCREEN -> listOf(SettingsSearchFocusIds.PLAYBACK_FULLSCREEN)
-            PlaybackSettingsPage.COMMENTS -> listOf(SettingsSearchFocusIds.PLAYBACK_COMMENTS)
-            PlaybackSettingsPage.DECODER -> listOf(SettingsSearchFocusIds.PLAYBACK_DECODER)
-            PlaybackSettingsPage.DIAGNOSTICS -> listOf(SettingsSearchFocusIds.PLAYBACK_DEBUG)
-        }.flatMap { listOf(it + "_title", it) }
-        val key = resolveSettingsItemScrollKey(request.settingId)
-            ?: if (playbackFocusId == SettingsSearchFocusIds.PLAYBACK_GESTURE) SettingsSearchFocusIds.PLAYBACK_FULLSCREEN else playbackFocusId
-        val index = keys.indexOf(key)
-        if (index < 0) {
+        val index = resolvePlaybackSettingsItemScrollIndex(page, playbackFocusId, request.settingId)
+        if (index == null) {
             SettingsSearchFocusController.clear(request.token)
             return@LaunchedEffect
         }
@@ -178,11 +172,23 @@ fun PlaybackSettingsContent(
 
 
     var showPipPermissionDialog by remember { mutableStateOf(false) }
-    val playbackInsightScope = rememberCoroutineScope()
+    val settingsScope = rememberCoroutineScope()
+    val fullscreenBrightness = if (page == PlaybackSettingsPage.PLAYBACK || page == PlaybackSettingsPage.FULLSCREEN) {
+        // 授权结果和设置写入由页面持有，滚动回收亮度所在项时仍可完成。
+        rememberPlaybackSystemBrightnessControl(
+            context,
+            settingsScope,
+            playerConfiguration.setSystemBrightnessEnabled,
+        )
+    } else {
+        null
+    }
 
     val miniPlayerMode = playbackPreferences.miniPlayerMode
     val stopPlaybackOnExit = playbackPreferences.stopPlaybackOnExit
     val backgroundPlaybackEnabled = playbackPreferences.backgroundPlaybackEnabled
+    val modeControlsEnabled = !stopPlaybackOnExit && backgroundPlaybackEnabled
+    var pipPermissionGranted by remember(context) { mutableStateOf<Boolean?>(null) }
     val audioFocusEnabled = playbackPreferences.audioFocusEnabled
     val audioModeAutoPipEnabled = playbackPreferences.audioModeAutoPipEnabled
     val audioNowPlayingBarEnabled = playbackPreferences.audioNowPlayingBarEnabled
@@ -254,6 +260,13 @@ fun PlaybackSettingsContent(
             mode == AppOpsManager.MODE_ALLOWED || mode == AppOpsManager.MODE_DEFAULT
         } catch (_: Exception) {
             false
+        }
+    }
+
+    if (page == PlaybackSettingsPage.PLAYBACK && modeControlsEnabled && miniPlayerMode.supportsSystemPip) {
+        // 权限跟随页面前台生命周期，滚动回收画中画列表项时无需重新查询系统。
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+            pipPermissionGranted = checkPipPermission()
         }
     }
 
@@ -610,365 +623,360 @@ SettingsItemAnchor("playback.video_second_codec_preference") {
                     AppPreferenceSectionTitle("小窗与后台")
                 }
             }
-            item(key = SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER) {
-                Box(modifier = Modifier.entrance()) {
-                    val scope = rememberCoroutineScope()
-                    val pipNoDanmakuEnabled = playerConfiguration.pipNoDanmakuEnabled
-                    val modeControlsEnabled = remember(stopPlaybackOnExit, backgroundPlaybackEnabled) {
-                        !stopPlaybackOnExit && backgroundPlaybackEnabled
-                    }
-                    val audioModeAutoPipToggleEnabled = remember(miniPlayerMode, backgroundPlaybackEnabled) {
-                        com.android.purebilibili.core.store.SettingsManager
-                            .shouldEnableAudioModeAutoPipToggle(miniPlayerMode) && backgroundPlaybackEnabled
-                    }
-                    val pipDanmakuToggleEnabled = remember(miniPlayerMode, backgroundPlaybackEnabled) {
-                        backgroundPlaybackEnabled &&
-                            miniPlayerMode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF
-                    }
-                    val miniPlayerOptions = listOf(
-                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF, "默认"),
-                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_ONLY, "小窗"),
-                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.SYSTEM_PIP, "画中画"),
-                        AppSegmentOption(com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP, "两种小窗")
+            miniPlayerPreferenceGroup(PlaybackMiniPlayerGroup.BACKGROUND) {
+                val miniPlayerOptions = remember {
+                    listOf(
+                        AppSegmentOption(SettingsManager.MiniPlayerMode.OFF, "默认"),
+                        AppSegmentOption(SettingsManager.MiniPlayerMode.IN_APP_ONLY, "小窗"),
+                        AppSegmentOption(SettingsManager.MiniPlayerMode.SYSTEM_PIP, "画中画"),
+                        AppSegmentOption(SettingsManager.MiniPlayerMode.IN_APP_AND_SYSTEM_PIP, "两种小窗"),
                     )
-
-                    AppPreferenceGroup {
-                            SettingsItemAnchor("playback.stop_playback_on_exit") {
-                                AppSwitchPreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.STOP_ON_EXIT),
-                                title = playbackSettingTitle("playback.stop_playback_on_exit"),
-                                subtitle = "开启后，返回其他页面时立即停止，也不会进入小窗或后台播放",
-                                checked = stopPlaybackOnExit,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setStopPlaybackOnExit(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
+                }
+                SettingsItemAnchor("playback.stop_playback_on_exit") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.STOP_ON_EXIT),
+                        title = playbackSettingTitle("playback.stop_playback_on_exit"),
+                        subtitle = "开启后，返回其他页面时立即停止，也不会进入小窗或后台播放",
+                        checked = stopPlaybackOnExit,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setStopPlaybackOnExit(context, it)
                             }
-                        AppPreferenceDivider()
-                            SettingsItemAnchor("playback.background_playback_enabled") {
-                                AppSwitchPreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.BACKGROUND_PLAYBACK),
-                                title = playbackSettingTitle("playback.background_playback_enabled"),
-                                subtitle = if (backgroundPlaybackEnabled) {
-                                    "离开应用或锁屏后继续播放"
-                                } else {
-                                    "关闭后离开应用或锁屏时停止播放"
-                                },
-                                checked = backgroundPlaybackEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setBackgroundPlaybackEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.background_playback_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.BACKGROUND_PLAYBACK),
+                        title = playbackSettingTitle("playback.background_playback_enabled"),
+                        subtitle = if (backgroundPlaybackEnabled) {
+                            "离开应用或锁屏后继续播放"
+                        } else {
+                            "关闭后离开应用或锁屏时停止播放"
+                        },
+                        checked = backgroundPlaybackEnabled,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setBackgroundPlaybackEnabled(context, it)
                             }
-                        AppPreferenceDivider()
-                            SettingsItemAnchor("playback.audio_focus_enabled") {
-                                AppSwitchPreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_FOCUS),
-                                title = playbackSettingTitle("playback.audio_focus_enabled"),
-                                subtitle = if (audioFocusEnabled) {
-                                    "播放视频时会请求其他音乐或视频应用暂停"
-                                } else {
-                                    "关闭后可能与其他应用同时发声"
-                                },
-                                checked = audioFocusEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setAudioFocusEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.audio_focus_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_FOCUS),
+                        title = playbackSettingTitle("playback.audio_focus_enabled"),
+                        subtitle = if (audioFocusEnabled) {
+                            "播放视频时会请求其他音乐或视频应用暂停"
+                        } else {
+                            "关闭后可能与其他应用同时发声"
+                        },
+                        checked = audioFocusEnabled,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setAudioFocusEnabled(context, it)
                             }
-                        AppPreferenceDivider()
-SettingsItemAnchor("playback.mini_player_mode") {
-                        SettingsSingleChoicePreference(
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.EXIT_PLAYER_MODE),
-                            title = settingItemTitle("playback.mini_player_mode"),
-                            subtitle = if (stopPlaybackOnExit) {
-                                "请先关闭“离开播放页后停止”"
-                            } else if (!backgroundPlaybackEnabled) {
-                                "请先开启“后台播放”"
-                            } else {
-                                miniPlayerMode.description
-                            },
-                            options = miniPlayerOptions,
-                            selectedValue = miniPlayerMode,
-                            enabled = modeControlsEnabled,
-                            onSelectionChange = { mode ->
-                                scope.launch {
-                                    com.android.purebilibili.core.store.SettingsManager
-                                        .setMiniPlayerMode(context, mode)
-                                }
-                                if (mode.supportsSystemPip &&
-                                    !checkPipPermission()
-                                ) {
-                                    showPipPermissionDialog = true
-                                }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.mini_player_mode") {
+                    SettingsSingleChoicePreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.EXIT_PLAYER_MODE),
+                        title = settingItemTitle("playback.mini_player_mode"),
+                        subtitle = if (stopPlaybackOnExit) {
+                            "请先关闭“离开播放页后停止”"
+                        } else if (!backgroundPlaybackEnabled) {
+                            "请先开启“后台播放”"
+                        } else {
+                            miniPlayerMode.description
+                        },
+                        options = miniPlayerOptions,
+                        selectedValue = miniPlayerMode,
+                        enabled = modeControlsEnabled,
+                        onSelectionChange = { mode ->
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setMiniPlayerMode(context, mode)
                             }
-                        )
-}
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("playback.audio_now_playing_bar_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.NOW_PLAYING_BAR),
-                                title = playbackSettingTitle("playback.audio_now_playing_bar_enabled"),
-                                subtitle = if (audioNowPlayingBarEnabled) {
-                                    "离开视频页后，底部保留当前视频入口"
-                                } else {
-                                    "关闭后返回首页等页面时不显示底部视频入口"
-                                },
-                                checked = audioNowPlayingBarEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setAudioNowPlayingBarEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("playback.audio_now_playing_bar_opens_audio_mode") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_MODE_ENTRY),
-                                title = playbackSettingTitle("playback.audio_now_playing_bar_opens_audio_mode"),
-                                subtitle = if (audioNowPlayingBarOpensAudioMode) {
-                                    "点击底部视频入口时跳转到听视频"
-                                } else {
-                                    "关闭后点击底部视频入口时跳转到视频详情页（默认）"
-                                },
-                                checked = audioNowPlayingBarOpensAudioMode,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        SettingsManager.setAudioNowPlayingBarOpensAudioMode(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("playback.audio_now_playing_bar_delete_button") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_BAR_DELETE_BUTTON),
-                                title = playbackSettingTitle("playback.audio_now_playing_bar_delete_button"),
-                                subtitle = "显示右上角删除按钮，点击后停止播放并移除小横条",
-                                checked = audioNowPlayingBarDeleteButton,
-                                onCheckedChange = { enabled ->
-                                    scope.launch { SettingsManager.setAudioNowPlayingBarDeleteButton(context, enabled) }
-                                },
-                                iconTint = AppContentColors.secondaryText(),
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("playback.audio_now_playing_bar_immersive_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_TITLE_AUTO_HIDE),
-                                title = playbackSettingTitle("playback.audio_now_playing_bar_immersive_enabled"),
-                                subtitle = if (audioNowPlayingBarImmersiveEnabled) {
-                                    "播放中 5 秒不操作时隐藏；点底部横条恢复"
-                                } else {
-                                    "关闭后标题横条始终显示"
-                                },
-                                checked = audioNowPlayingBarImmersiveEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setAudioNowPlayingBarImmersiveEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("playback.loudness_normalization_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.LOUDNESS_NORMALIZATION),
-                                title = playbackSettingTitle("playback.loudness_normalization_enabled"),
-                                subtitle = if (loudnessNormalizationEnabled) {
-                                    "自动拉平不同曲目间的响度差异；切换后重新开始播放生效"
-                                } else {
-                                    "关闭后保留各视频原始响度"
-                                },
-                                checked = loudnessNormalizationEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setLoudnessNormalizationEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("playback.audio_spectrum_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_SPECTRUM),
-                                title = playbackSettingTitle("playback.audio_spectrum_enabled"),
-                                subtitle = "听视频时让封面背景光晕随声音变化；无需录音权限",
-                                checked = audioSpectrumEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setAudioSpectrumEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-                        SettingsItemAnchor("playback.startup_auto_play_enabled") {
-                            AppSwitchPreference(
-                                icon = rememberSettingsSemanticIcon(SettingsIconRole.STARTUP_RESUME),
-                                title = playbackSettingTitle("playback.startup_auto_play_enabled"),
-                                subtitle = if (startupAutoPlayEnabled) {
-                                    "重新打开应用并进入播放器后，继续上次播放"
-                                } else {
-                                    "关闭后需要手动恢复播放"
-                                },
-                                checked = startupAutoPlayEnabled,
-                                onCheckedChange = {
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setStartupAutoPlayEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
-                        }
-                        AppPreferenceDivider()
-SettingsItemAnchor("playback.music_lyrics_ui_style") {
-                        SettingsSingleChoicePreference(
-                            icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_LYRICS),
-                            title = settingItemTitle("playback.music_lyrics_ui_style"),
-                            subtitle = when (musicLyricsUiStyle) {
-                                SettingsManager.MusicLyricsUiStyle.CLASSIC ->
-                                    "经典全屏歌词；可在听视频右上角更多菜单临时切换"
-                                SettingsManager.MusicLyricsUiStyle.IMMERSIVE ->
-                                    "大字歌词，随播放逐字高亮"
-                            },
-                            options = listOf(
-                                AppSegmentOption(
-                                    SettingsManager.MusicLyricsUiStyle.CLASSIC,
-                                    SettingsManager.MusicLyricsUiStyle.CLASSIC.label
-                                ),
-                                AppSegmentOption(
-                                    SettingsManager.MusicLyricsUiStyle.IMMERSIVE,
-                                    SettingsManager.MusicLyricsUiStyle.IMMERSIVE.label
-                                ),
-                            ),
-                            selectedValue = musicLyricsUiStyle,
-                            onSelectionChange = { style ->
-                                scope.launch {
-                                    SettingsManager.setMusicLyricsUiStyle(context, style)
-                                }
-                            },
-                            iconTint = AppContentColors.secondaryText()
-                        )
-}
-
-                        //  权限提示（仅当选择支持系统 PiP 的模式且无权限时显示）
-                        if (modeControlsEnabled &&
-                            miniPlayerMode.supportsSystemPip
-                            && !checkPipPermission()) {
-                            AppPreferenceDivider()
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showPipPermissionDialog = true }
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            if (mode.supportsSystemPip &&
+                                !checkPipPermission()
                             ) {
-                                AppIcon(
-                                    rememberSettingsVector(R.drawable.ph_warning_24, R.drawable.ms_warning_24),
-                                    contentDescription = null,
-                                    tint = warningTint,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                                Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    AppText(
-                                        "画中画权限未开启",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = warningTint
-                                    )
-                                    AppText(
-                                        "点击前往系统设置开启",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = AppContentColors.secondaryText()
-                                    )
-                                }
-                                AppIcon(
-                                    rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
-                                    contentDescription = null,
-                                    tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                showPipPermissionDialog = true
                             }
                         }
-                        AppPreferenceDivider()
-                            SettingsItemAnchor("playback.pip_no_danmaku_enabled") {
-                                AppSwitchPreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.PIP_DANMAKU),
-                                title = playbackSettingTitle("playback.pip_no_danmaku_enabled"),
-                                subtitle = if (!backgroundPlaybackEnabled) {
-                                    "需先开启后台播放"
-                                } else if (miniPlayerMode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF) {
-                                    if (pipNoDanmakuEnabled) "小窗和画中画中不显示弹幕" else "小窗和画中画中显示弹幕"
-                                } else {
-                                    "选择小窗或画中画模式后生效"
-                                },
-                                checked = pipNoDanmakuEnabled,
-                                enabled = pipDanmakuToggleEnabled,
-                                onCheckedChange = {
-                                    if (!pipDanmakuToggleEnabled) {
-                                        return@AppSwitchPreference
-                                    }
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setPipNoDanmakuEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
+                    )
+                }
+            }
+
+            miniPlayerPreferenceGroup(PlaybackMiniPlayerGroup.NOW_PLAYING_BAR) {
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.audio_now_playing_bar_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.NOW_PLAYING_BAR),
+                        title = playbackSettingTitle("playback.audio_now_playing_bar_enabled"),
+                        subtitle = if (audioNowPlayingBarEnabled) {
+                            "离开视频页后，底部保留当前视频入口"
+                        } else {
+                            "关闭后返回首页等页面时不显示底部视频入口"
+                        },
+                        checked = audioNowPlayingBarEnabled,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setAudioNowPlayingBarEnabled(context, it)
                             }
-                        AppPreferenceDivider()
-                            SettingsItemAnchor("playback.audio_mode_auto_pip_enabled") {
-                                AppSwitchPreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_MODE_PIP),
-                                title = playbackSettingTitle("playback.audio_mode_auto_pip_enabled"),
-                                subtitle = if (audioModeAutoPipToggleEnabled) {
-                                    if (audioModeAutoPipEnabled) {
-                                        "回到桌面或使用离开手势时，自动进入画中画"
-                                    } else {
-                                        "关闭后仅保留听视频页内的画中画按钮"
-                                    }
-                                } else {
-                                    "仅支持系统画中画的模式下生效"
-                                },
-                                checked = audioModeAutoPipEnabled,
-                                enabled = audioModeAutoPipToggleEnabled,
-                                onCheckedChange = {
-                                    if (!audioModeAutoPipToggleEnabled) {
-                                        return@AppSwitchPreference
-                                    }
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.SettingsManager
-                                            .setAudioModeAutoPipEnabled(context, it)
-                                    }
-                                },
-                                iconTint = AppContentColors.secondaryText()
-                            )
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.audio_now_playing_bar_opens_audio_mode") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_MODE_ENTRY),
+                        title = playbackSettingTitle("playback.audio_now_playing_bar_opens_audio_mode"),
+                        subtitle = if (audioNowPlayingBarOpensAudioMode) {
+                            "点击底部视频入口时跳转到听视频"
+                        } else {
+                            "关闭后点击底部视频入口时跳转到视频详情页（默认）"
+                        },
+                        checked = audioNowPlayingBarOpensAudioMode,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                SettingsManager.setAudioNowPlayingBarOpensAudioMode(context, it)
                             }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.audio_now_playing_bar_delete_button") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_BAR_DELETE_BUTTON),
+                        title = playbackSettingTitle("playback.audio_now_playing_bar_delete_button"),
+                        subtitle = "显示右上角删除按钮，点击后停止播放并移除小横条",
+                        checked = audioNowPlayingBarDeleteButton,
+                        onCheckedChange = { enabled ->
+                            settingsScope.launch { SettingsManager.setAudioNowPlayingBarDeleteButton(context, enabled) }
+                        },
+                        iconTint = AppContentColors.secondaryText(),
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.audio_now_playing_bar_immersive_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_TITLE_AUTO_HIDE),
+                        title = playbackSettingTitle("playback.audio_now_playing_bar_immersive_enabled"),
+                        subtitle = if (audioNowPlayingBarImmersiveEnabled) {
+                            "播放中 5 秒不操作时隐藏；点底部横条恢复"
+                        } else {
+                            "关闭后标题横条始终显示"
+                        },
+                        checked = audioNowPlayingBarImmersiveEnabled,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setAudioNowPlayingBarImmersiveEnabled(context, it)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+            }
+
+            miniPlayerPreferenceGroup(PlaybackMiniPlayerGroup.AUDIO) {
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.loudness_normalization_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.LOUDNESS_NORMALIZATION),
+                        title = playbackSettingTitle("playback.loudness_normalization_enabled"),
+                        subtitle = if (loudnessNormalizationEnabled) {
+                            "自动拉平不同曲目间的响度差异；切换后重新开始播放生效"
+                        } else {
+                            "关闭后保留各视频原始响度"
+                        },
+                        checked = loudnessNormalizationEnabled,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setLoudnessNormalizationEnabled(context, it)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.audio_spectrum_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_SPECTRUM),
+                        title = playbackSettingTitle("playback.audio_spectrum_enabled"),
+                        subtitle = "听视频时让封面背景光晕随声音变化；无需录音权限",
+                        checked = audioSpectrumEnabled,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setAudioSpectrumEnabled(context, it)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.startup_auto_play_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.STARTUP_RESUME),
+                        title = playbackSettingTitle("playback.startup_auto_play_enabled"),
+                        subtitle = if (startupAutoPlayEnabled) {
+                            "重新打开应用并进入播放器后，继续上次播放"
+                        } else {
+                            "关闭后需要手动恢复播放"
+                        },
+                        checked = startupAutoPlayEnabled,
+                        onCheckedChange = {
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setStartupAutoPlayEnabled(context, it)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.music_lyrics_ui_style") {
+                    SettingsSingleChoicePreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_LYRICS),
+                        title = settingItemTitle("playback.music_lyrics_ui_style"),
+                        subtitle = when (musicLyricsUiStyle) {
+                            SettingsManager.MusicLyricsUiStyle.CLASSIC ->
+                                "经典全屏歌词；可在听视频右上角更多菜单临时切换"
+                            SettingsManager.MusicLyricsUiStyle.IMMERSIVE ->
+                                "大字歌词，随播放逐字高亮"
+                        },
+                        options = listOf(
+                            AppSegmentOption(
+                                SettingsManager.MusicLyricsUiStyle.CLASSIC,
+                                SettingsManager.MusicLyricsUiStyle.CLASSIC.label
+                            ),
+                            AppSegmentOption(
+                                SettingsManager.MusicLyricsUiStyle.IMMERSIVE,
+                                SettingsManager.MusicLyricsUiStyle.IMMERSIVE.label
+                            ),
+                        ),
+                        selectedValue = musicLyricsUiStyle,
+                        onSelectionChange = { style ->
+                            settingsScope.launch {
+                                SettingsManager.setMusicLyricsUiStyle(context, style)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+            }
+
+            miniPlayerPreferenceGroup(PlaybackMiniPlayerGroup.PICTURE_IN_PICTURE) {
+                val pipNoDanmakuEnabled = playerConfiguration.pipNoDanmakuEnabled
+                val audioModeAutoPipToggleEnabled =
+                    SettingsManager.shouldEnableAudioModeAutoPipToggle(miniPlayerMode) && backgroundPlaybackEnabled
+                val pipDanmakuToggleEnabled =
+                    backgroundPlaybackEnabled && miniPlayerMode != SettingsManager.MiniPlayerMode.OFF
+
+                if (modeControlsEnabled && miniPlayerMode.supportsSystemPip && pipPermissionGranted == false) {
+                    AppPreferenceDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showPipPermissionDialog = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppIcon(
+                            rememberSettingsVector(R.drawable.ph_warning_24, R.drawable.ms_warning_24),
+                            contentDescription = null,
+                            tint = warningTint,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(AppSpacingTokens.Medium))
+                        Column(modifier = Modifier.weight(1f)) {
+                            AppText(
+                                "画中画权限未开启",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = warningTint
+                            )
+                            AppText(
+                                "点击前往系统设置开启",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = AppContentColors.secondaryText()
+                            )
+                        }
+                        AppIcon(
+                            rememberSettingsVector(R.drawable.ph_caret_right_24, R.drawable.ms_keyboard_arrow_right_24),
+                            contentDescription = null,
+                            tint = AppContentColors.secondaryText().copy(alpha = 0.5f),
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.pip_no_danmaku_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.PIP_DANMAKU),
+                        title = playbackSettingTitle("playback.pip_no_danmaku_enabled"),
+                        subtitle = if (!backgroundPlaybackEnabled) {
+                            "需先开启后台播放"
+                        } else if (miniPlayerMode != com.android.purebilibili.core.store.SettingsManager.MiniPlayerMode.OFF) {
+                            if (pipNoDanmakuEnabled) "小窗和画中画中不显示弹幕" else "小窗和画中画中显示弹幕"
+                        } else {
+                            "选择小窗或画中画模式后生效"
+                        },
+                        checked = pipNoDanmakuEnabled,
+                        enabled = pipDanmakuToggleEnabled,
+                        onCheckedChange = {
+                            if (!pipDanmakuToggleEnabled) {
+                                return@AppSwitchPreference
+                            }
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setPipNoDanmakuEnabled(context, it)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
+                }
+                AppPreferenceDivider()
+                SettingsItemAnchor("playback.audio_mode_auto_pip_enabled") {
+                    AppSwitchPreference(
+                        icon = rememberSettingsSemanticIcon(SettingsIconRole.AUDIO_MODE_PIP),
+                        title = playbackSettingTitle("playback.audio_mode_auto_pip_enabled"),
+                        subtitle = if (audioModeAutoPipToggleEnabled) {
+                            if (audioModeAutoPipEnabled) {
+                                "回到桌面或使用离开手势时，自动进入画中画"
+                            } else {
+                                "关闭后仅保留听视频页内的画中画按钮"
+                            }
+                        } else {
+                            "仅支持系统画中画的模式下生效"
+                        },
+                        checked = audioModeAutoPipEnabled,
+                        enabled = audioModeAutoPipToggleEnabled,
+                        onCheckedChange = {
+                            if (!audioModeAutoPipToggleEnabled) {
+                                return@AppSwitchPreference
+                            }
+                            settingsScope.launch {
+                                com.android.purebilibili.core.store.SettingsManager
+                                    .setAudioModeAutoPipEnabled(context, it)
+                            }
+                        },
+                        iconTint = AppContentColors.secondaryText()
+                    )
                 }
             }
 
@@ -1298,17 +1306,16 @@ SettingsItemAnchor("playback.data_saver_mode") {
                     )
                 }
             }
-            if (page == PlaybackSettingsPage.PLAYBACK || page == PlaybackSettingsPage.FULLSCREEN) {
+            if (fullscreenBrightness != null) {
                 item(key = SettingsSearchFocusIds.PLAYBACK_FULLSCREEN + "_title") {
                     AppPreferenceSectionTitle("全屏与手势")
                 }
-                item(key = SettingsSearchFocusIds.PLAYBACK_FULLSCREEN) {
-                    PlaybackFullscreenGestureSettingsSection(
-                        context = context,
-                        state = state,
-                        viewModel = viewModel,
-                    )
-                }
+                playbackFullscreenGestureSettings(
+                    context = context,
+                    viewModel = viewModel,
+                    scope = settingsScope,
+                    brightness = fullscreenBrightness,
+                )
             }
             item { Spacer(modifier = Modifier.height(32.dp)) }
 }
@@ -1378,6 +1385,8 @@ private fun PlaybackInteractionSettingsSection(
     val commentIpLocationEnabled by remember(context) { SettingsManager.getCommentIpLocationEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = true)
     val detailedCommentTimeEnabled by remember(context) { SettingsManager.getDetailedCommentTimeEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
+    val subReplyThreadedEnabled by remember(context) { SettingsManager.getSubReplyThreadedEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
     val subReplyLoadedCountEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getSubReplyLoadedCountEnabled(context) }
         .collectAsStateWithLifecycle(initialValue = false)
@@ -1896,6 +1905,19 @@ SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
         )
 }
         AppPreferenceDivider()
+        SettingsItemAnchor("playback.sub_reply_threaded_enabled") {
+            AppSwitchPreference(
+                icon = rememberSettingsSemanticIcon(SettingsIconRole.SUB_REPLY_THREADED),
+                title = playbackSettingTitle("playback.sub_reply_threaded_enabled"),
+                subtitle = "按回复关系缩进并连线，支持原地展开或收起分支",
+                checked = subReplyThreadedEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch { SettingsManager.setSubReplyThreadedEnabled(context, enabled) }
+                },
+                iconTint = AppContentColors.secondaryText(),
+            )
+        }
+        AppPreferenceDivider()
         SettingsItemAnchor("playback.sub_reply_loaded_count_enabled") {
             AppSwitchPreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.SUB_REPLY_LOADED_COUNT),
@@ -2020,26 +2042,152 @@ SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
     }
 }
 
-@Composable
-private fun PlaybackFullscreenGestureSettingsSection(
-    context: Context,
-    state: SettingsUiState,
-    viewModel: SettingsViewModel,
+// 搜索先定位懒列表分组，再由组内的设置行处理高亮和精确滚动。
+internal enum class PlaybackMiniPlayerGroup(
+    val segment: AppPreferenceGroupSegment,
+    private vararg val settingIds: String,
 ) {
-    val playerConfiguration = rememberSettingsPlayerConfiguration()
-    val scope = rememberCoroutineScope()
-    val portraitPlayerCollapseMode by remember(context) { com.android.purebilibili.core.store.SettingsManager.getPortraitPlayerCollapseMode(context) }
-        .collectAsStateWithLifecycle(initialValue = PortraitPlayerCollapseMode.INTRO_ONLY)
-    val videoDetailChromeScrollHideEnabled by remember(context) { SettingsManager.getVideoDetailChromeScrollHideEnabled(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
-    val portraitSwipeToFullscreenEnabled = playerConfiguration.portraitSwipeToFullscreenEnabled
-    val directPortraitStoryEntry = playerConfiguration.directPortraitStoryEntry
-    val portraitOnlyVerticalRecommendations by remember(context) { com.android.purebilibili.core.store.SettingsManager.getPortraitOnlyVerticalRecommendations(context) }
-        .collectAsStateWithLifecycle(initialValue = false)
-    val launchToPortraitFeedOnStartup = playerConfiguration.launchToPortraitFeedOnStartup
-    val centerSwipeToFullscreenEnabled = playerConfiguration.centerSwipeToFullscreenEnabled
-    val slideVolumeBrightnessEnabled = playerConfiguration.slideVolumeBrightnessEnabled
-    val setSystemBrightnessEnabled = playerConfiguration.setSystemBrightnessEnabled
+    BACKGROUND(
+        AppPreferenceGroupSegment.FIRST,
+        "playback.stop_playback_on_exit",
+        "playback.background_playback_enabled",
+        "playback.audio_focus_enabled",
+        "playback.mini_player_mode",
+    ),
+    NOW_PLAYING_BAR(
+        AppPreferenceGroupSegment.MIDDLE,
+        "playback.audio_now_playing_bar_enabled",
+        "playback.audio_now_playing_bar_opens_audio_mode",
+        "playback.audio_now_playing_bar_delete_button",
+        "playback.audio_now_playing_bar_immersive_enabled",
+    ),
+    AUDIO(
+        AppPreferenceGroupSegment.MIDDLE,
+        "playback.loudness_normalization_enabled",
+        "playback.audio_spectrum_enabled",
+        "playback.startup_auto_play_enabled",
+        "playback.music_lyrics_ui_style",
+    ),
+    PICTURE_IN_PICTURE(
+        AppPreferenceGroupSegment.LAST,
+        "playback.pip_no_danmaku_enabled",
+        "playback.audio_mode_auto_pip_enabled",
+    );
+
+    val itemKey: String
+        get() = if (this == BACKGROUND) SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER
+        else "${SettingsSearchFocusIds.PLAYBACK_MINI_PLAYER}_${name.lowercase()}"
+
+    companion object {
+        fun forSetting(settingId: String?): PlaybackMiniPlayerGroup =
+            entries.firstOrNull { settingId != null && settingId in it.settingIds } ?: BACKGROUND
+    }
+}
+
+private fun LazyListScope.miniPlayerPreferenceGroup(
+    group: PlaybackMiniPlayerGroup,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    item(key = group.itemKey, contentType = "settings_preference_group") {
+        Box(modifier = Modifier.entrance()) {
+            AppPreferenceGroup(segment = group.segment, content = content)
+        }
+    }
+}
+
+internal enum class PlaybackFullscreenGroup(private vararg val settingIds: String) {
+    DOUBLE_TAP(
+        "playback.seek_forward_seconds",
+        "playback.seek_backward_seconds",
+    ),
+    PORTRAIT(
+        "playback.portrait_player_collapse_mode",
+        "playback.video_detail_chrome_scroll_hide_enabled",
+        "playback.pause_on_player_collapse_enabled",
+        "playback.portrait_swipe_to_fullscreen_enabled",
+        "playback.direct_portrait_story_entry",
+        "playback.portrait_only_vertical_recommendations",
+        "playback.launch_to_portrait_feed_on_startup",
+    ),
+    SWIPE(
+        "playback.center_swipe_to_fullscreen_enabled",
+        "playback.slide_volume_brightness_enabled",
+        "playback.set_system_brightness_enabled",
+        "playback.fullscreen_swipe_seek_enabled",
+        "playback.swipe_seek_seconds",
+    ),
+    ORIENTATION(
+        "playback.auto_rotate_enabled",
+        "playback.landscape_hold_enabled",
+        "playback.horizontal_adaptation_enabled",
+        "playback.landscape_back_shows_comments",
+    ),
+    CONTROLS(
+        "playback.player_control_visibility.show_cast_button",
+        "playback.player_control_visibility.show_follow_button",
+        "playback.player_control_visibility.compact_player_chrome",
+        ContentDisplaySetting.REMEMBER_PLAYER_ADJUSTMENTS,
+        ContentDisplaySetting.ROTATION_SENSITIVITY,
+        ContentDisplaySetting.PLAYER_CONTROLS_TIMEOUT,
+    ),
+    LAYOUT(
+        "playback.tablet_comment_panel_width_preset",
+        "playback.tablet_secondary_default_tab",
+        "playback.fullscreen_mode",
+        "playback.fullscreen_aspect_ratio",
+        "playback.fullscreen_gesture_reverse",
+    ),
+    AMBIENT_AND_AUTO_FULLSCREEN(
+        "playback.video_ambient_settings.enabled",
+        "playback.video_ambient_settings.strength",
+        "playback.video_ambient_settings.power_saving",
+        "playback.portrait_letterbox_ambient_haze",
+        "playback.immersive_video_page_status_bar",
+        "playback.auto_enter_fullscreen",
+        "playback.auto_exit_fullscreen_mode",
+    ),
+    BUTTONS_AND_SCREENSHOT(
+        "playback.show_center_playback_button",
+        "playback.show_fullscreen_lock_button",
+        "playback.show_fullscreen_screenshot_button",
+        "playback.app_gesture_screenshot_enabled",
+        "playback.app_screenshot_gesture_mode",
+        "playback.app_screenshot_capture_mode",
+    ),
+    PLAYBACK_INFO(
+        "playback.show_online_count",
+        "playback.show_fullscreen_battery_level",
+        "playback.show_fullscreen_time",
+        "playback.fullscreen_action_counts",
+        "playback.show_fullscreen_action_items",
+    ),
+    PROGRESS(
+        "playback.chapter_display_mode",
+        "playback.bottom_progress_behavior",
+        "playback.progress_peak_danmaku_enabled",
+    );
+
+    val itemKey: String
+        get() = if (this == DOUBLE_TAP) SettingsSearchFocusIds.PLAYBACK_FULLSCREEN
+        else "${SettingsSearchFocusIds.PLAYBACK_FULLSCREEN}_${name.lowercase()}"
+
+    companion object {
+        fun forSetting(settingId: String?): PlaybackFullscreenGroup =
+            entries.firstOrNull { settingId != null && settingId in it.settingIds } ?: DOUBLE_TAP
+    }
+}
+
+private class PlaybackSystemBrightnessControl(
+    val canWriteSystemSettings: Boolean,
+    val onCheckedChange: (Boolean) -> Unit,
+)
+
+@Composable
+private fun rememberPlaybackSystemBrightnessControl(
+    context: Context,
+    scope: CoroutineScope,
+    setSystemBrightnessEnabled: Boolean,
+): PlaybackSystemBrightnessControl {
     val lifecycleOwner = LocalLifecycleOwner.current
     var canWriteSystemSettings by remember(context) {
         mutableStateOf(Settings.System.canWrite(context))
@@ -2096,10 +2244,6 @@ private fun PlaybackFullscreenGestureSettingsSection(
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-    val fullscreenSwipeSeekEnabled = playerConfiguration.fullscreenSwipeSeekEnabled
-    val doubleTapSeekEnabled = playerConfiguration.doubleTapSeekEnabled
-    val seekForwardSeconds = playerConfiguration.seekForwardSeconds
-    val seekBackwardSeconds = playerConfiguration.seekBackwardSeconds
     if (showSystemBrightnessPermissionDialog) {
         com.android.purebilibili.core.ui.AppAlertDialog(
             onDismissRequest = { showSystemBrightnessPermissionDialog = false },
@@ -2145,7 +2289,55 @@ private fun PlaybackFullscreenGestureSettingsSection(
             }
         )
     }
-    AppPreferenceGroup {
+
+    return PlaybackSystemBrightnessControl(canWriteSystemSettings) { requestedEnabled ->
+        when (
+            resolveSystemBrightnessToggleAction(
+                requestedEnabled = requestedEnabled,
+                canWriteSystemSettings = Settings.System.canWrite(context)
+            )
+        ) {
+            SystemBrightnessToggleAction.ENABLE -> {
+                canWriteSystemSettings = true
+                persistSystemBrightnessSetting(true)
+            }
+            SystemBrightnessToggleAction.DISABLE -> {
+                persistSystemBrightnessSetting(false)
+            }
+            SystemBrightnessToggleAction.REQUEST_PERMISSION -> {
+                canWriteSystemSettings = false
+                showSystemBrightnessPermissionDialog = true
+            }
+        }
+    }
+}
+
+private fun LazyListScope.fullscreenPreferenceGroup(
+    group: PlaybackFullscreenGroup,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    item(key = group.itemKey, contentType = "fullscreen_preference_group") {
+        val segment = when (group) {
+            PlaybackFullscreenGroup.DOUBLE_TAP -> AppPreferenceGroupSegment.FIRST
+            PlaybackFullscreenGroup.PROGRESS -> AppPreferenceGroupSegment.LAST
+            else -> AppPreferenceGroupSegment.MIDDLE
+        }
+        AppPreferenceGroup(segment = segment, content = content)
+    }
+}
+
+private fun LazyListScope.playbackFullscreenGestureSettings(
+    context: Context,
+    viewModel: SettingsViewModel,
+    scope: CoroutineScope,
+    brightness: PlaybackSystemBrightnessControl,
+) {
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.DOUBLE_TAP) {
+        val playerConfiguration = rememberSettingsPlayerConfiguration()
+        val doubleTapSeekEnabled = playerConfiguration.doubleTapSeekEnabled
+        val seekForwardSeconds = playerConfiguration.seekForwardSeconds
+        val seekBackwardSeconds = playerConfiguration.seekBackwardSeconds
+
         AppSliderDialogPreference(
             title = "手势灵敏度",
             subtitle = "调整快进、音量和亮度手势的响应速度",
@@ -2237,6 +2429,20 @@ SettingsItemAnchor("playback.seek_backward_seconds") {
 }
             }
         }
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.PORTRAIT) {
+        val playerConfiguration = rememberSettingsPlayerConfiguration()
+        val portraitPlayerCollapseMode by remember(context) { com.android.purebilibili.core.store.SettingsManager.getPortraitPlayerCollapseMode(context) }
+        .collectAsStateWithLifecycle(initialValue = PortraitPlayerCollapseMode.INTRO_ONLY)
+        val videoDetailChromeScrollHideEnabled by remember(context) { SettingsManager.getVideoDetailChromeScrollHideEnabled(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
+        val portraitSwipeToFullscreenEnabled = playerConfiguration.portraitSwipeToFullscreenEnabled
+        val directPortraitStoryEntry = playerConfiguration.directPortraitStoryEntry
+        val portraitOnlyVerticalRecommendations by remember(context) { com.android.purebilibili.core.store.SettingsManager.getPortraitOnlyVerticalRecommendations(context) }
+        .collectAsStateWithLifecycle(initialValue = false)
+        val launchToPortraitFeedOnStartup = playerConfiguration.launchToPortraitFeedOnStartup
+
         AppPreferenceDivider()
 SettingsItemAnchor("playback.portrait_player_collapse_mode") {
         SettingsSingleChoicePreference(
@@ -2381,6 +2587,15 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
             )
         }
 
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.SWIPE) {
+        val playerConfiguration = rememberSettingsPlayerConfiguration()
+        val centerSwipeToFullscreenEnabled = playerConfiguration.centerSwipeToFullscreenEnabled
+        val slideVolumeBrightnessEnabled = playerConfiguration.slideVolumeBrightnessEnabled
+        val setSystemBrightnessEnabled = playerConfiguration.setSystemBrightnessEnabled
+        val fullscreenSwipeSeekEnabled = playerConfiguration.fullscreenSwipeSeekEnabled
+
         AppPreferenceDivider()
             SettingsItemAnchor("playback.center_swipe_to_fullscreen_enabled") {
                 AppSwitchPreference(
@@ -2429,32 +2644,15 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 title = playbackSettingTitle("playback.set_system_brightness_enabled"),
                 subtitle = when {
                     !slideVolumeBrightnessEnabled -> "依赖“滑动调亮度和音量”开关"
-                    setSystemBrightnessEnabled && canWriteSystemSettings ->
+                    setSystemBrightnessEnabled && brightness.canWriteSystemSettings ->
                         "亮度手势会同时修改当前画面和设备系统亮度"
                     else -> "关闭时只临时调整当前播放画面；开启需要系统授权"
                 },
-                checked = setSystemBrightnessEnabled && canWriteSystemSettings,
+                checked = setSystemBrightnessEnabled && brightness.canWriteSystemSettings,
                 enabled = slideVolumeBrightnessEnabled,
                 onCheckedChange = { requestedEnabled ->
                     if (!slideVolumeBrightnessEnabled) return@AppSwitchPreference
-                    when (
-                        resolveSystemBrightnessToggleAction(
-                            requestedEnabled = requestedEnabled,
-                            canWriteSystemSettings = Settings.System.canWrite(context)
-                        )
-                    ) {
-                        SystemBrightnessToggleAction.ENABLE -> {
-                            canWriteSystemSettings = true
-                            persistSystemBrightnessSetting(true)
-                        }
-                        SystemBrightnessToggleAction.DISABLE -> {
-                            persistSystemBrightnessSetting(false)
-                        }
-                        SystemBrightnessToggleAction.REQUEST_PERMISSION -> {
-                            canWriteSystemSettings = false
-                            showSystemBrightnessPermissionDialog = true
-                        }
-                    }
+                    brightness.onCheckedChange(requestedEnabled)
                 },
                 iconTint = AppContentColors.secondaryText()
             )
@@ -2492,61 +2690,19 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 },
             )
         }
-        AppPreferenceDivider()
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.ORIENTATION) {
         val autoRotateEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoRotateEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
         val landscapeHoldEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getLandscapeHoldEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
-        val fullscreenGestureReverse = playerConfiguration.fullscreenGestureReverse
-        val autoEnterFullscreen = playerConfiguration.autoEnterFullscreenEnabled
-        val autoExitFullscreen = playerConfiguration.autoExitFullscreenEnabled
-        val hideCenterPlayback by remember(context) {
-            com.android.purebilibili.core.store.player.PlayerSettingsStore.getHideCenterPlayback(context)
-        }.collectAsStateWithLifecycle(initialValue = true)
-        val showFullscreenLockButton by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenLockButton(context) }.collectAsStateWithLifecycle(initialValue = true)
-        val showFullscreenScreenshotButton by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenScreenshotButton(context) }.collectAsStateWithLifecycle(initialValue = true)
-        val appGestureScreenshotEnabled by remember(context) { SettingsManager.getAppGestureScreenshotEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
-        val appScreenshotGestureMode by remember(context) { SettingsManager.getAppScreenshotGestureMode(context) }
-            .collectAsStateWithLifecycle(initialValue = AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS)
-        val appScreenshotCaptureMode by remember(context) { SettingsManager.getAppScreenshotCaptureMode(context) }
-            .collectAsStateWithLifecycle(initialValue = AppScreenshotCaptureMode.FULL_WINDOW)
-        val showFullscreenBatteryLevel by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenBatteryLevel(context) }.collectAsStateWithLifecycle(initialValue = true)
-        val showFullscreenTime by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenTime(context) }.collectAsStateWithLifecycle(initialValue = true)
-        val showFullscreenActionItems by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenActionItems(context) }.collectAsStateWithLifecycle(initialValue = true)
-        val showOnlineCount by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowOnlineCount(context) }.collectAsStateWithLifecycle(initialValue = false)
-        val chapterDisplayMode by remember(context) { SettingsManager.getChapterDisplayMode(context) }
-            .collectAsStateWithLifecycle(initialValue = ChapterDisplayMode.WITH_CONTROLS)
-        val bottomProgressBehavior by remember(context) { com.android.purebilibili.core.store.SettingsManager.getBottomProgressBehavior(context) }
-            .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_HIDE)
-        val progressPeakDanmakuEnabled by remember(context) { SettingsManager.getProgressPeakDanmakuEnabled(context) }
-            .collectAsStateWithLifecycle(initialValue = false)
-        val playerControlVisibility by remember(context) { SettingsManager.getPlayerControlVisibilitySettings(context) }
-            .collectAsStateWithLifecycle(
-                initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
-            )
         val windowSizeClass = LocalWindowSizeClass.current
         val displayContext = LocalAppWindowAdaptiveInfo.current.displayContext
         val isLargeScreenDevice = windowSizeClass.isTabletDevice ||
             displayContext.isKnownFoldableDevice
         val horizontalAdaptationEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getHorizontalAdaptationEnabled(context) }
             .collectAsStateWithLifecycle(initialValue = isLargeScreenDevice)
-        val videoAmbientSettings by remember(context) { SettingsManager.getVideoAmbientSettings(context) }
-            .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.feature.video.ambient.AmbientSettings())
-        val immersiveVideoPageStatusBar by remember(context) { com.android.purebilibili.core.store.SettingsManager.getHideVideoPageStatusBar(context) }
-            .collectAsStateWithLifecycle(initialValue = false)
-        val tabletCommentPanelWidthPreset = playerConfiguration.tabletCommentPanelWidthPreset
         val landscapeBackShowsComments by remember(context) { SettingsManager.getLandscapeBackShowsComments(context) }
             .collectAsStateWithLifecycle(initialValue = false)
-        val tabletSecondaryDefaultTab by remember(context) { com.android.purebilibili.core.store.SettingsManager.getTabletSecondaryDefaultTab(context) }
-            .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED)
-        val fullscreenMode by remember(context) { com.android.purebilibili.core.store.SettingsManager.getFullscreenMode(context) }
-            .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.FullscreenMode.AUTO)
-        val fullscreenAspectRatio = playerConfiguration.fixedFullscreenAspectRatio
-        val fullscreenModeSubtitle = when {
-            !autoRotateEnabled -> fullscreenMode.description
-            isLargeScreenDevice ->
-                "${fullscreenMode.description}；自动横竖屏仅旋转播放页，手动全屏时使用此方向"
-            else ->
-                "${fullscreenMode.description}；已开启自动横竖屏，将跟随设备方向自动进退全屏"
-        }
         val autoRotateSubtitle = if (isLargeScreenDevice) {
             "跟随设备方向旋转播放页，并保留平板/展开态折叠屏分栏布局"
         } else {
@@ -2558,6 +2714,7 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
             "主要适用于平板和折叠屏"
         }
 
+        AppPreferenceDivider()
             SettingsItemAnchor("playback.auto_rotate_enabled") {
                 AppSwitchPreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.FULLSCREEN_ORIENTATION),
@@ -2617,6 +2774,14 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 },
             )
         }
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.CONTROLS) {
+        val playerControlVisibility by remember(context) { SettingsManager.getPlayerControlVisibilitySettings(context) }
+            .collectAsStateWithLifecycle(
+                initialValue = com.android.purebilibili.core.store.PlayerControlVisibilitySettings()
+            )
+
         AppPreferenceDivider()
         SettingsItemAnchor("playback.player_control_visibility.show_cast_button") {
             AppSwitchPreference(
@@ -2668,6 +2833,32 @@ SettingsItemAnchor("playback.portrait_player_collapse_mode") {
                 iconTint = AppContentColors.secondaryText()
             )
         }
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.LAYOUT) {
+        val playerConfiguration = rememberSettingsPlayerConfiguration()
+        val autoRotateEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getAutoRotateEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
+        val fullscreenGestureReverse = playerConfiguration.fullscreenGestureReverse
+        val windowSizeClass = LocalWindowSizeClass.current
+        val displayContext = LocalAppWindowAdaptiveInfo.current.displayContext
+        val isLargeScreenDevice = windowSizeClass.isTabletDevice ||
+            displayContext.isKnownFoldableDevice
+        val horizontalAdaptationEnabled by remember(context) { com.android.purebilibili.core.store.SettingsManager.getHorizontalAdaptationEnabled(context) }
+            .collectAsStateWithLifecycle(initialValue = isLargeScreenDevice)
+        val tabletCommentPanelWidthPreset = playerConfiguration.tabletCommentPanelWidthPreset
+        val tabletSecondaryDefaultTab by remember(context) { com.android.purebilibili.core.store.SettingsManager.getTabletSecondaryDefaultTab(context) }
+            .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.TabletSecondaryDefaultTab.RELATED)
+        val fullscreenMode by remember(context) { com.android.purebilibili.core.store.SettingsManager.getFullscreenMode(context) }
+            .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.core.store.FullscreenMode.AUTO)
+        val fullscreenAspectRatio = playerConfiguration.fixedFullscreenAspectRatio
+        val fullscreenModeSubtitle = when {
+            !autoRotateEnabled -> fullscreenMode.description
+            isLargeScreenDevice ->
+                "${fullscreenMode.description}；自动横竖屏仅旋转播放页，手动全屏时使用此方向"
+            else ->
+                "${fullscreenMode.description}；已开启自动横竖屏，将跟随设备方向自动进退全屏"
+        }
+
         AppPreferenceDivider()
 SettingsItemAnchor("playback.tablet_comment_panel_width_preset") {
         SettingsSingleChoicePreference(
@@ -2752,6 +2943,16 @@ SettingsItemAnchor("playback.fullscreen_aspect_ratio") {
                 iconTint = AppContentColors.secondaryText()
             )
             }
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.AMBIENT_AND_AUTO_FULLSCREEN) {
+        val playerConfiguration = rememberSettingsPlayerConfiguration()
+        val autoEnterFullscreen = playerConfiguration.autoEnterFullscreenEnabled
+        val videoAmbientSettings by remember(context) { SettingsManager.getVideoAmbientSettings(context) }
+            .collectAsStateWithLifecycle(initialValue = com.android.purebilibili.feature.video.ambient.AmbientSettings())
+        val immersiveVideoPageStatusBar by remember(context) { com.android.purebilibili.core.store.SettingsManager.getHideVideoPageStatusBar(context) }
+            .collectAsStateWithLifecycle(initialValue = false)
+
         AppPreferenceDivider()
         SettingsItemAnchor("playback.video_ambient_settings.enabled") {
             AppSwitchPreference(
@@ -2915,6 +3116,20 @@ SettingsItemAnchor("playback.video_ambient_settings.power_saving") {
                 },
             )
         }
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.BUTTONS_AND_SCREENSHOT) {
+        val hideCenterPlayback by remember(context) {
+            com.android.purebilibili.core.store.player.PlayerSettingsStore.getHideCenterPlayback(context)
+        }.collectAsStateWithLifecycle(initialValue = true)
+        val showFullscreenLockButton by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenLockButton(context) }.collectAsStateWithLifecycle(initialValue = true)
+        val showFullscreenScreenshotButton by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenScreenshotButton(context) }.collectAsStateWithLifecycle(initialValue = true)
+        val appGestureScreenshotEnabled by remember(context) { SettingsManager.getAppGestureScreenshotEnabled(context) }.collectAsStateWithLifecycle(initialValue = false)
+        val appScreenshotGestureMode by remember(context) { SettingsManager.getAppScreenshotGestureMode(context) }
+            .collectAsStateWithLifecycle(initialValue = AppScreenshotGestureMode.TOP_RIGHT_TWO_FINGER_LONG_PRESS)
+        val appScreenshotCaptureMode by remember(context) { SettingsManager.getAppScreenshotCaptureMode(context) }
+            .collectAsStateWithLifecycle(initialValue = AppScreenshotCaptureMode.FULL_WINDOW)
+
         AppPreferenceDivider()
         SettingsItemAnchor("playback.show_center_playback_button") {
             AppSwitchPreference(
@@ -3008,6 +3223,14 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
             }
         )
 }
+    }
+
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.PLAYBACK_INFO) {
+        val showFullscreenBatteryLevel by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenBatteryLevel(context) }.collectAsStateWithLifecycle(initialValue = true)
+        val showFullscreenTime by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenTime(context) }.collectAsStateWithLifecycle(initialValue = true)
+        val showFullscreenActionItems by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowFullscreenActionItems(context) }.collectAsStateWithLifecycle(initialValue = true)
+        val showOnlineCount by remember(context) { com.android.purebilibili.core.store.SettingsManager.getShowOnlineCount(context) }.collectAsStateWithLifecycle(initialValue = false)
+
         AppPreferenceDivider()
         SettingsItemAnchor("playback.show_online_count") {
             AppSwitchPreference(
@@ -3077,8 +3300,17 @@ SettingsItemAnchor("playback.app_screenshot_capture_mode") {
                 iconTint = AppContentColors.secondaryText()
             )
             }
-        AppPreferenceDivider()
+    }
 
+    fullscreenPreferenceGroup(PlaybackFullscreenGroup.PROGRESS) {
+        val chapterDisplayMode by remember(context) { SettingsManager.getChapterDisplayMode(context) }
+            .collectAsStateWithLifecycle(initialValue = ChapterDisplayMode.WITH_CONTROLS)
+        val bottomProgressBehavior by remember(context) { com.android.purebilibili.core.store.SettingsManager.getBottomProgressBehavior(context) }
+            .collectAsStateWithLifecycle(initialValue = BottomProgressBehavior.ALWAYS_HIDE)
+        val progressPeakDanmakuEnabled by remember(context) { SettingsManager.getProgressPeakDanmakuEnabled(context) }
+            .collectAsStateWithLifecycle(initialValue = false)
+
+        AppPreferenceDivider()
         SettingsItemAnchor("playback.chapter_display_mode") {
             SettingsSingleChoicePreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.CHAPTER_DISPLAY),
@@ -3132,7 +3364,6 @@ SettingsItemAnchor("playback.bottom_progress_behavior") {
             )
         }
     }
-
 }
 
 @Composable
