@@ -10,17 +10,20 @@ import com.android.purebilibili.data.model.CommentFraudStatus
 import com.android.purebilibili.feature.comment.CommentDetailFraudResult
 import com.android.purebilibili.feature.comment.visibility.CommentVisibilityResultDialog
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
+import kotlinx.coroutines.flow.Flow
 
 /** Shared feedback for ordinary videos, episode comments and comment sheets. */
 @Composable
 internal fun CommentFraudFeedbackHost(
-    commentViewModel: VideoCommentViewModel,
+    fraudEvents: Flow<CommentDetailFraudResult>,
+    onDismissResult: () -> Unit = {},
+    onDeleteShadowBanned: ((Long) -> Unit)? = null,
     enabled: Boolean = true,
 ) {
-    var dialogResult by remember(commentViewModel, enabled) { mutableStateOf<CommentDetailFraudResult?>(null) }
-    LaunchedEffect(commentViewModel, enabled) {
+    var dialogResult by remember(fraudEvents, enabled) { mutableStateOf<CommentDetailFraudResult?>(null) }
+    LaunchedEffect(fraudEvents, enabled) {
         if (!enabled) return@LaunchedEffect
-        commentViewModel.fraudEvent.collect { dialogResult = it }
+        fraudEvents.collect { dialogResult = it }
     }
     dialogResult?.let { result ->
         CommentVisibilityResultDialog(
@@ -30,11 +33,25 @@ internal fun CommentFraudFeedbackHost(
             message = result.message,
             onDismiss = {
                 dialogResult = null
-                commentViewModel.dismissFraudResult()
+                onDismissResult()
             },
-            onDeleteComment = if (result.status == CommentFraudStatus.SHADOW_BANNED) {
-                { commentViewModel.startDissolve(result.rpid) }
+            onDeleteComment = if (result.status == CommentFraudStatus.SHADOW_BANNED && onDeleteShadowBanned != null) {
+                { onDeleteShadowBanned(result.rpid) }
             } else null,
         )
     }
+}
+
+@Composable
+internal fun CommentFraudFeedbackHost(
+    commentViewModel: VideoCommentViewModel,
+    enabled: Boolean = true,
+    onDeleteShadowBanned: ((Long) -> Unit)? = null,
+) {
+    CommentFraudFeedbackHost(
+        fraudEvents = commentViewModel.fraudEvent,
+        onDismissResult = commentViewModel::dismissFraudResult,
+        onDeleteShadowBanned = onDeleteShadowBanned ?: commentViewModel::startDissolve,
+        enabled = enabled,
+    )
 }

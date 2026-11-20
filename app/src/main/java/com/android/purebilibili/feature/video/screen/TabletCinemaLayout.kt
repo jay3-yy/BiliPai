@@ -140,8 +140,9 @@ import com.android.purebilibili.feature.video.ui.components.rememberRelatedVideo
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
 import com.android.purebilibili.feature.video.ui.components.VideoInlineSubReplyDetailContent
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
+import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
 import com.android.purebilibili.feature.video.ui.components.resolveReplyItemContentType
-import com.android.purebilibili.feature.video.ui.components.shouldShowReplyTopAction
+import com.android.purebilibili.feature.video.ui.components.resolveReplyMenuBindings
 import com.android.purebilibili.feature.video.ui.components.videoCommentItemModifier
 import com.android.purebilibili.feature.video.ui.components.videoCommentSkeletonItems
 import com.android.purebilibili.feature.video.ui.section.ActionButtonsRow
@@ -1432,6 +1433,7 @@ private fun CinemaCommentsPane(
             onCommentLike = commentActions.likeComment,
             onCommentHate = commentActions.hateComment,
             onReportComment = commentActions.reportComment,
+            onToggleTopComment = commentActions.toggleTopComment,
             onUrlClick = openCommentUrl,
             showIdentityDecorations = showIdentityDecorations,
             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUpClick) ?: Unit }
@@ -1491,6 +1493,13 @@ private fun CinemaCommentsPane(
                 key = { "curtain_reply_${it.rpid}" },
                 contentType = { resolveReplyItemContentType(it) }
             ) { reply ->
+                val menuBindings = resolveReplyMenuBindings(
+                    item = reply,
+                    currentMid = commentState.currentMid,
+                    upMid = success.info.owner.mid,
+                    pinnedReplyIds = commentState.pinnedReplyIds,
+                    callbacks = commentActions.replyMenuCallbacks(),
+                )
                 ReplyItemView(
                     modifier = videoCommentItemModifier(),
                     avatarListState = listState.takeIf { avatarPushEnabled },
@@ -1499,7 +1508,7 @@ private fun CinemaCommentsPane(
                     upMid = success.info.owner.mid,
                     showUpFlag = commentState.showUpFlag,
                     showIdentityDecorations = showIdentityDecorations,
-                    isPinned = reply.rpid in commentState.pinnedReplyIds,
+                    isPinned = menuBindings.isPinned,
                     emoteMap = success.emoteMap,
                     onClick = {},
                     onSubClick = commentActions.openSubReply,
@@ -1519,13 +1528,10 @@ private fun CinemaCommentsPane(
                     isLiked = reply.rpid in commentState.likedComments,
                     isHated = reply.rpid in commentState.hatedComments,
                     onReplyClick = { playbackActions.replyTo(reply) },
-                    onReportClick = { reason -> commentActions.reportComment(reply.rpid, reason) },
-                    canToggleTop = shouldShowReplyTopAction(
-                        currentMid = commentState.currentMid,
-                        upMid = success.info.owner.mid,
-                        item = reply
-                    ),
-                    onToggleTopClick = { commentActions.toggleTopComment(reply) },
+                    onReportClick = menuBindings.onReportClick,
+                    canToggleTop = menuBindings.canToggleTop,
+                    onToggleTopClick = menuBindings.onToggleTopClick,
+                    onCheckFraudClick = menuBindings.onCheckFraudClick,
                     onDeleteClick = if (
                         commentState.currentMid > 0 && reply.mid == commentState.currentMid
                     ) {

@@ -106,7 +106,9 @@ import com.android.purebilibili.feature.dynamic.components.dynamicInlineCommentI
 import com.android.purebilibili.feature.dynamic.components.RepostDialog
 import com.android.purebilibili.feature.dynamic.components.shareDynamicLink
 import com.android.purebilibili.feature.settings.rememberSettingsNavigationConfiguration
+import com.android.purebilibili.feature.video.ui.components.CommentFraudFeedbackHost
 import com.android.purebilibili.feature.video.ui.components.rememberCommentBarScrollVisible
+import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
 import com.android.purebilibili.feature.video.ui.components.resolveBottomInputBarContentBottomPadding
 import com.android.purebilibili.feature.video.ui.components.shouldUseFloatingLiquidBottomInputBar
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -211,7 +213,10 @@ fun DynamicDetailScreen(
     androidx.compose.runtime.CompositionLocalProvider(
         com.android.purebilibili.core.ui.transition.LocalDynamicCommentPreviewVisible provides false,
         com.android.purebilibili.feature.share.LocalReplyShareContext provides
-            com.android.purebilibili.feature.share.ReplyShareContext("https://t.bilibili.com/$dynamicId", title = "动态"),
+            com.android.purebilibili.feature.share.dynamicReplyShareContext(
+                dynamicId = dynamicId,
+                item = (loadedUiState as? DynamicDetailUiState.Success)?.item,
+            ),
     ) {
     val contentRevealAlpha = com.android.purebilibili.core.ui.transition.rememberSharedCardDetailRevealAlpha(
         entryKey = dynamicId,
@@ -311,6 +316,17 @@ fun DynamicDetailScreen(
             android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
+    val commentMenuCallbacks = interactionViewModel.replyMenuCallbacks { message ->
+        android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+    CommentFraudFeedbackHost(
+        fraudEvents = interactionViewModel.commentFraudEvent,
+        onDeleteShadowBanned = { rpid ->
+            interactionViewModel.deleteDynamicComment(rpid) { _, message ->
+                android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+            }
+        },
+    )
     AppScaffold(
         modifier = Modifier.graphicsLayer {
             alpha = if (uiState is DynamicDetailUiState.Loading) 1f else contentRevealAlpha.value
@@ -627,6 +643,8 @@ fun DynamicDetailScreen(
                             showImagePreview = true
                         },
                         skeletonSlotCount = commentSkeletonSlotCount,
+                        pinnedReplyIds = commentUiState.pinnedReplyIds,
+                        menuCallbacks = commentMenuCallbacks,
                     )
                 }
                 val commentComposer: @Composable (Modifier) -> Unit = { modifier ->
@@ -764,6 +782,8 @@ fun DynamicDetailScreen(
                     onCoveredBlurProgressChange = { progress ->
                         subReplyCoveredBlurProgress = progress
                     },
+                    pinnedReplyIds = commentUiState.pinnedReplyIds,
+                    menuCallbacks = commentMenuCallbacks,
                 )
 
                 val postComment: (String, List<Uri>, (Boolean) -> Unit) -> Unit = { message, images, onResult ->

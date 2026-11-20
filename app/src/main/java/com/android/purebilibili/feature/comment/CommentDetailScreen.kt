@@ -10,6 +10,7 @@ import androidx.compose.material.icons.outlined.OpenInBrowser
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,9 +41,12 @@ import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewSourceAnchor
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewTextContent
 import com.android.purebilibili.feature.message.feed.MessageFeedError
+import com.android.purebilibili.feature.share.LocalReplyShareContext
+import com.android.purebilibili.feature.share.commentDetailReplyShareContext
 import com.android.purebilibili.feature.video.ui.components.CommentInputDialog
 import com.android.purebilibili.feature.video.ui.components.SubReplyDetailContent
 import com.android.purebilibili.feature.video.ui.components.rememberVideoCommentAppearance
+import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
 import com.android.purebilibili.feature.video.viewmodel.commentComposerDraftKey
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,7 +86,13 @@ fun CommentDetailScreen(
             message = result.message,
             onDismiss = viewModel::dismissFraudResult,
             onDeleteComment = if (result.status == CommentFraudStatus.SHADOW_BANNED) {
-                { viewModel.startDissolve(result.rpid) }
+                {
+                    if (subReplyState.rootReply?.rpid == result.rpid) {
+                        viewModel.deleteComment(result.rpid)
+                    } else {
+                        viewModel.startDissolve(result.rpid)
+                    }
+                }
             } else null,
         )
     }
@@ -114,6 +124,13 @@ fun CommentDetailScreen(
         viewModel.closeConversation()
     }
 
+    CompositionLocalProvider(
+        LocalReplyShareContext provides commentDetailReplyShareContext(
+            oid = oid,
+            type = type,
+            enterUri = enterUri,
+        ),
+    ) {
     AppScaffold(
         topBar = {
             AppTopBar(
@@ -191,10 +208,14 @@ fun CommentDetailScreen(
                         isConversationMode = subReplyState.conversationAnchor != null,
                         conversationAnchorId = subReplyState.conversationAnchor?.rpid ?: 0L,
                         dissolvingIds = subReplyState.dissolvingIds,
+                        upMid = subReplyState.upMid,
                         currentMid = currentMid,
                         onDissolveStart = viewModel::startDissolve,
                         onDeleteComment = viewModel::deleteComment,
                         onCheckCommentFraud = viewModel::checkCommentFraud,
+                        menuCallbacks = viewModel.replyMenuCallbacks { message ->
+                            android.widget.Toast.makeText(context, message, android.widget.Toast.LENGTH_SHORT).show()
+                        },
                         onCommentLike = viewModel::likeComment,
                         onCommentHate = viewModel::hateComment,
                         likedComments = likedComments,
@@ -269,5 +290,6 @@ fun CommentDetailScreen(
                 }
             )
         }
+    }
     }
 }

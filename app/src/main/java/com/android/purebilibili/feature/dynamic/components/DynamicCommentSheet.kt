@@ -61,8 +61,12 @@ import com.android.purebilibili.feature.dynamic.resolveDynamicCommentSkeletonSlo
 import com.android.purebilibili.feature.dynamic.DYNAMIC_COMMENT_SKELETON_MIN_SLOTS
 import com.android.purebilibili.feature.dynamic.DynamicCommentSheetHostContent
 import com.android.purebilibili.feature.video.ui.components.rememberCommentAvatarPushEnabled
+import com.android.purebilibili.feature.video.ui.components.CommentFraudFeedbackHost
 import com.android.purebilibili.feature.video.ui.components.ReplyItemView
+import com.android.purebilibili.feature.video.ui.components.ReplyMenuCallbacks
 import com.android.purebilibili.feature.video.ui.components.SubReplyDetailContent
+import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
+import com.android.purebilibili.feature.video.ui.components.resolveReplyMenuBindings
 import com.android.purebilibili.feature.video.ui.components.resolveVideoCommentPredictiveBackProgress
 import com.android.purebilibili.feature.video.ui.components.resolveVideoCommentPredictiveBackTarget
 import com.android.purebilibili.feature.video.ui.components.VideoCommentPredictiveBackTarget
@@ -128,6 +132,26 @@ fun DynamicCommentOverlayHost(
                 fallbackCount = fallbackCount
             )
         }
+        val notifyToast: (String) -> Unit = remember(toastContext, inspectionMode) {
+            { message ->
+                if (!inspectionMode) {
+                    android.widget.Toast.makeText(toastContext, message, android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+        CommentFraudFeedbackHost(
+            fraudEvents = viewModel.commentFraudEvent,
+            onDeleteShadowBanned = { rpid ->
+                viewModel.deleteDynamicComment(rpid) { _, message -> notifyToast(message) }
+            },
+        )
+        CompositionLocalProvider(
+            com.android.purebilibili.feature.share.LocalReplyShareContext provides
+                com.android.purebilibili.feature.share.dynamicReplyShareContext(
+                    dynamicId = dynamicId,
+                    item = dynamicItem,
+                ),
+        ) {
         DynamicCommentSheet(
             comments = comments,
             totalCount = totalCount,
@@ -138,6 +162,8 @@ fun DynamicCommentOverlayHost(
             isLoadingMore = commentsLoadingMore,
             hasMore = commentUiState.hasMore,
             nextPage = commentUiState.nextPage,
+            pinnedReplyIds = commentUiState.pinnedReplyIds,
+            menuCallbacks = viewModel.replyMenuCallbacks(notifyToast),
             onDismiss = { viewModel.closeCommentSheet() },
             onRefresh = viewModel::refreshComments,
             onSortModeChange = { viewModel.setDynamicCommentSortMode(it) },
@@ -196,6 +222,7 @@ fun DynamicCommentOverlayHost(
                 }
             },
         )
+        }
         DynamicCommentInputHost(
             draftKeyPrefix = "dynamic-sheet:$dynamicId",
             viewModel = viewModel,
@@ -250,6 +277,8 @@ fun DynamicCommentSheet(
     onThreadCommentReport: (Long, Int) -> Unit = { _, _ -> },
     hasMore: Boolean = false,
     nextPage: Int = 1,
+    pinnedReplyIds: Set<Long> = emptySet(),
+    menuCallbacks: ReplyMenuCallbacks? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val listState = rememberLazyListState()
@@ -522,12 +551,22 @@ fun DynamicCommentSheet(
                                         val actionCapabilities = resolveDynamicCommentActionCapabilities(
                                             reply, dynamicAuthorMid, currentUserMid,
                                         )
+                                        val resolvedBindings = menuCallbacks?.let { callbacks ->
+                                            resolveReplyMenuBindings(
+                                                item = reply,
+                                                currentMid = currentUserMid ?: 0L,
+                                                upMid = dynamicAuthorMid,
+                                                pinnedReplyIds = pinnedReplyIds,
+                                                callbacks = callbacks,
+                                            )
+                                        }
                                         ReplyItemView(
                                             modifier = dynamicCommentItemModifier(),
                                             avatarListState = listState.takeIf { avatarPushEnabled },
                                             item = reply,
                                             animateSupplementedSubReplies = true,
                                             upMid = dynamicAuthorMid,
+                                            isPinned = resolvedBindings?.isPinned ?: (reply.rpid in pinnedReplyIds),
                                             onClick = { onViewReplies(reply, 0L) },
                                             onSubClick = onViewReplies,
                                             onReplyClick = { onReply(reply) },
@@ -536,9 +575,10 @@ fun DynamicCommentSheet(
                                             onHateClick = { onHate(reply) },
                                             isHated = reply.action == 2,
                                             onDeleteClick = if (actionCapabilities.canDelete) ({ onDelete(reply) }) else null,
-                                            onReportClick = { reason -> onReport(reply, reason) },
-                                            canToggleTop = actionCapabilities.canToggleTop,
-                                            onToggleTopClick = { onToggleTop(reply) },
+                                            onCheckFraudClick = resolvedBindings?.onCheckFraudClick,
+                                            onReportClick = resolvedBindings?.onReportClick ?: { reason -> onReport(reply, reason) },
+                                            canToggleTop = resolvedBindings?.canToggleTop ?: actionCapabilities.canToggleTop,
+                                            onToggleTopClick = resolvedBindings?.onToggleTopClick ?: { onToggleTop(reply) },
                                             onUrlClick = onUrlClick,
                                             onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
                                             onImagePreview = { images, index, rect, textContent ->
@@ -620,6 +660,9 @@ fun DynamicCommentSheet(
                                 onCommentLike = onThreadCommentLike,
                                 onCommentHate = onThreadCommentHate,
                                 onReportComment = onThreadCommentReport,
+                                onToggleTopComment = onToggleTop,
+                                pinnedReplyIds = pinnedReplyIds,
+                                menuCallbacks = menuCallbacks,
                                 likedComments = likedThreadComments,
                                 hatedComments = hatedThreadComments,
                                 onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
@@ -835,6 +878,8 @@ fun LazyListScope.dynamicInlineCommentItems(
     onImagePreview: (List<String>, Int, ImagePreviewSourceAnchor?, ImagePreviewTextContent?) -> Unit,
     avatarListState: LazyListState? = null,
     skeletonSlotCount: Int = DYNAMIC_COMMENT_SKELETON_MIN_SLOTS,
+    pinnedReplyIds: Set<Long> = emptySet(),
+    menuCallbacks: ReplyMenuCallbacks? = null,
 ) {
     when {
         isLoading && comments.isEmpty() -> dynamicCommentSkeletonItems(
@@ -864,12 +909,22 @@ fun LazyListScope.dynamicInlineCommentItems(
             val actionCapabilities = resolveDynamicCommentActionCapabilities(
                 reply, dynamicAuthorMid, currentUserMid,
             )
+            val resolvedBindings = menuCallbacks?.let { callbacks ->
+                resolveReplyMenuBindings(
+                    item = reply,
+                    currentMid = currentUserMid ?: 0L,
+                    upMid = dynamicAuthorMid,
+                    pinnedReplyIds = pinnedReplyIds,
+                    callbacks = callbacks,
+                )
+            }
             ReplyItemView(
                 modifier = dynamicCommentItemModifier(),
                 avatarListState = avatarListState,
                 item = reply,
                 animateSupplementedSubReplies = true,
                 upMid = dynamicAuthorMid,
+                isPinned = resolvedBindings?.isPinned ?: (reply.rpid in pinnedReplyIds),
                 onClick = { onViewReplies(reply, 0L) },
                 onSubClick = onViewReplies,
                 onReplyClick = { onReply(reply) },
@@ -878,9 +933,10 @@ fun LazyListScope.dynamicInlineCommentItems(
                 onHateClick = { onHate(reply) },
                 isHated = reply.action == 2,
                 onDeleteClick = if (actionCapabilities.canDelete) ({ onDelete(reply) }) else null,
-                onReportClick = { reason -> onReport(reply, reason) },
-                canToggleTop = actionCapabilities.canToggleTop,
-                onToggleTopClick = { onToggleTop(reply) },
+                onCheckFraudClick = resolvedBindings?.onCheckFraudClick,
+                onReportClick = resolvedBindings?.onReportClick ?: { reason -> onReport(reply, reason) },
+                canToggleTop = resolvedBindings?.canToggleTop ?: actionCapabilities.canToggleTop,
+                onToggleTopClick = resolvedBindings?.onToggleTopClick ?: { onToggleTop(reply) },
                 onUrlClick = onUrlClick,
                 onAvatarClick = { mid -> mid.toLongOrNull()?.let(onUserClick) },
                 onImagePreview = onImagePreview,

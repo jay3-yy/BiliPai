@@ -4,6 +4,7 @@ import com.android.purebilibili.core.network.grpc.ProtoWire
 import org.junit.Test
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 
 class CommentGrpcRepositoryTest {
 
@@ -280,5 +281,34 @@ class CommentGrpcRepositoryTest {
         val data = CommentGrpcRepository.parseMainListReply(response)
 
         assertEquals("🔹倒数第四集", data.replies.orEmpty().first().content.message)
+    }
+
+    @Test
+    fun `parseDetailListReply and parseDialogListReply map subject upMid to upper`() {
+        val subjectWithUp = ProtoWire.message(
+            ProtoWire.int64(1, 888999L),
+            ProtoWire.int64(16, 2L)
+        )
+        val subjectWithoutUp = ProtoWire.message(
+            ProtoWire.int64(16, 2L)
+        )
+
+        val detailWithUp = CommentGrpcRepository.parseDetailListReply(
+            ProtoWire.message(ProtoWire.bytes(2, subjectWithUp))
+        )
+        val detailWithoutUp = CommentGrpcRepository.parseDetailListReply(
+            ProtoWire.message(ProtoWire.bytes(2, subjectWithoutUp))
+        )
+        val dialogWithUp = CommentGrpcRepository.parseDialogListReply(
+            ProtoWire.message(ProtoWire.bytes(2, subjectWithUp))
+        )
+        val dialogWithoutUp = CommentGrpcRepository.parseDialogListReply(
+            ProtoWire.message(ProtoWire.bytes(2, subjectWithoutUp))
+        )
+
+        assertEquals(888999L, detailWithUp.upper?.mid)
+        assertNull(detailWithoutUp.upper)
+        assertEquals(888999L, dialogWithUp.upper?.mid)
+        assertNull(dialogWithoutUp.upper)
     }
 }

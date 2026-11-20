@@ -57,6 +57,8 @@ fun SubReplySheet(
     onUrlClick: ((String) -> Unit)? = null,
     showIdentityDecorations: Boolean = true,
     onAvatarClick: ((String) -> Unit)? = null,
+    pinnedReplyIds: Set<Long> = emptySet(),
+    menuCallbacks: ReplyMenuCallbacks? = null,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
     sheetSurfaceModifier: Modifier = Modifier,
 ) {
@@ -157,6 +159,8 @@ fun SubReplySheet(
                     onUrlClick = onUrlClick,
                     showIdentityDecorations = showIdentityDecorations,
                     onAvatarClick = onAvatarClick,
+                    pinnedReplyIds = pinnedReplyIds,
+                    menuCallbacks = menuCallbacks,
                     targetReplyId = state.targetReplyId
                 )
                 }

@@ -21,6 +21,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.core.network.NetworkModule
 import com.android.purebilibili.data.model.CommentFraudStatus
+import com.android.purebilibili.data.model.response.ReplyControl
 import com.android.purebilibili.data.model.response.ReplyData
 import com.android.purebilibili.data.model.response.CommentMainListContinuation
 import com.android.purebilibili.data.model.response.ReplyItem
@@ -373,7 +374,7 @@ class VideoCommentViewModel : ViewModel() {
         commentType: Int = VIDEO_COMMENT_TYPE
     ) {
         android.util.Log.d("CommentVM", " init called with aid=$aid, upMid=$upMid, currentAid=$currentAid, type=$commentType")
-        if (currentAid == aid && _commentState.value.upMid == upMid && currentSubject.type == commentType) {
+        if (currentAid == aid && (upMid == 0L || _commentState.value.upMid == upMid) && currentSubject.type == commentType) {
             // [修复] 即使视频相同，也刷新 currentMid（防止登录状态变化后不更新）
             refreshCurrentMid()
             allReplies = sentReplies.merge(allReplies)
@@ -584,6 +585,7 @@ class VideoCommentViewModel : ViewModel() {
                 
                 _commentState.value = current.copy(
                     replies = combinedReplies.toImmutableList(),
+                    upMid = current.upMid.takeIf { it > 0L } ?: data.upper?.mid?.takeIf { it > 0L } ?: 0L,
                     voteCard = if (pageToLoad == 1) data.voteCard else current.voteCard,
                     pageControl = if (pageToLoad == 1) data.control else current.pageControl,
                     likedComments = reactionIds(current.likedComments, combinedReplies.flatMap { listOf(it) + it.replies.orEmpty() }, 1),
@@ -1463,6 +1465,20 @@ class VideoCommentViewModel : ViewModel() {
                 rpid = reply.rpid,
                 isCurrentlyTop = isCurrentlyTop
             ).onSuccess {
+                val nextPinnedIds = if (isCurrentlyTop) {
+                    current.pinnedReplyIds - reply.rpid
+                } else {
+                    setOf(reply.rpid)
+                }
+                _commentState.update { state ->
+                    state.copy(pinnedReplyIds = nextPinnedIds.toImmutableSet())
+                }
+                _subReplyState.update { sub ->
+                    if (sub.rootReply?.rpid == reply.rpid) {
+                        val updatedControl = (sub.rootReply.replyControl ?: ReplyControl()).copy(isUpTop = !isCurrentlyTop)
+                        sub.copy(rootReply = sub.rootReply.copy(replyControl = updatedControl))
+                    } else sub
+                }
                 requestComments(refresh = true, forceRefresh = true)
             }.onFailure { error ->
                 android.util.Log.e("CommentVM", "toggleTopComment failed: ${error.message}")
@@ -1484,20 +1500,35 @@ class VideoCommentViewModel : ViewModel() {
             it.copy(isDetectingFraud = true, fraudDetectResult = null, fraudDetectRpid = rpid)
         }
         viewModelScope.launch {
-            val status = CommentRepository.checkCommentStatus(
-                aid = subject.oid, rpid = rpid, rootId = reply.root, type = subject.type,
-            ).getOrThrow()
-            if (currentSubject != subject || TokenManager.accountIdentity.value != account) return@launch
-            CommentFraudRepository.saveRecord(
-                rpid = rpid, oid = subject.oid, type = subject.type, root = reply.root,
-                uid = account.mid ?: reply.mid, message = reply.content.message, status = status,
-            )
-            if (currentSubject != subject || TokenManager.accountIdentity.value != account ||
-                _commentState.value.fraudDetectRpid != rpid) return@launch
-            _commentState.update { it.copy(isDetectingFraud = false, fraudDetectResult = status) }
-            _fraudEvent.tryEmit(CommentDetailFraudResult(
-                rpid, subject.oid, subject.type, reply.content.message, status,
-            ))
+            try {
+                val status = CommentRepository.checkCommentStatus(
+                    aid = subject.oid, rpid = rpid, rootId = reply.root, type = subject.type,
+                ).getOrElse { CommentFraudStatus.UNKNOWN }
+                if (currentSubject != subject || TokenManager.accountIdentity.value != account) return@launch
+                CommentFraudRepository.saveRecord(
+                    rpid = rpid, oid = subject.oid, type = subject.type, root = reply.root,
+                    uid = account.mid ?: reply.mid, message = reply.content.message, status = status,
+                )
+                if (currentSubject != subject || TokenManager.accountIdentity.value != account ||
+                    _commentState.value.fraudDetectRpid != rpid) return@launch
+                _commentState.update { it.copy(isDetectingFraud = false, fraudDetectResult = status) }
+                _fraudEvent.tryEmit(CommentDetailFraudResult(
+                    rpid, subject.oid, subject.type, reply.content.message, status,
+                ))
+            } finally {
+                if (currentSubject == subject && TokenManager.accountIdentity.value == account &&
+                    _commentState.value.fraudDetectRpid == rpid) {
+                    _commentState.update { it.copy(isDetectingFraud = false) }
+                }
+            }
+        }
+    }
+
+    fun deleteCommentForFraudResult(rpid: Long) {
+        if (_subReplyState.value.visible && _subReplyState.value.items.any { it.rpid == rpid }) {
+            deleteSubComment(rpid)
+        } else {
+            deleteComment(rpid)
         }
     }
 

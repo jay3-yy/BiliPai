@@ -656,8 +656,10 @@ internal fun VideoDetailScreenStateHolder(
         },
         com.android.purebilibili.feature.video.ui.components.LocalFavoriteFolderMenuAnchor provides favoriteFolderMenuAnchor,
         com.android.purebilibili.feature.share.LocalReplyShareContext provides shareInfo?.let {
-            com.android.purebilibili.feature.share.ReplyShareContext(
-                url = "https://www.bilibili.com/video/${it.bvid}", title = it.title, cover = it.pic,
+            com.android.purebilibili.feature.share.videoReplyShareContext(
+                bvid = it.bvid,
+                title = it.title,
+                cover = it.pic,
                 page = it.pages.indexOfFirst { page -> page.cid == it.cid }.coerceAtLeast(0) + 1,
             )
         },
@@ -4076,6 +4078,7 @@ internal fun VideoDetailScreenStateHolder(
                             repliesError = commentState.repliesError,
                             isRepliesEnd = commentState.isRepliesEnd, videoTags = success.videoTags,
                             paginationPage = commentState.nextPage,
+                            pinnedReplyIds = commentState.pinnedReplyIds,
                             voteCard = commentState.voteCard,
                             pageControl = commentState.pageControl,
                             sortMode = commentState.sortMode,
@@ -4133,6 +4136,7 @@ internal fun VideoDetailScreenStateHolder(
                                         onCommentLike = commentActions.likeComment,
                                         onCommentHate = commentActions.hateComment,
                                         onReportComment = commentActions.reportComment,
+                                        onToggleTopComment = commentActions.toggleTopComment,
                                         onUrlClick = openCommentUrl,
                                         showIdentityDecorations = commentMemberDecorationsEnabled,
                                         onAvatarClick = { mid ->

@@ -94,25 +94,39 @@ internal fun BgmDetailScreen(
         commentViewModel.beginCommentDraft()
         composer = true
     }
-    BgmDetailContent(
-        state = state, comments = comments, showVideos = showVideos,
-        onBack = onBack, onRetry = {
-            if (!state.updatingWish) { commentViewModel.clearForVideoChange(); viewModel.refresh() }
-        }, onVideosClick = onVideosClick,
-        onVideoClick = onVideoClick, onUserClick = onUserClick, onWish = viewModel::toggleWish,
-        onShare = {
-            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, "${state.detail?.musicTitle.orEmpty()} https://music.bilibili.com/h5/music-detail?music_id=${android.net.Uri.encode(musicId)}")
-            }, "分享音乐"))
-        },
-        onCompose = { compose() }, onReply = { compose(it) },
-        onSort = commentViewModel::setSortMode, onLoadMore = commentViewModel::loadComments,
-        onCommentClick = { root, target -> info?.let { onCommentClick(it.oid, root, target, resolveBgmCommentType(it)) } },
-        onCommentLike = commentViewModel::likeComment, onCommentHate = commentViewModel::hateComment,
-        onCommentDelete = commentViewModel::deleteComment, onCommentReport = commentViewModel::reportComment,
-        onLinkClick = onLinkClick, modifier = modifier,
+    CommentFraudFeedbackHost(
+        commentViewModel = commentViewModel,
+        onDeleteShadowBanned = commentViewModel::deleteCommentForFraudResult,
     )
+    CompositionLocalProvider(
+        com.android.purebilibili.feature.share.LocalReplyShareContext provides
+            com.android.purebilibili.feature.share.bgmReplyShareContext(
+                musicId = musicId,
+                title = state.detail?.musicTitle.orEmpty(),
+                cover = state.detail?.mvCover.orEmpty(),
+            ),
+    ) {
+        BgmDetailContent(
+            state = state, comments = comments, showVideos = showVideos,
+            onBack = onBack, onRetry = {
+                if (!state.updatingWish) { commentViewModel.clearForVideoChange(); viewModel.refresh() }
+            }, onVideosClick = onVideosClick,
+            onVideoClick = onVideoClick, onUserClick = onUserClick, onWish = viewModel::toggleWish,
+            onShare = {
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, "${state.detail?.musicTitle.orEmpty()} https://music.bilibili.com/h5/music-detail?music_id=${android.net.Uri.encode(musicId)}")
+                }, "分享音乐"))
+            },
+            onCompose = { compose() }, onReply = { compose(it) },
+            onSort = commentViewModel::setSortMode, onLoadMore = commentViewModel::loadComments,
+            onCommentClick = { root, target -> info?.let { onCommentClick(it.oid, root, target, resolveBgmCommentType(it)) } },
+            onCommentLike = commentViewModel::likeComment, onCommentHate = commentViewModel::hateComment,
+            onCommentDelete = commentViewModel::deleteComment,
+            menuCallbacks = commentViewModel.replyMenuCallbacks(),
+            onLinkClick = onLinkClick, modifier = modifier,
+        )
+    }
     val composerSessionId = comments.composerDrafts.sessionId
     val composerReplyRpid = comments.replyTarget?.rpid
     val composerDraft = comments.composerDrafts.drafts[commentComposerDraftKey(composerReplyRpid)]
@@ -172,7 +186,7 @@ private fun BgmDetailContent(
     onCommentLike: (Long) -> Unit,
     onCommentHate: (Long) -> Unit,
     onCommentDelete: (Long) -> Unit,
-    onCommentReport: (Long, Int, String) -> Unit,
+    menuCallbacks: ReplyMenuCallbacks,
     onLinkClick: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -239,8 +253,18 @@ private fun BgmDetailContent(
                         if (commentsEnabled) {
                             item("comment-sort") { CommentSortHeader(comments.replyCount, comments.sortMode, onSort) }
                             items(comments.replies, key = { "reply-${it.rpid}" }) { reply ->
+                                val menuBindings = resolveReplyMenuBindings(
+                                    item = reply,
+                                    currentMid = comments.currentMid,
+                                    upMid = comments.upMid,
+                                    pinnedReplyIds = comments.pinnedReplyIds,
+                                    callbacks = menuCallbacks,
+                                )
                                 ReplyItemView(
                                     item = reply, onClick = { onCommentClick(reply.rpid, 0) },
+                                    upMid = comments.upMid,
+                                    showUpFlag = comments.showUpFlag,
+                                    isPinned = menuBindings.isPinned,
                                     onSubClick = { root, target -> onCommentClick(root.rpid, target) },
                                     onAvatarClick = { it.toLongOrNull()?.let(onUserClick) },
                                     isLiked = reply.rpid in comments.likedComments,
@@ -248,8 +272,11 @@ private fun BgmDetailContent(
                                     onLikeClick = { onCommentLike(reply.rpid) }, onHateClick = { onCommentHate(reply.rpid) },
                                     onReplyClick = { onReply(reply) }, onUrlClick = onLinkClick,
                                     onImagePreview = { images, index, _, _ -> previewImages = images; previewIndex = index },
-                                    onDeleteClick = if (comments.currentMid > 0 && reply.mid == comments.currentMid) ({ onCommentDelete(reply.rpid) }) else null,
-                                    onReportClick = { reason -> onCommentReport(reply.rpid, reason, "") },
+                                    onDeleteClick = if (comments.currentMid > 0L && resolveReplyMemberMid(reply) == comments.currentMid) ({ onCommentDelete(reply.rpid) }) else null,
+                                    onReportClick = menuBindings.onReportClick,
+                                    onCheckFraudClick = menuBindings.onCheckFraudClick,
+                                    canToggleTop = menuBindings.canToggleTop,
+                                    onToggleTopClick = menuBindings.onToggleTopClick,
                                 )
                             }
                             item("comment-status") {

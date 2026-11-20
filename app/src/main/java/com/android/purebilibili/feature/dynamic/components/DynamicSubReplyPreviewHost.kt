@@ -12,6 +12,7 @@ import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.data.model.response.ReplyItem
 import com.android.purebilibili.feature.dynamic.resolveDynamicThreadReactionIds
+import com.android.purebilibili.feature.video.ui.components.ReplyMenuCallbacks
 import com.android.purebilibili.feature.video.ui.components.SubReplySheet
 import com.android.purebilibili.feature.video.viewmodel.SubReplySortMode
 import com.android.purebilibili.feature.video.viewmodel.SubReplyUiState
@@ -30,6 +31,8 @@ fun DynamicSubReplyPreviewHost(
     currentMid: Long = 0L,
     onDeleteComment: ((Long) -> Unit)? = null,
     onUrlClick: ((String) -> Unit)? = null,
+    pinnedReplyIds: Set<Long> = emptySet(),
+    menuCallbacks: ReplyMenuCallbacks? = null,
     onCoveredBlurProgressChange: ((Float) -> Unit)? = null,
 ) {
     val emoteCatalogSessionKey = DynamicEmoteCatalog.currentSessionKey()
@@ -88,6 +91,8 @@ fun DynamicSubReplyPreviewHost(
         hatedComments = hatedComments,
         currentMid = currentMid,
         onDeleteComment = onDeleteComment,
+        pinnedReplyIds = pinnedReplyIds,
+        menuCallbacks = menuCallbacks,
         onImagePreview = { images, index, rect, textContent ->
             previewImages = images
             previewInitialIndex = index

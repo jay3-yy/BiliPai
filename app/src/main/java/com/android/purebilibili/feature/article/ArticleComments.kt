@@ -14,6 +14,8 @@ import com.android.purebilibili.core.ui.components.*
 import com.android.purebilibili.data.repository.ArticleDetailUiModel
 import com.android.purebilibili.feature.dynamic.DynamicViewModel
 import com.android.purebilibili.feature.dynamic.components.*
+import com.android.purebilibili.feature.video.ui.components.CommentFraudFeedbackHost
+import com.android.purebilibili.feature.video.ui.components.replyMenuCallbacks
 
 @Composable
 internal fun rememberArticleCommentContent(
@@ -31,6 +33,7 @@ internal fun rememberArticleCommentContent(
     val loading = !belongsToArticle || state.isLoading
     val count = if (belongsToArticle && !loading && state.refreshError == null) state.totalCount.toLong() else article.stats?.reply
     fun notify(message: String) = Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    val menuCallbacks = viewModel.replyMenuCallbacks(::notify)
     return {
         item(key = "article-comments-header") {
             Column {
@@ -76,6 +79,8 @@ internal fun rememberArticleCommentContent(
                 onUserClick = onUserClick,
                 onUrlClick = onLinkClick,
                 onImagePreview = { images, index, _, _ -> onImagePreview(images, index) },
+                pinnedReplyIds = if (belongsToArticle) state.pinnedReplyIds else emptySet(),
+                menuCallbacks = menuCallbacks,
             )
         }
         if (belongsToArticle && state.hasMore && !state.isLoadingMore && !loading) {
@@ -89,8 +94,17 @@ internal fun rememberArticleCommentContent(
 @Composable
 internal fun ArticleCommentOverlays(viewModel: DynamicViewModel, article: ArticleDetailUiModel, onUserClick: (Long) -> Unit, onLinkClick: ((String) -> Unit)?) {
     val context = LocalContext.current
+    val commentUiState by viewModel.commentUiState.collectAsStateWithLifecycle()
     val subReplies by viewModel.subReplyState.collectAsStateWithLifecycle()
+    val commentId = article.dynamicId.ifBlank { "article:${article.articleId}" }
     fun notify(message: String) = Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    val menuCallbacks = viewModel.replyMenuCallbacks(::notify)
+    CommentFraudFeedbackHost(
+        fraudEvents = viewModel.commentFraudEvent,
+        onDeleteShadowBanned = { rpid ->
+            viewModel.deleteDynamicComment(rpid) { _, message -> notify(message) }
+        },
+    )
     if (subReplies.visible) {
         DynamicSubReplyPreviewHost(
             state = subReplies,
@@ -105,6 +119,8 @@ internal fun ArticleCommentOverlays(viewModel: DynamicViewModel, article: Articl
             onCommentHate = { viewModel.hateComment(it) { _, message -> notify(message) } },
             currentMid = TokenManager.midCache ?: 0L,
             onDeleteComment = { viewModel.deleteDynamicComment(it) { _, message -> notify(message) } },
+            pinnedReplyIds = if (commentUiState.dynamicId == commentId) commentUiState.pinnedReplyIds else emptySet(),
+            menuCallbacks = menuCallbacks,
         )
     }
     DynamicCommentInputHost(draftKeyPrefix = "article:${article.articleId}", viewModel = viewModel) { message, images, done ->
