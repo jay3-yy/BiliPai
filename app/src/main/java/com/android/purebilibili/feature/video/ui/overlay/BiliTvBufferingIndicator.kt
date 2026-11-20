@@ -81,7 +81,7 @@ internal fun PlayerLoadingIndicator(
     label: String,
     tint: Color,
     modifier: Modifier = Modifier,
-    size: Dp = 48.dp,
+    size: Dp = 32.dp,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
