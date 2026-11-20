@@ -6,8 +6,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -49,7 +49,7 @@ internal fun CenterPlaybackControl(
     diameter: Dp,
     modifier: Modifier = Modifier,
     viewportTopInset: Dp = 0.dp,
-    isBuffering: Boolean = false,
+    loading: Boolean = false,
 ) {
     val glass = LocalAppThemeConfig.current.liquidGlassEnabled
     // Inline chrome also covers the status-bar backdrop; that band is not part of the video viewport.
@@ -90,7 +90,7 @@ internal fun CenterPlaybackControl(
                             }
                         }
                     }
-                    if (isBuffering) {
+                    if (visible && loading) {
                         BiliTvAnimatedBufferingIndicator(
                             tint = Color.White,
                             size = 20.dp,

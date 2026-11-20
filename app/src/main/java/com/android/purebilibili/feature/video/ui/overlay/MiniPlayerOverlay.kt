@@ -54,6 +54,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -164,6 +165,7 @@ private fun MiniPlayerSessionOverlay(
     val playerChromeProfile = rememberAppPlayerChromeProfile()
     val reduceMotion = rememberSystemReduceMotion()
     val visualWorkActive = rememberVisualWorkActive()
+    var miniPlayerInViewport by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val layoutPolicy = remember(configuration.screenWidthDp) {
         resolveMiniPlayerOverlayLayoutPolicy(
@@ -857,6 +859,7 @@ private fun MiniPlayerSessionOverlay(
                     .offset { IntOffset(animatedOffsetX.roundToInt(), animatedOffsetY.roundToInt()) }
                     .width(miniPlayerWidth)
                     .height(miniPlayerHeight)
+                    .onVisibilityChanged(minFractionVisible = 0f) { miniPlayerInViewport = it }
                     .onGloballyPositioned { coordinates ->
                         cardCoordinates[0] = coordinates
                         if (navigationHandoff != null) {
@@ -991,7 +994,13 @@ private fun MiniPlayerSessionOverlay(
                 }
 
                 player?.let { currentPlayer ->
-                    PlayerBufferingIndicator(player = currentPlayer, modifier = Modifier.align(Alignment.Center))
+                    // 退出小窗/落地过渡期间不再叠一层缓冲动画，避免详情页起播前先闪一个小圈。
+                    if (miniPlayerManager.isMiniMode && miniPlayerManager.isActive &&
+                        visualWorkActive && miniPlayerInViewport && !contentHidden && !awaitingMorphLanding &&
+                        !isStashed && !dismissing && !suppressContentForPip && landingCover == null
+                    ) {
+                        PlayerBufferingIndicator(player = currentPlayer, modifier = Modifier.align(Alignment.Center))
+                    }
                 }
 
                 // 控件直接叠在视频上；玻璃与原生材质共用媒体白色图标，不增加标题栏。
