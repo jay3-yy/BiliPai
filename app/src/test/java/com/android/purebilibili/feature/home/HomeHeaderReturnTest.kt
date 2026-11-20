@@ -7,6 +7,17 @@ import org.junit.Test
 
 class HomeHeaderReturnTest {
     @Test
+    fun waitingForFirstVisibleFrameDoesNotConsumeTheLanding() {
+        val event = HomeHeaderReturn(HomeHeaderControl.SEARCH, landingFromSystemWindow = true)
+        event.updateSystemPhase(SystemWindowMotionPhase.RETURNED)
+        assertTrue(event.canLand(navigationRunning = false))
+        assertFalse(event.canLand(navigationRunning = true))
+        assertTrue(event.canLand(navigationRunning = false))
+        assertTrue(event.consumeWhenLanded(navigationRunning = false))
+        assertFalse(event.canLand(navigationRunning = false))
+    }
+
+    @Test
     fun playedLandingCannotReplayAfterSharedBoundsSettleAgain() {
         val event = HomeHeaderReturn(HomeHeaderControl.END_ACTION)
         assertTrue(event.consumeWhenLanded(navigationRunning = false))

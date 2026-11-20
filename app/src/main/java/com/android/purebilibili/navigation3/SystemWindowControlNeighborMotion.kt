@@ -19,6 +19,7 @@ import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.rememberVisualWorkActive
 import com.android.purebilibili.core.ui.transition.VideoCardSourceAnchor
+import com.android.purebilibili.core.ui.transition.NavigationReturnLanding
 import java.lang.ref.WeakReference
 import kotlin.math.max
 import kotlin.math.min
@@ -41,8 +42,8 @@ internal fun resolveSystemWindowNeighborDirection(
         }
     }
     if (overlapX >= min(source.width, neighbor.width) * 0.5f) {
-        if (neighbor.top >= source.bottom - 1f && neighbor.top - source.bottom <= gap) return Offset(0f, 1f)
-        if (source.top >= neighbor.bottom - 1f && source.top - neighbor.bottom <= gap) return Offset(0f, -1f)
+        if (neighbor.top >= source.bottom - 1f && (sameMotionGroup || neighbor.top - source.bottom <= gap)) return Offset(0f, 1f)
+        if (source.top >= neighbor.bottom - 1f && (sameMotionGroup || source.top - neighbor.bottom <= gap)) return Offset(0f, -1f)
     }
     return null
 }
@@ -66,6 +67,7 @@ internal class SystemWindowControlNeighbor(
     var eligible = false
     var inViewport by mutableStateOf(false)
     val pressure = Animatable(0f)
+    val groupLanding = NavigationReturnLanding()
 
     fun visibleBounds(): Rect? = coordinates?.takeIf { it.isAttached }
         ?.boundsInWindow()?.takeIf { it.width > 1f && it.height > 1f }
@@ -92,6 +94,7 @@ internal object SystemWindowControlNeighbors {
     fun detach(control: SystemWindowControlNeighbor) {
         controls.remove(control)
         control.coordinates = null
+        control.groupLanding.clear()
     }
 
     private fun direction(
@@ -102,6 +105,9 @@ internal object SystemWindowControlNeighbors {
         if (!neighbor.eligible || neighbor === source || neighbor.view !== source.view ||
             neighbor.route != source.route
         ) return null
+        if ((source.motionGroup != null || neighbor.motionGroup != null) &&
+            source.motionGroup !== neighbor.motionGroup
+        ) return null
         val neighborBounds = neighbor.visibleBounds() ?: return null
         return resolveSystemWindowNeighborDirection(
             source = sourceBounds,
@@ -111,12 +117,48 @@ internal object SystemWindowControlNeighbors {
         )
     }
 
+    fun beginGroupNavigation(source: SystemWindowControlNeighbor) {
+        val group = source.motionGroup as? NavigationControlMotionGroupState ?: return
+        group.sharedReturn = null
+        group.systemReturn = null
+        controls.filter { it.motionGroup === group }.forEach {
+            it.groupLanding.clear()
+            it.motion = null
+            it.sharedMotion = null
+        }
+    }
+
+    fun isGroupRestored(group: NavigationControlMotionGroupState): Boolean =
+        controls.filter { it.motionGroup === group }.all {
+            !it.pressure.isRunning && it.motion?.phase?.running != true
+        }
+
+    private fun captureGroupLanding(source: SystemWindowControlNeighbor): (() -> Unit)? {
+        val group = source.motionGroup as? NavigationControlMotionGroupState ?: return null
+        val sourceReference = WeakReference(source)
+        val members = controls.filter {
+            it.eligible && it.motionGroup === group && it.view === source.view && it.route == source.route
+        }.map(::WeakReference)
+        return {
+            val current = sourceReference.get()
+            if (current != null && current in controls) members.forEach { reference ->
+                reference.get()?.takeIf { it in controls && it.motionGroup === group }?.let {
+                    it.groupLanding.request()
+                }
+            }
+        }
+    }
+
     fun linkShared(
         anchor: VideoCardSourceAnchor,
         origin: com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin,
     ) {
         val source = controls.firstOrNull { anchor.hasCoordinates(it.coordinates) } ?: return
         val bounds = source.visibleBounds() ?: return
+        val group = source.motionGroup as? NavigationControlMotionGroupState
+        captureGroupLanding(source)?.let { deliver ->
+            group?.sharedReturn = NavigationControlMotionGroupState.SharedReturn(origin, deliver)
+        }
         controls.forEach { neighbor ->
             val direction = direction(source, bounds, neighbor) ?: return@forEach
             neighbor.sharedMotion = SystemWindowControlNeighbor.SharedMotion(origin, direction)
@@ -131,9 +173,13 @@ internal object SystemWindowControlNeighbors {
             val direction = direction(source, bounds, candidate) ?: return@mapNotNull null
             WeakReference(candidate) to direction
         }
-        if (neighbors.isEmpty()) return null
+        val groupLanding = captureGroupLanding(source)?.let(::ControlGroupLandingDelivery)
+        if (neighbors.isEmpty() && groupLanding == null) return null
         val sourceReference = WeakReference(source)
         return { phase ->
+            if (phase == SystemWindowMotionPhase.RETURNED && groupLanding != null) {
+                (sourceReference.get()?.motionGroup as? NavigationControlMotionGroupState)?.systemReturn = groupLanding
+            }
             val currentSource = sourceReference.get()
             // 打开与返回必须仍属于同一个来源实例。
             if (currentSource != null && currentSource in controls && anchor.hasCoordinates(currentSource.coordinates)) {
@@ -144,7 +190,9 @@ internal object SystemWindowControlNeighbors {
                     // 否则位移可能把邻项推过距离阈值，导致结束回调无法释放。
                     if (phase.returning && neighbor.returnHandledByOwner) return@forEach
                     neighbor.sharedMotion = null
-                    neighbor.motion = SystemWindowControlNeighbor.Motion(phase, direction)
+                    // 返回途中先释放进入时的让位，等整组复原后再响应落位冲量。
+                    val neighborPhase = if (groupLanding != null && phase.returning) SystemWindowMotionPhase.OPENED else phase
+                    neighbor.motion = SystemWindowControlNeighbor.Motion(neighborPhase, direction)
                 }
             }
         }

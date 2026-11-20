@@ -1,6 +1,7 @@
 // 私信收件箱页面
 package com.android.purebilibili.feature.message
 
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 import com.android.purebilibili.navigation3.BiliPaiNavKey
@@ -427,7 +428,7 @@ fun InboxScreen(
 private fun MessageCenterTopShortcutRow(
     items: List<MessageCenterTopItem>,
     onItemClick: (MessageCenterDestination) -> Unit
-) {
+) = NavigationControlMotionGroup {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()

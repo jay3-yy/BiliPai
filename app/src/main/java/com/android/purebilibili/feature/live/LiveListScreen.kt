@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.live
 
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import androidx.compose.foundation.border
 
 import com.android.purebilibili.core.ui.AppContentColors
@@ -958,7 +959,7 @@ private fun LiveListHeader(
     onSearchClick: () -> Unit,
     onAreaListClick: () -> Unit,
     searchBackdrop: top.yukonga.miuix.kmp.blur.Backdrop? = null,
-) {
+) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
     val compactChrome = rememberAppTopChromePolicy().compactChromeSpec
     val searchShape = AppShapes.container(ContainerLevel.Pill)

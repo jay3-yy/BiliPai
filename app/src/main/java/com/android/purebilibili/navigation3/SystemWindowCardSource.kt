@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.android.purebilibili.core.ui.transition.navigationReturnLanding
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSourceTrackingEnabled
 import com.android.purebilibili.core.ui.transition.VideoCardSourceInstances
@@ -41,6 +42,7 @@ internal class SystemWindowCardSource internal constructor(
     /** 点击时先于路由跳转调用；未登记成功时调用方继续原窗口内导航。 */
     fun record(cornerRadiusPx: Float = 0f, layer: GraphicsLayer? = null): Boolean {
         val bounds = boundsInRoot() ?: return false
+        SystemWindowControlNeighbors.beginGroupNavigation(neighbor)
         CardPositionManager.recordVideoCardPosition(
             bvid = identity,
             sourceRoute = sourceRoute,
@@ -86,6 +88,7 @@ internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = 
     is BiliPaiNavKey.Live -> "live_${target.roomId}"
     is BiliPaiNavKey.BangumiPlayer -> "bangumi_${target.seasonId}"
     is BiliPaiNavKey.BangumiDetail -> "bangumi_${target.seasonId}"
+    is BiliPaiNavKey.Bangumi -> "bangumi_library_${target.initialType}"
     is BiliPaiNavKey.ArticleDetail -> "article_${target.articleId}"
     is BiliPaiNavKey.DynamicDetail -> "dynamic_${target.dynamicId}"
     is BiliPaiNavKey.Space -> target.mid.takeIf { it > 0L }?.let { "space_$it" }
@@ -139,14 +142,21 @@ internal fun SystemWindowCardSource?.anchorModifier(
     motionGroup: Any? = null,
 ): Modifier {
     if (this == null) return Modifier
-    ObserveSystemWindowControlNeighbor(neighbor, neighborActive, returnHandledByOwner, motionGroup)
-    return (if (animateNeighbors) neighbor.modifier else Modifier)
+    val group = motionGroup ?: LocalNavigationControlMotionGroup.current
+    val grouped = group as? NavigationControlMotionGroupState
+    ObserveSystemWindowControlNeighbor(neighbor, neighborActive, returnHandledByOwner, group)
+    val landing = if (grouped == null) Modifier else Modifier.navigationReturnLanding(
+        neighbor.groupLanding,
+        sharedBoundsReleased = grouped.sharedReturn?.origin?.sharedBounds == null,
+        isSourceVisible = { neighbor.visibleBounds() != null },
+    )
+    return landing.then(if (animateNeighbors) neighbor.modifier else Modifier)
         .videoCardSourceAnchor(
             identity, shape,
             onPositioned = { coordinates = it; neighbor.coordinates = it },
             sharedSource = sharedSource,
             drawSharedContent = animateNeighbors,
-            returnHandledByOwner = returnHandledByOwner,
+            returnHandledByOwner = returnHandledByOwner || grouped != null,
         )
         .onGloballyPositioned {
             val visible = it.boundsInWindow()

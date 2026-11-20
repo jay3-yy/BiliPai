@@ -49,6 +49,15 @@ class SystemWindowControlNeighborMotionTest {
     }
 
     @Test
+    fun explicitlyGroupedServiceRowsCanReactAcrossTheirSectionSpacing() {
+        val first = Rect(16f, 16f, 80f, 64f)
+        val second = Rect(16f, 110f, 80f, 158f)
+        assertNull(resolveSystemWindowNeighborDirection(first, second, 24f))
+        assertEquals(Offset(0f, 1f), resolveSystemWindowNeighborDirection(first, second, 24f, sameMotionGroup = true))
+        assertEquals(Offset(0f, -1f), resolveSystemWindowNeighborDirection(second, first, 24f, sameMotionGroup = true))
+    }
+
+    @Test
     fun stackedShortcutsReactAlongTheirColumn() {
         val first = Rect(16f, 16f, 80f, 64f)
         val second = Rect(16f, 80f, 80f, 128f)

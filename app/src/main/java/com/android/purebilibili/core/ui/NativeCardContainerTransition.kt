@@ -3,6 +3,7 @@ package com.android.purebilibili.core.ui
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.feature.live.rememberLiveCardContainerTransition
 import com.android.purebilibili.navigation3.BiliPaiNavKey
@@ -18,6 +19,7 @@ internal fun rememberNativeCardContainerTransition(
     target: BiliPaiNavKey,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    cornerRadius: Dp = 12.dp,
 ): com.android.purebilibili.feature.live.LiveCardContainerTransition {
     val resolvedTarget = com.android.purebilibili.feature.bangumi.resolveBangumiPlaybackEntry(target)
     val transition = rememberLiveCardContainerTransition(
@@ -25,7 +27,7 @@ internal fun rememberNativeCardContainerTransition(
         title = "",
         hostName = "",
         color = MaterialTheme.colorScheme.surface,
-        cornerRadius = 12.dp,
+        cornerRadius = cornerRadius,
         containerTarget = resolvedTarget,
         enabled = enabled && LocalNativeCardNavigate.current != null &&
             (if (resolvedTarget is BiliPaiNavKey.ArticleDetail || resolvedTarget is BiliPaiNavKey.DynamicDetail ||

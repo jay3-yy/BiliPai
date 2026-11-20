@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.profile
 
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
 import com.android.purebilibili.core.util.animateScrollToTop
 
 import com.android.purebilibili.core.util.responsiveContentWidth
@@ -33,6 +34,7 @@ import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -94,6 +96,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -102,6 +105,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.android.purebilibili.core.ui.transition.LocalDynamicImagePreviewTextVisible
+import com.android.purebilibili.core.ui.rememberNativeCardContainerTransition
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.Lifecycle
@@ -2141,7 +2145,7 @@ private fun ProfileQuickAccessDashboard(
     onFavoriteClick: () -> Unit,
     onFavoriteFolderClick: (Long, Long, String) -> Unit,
     contentColor: Color,
-) {
+) = NavigationControlMotionGroup {
     val shortcuts = listOf(
         ProfileQuickAccess("离线缓存", rememberAppDownloadIcon(), BiliPaiNavKey.DownloadList, onDownloadClick),
         ProfileQuickAccess("历史", rememberAppHistoryIcon(), BiliPaiNavKey.History, onHistoryClick),
@@ -2323,7 +2327,7 @@ private fun ProfileSpaceHeader(
     onDynamicsClick: () -> Unit,
     modifier: Modifier = Modifier,
     showIdentity: Boolean = true,
-) {
+) = NavigationControlMotionGroup {
     val openLedger = LocalProfileLedgerNavigation.current
     val textColor = heroChrome.textColor
     val secondaryColor = heroChrome.secondaryTextColor
@@ -2897,22 +2901,42 @@ private fun ProfileBangumiStrip(
     onBangumiClick: (Long, Long) -> Unit,
     contentChrome: ProfileContentChrome
 ) {
+    val moreControl = rememberSystemWindowNavigationControl(
+        target = BiliPaiNavKey.Bangumi(initialType = 1),
+        shape = ButtonDefaults.textShape,
+        onClick = onMoreClick,
+    )
     ProfileSpaceSection(
         title = "追番",
         count = count,
-        onMoreClick = onMoreClick,
-        textColor = contentChrome.onSurfaceColor
+        onMoreClick = moreControl.onClick,
+        textColor = contentChrome.onSurfaceColor,
+        moreModifier = moreControl.modifier,
     ) {
         items.take(8).forEach { item ->
-            ProfileSpacePosterCard(
-                title = item.title,
-                subtitle = item.progress.ifBlank { item.newEp?.indexShow.orEmpty() },
-                imageUrl = item.cover,
-                contentChrome = contentChrome,
-                onClick = { onBangumiClick(item.seasonId, item.firstEp) }
-            )
+            key(item.seasonId, item.firstEp) {
+                ProfileBangumiPosterCard(item, contentChrome, onBangumiClick)
+            }
         }
     }
+}
+
+@Composable
+private fun ProfileBangumiPosterCard(
+    item: FollowBangumiItem,
+    contentChrome: ProfileContentChrome,
+    onBangumiClick: (Long, Long) -> Unit,
+) {
+    ProfileSpacePosterCard(
+        title = item.title,
+        subtitle = item.progress.ifBlank { item.newEp?.indexShow.orEmpty() },
+        imageUrl = item.cover,
+        contentChrome = contentChrome,
+        onClick = { onBangumiClick(item.seasonId, item.firstEp) },
+        transitionTarget = if (item.seasonId > 0L || item.firstEp > 0L) {
+            BiliPaiNavKey.BangumiPlayer(seasonId = item.seasonId, epId = item.firstEp)
+        } else null,
+    )
 }
 
 @Composable
@@ -2975,6 +2999,7 @@ private fun ProfileSpaceSection(
     count: Int,
     onMoreClick: () -> Unit,
     textColor: Color = AppContentColors.primaryText(),
+    moreModifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2991,7 +3016,7 @@ private fun ProfileSpaceSection(
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
             )
-            AppTextButton(onClick = onMoreClick) {
+            AppTextButton(onClick = onMoreClick, modifier = moreModifier) {
                 AppText(
                     text = "查看更多",
                     fontWeight = FontWeight.Medium
@@ -3015,19 +3040,38 @@ private fun ProfileSpacePosterCard(
     subtitle: String,
     imageUrl: String,
     contentChrome: ProfileContentChrome,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    transitionTarget: BiliPaiNavKey? = null,
 ) {
     val cardTokens = remember { resolveProfileCardTokens() }
     val cardShape = AppShapes.borderedContainer(ContainerLevel.Card)
     val cardWidth = cardTokens.widthDp.dp
     val coverHeight = resolveProfileCardCoverHeightDp(cardTokens).dp
     val cardHeight = resolveProfileCardHeightDp(cardTokens).dp
+    val transition = if (transitionTarget != null) {
+        val density = LocalDensity.current
+        val direction = LocalLayoutDirection.current
+        val cornerRadius = with(density) {
+            AppShapes.transitionCornerRadiusPx(
+                shape = cardShape,
+                size = Size(cardWidth.toPx(), cardHeight.toPx()),
+                layoutDirection = direction,
+                density = density,
+            ).toDp()
+        }
+        rememberNativeCardContainerTransition(
+            target = transitionTarget,
+            onClick = onClick,
+            cornerRadius = cornerRadius,
+        )
+    } else null
     AppSurface(
         modifier = Modifier
             .width(cardWidth)
             .height(cardHeight)
+            .then(transition?.modifier ?: Modifier)
             .clip(cardShape)
-            .clickable(onClick = onClick),
+            .clickable(onClick = transition?.onClick ?: onClick),
         shape = cardShape,
         color = contentChrome.cardMetadataColor,
         border = BorderStroke(0.5.dp, contentChrome.cardBorderColor),
@@ -3124,13 +3168,9 @@ private fun ProfileBangumiList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items.forEach { item ->
-            ProfileSpacePosterCard(
-                title = item.title,
-                subtitle = item.progress.ifBlank { item.newEp?.indexShow.orEmpty() },
-                imageUrl = item.cover,
-                contentChrome = contentChrome,
-                onClick = { onBangumiClick(item.seasonId, item.firstEp) }
-            )
+            key(item.seasonId, item.firstEp) {
+                ProfileBangumiPosterCard(item, contentChrome, onBangumiClick)
+            }
         }
     }
 }
@@ -5037,7 +5077,7 @@ fun ServicesSection(
     isLogin: Boolean = true,
     isTablet: Boolean = false,
     modifier: Modifier = Modifier,
-) {
+) = NavigationControlMotionGroup {
     val accountAction = rememberProfileAccountPopupAction(onAccountManageClick)
     val queryAicu = com.android.purebilibili.feature.aicu.LocalAicuNavigation.current
     val downloadIcon = rememberAppDownloadIcon()
@@ -5469,7 +5509,7 @@ private fun ProfileFavoriteFolderShortcutGrid(
     compactHorizontal: Boolean = false,
     onMoreClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
-) {
+) = NavigationControlMotionGroup {
     val folderIcon = rememberAppFolderIcon()
     if (compactHorizontal) {
         Row(
@@ -5498,7 +5538,7 @@ private fun ProfileFavoriteFolderShortcutGrid(
                 )
             }
         }
-        return
+        return@NavigationControlMotionGroup
     }
     Column(
         modifier = modifier.fillMaxWidth(),

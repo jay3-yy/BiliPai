@@ -1733,14 +1733,17 @@ internal fun HomeHeader(
             returnPressure.snapTo(0f)
             return@LaunchedEffect
         }
-        if (headerReturn == null || !headerReturn.consumeWhenLanded(headerNavigationRunning)) {
+        if (headerReturn == null || !headerReturn.canLand(headerNavigationRunning)) {
             // 返回途中只恢复顶栏姿态；取消手势不补发落位冲量。
             returnPressure.animateTo(0f, AppMotionTokens.folmeSpringSpec(damping = 1f, response = 0.25f))
             return@LaunchedEffect
         }
-        // 事件一旦开始播放就已消费。焦点恢复时只收回当前形变。
+        // 先等首页实际恢复一帧；在首次非零形变前取消，不得吞掉尚未显示的反馈。
+        androidx.compose.runtime.withFrameNanos { }
         returnPressure.snapTo(0f)
-        returnPressure.animateTo(0f, navigationReturnLandingPressureSpec())
+        returnPressure.animateTo(0f, navigationReturnLandingPressureSpec()) {
+            if (value != 0f) headerReturn.consumeWhenLanded(navigationRunning = false)
+        }
     }
     fun linkedControlMotion(control: HomeHeaderControl, sharedContent: Boolean = true): Modifier {
         val neighborMotion = when (control) {

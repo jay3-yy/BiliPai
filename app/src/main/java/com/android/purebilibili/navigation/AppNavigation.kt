@@ -974,8 +974,8 @@ fun AppNavigation(
             val pending = pendingHomeHeaderReturn ?: return@LaunchedEffect
             fun homeSelected() = navigation3BackStack.lastOrNull() == BiliPaiNavKey.MainHost &&
                 resolveBottomPagerItemForPage(mainBottomPagerState.selectedPage, visibleBottomBarItems) == BottomNavItem.HOME
-            snapshotFlow { homeSelected() }.first { !it }
-            snapshotFlow { homeSelected() }.first { it }
+            // 离开由提交导航时同步记录，快速 push/pop 不能依赖观察器看到中间页面。
+            pending.awaitHomeAfterDeparture(::homeSelected)
             homeHeaderReturn = pending
             pendingHomeHeaderReturn = null
         }
@@ -1485,6 +1485,9 @@ fun AppNavigation(
             if (nextStack.lastOrNull() != navigation3BackStack.lastOrNull()) {
                 // openId 等会话键在此确定；来源必须绑定最终入栈的完整键。
                 sharedSource?.prepareSharedFallback(sessionScopedKey)
+                if (nextStack.lastOrNull() != BiliPaiNavKey.MainHost) {
+                    pendingHomeHeaderReturn?.markNavigationDeparted()
+                }
             }
             replaceNavigation3BackStack(nextStack)
         }
@@ -1646,6 +1649,9 @@ fun AppNavigation(
                 // path when MainHost is already the sole destination.
                 if (shouldResetNavigation3BackStackForBottomPager(navigation3BackStack)) {
                     replaceNavigation3BackStack(listOf(BiliPaiNavKey.MainHost))
+                }
+                if (mainBottomPagerState.selectedPage != page) {
+                    pendingHomeHeaderReturn?.markNavigationDeparted()
                 }
                 mainBottomPagerState.switchToPage(page)
             }

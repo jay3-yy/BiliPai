@@ -127,7 +127,12 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
         content = content,
     )
     sharedControlEntry<BiliPaiNavKey.SeasonSeriesDetail>(settingsBackStack, navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
-    entry<BiliPaiNavKey.Bangumi>(swipeDismiss = NavSwipeDirection.None, content = content)
+    sharedControlEntry<BiliPaiNavKey.Bangumi>(
+        settingsBackStack,
+        navigationContainerTransitions,
+        swipeDismiss = NavSwipeDirection.None,
+        content = content,
+    )
     sharedControlEntry<BiliPaiNavKey.BangumiPlayer>(settingsBackStack, navigationContainerTransitions,
         transition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.BangumiPlayer }
             ?.let(liveContainerTransitions::get) ?: predictiveBackExcludedTransition,
