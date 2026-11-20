@@ -8,7 +8,9 @@ import com.android.purebilibili.core.ui.AppAlertDialog as AlertDialog
 import com.android.purebilibili.core.store.FullscreenActionCount
 import com.android.purebilibili.core.store.FullscreenActionCountSettings
 import com.android.purebilibili.core.store.ChapterDisplayMode
-import com.android.purebilibili.feature.settings.playbackSettingTitle
+import com.android.purebilibili.core.store.player.PlayerMenuConfiguration
+import com.android.purebilibili.core.store.player.PlayerMenuStore
+import com.android.purebilibili.feature.video.ui.components.FullscreenMoreMenuEntry.*
 import com.android.purebilibili.core.theme.AppUiStyle
 import com.android.purebilibili.core.theme.LocalAppUiStyle
 import com.android.purebilibili.core.ui.AppContentColors
@@ -25,6 +27,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -230,7 +234,7 @@ private fun videoSettingsChipContentColor(isSelected: Boolean): Color {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VideoSettingsPanel(
+internal fun VideoSettingsPanel(
     // 定时关闭
     sleepTimerMinutes: Int?,
     onSleepTimerChange: (Int?) -> Unit,
@@ -282,7 +286,7 @@ fun VideoSettingsPanel(
     currentSecondCodec: String = "avc1",
     onSecondCodecChange: (String) -> Unit = {},
     currentAudioQuality: Int = -1,
-    selectedAudioQuality: Int = -1,
+    audioQualityValue: String? = null,
     availableAudioQualities: List<AudioQualityOption> = emptyList(),
     onAudioQualityChange: (Int) -> Unit = {},
     anime4kEnabled: Boolean = false,
@@ -310,6 +314,7 @@ fun VideoSettingsPanel(
     onDownloadVideo: (() -> Unit)? = null,
     onEditPlayUrl: (() -> Unit)? = null,
     onSubtitleSettings: (() -> Unit)? = null,
+    subtitleValue: String? = null,
     onLoadSubtitle: (() -> Unit)? = null,
     onSaveSubtitle: (() -> Unit)? = null,
     onShowPlaybackInfo: (() -> Unit)? = null,
@@ -339,11 +344,16 @@ fun VideoSettingsPanel(
     playerDiagnosticsEnabled: Boolean = false,
     onPlayerDiagnosticsChange: ((Boolean) -> Unit)? = null,
     uiStyle: AppUiStyle = LocalAppUiStyle.current,
+    customizeFullscreenMoreMenu: Boolean = false,
+    menuConfiguration: PlayerMenuConfiguration? = null,
+    topShortcutOnBar: FullscreenMoreMenuEntry? = null,
+    onOpenMovedQualityMenu: (() -> Unit)? = null,
+    onOpenMovedSpeedMenu: (() -> Unit)? = null,
     // 关闭面板
     onDismiss: () -> Unit
 ) {
     PlayerNativeMenuTheme(uiStyle) {
-    var page by remember { mutableStateOf("main") }
+    var page by remember(customizeFullscreenMoreMenu) { mutableStateOf("main") }
     var showPlayerVolumeDialog by remember { mutableStateOf(false) }
     val controlCenterMotion: VideoControlCenterMotion? = null
     val useMiuixNonGlassPresentation = isMiuixNonGlassEnabled()
@@ -454,91 +464,219 @@ fun VideoSettingsPanel(
             // 下一层弹窗必须等共用玻璃宿主释放；原生面板保留原来的执行顺序。
             if (dispatchAfterDismiss != null) dispatchAfterDismiss(finish) else finish()
         }
+        val mainRows = if (page == "main" || page == "editMenu" || page == "playbackSettings") {
+            buildMap<FullscreenMoreMenuEntry, @Composable () -> Unit> {
+                nearbyHandoff?.takeIf { com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED }?.let { controller ->
+                    put(NEARBY_HANDOFF) { PlayerSettingsRow(NEARBY_HANDOFF.title) { dismissWithAction(controller.openDevices) } }
+                }
+                onWatchLater?.let { action ->
+                    put(WATCH_LATER) { PlayerSettingsRow(WATCH_LATER.title) { dismissWithAction(action) } }
+                }
+                onShowNotes?.let { action ->
+                    put(NOTES) { PlayerSettingsRow(NOTES.title) { dismissWithAction(action) } }
+                }
+                onDownloadVideo?.let { action ->
+                    put(DOWNLOAD) { PlayerSettingsRow(DOWNLOAD.title) { dismissWithAction(action) } }
+                }
+                put(SAVE_COVER) { PlayerSettingsRow(SAVE_COVER.title) { dismissWithAction(onSaveCover) } }
+                put(SLEEP_TIMER) {
+                    PlayerSettingsRow(SLEEP_TIMER.title, formatPlayerMenuTimerValue(sleepTimerMinutes)) { page = "sleep" }
+                }
+                onEditPlayUrl?.let { action ->
+                    put(PLAY_URL) { PlayerSettingsRow(PLAY_URL.title) { dismissWithAction(action) } }
+                }
+                onChapterDisplayModeChange?.let { onModeChange ->
+                    put(CHAPTERS) {
+                        PlayerSettingsPopupRow(
+                            title = CHAPTERS.title,
+                            current = chapterDisplayMode.label,
+                            options = ChapterDisplayMode.entries.map { it.label },
+                        ) { index -> onModeChange(ChapterDisplayMode.entries[index]) }
+                    }
+                }
+                put(CENTER_PLAYBACK) {
+                    PlayerSettingsToggleRow(
+                        title = CENTER_PLAYBACK.title,
+                        checked = !hideCenterPlayback,
+                        onCheckedChange = { visible ->
+                            scope.launch {
+                                com.android.purebilibili.core.store.player.PlayerSettingsStore
+                                    .setHideCenterPlayback(context, !visible)
+                            }
+                        },
+                    )
+                }
+                put(RELOAD) { PlayerSettingsRow(RELOAD.title) { dismissWithAction(onReload) } }
+                put(ENHANCEMENT) {
+                    PlayerSettingsRow(
+                        ENHANCEMENT.title,
+                        resolveAnime4KSettingsSubtitle(anime4kEnabled, anime4kAvailable, anime4kBypassReason),
+                    ) { page = "enhancement" }
+                }
+                if (onPlayerVolumeChange != null) {
+                    put(VOLUME) {
+                        PlayerSettingsRow(VOLUME.title, "${(playerVolume * 100).toInt()}%") { showPlayerVolumeDialog = true }
+                    }
+                } else if (playerVolumeUnavailableReason != null) {
+                    put(VOLUME) { PlayerSettingsRow(VOLUME.title, playerVolumeUnavailableReason, onClick = null) }
+                }
+                if (cdnCount > 0 || cdnServiceLabels.isNotEmpty()) {
+                    put(CDN) {
+                        val service = cdnServiceLabels.getOrNull(currentCdnServiceIndex) ?: "线路 ${currentCdnIndex + 1}"
+                        PlayerSettingsRow(CDN.title, service) { page = "cdn" }
+                    }
+                }
+                put(TRANSFORM) {
+                    val transform = buildList {
+                        if (isFlippedHorizontal) add("左右翻转")
+                        if (isFlippedVertical) add("上下翻转")
+                    }.joinToString("、").ifEmpty { "默认" }
+                    PlayerSettingsRow(TRANSFORM.title, transform) { page = "transform" }
+                }
+                if (qualityLabels.isNotEmpty()) {
+                    put(QUALITY) {
+                        PlayerSettingsRow(QUALITY.title, currentQualityLabel.ifBlank { "未知" }) {
+                            if (onOpenMovedQualityMenu != null) {
+                                dismissWithAction(onOpenMovedQualityMenu)
+                            } else {
+                                page = "quality"
+                            }
+                        }
+                    }
+                }
+                if (availableAudioQualities.isNotEmpty()) {
+                    put(AUDIO_QUALITY) {
+                        PlayerSettingsRow(AUDIO_QUALITY.title, audioQualityValue ?: "未知") { page = "audio" }
+                    }
+                }
+                put(CODEC) {
+                    PlayerSettingsRow(CODEC.title, "首选 ${piliCodecLabel(currentCodec)}，当前播放 ${piliCodecLabel(playingVideoCodec)}") { page = "codec" }
+                }
+                onPlaybackOrderChange?.let { change ->
+                    put(PLAYBACK_ORDER) {
+                        PlayerSettingsPopupRow(PLAYBACK_ORDER.title, playbackOrderLabel, playbackOrderOptions, onSelected = change)
+                    }
+                }
+                onShowDanmakuPool?.let { action ->
+                    put(DANMAKU_LIST) { PlayerSettingsRow(DANMAKU_LIST.title) { dismissWithAction(action) } }
+                }
+                put(DANMAKU_SETTINGS) { PlayerSettingsRow(DANMAKU_SETTINGS.title) { dismissWithAction(onDanmakuSettingsClick) } }
+                onSubtitleSettings?.let { action ->
+                    put(SUBTITLE_SETTINGS) { PlayerSettingsRow(SUBTITLE_SETTINGS.title, subtitleValue) { dismissWithAction(action) } }
+                }
+                onLoadSubtitle?.let { action ->
+                    put(LOAD_SUBTITLES) { PlayerSettingsRow(LOAD_SUBTITLES.title) { dismissWithAction(action) } }
+                }
+                onSaveSubtitle?.let { action ->
+                    put(SAVE_SUBTITLES) { PlayerSettingsRow(SAVE_SUBTITLES.title) { dismissWithAction(action) } }
+                }
+                onShowPlaybackInfo?.let { action ->
+                    put(PLAYBACK_INFO) { PlayerSettingsRow(PLAYBACK_INFO.title) { dismissWithAction(action) } }
+                }
+                onPlayerDiagnosticsChange?.let { change ->
+                    put(DIAGNOSTICS) {
+                        PlayerSettingsToggleRow(DIAGNOSTICS.title, playerDiagnosticsEnabled, change)
+                    }
+                }
+                onReport?.let { action ->
+                    put(REPORT) { PlayerSettingsRow(REPORT.title) { dismissWithAction(action) } }
+                }
+                if (isFullscreen) {
+                    put(ACTION_COUNTS) { PlayerSettingsRow(ACTION_COUNTS.title) { page = "actionCounts" } }
+                }
+                put(ADVANCED) { PlayerSettingsRow(ADVANCED.title) { page = "advanced" } }
+                if (onOpenMovedSpeedMenu != null) {
+                    put(SPEED) {
+                        PlayerSettingsRow(SPEED.title, PlaybackSpeed.formatSpeedFull(currentSpeed)) {
+                            dismissWithAction(onOpenMovedSpeedMenu)
+                        }
+                    }
+                }
+            }
+        } else emptyMap()
+        // 同窗玻璃菜单自行避让系统栏，原生面板仍保留导航栏内边距。
+        val menuModifier = Modifier.fillMaxWidth().then(
+            if (LocalPlayerGlassSettingsSurface.current) Modifier else Modifier.navigationBarsPadding()
+        )
+        val fullscreenMainListState = rememberLazyListState()
+        val playbackSettingsListState = rememberLazyListState()
+        val settingsListState = rememberLazyListState()
+        if (page == "editMenu" && menuConfiguration != null) {
+            PlayerMenuEditor(
+                configuration = menuConfiguration,
+                defaultEntries = fullscreenMoreMenuEntries,
+                availableEntries = mainRows.keys + SPEED,
+                onBack = { page = "main" },
+                onSave = { PlayerMenuStore.FULLSCREEN.save(context, it) },
+                onSaved = { page = "main" },
+                modifier = menuModifier,
+                topShortcutEntries = fullscreenTopShortcutEntries,
+                bottomControlOptions = fullscreenBottomControlOptions,
+                playbackSettingsEntries = fullscreenPlaybackSettingsEntries,
+            )
+            return@PlayerNativeSettingsHost
+        }
+        val visibleEntries = if (customizeFullscreenMoreMenu) {
+            menuConfiguration.visibleEntries(fullscreenMoreMenuEntries, mainRows.keys)
+                .filterNot { it == topShortcutOnBar }
+        } else emptyList()
+        val playbackSettingsEntries = visibleEntries.filter { it in fullscreenPlaybackSettingsEntries }
         LazyColumn(
-            // 同窗玻璃菜单由覆盖层避让系统栏，列表只保留紧凑留白；原生面板沿用原参数。
-            modifier = Modifier.fillMaxWidth().then(
-                if (LocalPlayerGlassSettingsSurface.current) Modifier else Modifier.navigationBarsPadding()
-            ),
+            modifier = menuModifier,
+            state = when {
+                page == "main" && customizeFullscreenMoreMenu -> fullscreenMainListState
+                page == "playbackSettings" -> playbackSettingsListState
+                else -> settingsListState
+            },
             contentPadding = PaddingValues(vertical = if (LocalPlayerGlassSettingsSurface.current) 6.dp else 14.dp),
         ) {
-            if (page != "advanced") {
+            if (page == "main") {
+                if (customizeFullscreenMoreMenu) {
+                    item(key = "edit_menu") {
+                        PlayerSettingsRow(
+                            PLAYER_MENU_EDITOR_TITLE,
+                            onClick = if (menuConfiguration != null) ({ page = "editMenu" }) else null,
+                        )
+                    }
+                    val firstPlaybackSetting = playbackSettingsEntries.firstOrNull()
+                    visibleEntries.forEach { entry ->
+                        when {
+                            entry == firstPlaybackSetting -> item(key = "playback_settings") {
+                                PlayerSettingsRow(PLAYER_PLAYBACK_SETTINGS_TITLE) { page = "playbackSettings" }
+                            }
+                            entry !in fullscreenPlaybackSettingsEntries -> item(key = entry.id) {
+                                mainRows.getValue(entry)()
+                            }
+                        }
+                    }
+                } else {
+                    item { mainRows.values.forEach { row -> row() } }
+                }
+            } else if (page == "playbackSettings") {
                 item {
-                    if (page != "main") PlayerSettingsRow("返回", onClick = { page = if (page == "cdnAdvanced") "cdn" else "main" })
+                    PlayerSettingsRow("返回") { page = "main" }
+                    AppText(
+                        PLAYER_PLAYBACK_SETTINGS_TITLE,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                }
+                items(playbackSettingsEntries, key = { it.id }) { entry -> mainRows.getValue(entry)() }
+            } else if (page != "advanced") {
+                item {
+                    PlayerSettingsRow("返回") {
+                        page = when (page) {
+                            "cdnAdvanced" -> "cdn"
+                            "enhancement", "cdn", "transform", "audio", "codec" ->
+                                if (customizeFullscreenMoreMenu) "playbackSettings" else "main"
+                            else -> "main"
+                        }
+                    }
                     val submenuTitle = when (page) { "quality" -> "选择画质"; "audio" -> "选择音质"; "codec" -> "首选编码格式"; "cdn", "cdnAdvanced" -> "CDN 设置"; "transform" -> "画面变换"; "enhancement" -> "画质增强"; "actionCounts" -> FullscreenActionCountSettings.TITLE; else -> null }
                     submenuTitle?.let { title ->
                         Box(Modifier.fillMaxWidth().height(45.dp), contentAlignment = Alignment.Center) { Text(title, fontSize = 14.sp) }
                     }
                     when (page) {
-                        "main" -> {
-                            nearbyHandoff?.takeIf { com.android.purebilibili.feature.nearby.NEARBY_HANDOFF_ENABLED }?.let { controller ->
-                                PlayerSettingsRow(com.android.purebilibili.feature.nearby.NEARBY_TITLE) {
-                                    dismissWithAction { controller.openDevices() }
-                                }
-                            }
-                            onWatchLater?.let { action -> PlayerSettingsRow("稍后再看（添加 / 移出）") { dismissWithAction(action) } }
-                            onShowNotes?.let { action -> PlayerSettingsRow("查看笔记") { dismissWithAction(action) } }
-                            onDownloadVideo?.let { action -> PlayerSettingsRow("离线缓存") { dismissWithAction(action) } }
-                            PlayerSettingsRow("保存封面") { dismissWithAction(onSaveCover) }
-                            PlayerSettingsRow("定时关闭", sleepTimerMinutes?.let { "剩余 $it 分钟" }) { page = "sleep" }
-                            onEditPlayUrl?.let { action -> PlayerSettingsRow("播放地址") { dismissWithAction(action) } }
-                            onChapterDisplayModeChange?.let { onModeChange ->
-                                PlayerSettingsPopupRow(
-                                    title = playbackSettingTitle("playback.chapter_display_mode"),
-                                    current = chapterDisplayMode.label,
-                                    options = ChapterDisplayMode.entries.map { it.label },
-                                ) { index -> onModeChange(ChapterDisplayMode.entries[index]) }
-                            }
-                            PlayerSettingsToggleRow(
-                                title = playbackSettingTitle("playback.show_center_playback_button"),
-                                checked = !hideCenterPlayback,
-                                onCheckedChange = { visible ->
-                                    scope.launch {
-                                        com.android.purebilibili.core.store.player.PlayerSettingsStore
-                                            .setHideCenterPlayback(context, !visible)
-                                    }
-                                },
-                            )
-                            PlayerSettingsRow("重载视频") { dismissWithAction(onReload) }
-                            PlayerSettingsRow(
-                                "画质增强",
-                                resolveAnime4KSettingsSubtitle(anime4kEnabled, anime4kAvailable, anime4kBypassReason),
-                            ) { page = "enhancement" }
-                            if (onPlayerVolumeChange != null) {
-                                PlayerSettingsRow("播放器音量", "当前: ${(playerVolume * 100).toInt()}%") { showPlayerVolumeDialog = true }
-                            } else if (playerVolumeUnavailableReason != null) {
-                                PlayerSettingsRow("播放器音量", playerVolumeUnavailableReason, onClick = null)
-                            }
-                            if (cdnCount > 0 || cdnServiceLabels.isNotEmpty()) PlayerSettingsRow("CDN 设置", "当前：${cdnServiceLabels.getOrNull(currentCdnServiceIndex) ?: "线路 ${currentCdnIndex + 1}"}，无法播放请切换") { page = "cdn" }
-                            PlayerSettingsRow(
-                                "画面变换",
-                                buildList {
-                                    if (isFlippedHorizontal) add("左右翻转")
-                                    if (isFlippedVertical) add("上下翻转")
-                                }.joinToString("、").ifEmpty { "默认" },
-                            ) { page = "transform" }
-                            if (qualityLabels.isNotEmpty()) PlayerSettingsRow("选择画质", "当前画质 $currentQualityLabel") { page = "quality" }
-                            if (availableAudioQualities.isNotEmpty()) PlayerSettingsRow("选择音质", availableAudioQualities.firstOrNull { it.preferenceId == selectedAudioQuality }?.label?.let { "当前音质 $it" } ?: "当前音质未知") { page = "audio" }
-                            PlayerSettingsRow("首选编码格式", "首选 ${piliCodecLabel(currentCodec)}，当前播放 ${piliCodecLabel(playingVideoCodec)}") { page = "codec" }
-                            onPlaybackOrderChange?.let { change -> PlayerSettingsPopupRow("播完后行为", playbackOrderLabel, playbackOrderOptions, onSelected = change) }
-                            onShowDanmakuPool?.let { action -> PlayerSettingsRow("弹幕列表") { dismissWithAction(action) } }
-                            PlayerSettingsRow("弹幕设置") { dismissWithAction(onDanmakuSettingsClick) }
-                            onSubtitleSettings?.let { action -> PlayerSettingsRow("字幕设置") { dismissWithAction(action) } }
-                            onLoadSubtitle?.let { action -> PlayerSettingsRow("加载字幕") { dismissWithAction(action) } }
-                            onSaveSubtitle?.let { action -> PlayerSettingsRow("保存字幕") { dismissWithAction(action) } }
-                            onShowPlaybackInfo?.let { action -> PlayerSettingsRow("播放信息") { dismissWithAction(action) } }
-                            onPlayerDiagnosticsChange?.let { change ->
-                                PlayerSettingsToggleRow(
-                                    title = "播放器诊断",
-                                    checked = playerDiagnosticsEnabled,
-                                    onCheckedChange = change,
-                                )
-                            }
-                            onReport?.let { action -> PlayerSettingsRow("举报") { dismissWithAction(action) } }
-                            if (isFullscreen) {
-                                PlayerSettingsRow(FullscreenActionCountSettings.TITLE) { page = "actionCounts" }
-                            }
-                            PlayerSettingsRow("高级设置") { page = "advanced" }
-                        }
                         "actionCounts" -> {
                             FullscreenActionCount.entries.forEach { count ->
                                 PlayerSettingsToggleRow(

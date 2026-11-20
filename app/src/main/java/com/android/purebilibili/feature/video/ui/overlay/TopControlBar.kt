@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.vectorResource
@@ -55,6 +56,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.currentStateAsState
@@ -74,6 +76,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.compose.material.icons.outlined.Home
+
+private const val TopShortcutButtonSizeDp = 34
 
 /**
  * Shared Android PiliPlus HeaderControl for inline/fullscreen and portrait/landscape.
@@ -143,6 +147,8 @@ fun TopControlBar(
     followStatusKnown: Boolean = false,
     onFollowClick: () -> Unit = {},
     extraActions: (@Composable () -> Unit)? = null,
+    topShortcut: (@Composable () -> Unit)? = null,
+    onTopShortcutCapacityChanged: ((Boolean) -> Unit)? = null,
 ) {
     val policy = resolveTopControlBarLayoutPolicy(
         isPortrait = isPortrait,
@@ -207,6 +213,9 @@ fun TopControlBar(
                 hasTitle = hasTitle,
                 allowSeparateTitleRow = isFullscreen,
                 alignEdgesToTop = showPortraitAuthor,
+                shortcut = topShortcut,
+                shortcutWidth = TopShortcutButtonSizeDp.dp + buttonSpacing,
+                onShortcutCapacityChanged = onTopShortcutCapacityChanged,
                 left = {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(buttonSpacing)) {
                         HeaderIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回", onBack, iconSize = if (glass) 15 else 20)
@@ -664,26 +673,44 @@ private fun PiliHeaderSlots(
     left: @Composable () -> Unit,
     right: @Composable () -> Unit,
     title: @Composable () -> Unit,
+    shortcut: (@Composable () -> Unit)?,
+    shortcutWidth: Dp,
+    onShortcutCapacityChanged: ((Boolean) -> Unit)?,
 ) {
     Layout(
         content = {
             Box { left() }
             Box { right() }
             if (hasTitle) Box { title() }
+            if (onShortcutCapacityChanged != null) {
+                Box(
+                    modifier = Modifier.onSizeChanged { onShortcutCapacityChanged(it.width > 0) },
+                    contentAlignment = Alignment.CenterStart,
+                ) { shortcut?.invoke() }
+            }
         },
         modifier = Modifier.fillMaxWidth(),
     ) { measurables, constraints ->
         val natural = Constraints(maxHeight = constraints.maxHeight)
         val leftPlaceable = measurables[0].measure(natural)
         val rightPlaceable = measurables[1].measure(natural)
-        val edgeWidth = leftPlaceable.width + rightPlaceable.width
-        val width = constraints.maxWidth
-        val scale = if (edgeWidth > width) width.toFloat() / edgeWidth else 1f
         // 至少为八个标题字及材质内边距留出空间，避免标题退化成竖长窄条。
         val minimumTitleWidth = 128.sp.roundToPx() + 34.dp.roundToPx()
+        val width = constraints.maxWidth
+        val baseEdgeWidth = leftPlaceable.width + rightPlaceable.width
+        val shortcutPlaceable = if (onShortcutCapacityChanged != null) {
+            val slotWidth = shortcutWidth.roundToPx()
+            // 按未缩放的实际控件宽度预留位置，快捷键不挤压现有按钮或标题。
+            val availableWidth = width - baseEdgeWidth - (if (hasTitle) minimumTitleWidth else 0)
+            val measuredWidth = if (availableWidth >= slotWidth) slotWidth else 0
+            measurables[if (hasTitle) 3 else 2].measure(natural.copy(minWidth = measuredWidth, maxWidth = measuredWidth))
+                .takeIf { shortcut != null && measuredWidth > 0 }
+        } else null
+        val edgeWidth = baseEdgeWidth + (shortcutPlaceable?.width ?: 0)
+        val scale = if (edgeWidth > width) width.toFloat() / edgeWidth else 1f
         val separateTitleRow = hasTitle && allowSeparateTitleRow &&
             width - edgeWidth < minimumTitleWidth
-        val edgeHeight = maxOf(leftPlaceable.height, rightPlaceable.height)
+        val edgeHeight = maxOf(leftPlaceable.height, rightPlaceable.height, shortcutPlaceable?.height ?: 0)
         val titleRowGap = if (separateTitleRow) 4.dp.roundToPx() else 0
         val titlePlaceable = if (hasTitle) measurables[2].measure(
             Constraints(
@@ -708,6 +735,10 @@ private fun PiliHeaderSlots(
             } else {
                 leftPlaceable.placeRelative(0, if (alignEdgesToTop) 0 else (rowHeight - leftPlaceable.height) / 2)
                 rightPlaceable.placeRelative(width - rightPlaceable.width, if (alignEdgesToTop) 0 else (rowHeight - rightPlaceable.height) / 2)
+                shortcutPlaceable?.placeRelative(
+                    width - rightPlaceable.width - shortcutPlaceable.width,
+                    if (alignEdgesToTop) 0 else (rowHeight - shortcutPlaceable.height) / 2,
+                )
             }
             titlePlaceable?.placeRelative(
                 if (separateTitleRow) 0 else leftPlaceable.width,
@@ -769,6 +800,11 @@ private fun HeaderIcon(
             )
         }
     }
+}
+
+@Composable
+internal fun PlayerTopShortcutButton(icon: ImageVector, title: String, onClick: () -> Unit) {
+    HeaderIcon(icon, title, onClick, buttonSizeDp = TopShortcutButtonSizeDp)
 }
 
 @Composable

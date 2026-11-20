@@ -41,6 +41,7 @@ data class AppWindowAction(
     val enabled: Boolean = true,
     val selected: Boolean = false,
     val children: List<AppWindowAction> = emptyList(),
+    val iconContent: (@Composable (Modifier) -> Unit)? = null,
 )
 
 /** 玻璃菜单将分级选项放入同一个面板，避免切换子级时重新测量材质外壳。 */
@@ -49,7 +50,13 @@ internal fun flattenGlassWindowActionGroups(groups: List<List<AppWindowAction>>)
         if (action.children.isEmpty()) {
             target += action
         } else {
-            target += AppWindowAction(label = action.label, icon = action.icon, iconTint = action.iconTint, enabled = false)
+            target += AppWindowAction(
+                label = action.label,
+                icon = action.icon,
+                iconTint = action.iconTint,
+                enabled = false,
+                iconContent = action.iconContent,
+            )
             action.children.forEach { child ->
                 appendAction(target, if (action.enabled) child else child.copy(enabled = false))
             }
@@ -195,7 +202,7 @@ private fun AppStandardWindowActionMenu(
                     actions.forEach { action ->
                         AppDropdownMenuItem(
                             text = { AppText(action.label) },
-                            leadingIcon = action.icon?.let { icon ->
+                            leadingIcon = action.iconContent?.let { content -> { content(Modifier) } } ?: action.icon?.let { icon ->
                                 {
                                     if (action.iconTint == null) {
                                         AppIcon(icon, contentDescription = null)
@@ -326,7 +333,7 @@ private fun AppCompactWindowActionMenu(
                             selected = action.selected,
                             dismissOnClick = action.children.isEmpty(),
                             enabled = action.enabled,
-                            leadingIcon = action.icon?.let { icon ->
+                            leadingIcon = action.iconContent?.let { content -> { content(Modifier) } } ?: action.icon?.let { icon ->
                                 {
                                     if (action.iconTint == null || !action.enabled) {
                                         AppIcon(icon, contentDescription = null)
@@ -398,7 +405,7 @@ private fun AppWindowAction.toDropdownItem(onSelected: (AppWindowAction) -> Unit
     enabled = enabled,
     selected = selected,
     onClick = { onSelected(this) },
-    icon = icon?.let { imageVector ->
+    icon = iconContent ?: icon?.let { imageVector ->
         { modifier ->
             if (iconTint == null) {
                 AppIcon(

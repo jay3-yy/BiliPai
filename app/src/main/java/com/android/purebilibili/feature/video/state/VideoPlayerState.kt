@@ -566,6 +566,7 @@ class VideoPlayerState(
     val apiDimension: StateFlow<Pair<Int, Int>?> = _apiDimension.asStateFlow()
 
     val hasRenderedFirstFrame: StateFlow<Boolean> = PlaybackFirstFrameTracker.observe(player)
+    internal val hasPlayedCurrentMedia: StateFlow<Boolean> = PlaybackFirstFrameTracker.observeHasPlayed(player)
     private val _debugInfo = MutableStateFlow(
         if (hasRenderedFirstFrame.value) applyRenderedFirstFrameDebugInfo(PlaybackDebugInfo())
         else PlaybackDebugInfo()

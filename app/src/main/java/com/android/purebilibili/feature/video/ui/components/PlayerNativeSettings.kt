@@ -26,10 +26,13 @@ import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppListItem
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.isMiuixNonGlassEnabled
+import com.android.purebilibili.core.ui.rememberAppQualityIcon
+import com.android.purebilibili.core.ui.rememberAppSpeedIcon
 
 
 /** 只在同窗玻璃设置容器实际接管后移除内容的原生实色底板。 */
 internal val LocalPlayerGlassSettingsSurface = compositionLocalOf { false }
+internal const val PLAYER_TOP_SHORTCUT_TITLE = "顶部快捷位"
 
 internal fun playerNativeMenuConfig(config: com.android.purebilibili.core.ui.AppThemeConfig) =
     config.copy(nativeMiuixPopupsEnabled = false, liquidGlassEnabled = config.popupGlassEnabled)
@@ -53,6 +56,7 @@ internal fun PlayerNativeSettingsHost(
     bottomPaddingDp: Int = 0,
     isFullscreen: Boolean = false,
     playerBounds: androidx.compose.ui.unit.IntRect? = null,
+    title: String = "更多操作",
     content: @Composable () -> Unit,
 ) {
     val uiStyle = LocalAppUiStyle.current
@@ -85,7 +89,7 @@ internal fun PlayerNativeSettingsHost(
     if (com.android.purebilibili.core.ui.components.AppGlassMenu(
             expanded = true,
             onDismissRequest = onDismiss,
-            title = "更多操作",
+            title = title,
             placement = if (com.android.purebilibili.core.ui.components.LocalAppGlassMenuSource.current?.isAvailable == true) {
                 com.android.purebilibili.core.ui.components.AppGlassMenuPlacement.ANCHOR_END
             } else if (isFullscreen) com.android.purebilibili.core.ui.components.AppGlassMenuPlacement.END
@@ -106,7 +110,7 @@ internal fun PlayerNativeSettingsHost(
     // 播放器提供避让宿主时，横屏更多操作与选集共用侧面板；其他入口保留原有弹窗。
     if (sidePanel) {
         PlayerNativeMenuTheme(uiStyle) {
-            PlayerDetailPanel("更多操作", isFullscreen, playerBounds, onDismiss) { requestDismiss ->
+            PlayerDetailPanel(title, isFullscreen, playerBounds, onDismiss) { requestDismiss ->
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -114,7 +118,7 @@ internal fun PlayerNativeSettingsHost(
                         .padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("更多操作", fontSize = 16.sp)
+                    Text(title, fontSize = 16.sp)
                     Spacer(Modifier.weight(1f))
                     PanelAction(Icons.Outlined.Close, "关闭", requestDismiss)
                 }
@@ -165,6 +169,11 @@ internal fun PlayerSettingsRow(title: String, subtitle: String? = null, onClick:
         "播放信息" -> Icons.Outlined.Info
         "举报" -> Icons.Outlined.ErrorOutline
         FullscreenActionCountSettings.TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ic_settings_action_counts_24)
+        PLAYER_MENU_EDITOR_TITLE -> ImageVector.vectorResource(com.android.purebilibili.R.drawable.ms_reorder_24)
+        PLAYER_PLAYBACK_SETTINGS_TITLE -> Icons.Outlined.Tune
+        PLAYER_TOP_SHORTCUT_TITLE -> Icons.Outlined.VerticalAlignTop
+        PLAYER_QUALITY_PLACEMENT_TITLE -> rememberAppQualityIcon()
+        PLAYER_SPEED_PLACEMENT_TITLE, "播放倍速" -> rememberAppSpeedIcon()
         "返回" -> Icons.Outlined.ArrowBack
         else -> Icons.Outlined.Settings
     }
@@ -212,19 +221,20 @@ internal fun PlayerSettingsPopupRow(
     current: String,
     options: List<String>,
     enabledOptions: List<Boolean> = List(options.size) { true },
+    enabled: Boolean = true,
     onSelected: (Int) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
     // 玻璃设置面板内展开选项，不再为内部行创建第二层玻璃弹窗。
     if (LocalPlayerGlassSettingsSurface.current) {
         Column(Modifier.fillMaxWidth()) {
-            PlayerSettingsRow(title, current) { expanded = !expanded }
+            PlayerSettingsRow(title, current, onClick = if (enabled) ({ expanded = !expanded }) else null)
             if (expanded) {
                 options.forEachIndexed { index, label ->
                     PlayerSettingsSelectionRow(
                         title = label,
                         selected = label == current,
-                        enabled = enabledOptions.getOrElse(index) { true },
+                        enabled = enabled && enabledOptions.getOrElse(index) { true },
                         allowSelectedClick = true,
                         onClick = { expanded = false; if (label != current) onSelected(index) },
                     )
@@ -233,8 +243,8 @@ internal fun PlayerSettingsPopupRow(
         }
         return
     }
-    com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { expanded = true }) {
-        PlayerSettingsRow(title, current) { expanded = true }
+    com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { if (enabled) expanded = true }) {
+        PlayerSettingsRow(title, current, onClick = if (enabled) ({ expanded = true }) else null)
         com.android.purebilibili.core.ui.components.AppDropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
@@ -242,7 +252,7 @@ internal fun PlayerSettingsPopupRow(
             options.forEachIndexed { index, label ->
                 com.android.purebilibili.core.ui.components.AppDropdownMenuItem(
                     text = { Text(label, fontSize = 14.sp) },
-                    enabled = enabledOptions.getOrElse(index) { true },
+                    enabled = enabled && enabledOptions.getOrElse(index) { true },
                     onClick = {
                         expanded = false
                         if (label != current) onSelected(index)

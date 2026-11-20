@@ -268,7 +268,7 @@ fun rememberPiliPlayerMenuSession(
     val sleepTimer = remember(player, context) { player?.let { PiliPlayerSleepTimer.forPlayer(it, context) } }
     val timerMinutes by remember(sleepTimer) {
         sleepTimer?.minutes ?: kotlinx.coroutines.flow.MutableStateFlow<Int?>(null)
-    }.collectAsStateWithLifecycle(initialValue = null)
+    }.collectAsStateWithLifecycle()
     val timerActivity = remember(context) { context.findPiliActivity() }
     LaunchedEffect(sleepTimer, timerActivity) {
         sleepTimer?.attachActivity(timerActivity)

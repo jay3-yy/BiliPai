@@ -471,6 +471,19 @@ class VideoPlayerCoverPolicyTest {
     }
 
     @Test
+    fun pausedPortraitPlaybackDoesNotNeedAnotherManualStartWhenDetailMounts() {
+        assertFalse(
+            shouldKeepCoverForManualStart(
+                playWhenReady = false,
+                currentPositionMs = 98_000L,
+                autoPlayEnabled = false,
+                hasManualStartPlaybackIntent = false,
+                hasPlayedCurrentMedia = true,
+            )
+        )
+    }
+
+    @Test
     fun manualStartCover_staysVisibleBeforeLoadResetsFreshPlayerFlag() {
         assertTrue(
             shouldKeepCoverForManualStart(

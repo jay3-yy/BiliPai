@@ -100,6 +100,8 @@ class AudioStreamSelectionPolicyTest {
         assertEquals(AUDIO_QUALITY_AUTO, decision.effectivePreferenceId)
         assertEquals(30280, decision.selectedPreferenceId)
         assertEquals(AudioFallbackReason.SPEED_INCOMPATIBLE, decision.fallbackReason)
+        val presentation = resolveAudioQualityControlPresentation(decision.availableOptions, decision.selectedPreferenceId)
+        assertEquals("192K", presentation.currentLabel)
     }
 
     @Test
@@ -260,8 +262,18 @@ class AudioStreamSelectionPolicyTest {
         )
 
         assertEquals("音质", presentation.label)
+        assertNull(presentation.currentLabel)
         assertTrue(!presentation.showHiResBadge)
         assertTrue(!presentation.showDolbyBadge)
+    }
+
+    @Test
+    fun `automatic audio preference does not report a current track before selection`() {
+        val options = buildAvailableAudioQualityOptions(collectAudioStreamCandidates(fullDash()))
+        val presentation = resolveAudioQualityControlPresentation(options, AUDIO_QUALITY_AUTO)
+
+        assertEquals("自动", presentation.label)
+        assertNull(presentation.currentLabel)
     }
 
     @Test

@@ -1103,6 +1103,7 @@ private fun VideoPlayerSectionContent(
     val videoSizeState by playerState.videoSize.collectAsStateWithLifecycle()
     // Keep real first-frame readiness across detail/mini-player handoffs, without telemetry.
     val persistedRenderedFirstFrame by playerState.hasRenderedFirstFrame.collectAsStateWithLifecycle()
+    val hasPlayedCurrentMedia by playerState.hasPlayedCurrentMedia.collectAsStateWithLifecycle()
     val currentPlaybackIdentity = remember(bvid, uiState) {
         val success = uiState as? VideoPlaybackUiState.Success
         resolvePlayerInteractionIdentity(
@@ -1119,8 +1120,11 @@ private fun VideoPlayerSectionContent(
     }
 
     // 控制器显示状态
-    var showControls by remember(currentPlaybackIdentity) {
-        mutableStateOf(INITIAL_PLAYER_CONTROLS_VISIBLE)
+    var showControls by remember(currentPlaybackIdentity, playerState.player) {
+        // 竖屏播放器退出后会重新挂载详情控件。暂停续接时首屏直接给出可拖动的真实进度。
+        val reattachingPausedPlayback = uiState is VideoPlaybackUiState.Success &&
+            !isFullscreen && !isPortraitFullscreen && hasPlayedCurrentMedia && !observedPlayWhenReady
+        mutableStateOf(INITIAL_PLAYER_CONTROLS_VISIBLE || reattachingPausedPlayback)
     }
     var hasAutoHiddenControlsForCurrentVideo by remember(currentPlaybackIdentity) {
         mutableStateOf(INITIAL_PLAYER_CHROME_AUTO_HIDE_HANDLED)
@@ -3613,7 +3617,8 @@ private fun VideoPlayerSectionContent(
             playWhenReady = observedPlayWhenReady,
             currentPositionMs = playerState.player.currentPosition,
             autoPlayEnabled = autoPlayOnOpenEnabled,
-            hasManualStartPlaybackIntent = hasManualStartPlaybackIntent
+            hasManualStartPlaybackIntent = hasManualStartPlaybackIntent,
+            hasPlayedCurrentMedia = hasPlayedCurrentMedia,
         )
         // 只保留当前输出面的真实出画状态；历史播放记录不能证明新视图已经出画。
         var hasCurrentOutputFrame by remember(currentPlaybackIdentity, playerState.player) {

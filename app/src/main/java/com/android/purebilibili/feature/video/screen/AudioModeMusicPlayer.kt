@@ -52,6 +52,7 @@ import com.android.purebilibili.feature.video.share.buildVideoSharePayload
 import com.android.purebilibili.feature.video.ui.components.CollectionSheet
 import com.android.purebilibili.feature.video.ui.components.PlayerEpisodeMenu
 import com.android.purebilibili.feature.video.ui.components.PlaybackSpeed
+import com.android.purebilibili.feature.video.ui.components.formatPlayerMenuTimerValue
 import com.android.purebilibili.feature.video.ui.components.SpeedSelectionMenuDialog
 import com.android.purebilibili.feature.video.ui.components.VideoCommentSheetHost
 import com.android.purebilibili.feature.video.viewmodel.VideoCommentViewModel
@@ -460,6 +461,7 @@ internal fun AudioModeMusicPlayer(
         // Video audio mode owns this player; the position clock stays inside content.
         playbackPositionSource = player,
         playbackPositionIdentity = "${info.bvid}:${info.cid}",
+        customizeMoreMenu = true,
         onBack = onBack,
         onPlayPause = { player?.handleAudioModePlayPause() },
         onSeek = { positionMs ->
@@ -562,8 +564,8 @@ internal fun AudioModeMusicPlayer(
             else -> null
         },
         onSleepTimerClick = { showSleepTimerDialog = true },
-        sleepTimerLabel = if (sleepAfterCurrent) "播完当前首后停止" else formatAudioModeSleepTimerButtonLabel(sleepTimerMinutes),
-        audioQualityLabel = audioQualityPresentation.label,
+        sleepTimerValue = if (sleepAfterCurrent) "播完当前首后停止" else formatPlayerMenuTimerValue(sleepTimerMinutes),
+        audioQualityValue = audioQualityPresentation.currentLabel,
         audioQualityOptions = successState.availableAudioQualities,
         requestedAudioQuality = successState.requestedAudioQuality,
         selectedAudioQuality = successState.selectedAudioQuality,
@@ -590,7 +592,8 @@ internal fun AudioModeMusicPlayer(
             }
         },
         onCommentsClick = { showComments = true },
-        isFavorited = engagementState.isFavorited,
+        isFavorited = engagementState.subject?.aid == info.aid &&
+            engagementState.subject?.bvid == info.bvid && engagementState.isFavorited,
         onFavoriteClick = {
             when (
                 resolveVideoFavoriteAction(
@@ -606,7 +609,7 @@ internal fun AudioModeMusicPlayer(
         onDownloadClick = { viewModel.downloadAudio(context) },
         onShareClick = { showShare = true },
         onSpeedClick = { showSpeedMenu = true },
-        speedLabel = PlaybackSpeed.formatSpeed(currentSpeed),
+        speedValue = player?.let { PlaybackSpeed.formatSpeedFull(currentSpeed) },
         isInPipMode = isInPipMode,
         liquidGlassEffectsEnabled = liquidGlassEffectsEnabled
     )

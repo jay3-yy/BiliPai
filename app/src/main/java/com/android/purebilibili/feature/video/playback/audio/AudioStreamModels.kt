@@ -42,7 +42,8 @@ data class AudioQualityOption(
 data class AudioQualityControlPresentation(
     val label: String,
     val showHiResBadge: Boolean,
-    val showDolbyBadge: Boolean
+    val showDolbyBadge: Boolean,
+    val currentLabel: String? = null,
 )
 
 data class AudioSelectionDecision(
