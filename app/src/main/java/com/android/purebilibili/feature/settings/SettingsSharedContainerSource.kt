@@ -25,7 +25,6 @@ internal class SettingsSharedContainerOrigin(val owner: BiliPaiNavKey, color: Co
     var bottomRadius by mutableStateOf(0.dp)
     var sharedBounds by mutableStateOf<SettingsSharedContainerBounds?>(null)
     val returnLanding = NavigationReturnLanding()
-    var returnLandingHandledByOwner = false
 }
 
 internal class SettingsSharedContainerSources {

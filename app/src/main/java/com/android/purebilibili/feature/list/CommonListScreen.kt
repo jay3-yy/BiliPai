@@ -80,7 +80,7 @@ import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.motion.AppMotionTokens
 import com.android.purebilibili.core.util.responsiveContentWidth
 
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -906,16 +906,6 @@ fun CommonListScreen(
         favoritePagerGridStates.clear()
         historyPagerGridStates.values.forEach { it.requestScrollToItem(0) }
     }
-    val hideListTopSearchBar = shouldHideListTopSearchBar(
-        bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
-        listScopedSearchEnabled = homeSettings.listScopedSearchEnabled,
-        isSearchDestination = isSearchDestination,
-    )
-    val showListScopedSearchActiveBar = shouldShowListScopedSearchActiveBar(
-        bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
-        listScopedSearchEnabled = homeSettings.listScopedSearchEnabled,
-        searchQuery = searchQuery,
-    )
     LaunchedEffect(listScopedSearchChannel) {
         listScopedSearchChannel?.receiveAsFlow()?.collect { query ->
             searchQuery = query
@@ -944,7 +934,6 @@ fun CommonListScreen(
     var headerHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var visibleHeaderHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     var fixedTopBarHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
-    var searchBarHeightPx by androidx.compose.runtime.remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val headerHeightDp = with(LocalDensity.current) {
         (if (supportsCollapsibleCommonListHeader) visibleHeaderHeightPx else headerHeightPx).toDp()
     }
@@ -2186,70 +2175,40 @@ fun CommonListScreen(
                         scrollBehavior = scrollBehavior
                     )
 
-                    // 🔍 搜索栏。历史页开启全局液态玻璃复用后，搜索与筛选各自成为
-                    // 一条独立 Dock，结构与首页顶部一致。
-                    // 「列表精简搜索」开启后隐藏顶栏搜索，由底栏胶囊页内搜索；有关键词时
-                    // 显示轻量结果条以便确认与清除。
-                    if (hideListTopSearchBar) {
-                        if (showListScopedSearchActiveBar) {
-                            ListScopedSearchActiveBar(
-                                searchQuery = searchQuery,
-                                onClear = { searchQuery = "" },
-                                backdrop = visibleHeaderBackdrop,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .onGloballyPositioned { coordinates ->
-                                        searchBarHeightPx = coordinates.size.height
-                                    }
-                                    .padding(
-                                        horizontal = if (historyViewModel != null && historyFilterChrome.useLiquidDock) {
-                                            historyFilterChrome.horizontalPaddingDp.dp
-                                        } else {
-                                            favoriteHeaderLayout.searchBarHorizontalPaddingDp.dp
-                                        },
-                                        vertical = favoriteHeaderLayout.searchBarVerticalPaddingDp.dp
-                                    ),
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .onGloballyPositioned { coordinates ->
-                                    searchBarHeightPx = coordinates.size.height
-                                }
-                                .padding(
-                                    horizontal = if (historyViewModel != null && historyFilterChrome.useLiquidDock) {
-                                        historyFilterChrome.horizontalPaddingDp.dp
-                                    } else {
-                                        favoriteHeaderLayout.searchBarHorizontalPaddingDp.dp
-                                    },
-                                    vertical = favoriteHeaderLayout.searchBarVerticalPaddingDp.dp
-                                )
-                        ) {
-                            val searchPlaceholder = when {
-                                isSubscribedBrowse -> "搜索追更"
-                                historyViewModel != null -> "搜索历史"
-                                favoriteViewModel != null && favoriteSection != FavoriteSection.VIDEO ->
-                                    "搜索${favoriteSection.label}收藏"
-                                else -> "搜索视频"
-                            }
-                            AppLiquidAwareSearchField(
-                                query = searchQuery,
-                                onQueryChange = { searchQuery = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                compactHeight = if (favoriteViewModel != null && historyFilterChrome.useLiquidDock) {
-                                    (historyFilterChrome.heightDp * 0.88f).dp
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                horizontal = if (historyViewModel != null && historyFilterChrome.useLiquidDock) {
+                                    historyFilterChrome.horizontalPaddingDp.dp
                                 } else {
-                                    androidx.compose.ui.unit.Dp.Unspecified
+                                    favoriteHeaderLayout.searchBarHorizontalPaddingDp.dp
                                 },
-                                placeholder = searchPlaceholder,
-                                backdrop = visibleHeaderBackdrop,
-                                isScrollInProgressProvider = {
-                                    primaryGridState.isScrollInProgress
-                                },
+                                vertical = favoriteHeaderLayout.searchBarVerticalPaddingDp.dp
                             )
+                    ) {
+                        val searchPlaceholder = when {
+                            isSubscribedBrowse -> "搜索追更"
+                            historyViewModel != null -> "搜索观看记录"
+                            favoriteViewModel != null && favoriteSection != FavoriteSection.VIDEO ->
+                                "搜索${favoriteSection.label}收藏"
+                            else -> "搜索视频"
                         }
+                        AppLiquidAwareSearchField(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            compactHeight = if (favoriteViewModel != null && historyFilterChrome.useLiquidDock) {
+                                (historyFilterChrome.heightDp * 0.88f).dp
+                            } else {
+                                androidx.compose.ui.unit.Dp.Unspecified
+                            },
+                            placeholder = searchPlaceholder,
+                            backdrop = visibleHeaderBackdrop,
+                            isScrollInProgressProvider = {
+                                primaryGridState.isScrollInProgress
+                            },
+                        )
                     }
 
                     if (favoriteViewModel != null && !(isSearchDestination && isSubscribedBrowse)) {

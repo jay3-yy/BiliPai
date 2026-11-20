@@ -10,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Image
@@ -40,6 +41,10 @@ import com.android.purebilibili.data.model.response.LiveAreaNavigationTab
 import com.android.purebilibili.data.model.response.LiveSecondSortTag
 import com.android.purebilibili.data.repository.LiveRepository
 import com.android.purebilibili.navigation.animatePagerSelection
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import kotlinx.coroutines.launch
 
 private data class LiveAreaTab(val id: Int, val parentId: Int, val title: String, val cover: String = "")
@@ -104,11 +109,22 @@ fun LiveAreaDetailScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             Column {
-                AppTopBar(
-                    title = parentTitle,
-                    navigationIcon = { AppIconButton(onClick = onBack) { AppIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") } },
-                    actions = { AppIconButton(onClick = onSearchClick) { AppIcon(Icons.Outlined.Search, "搜索直播") } },
-                )
+                NavigationControlMotionGroup {
+                    val search = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveSearch, CircleShape, onSearchClick)
+                    AppTopBar(
+                        title = parentTitle,
+                        navigationIcon = {
+                            AppIconButton(onClick = onBack, modifier = rememberSystemWindowControlNeighborModifier()) {
+                                AppIcon(Icons.AutoMirrored.Outlined.ArrowBack, "返回")
+                            }
+                        },
+                        actions = {
+                            AppIconButton(onClick = search.onClick, modifier = search.modifier) {
+                                AppIcon(Icons.Outlined.Search, "搜索直播")
+                            }
+                        },
+                    )
+                }
                 if (hasTabs) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         CompositionLocalProvider(LocalLiquidIndicatorDynamicLengthEnabled provides false) {

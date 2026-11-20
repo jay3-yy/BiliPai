@@ -20,6 +20,7 @@ import com.android.purebilibili.core.network.grpc.DynamicReactionUser
 import com.android.purebilibili.core.ui.AppModalBottomSheet
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.feature.video.playback.policy.VideoUiWorkPermission
 import com.android.purebilibili.feature.video.playback.policy.runVisibleVideoUiWork
@@ -90,7 +91,7 @@ fun DynamicReactionSheet(item: DynamicItem, onDismiss: () -> Unit, onUserClick: 
         }
         AppText(title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp))
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).appScrollBoundaryHaptics(listState),
             state = listState,
             contentPadding = PaddingValues(16.dp),
         ) {

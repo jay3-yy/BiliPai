@@ -83,6 +83,8 @@ internal fun rememberLiveCardContainerTransition(
     enabled: Boolean = true,
     includeAvatarCompanions: Boolean = false,
     containerTarget: BiliPaiNavKey? = null,
+    // 来源图层已包含头像和徽标时，可直接使用头像的交接时机。
+    avatarSource: Boolean = includeAvatarCompanions,
 ): LiveCardContainerTransition {
     val sources = LocalLiveCardContainerSources.current
     val owner = LocalLiveCardContainerOwner.current
@@ -174,7 +176,7 @@ internal fun rememberLiveCardContainerTransition(
             sources.sources.remove(target)
             sources.capture(
                 target, owner, anchor, layer, color, radiusPx, radiusPx,
-                avatarSource = includeAvatarCompanions,
+                avatarSource = avatarSource,
             )
             selected = sources.sources[target]?.anchor === anchor
             sources.sources[target]?.takeIf { selected }?.companions = listOfNotNull(

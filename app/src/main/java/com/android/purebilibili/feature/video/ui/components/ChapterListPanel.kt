@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import com.android.purebilibili.core.ui.components.AppSwitch as Switch
 import com.android.purebilibili.core.ui.components.AppText as Text
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,8 +44,12 @@ fun ChapterListPanel(
             if (onShowViewPointsChange != null) Switch(checked = showViewPoints, onCheckedChange = onShowViewPointsChange)
             PanelAction(Icons.Default.Close, "关闭", requestDismiss)
         }
-        LazyColumn(state = state, modifier = Modifier.weight(1f).fillMaxWidth(), overscrollEffect = null,
-            contentPadding = PaddingValues(top = 7.dp, bottom = 100.dp)) {
+        LazyColumn(
+            state = state,
+            modifier = Modifier.weight(1f).fillMaxWidth().appScrollBoundaryHaptics(state),
+            overscrollEffect = null,
+            contentPadding = PaddingValues(top = 7.dp, bottom = 100.dp),
+        ) {
             itemsIndexed(viewPoints) { index, point ->
                 val range = "${FormatUtils.formatDuration(point.from)} - ${FormatUtils.formatDuration(point.to)}"
                 PlayerPanelMediaRow(

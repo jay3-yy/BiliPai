@@ -75,6 +75,10 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.LocalNavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberNavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 
 /**
  *  离线缓存列表页面
@@ -264,6 +268,7 @@ fun DownloadListScreen(
         } else {
             val columns = resolveVideoListColumns(listLayout.singleColumn, maxWidth.value)
             val alignRows = columns > 1 && !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
+            val playbackMotionGroup = rememberNavigationControlMotionGroup()
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
                 state = gridState,
@@ -342,57 +347,74 @@ fun DownloadListScreen(
                         val playableOffline = remember(task.filePath, task.status) {
                             isDownloadTaskPlayableOffline(task)
                         }
-                        DownloadTaskItem(
-                            task = task,
-                            modifier = if (alignRows) Modifier.fillMaxHeight() else Modifier,
-                            stacked = columns > 1,
-                            onClick = {
-                                if (selectionMode) {
-                                    if (!deletingBatch && task.id in completedTaskIds) {
-                                        selectedTaskIds = if (task.id in selectedTaskIds) {
-                                            selectedTaskIds - task.id
-                                        } else selectedTaskIds + task.id
-                                    }
-                                } else when (resolveDownloadTaskClickTarget(task, isNetworkAvailable = isNetworkAvailable)) {
-                                    DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(task.id)
-                                    DownloadTaskClickTarget.OnlinePlayer -> {
-                                        Toast.makeText(
-                                            context,
-                                            "本地文件不可用，已切换在线播放",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        onVideoClick(task.bvid)
-                                    }
-                                    null -> Unit
+                        val playbackTarget = if (!selectionMode && !isDissolving) {
+                            resolveDownloadTaskClickTarget(task, isNetworkAvailable, playableOffline)
+                        } else null
+                        val navigationTarget = when (playbackTarget) {
+                            DownloadTaskClickTarget.OfflinePlayer -> BiliPaiNavKey.OfflineVideoPlayer(task.id)
+                            DownloadTaskClickTarget.OnlinePlayer -> BiliPaiNavKey.VideoDetail(task.bvid)
+                            null -> null
+                        }
+                        fun openPlayback(target: DownloadTaskClickTarget?) {
+                            when (target) {
+                                DownloadTaskClickTarget.OfflinePlayer -> onOfflineVideoClick(task.id)
+                                DownloadTaskClickTarget.OnlinePlayer -> {
+                                    Toast.makeText(context, "本地文件不可用，已切换在线播放", Toast.LENGTH_SHORT).show()
+                                    onVideoClick(task.bvid)
                                 }
-                            },
-                            onPauseResume = {
-                                actionScope.launch {
-                                    val currentTask = DownloadManager.tasks.value[task.id] ?: return@launch
-                                    if (currentTask.isDownloading || currentTask.isWaitingForRetry) {
-                                        DownloadManager.pauseDownload(task.id)
-                                    } else if (currentTask.canResume) {
-                                        DownloadManager.startDownload(task.id)
-                                    }
-                                    val updatedStatus = DownloadManager.tasks.value[task.id]?.status
-                                    if (updatedStatus != null && updatedStatus != currentTask.status) {
-                                        downloadHaptic(HapticType.LIGHT)
-                                    }
-                                }
-                            },
-                            onDelete = {
-                                if (deletingTaskId == null) pendingDeleteTask = task
-                            },
-                            selectionMode = selectionMode,
-                            selected = task.id in selectedCompletedIds,
-                            selectionEnabled = !deletingBatch && task.id in completedTaskIds,
-                            offlinePlayable = playableOffline,
-                            speedBytesPerSecond = if (task.status == DownloadStatus.DOWNLOADING) {
-                                downloadSpeedsByTask[task.id] ?: 0L
-                            } else {
-                                0L
+                                null -> Unit
                             }
-                        )
+                        }
+                        CompositionLocalProvider(LocalNavigationControlMotionGroup provides playbackMotionGroup) {
+                            val playback = rememberSystemWindowNavigationControl(
+                                navigationTarget, AppShapes.container(ContainerLevel.Card),
+                            ) { openPlayback(playbackTarget) }
+                            DownloadTaskItem(
+                                task = task,
+                                modifier = playback.modifier.then(if (alignRows) Modifier.fillMaxHeight() else Modifier),
+                                stacked = columns > 1,
+                                onClick = {
+                                    if (selectionMode) {
+                                        if (!deletingBatch && task.id in completedTaskIds) {
+                                            selectedTaskIds = if (task.id in selectedTaskIds) {
+                                                selectedTaskIds - task.id
+                                            } else selectedTaskIds + task.id
+                                        }
+                                    } else {
+                                        // 文件可能在列表显示后被清理，点击时按实际可用性决定去哪。
+                                        val currentTarget = resolveDownloadTaskClickTarget(task, isNetworkAvailable)
+                                        if (currentTarget == playbackTarget) playback.onClick()
+                                        else openPlayback(currentTarget)
+                                    }
+                                },
+                                onPauseResume = {
+                                    actionScope.launch {
+                                        val currentTask = DownloadManager.tasks.value[task.id] ?: return@launch
+                                        if (currentTask.isDownloading || currentTask.isWaitingForRetry) {
+                                            DownloadManager.pauseDownload(task.id)
+                                        } else if (currentTask.canResume) {
+                                            DownloadManager.startDownload(task.id)
+                                        }
+                                        val updatedStatus = DownloadManager.tasks.value[task.id]?.status
+                                        if (updatedStatus != null && updatedStatus != currentTask.status) {
+                                            downloadHaptic(HapticType.LIGHT)
+                                        }
+                                    }
+                                },
+                                onDelete = {
+                                    if (deletingTaskId == null) pendingDeleteTask = task
+                                },
+                                selectionMode = selectionMode,
+                                selected = task.id in selectedCompletedIds,
+                                selectionEnabled = !deletingBatch && task.id in completedTaskIds,
+                                offlinePlayable = playableOffline,
+                                speedBytesPerSecond = if (task.status == DownloadStatus.DOWNLOADING) {
+                                    downloadSpeedsByTask[task.id] ?: 0L
+                                } else {
+                                    0L
+                                }
+                            )
+                        }
                     }
                     }
                 }

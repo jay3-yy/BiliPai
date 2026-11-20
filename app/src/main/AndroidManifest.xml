@@ -170,6 +170,23 @@
                 <data android:scheme="http" android:host="m.bilibili.com" />
             </intent-filter>
             
+            <!-- Bilibili search and music detail links -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="search.bilibili.com" />
+                <data android:scheme="http" android:host="search.bilibili.com" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="music.bilibili.com" android:path="/h5/music-detail" />
+                <data android:scheme="http" android:host="music.bilibili.com" android:path="/h5/music-detail" />
+            </intent-filter>
+
             <!-- 🔗 Deep Link: b23.tv 短链接 -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />

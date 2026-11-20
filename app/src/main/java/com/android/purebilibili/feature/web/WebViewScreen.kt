@@ -13,6 +13,8 @@ import com.android.purebilibili.core.ui.components.appElasticPress
 import com.android.purebilibili.core.ui.components.AppIcon
 
 import android.view.ViewGroup
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.content.Context
 import android.webkit.RenderProcessGoneDetail
 import android.widget.Toast
@@ -38,13 +40,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppScaffold
+import com.android.purebilibili.core.ui.AppHapticScene
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppHapticFeedback
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 
@@ -81,6 +86,7 @@ fun WebViewScreen(
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
+    val scrollHaptics = rememberAppHapticFeedback(AppHapticScene.REFRESH)
     // 组合期读取明暗主题，factory 里不能再调用 @Composable。
     val shortReviewReport = remember(url) { isShortReviewReportUrl(url) }
     val darkTheme = com.android.purebilibili.core.ui.isAppInDarkTheme()
@@ -254,7 +260,7 @@ fun WebViewScreen(
                                         request: WebResourceRequest?
                                     ): Boolean {
                                         if (request?.isForMainFrame != true) return false
-                                        val requestUrl = request?.url?.toString() ?: return false
+                                        val requestUrl = request.url?.toString() ?: return false
                                         return handleBilibiliUrl(
                                             webView = view,
                                             urlString = requestUrl,
@@ -416,6 +422,9 @@ fun WebViewScreen(
                             }.also { browserSession.attach(it, url) }
                         },
                         update = { webView ->
+                            webView.onScrollBoundary = {
+                                scrollHaptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+                            }
                             // Compare the caller's request, not the current URL after redirects.
                             webView.setShortReviewReportTheme(if (shortReviewReport) darkTheme else null, webViewBackground)
                             webView.loadRequestedUrl(url)
@@ -494,6 +503,44 @@ internal fun isShortReviewReportUrl(url: String): Boolean = runCatching {
 }.getOrDefault(false)
 
 private class BrowserWebView(context: Context) : WebView(context) {
+    var onScrollBoundary: (() -> Unit)? = null
+    private var horizontalTouchScroll: Boolean? = null
+    private val scrollGesture = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent): Boolean = true
+
+        override fun onScroll(
+            e1: MotionEvent?,
+            e2: MotionEvent,
+            distanceX: Float,
+            distanceY: Float,
+        ): Boolean {
+            if (horizontalTouchScroll == null) {
+                horizontalTouchScroll = kotlin.math.abs(distanceX) > kotlin.math.abs(distanceY)
+            }
+            return true
+        }
+    }).apply { setIsLongpressEnabled(false) }
+
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) horizontalTouchScroll = null
+        scrollGesture.onTouchEvent(event)
+        val handled = super.dispatchTouchEvent(event)
+        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+            horizontalTouchScroll = null
+        }
+        return handled
+    }
+
+    override fun onScrollChanged(left: Int, top: Int, oldLeft: Int, oldTop: Int) {
+        super.onScrollChanged(left, top, oldLeft, oldTop)
+        val horizontal = horizontalTouchScroll ?: return
+        val delta = if (horizontal) left - oldLeft else top - oldTop
+        if (delta == 0) return
+        val direction = if (delta > 0) 1 else -1
+        val canContinue = if (horizontal) canScrollHorizontally(direction) else canScrollVertically(direction)
+        if (!canContinue) onScrollBoundary?.invoke()
+    }
+
     private var reportDarkTheme: Boolean? = null
     private var reportFileCallback: ValueCallback<Array<Uri>>? = null
     private var reportAllowsMultiple = false
@@ -572,6 +619,7 @@ private class BrowserWebView(context: Context) : WebView(context) {
     fun release(rendererGone: Boolean = false) {
         if (released) return
         released = true
+        onScrollBoundary = null
         finishReportFileSelection(emptyList())
         (parent as? ViewGroup)?.removeView(this)
         if (!rendererGone) stopLoading()

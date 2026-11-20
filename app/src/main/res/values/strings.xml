@@ -2,6 +2,7 @@
     <string name="dynamic_live_photo_badge">实况</string>
     <string name="link_preview_card_label">链接预览</string>
     <string name="video_link_part_unavailable">无法打开链接指定的分 P</string>
+    <string name="external_link_unavailable">无法打开此链接</string>
     <string name="history_activity_stats">阅读与观看统计</string>
     <string name="mini_player_notification_channel">小窗播放</string>
     <string name="app_name">BiliPai</string>
@@ -371,21 +372,16 @@
     <string name="animation_section_maid">蓝雪女仆</string>
     <string name="animation_maid_summary">关闭后隐藏女仆动画和静态图</string>
     <string name="animation_card_entrance_summary">打开首页时卡片依次淡入</string>
-    <string name="animation_card_transition_summary">从来源卡片或按钮展开详情，返回时收回原位</string>
-    <string name="animation_card_transition_method_title">卡片转场方式</string>
-    <string name="animation_card_transition_method_summary">选择金标优先或直接使用安卓共享元素</string>
-    <string name="animation_card_transition_auto">自动（金标优先）</string>
-    <string name="animation_card_transition_shared_element">安卓共享元素</string>
+    <string name="animation_card_transition_summary">系统金标可用时，从来源卡片或按钮连续展开和返回</string>
     <string name="animation_card_removal_dissolve_title">卡片移除粒子消散</string>
     <string name="animation_card_removal_dissolve_summary">适用于首页不感兴趣和稍后再看单条移除。快速档的粒子消散约 0.7 秒，关闭后直接更新列表。</string>
     <string name="animation_card_removal_dissolve_off">关闭</string>
-    <string name="animation_card_transition_source_official">可用时优先使用金标，视频卡片回退到普通页面动画</string>
-    <string name="animation_card_transition_source_fallback">金标当前不可用，视频卡片使用普通页面动画</string>
-    <string name="animation_card_transition_source_shared">可用入口使用安卓共享元素，视频卡片暂用普通页面动画</string>
+    <string name="animation_card_transition_source_official">可用入口使用系统金标转场</string>
+    <string name="animation_card_transition_source_fallback">金标当前不可用，页面使用普通转场</string>
     <string name="animation_card_transition_source_reduced_motion">系统已开启减少动态效果，当前不使用卡片过渡动画</string>
-    <string name="animation_transition_blur_official_supported">控制金标、卡片共享转场和容器形变的背景模糊</string>
-    <string name="animation_transition_blur_official_system">控制卡片共享转场和容器形变的背景模糊，金标模糊由系统管理</string>
-    <string name="animation_transition_blur_summary">控制卡片共享转场和容器形变的背景模糊</string>
+    <string name="animation_transition_blur_official_supported">控制金标和设置容器转场的背景模糊</string>
+    <string name="animation_transition_blur_official_system">控制设置容器转场的背景模糊，金标模糊由系统管理</string>
+    <string name="animation_transition_blur_summary">控制设置容器转场的背景模糊</string>
     <string name="animation_predictive_back_title">预测性返回手势</string>
     <string name="animation_predictive_back_summary">统一控制页面、卡片、图片预览、评论和弹窗的跟手返回预览；关闭后仍可正常返回，不影响页面切换动画设置</string>
     <string name="animation_back_title">页面切换动画</string>
@@ -1085,4 +1081,8 @@
     <string name="hot_danmaku_send_error">发送失败，请重试</string>
     <string name="message_select_conversation">选择一个会话</string>
     <string name="message_close_conversation">关闭会话</string>
+    <string name="sub_reply_style_title">楼中楼样式</string>
+    <string name="sub_reply_style_summary">树状按回复关系缩进并连线，可展开或收起分支</string>
+    <string name="sub_reply_style_tree">YouTube 树状</string>
+    <string name="sub_reply_style_classic">B 站经典</string>
 </resources>

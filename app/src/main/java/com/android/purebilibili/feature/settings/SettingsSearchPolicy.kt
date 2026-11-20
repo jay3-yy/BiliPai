@@ -1001,7 +1001,6 @@ internal fun resolveSettingsSearchResults(
                 "playback.comment_member_decorations_enabled" -> listOf("评论装扮", "个性装扮")
                 "playback.image_preview_long_press_save_enabled" -> listOf("图片长按保存", "长按保存图片")
                 "playback.video_info_default_expanded" -> listOf("简介默认展开")
-                "playback.sub_reply_threaded_enabled" -> listOf("评论树", "嵌套回复", "回复连线", "折叠分支")
                 "playback.sub_reply_loaded_count_enabled" -> listOf("楼中楼已加载数量", "已加载条数")
                 "playback.hide_interactive_command_danmaku" -> listOf("关注点赞弹幕", "关注弹幕", "点赞弹幕", "三连弹幕", "三连", "隐藏三连", "三连互动提示", "屏蔽互动提示")
                 else -> emptyList()

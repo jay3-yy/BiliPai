@@ -43,7 +43,7 @@ import com.android.purebilibili.core.ui.components.AppHorizontalPager as Horizon
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ForwardToInbox
 import androidx.compose.material.icons.filled.MoreVert
@@ -264,7 +264,6 @@ private fun LiveRoomScreen(
     settingsIconStyle: AppIconStyle,
     onOpenWeb: ((String) -> Unit)?,
 ) {
-    val sharedSurfaceVisible = com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
     val bilibiliRoomId = roomId.toLongOrNull() ?: 0L
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -1232,8 +1231,6 @@ private fun LiveRoomScreen(
                         }
                     },
                     update = { playerView ->
-                        playerView.alpha = if (sharedSurfaceVisible) 1f else 0f
-                        playerView.videoSurfaceView?.alpha = if (sharedSurfaceVisible) 1f else 0f
                         playerView.player = if (shouldBindLivePlayerViewForAudioOnly(isLiveAudioOnly)) exoPlayer else null
                         if (playerView.resizeMode != viewportAspectRatio.playerResizeMode) {
                             playerView.resizeMode = viewportAspectRatio.playerResizeMode
@@ -1249,14 +1246,6 @@ private fun LiveRoomScreen(
                 }
             }
 
-            if (!sharedSurfaceVisible) {
-                AsyncImage(
-                    model = com.android.purebilibili.core.util.FormatUtils.fixImageUrl(liveCoverForUi),
-                    contentDescription = null,
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().background(roomColorTokens.baseBackgroundColor),
-                )
-            }
             val successState = uiState as? LivePlayerState.Success
             val liveDanmakuLayerEnabled =
                 !(pipPresentation && pipNoDanmaku) &&
@@ -1267,7 +1256,7 @@ private fun LiveRoomScreen(
             val showLiveDanmakuOverlay =
                 liveLayoutMode != LiveRoomLayoutMode.PortraitVerticalOverlay || isFullscreen || pipPresentation
             val liveDanmakuInPip = pipPresentation
-            if (liveDanmakuLayerEnabled && sharedSurfaceVisible) {
+            if (liveDanmakuLayerEnabled) {
                 // 隐藏时保留渲染器并暂停，恢复后跟随直播时间；画中画沿用弹幕显示偏好。
                 LiveDanmakuOverlay(
                     danmakuFlow = viewModel.danmakuFlow,

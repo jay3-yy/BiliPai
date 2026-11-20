@@ -19,6 +19,7 @@ import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppDialogAction
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 
 @Composable
 internal fun ArticleOutlineDialog(
@@ -38,7 +39,10 @@ internal fun ArticleOutlineDialog(
             if (entries.isEmpty()) {
                 AppText("本文暂无标题目录", color = AppContentColors.secondaryText())
             } else {
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = listMaxHeight), state = listState) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = listMaxHeight).appScrollBoundaryHaptics(listState),
+                    state = listState,
+                ) {
                     itemsIndexed(entries, key = { _, entry -> entry.blockIndex }) { index, entry ->
                         val isCurrent = entry.blockIndex == currentBlock
                         AppTextButton(

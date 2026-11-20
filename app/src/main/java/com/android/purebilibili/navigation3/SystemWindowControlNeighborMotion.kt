@@ -54,14 +54,8 @@ internal class SystemWindowControlNeighbor(
     val density: Float,
 ) {
     class Motion(val phase: SystemWindowMotionPhase, val direction: Offset)
-    class SharedMotion(
-        val origin: com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin,
-        val direction: Offset,
-    )
-
     var coordinates: LayoutCoordinates? = null
     var motion by mutableStateOf<Motion?>(null)
-    var sharedMotion by mutableStateOf<SharedMotion?>(null)
     var motionGroup: Any? = null
     var returnHandledByOwner = false
     var eligible = false
@@ -75,14 +69,7 @@ internal class SystemWindowControlNeighbor(
     // 仅变换绘制层，不改变槽位、原生组件尺寸和系统窗口的来源落点。
     val modifier: Modifier = Modifier.graphicsLayer {
         val event = motion
-        val shared = sharedMotion
-        val bounds = shared?.origin?.sharedBounds
-        val amount = if (shared != null && bounds != null && shared.origin.available) {
-            // 展开、预测返回和取消都跟随共享边界；两端为零，不在落位后补弹。
-            navigationSharedNeighborPressure(bounds.open.value)
-        } else if (shared != null) 0f else pressure.value
-        val direction = shared?.direction ?: event?.direction ?: Offset.Zero
-        applyControlNeighborPressure(amount, direction)
+        applyControlNeighborPressure(pressure.value, event?.direction ?: Offset.Zero)
     }
 }
 
@@ -119,12 +106,10 @@ internal object SystemWindowControlNeighbors {
 
     fun beginGroupNavigation(source: SystemWindowControlNeighbor) {
         val group = source.motionGroup as? NavigationControlMotionGroupState ?: return
-        group.sharedReturn = null
         group.systemReturn = null
         controls.filter { it.motionGroup === group }.forEach {
             it.groupLanding.clear()
             it.motion = null
-            it.sharedMotion = null
         }
     }
 
@@ -146,22 +131,6 @@ internal object SystemWindowControlNeighbors {
                     it.groupLanding.request()
                 }
             }
-        }
-    }
-
-    fun linkShared(
-        anchor: VideoCardSourceAnchor,
-        origin: com.android.purebilibili.feature.settings.SettingsSharedContainerOrigin,
-    ) {
-        val source = controls.firstOrNull { anchor.hasCoordinates(it.coordinates) } ?: return
-        val bounds = source.visibleBounds() ?: return
-        val group = source.motionGroup as? NavigationControlMotionGroupState
-        captureGroupLanding(source)?.let { deliver ->
-            group?.sharedReturn = NavigationControlMotionGroupState.SharedReturn(origin, deliver)
-        }
-        controls.forEach { neighbor ->
-            val direction = direction(source, bounds, neighbor) ?: return@forEach
-            neighbor.sharedMotion = SystemWindowControlNeighbor.SharedMotion(origin, direction)
         }
     }
 
@@ -189,7 +158,6 @@ internal object SystemWindowControlNeighbors {
                     // 受力方向绑定本次静止几何；不能用已被挤开的边界重做邻项判定，
                     // 否则位移可能把邻项推过距离阈值，导致结束回调无法释放。
                     if (phase.returning && neighbor.returnHandledByOwner) return@forEach
-                    neighbor.sharedMotion = null
                     // 返回途中先释放进入时的让位，等整组复原后再响应落位冲量。
                     val neighborPhase = if (groupLanding != null && phase.returning) SystemWindowMotionPhase.OPENED else phase
                     neighbor.motion = SystemWindowControlNeighbor.Motion(neighborPhase, direction)
@@ -219,9 +187,8 @@ internal fun ObserveSystemWindowControlNeighbor(
         onDispose { SystemWindowControlNeighbors.detach(control) }
     }
     val event = control.motion
-    val shared = control.sharedMotion
-    LaunchedEffect(control, event, shared, active, enabled, pageActive, inViewport) {
-        if (shared != null || !enabled || !pageActive || !inViewport) {
+    LaunchedEffect(control, event, active, enabled, pageActive, inViewport) {
+        if (!enabled || !pageActive || !inViewport) {
             control.pressure.snapTo(0f)
             return@LaunchedEffect
         }
@@ -240,11 +207,4 @@ internal fun ObserveSystemWindowControlNeighbor(
             controlNeighborPressureSpring(loading = event.phase.running),
         )
     }
-}
-
-internal fun navigationSharedNeighborPressure(open: Float): Float {
-    val fraction = open.coerceIn(0f, 1f)
-    // 两端不仅回到零，速度也回到零；取消手势按同一路径退回，避免尾端被截断。
-    val envelope = 4f * fraction * (1f - fraction)
-    return envelope * envelope
 }

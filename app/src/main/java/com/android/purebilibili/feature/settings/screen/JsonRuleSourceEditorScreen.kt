@@ -2,7 +2,7 @@ package com.android.purebilibili.feature.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -142,7 +142,6 @@ internal fun JsonRuleSourceEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding()
-                .appScrollBoundaryHaptics(scrollState)
                 .verticalScroll(scrollState)
                 .padding(settingsScrollContentPadding(extraHorizontal = 16.dp, extraVertical = 16.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp),

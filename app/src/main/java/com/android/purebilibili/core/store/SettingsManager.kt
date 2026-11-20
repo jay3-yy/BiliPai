@@ -734,7 +734,6 @@ data class HomeSettings(
     val homeRefreshUndoVisible: Boolean = false, // 刷新后的撤销按钮默认隐藏
     val cardAnimationEnabled: Boolean = false,    //  卡片进场动画（默认关闭）
     val cardTransitionEnabled: Boolean = false,   // 卡片展开过渡按需开启
-    val preferSharedElementCardTransition: Boolean = false,
     val cardRemovalDissolveMode: CardRemovalDissolveMode = CardRemovalDissolveMode.STANDARD,
     val videoSharedTransitionSpeed: VideoSharedTransitionSpeed = VideoSharedTransitionSpeed.STANDARD,
     val videoSharedTransitionCustomDurationMillis: Int =
@@ -1704,8 +1703,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
         booleanPreferencesKey("maid_lottie_animation_enabled")
     //  [新增] 卡片过渡动画开关
     private val KEY_CARD_TRANSITION_ENABLED = booleanPreferencesKey("card_transition_enabled")
-    private val KEY_PREFER_SHARED_ELEMENT_CARD_TRANSITION =
-        booleanPreferencesKey("prefer_shared_element_card_transition")
     private val KEY_CARD_REMOVAL_DISSOLVE_ENABLED = booleanPreferencesKey("card_removal_dissolve_enabled")
     private val KEY_CARD_REMOVAL_DISSOLVE_QUICK = booleanPreferencesKey("card_removal_dissolve_quick")
     // 实时画面转场：SDR 用 TextureView 一镜到底；HDR 仍 SurfaceView（不降画质），morph 走封面
@@ -1994,7 +1991,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
             homeRefreshUndoVisible = preferences[KEY_HOME_REFRESH_UNDO_VISIBLE] ?: false,
             cardAnimationEnabled = preferences[KEY_CARD_ANIMATION_ENABLED] ?: false,
             cardTransitionEnabled = preferences[KEY_CARD_TRANSITION_ENABLED] ?: false,
-            preferSharedElementCardTransition = preferences[KEY_PREFER_SHARED_ELEMENT_CARD_TRANSITION] ?: false,
             cardRemovalDissolveMode = readCardRemovalDissolveMode(preferences),
             videoSharedTransitionSpeed = VideoSharedTransitionSpeed.fromValue(
                 preferences[KEY_VIDEO_SHARED_TRANSITION_SPEED]
@@ -3621,13 +3617,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
 
     suspend fun setCardTransitionEnabled(context: Context, value: Boolean) {
         context.settingsDataStore.edit { preferences -> preferences[KEY_CARD_TRANSITION_ENABLED] = value }
-    }
-
-    fun getPreferSharedElementCardTransition(context: Context): Flow<Boolean> =
-        context.settingsDataStore.data.map { it[KEY_PREFER_SHARED_ELEMENT_CARD_TRANSITION] ?: false }
-
-    suspend fun setPreferSharedElementCardTransition(context: Context, preferSharedElement: Boolean) {
-        context.settingsDataStore.edit { it[KEY_PREFER_SHARED_ELEMENT_CARD_TRANSITION] = preferSharedElement }
     }
 
     private fun readCardRemovalDissolveMode(preferences: Preferences): CardRemovalDissolveMode = when {
@@ -9061,10 +9050,6 @@ private val KEY_APP_FONT_WEIGHT = intPreferencesKey("app_font_weight")
                 SettingsShareSection.APPEARANCE,
             ),
             BooleanShareablePreferenceDefinition(KEY_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),
-            BooleanShareablePreferenceDefinition(
-                KEY_PREFER_SHARED_ELEMENT_CARD_TRANSITION,
-                SettingsShareSection.APPEARANCE,
-            ),
             BooleanShareablePreferenceDefinition(KEY_CARD_REMOVAL_DISSOLVE_ENABLED, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_CARD_REMOVAL_DISSOLVE_QUICK, SettingsShareSection.APPEARANCE),
             BooleanShareablePreferenceDefinition(KEY_LIVE_SURFACE_CARD_TRANSITION_ENABLED, SettingsShareSection.APPEARANCE),

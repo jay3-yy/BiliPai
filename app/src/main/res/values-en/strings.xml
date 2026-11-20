@@ -2,6 +2,7 @@
     <string name="dynamic_live_photo_badge">Live Photo</string>
     <string name="link_preview_card_label">Link preview</string>
     <string name="video_link_part_unavailable">Couldn’t open the video part specified in the link</string>
+    <string name="external_link_unavailable">Couldn’t open this link</string>
     <string name="history_activity_stats">Reading and Viewing Stats</string>
     <string name="app_name">BiliPai</string>
 
@@ -368,21 +369,16 @@
     <string name="animation_section_maid">Blue Snow Maid</string>
     <string name="animation_maid_summary">Hides maid animations and static images when turned off</string>
     <string name="animation_card_entrance_summary">Fade cards in one at a time when opening Home</string>
-    <string name="animation_card_transition_summary">Expand details from the source card or button and return to it</string>
-    <string name="animation_card_transition_method_title">Card transition method</string>
-    <string name="animation_card_transition_method_summary">Prefer system animations or use Android shared elements</string>
-    <string name="animation_card_transition_auto">Auto (prefer system)</string>
-    <string name="animation_card_transition_shared_element">Android shared elements</string>
+    <string name="animation_card_transition_summary">Use system card transitions to open and return to the source when available.</string>
     <string name="animation_card_removal_dissolve_title">Card removal effect</string>
     <string name="animation_card_removal_dissolve_summary">Applies to Not interested on Home and single-item removal in Watch Later. Fast dissolves in about 0.7 seconds. Off updates the list immediately.</string>
     <string name="animation_card_removal_dissolve_off">Off</string>
-    <string name="animation_card_transition_source_official">Use system animation when available. Video cards fall back to page transitions.</string>
-    <string name="animation_card_transition_source_fallback">System animation is unavailable. Video cards use page transitions.</string>
-    <string name="animation_card_transition_source_shared">Use Android shared elements for eligible entries. Video cards temporarily use page transitions.</string>
+    <string name="animation_card_transition_source_official">Eligible entries use system card transitions.</string>
+    <string name="animation_card_transition_source_fallback">System card transitions are unavailable. Pages use standard transitions.</string>
     <string name="animation_card_transition_source_reduced_motion">Reduced motion is enabled in system settings; card transitions are currently inactive</string>
-    <string name="animation_transition_blur_official_supported">Control background blur for system, shared card, and container transitions</string>
-    <string name="animation_transition_blur_official_system">Control background blur for shared card and container transitions. The system manages its own blur.</string>
-    <string name="animation_transition_blur_summary">Control background blur for shared card and container transitions</string>
+    <string name="animation_transition_blur_official_supported">Control background blur for system card transitions and Settings container transitions</string>
+    <string name="animation_transition_blur_official_system">Control Settings container blur. System card transition blur is managed by Android.</string>
+    <string name="animation_transition_blur_summary">Control background blur for Settings container transitions</string>
     <string name="animation_predictive_back_title">Predictive back gestures</string>
     <string name="animation_predictive_back_summary">Control back previews across pages, cards, images, comments and dialogs. Turning this off keeps normal back navigation and your page transition choice.</string>
     <string name="animation_back_title">Page transition animation</string>
@@ -1083,4 +1079,8 @@
     <string name="hot_danmaku_send_error">Could not send. Try again.</string>
     <string name="message_select_conversation">Select a conversation</string>
     <string name="message_close_conversation">Close conversation</string>
+    <string name="sub_reply_style_title">Reply thread style</string>
+    <string name="sub_reply_style_summary">Tree view groups replies with indentation and connectors. Branches can be expanded or collapsed.</string>
+    <string name="sub_reply_style_tree">YouTube tree</string>
+    <string name="sub_reply_style_classic">Bilibili classic</string>
 </resources>

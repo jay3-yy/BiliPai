@@ -82,7 +82,6 @@ internal class SettingsSharedContainerTransition(
     private val pageColor: () -> Color,
     private val realtimeBlurEnabled: Boolean,
     private val blurMotionTier: () -> MotionTier,
-    val navigationControlFallback: Boolean = false,
 ) : NavTransition {
     override val preparesEnterFrame = true
     override val handlesOwnClipping = true
@@ -199,7 +198,7 @@ internal fun settingsSharedContainerDestination(
         snapshotFlow {
             latestScope.value.isRemoving && bounds.sourcePlaced && bounds.destinationPlaced
         }.first { it }
-        if (!origin.returnLandingHandledByOwner) origin.returnLanding.request()
+        origin.returnLanding.request()
     }
     val view = LocalView.current
     val activity = LocalActivity.current

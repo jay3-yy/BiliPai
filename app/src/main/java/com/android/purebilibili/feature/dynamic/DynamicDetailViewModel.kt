@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.repository.DynamicRepository
+import com.android.purebilibili.data.repository.shouldFetchOpusDetailForDynamicDetail
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -14,7 +15,7 @@ import kotlinx.coroutines.launch
 
 internal sealed interface DynamicDetailUiState {
     data object Loading : DynamicDetailUiState
-    data class Success(val item: DynamicItem) : DynamicDetailUiState
+    data class Success(val item: DynamicItem, val isPreview: Boolean = false) : DynamicDetailUiState
     data class Error(val message: String) : DynamicDetailUiState
 }
 
@@ -36,7 +37,10 @@ internal class DynamicDetailViewModel(
         loadJob?.cancel()
         if (!sameDetail) initializedComments = null
         val retained = _uiState.value.takeIf { sameDetail && it is DynamicDetailUiState.Success }
-        _uiState.value = retained ?: readSeed(dynamicId)?.let { DynamicDetailUiState.Success(it) }
+        // 列表里的图文可能只有摘要和九宫格，等详情解析完成再确定段落与图片布局。
+        _uiState.value = retained ?: readSeed(dynamicId)
+            ?.takeUnless(::shouldFetchOpusDetailForDynamicDetail)
+            ?.let { DynamicDetailUiState.Success(it, isPreview = true) }
             ?: DynamicDetailUiState.Loading
         loadJob = viewModelScope.launch {
             val result = loadDetail(dynamicId)

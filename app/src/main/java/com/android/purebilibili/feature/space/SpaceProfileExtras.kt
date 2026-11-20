@@ -9,6 +9,7 @@ import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -18,6 +19,7 @@ import com.android.purebilibili.core.ui.AppAlertDialog
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.core.util.FormatUtils
@@ -63,7 +65,12 @@ internal fun SpaceProfileDialogs(
             onDismissRequest = onDismissFollowedUsers,
             title = { AppText("我关注的人也关注了 TA") },
             text = {
-                LazyColumn(Modifier.heightIn(max = maxListHeight), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val listState = rememberLazyListState()
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = maxListHeight).appScrollBoundaryHaptics(listState),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     if (state.hasLoadedFollowedUsers && state.followedUsers.isEmpty()) item { AppText("暂无共同关注信息") }
                     items(state.followedUsers, key = { it.mid }) { user ->
                         AppTextButton(onClick = { onDismissFollowedUsers(); onUserClick(user.mid) }) {
@@ -88,7 +95,12 @@ internal fun SpaceProfileDialogs(
             onDismissRequest = onDismissReservations,
             title = { AppText("预约 (${state.reservations.size})") },
             text = {
-                LazyColumn(Modifier.heightIn(max = maxListHeight), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                val listState = rememberLazyListState()
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = maxListHeight).appScrollBoundaryHaptics(listState),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
                     items(state.reservations, key = { it.sid }) { reservation ->
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             AppText(reservation.name, style = MaterialTheme.typography.titleSmall)
@@ -120,7 +132,12 @@ internal fun SpaceProfileDialogs(
             onDismissRequest = onDismissMedals,
             title = { AppText("粉丝勋章墙 (${wall.count})") },
             text = {
-                LazyColumn(Modifier.heightIn(max = maxListHeight), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val listState = rememberLazyListState()
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = maxListHeight).appScrollBoundaryHaptics(listState),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     item { AppText(wall.name) }
                     if (wall.list.isEmpty()) item { AppText("暂无粉丝勋章") }
                     items(wall.list, key = { it.medal?.id ?: it.targetName }) { item ->

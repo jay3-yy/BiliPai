@@ -1,6 +1,8 @@
 // 文件路径: feature/dynamic/DynamicScreen.kt
 package com.android.purebilibili.feature.dynamic
 
+import com.android.purebilibili.feature.dynamic.components.DynamicUserMenuAnchor
+
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.core.ui.common.verticalPriorityHorizontalPagerSwipe
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
@@ -33,7 +35,7 @@ import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
@@ -809,6 +811,7 @@ fun DynamicScreen(
                                 selfUid = selfUid,
                                 isExpanded = isSidebarExpanded,
                                 userListState = sidebarUserListState,
+                                onLiveClick = onLiveClick,
                                 onUserClick = { userId ->
                                     handleUserSelection(userId)
                                     if (targetMode.isDrawer() && isSidebarExpanded) {
@@ -1238,6 +1241,7 @@ fun DynamicScreen(
                                     hiddenCount = hiddenUserIds.size,
                                     uplistUpdateMids = state.uplistUpdateMids,
                                     onUserClick = handleUserSelection,
+                                    onLiveClick = onLiveClick,
                                     onToggleShowHidden = { viewModel.toggleShowHiddenUsers() },
                                     onTogglePin = { viewModel.togglePinUser(it) },
                                     onToggleHidden = { viewModel.toggleHiddenUser(it) },
@@ -1933,6 +1937,7 @@ private fun HorizontalUserList(
     hiddenCount: Int,
     uplistUpdateMids: Set<Long> = emptySet(),
     onUserClick: (Long?) -> Unit,
+    onLiveClick: (Long, String, String) -> Unit,
     onToggleShowHidden: () -> Unit,
     onTogglePin: (Long) -> Unit,
     onToggleHidden: (Long) -> Unit,
@@ -1960,7 +1965,7 @@ private fun HorizontalUserList(
                     user.name
                 }
 
-                com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showMenu = true }, enabled = !isShortcut) {
+                DynamicUserMenuAnchor(user, enabled = !isShortcut, onOpen = { showMenu = true }) { avatarModifier, menuSource ->
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
@@ -1971,7 +1976,31 @@ private fun HorizontalUserList(
                             .padding(AppSpacingTokens.ExtraSmall)
                             .alpha(if (user.isHidden) 0.5f else 1f)
                     ) {
-                        DynamicUserAvatarWithLiveBadge(isLive = user.isLive) {
+                        DynamicUserAvatarWithLiveBadge(
+                            user = user,
+                            onLiveClick = onLiveClick,
+                            avatarModifier = avatarModifier,
+                            name = {
+                                AppText(
+                                    displayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (isSelected)
+                                        AppContentColors.accent()
+                                    else
+                                        AppContentColors.secondaryText(),
+                                    maxLines = 2,
+                                    minLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                    // 长昵称可换行；统一文字行高，避免 miuix 默认正文行高
+                                    // 挤占头像、直播标记和名称的纵向空间。
+                                    modifier = Modifier.widthIn(
+                                        min = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large,
+                                        max = 128.dp,
+                                    )
+                                )
+                            },
+                        ) {
                             val hasUpdate = user.uid in uplistUpdateMids
                             Box(
                                 modifier = Modifier
@@ -2025,30 +2054,12 @@ private fun HorizontalUserList(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-                        AppText(
-                            displayName,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected)
-                                AppContentColors.accent()
-                            else
-                                AppContentColors.secondaryText(),
-                            maxLines = 2,
-                            minLines = 2,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            // 长昵称可换行；统一文字行高，避免 miuix 默认正文行高
-                            // 挤占头像、直播标记和名称的纵向空间。
-                            modifier = Modifier.widthIn(
-                                min = AppSpacingTokens.TripleExtraLarge + AppSpacingTokens.Large,
-                                max = 128.dp,
-                            )
-                        )
                     }
 
                     AppDropdownMenu(
                         expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
+                        onDismissRequest = { showMenu = false },
+                        glassSource = menuSource,
                     ) {
                         AppDropdownMenuItem(
                             text = { AppText(if (user.isPinned) "取消置顶" else "置顶") },

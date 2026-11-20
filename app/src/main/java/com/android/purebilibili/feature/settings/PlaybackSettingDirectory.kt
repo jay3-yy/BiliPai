@@ -1,8 +1,12 @@
 package com.android.purebilibili.feature.settings
 
 import android.content.Context
+import com.android.purebilibili.R
+import com.android.purebilibili.core.store.SettingsManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+
+internal const val SUB_REPLY_STYLE_SETTING_ID = "playback.sub_reply_threaded_enabled"
 
 internal data class PlaybackSettingItem(
     val settingId: String,
@@ -23,9 +27,9 @@ internal fun settingItemTitle(settingId: String): String =
     settingsItemDirectory.first { it.settingId == settingId }.title
 
 internal fun settingItemTitle(settingId: String, context: Context): String = when (settingId) {
+    SUB_REPLY_STYLE_SETTING_ID -> context.getString(R.string.sub_reply_style_title)
     "navigation.video_companion_enabled" -> context.getString(com.android.purebilibili.R.string.video_companion_title)
     "animation.card_transition_enabled" -> context.getString(com.android.purebilibili.R.string.animation_title_card_transition)
-    CARD_TRANSITION_METHOD_SETTING_ID -> context.getString(com.android.purebilibili.R.string.animation_card_transition_method_title)
     SETTINGS_ICON_GLYPHS_SETTING_ID -> context.getString(com.android.purebilibili.R.string.appearance_settings_icon_glyphs_title)
     PROGRESSIVE_BLUR_RENDERER_SETTING_ID -> context.getString(com.android.purebilibili.R.string.animation_progressive_renderer_title)
     GRID_CUSTOMIZATION_SETTING_ID -> context.getString(com.android.purebilibili.R.string.home_settings_grid_customization_title)
@@ -83,7 +87,18 @@ internal val playbackSettingDirectory = listOf(
     PlaybackSettingItem("playback.double_tap_like", "双击点赞", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, null),
     PlaybackSettingItem("playback.favorite_quick_save_default_folder", "点按收藏进默认收藏夹", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.FavoriteInteractionSettingsStore .getQuickSaveDefaultFolder(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.auto_skip_op_ed", "自动跳过片头片尾", SettingsRootCategory.PLAYBACK_QUALITY, SettingsSearchFocusIds.PLAYBACK_INTERACTION, null),
-    PlaybackSettingItem("playback.sub_reply_threaded_enabled", "楼中楼树状显示", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager.getSubReplyThreadedEnabled(context).map { if (it) "开启" else "关闭" } }),
+    PlaybackSettingItem(
+        settingId = SUB_REPLY_STYLE_SETTING_ID,
+        title = "楼中楼样式",
+        page = SettingsRootCategory.COMMENTS_CONTENT,
+        sectionKey = SettingsSearchFocusIds.PLAYBACK_COMMENTS,
+        observeValue = { context ->
+            SettingsManager.getSubReplyThreadedEnabled(context).map { threaded ->
+                context.getString(if (threaded) R.string.sub_reply_style_tree else R.string.sub_reply_style_classic)
+            }
+        },
+        aliases = listOf("楼中楼树状显示", "YouTube", "B站经典", "评论树", "嵌套回复", "回复连线", "折叠分支"),
+    ),
     PlaybackSettingItem("playback.sub_reply_loaded_count_enabled", "显示已加载回复数", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager .getSubReplyLoadedCountEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.comment_fraud_detection_enabled", "评论发送检测", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager .getCommentFraudDetectionEnabled(context).map { if (it) "开启" else "关闭" } }),
     PlaybackSettingItem("playback.comment_avatar_push_enabled", "评论头像推挤", SettingsRootCategory.COMMENTS_CONTENT, SettingsSearchFocusIds.PLAYBACK_COMMENTS, { context -> com.android.purebilibili.core.store.SettingsManager.getCommentAvatarPushEnabled(context).map { if (it) "开启" else "关闭" } }),

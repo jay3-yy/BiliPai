@@ -1,6 +1,7 @@
 package com.android.purebilibili.feature.dynamic.components
 
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.AppSpacingTokens
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,34 +26,98 @@ import com.android.purebilibili.core.ui.components.AppText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
+import com.android.purebilibili.core.ui.components.AppGlassMenuSource
+import com.android.purebilibili.core.ui.components.appGlassMenuSource
+import com.android.purebilibili.core.ui.components.rememberAppGlassMenuSource
+import com.android.purebilibili.core.ui.components.appActionClickable
+import com.android.purebilibili.feature.dynamic.SidebarUser
 import com.android.purebilibili.feature.dynamic.shouldShowDynamicUserLiveBadge
+import com.android.purebilibili.feature.live.rememberLiveCardContainerTransition
 import kotlin.math.PI
 import kotlin.math.sin
 
 private val StaticLiveBarHeights = floatArrayOf(0.24f, 0.9f, 0.54f)
 
 @Composable
+internal fun DynamicUserMenuAnchor(
+    user: SidebarUser,
+    enabled: Boolean,
+    onOpen: () -> Unit,
+    content: @Composable (avatarModifier: Modifier, source: AppGlassMenuSource) -> Unit,
+) {
+    val source = rememberAppGlassMenuSource()
+    val menuModifier = Modifier.appGlassMenuSource(source, onOpen = onOpen, enabled = enabled)
+    // 有独立进房按钮时，玻璃管理菜单只从头像区域处理按住手势。
+    val hasLiveAction = user.isLive && user.liveRoomId > 0L
+    Box(if (hasLiveAction) Modifier else menuModifier) {
+        content(if (hasLiveAction) menuModifier else Modifier, source)
+    }
+}
+
+@Composable
 internal fun DynamicUserAvatarWithLiveBadge(
-    isLive: Boolean,
+    user: SidebarUser,
+    onLiveClick: (Long, String, String) -> Unit,
     modifier: Modifier = Modifier,
+    avatarModifier: Modifier = Modifier,
+    name: (@Composable () -> Unit)? = null,
     avatar: @Composable BoxScope.() -> Unit,
 ) {
+    val showBadge = shouldShowDynamicUserLiveBadge(user.isLive)
+    val transition = if (showBadge && user.liveRoomId > 0L) {
+        rememberLiveCardContainerTransition(
+            roomId = user.liveRoomId,
+            title = user.liveRoomTitle,
+            hostName = user.name,
+            color = Color.Transparent,
+            cornerRadius = 0.dp,
+            avatarSource = true,
+            onClick = { onLiveClick(user.liveRoomId, user.liveRoomTitle, user.name) },
+        )
+    } else null
+    // 头像、直播徽标和昵称共用转场快照，只有直播徽标处理进房点击。
     Column(
-        modifier = modifier,
+        modifier = modifier.then(transition?.modifier ?: Modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy((-8).dp),
     ) {
-        Box(content = avatar)
-        if (shouldShowDynamicUserLiveBadge(isLive)) DynamicUserLiveBadge()
+        if (showBadge) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy((-8).dp),
+            ) {
+                Box(modifier = avatarModifier, content = avatar)
+                DynamicUserLiveBadge(
+                    modifier = if (transition != null) {
+                        Modifier
+                            .zIndex(1f)
+                            .clip(CircleShape)
+                            .appActionClickable(
+                                role = Role.Button,
+                                onClickLabel = "进入${user.name}的直播间",
+                                onClick = transition.onClick,
+                            )
+                    } else Modifier,
+                )
+            }
+        } else {
+            Box(modifier = avatarModifier, content = avatar)
+        }
+        if (name != null) {
+            Spacer(Modifier.height(AppSpacingTokens.ExtraSmall))
+            name()
+        }
     }
 }
 

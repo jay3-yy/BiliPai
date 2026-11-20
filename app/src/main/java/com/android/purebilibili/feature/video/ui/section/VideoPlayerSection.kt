@@ -523,7 +523,6 @@ private fun VideoPlayerSectionContent(
     state: VideoPlayerSectionState,
     actions: VideoPlayerSectionActions,
 ) {
-    val sharedSurfaceVisible = com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible.current
     val playerState = state.playerState
     var playerInViewport by remember { mutableStateOf(false) }
     val playerVisualWorkActive = com.android.purebilibili.core.ui.rememberVisualWorkActive() &&
@@ -3795,7 +3794,7 @@ private fun VideoPlayerSectionContent(
                     // PlayerView leaves this backing opaque over the source-cover underlay.
                     // Shared by glass, MD3 and Miuix; their viewport geometry stays unchanged.
                     .graphicsLayer {
-                        alpha = if (isPlayerSurfaceReady && sharedSurfaceVisible) playerSurfaceAlpha.value else 0f
+                        alpha = if (isPlayerSurfaceReady) playerSurfaceAlpha.value else 0f
                     }
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
@@ -3922,7 +3921,6 @@ private fun VideoPlayerSectionContent(
                     },
                     update = { playerView ->
                         // 只隐藏输出层，保留 Surface 与解码绑定，取消返回时可直接恢复。
-                        playerView.alpha = if (sharedSurfaceVisible) 1f else 0f
                         // 同一 PlayerView 换用新的状态持有者时也必须先订阅再绑定。
                         playerState.attachPlayerListeners()
                         playerViewRef = playerView
@@ -3941,7 +3939,7 @@ private fun VideoPlayerSectionContent(
                         )
                         playerView.keepScreenOn = keepVideoPlaybackAwake
                         // Keep the decoder output attached so cancelling the gesture reveals a live frame.
-                        playerView.videoSurfaceView?.alpha = if (miniPlayerPreviewCoversVideo || !sharedSurfaceVisible) 0f else 1f
+                        playerView.videoSurfaceView?.alpha = if (miniPlayerPreviewCoversVideo) 0f else 1f
                         playerView.visibility = if (!handingOffToMiniPlayer && !anime4kFrameVisible && shouldShowInlinePlayerView(
                                 isPortraitFullscreen = isPortraitFullscreen,
                                 forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
@@ -4081,7 +4079,6 @@ private fun VideoPlayerSectionContent(
                             surfaceView.updateFlip(effectiveFlippedHorizontal, effectiveFlippedVertical)
                             surfaceView.updateDisplayScaleMode(viewportAspectRatio.toAnime4KDisplayScaleMode())
                             surfaceView.visibility = View.VISIBLE
-                            surfaceView.alpha = if (sharedSurfaceVisible) 1f else 0f
                         },
                         onRelease = { surfaceView ->
                             surfaceView.onInputSurfaceChanged = {}
@@ -4267,7 +4264,7 @@ private fun VideoPlayerSectionContent(
     val isSurfaceRevealSettling = hasStartedSmoothReveal && !hasSurfaceRevealSettled
     // 装载媒体和 videoSize 不能证明当前输出面已经出画。玻璃与原生路径共用首帧揭开
     // 时序：淡入期间保留不透明封面垫底，直到视频层不透明后才移除，避免中途露出黑底。
-    val holdEntryCoverUnderlay = !sharedSurfaceVisible || !isPlayerSurfaceReady || shouldHoldEntryCoverUnderlay(
+    val holdEntryCoverUnderlay = !isPlayerSurfaceReady || shouldHoldEntryCoverUnderlay(
         isFirstFrameRendered = isFirstFrameRendered,
         forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
         shouldKeepCoverForManualStart = keepCoverForManualStart,
@@ -4388,7 +4385,7 @@ private fun VideoPlayerSectionContent(
     val forcedReturnCoverSharedElementSourceRoute = resolveForcedReturnCoverSharedElementSourceRoute(
         sourceRouteForSharedElement
     )
-    val coverLayerZIndex = if (!sharedSurfaceVisible) 100f else resolveVideoPlayerCoverLayerZIndex(
+    val coverLayerZIndex = resolveVideoPlayerCoverLayerZIndex(
         playbackIntent = videoSharedPlaybackIntent,
         forceCoverDuringReturnAnimation = forceCoverDuringReturnAnimation,
         shouldKeepCoverForManualStart = keepCoverForManualStart,

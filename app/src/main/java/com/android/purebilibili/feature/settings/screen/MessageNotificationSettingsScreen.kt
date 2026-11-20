@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,7 +47,6 @@ import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppSingleChoicePreference
 import com.android.purebilibili.core.ui.components.AppSwitchPreference as SettingSwitchItem
 import com.android.purebilibili.core.ui.components.AppText
-import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.feature.message.notification.MessageNotificationMode
 import com.android.purebilibili.feature.message.notification.MessageNotificationNotifier
 import com.android.purebilibili.feature.message.notification.MessageNotificationSettings
@@ -227,7 +226,6 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .appScrollBoundaryHaptics(scrollState)
                 .verticalScroll(scrollState)
                 .padding(bottom = 24.dp),
         ) {

@@ -34,6 +34,7 @@ import com.android.purebilibili.core.store.TokenManager
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.util.LocalWindowSizeClass
 import com.android.purebilibili.core.util.WindowHeightSizeClass
+import com.android.purebilibili.navigation3.BiliPaiNavKey
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.modules.SerializersModule
 import kotlinx.serialization.modules.polymorphic
@@ -60,12 +61,13 @@ private val messageNavigationState = SavedStateConfiguration {
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-fun MessageCenterScreen(
+internal fun MessageCenterScreen(
     onBack: () -> Unit,
     onConversationVisibilityChanged: (Boolean) -> Unit,
     onTopItemClick: (MessageCenterDestination) -> Unit,
     onNavigateToVideo: (String) -> Unit,
     onOpenBilibiliLink: (String) -> Unit,
+    onOpenConversationWindow: (BiliPaiNavKey.Chat, () -> Unit) -> Boolean,
 ) {
     val accountIdentity by TokenManager.accountIdentity.collectAsStateWithLifecycle()
     val latestConversationVisibilityChanged by rememberUpdatedState(onConversationVisibilityChanged)
@@ -83,6 +85,8 @@ fun MessageCenterScreen(
         backNavigationBehavior = BackNavigationBehavior.PopLatest,
         directive = directive,
     )
+    // 单栏可以从会话行进独立窗口，双栏继续用同一个详情栏切换会话。
+    val singlePane = directive.maxHorizontalPartitions == 1
 
     key(accountIdentity) {
         // 手机、折叠屏和大屏共用同一条会话导航，窗口尺寸变化只更新各栏可见性。
@@ -120,16 +124,23 @@ fun MessageCenterScreen(
                             onTopItemClick = onTopItemClick,
                             onOpenLink = onOpenBilibiliLink,
                             paneWidth = maxWidth,
+                            conversationWindowEnabled = singlePane,
                             onSessionClick = { talkerId, sessionType, userName ->
-                                val current = backStack.last()
-                                val conversation = MessageConversation(talkerId, sessionType, userName)
-                                if (current is MessageConversation) {
-                                    if (current.talkerId != talkerId || current.sessionType != sessionType) {
-                                        backStack[backStack.lastIndex] = conversation
+                                val openInPane: () -> Unit = {
+                                    val current = backStack.last()
+                                    val conversation = MessageConversation(talkerId, sessionType, userName)
+                                    if (current is MessageConversation) {
+                                        if (current.talkerId != talkerId || current.sessionType != sessionType) {
+                                            backStack[backStack.lastIndex] = conversation
+                                        }
+                                    } else {
+                                        backStack.add(conversation)
                                     }
-                                } else {
-                                    backStack.add(conversation)
                                 }
+                                if (!singlePane || !onOpenConversationWindow(
+                                        BiliPaiNavKey.Chat(talkerId, sessionType, userName), openInPane,
+                                    )
+                                ) openInPane()
                             },
                         )
                     }

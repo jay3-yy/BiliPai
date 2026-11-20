@@ -19,7 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
@@ -72,7 +72,6 @@ import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.rememberVisualWorkActive
-import com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible
 import top.yukonga.miuix.kmp.nav.core.LocalNavEntryContentVisible
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.PI
@@ -154,8 +153,7 @@ private fun animatedMiuixAboutGradient(
     val latestScrollProgress = rememberUpdatedState(scrollProgress)
     val gradientVisible by remember { derivedStateOf { latestScrollProgress.value() < 1f } }
     val motionEnabled = LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current
-    val pageActive = rememberVisualWorkActive() && LocalNavEntryContentVisible.current &&
-        LocalNavigationSharedSurfaceVisible.current
+    val pageActive = rememberVisualWorkActive() && LocalNavEntryContentVisible.current
     val animating = motionAllowed && motionEnabled && pageActive && inViewport && gradientVisible
     LaunchedEffect(animating) {
         if (!animating) return@LaunchedEffect

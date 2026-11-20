@@ -14,7 +14,6 @@ internal const val GRID_WIDE_PORTRAIT_SETTING_ID = "appearance.grid_column_count
 internal const val PROGRESSIVE_BLUR_RENDERER_SETTING_ID = "animation.progressive_blur_renderer"
 
 internal const val CARD_REMOVAL_DISSOLVE_SETTING_ID = "animation.card_removal_dissolve_enabled"
-internal const val CARD_TRANSITION_METHOD_SETTING_ID = "animation.card_transition_method"
 
 @StringRes
 internal fun cardRemovalDissolveModeLabel(mode: CardRemovalDissolveMode): Int = when (mode) {
@@ -81,20 +80,7 @@ internal val additionalSettingsDirectory = listOf(
     PlaybackSettingItem("animation.haptic_feedback_enabled", "触感反馈", SettingsRootCategory.ANIMATION_HAPTICS, "animation_page", null, target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.hapticFeedbackEnabled) "开启" else "关闭" }),
     PlaybackSettingItem("animation.global_text_tap_copy_enabled", "点按文字复制", SettingsRootCategory.APPEARANCE_THEME, "appearance_text_size", { context -> com.android.purebilibili.core.store.SettingsManager.getGlobalTextTapCopyEnabled(context).map { if (it) "开启" else "关闭" } }, target = SettingsSearchTarget.APPEARANCE, aliases = listOf("文字复制", "点按正文复制")),
     PlaybackSettingItem("animation.card_animation_enabled", "首页卡片淡入", SettingsRootCategory.ANIMATION_HAPTICS, "animation_card", null, target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.cardAnimationEnabled) "开启" else "关闭" }),
-    PlaybackSettingItem("animation.card_transition_enabled", "一镜到底动画", SettingsRootCategory.ANIMATION_HAPTICS, "animation_card", null, aliases = listOf("卡片展开动画", "卡片过渡", "系统一镜到底"), target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.cardTransitionEnabled) "开启" else "关闭" }),
-    PlaybackSettingItem(
-        settingId = CARD_TRANSITION_METHOD_SETTING_ID,
-        title = "卡片转场方式",
-        page = SettingsRootCategory.ANIMATION_HAPTICS,
-        sectionKey = "animation_card",
-        observeValue = { context ->
-            SettingsManager.getPreferSharedElementCardTransition(context).map { shared ->
-                context.getString(if (shared) R.string.animation_card_transition_shared_element else R.string.animation_card_transition_auto)
-            }
-        },
-        aliases = listOf("金标", "金标优先", "安卓共享元素", "一镜到底转场方式"),
-        target = SettingsSearchTarget.ANIMATION,
-    ),
+    PlaybackSettingItem("animation.card_transition_enabled", "一镜到底动画", SettingsRootCategory.ANIMATION_HAPTICS, "animation_card", null, aliases = listOf("卡片展开动画", "卡片过渡", "系统一镜到底", "金标"), target = SettingsSearchTarget.ANIMATION, readState = { state -> if (state.cardTransitionEnabled) "开启" else "关闭" }),
     PlaybackSettingItem(
         settingId = CARD_REMOVAL_DISSOLVE_SETTING_ID,
         title = "卡片移除粒子消散",

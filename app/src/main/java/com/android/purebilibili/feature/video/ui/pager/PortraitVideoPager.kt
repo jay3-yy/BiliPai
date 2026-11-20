@@ -62,6 +62,7 @@ import androidx.compose.material3.MaterialTheme
 import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -1946,6 +1947,7 @@ fun PortraitVideoPager(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            .appScrollBoundaryHaptics(pagerState)
     ) { page ->
         val item = pageItems.getOrNull(page)
         val handleUserClick: (Long) -> Unit = { mid ->

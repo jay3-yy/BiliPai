@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.staggeredgrid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.android.purebilibili.core.ui.components.AppCard
@@ -60,6 +61,11 @@ import com.android.purebilibili.core.ui.adaptive.MotionTier
 import com.android.purebilibili.core.ui.performance.TrackScrollJank
 import com.android.purebilibili.core.ui.components.UpBadgeName
 import com.android.purebilibili.core.ui.transition.LocalVideoCardSharedElementSourceRoute
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.LocalNavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberNavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import com.android.purebilibili.core.util.responsiveContentWidth
 import kotlinx.collections.immutable.ImmutableSet
 import com.android.purebilibili.data.model.response.VideoItem
@@ -702,11 +708,13 @@ internal fun HomeCategoryPageContent(
     }
 
     Box(modifier = modifier) {
+        val popularMotionGroup = if (category == HomeCategory.POPULAR) rememberNavigationControlMotionGroup() else null
         CompositionLocalProvider(
             LocalVideoCardSharedElementSourceRoute provides sourceRoute,
             LocalHomeScrollTickProvider provides homeScrollTickProvider,
             LocalHomeCardScrolling provides cardScrolling,
-            LocalHomeCardTransitionRunning provides cardTransitionRunning
+            LocalHomeCardTransitionRunning provides cardTransitionRunning,
+            LocalNavigationControlMotionGroup provides popularMotionGroup,
         ) {
             HomeFeedGrid(
                 state = gridState,
@@ -852,11 +860,15 @@ internal fun HomeCategoryPageContent(
             }
             if (category == HomeCategory.POPULAR) {
                 item(fullLine = true) {
+                    val categoryMotion = if (popularSubCategory == PopularSubCategory.WEEKLY) {
+                        rememberSystemWindowControlNeighborModifier()
+                    } else Modifier
                     PopularSubCategorySegmentedControl(
                         selectedSubCategory = popularSubCategory,
                         onSubCategoryChange = onPopularSubCategoryChange,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(categoryMotion)
                             .padding(horizontal = AppSpacingTokens.Small, vertical = AppSpacingTokens.None)
                     )
                 }
@@ -864,11 +876,17 @@ internal fun HomeCategoryPageContent(
 
             if (category == HomeCategory.POPULAR && popularSubCategory == PopularSubCategory.WEEKLY) {
                 item(fullLine = true) {
-                    com.android.purebilibili.core.ui.components.AppTextButton(
-                        onClick = onWeeklySeriesClick,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    val archive = rememberSystemWindowNavigationControl(
+                        BiliPaiNavKey.WeeklySeries(), ButtonDefaults.textShape, onWeeklySeriesClick,
+                    )
+                    AppTextButton(
+                        onClick = archive.onClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .then(archive.modifier),
                     ) {
-                        com.android.purebilibili.core.ui.components.AppText("查看往期每周必看")
+                        AppText("查看往期每周必看")
                     }
                 }
             }

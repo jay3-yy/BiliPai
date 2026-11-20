@@ -926,17 +926,6 @@ fun WatchLaterScreen(
     var searchQuery by rememberSaveable(accountIdentity) {
         mutableStateOf(if (accountIdentity == initialAccountIdentity) initialSearchQuery else "")
     }
-    val hideListTopSearchBar = com.android.purebilibili.feature.list.shouldHideListTopSearchBar(
-        bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
-        listScopedSearchEnabled = homeSettings.listScopedSearchEnabled,
-        isSearchDestination = isSearchDestination,
-    )
-    val showListScopedSearchActiveBar =
-        com.android.purebilibili.feature.list.shouldShowListScopedSearchActiveBar(
-            bottomBarSearchEnabled = homeSettings.isBottomBarSearchEnabled,
-            listScopedSearchEnabled = homeSettings.listScopedSearchEnabled,
-            searchQuery = searchQuery,
-        )
     LaunchedEffect(listScopedSearchChannel) {
         listScopedSearchChannel?.receiveAsFlow()?.collect { query ->
             searchQuery = query
@@ -1345,28 +1334,15 @@ fun WatchLaterScreen(
                     exit = shrinkVertically() + fadeOut(),
                 ) {
                     Column {
-                        if (hideListTopSearchBar) {
-                            if (showListScopedSearchActiveBar) {
-                                com.android.purebilibili.feature.list.ListScopedSearchActiveBar(
-                                    searchQuery = searchQuery,
-                                    onClear = { searchQuery = "" },
-                                    backdrop = watchLaterChromeBackdrop,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = AppSpacingTokens.Medium),
-                                )
-                            }
-                        } else {
-                            AppLiquidAwareSearchField(
-                                query = searchQuery,
-                                onQueryChange = { searchQuery = it },
-                                placeholder = "搜索稍后再看",
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = AppSpacingTokens.Medium),
-                                backdrop = watchLaterChromeBackdrop,
-                            )
-                        }
+                        AppLiquidAwareSearchField(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = "搜索稍后再看",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = AppSpacingTokens.Medium),
+                            backdrop = watchLaterChromeBackdrop,
+                        )
                         Spacer(modifier = Modifier.height(AppSpacingTokens.Small))
                     }
                 }

@@ -1,8 +1,15 @@
 package com.android.purebilibili.feature.space
 
 import com.android.purebilibili.core.ui.transition.NavigationReturnLandingStyle
+import com.android.purebilibili.core.ui.LocalVisualWorkAllowed
 import com.android.purebilibili.navigation.tabIndicatorPosition
 import com.android.purebilibili.navigation.isTabSelectionInProgress
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.LocalNavigationControlMotionGroup
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberNavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import com.android.purebilibili.feature.home.effectiveGridColumnCountForWindow
 import com.android.purebilibili.feature.home.effectiveGridColumnCountCompact
 import com.android.purebilibili.feature.home.gridColumnPinchEnabled
@@ -76,13 +83,13 @@ import androidx.compose.foundation.border
 import com.android.purebilibili.core.ui.components.appActionClickable
 import com.android.purebilibili.core.ui.components.appActionWithFeedback
 import com.android.purebilibili.core.ui.components.appCombinedClickable
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import com.android.purebilibili.core.ui.components.AppHorizontalPager as HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import com.android.purebilibili.core.ui.components.liquidDockViewport
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -104,7 +111,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.DropdownMenu
 import com.android.purebilibili.core.ui.components.AppDropdownMenuItem as DropdownMenuItem
 import androidx.compose.material.icons.Icons
@@ -262,6 +269,7 @@ import com.android.purebilibili.core.ui.transition.withMeasuredCoverDecodeSize
 import com.android.purebilibili.feature.home.components.cards.videoCardShellReturnChromeAlpha
 import com.android.purebilibili.feature.home.resolveHomeFeedCardLayout
 import com.android.purebilibili.core.ui.components.UserLevelBadge
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.core.util.CardPositionManager
 import com.android.purebilibili.core.util.responsiveContentWidth
@@ -1751,6 +1759,7 @@ private fun SpaceContent(
                 }
             },
             tabs = {
+                val activeTabGrid = pageGridStates.getValue(displayedMainTabs[pagerState.currentPage].tab)
                 SpaceMainTabRow(
                     tabs = displayedMainTabs,
                     selectedTab = resolveSpacePrimaryTab(selectedMainTab),
@@ -1764,8 +1773,9 @@ private fun SpaceContent(
                     },
                     modifier = Modifier
                         .padding(horizontal = outerPaddingDp)
+                        .appScrollBoundaryHaptics(activeTabGrid)
                         .scrollable(
-                            state = pageGridStates.getValue(displayedMainTabs[pagerState.currentPage].tab),
+                            state = activeTabGrid,
                             orientation = Orientation.Vertical,
                             reverseDirection = true,
                         ),
@@ -2040,6 +2050,12 @@ private fun SpaceContent(
         }
         // 瀑布流不提供原生吸顶 item；每页用独立顶层承接标签，跨栏占位保留滚动几何。
         // 玻璃与原生材质继续使用各自的标签组件参数。
+        val opusCollectionMotion = if (
+            selectedMainTab == SpaceMainTab.CONTRIBUTION &&
+            selectedContributionTab.subTab == SpaceSubTab.OPUS &&
+            state.opusCollections.isNotEmpty()
+        ) rememberNavigationControlMotionGroup() else null
+        val opusCollectionMotionActive = LocalVisualWorkAllowed.current && isSelectedPage
         Box(Modifier.fillMaxSize()) {
         LazyVerticalStaggeredGrid(
             columns = StaggeredGridCells.Fixed(gridColumns),
@@ -2836,22 +2852,40 @@ private fun SpaceContent(
                         val loadMore = if (isOpus) onLoadMoreOpus else onLoadMoreArticles
                         if (isOpus && selectedContributionTab.filters.isNotEmpty()) {
                             item(span = StaggeredGridItemSpan.FullLine) {
-                                AppWindowActionMenu(groups = listOf(selectedContributionTab.filters.map { filter ->
-                                    AppWindowAction(label = filter.text, selected = filter.meta == state.opusFilter,
-                                        onClick = { onSelectOpusFilter(filter.meta) })
-                                })) {
-                                    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        AppText(selectedContributionTab.filters.firstOrNull { it.meta == state.opusFilter }?.text ?: "全部图文")
-                                        AppIcon(Icons.Outlined.MoreVert, contentDescription = "图文筛选")
+                                CompositionLocalProvider(
+                                    LocalNavigationControlMotionGroup provides opusCollectionMotion,
+                                    LocalVisualWorkAllowed provides opusCollectionMotionActive,
+                                ) {
+                                    AppWindowActionMenu(
+                                        groups = listOf(selectedContributionTab.filters.map { filter ->
+                                            AppWindowAction(label = filter.text, selected = filter.meta == state.opusFilter,
+                                                onClick = { onSelectOpusFilter(filter.meta) })
+                                        }),
+                                        modifier = rememberSystemWindowControlNeighborModifier(),
+                                    ) {
+                                        Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            AppText(selectedContributionTab.filters.firstOrNull { it.meta == state.opusFilter }?.text ?: "全部图文")
+                                            AppIcon(Icons.Outlined.MoreVert, contentDescription = "图文筛选")
+                                        }
                                     }
                                 }
                             }
                         }
                         if (isOpus) {
                             items(state.opusCollections, key = { "opus_collection_${it.id}" }, contentType = { "space_collection_summary" }, span = { StaggeredGridItemSpan.FullLine }) { collection ->
-                                SpaceCollectionSummaryCard(title = collection.title, subtitle = collection.subtitle,
-                                    cover = collection.cover, total = null,
-                                    onClick = { onArticleCollectionClick(collection.id, collection.title) })
+                                CompositionLocalProvider(
+                                    LocalNavigationControlMotionGroup provides opusCollectionMotion,
+                                    LocalVisualWorkAllowed provides opusCollectionMotionActive,
+                                ) {
+                                    SpaceCollectionSummaryCard(
+                                        title = collection.title,
+                                        subtitle = collection.subtitle,
+                                        cover = collection.cover,
+                                        total = null,
+                                        articleCollectionTarget = BiliPaiNavKey.ArticleCollection(collection.id, collection.title),
+                                        onClick = { onArticleCollectionClick(collection.id, collection.title) },
+                                    )
+                                }
                             }
                         }
                         val opusError = state.opusError.takeIf { isOpus }
@@ -3453,6 +3487,7 @@ private fun SpaceContent(
                     .align(Alignment.TopCenter)
                     .padding(top = chromeTopInset, start = outerPaddingDp, end = outerPaddingDp)
                     .zIndex(1f)
+                    .appScrollBoundaryHaptics(gridState)
                     .scrollable(
                         state = gridState,
                         orientation = Orientation.Vertical,
@@ -3838,23 +3873,34 @@ private fun SpaceHeader(
                         .padding(top = (avatarBannerOverlap + actionsTopMargin).coerceAtLeast(0.dp)),
                     verticalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        metrics.forEachIndexed { index, metric ->
-                            SpaceHeaderStat(
-                                label = metric.label,
-                                value = metric.value,
-                                modifier = Modifier.weight(1f),
-                                onClick = when (metric.label) {
-                                    "粉丝" -> onFansClick
-                                    "关注" -> onFollowingClick
+                    NavigationControlMotionGroup {
+                        val statShape = AppShapes.container(ContainerLevel.Card)
+                        val following = rememberSystemWindowNavigationControl(
+                            BiliPaiNavKey.Following(userInfo.mid), statShape, onFollowingClick,
+                        )
+                        val fans = rememberSystemWindowNavigationControl(
+                            BiliPaiNavKey.Following(userInfo.mid, fans = true), statShape, onFansClick,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            metrics.forEachIndexed { index, metric ->
+                                val control = when (metric.label) {
+                                    "粉丝" -> fans
+                                    "关注" -> following
                                     else -> null
-                                },
-                            )
-                            if (index < metrics.lastIndex) {
-                                SpaceHeaderMetricDivider()
+                                }
+                                val motionModifier = control?.modifier ?: rememberSystemWindowControlNeighborModifier()
+                                SpaceHeaderStat(
+                                    label = metric.label,
+                                    value = metric.value,
+                                    modifier = Modifier.weight(1f).then(motionModifier),
+                                    onClick = control?.onClick,
+                                )
+                                if (index < metrics.lastIndex) {
+                                    SpaceHeaderMetricDivider()
+                                }
                             }
                         }
                     }
@@ -5723,14 +5769,18 @@ private fun SpaceCollectionSummaryCard(
     total: Int?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    articleCollectionTarget: BiliPaiNavKey.ArticleCollection? = null,
 ) {
+    val shape = AppShapes.container(ContainerLevel.Card)
+    val collection = articleCollectionTarget?.let { rememberSystemWindowNavigationControl(it, shape, onClick) }
     AppSurface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = AppShapes.container(ContainerLevel.Card),
+            .padding(horizontal = 16.dp)
+            .then(collection?.modifier ?: Modifier),
+        shape = shape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.24f),
-        onClick = onClick
+        onClick = collection?.onClick ?: onClick,
     ) {
         Row(
             modifier = Modifier

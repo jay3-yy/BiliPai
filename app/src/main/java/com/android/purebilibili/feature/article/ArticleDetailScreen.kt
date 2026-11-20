@@ -7,7 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
@@ -75,6 +75,10 @@ import com.android.purebilibili.feature.dynamic.components.isImagePreviewSourceH
 import com.android.purebilibili.feature.dynamic.components.prepareImagePreviewSourceTransition
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import com.android.purebilibili.core.ui.components.appDesktopFocusableItemVisuals
 import com.android.purebilibili.feature.web.PublicWebLinkText
 
@@ -338,6 +342,60 @@ fun ArticleDetailScreen(
         }
         }
     }
+    }
+}
+
+@Composable
+private fun ArticleAuthorByline(
+    article: ArticleDetailUiModel,
+    onUserClick: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) = NavigationControlMotionGroup {
+    val target = article.authorMid.takeIf { it > 0L }?.let { BiliPaiNavKey.Space(it) }
+    val openAuthor = { onUserClick(article.authorMid) }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        if (article.authorFace.isNotBlank()) {
+            val avatar = rememberSystemWindowNavigationControl(target, CircleShape, openAuthor)
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .then(avatar.modifier)
+                    .appDesktopFocusableItemVisuals(enabled = target != null)
+                    .clickable(enabled = target != null, role = Role.Button, onClick = avatar.onClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                AsyncImage(
+                    model = article.authorFace,
+                    contentDescription = article.authorName,
+                    modifier = Modifier.size(42.dp).clip(CircleShape),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+        }
+        Column(
+            modifier = Modifier.padding(start = if (article.authorFace.isNotBlank()) 12.dp else 0.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            if (article.authorName.isNotBlank()) {
+                val name = rememberSystemWindowNavigationControl(
+                    target, AppShapes.container(ContainerLevel.Tag), openAuthor,
+                )
+                AppText(
+                    text = article.authorName,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = name.modifier.clickable(enabled = target != null, onClick = name.onClick),
+                    tapToCopyEnabled = target == null,
+                )
+            }
+            if (article.publishTime.isNotBlank()) {
+                AppText(
+                    text = article.publishTime,
+                    modifier = if (target != null) rememberSystemWindowControlNeighborModifier() else Modifier,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppContentColors.secondaryText(),
+                )
+            }
+        }
     }
 }
 
@@ -608,52 +666,7 @@ private fun ArticleDetailContent(
                             fontWeight = FontWeight.Bold
                         )
                         if (article.authorName.isNotBlank() || article.publishTime.isNotBlank()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (article.authorFace.isNotBlank()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .appDesktopFocusableItemVisuals(enabled = article.authorMid > 0)
-                                            .clickable(
-                                                enabled = article.authorMid > 0,
-                                                role = Role.Button,
-                                            ) {
-                                                if (article.authorMid > 0) onUserClick(article.authorMid)
-                                            },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        AsyncImage(
-                                            model = article.authorFace,
-                                            contentDescription = article.authorName,
-                                            modifier = Modifier
-                                                .size(42.dp)
-                                                .clip(CircleShape),
-                                            contentScale = ContentScale.Crop,
-                                        )
-                                    }
-                                }
-                                Column(
-                                    modifier = Modifier.padding(start = if (article.authorFace.isNotBlank()) 12.dp else 0.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    if (article.authorName.isNotBlank()) {
-                                        AppText(
-                                            text = article.authorName,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            modifier = Modifier.clickable(enabled = article.authorMid > 0) {
-                                                if (article.authorMid > 0) onUserClick(article.authorMid)
-                                            }
-                                        )
-                                    }
-                                    if (article.publishTime.isNotBlank()) {
-                                        AppText(
-                                            text = article.publishTime,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = AppContentColors.secondaryText()
-                                        )
-                                    }
-                                }
-                            }
+                            ArticleAuthorByline(article, onUserClick)
                         }
                         if (shouldShowArticleSummary(article.summary, article.blocks)) {
                             AppText(

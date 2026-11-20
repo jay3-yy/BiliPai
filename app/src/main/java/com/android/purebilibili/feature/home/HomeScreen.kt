@@ -1,6 +1,8 @@
 // 文件路径: feature/home/HomeScreen.kt
 package com.android.purebilibili.feature.home
 
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+
 import com.android.purebilibili.core.plugin.BuiltinPluginIds
 
 
@@ -241,6 +243,7 @@ internal fun HomeScreen(
     onLiveListClick: () -> Unit = {},  // 底栏直播全屏页
     onLiveSearchClick: () -> Unit = {},
     onLiveMatchClick: () -> Unit = {},
+    liveMatchTarget: BiliPaiNavKey.Web? = null,
     onLiveAreaClick: () -> Unit = {},
     onLiveFollowingClick: () -> Unit = {},
     onLiveAreaDetailClick: (Int, Int, String) -> Unit = { _, _, _ -> },
@@ -1890,6 +1893,7 @@ internal fun HomeScreen(
                                     onLiveClick = onLiveClick,
                                     onSearchClick = onLiveSearchClick,
                                     onMatchClick = onLiveMatchClick,
+                                    matchTarget = liveMatchTarget,
                                     onAreaListClick = onLiveAreaClick,
                                     onFollowingClick = onLiveFollowingClick,
                                     onUserClick = onSpaceClick,

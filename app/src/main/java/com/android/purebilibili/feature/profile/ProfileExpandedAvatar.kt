@@ -33,6 +33,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import com.android.purebilibili.feature.home.UserState
 import com.android.purebilibili.core.ui.components.AppIcon
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -101,6 +102,7 @@ internal fun ProfileExpandedAvatar(
                     // Preload the image without any input nodes until the morph is visible.
                     .then(
                         if (visible) Modifier
+                            .appScrollBoundaryHaptics(listState)
                             .scrollable(listState, Orientation.Vertical, reverseDirection = true, flingBehavior = flingBehavior)
                             .clickable(onClick = onCollapse)
                         else Modifier.clearAndSetSemantics {},

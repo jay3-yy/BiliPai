@@ -1026,6 +1026,7 @@ internal fun VideoContentSection(
                             onLoadMoreReplies = onLoadMoreReplies,
                             onRefreshReplies = onRefreshReplies,
                             pullToRefreshEnabled = commentPullToRefreshEnabled,
+                            pullToRefreshFromTopOnly = true,
                             onImagePreview = { images, index, rect, textContent ->
                                 previewImages = images
                                 previewInitialIndex = index
@@ -1603,6 +1604,7 @@ internal fun VideoCommentTab(
     floatingHeaderContentPadding: Dp = 0.dp,
     onSearchClick: (() -> Unit)? = null,
     pullToRefreshEnabled: Boolean = true,
+    pullToRefreshFromTopOnly: Boolean = false,
     pinnedReplyIds: Set<Long> = emptySet(),
     paginationPage: Int = 1,
     floatingHeaderContentPaddingPx: (() -> Float)? = null,
@@ -1678,6 +1680,7 @@ internal fun VideoCommentTab(
             onRefresh = onRefreshReplies,
             enabled = pullToRefreshEnabled,
             contentPadding = commentContentPadding,
+            refreshGestureListState = listState.takeIf { pullToRefreshFromTopOnly },
             modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
             LazyColumn(

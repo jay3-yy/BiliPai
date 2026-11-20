@@ -7,7 +7,7 @@ import com.android.purebilibili.core.ui.AppSurfaceTokens
 import com.android.purebilibili.core.ui.AppContentColors
 
 import android.widget.Toast
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Add
@@ -55,6 +56,9 @@ import com.android.purebilibili.data.model.response.LiveAreaParent
 import com.android.purebilibili.data.model.response.LiveFavoriteTagEntry
 import com.android.purebilibili.data.repository.LiveRepository
 import com.android.purebilibili.navigation.animatePagerSelection
+import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.NavigationControlMotionGroup
+import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -226,13 +230,14 @@ private fun LiveFavoriteTagsPanel(
     onTagClick: (LiveFavoriteTagEntry) -> Unit,
     onRemove: (LiveFavoriteTagEntry) -> Unit,
     onMove: (Int, Int) -> Unit,
-) {
+) = NavigationControlMotionGroup {
     val latestTags by rememberUpdatedState(favoriteTags)
     val latestMove by rememberUpdatedState(onMove)
     val latestStart by rememberUpdatedState(onStartEditing)
     val positions = remember { mutableStateMapOf<Int, Rect>() }
     var draggedId by remember { mutableStateOf<Int?>(null) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
+    val tagShape = RoundedCornerShape(4.dp)
     Column(Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AppText("我的常用标签", style = MaterialTheme.typography.titleSmall)
@@ -242,6 +247,13 @@ private fun LiveFavoriteTagsPanel(
         FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
             favoriteTags.forEach { tag ->
                 key(tag.areaId) {
+                    val openTag = if (enabled && !isEditing) {
+                        rememberSystemWindowNavigationControl(
+                            target = BiliPaiNavKey.LiveAreaDetail(tag.parentAreaId, tag.areaId, tag.title),
+                            shape = tagShape,
+                            onClick = { onTagClick(tag) },
+                        )
+                    } else null
                     val bounds = positions[tag.areaId]
                     val offset = if (draggedId == tag.areaId && bounds != null) dragPosition - bounds.center else Offset.Zero
                     Box(
@@ -272,12 +284,14 @@ private fun LiveFavoriteTagsPanel(
                             },
                     ) {
                         AppSurface(
-                            onClick = { if (isEditing) onRemove(tag) else onTagClick(tag) },
+                            onClick = openTag?.onClick ?: { if (isEditing) onRemove(tag) else onTagClick(tag) },
                             enabled = enabled,
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                            shape = tagShape,
                             border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                             color = MaterialTheme.colorScheme.surface,
-                            modifier = Modifier.graphicsLayer(translationX = offset.x, translationY = offset.y),
+                            modifier = Modifier
+                                .graphicsLayer(translationX = offset.x, translationY = offset.y)
+                                .then(openTag?.modifier ?: Modifier),
                         ) {
                             AppText(tag.title + if (isEditing) " −" else "", modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
                         }

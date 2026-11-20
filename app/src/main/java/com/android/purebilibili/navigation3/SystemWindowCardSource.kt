@@ -33,7 +33,6 @@ internal class SystemWindowCardSource internal constructor(
     private val screenHeightPx: Float,
     private val densityValue: Float,
     internal val neighbor: SystemWindowControlNeighbor,
-    internal val sharedSource: NavigationSharedContainerSource?,
 ) {
     var coordinates: androidx.compose.ui.layout.LayoutCoordinates? = null
 
@@ -68,28 +67,36 @@ internal fun resolveSystemWindowCardIdentity(target: BiliPaiNavKey?): String? = 
     BiliPaiNavKey.Inbox -> "inbox"
     BiliPaiNavKey.Profile -> "profile"
     is BiliPaiNavKey.Search -> "search"
+    BiliPaiNavKey.SearchTrending -> "search_trending"
+    is BiliPaiNavKey.WeeklySeries -> "weekly_series_${target.number ?: 0}"
     BiliPaiNavKey.LiveSearch -> "live_search"
     BiliPaiNavKey.LiveArea -> "live_area"
+    BiliPaiNavKey.LiveFollowing -> "live_following"
     BiliPaiNavKey.History -> "history"
     BiliPaiNavKey.Favorite -> "favorite"
     BiliPaiNavKey.FavoriteSubscribed -> "favorite_subscribed"
     BiliPaiNavKey.WatchLater -> "watch_later"
     BiliPaiNavKey.DownloadList -> "download_list"
+    is BiliPaiNavKey.OfflineVideoPlayer -> "offline_video_${target.taskId}"
     BiliPaiNavKey.Partition -> "partition"
     BiliPaiNavKey.ReplyMe -> "reply_me"
     BiliPaiNavKey.AtMe -> "at_me"
     BiliPaiNavKey.LikeMe -> "like_me"
     BiliPaiNavKey.SystemNotice -> "system_notice"
+    is BiliPaiNavKey.Chat -> target.talkerId.takeIf { it > 0L }?.let { "chat_${target.sessionType}_$it" }
     is BiliPaiNavKey.Following -> target.mid.takeIf { it > 0L }?.let { "following_${it}_${target.fans}" }
     is BiliPaiNavKey.TopicDetail -> target.topicId.takeIf { it > 0L }?.let { "topic_$it" }
     is BiliPaiNavKey.MatchInfo -> target.cid.takeIf { it > 0L }?.let { "match_$it" }
     is BiliPaiNavKey.SeasonSeriesDetail -> "series_${target.type}_${target.id}_${target.mid}"
     is BiliPaiNavKey.AudioMode -> target.sourceBvid.takeIf(String::isNotBlank)
+    is BiliPaiNavKey.VideoDetail -> target.bvid.takeIf(String::isNotBlank)
     is BiliPaiNavKey.Live -> "live_${target.roomId}"
     is BiliPaiNavKey.BangumiPlayer -> "bangumi_${target.seasonId}"
     is BiliPaiNavKey.BangumiDetail -> "bangumi_${target.seasonId}"
+    is BiliPaiNavKey.BangumiReview -> target.mediaId.takeIf { it > 0L }?.let { "bangumi_review_$it" }
     is BiliPaiNavKey.Bangumi -> "bangumi_library_${target.initialType}"
     is BiliPaiNavKey.ArticleDetail -> "article_${target.articleId}"
+    is BiliPaiNavKey.ArticleCollection -> target.collectionId.takeIf { it > 0L }?.let { "article_collection_$it" }
     is BiliPaiNavKey.DynamicDetail -> "dynamic_${target.dynamicId}"
     is BiliPaiNavKey.Space -> target.mid.takeIf { it > 0L }?.let { "space_$it" }
     is BiliPaiNavKey.LiveAreaDetail -> "live_area_${target.parentAreaId}_${target.areaId}"
@@ -110,7 +117,7 @@ internal data class SystemWindowNavigationControl(val modifier: Modifier, val on
 
 @Composable
 internal fun rememberSystemWindowNavigationControl(
-    target: BiliPaiNavKey,
+    target: BiliPaiNavKey?,
     shape: Shape,
     onClick: () -> Unit,
 ): SystemWindowNavigationControl {
@@ -145,23 +152,48 @@ internal fun SystemWindowCardSource?.anchorModifier(
     val group = motionGroup ?: LocalNavigationControlMotionGroup.current
     val grouped = group as? NavigationControlMotionGroupState
     ObserveSystemWindowControlNeighbor(neighbor, neighborActive, returnHandledByOwner, group)
-    val landing = if (grouped == null) Modifier else Modifier.navigationReturnLanding(
-        neighbor.groupLanding,
-        sharedBoundsReleased = grouped.sharedReturn?.origin?.sharedBounds == null,
-        isSourceVisible = { neighbor.visibleBounds() != null },
-    )
-    return landing.then(if (animateNeighbors) neighbor.modifier else Modifier)
+    return neighbor.groupLandingModifier(grouped)
+        .then(if (animateNeighbors) neighbor.modifier else Modifier)
         .videoCardSourceAnchor(
             identity, shape,
             onPositioned = { coordinates = it; neighbor.coordinates = it },
-            sharedSource = sharedSource,
-            drawSharedContent = animateNeighbors,
             returnHandledByOwner = returnHandledByOwner || grouped != null,
         )
         .onGloballyPositioned {
-            val visible = it.boundsInWindow()
-            neighbor.inViewport = visible.width > 1f && visible.height > 1f
+            neighbor.updateViewport(it)
         }
+}
+
+/** 同组的原地操作只参与联动，点击时仍执行自己的操作。 */
+@Composable
+internal fun rememberSystemWindowControlNeighborModifier(): Modifier {
+    if (!LocalVideoCardSourceTrackingEnabled.current) return Modifier
+    val group = LocalNavigationControlMotionGroup.current ?: return Modifier
+    val view = LocalView.current
+    val sourceRoute = LocalVideoCardSharedElementSourceRoute.current
+    val density = LocalDensity.current.density
+    val neighbor = remember(group, view, sourceRoute, density) {
+        SystemWindowControlNeighbor(view, sourceRoute, density)
+    }
+    ObserveSystemWindowControlNeighbor(neighbor, pageActive = true, returnHandledByOwner = false, motionGroup = group)
+    return neighbor.groupLandingModifier(group)
+        .then(neighbor.modifier)
+        .onGloballyPositioned {
+            neighbor.coordinates = it
+            neighbor.updateViewport(it)
+        }
+}
+
+@Composable
+private fun SystemWindowControlNeighbor.groupLandingModifier(group: NavigationControlMotionGroupState?): Modifier =
+    if (group == null) Modifier else Modifier.navigationReturnLanding(
+        groupLanding,
+        isSourceVisible = { visibleBounds() != null },
+    )
+
+private fun SystemWindowControlNeighbor.updateViewport(coordinates: androidx.compose.ui.layout.LayoutCoordinates) {
+    val visible = coordinates.boundsInWindow()
+    inViewport = visible.width > 1f && visible.height > 1f
 }
 
 // 空锚点与可见内容分离的入口，把联动层显式放到可见内容上。
@@ -174,9 +206,8 @@ internal fun rememberSystemWindowCardSource(target: BiliPaiNavKey?): SystemWindo
     val configuration: Configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val view = LocalView.current
-    val sharedSource = rememberNavigationSharedContainerSource(identity)
     return remember(
-        identity, sourceRoute, configuration.screenWidthDp, configuration.screenHeightDp, density, view, sharedSource,
+        identity, sourceRoute, configuration.screenWidthDp, configuration.screenHeightDp, density, view,
     ) {
         SystemWindowCardSource(
             identity = identity,
@@ -185,7 +216,6 @@ internal fun rememberSystemWindowCardSource(target: BiliPaiNavKey?): SystemWindo
             screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() },
             densityValue = density.density,
             neighbor = SystemWindowControlNeighbor(view, sourceRoute, density.density),
-            sharedSource = sharedSource,
         )
     }
 }

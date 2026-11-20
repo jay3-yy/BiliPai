@@ -14,6 +14,9 @@ import androidx.compose.ui.text.withStyle
 import com.android.purebilibili.core.util.BilibiliNavigationTarget
 import com.android.purebilibili.core.util.BilibiliNavigationTargetParser
 import com.android.purebilibili.data.model.response.DynamicDesc
+import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.data.model.response.OpusContentBlock
+import com.android.purebilibili.data.model.response.plainText
 import com.android.purebilibili.data.model.response.EmojiInfo
 import com.android.purebilibili.data.model.response.RichTextNode
 
@@ -475,6 +478,44 @@ internal fun resolvePreferredDynamicDesc(
         primary.text.isNotBlank() -> primary
         else -> fallback
     }
+}
+
+private fun resolveDynamicCopyNodeText(nodes: List<RichTextNode>): String =
+    nodes.joinToString(separator = "") { node ->
+        node.text.ifEmpty { resolveDynamicRichTextNodeToken(node) }
+    }
+
+internal fun resolveDynamicFullText(item: DynamicItem): String {
+    val content = item.modules.module_dynamic
+    val major = content?.major
+    val opus = major?.opus
+    val paragraphs = opus?.contentBlocks.orEmpty().mapNotNull { block ->
+        val text = if (block is OpusContentBlock.Text) {
+            block.text.ifBlank { resolveDynamicCopyNodeText(block.richTextNodes) }
+        } else {
+            block.plainText
+        }
+        normalizeDynamicBodyText(text).takeIf { it.isNotBlank() }
+    }
+    val body = if (paragraphs.isNotEmpty()) {
+        paragraphs.joinToString("\n\n")
+    } else {
+        val hasImages = !opus?.pics.isNullOrEmpty() || !major?.draw?.items.isNullOrEmpty()
+        val desc = resolvePreferredDynamicDesc(
+            primary = content?.desc?.let { resolveDynamicDescForImages(it, hasImages) },
+            fallback = opus?.summary?.let {
+                resolveDynamicOpusSummaryDescForImages(it.text, it.rich_text_nodes, hasImages)
+            },
+        )
+        desc?.let {
+            it.text.ifBlank { resolveDynamicCopyNodeText(it.rich_text_nodes) }
+        }.orEmpty()
+    }
+    return listOfNotNull(
+        resolveDynamicHeadlineTitle(opus, major?.article),
+        body.takeIf { it.isNotBlank() },
+        item.orig?.let(::resolveDynamicFullText)?.takeIf { it.isNotBlank() },
+    ).joinToString("\n\n")
 }
 
 internal fun shouldRenderDynamicRichText(desc: DynamicDesc?): Boolean {

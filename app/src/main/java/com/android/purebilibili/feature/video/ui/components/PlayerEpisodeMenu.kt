@@ -12,7 +12,7 @@ import com.android.purebilibili.core.ui.components.AppTabRowRole
 import com.android.purebilibili.core.ui.components.AppThemeAdaptiveTabRow
 import androidx.compose.foundation.background
 import com.android.purebilibili.core.ui.components.appCombinedClickable
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import com.android.purebilibili.core.ui.components.AppIconButton as IconButton
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -175,9 +176,13 @@ fun PlayerEpisodeMenu(
                 }
             }
         }
-        LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds(), overscrollEffect = null,
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxWidth().weight(1f).clipToBounds().appScrollBoundaryHaptics(listState),
+            overscrollEffect = null,
             contentPadding = PaddingValues(top = 7.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
             itemsIndexed(entries) { _, group ->
                 val current = content.sections.getOrNull(content.currentSectionIndex)?.entries?.getOrNull(content.currentEntryIndex)
                 val selected = sectionIndex == content.currentSectionIndex && current in group

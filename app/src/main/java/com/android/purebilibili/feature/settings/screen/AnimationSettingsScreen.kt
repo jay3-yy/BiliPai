@@ -182,17 +182,6 @@ fun AnimationSettingsContent(
     }
     val listState = rememberLazyListState()
     val focusRequest by SettingsSearchFocusController.request.collectAsStateWithLifecycle()
-    LaunchedEffect(focusRequest?.token, state.cardTransitionEnabled) {
-        val request = focusRequest ?: return@LaunchedEffect
-        if (!state.cardTransitionEnabled && request.settingId == CARD_TRANSITION_METHOD_SETTING_ID) {
-            SettingsSearchFocusController.submit(
-                target = SettingsSearchTarget.ANIMATION,
-                focusId = "animation_card",
-                settingId = "animation.card_transition_enabled",
-                query = request.query,
-            )
-        }
-    }
     LaunchedEffect(focusRequest?.token, state.hapticFeedbackEnabled) {
         val request = focusRequest ?: return@LaunchedEffect
         if (!state.hapticFeedbackEnabled && (request.settingId == HAPTIC_SCENES_SETTING_ID ||
@@ -247,18 +236,16 @@ fun AnimationSettingsContent(
         SystemVideoCardTransition.deviceCapability(context.findHostActivity())
     }
     val systemReduceMotion = rememberSystemReduceMotion()
-    val preferSharedElement = homeConfiguration.preferSharedElementCardTransition
     val cardTransitionSourceDescription = stringResource(
         when {
             systemReduceMotion -> R.string.animation_card_transition_source_reduced_motion
-            preferSharedElement -> R.string.animation_card_transition_source_shared
             videoTransitionCapability.available -> R.string.animation_card_transition_source_official
             else -> R.string.animation_card_transition_source_fallback
         },
     )
     val transitionBlurDescription = stringResource(
         when {
-            preferSharedElement || !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
+            !videoTransitionCapability.available -> R.string.animation_transition_blur_summary
             videoTransitionCapability.configurableBlur -> R.string.animation_transition_blur_official_supported
             else -> R.string.animation_transition_blur_official_system
         },
@@ -713,27 +700,6 @@ fun AnimationSettingsContent(
                         }
                         AppPreferenceDivider()
 
-                        if (state.cardTransitionEnabled) {
-                            SettingsItemAnchor(CARD_TRANSITION_METHOD_SETTING_ID) {
-                                SettingsSingleChoicePreference(
-                                    icon = rememberSettingsSemanticIcon(SettingsIconRole.TRANSITION_MODE),
-                                    title = stringResource(R.string.animation_card_transition_method_title),
-                                    subtitle = cardTransitionSourceDescription,
-                                    options = listOf(
-                                        AppSegmentOption(false, stringResource(R.string.animation_card_transition_auto)),
-                                        AppSegmentOption(true, stringResource(R.string.animation_card_transition_shared_element)),
-                                    ),
-                                    selectedValue = preferSharedElement,
-                                    onSelectionChange = { shared ->
-                                        scope.launch {
-                                            SettingsManager.setPreferSharedElementCardTransition(context, shared)
-                                        }
-                                    },
-                                    iconTint = AppContentColors.secondaryText(),
-                                )
-                            }
-                            AppPreferenceDivider()
-                        }
                         SettingsItemAnchor(CARD_REMOVAL_DISSOLVE_SETTING_ID) {
                             SettingsSingleChoicePreference(
                                 icon = rememberSettingsSemanticIcon(SettingsIconRole.CARD_REMOVAL_DISSOLVE),

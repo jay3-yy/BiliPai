@@ -11,7 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.android.purebilibili.core.ui.components.appCombinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
+import com.android.purebilibili.core.ui.components.AppLazyRow as LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import com.android.purebilibili.core.ui.components.AppLazyVerticalGrid as LazyVerticalGrid
@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.navigation3.BiliPaiNavKey
+import com.android.purebilibili.navigation3.rememberSystemWindowControlNeighborModifier
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -534,7 +535,7 @@ private fun com.android.purebilibili.data.model.response.LiveRoom.toLiveRoomItem
     )
 
 @Composable
-fun LiveListScreen(
+internal fun LiveListScreen(
     onBack: () -> Unit,
     onLiveClick: (Long, String, String) -> Unit,
     onSearchClick: () -> Unit,
@@ -542,6 +543,7 @@ fun LiveListScreen(
     onFollowingClick: () -> Unit,
     onAreaDetailClick: (Int, Int, String) -> Unit,
     onMatchClick: () -> Unit,
+    matchTarget: BiliPaiNavKey.Web?,
     onUserClick: (Long) -> Unit = {},
     /** 底栏主入口时隐藏返回，更接近 BiliPai 主 tab 形态。 */
     showNavigationBack: Boolean = true,
@@ -703,6 +705,7 @@ fun LiveListScreen(
                 onToggleFirstFrame = viewModel::toggleShowFirstFrame,
                 onAreaListClick = onAreaListClick,
                 onMatchClick = onMatchClick,
+                matchTarget = matchTarget,
                 onSortTagSelected = { sort ->
                     if (!state.isLoading) {
                         viewModel.selectSortTag(sort)
@@ -811,6 +814,7 @@ internal fun LiveHomeContent(
     onToggleFirstFrame: () -> Unit,
     onAreaListClick: () -> Unit,
     onMatchClick: () -> Unit,
+    matchTarget: BiliPaiNavKey.Web? = null,
     onSortTagSelected: (String?) -> Unit,
     onLoadMore: () -> Unit,
     onAreaDetailClick: (Int, Int, String) -> Unit,
@@ -893,6 +897,7 @@ internal fun LiveHomeContent(
                         onToggleFirstFrame = onToggleFirstFrame,
                         onAreaListClick = onAreaListClick,
                         onMatchClick = onMatchClick,
+                        matchTarget = matchTarget,
                     )
                     if (selectedParentAreaId > 0 && sortTags.isNotEmpty()) {
                         LiveSortTagChipRow(
@@ -1080,8 +1085,11 @@ private fun LiveFollowHeader(
     livingCount: Int?,
     onActionClick: () -> Unit,
     modifier: Modifier = Modifier,
-) {
+) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
+    val following = rememberSystemWindowNavigationControl(
+        BiliPaiNavKey.LiveFollowing, AppShapes.container(ContainerLevel.Card), onActionClick,
+    )
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically
@@ -1096,12 +1104,12 @@ private fun LiveFollowHeader(
                 append(" 人正在直播")
                 pop()
             },
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).then(rememberSystemWindowControlNeighborModifier()),
             color = palette.primaryText,
             style = MaterialTheme.typography.bodyMedium,
         )
         Row(
-            modifier = Modifier.clickable(onClick = onActionClick),
+            modifier = following.modifier.clickable(onClick = following.onClick),
             verticalAlignment = Alignment.CenterVertically
         ) {
             AppText(
@@ -1129,7 +1137,7 @@ private fun LiveFollowAvatarRow(
     onUserClick: (Long) -> Unit,
     onFollowingClick: () -> Unit,
     showMore: Boolean,
-) {
+) = NavigationControlMotionGroup {
     val palette = rememberLiveChromePalette()
     LazyRow(state = listState) {
         items(items, key = { it.roomId }) { item ->
@@ -1199,7 +1207,8 @@ private fun LiveFollowAvatarRow(
         }
         if (showMore) {
             item(key = "more_following") {
-                AppIconButton(onClick = onFollowingClick, modifier = Modifier.size(48.dp)) {
+                val following = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveFollowing, CircleShape, onFollowingClick)
+                AppIconButton(onClick = following.onClick, modifier = Modifier.size(48.dp).then(following.modifier)) {
                     AppText(">", modifier = Modifier.semantics { contentDescription = "更多关注直播" })
                 }
             }
@@ -1216,7 +1225,8 @@ private fun LiveAreaHomeChipRow(
     onToggleFirstFrame: () -> Unit,
     onAreaListClick: () -> Unit,
     onMatchClick: () -> Unit,
-) {
+    matchTarget: BiliPaiNavKey.Web?,
+) = NavigationControlMotionGroup {
     val categoryOptions = remember(areaEntries) {
         buildList {
             add(AppSegmentOption(LIVE_HOME_RECOMMEND_INDEX, "推荐"))
@@ -1231,6 +1241,8 @@ private fun LiveAreaHomeChipRow(
         }
     }
     val selectedCategory = selectedAreaIndex
+    val allAreas = rememberSystemWindowNavigationControl(BiliPaiNavKey.LiveArea, CircleShape, onAreaListClick)
+    val matches = rememberSystemWindowNavigationControl(matchTarget, CircleShape, onMatchClick)
     val quickActionColors = AppIconButtonDefaults.colors(
         containerColor = com.android.purebilibili.core.ui.AppSurfaceTokens.secondaryContainer(),
         contentColor = com.android.purebilibili.core.ui.AppSurfaceTokens.onSecondaryContainer(),
@@ -1273,7 +1285,7 @@ private fun LiveAreaHomeChipRow(
         }
         AppFilledIconButton(
             onClick = onToggleFirstFrame,
-            modifier = Modifier.size(26.dp),
+            modifier = Modifier.size(26.dp).then(rememberSystemWindowControlNeighborModifier()),
             colors = quickActionColors,
         ) {
             AppIcon(
@@ -1288,8 +1300,8 @@ private fun LiveAreaHomeChipRow(
         }
         Spacer(Modifier.width(8.dp))
         AppFilledIconButton(
-            onClick = onMatchClick,
-            modifier = Modifier.size(26.dp),
+            onClick = matches.onClick,
+            modifier = Modifier.size(26.dp).then(matches.modifier),
             colors = quickActionColors,
         ) {
             AppIcon(
@@ -1300,8 +1312,8 @@ private fun LiveAreaHomeChipRow(
         }
         Spacer(Modifier.width(8.dp))
         AppFilledIconButton(
-            onClick = onAreaListClick,
-            modifier = Modifier.size(26.dp),
+            onClick = allAreas.onClick,
+            modifier = Modifier.size(26.dp).then(allAreas.modifier),
             colors = quickActionColors,
         ) {
             AppIcon(

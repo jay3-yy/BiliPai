@@ -70,7 +70,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil3.imageLoader
 import com.android.purebilibili.R
-import com.android.purebilibili.core.ui.AdaptivePullToRefreshBox
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
 import com.android.purebilibili.core.ui.AppSplitLayout
 import com.android.purebilibili.core.ui.AppTopBar
@@ -82,6 +81,7 @@ import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.core.ui.rememberAppGridLayoutIcon
 import com.android.purebilibili.core.ui.rememberAppListLayoutIcon
 import com.android.purebilibili.data.model.response.DynamicItem
+import com.android.purebilibili.feature.common.ListLoadError
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
 import com.android.purebilibili.feature.dynamic.components.DynamicCardActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardInteractionActions
@@ -263,8 +263,7 @@ fun DynamicDetailScreen(
         commentUiState.pinnedRootReplyId,
         commentUiState.pinnedReply,
     ) { resolveDynamicDetailDisplayComments(commentUiState) }
-    val commentsLoading = commentUiState.isLoading
-    val commentsRefreshing = commentUiState.isRefreshing
+    val commentsLoading = commentUiState.isLoading || commentUiState.isRefreshing
     val commentsRefreshError = commentUiState.pinnedReplyError ?: commentUiState.refreshError
     val commentsLoadingMore = commentUiState.isLoadingMore
     val commentTotalCount = commentUiState.totalCount
@@ -578,6 +577,7 @@ fun DynamicDetailScreen(
                             ),
                             presentation = DynamicCardPresentation(
                                 isDetail = true,
+                                allowCopyFullText = !state.isPreview,
                                 isLiked = likedDynamics.contains(state.item.id_str),
                                 likeOverride = likeOverrides[state.item.id_str],
                                 forwardCountDelta = forwardCountDelta,
@@ -586,7 +586,7 @@ fun DynamicDetailScreen(
                         )
                     }
                 }
-                val commentContent: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
+                val commentContent: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = commentContent@{
                     item(key = "dynamic_detail_comment_header") {
                         DynamicInlineCommentHeader(
                             totalCount = commentTotalCount,
@@ -594,6 +594,20 @@ fun DynamicDetailScreen(
                             sortMode = commentSortMode,
                             onSortModeChange = interactionViewModel::setDynamicCommentSortMode,
                         )
+                    }
+                    val loadError = commentUiState.refreshError
+                        .takeIf { commentUiState.dynamicId == state.item.id_str }
+                    if (loadError != null && comments.isEmpty() && !commentsLoading) {
+                        item(key = "dynamic_detail_comment_load_error") {
+                            ListLoadError(
+                                message = loadError,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(AppSpacingTokens.Medium),
+                                onRetry = interactionViewModel::refreshComments,
+                            )
+                        }
+                        return@commentContent
                     }
                     dynamicInlineCommentItems(
                         avatarListState = (if (useSplitLayout) commentListState else detailListState)
@@ -646,6 +660,17 @@ fun DynamicDetailScreen(
                         pinnedReplyIds = commentUiState.pinnedReplyIds,
                         menuCallbacks = commentMenuCallbacks,
                     )
+                    if (loadError != null && commentUiState.hasMore && !commentsLoadingMore) {
+                        item(key = "dynamic_detail_comment_page_error") {
+                            ListLoadError(
+                                message = loadError,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(AppSpacingTokens.Medium),
+                                onRetry = interactionViewModel::loadMoreComments,
+                            )
+                        }
+                    }
                 }
                 val commentComposer: @Composable (Modifier) -> Unit = { modifier ->
                     DynamicDetailCommentDock(
@@ -702,22 +727,17 @@ fun DynamicDetailScreen(
                             },
                             secondaryContent = {
                                 Box(modifier = Modifier.fillMaxSize()) {
-                                    AdaptivePullToRefreshBox(
-                                        isRefreshing = commentsRefreshing,
-                                        onRefresh = interactionViewModel::refreshComments,
-                                        modifier = Modifier.fillMaxSize(),
-                                        indicatorTopInset = paddingValues.calculateTopPadding(),
+                                    LazyColumn(
+                                        state = commentListState,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .then(detailCommentSourceModifier),
+                                        contentPadding = PaddingValues(
+                                            top = paddingValues.calculateTopPadding(),
+                                            bottom = commentContentBottomPadding,
+                                        ),
                                     ) {
-                                        LazyColumn(
-                                            state = commentListState,
-                                            modifier = Modifier.fillMaxSize().then(detailCommentSourceModifier),
-                                            contentPadding = PaddingValues(
-                                                top = paddingValues.calculateTopPadding(),
-                                                bottom = commentContentBottomPadding,
-                                            ),
-                                        ) {
-                                            commentContent()
-                                        }
+                                        commentContent()
                                     }
                                     commentComposer(Modifier.align(Alignment.BottomCenter))
                                 }
@@ -731,20 +751,18 @@ fun DynamicDetailScreen(
                                 .consumeWindowInsets(paddingValues)
                                 .responsiveContentWidth(maxWidth = resolveDynamicFeedMaxWidth())
                         ) {
-                            AdaptivePullToRefreshBox(
-                                isRefreshing = commentsRefreshing,
-                                onRefresh = interactionViewModel::refreshComments,
-                                modifier = Modifier.fillMaxSize(),
-                                indicatorTopInset = paddingValues.calculateTopPadding(),
+                            LazyColumn(
+                                state = detailListState,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .then(detailCommentSourceModifier),
+                                contentPadding = PaddingValues(
+                                    top = paddingValues.calculateTopPadding(),
+                                    bottom = commentContentBottomPadding,
+                                ),
                             ) {
-                                LazyColumn(
-                                    state = detailListState,
-                                    modifier = Modifier.fillMaxSize().then(detailCommentSourceModifier),
-                                    contentPadding = PaddingValues(top = paddingValues.calculateTopPadding(), bottom = commentContentBottomPadding),
-                                ) {
-                                    cardContent()
-                                    commentContent()
-                                }
+                                cardContent()
+                                commentContent()
                             }
                             commentComposer(Modifier.align(Alignment.BottomCenter))
                         }

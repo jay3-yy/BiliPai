@@ -19,7 +19,7 @@ enum class AppHapticScene(val bit: Int, val title: String, val description: Stri
     PLAYER_GESTURES(64, "播放器手势", "亮度、音量、长按倍速与锁屏操作"),
     PLAYER_SEEK(128, "播放进度与章节", "拖动播放进度、章节与继续观看操作"),
     VIDEO_ACTIONS(256, "视频互动操作", "点赞、投币、收藏、分享、长按三连与合集订阅"),
-    REFRESH(512, "刷新与列表操作", "刷新、滑到列表顶部或底部、批量选择与下载操作"),
+    REFRESH(512, "刷新与列表操作", "刷新、横向或纵向滑到边缘、批量选择与下载操作"),
     RESULTS(1024, "图片保存与分享结果", "图片保存开始、保存与分享的成功或失败反馈");
 
     val settingId: String get() = "animation.haptic_scene.${name.lowercase()}"

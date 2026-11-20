@@ -13,7 +13,6 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     settingsBackStack: List<BiliPaiNavKey> = emptyList(),
     settingsPersistentPanes: Boolean = false,
     settingsContainerTransitions: Map<BiliPaiNavKey, NavTransition> = emptyMap(),
-    navigationContainerTransitions: Map<BiliPaiNavKey, NavTransition> = emptyMap(),
     liveContainerTransitions: Map<BiliPaiNavKey, NavTransition> = emptyMap(),
     settingsMorphFallback: NavTransition? = null,
     activeMainHostRoute: String? = null,
@@ -29,13 +28,13 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     entry<BiliPaiNavKey.Dynamic>(swipeDismiss = NavSwipeDirection.None, content = content)
     // Search owns a bottom-search-slot morph. A generic horizontal swipe would turn the whole
     // destination into a shrinking card and conflict with that spatial relationship.
-    sharedControlEntry<BiliPaiNavKey.Search>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.Search>(
         transition = predictiveBackExcludedTransition,
         swipeDismiss = NavSwipeDirection.None,
         content = content,
     )
     entry<BiliPaiNavKey.SearchTrending>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.TopicDetail>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.TopicDetail>(swipeDismiss = swipeBackDirection, content = content)
     settingsEntry<BiliPaiNavKey.Settings>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     settingsEntry<BiliPaiNavKey.SettingsCategory>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     settingsEntry<BiliPaiNavKey.SettingsSearch>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
@@ -71,68 +70,67 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     settingsEntry<BiliPaiNavKey.TipsSettings>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     settingsEntry<BiliPaiNavKey.KeyboardShortcutsSettings>(settingsBackStack, settingsPersistentPanes, activeMainHostRoute, settingsContainerTransitions, settingsMorphFallback, swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Login>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.Profile>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.Profile>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.ProfileAccountEdit>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.AccountLedger>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.AicuQuery>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.History>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.History>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.PersonalRecapUps>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.HistorySearch>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.Favorite>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.Favorite>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.FavoritePgc>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.FavoriteSubscribed>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.FavoriteSubscribed>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.FavoriteSearch>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.LikedVideos>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.WatchLater>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.WatchLater>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.WatchLaterSearch>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Onboarding>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.Following>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.Following>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.UpowerRank>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.UpowerRank.Companion>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.MemberGuard>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.MemberGuard.Companion>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.DownloadList>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.DownloadList>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.OfflineVideoPlayer>(
         transition = predictiveBackExcludedTransition,
         swipeDismiss = NavSwipeDirection.None,
         content = content,
     )
     entry<BiliPaiNavKey.LiveList>(swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.LiveSearch>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.LiveArea>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.LiveAreaDetail>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.LiveSearch>(swipeDismiss = NavSwipeDirection.None, content = content)
+    entry<BiliPaiNavKey.LiveArea>(swipeDismiss = NavSwipeDirection.None, content = content)
+    entry<BiliPaiNavKey.LiveAreaDetail>(
         transition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.LiveAreaDetail }
             ?.let(liveContainerTransitions::get) ?: pageTransition,
         swipeDismiss = NavSwipeDirection.None,
         content = content,
     )
     entry<BiliPaiNavKey.LiveMatch>(swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.MatchInfo>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
+    entry<BiliPaiNavKey.MatchInfo>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.LiveFollowing>(swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.Inbox>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.ReplyMe>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.AtMe>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.LikeMe>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.SystemNotice>(navigationContainerTransitions, swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.Inbox>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.ReplyMe>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.AtMe>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.LikeMe>(swipeDismiss = swipeBackDirection, content = content)
+    entry<BiliPaiNavKey.SystemNotice>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.Chat>(swipeDismiss = swipeBackDirection, content = content)
-    sharedControlEntry<BiliPaiNavKey.Partition>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
+    entry<BiliPaiNavKey.Partition>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.Story>(
         transition = fullscreenVideoCardTransition,
         swipeDismiss = NavSwipeDirection.None,
         content = content,
     )
-    sharedControlEntry<BiliPaiNavKey.AudioMode>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.AudioMode>(
         transition = predictiveBackExcludedTransition,
         swipeDismiss = NavSwipeDirection.None,
         content = content,
     )
-    sharedControlEntry<BiliPaiNavKey.SeasonSeriesDetail>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.Bangumi>(
-        navigationContainerTransitions,
+    entry<BiliPaiNavKey.SeasonSeriesDetail>(swipeDismiss = NavSwipeDirection.None, content = content)
+    entry<BiliPaiNavKey.Bangumi>(
         swipeDismiss = NavSwipeDirection.None,
         content = content,
     )
-    sharedControlEntry<BiliPaiNavKey.BangumiPlayer>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.BangumiPlayer>(
         transition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.BangumiPlayer }
             ?.let(liveContainerTransitions::get) ?: predictiveBackExcludedTransition,
         swipeDismiss = NavSwipeDirection.None,
@@ -156,16 +154,16 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
         content = content,
     )
     entry<BiliPaiNavKey.ArticleCollection>(swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.ArticleDetail>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.DynamicDetail>(navigationContainerTransitions, swipeDismiss = NavSwipeDirection.None, content = content)
+    entry<BiliPaiNavKey.ArticleDetail>(swipeDismiss = NavSwipeDirection.None, content = content)
+    entry<BiliPaiNavKey.DynamicDetail>(swipeDismiss = NavSwipeDirection.None, content = content)
     entry<BiliPaiNavKey.CommentDetail>(swipeDismiss = swipeBackDirection, content = content)
     entry<BiliPaiNavKey.SpaceWebVideos>(swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.Space>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.Space>(
         transition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.Space }?.let(liveContainerTransitions::get) ?: pageTransition,
         swipeDismiss = swipeBackDirection, content = content,
     )
     entry<BiliPaiNavKey.Category>(swipeDismiss = NavSwipeDirection.None, content = content)
-    sharedControlEntry<BiliPaiNavKey.Live>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.Live>(
         // 卡片来源优先；深链等普通入口与卡片动效关闭时完整继承页面切换设置。
         transition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.Live }
             ?.let(liveContainerTransitions::get) ?: pageTransition,
@@ -173,7 +171,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
         content = content,
     )
     val bangumiContainer = settingsBackStack.lastOrNull { it is BiliPaiNavKey.BangumiDetail }?.let(liveContainerTransitions::get)
-    sharedControlEntry<BiliPaiNavKey.BangumiDetail>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.BangumiDetail>(
         transition = bangumiContainer ?: pageTransition,
         swipeDismiss = if (bangumiContainer != null) swipeBackDirection else NavSwipeDirection.None,
         content = content,
@@ -181,7 +179,7 @@ internal fun NavEntryBuilder.biliPaiNavEntries(
     entry<BiliPaiNavKey.BangumiReview>(swipeDismiss = NavSwipeDirection.None, content = content)
     val webContainerTransition = settingsBackStack.lastOrNull { it is BiliPaiNavKey.Web }
         ?.let(liveContainerTransitions::get)
-    sharedControlEntry<BiliPaiNavKey.Web>(navigationContainerTransitions,
+    entry<BiliPaiNavKey.Web>(
         transition = webContainerTransition ?: predictiveBackExcludedTransition,
         swipeDismiss = if (webContainerTransition != null) swipeBackDirection else NavSwipeDirection.None,
         content = content,
@@ -210,21 +208,6 @@ private inline fun <reified T : BiliPaiNavKey> NavEntryBuilder.settingsEntry(
     entry<T>(
         transition = if (paneNavigation) SettingsPaneTransition else
             backStack.getOrNull(index)?.let(containerTransitions::get) ?: settingsMorphFallback ?: transition,
-        swipeDismiss = swipeDismiss,
-        content = content,
-    )
-}
-
-/** 同类型页面可同时在栈中，共享转场绑定到登记来源的具体页面。 */
-private inline fun <reified T : BiliPaiNavKey> NavEntryBuilder.sharedControlEntry(
-    transitions: Map<BiliPaiNavKey, NavTransition>,
-    transition: NavTransition? = null,
-    swipeDismiss: NavSwipeDirection,
-    noinline content: @Composable (BiliPaiNavKey) -> Unit,
-) {
-    entry<T>(
-        transition = transition,
-        transitionForKey = { key -> transitions[key] },
         swipeDismiss = swipeDismiss,
         content = content,
     )

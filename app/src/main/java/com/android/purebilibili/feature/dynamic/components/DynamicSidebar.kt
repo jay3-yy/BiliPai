@@ -174,6 +174,7 @@ fun DynamicSidebar(
     isExpanded: Boolean,
     userListState: androidx.compose.foundation.lazy.LazyListState,
     onUserClick: (Long?) -> Unit,
+    onLiveClick: (Long, String, String) -> Unit,
     showHiddenUsers: Boolean,
     hiddenCount: Int,
     uplistUpdateMids: Set<Long> = emptySet(),
@@ -348,6 +349,7 @@ fun DynamicSidebar(
                             showLabel = isExpanded,
                             allowManageMenu = false,
                             onClick = { onUserClick(allUser.uid) },
+                            onLiveClick = onLiveClick,
                             onTogglePin = { onTogglePin(allUser.uid) },
                             onToggleHidden = { onToggleHidden(allUser.uid) }
                         )
@@ -441,6 +443,7 @@ fun DynamicSidebar(
                                 showUnreadBadge = user.uid in uplistUpdateMids,
                                 allowManageMenu = !isShortcut,
                                 onClick = appActionWithFeedback { onUserClick(user.uid) },
+                                onLiveClick = onLiveClick,
                                 onTogglePin = { onTogglePin(user.uid) },
                                 onToggleHidden = { onToggleHidden(user.uid) }
                             )
@@ -653,6 +656,7 @@ fun SidebarUserItem(
     showUnreadBadge: Boolean = false,
     allowManageMenu: Boolean = true,
     onClick: () -> Unit,
+    onLiveClick: (Long, String, String) -> Unit,
     onTogglePin: () -> Unit,
     onToggleHidden: () -> Unit
 ) {
@@ -665,7 +669,7 @@ fun SidebarUserItem(
         ?: AppContentColors.selectionAccent(LocalAppThemeConfig.current.liquidGlassEnabled)
     val haptic = rememberHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.NAVIGATION)
 
-    com.android.purebilibili.core.ui.components.AppGlassMenuAnchor(onOpen = { showMenu = true }, enabled = allowManageMenu) {
+    DynamicUserMenuAnchor(user, enabled = allowManageMenu, onOpen = { showMenu = true }) { avatarModifier, menuSource ->
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
@@ -685,7 +689,24 @@ fun SidebarUserItem(
                 .padding(vertical = AppSpacingTokens.Small) // 内部间距
                 .alpha(if (user.isHidden) 0.5f else 1f)
         ) {
-            DynamicUserAvatarWithLiveBadge(isLive = user.isLive) {
+            DynamicUserAvatarWithLiveBadge(
+                user = user,
+                onLiveClick = onLiveClick,
+                avatarModifier = avatarModifier,
+                name = if (showLabel) {
+                    {
+                        AppText(
+                            text = displayName,
+                            fontSize = MaterialTheme.typography.labelSmall.fontSize,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (isSelected) accentColor else AppContentColors.primaryText(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = AppSpacingTokens.Micro)
+                        )
+                    }
+                } else null,
+            ) {
                 // 头像
                 Box(
                     modifier = Modifier
@@ -734,24 +755,12 @@ fun SidebarUserItem(
                     )
                 }
             }
-
-            if (showLabel) {
-                Spacer(modifier = Modifier.height(AppSpacingTokens.ExtraSmall))
-                AppText(
-                    text = displayName,
-                    fontSize = MaterialTheme.typography.labelSmall.fontSize,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    color = if (isSelected) accentColor else AppContentColors.primaryText(),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(horizontal = AppSpacingTokens.Micro)
-                )
-            }
         }
 
         AppDropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false },
+            glassSource = menuSource,
             modifier = if (com.android.purebilibili.core.ui.components.appGlassMenuAvailable()) Modifier
                 else Modifier.background(MaterialTheme.colorScheme.surfaceContainer) // 自适应菜单背景
         ) {

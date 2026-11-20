@@ -902,7 +902,15 @@ class DynamicScreenStatePolicyTest {
             SidebarUser(uid = 999L, name = "装机猿PC问答3", face = "face_fake", lastActiveTs = 9999L)
         )
         val liveUsers = listOf(
-            SidebarUser(uid = 102L, name = "关注UP 2", face = "face2", isLive = true, lastActiveTs = 6000L)
+            SidebarUser(
+                uid = 102L,
+                name = "关注UP 2",
+                face = "face2",
+                isLive = true,
+                lastActiveTs = 6000L,
+                liveRoomId = 9527L,
+                liveRoomTitle = "直播标题",
+            )
         )
 
         val merged = resolveMergedFollowedUsers(
@@ -921,6 +929,8 @@ class DynamicScreenStatePolicyTest {
         val user102 = merged.first { it.uid == 102L }
         assertTrue(user102.isLive)
         assertEquals(6000L, user102.lastActiveTs)
+        assertEquals(9527L, user102.liveRoomId)
+        assertEquals("直播标题", user102.liveRoomTitle)
     }
 
     @Test

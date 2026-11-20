@@ -1905,14 +1905,18 @@ SettingsItemAnchor("playback.comment_collapsed_reply_preview_limit") {
         )
 }
         AppPreferenceDivider()
-        SettingsItemAnchor("playback.sub_reply_threaded_enabled") {
-            AppSwitchPreference(
+        SettingsItemAnchor(SUB_REPLY_STYLE_SETTING_ID) {
+            SettingsSingleChoicePreference(
                 icon = rememberSettingsSemanticIcon(SettingsIconRole.SUB_REPLY_THREADED),
-                title = playbackSettingTitle("playback.sub_reply_threaded_enabled"),
-                subtitle = "按回复关系缩进并连线，支持原地展开或收起分支",
-                checked = subReplyThreadedEnabled,
-                onCheckedChange = { enabled ->
-                    scope.launch { SettingsManager.setSubReplyThreadedEnabled(context, enabled) }
+                title = stringResource(R.string.sub_reply_style_title),
+                subtitle = stringResource(R.string.sub_reply_style_summary),
+                options = listOf(
+                    AppSegmentOption(true, stringResource(R.string.sub_reply_style_tree)),
+                    AppSegmentOption(false, stringResource(R.string.sub_reply_style_classic)),
+                ),
+                selectedValue = subReplyThreadedEnabled,
+                onSelectionChange = { threaded ->
+                    scope.launch { SettingsManager.setSubReplyThreadedEnabled(context, threaded) }
                 },
                 iconTint = AppContentColors.secondaryText(),
             )

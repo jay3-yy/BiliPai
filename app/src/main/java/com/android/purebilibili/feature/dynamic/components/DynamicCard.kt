@@ -40,6 +40,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 //  Material Icons
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -88,6 +89,7 @@ import com.android.purebilibili.core.ui.common.TextSelectionPolicy
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
 import com.android.purebilibili.core.ui.common.detectTapWithSelectionFriendly
+import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.rememberAppMoreIcon
 import com.android.purebilibili.core.ui.rememberAppVisibilityOffIcon
 import com.android.purebilibili.core.ui.rememberAppWarningIcon
@@ -184,6 +186,7 @@ data class DynamicCardPresentation(
     val likeOverride: Boolean? = null,
     val forwardCountDelta: Int = 0,
     val detailImageLayout: DynamicDetailImageLayout = DynamicDetailImageLayout.EXPANDED,
+    val allowCopyFullText: Boolean = false,
 )
 
 /** 信息流正文最多展示 6 行，溢出后通过「展开更多」进入详情。 */
@@ -682,6 +685,10 @@ fun DynamicCardV2(
                 val commentIcon = rememberAppCommentIcon()
                 val warningIcon = rememberAppWarningIcon()
                 val errorTint = AppContentColors.error()
+                val fullText = if (presentation.allowCopyFullText) {
+                    remember(item) { resolveDynamicFullText(item) }
+                } else ""
+                val copyFullText = if (fullText.isNotBlank()) rememberClipboardCopyHandler() else null
                 AppWindowActionMenu(
                     groups = listOf(
                         buildList {
@@ -704,6 +711,15 @@ fun DynamicCardV2(
                                     },
                                 )
                             )
+                            if (copyFullText != null) {
+                                add(
+                                    AppWindowAction(
+                                        label = "复制全文",
+                                        icon = Icons.Outlined.ContentCopy,
+                                        onClick = { copyFullText(fullText, "动态全文") },
+                                    )
+                                )
+                            }
                             add(
                                 AppWindowAction(
                                     label = "分享动态",

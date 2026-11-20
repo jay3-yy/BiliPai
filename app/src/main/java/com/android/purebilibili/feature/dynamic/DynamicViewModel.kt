@@ -716,7 +716,9 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                 name = room.uname,
                 face = room.face,
                 isLive = true,
-                lastActiveTs = nowSeconds  // 直播中视作最近活跃
+                lastActiveTs = nowSeconds, // 直播中视作最近活跃
+                liveRoomId = room.roomid,
+                liveRoomTitle = room.title,
             )
         }
     }
@@ -3499,7 +3501,9 @@ data class SidebarUser(
     val isLive: Boolean = false,
     val lastActiveTs: Long = 0L,
     val isPinned: Boolean = false,
-    val isHidden: Boolean = false
+    val isHidden: Boolean = false,
+    val liveRoomId: Long = 0L,
+    val liveRoomTitle: String = "",
 )
 
 /**

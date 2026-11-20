@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">BiliPai</string>
     <string name="video_link_part_unavailable">無法開啟連結指定的分 P</string>
+    <string name="external_link_unavailable">無法開啟此連結</string>
 
     <string name="common_back">返回</string>
     <string name="keyboard_shortcut_group_app">應用快捷鍵</string>
@@ -191,4 +192,8 @@
     <string name="video_companion_summary">大螢幕下從各頁面開啟影片時保留來源頁，可拖曳調整寬度或切換單欄</string>
     <string name="message_select_conversation">選擇一個對話</string>
     <string name="message_close_conversation">關閉對話</string>
+    <string name="sub_reply_style_title">樓中樓樣式</string>
+    <string name="sub_reply_style_summary">樹狀依回覆關係縮排並連線，可展開或收合分支</string>
+    <string name="sub_reply_style_tree">YouTube 樹狀</string>
+    <string name="sub_reply_style_classic">B 站經典</string>
 </resources>

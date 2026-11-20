@@ -37,7 +37,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import com.android.purebilibili.core.ui.components.appHorizontalScroll as horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import com.android.purebilibili.core.ui.components.AppLazyColumn as LazyColumn
@@ -46,7 +46,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import com.android.purebilibili.navigation3.BiliPaiNavKey
 import com.android.purebilibili.navigation3.rememberSystemWindowNavigationControl
-import androidx.compose.foundation.verticalScroll
+import com.android.purebilibili.core.ui.components.appVerticalScroll as verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DarkMode
@@ -5629,14 +5629,17 @@ private fun ProfileFavoriteFolderMoreChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val shape = AppShapes.container(ContainerLevel.Card)
+    val control = rememberSystemWindowNavigationControl(BiliPaiNavKey.Favorite, shape, onClick)
     Box(
         modifier = modifier
             .heightIn(min = 42.dp)
-            .clip(AppShapes.container(ContainerLevel.Card))
+            .then(control.modifier)
+            .clip(shape)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.18f))
             .appGentleActionClickable(
-                shape = AppShapes.container(ContainerLevel.Card),
-                onClick = onClick,
+                shape = shape,
+                onClick = control.onClick,
             )
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center

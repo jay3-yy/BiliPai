@@ -1,13 +1,18 @@
 package com.Android.purebilibili.feature.dynamic
 
+import android.view.View
+import android.view.ViewConfiguration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -16,12 +21,18 @@ import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import coil3.ImageLoader
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.AppThemeConfig
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
 import com.android.purebilibili.core.ui.ProvideAppThemeConfig
+import com.android.purebilibili.core.ui.components.AppGlassMenuPresenter
+import com.android.purebilibili.core.ui.components.AppGlassMenuRequest
+import com.android.purebilibili.core.ui.components.LocalAppGlassMenuPresenter
+import com.android.purebilibili.core.ui.components.LocalPageImageLoadingAllowed
 import com.android.purebilibili.data.model.response.DynamicAuthorModule
 import com.android.purebilibili.data.model.response.DynamicContentModule
 import com.android.purebilibili.data.model.response.DynamicDesc
@@ -29,12 +40,14 @@ import com.android.purebilibili.data.model.response.DynamicItem
 import com.android.purebilibili.data.model.response.DynamicModules
 import com.android.purebilibili.feature.dynamic.DynamicList
 import com.android.purebilibili.feature.dynamic.DynamicUiState
+import com.android.purebilibili.feature.dynamic.SidebarUser
 import com.android.purebilibili.feature.dynamic.rememberDynamicUserGridState
 import com.android.purebilibili.feature.dynamic.resolveDynamicPagePresentation
 import com.android.purebilibili.feature.dynamic.components.DynamicCardActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardNavigationActions
 import com.android.purebilibili.feature.dynamic.components.DynamicCardPresentation
 import com.android.purebilibili.feature.dynamic.components.DynamicCardV2
+import com.android.purebilibili.feature.dynamic.components.SidebarUserItem
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
@@ -46,6 +59,53 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class DynamicAuthorSwitchUiRegressionTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun sidebarLiveBadgeOpensTheRoomWithoutOpeningTheAuthorMenu() {
+        val openedRooms = mutableListOf<Long>()
+        var authorSelections = 0
+        var menuRequests = 0
+        compose.setContent {
+            val view = LocalView.current
+            val presenter = remember(view) {
+                object : AppGlassMenuPresenter {
+                    override val ownerView: View = view
+                    override fun show(owner: Any, request: AppGlassMenuRequest) { menuRequests++ }
+                    override fun dismiss(owner: Any) = Unit
+                }
+            }
+            CompositionLocalProvider(
+                LocalAppGlassMenuPresenter provides presenter,
+                LocalComponentMotionEnabled provides false,
+                LocalPageImageLoadingAllowed provides false,
+            ) {
+                ProvideAppThemeConfig(AppThemeConfig(liquidGlassEnabled = true)) {
+                    MaterialTheme {
+                        Box(Modifier.width(76.dp)) {
+                            SidebarUserItem(
+                                user = SidebarUser(uid = 11L, name = "直播作者", face = "", isLive = true, liveRoomId = 42L),
+                                selfUid = 0L,
+                                isSelected = true,
+                                showLabel = true,
+                                onClick = { authorSelections++ },
+                                onLiveClick = { roomId, _, _ -> openedRooms.add(roomId) },
+                                onTogglePin = {},
+                                onToggleHidden = {},
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        val badge = compose.onNodeWithText("直播中", useUnmergedTree = true).assertIsDisplayed()
+        badge.performTouchInput { down(center) }
+        compose.mainClock.advanceTimeBy(ViewConfiguration.getTapTimeout().toLong() + 32L)
+        badge.performTouchInput { up() }
+        compose.runOnIdle {
+            assertEquals(listOf(42L), openedRooms)
+            assertEquals(0, authorSelections)
+            assertEquals(0, menuRequests)
+        }
+    }
 
     @Test fun authorArticlesKeepTheLoadingPlaceholderBetweenPages() {
         val state = mutableStateOf(DynamicUiState(userIsLoading = true))

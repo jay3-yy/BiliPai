@@ -40,6 +40,7 @@ import com.android.purebilibili.core.ui.motion.rememberSystemReduceMotion
 import com.android.purebilibili.core.ui.performance.isLowBlurBudgetForced
 import com.android.purebilibili.feature.home.UserState
 import kotlin.math.roundToInt
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 
 /** Keep native fusion off the page backdrop; only the avatar/cutout enter its buffers. */
 @Composable
@@ -116,6 +117,7 @@ internal fun ProfileAvatarEffect(
                                     .clip(CircleShape)
                                     .border(2.dp, latestBorder.value, CircleShape)
                                     .then(latestPhotoScrollConnection.value?.let { Modifier.nestedScroll(it) } ?: Modifier)
+                                    .appScrollBoundaryHaptics(listState)
                                     .scrollable(listState, Orientation.Vertical, reverseDirection = true, flingBehavior = latestFling.value)
                                     .clickable {
                                         val location = IntArray(2)

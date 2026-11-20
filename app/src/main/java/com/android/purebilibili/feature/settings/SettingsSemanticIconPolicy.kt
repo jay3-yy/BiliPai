@@ -303,7 +303,6 @@ internal enum class SettingsIconRole(
     AMBIENT_STRENGTH(R.drawable.ic_settings_ambient_strength_24),
     AMBIENT_POWER_SAVING(R.drawable.ic_settings_ambient_power_saving_24),
     EXIT_DIRECTION(R.drawable.ic_settings_exit_direction_24),
-    TRANSITION_MODE(R.drawable.ic_settings_transition_mode_24),
     UI_STYLE(R.drawable.ms_view_carousel_24, R.drawable.ph_layout_24),
     LIST_ITEM_STYLE(R.drawable.ms_view_stream_24, R.drawable.ph_list_dashes_24),
     ICON_STYLE(R.drawable.ms_apps_24, R.drawable.ph_squares_four_24),

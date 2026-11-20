@@ -449,7 +449,7 @@ fun BottomBarSettingsContent(
                                 AppSwitchPreference(
                                     icon = rememberSettingsSemanticIcon(SettingsIconRole.LIST_SCOPED_SEARCH),
                                     title = settingItemTitle("navigation.list_scoped_search_enabled"),
-                                    subtitle = "收藏、历史和稍后再看改用底栏搜索当前页",
+                                    subtitle = "浏览底栏中的收藏、历史或稍后再看时，底栏提交的关键词用于筛选当前列表",
                                     checked = listScopedSearchEnabled,
                                     onCheckedChange = { enabled ->
                                         scope.launch {

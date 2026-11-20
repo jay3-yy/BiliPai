@@ -39,6 +39,7 @@ import com.android.purebilibili.core.ui.components.AppIcon
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.ui.components.AppText
 import com.android.purebilibili.core.ui.components.AppTextButton
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.core.ui.rememberAppBackIcon
 import com.android.purebilibili.feature.dynamic.components.ImagePreviewDialog
 import com.android.purebilibili.feature.home.subscription.FeedReadingBlock
@@ -138,7 +139,7 @@ internal fun InstantArticleContent(
             }
             is InstantArticleUiState.Content -> LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier.fillMaxSize().padding(padding).appScrollBoundaryHaptics(listState),
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),

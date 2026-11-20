@@ -98,7 +98,7 @@ internal fun FavoriteResourceOrderContent(
                     LazyColumn(
                         state = listState,
                         userScrollEnabled = !busy && draggedId == null,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = listHeight),
+                        modifier = Modifier.fillMaxWidth().heightIn(max = listHeight).appScrollBoundaryHaptics(listState),
                     ) {
                         itemsIndexed(state.draft, key = { _, tag -> tag.orderKey }) { index, tag ->
                             val dragging = draggedId == tag.orderKey
