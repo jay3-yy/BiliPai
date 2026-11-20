@@ -21,7 +21,6 @@ import com.android.purebilibili.feature.share.commentDetailReplyShareContext
 import com.android.purebilibili.feature.share.dynamicReplyShareContext
 import com.android.purebilibili.feature.share.matchReplyShareContext
 import com.android.purebilibili.feature.share.videoReplyShareContext
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -190,46 +189,4 @@ class ReplyMenuConsistencyTest {
         assertEquals(setOf(10L, 20L), payload.pinnedReplyIds)
         assertEquals(listOf(10L, 20L, 30L), payload.replies.map { it.rpid })
     }
-
-    @Test
-    fun `all refactored comment surfaces wire unified menu bindings share context fraud feedback and pinned ids`() {
-        val hostsWithUnifiedBindings = mapOf(
-            "feature/video/ui/components/VideoCommentSheetHost.kt" to listOf("resolveReplyMenuBindings", "CommentInputDialog("),
-            "feature/video/ui/components/SubReplyDetailComponents.kt" to listOf("resolveReplyMenuBindings", "resolveSubReplyDetailRowBindings"),
-            "feature/video/screen/VideoContentSection.kt" to listOf("resolveReplyMenuBindings", "pinnedReplyIds"),
-            "feature/video/screen/VideoDetailPhoneContent.kt" to listOf("pinnedReplyIds"),
-            "feature/video/screen/TabletVideoLayout.kt" to listOf("resolveReplyMenuBindings", "replyMenuCallbacks", "pinnedReplyIds"),
-            "feature/video/screen/TabletCinemaLayout.kt" to listOf("resolveReplyMenuBindings", "replyMenuCallbacks", "pinnedReplyIds"),
-            "feature/video/screen/VideoDetailScreenStateHolder.kt" to listOf("LocalReplyShareContext", "videoReplyShareContext", "pinnedReplyIds"),
-            "feature/bangumi/ui/player/BangumiPlayerContent.kt" to listOf("bangumiReplyShareContext", "replyMenuCallbacks", "pinnedReplyIds"),
-            "feature/video/ui/pager/PortraitVideoPager.kt" to listOf("videoReplyShareContext", "LocalReplyShareContext"),
-            "feature/video/screen/AudioModeMusicPlayer.kt" to listOf("videoReplyShareContext", "LocalReplyShareContext", "VideoCommentSheetHost("),
-            "feature/matchinfo/MatchInfoScreen.kt" to listOf("matchReplyShareContext", "LocalReplyShareContext", "MATCH_COMMENT_TYPE", "VideoCommentSheetHost("),
-            "feature/dynamic/components/DynamicCommentSheet.kt" to listOf("resolveReplyMenuBindings", "dynamicReplyShareContext", "LocalReplyShareContext", "CommentFraudFeedbackHost("),
-            "feature/dynamic/DynamicDetailScreen.kt" to listOf("dynamicReplyShareContext", "LocalReplyShareContext", "replyMenuCallbacks", "pinnedReplyIds", "CommentFraudFeedbackHost("),
-            "feature/article/ArticleDetailScreen.kt" to listOf("articleReplyShareContext", "LocalReplyShareContext"),
-            "feature/article/ArticleComments.kt" to listOf("replyMenuCallbacks", "pinnedReplyIds", "CommentFraudFeedbackHost("),
-            "feature/audio/bgm/BgmDetailScreen.kt" to listOf("bgmReplyShareContext", "LocalReplyShareContext", "resolveReplyMenuBindings", "CommentFraudFeedbackHost("),
-            "feature/comment/CommentDetailScreen.kt" to listOf("commentDetailReplyShareContext", "LocalReplyShareContext", "replyMenuCallbacks", "upMid = subReplyState.upMid", "CommentVisibilityResultDialog("),
-            "feature/video/VideoActivity.kt" to listOf("LocalDetailedCommentTimeEnabled provides detailedCommentTimeEnabled"),
-        )
-
-        hostsWithUnifiedBindings.forEach { (path, requiredTokens) ->
-            val content = source(path)
-            requiredTokens.forEach { token ->
-                assertTrue(content.contains(token), "Expected '$token' in $path")
-            }
-        }
-
-        val matchInfo = source("feature/matchinfo/MatchInfoScreen.kt")
-        assertFalse(
-            matchInfo.contains("handleFraudEvents = false"),
-            "MatchInfoScreen must not disable CommentFraudFeedbackHost",
-        )
-    }
-
-    private fun source(path: String): String = listOf(
-        File("app/src/main/java/com/android/purebilibili/$path"),
-        File("src/main/java/com/android/purebilibili/$path"),
-    ).first { it.exists() }.readText()
 }

@@ -1455,23 +1455,28 @@ class VideoCommentViewModel : ViewModel() {
     }
 
     fun toggleTopComment(reply: ReplyItem) {
-        if (currentSubject.oid <= 0L || reply.rpid <= 0L) return
-        val current = _commentState.value
-        val isCurrentlyTop = reply.rpid in current.pinnedReplyIds || reply.replyControl?.isUpTop == true
+        val subject = currentSubject
+        if (!subject.isValid || reply.rpid <= 0L) return
+        val sessionId = commentSessionId
+        val account = TokenManager.accountIdentity.value
+        val isCurrentlyTop = reply.rpid in _commentState.value.pinnedReplyIds || reply.replyControl?.isUpTop == true
         viewModelScope.launch {
             CommentRepository.setCommentTopForSubject(
-                oid = currentSubject.oid,
-                type = currentSubject.type,
+                oid = subject.oid,
+                type = subject.type,
                 rpid = reply.rpid,
                 isCurrentlyTop = isCurrentlyTop
             ).onSuccess {
-                val nextPinnedIds = if (isCurrentlyTop) {
-                    current.pinnedReplyIds - reply.rpid
-                } else {
-                    setOf(reply.rpid)
-                }
+                if (commentSessionId != sessionId || currentSubject != subject ||
+                    TokenManager.accountIdentity.value != account
+                ) return@launch
                 _commentState.update { state ->
-                    state.copy(pinnedReplyIds = nextPinnedIds.toImmutableSet())
+                    val pinnedReplyIds = if (isCurrentlyTop) {
+                        state.pinnedReplyIds - reply.rpid
+                    } else {
+                        setOf(reply.rpid)
+                    }
+                    state.copy(pinnedReplyIds = pinnedReplyIds.toImmutableSet())
                 }
                 _subReplyState.update { sub ->
                     if (sub.rootReply?.rpid == reply.rpid) {

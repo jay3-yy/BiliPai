@@ -2721,14 +2721,24 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
             onResult(false, "无法确定评论参数")
             return
         }
+        val dynamicId = _selectedDynamic.value?.id_str ?: return
+        val subjectSession = commentSubjectSession
+        val account = activeAccountIdentity
         val isCurrentlyTop = reply.rpid in _commentUiState.value.pinnedReplyIds || reply.replyControl?.isUpTop == true
         launchAccount {
-            CommentRepository.setCommentTopForSubject(
+            val result = CommentRepository.setCommentTopForSubject(
                 oid = target.oid,
                 type = target.type,
                 rpid = reply.rpid,
                 isCurrentlyTop = isCurrentlyTop,
-            ).fold(
+            )
+            if (account != activeAccountIdentity || account != TokenManager.accountIdentity.value ||
+                !shouldApplyDynamicSentComment(
+                    dynamicId, target, subjectSession, _selectedDynamic.value?.id_str,
+                    _selectedCommentTarget.value, commentSubjectSession,
+                )
+            ) return@launchAccount
+            result.fold(
                 onSuccess = {
                     val nextPinnedIds = if (isCurrentlyTop) {
                         _commentUiState.value.pinnedReplyIds - reply.rpid
@@ -2743,7 +2753,7 @@ class DynamicViewModel(application: Application) : AndroidViewModel(application)
                         } else sub
                     }
                     cacheCurrentComments(_commentUiState.value.comments)
-                    _selectedDynamic.value?.id_str?.takeIf(String::isNotBlank)?.let(::loadComments)
+                    loadComments(dynamicId)
                     onResult(true, if (isCurrentlyTop) "已取消置顶" else "已置顶")
                 },
                 onFailure = { onResult(false, it.message ?: "置顶操作失败") },
