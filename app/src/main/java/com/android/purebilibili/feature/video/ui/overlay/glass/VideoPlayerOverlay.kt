@@ -1787,8 +1787,6 @@ private fun VideoPlayerOverlayContent(
                 onPlayPause = { togglePlayPause() },
                 diameter = if (isFullscreen) 72.dp else 56.dp,
                 modifier = Modifier.align(Alignment.Center),
-                isBuffering = !pluginPlaybackStatus.first && player.playWhenReady &&
-                    (player.playbackState == Player.STATE_BUFFERING || centerLoadingUiState != null),
             )
         }
 
