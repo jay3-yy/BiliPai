@@ -47,6 +47,7 @@ import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppSingleChoicePreference
 import com.android.purebilibili.core.ui.components.AppSwitchPreference as SettingSwitchItem
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.components.appScrollBoundaryHaptics
 import com.android.purebilibili.feature.message.notification.MessageNotificationMode
 import com.android.purebilibili.feature.message.notification.MessageNotificationNotifier
 import com.android.purebilibili.feature.message.notification.MessageNotificationSettings
@@ -222,10 +223,12 @@ fun MessageNotificationSettingsScreen(onBack: () -> Unit) {
         scrollHost = SettingsPageScrollHost.External,
         externalContentHandlesTopPadding = true,
     ) {
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .appScrollBoundaryHaptics(scrollState)
+                .verticalScroll(scrollState)
                 .padding(bottom = 24.dp),
         ) {
             Spacer(modifier = Modifier.height(LocalSettingsTopContentPadding.current))

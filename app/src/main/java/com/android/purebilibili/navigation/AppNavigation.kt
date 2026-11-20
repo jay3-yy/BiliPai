@@ -685,6 +685,9 @@ fun AppNavigation(
 
     // 直播、番剧等非视频独立窗口按显式入口处理，不恢复内存终止快照。
     val windowInitialKey = initialVideoRoute?.let(::legacyRouteToBiliPaiNavKey)
+    val systemWindowEntry = windowInitialKey?.takeIf {
+        (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)?.hasOfficialCardSession == true
+    }
     val nonVideoWindowEntry = windowInitialKey != null && windowInitialKey !is BiliPaiNavKey.VideoDetail
     val memoryRecovery = com.android.purebilibili.navigation3.rememberFairMemoryNavigationRecovery(
         context = context,
@@ -711,7 +714,10 @@ fun AppNavigation(
     val miniPlayerMotionEnabled = hostWindowFocused && hostWindowResumed && !isInPipMode &&
         !systemReduceMotion && com.android.purebilibili.core.ui.LocalAppThemeConfig.current.uiEntranceAnimationEnabled
     val sharedVideoCardTransitionEnabled = appearance.cardTransitionEnabled && !systemReduceMotion
-    val systemCardTransitionEnabled = sharedVideoCardTransitionEnabled && !homeSettings.preferSharedElementCardTransition
+    // 保留页面的点击回调也在点击时读取当前方式。
+    val systemCardTransitionEnabled by rememberUpdatedState(
+        sharedVideoCardTransitionEnabled && !homeSettings.preferSharedElementCardTransition,
+    )
     androidx.compose.runtime.SideEffect {
         // The method preference selects new launches. An existing system window keeps its return path.
         (hostActivity as? com.android.purebilibili.feature.video.VideoActivity)
@@ -6583,6 +6589,7 @@ fun AppNavigation(
                 val miniPlayerOwnsNavigationMotion = miniPlayerMotion?.ownsNavigationMotion == true
                 BiliPaiNavDisplayHost(
                     backStack = navigation3BackStack,
+                    systemWindowEntry = systemWindowEntry,
                     onOpenCardContainer = { navigateToSystemCardWindowOrPush(it) },
                     activeMainHostRoute = activeBottomTabRoute,
                     // 系统未启动时，仅本次可匹配来源启用官方共享容器；其余沿用页面转场。

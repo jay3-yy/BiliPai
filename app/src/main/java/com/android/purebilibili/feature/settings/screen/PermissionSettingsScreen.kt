@@ -186,10 +186,12 @@ fun PermissionSettingsContent(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+    val scrollState = rememberScrollState()
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
+            .appScrollBoundaryHaptics(scrollState)
+            .verticalScroll(scrollState),
     ) {
             Spacer(modifier = Modifier.height(LocalSettingsTopContentPadding.current))
             Box(modifier = Modifier.entrance()) {

@@ -128,6 +128,7 @@ internal fun BiliPaiNavDisplayHost(
     cardTransitionEnabled: Boolean = true,
     videoCardTransitionEnabled: Boolean = cardTransitionEnabled,
     sharedContainerFallbackEnabled: Boolean = false,
+    systemWindowEntry: BiliPaiNavKey? = null,
     videoMiniPlayerDeparture: Boolean = false,
     videoTransitionRealtimeBlurEnabled: Boolean = false,
     isLightBackground: Boolean = false,
@@ -1065,6 +1066,7 @@ internal fun BiliPaiNavDisplayHost(
             predictiveBackBackgroundState,
             videoCardTransitionEnabled,
             sharedContainerFallbackEnabled,
+            systemWindowEntry,
             stableEntryBack,
             entryBackEnabled,
             backStack,
@@ -1162,10 +1164,10 @@ internal fun BiliPaiNavDisplayHost(
                                     } else Modifier
                                 ),
                             ) {
-                                // 子页内容随共享容器交接，不再等容器落位后逐组从透明重新进场。
+                                // 窗口首屏及共享容器的内容随各自的转场入场。
                                 CompositionLocalProvider(
                                     com.android.purebilibili.core.ui.animation.LocalNavigationOwnsContentEntrance
-                                        provides useSettingsContainer,
+                                        provides (useSettingsContainer || key == systemWindowEntry),
                                     LocalNavigationSharedSurfaceVisible provides
                                         !(useSettingsContainer && settingsTransition?.navigationControlFallback == true &&
                                             sharedContainerMoving),

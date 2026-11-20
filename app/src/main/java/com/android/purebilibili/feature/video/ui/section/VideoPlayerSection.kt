@@ -273,6 +273,27 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
+import com.android.purebilibili.feature.video.ui.overlay.LocalPlayerLevelGestureActive
+import com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop
+import top.yukonga.miuix.kmp.blur.Backdrop
+
+@Composable
+private fun VideoPlayerOverlayHost(
+    panelViewport: PlayerPanelViewportState?,
+    levelGestureActive: Boolean,
+    pageBackdrop: Backdrop?,
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+) {
+    Box(modifier = modifier) {
+        // 返回预览会重组控件，逐项提供其环境值，避免走多值数组的更新路径。
+        CompositionLocalProvider(LocalPlayerPanelViewport provides panelViewport) {
+            CompositionLocalProvider(LocalPlayerLevelGestureActive provides levelGestureActive) {
+                CompositionLocalProvider(LocalPlayerPageBackdrop provides pageBackdrop, content = content)
+            }
+        }
+    }
+}
 
 @Composable
 private fun BoxScope.VideoSubtitleOverlayHost(
@@ -5745,22 +5766,17 @@ private fun VideoPlayerSectionContent(
                 VideoPlayerOverlay(state = overlayState, actions = overlayActions)
             }
 
-            Box(
+            VideoPlayerOverlayHost(
+                panelViewport = panelViewport.takeIf { panelAvoidanceEnabled },
+                levelGestureActive = shouldShowLevelIndicator,
+                pageBackdrop = pageChromeBackdrop,
                 modifier = Modifier
                     .fillMaxSize()
                     .graphicsLayer {
                         alpha = transitionChromeAlphaProvider()
-                    }
-            ) {
-                CompositionLocalProvider(
-                    LocalPlayerPanelViewport provides panelViewport.takeIf { panelAvoidanceEnabled },
-                    com.android.purebilibili.feature.video.ui.overlay.LocalPlayerLevelGestureActive provides shouldShowLevelIndicator,
-                    com.android.purebilibili.feature.video.ui.overlay.LocalPlayerPageBackdrop provides
-                        pageChromeBackdrop,
-                ) {
-                    renderVideoPlayerOverlay()
-                }
-            }
+                    },
+                content = renderVideoPlayerOverlay,
+            )
 
             SponsorSkipButton(
                 segment = sponsorSegment,

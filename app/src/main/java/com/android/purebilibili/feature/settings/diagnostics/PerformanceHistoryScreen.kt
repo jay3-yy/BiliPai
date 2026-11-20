@@ -165,7 +165,12 @@ internal fun PerformanceHistoryContent(
     val secondary = AppContentColors.secondaryText()
     var summaryExpanded by rememberSaveable(current.id) { mutableStateOf(false) }
     val copy = rememberClipboardCopyHandler()
-    LazyColumn(modifier, state = listState, contentPadding = contentPadding, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyColumn(
+        modifier.appScrollBoundaryHaptics(listState),
+        state = listState,
+        contentPadding = contentPadding,
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
         item(key = "selection", contentType = "controls") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {

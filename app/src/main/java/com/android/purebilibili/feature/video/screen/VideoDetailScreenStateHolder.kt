@@ -1084,7 +1084,6 @@ internal fun VideoDetailScreenStateHolder(
                         isVertical = VideoRepository.getCachedVerticalFlag(targetBvid),
                     )
 
-                    // 先摘掉父详情壳 sharedBounds，再 push，避免相关卡嵌套在父壳内吃不到 morph。
                     // 只保留轻量 UI 位置快照；整屏位图捕获会把导航提交阻塞数百毫秒。
                     viewModel.cancelRelatedPreload()
                     sharedDanmakuManager.clearForVideoChange()
@@ -1197,14 +1196,17 @@ internal fun VideoDetailScreenStateHolder(
 
     // 进场以动画为主：导航/shell morph 期间不挂载手机正文等重型内容。
     // loadVideo 立即发起按需网络请求，媒体 prepare 才等待 entryTransitionFinished。
-    val entryVisualEnabled = transitionEnabled && !deferVideoDetailEntryLoad
-    val navigationOwnsEntryMotion = !transitionEnabled && entryNavigationTransitionScope != null
+    val navigationOwnsContentEntrance =
+        com.android.purebilibili.core.ui.animation.LocalNavigationOwnsContentEntrance.current
+    val localEntryMotionEnabled = transitionEnabled && !navigationOwnsContentEntrance
+    val entryVisualEnabled = localEntryMotionEnabled && !deferVideoDetailEntryLoad
+    val navigationOwnsEntryMotion = !localEntryMotionEnabled && entryNavigationTransitionScope != null
     // entry 生命周期内只允许完成一次；返回标志或 defer 变化不能重建状态并隐藏已加载正文。
     var legacyEntryVisualFinished by remember {
         mutableStateOf(
             when {
                 deferVideoDetailEntryLoad -> false
-                !transitionEnabled -> true
+                !localEntryMotionEnabled -> true
                 else -> false
             }
         )
@@ -1219,12 +1221,12 @@ internal fun VideoDetailScreenStateHolder(
     val entryVisualProgress = remember(entryVisualEnabled) {
         Animatable(if (entryVisualEnabled) 0f else 1f)
     }
-    val detailInfoRevealProgress = remember(transitionEnabled) {
-        Animatable(if (transitionEnabled) 0f else 1f)
+    val detailInfoRevealProgress = remember(localEntryMotionEnabled) {
+        Animatable(if (localEntryMotionEnabled) 0f else 1f)
     }
 
-    LaunchedEffect(transitionEnabled, motionSpec.entryPhaseDurationMillis, entryHeroDriver) {
-        if (!transitionEnabled || entryHeroDriver != null) {
+    LaunchedEffect(localEntryMotionEnabled, motionSpec.entryPhaseDurationMillis, entryHeroDriver) {
+        if (!localEntryMotionEnabled || entryHeroDriver != null) {
             detailInfoRevealProgress.snapTo(1f)
         } else {
             detailInfoRevealProgress.animateTo(
@@ -1244,7 +1246,7 @@ internal fun VideoDetailScreenStateHolder(
         entryVisualEnabled,
         motionSpec.entryPhaseDurationMillis,
         entryHeroDriver,
-        transitionEnabled,
+        localEntryMotionEnabled,
         navigationOwnsEntryMotion,
     ) {
         if (navigationOwnsEntryMotion) return@LaunchedEffect
@@ -1265,7 +1267,7 @@ internal fun VideoDetailScreenStateHolder(
                 }
             }
 
-            !transitionEnabled -> {
+            !localEntryMotionEnabled -> {
                 entryVisualProgress.snapTo(1f)
                 legacyEntryVisualFinished = true
             }
@@ -1793,7 +1795,8 @@ internal fun VideoDetailScreenStateHolder(
     val detailShellSharedBoundsEnabled = transitionState.detailShellSharedBoundsEnabled
     val suppressEnterFadeAfterBackPreview = transitionState.suppressEnterFadeAfterBackPreview
     val detailTransitionProgress = transitionState.progress
-    val detailChildTransitionEnabled = transitionState.detailChildTransitionEnabled
+    val detailChildTransitionEnabled = transitionState.detailChildTransitionEnabled &&
+        !navigationOwnsContentEntrance
     val coverSharedBoundsActive = transitionState.coverSharedBoundsActive
     val sharedBoundsActive = transitionState.sharedBoundsActive
     val routeSheetFrameProvider = transitionState.routeSheetFrameProvider

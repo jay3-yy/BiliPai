@@ -61,7 +61,9 @@ import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.blur.*
 import com.android.purebilibili.core.ui.effect.lens
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.material.EdgePeak
+import top.yukonga.miuix.kmp.material.EdgeStrokes
+import top.yukonga.miuix.kmp.material.drawEdgeStroke
 import androidx.compose.ui.res.colorResource
 import com.android.purebilibili.designsystem.R
 import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
@@ -317,7 +319,7 @@ private class LiquidValueBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
-        downscaleFactor: Int,
+        downscaleFactor: Float,
     ) {
         // The effect's recording scope includes refraction/blur padding. Cover all of it;
         // a 6dp slider track alone leaves the enlarged lens sampling transparent pixels.
@@ -336,6 +338,11 @@ private class LiquidValueBackdrop(
     }
 }
 
+private val liquidValueThumbRim = EdgeStrokes.MiddleLight.copy(
+    width = (0.5f / 1.5f).dp,
+    peak = EdgePeak.Vertical,
+)
+
 @Composable
 private fun LiquidValueThumb(
     motion: LiquidValueMotion, track: Backdrop, modifier: Modifier, thumbSize: DpSize,
@@ -353,7 +360,7 @@ private fun LiquidValueThumb(
                 blur(8.dp.toPx() * (1f - progress))
                 lens(5.dp.toPx() * lensScale * progress, 10.dp.toPx() * lensScale * progress, chromaticAberration = 1f)
             },
-            highlight = { Highlight(width = (0.5f / 1.5f).dp, alpha = motion.press.value.coerceIn(0f, 1f)) },
+            onDrawFront = { drawEdgeStroke(CircleShape, liquidValueThumbRim, motion.press.value.coerceIn(0f, 1f)) },
             layerBlock = {
                 val velocity = motion.velocity.value
                 scaleX = LiquidIndicatorMotion.scaleX(motion.scaleX.value, velocity)

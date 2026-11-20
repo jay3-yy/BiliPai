@@ -131,6 +131,8 @@ class NavEntryBuilder {
      *   governing transition's [NavTransition.dismissDirection]. Pass [NavSwipeDirection.None] to
      *   disable the gesture on this route, or another direction to override it.
      * @param metadata extra per-entry metadata, merged with the transition / swipe-dismiss overrides.
+     * @param transitionForKey resolves a transition for an individual key. A `null` result uses
+     *   [transition].
      * @param content the composable rendering a key of type [T].
      */
     inline fun <reified T : Any> entry(
@@ -138,13 +140,15 @@ class NavEntryBuilder {
         transition: NavTransition? = null,
         swipeDismiss: NavSwipeDirection? = null,
         metadata: Map<String, Any> = emptyMap(),
+        noinline transitionForKey: ((T) -> NavTransition?)? = null,
         noinline content: @Composable (T) -> Unit,
     ) {
         register(T::class) { key ->
             @Suppress("UNCHECKED_CAST")
             val typed = key as T
             var mergedMetadata = metadata
-            if (transition != null) mergedMetadata = mergedMetadata + (NAV_TRANSITION_METADATA_KEY to transition)
+            val entryTransition = transitionForKey?.invoke(typed) ?: transition
+            if (entryTransition != null) mergedMetadata = mergedMetadata + (NAV_TRANSITION_METADATA_KEY to entryTransition)
             if (swipeDismiss != null) mergedMetadata = mergedMetadata + (NAV_SWIPE_DISMISS_METADATA_KEY to swipeDismiss)
             NavEntry(
                 key = typed,

@@ -49,6 +49,9 @@ fun AppLazyColumn(
                 (LocalListAuxiliaryWorkAllowed.current && !state.isScrollInProgress),
         ) {
             LazyColumn(
+                modifier = if (userScrollEnabled) {
+                    Modifier.appScrollBoundaryHaptics(state, reverseLayout)
+                } else Modifier,
                 state = state, contentPadding = contentPadding, reverseLayout = reverseLayout,
                 verticalArrangement = verticalArrangement, horizontalAlignment = horizontalAlignment,
                 flingBehavior = flingBehavior, userScrollEnabled = userScrollEnabled,

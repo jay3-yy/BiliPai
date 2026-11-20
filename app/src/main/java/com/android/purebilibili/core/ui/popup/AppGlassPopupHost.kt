@@ -1406,7 +1406,6 @@ private fun AppGlassChoicePopupCard(
                         shape = { PopupSurfaceShape(outlineCache.outline(morph.frame(cornerRadiusPx, densityScale),
                             glassPopupSurfaceBounds(morph.card, morph.anchor, densityScale).topLeft, densityScale)) },
                         effects = effects,
-                        highlight = null,
                         onDrawFront = onDrawRim,
                         layerBlock = materialLayer,
                         onDrawSurface = onDrawSurface,

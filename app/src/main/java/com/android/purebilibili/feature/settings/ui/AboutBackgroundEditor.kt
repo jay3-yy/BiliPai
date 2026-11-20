@@ -51,14 +51,14 @@ import kotlinx.coroutines.launch
 /** 持久设置在宿主收集；预览和编辑器只接收值与保存回调。 */
 @Composable
 internal fun MiuixAboutAppearanceHost(
-    content: @Composable (AboutBackgroundSettings, () -> Unit) -> Unit,
+    content: @Composable (AboutBackgroundSettings, Boolean, () -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
     val settings by remember(context) { AboutAppearanceStore.observe(context) }
         .collectAsStateWithLifecycle(initialValue = AboutBackgroundSettings())
     val scope = rememberCoroutineScope()
     var showEditor by rememberSaveable { mutableStateOf(false) }
-    content(settings) { showEditor = true }
+    content(settings, showEditor) { showEditor = true }
     if (showEditor) {
         AboutBackgroundEditor(
             initialSettings = settings,

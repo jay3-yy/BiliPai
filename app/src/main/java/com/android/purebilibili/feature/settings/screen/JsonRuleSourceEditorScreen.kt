@@ -137,11 +137,13 @@ internal fun JsonRuleSourceEditorScreen(
             ) { AppText(if (saving) "保存中…" else if (installedId == null) "安装" else "保存") }
         },
     ) {
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .imePadding()
-                .verticalScroll(rememberScrollState())
+                .appScrollBoundaryHaptics(scrollState)
+                .verticalScroll(scrollState)
                 .padding(settingsScrollContentPadding(extraHorizontal = 16.dp, extraVertical = 16.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {

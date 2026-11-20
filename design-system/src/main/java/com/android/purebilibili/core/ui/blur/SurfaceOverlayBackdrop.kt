@@ -24,7 +24,7 @@ class SurfaceOverlayBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
-        downscaleFactor: Int,
+        downscaleFactor: Float,
     ) {
         val color = surfaceColor()
         // 完全遮挡时不再绘制底层内容，保持采样与实色顶栏一致。

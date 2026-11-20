@@ -7,14 +7,14 @@ import org.junit.Test
 
 class NavigationSharedContainerPolicyTest {
     @Test
-    fun ordinaryControlsAndInlineVideoCanUseSharedFallback() {
+    fun ordinaryControlsCanUseSharedFallback() {
         assertTrue(supportsNavigationSharedContainer(BiliPaiNavKey.Settings))
         assertTrue(supportsNavigationSharedContainer(BiliPaiNavKey.Search()))
-        assertTrue(supportsNavigationSharedContainer(BiliPaiNavKey.VideoDetail(bvid = "BV1")))
     }
 
     @Test
-    fun fullscreenVideoAndUnmatchedDestinationsKeepTheirPageTransition() {
+    fun videoDetailsAndUnmatchedDestinationsKeepTheirPageTransition() {
+        assertFalse(supportsNavigationSharedContainer(BiliPaiNavKey.VideoDetail(bvid = "BV1")))
         assertFalse(supportsNavigationSharedContainer(BiliPaiNavKey.VideoDetail(bvid = "BV1", fullscreen = true)))
         assertFalse(supportsNavigationSharedContainer(BiliPaiNavKey.VideoDetail(bvid = "BV1", directPortraitEntry = true)))
         assertFalse(supportsNavigationSharedContainer(BiliPaiNavKey.MainHost))

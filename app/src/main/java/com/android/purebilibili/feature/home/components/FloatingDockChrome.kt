@@ -51,33 +51,22 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
-import top.yukonga.miuix.kmp.blur.highlight.LightPosition
-import top.yukonga.miuix.kmp.blur.highlight.LightSource
+import top.yukonga.miuix.kmp.material.EdgeLightSource
+import top.yukonga.miuix.kmp.material.EdgePeak
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.material.drawEdgeStroke
 import dev.chrisbanes.haze.HazeState
 import com.android.purebilibili.core.ui.blur.unifiedBlur
 import com.android.purebilibili.core.ui.blur.BlurSurfaceType
 import com.android.purebilibili.core.ui.adaptive.MotionTier
 
-private val iosIndicatorSpecular: Highlight = Highlight(
+private val iosIndicatorSpecular = EdgeStroke(
     width = 1.dp,
-    alpha = 1f,
-    style = BloomStroke(
-        color = Color.White.copy(alpha = 0.12f),
-        innerBlurRadius = 2.0.dp,
-        primaryLight = LightSource(
-            position = LightPosition(0.5f, -0.3f, -0.05f),
-            color = Color.White,
-            intensity = 1f,
-        ),
-        secondaryLight = LightSource(
-            position = LightPosition(0.5f, 0.8f, -0.5f),
-            color = Color.White,
-            intensity = 0.4f,
-        ),
-        dualPeak = true,
-    ),
+    bevel = 2.dp,
+    color = Color.White.copy(alpha = 0.12f),
+    primary = EdgeLightSource(0.5f, -0.3f, -0.05f),
+    secondary = EdgeLightSource(0.5f, 0.8f, -0.5f, intensity = 0.4f),
+    peak = EdgePeak.Dual,
 )
 
 private const val LIGHT_REF_X = 0.5f
@@ -104,11 +93,11 @@ internal fun quantizeGravityHighlightDirection(
 
 @Composable
 internal fun rememberBiliPaiGravityHighlight(
-    base: Highlight = iosIndicatorSpecular,
+    base: EdgeStroke = iosIndicatorSpecular,
     extraDegrees: Float = 0f,
     width: Dp = base.width,
     active: Boolean,
-): State<Highlight> {
+): State<EdgeStroke> {
     val tiltState = rememberSharedGlassGravity(active)
     val quantizedDirection = remember(tiltState) {
         derivedStateOf {
@@ -120,8 +109,6 @@ internal fun rememberBiliPaiGravityHighlight(
     }
     return remember(base, extraDegrees, quantizedDirection, width) {
         derivedStateOf {
-            val baseStyle = base.style as BloomStroke
-            val basePrimary = baseStyle.primaryLight
             val (lx0, ly0) = quantizedDirection.value
             val rad = extraDegrees * PI / 180.0
             val c = cos(rad).toFloat()
@@ -130,15 +117,7 @@ internal fun rememberBiliPaiGravityHighlight(
             val ly = s * lx0 + c * ly0
             base.copy(
                 width = width,
-                style = baseStyle.copy(
-                    primaryLight = basePrimary.copy(
-                        position = LightPosition(
-                            x = LIGHT_REF_X + lx,
-                            y = LIGHT_REF_Y + ly,
-                            z = basePrimary.position.z,
-                        ),
-                    ),
-                ),
+                primary = base.primary.copy(x = LIGHT_REF_X + lx, y = LIGHT_REF_Y + ly),
             )
         }
     }
@@ -234,9 +213,9 @@ internal fun Modifier.biliPaiFloatingDockShell(
             effectPaddingPx = effectPaddingPx,
             materialBlur = materialBlur,
         )
-        val highlightBlock = remember(baseHighlight, highlightAlpha) {
-            val block: BackdropEffectScope.() -> Highlight? = {
-                baseHighlight.value.copy(alpha = highlightAlpha)
+        val drawRim = remember(baseHighlight, highlightAlpha, shapeBlock) {
+            val block: DrawScope.() -> Unit = {
+                if (highlightAlpha > 0f) drawEdgeStroke(shapeBlock(), baseHighlight.value, highlightAlpha)
             }
             block
         }
@@ -272,7 +251,7 @@ internal fun Modifier.biliPaiFloatingDockShell(
                 effects = effects,
                 // Inline capsules (search/input) disable the shell lens and its rim highlight
                 // together; keeping the highlight alone leaves a one-pixel "shrimp line".
-                highlight = highlightBlock,
+                onDrawFront = drawRim,
                 layerBlock = interactionLayerBlock ?: layerBlock,
                 onDrawSurface = onDrawSurface,
             )
@@ -398,7 +377,7 @@ private fun rememberFloatingDockBackdropEffects(
             padding = maxOf(padding, effectPaddingPx)
         }
         // 折射可能扩大采样范围；在模糊之前确定最终边距，避免效果链二次求值。
-        if (shouldDrawLens && top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() &&
+        if (shouldDrawLens && top.yukonga.miuix.kmp.material.isRuntimeShaderSupported() &&
             refractionHeightPx > 0f && refractionAmountPx > 0f
         ) {
             padding = maxOf(padding, refractionAmountPx)
@@ -472,7 +451,8 @@ internal fun Modifier.floatingDockIndicatorOptics(
     progressProvider: () -> Float,
     scaleXProvider: () -> Float,
     scaleYProvider: () -> Float,
-    highlightProvider: () -> Highlight?,
+    highlightProvider: () -> EdgeStroke?,
+    highlightAlphaProvider: () -> Float,
     vertical: Boolean = false,
     shellScaleProvider: () -> Float = { 1f },
     idleColor: Color? = null,
@@ -495,7 +475,7 @@ internal fun Modifier.floatingDockIndicatorOptics(
                 gapOnlyDispersion = gapOnlyDispersion,
             )
         },
-        highlight = { highlightProvider() },
+        onDrawFront = { highlightProvider()?.let { drawEdgeStroke(shape, it, highlightAlphaProvider()) } },
         layerBlock = {
             this.scaleX = scaleXProvider()
             this.scaleY = scaleYProvider()
@@ -599,7 +579,9 @@ internal fun BoxScope.BiliPaiFloatingDockIndicator(
                                     ),
                                 )
                             },
-                            highlight = { if (highlightEnabled) pillHighlight.value.copy(alpha = pressProgress) else null },
+                            onDrawFront = {
+                                if (highlightEnabled) drawEdgeStroke(shape, pillHighlight.value, pressProgress)
+                            },
                             layerBlock = {
                                 this.scaleX = liquidWobbleScaleX(
                                     com.android.purebilibili.core.ui.animation.LiquidIndicatorMotion.scaleX(scaleX, velocity), recoilStretch(),

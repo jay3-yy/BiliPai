@@ -37,6 +37,9 @@ Source paths, preserved behavior, and modifications are recorded in
 
 UI components and liquid-glass indicator behavior reference
 [Miuix](https://github.com/compose-miuix-ui/miuix).
+The UI, preference, blur, material, squircle and icon dependencies use
+[`0.9.5-d27cbb0b-SNAPSHOT`](https://github.com/compose-miuix-ui/miuix/commit/d27cbb0b)
+under Apache-2.0.
 
 ## Publication visibility check references
 

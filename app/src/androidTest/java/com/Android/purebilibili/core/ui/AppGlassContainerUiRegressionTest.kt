@@ -145,7 +145,7 @@ class AppGlassContainerUiRegressionTest {
             density: Density,
             coordinates: LayoutCoordinates?,
             layerBlock: (GraphicsLayerScope.() -> Unit)?,
-            downscaleFactor: Int,
+            downscaleFactor: Float,
         ) {
             draws.incrementAndGet()
             drawRect(color)

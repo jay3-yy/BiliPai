@@ -25,7 +25,7 @@ class SurfaceOverlayBackdropUiTest {
             density: Density,
             coordinates: LayoutCoordinates?,
             layerBlock: (GraphicsLayerScope.() -> Unit)?,
-            downscaleFactor: Int,
+            downscaleFactor: Float,
         ) {
             draws++
             drawRect(Color.Red)
@@ -35,7 +35,7 @@ class SurfaceOverlayBackdropUiTest {
     @Test
     fun opaqueHeaderHidesContentAtEverySamplingScale() {
         val content = Content()
-        for (scale in listOf(1, 2, 4)) {
+        for (scale in listOf(1f, 2.5f, 4f)) {
             assertColor(Color.Black, render(SurfaceOverlayBackdrop(content, Color.Black), scale))
         }
         assertEquals(0, content.draws)
@@ -68,7 +68,7 @@ class SurfaceOverlayBackdropUiTest {
         assertEquals(2, content.draws)
     }
 
-    private fun render(backdrop: Backdrop, factor: Int = 1): Color {
+    private fun render(backdrop: Backdrop, factor: Float = 1f): Color {
         val bitmap = ImageBitmap(16, 16)
         CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, Canvas(bitmap), Size(16f, 16f)) {
             with(backdrop) { drawBackdrop(this@draw, null, null, factor) }

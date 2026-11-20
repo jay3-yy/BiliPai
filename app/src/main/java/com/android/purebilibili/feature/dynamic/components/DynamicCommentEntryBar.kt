@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.purebilibili.core.ui.AppContentColors
 import com.android.purebilibili.core.ui.AppShapes
+import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.ui.ContainerLevel
 import com.android.purebilibili.core.ui.components.appElasticPress
 import com.android.purebilibili.core.ui.components.AppIcon
@@ -47,7 +48,42 @@ import com.android.purebilibili.feature.home.components.resolveFloatingDockGeome
 import com.android.purebilibili.feature.home.components.resolveSharedBottomBarCapsuleShape
 import com.android.purebilibili.feature.video.ui.components.CommentEntryBarContent
 import com.android.purebilibili.feature.video.ui.components.resolveBottomInputBarPlaceholderTextColor
-import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
+import top.yukonga.miuix.kmp.blur.Backdrop
+
+private data class CommentEntryBarDimensions(
+    val height: Dp,
+    val horizontalPadding: Dp,
+    val iconSize: Dp,
+    val iconSpacing: Dp,
+    val actionIconSize: Dp,
+    val preferredActionPadding: Dp,
+) {
+    val commentChromeWidth = horizontalPadding * 2 + iconSize + iconSpacing
+}
+
+private object DynamicCommentBarSpec {
+    val Glass = CommentEntryBarDimensions(
+        height = 44.dp,
+        horizontalPadding = AppSpacingTokens.Large,
+        iconSize = 20.dp,
+        iconSpacing = 6.dp,
+        actionIconSize = 19.dp,
+        preferredActionPadding = 10.dp,
+    )
+    val Native = CommentEntryBarDimensions(
+        height = 48.dp,
+        horizontalPadding = AppSpacingTokens.Medium,
+        iconSize = 18.dp,
+        iconSpacing = AppSpacingTokens.Small,
+        actionIconSize = 22.dp,
+        preferredActionPadding = 6.dp,
+    )
+    val MinimumActionPadding = AppSpacingTokens.ExtraSmall
+    val ActionCountGap = AppSpacingTokens.ExtraSmall
+    val DockGap = AppSpacingTokens.Small
+    val CountWidthAllowance = 1.dp
+    val OverflowIconSize = 20.dp
+}
 
 /**
  * 动态评论输入入口。
@@ -59,11 +95,12 @@ import top.yukonga.miuix.kmp.blur.Backdrop as MiuixBackdrop
 internal fun DynamicCommentEntryBar(
     onClick: () -> Unit,
     liquidGlassEnabled: Boolean,
-    backdrop: MiuixBackdrop?,
+    backdrop: Backdrop?,
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
     isScrollInProgressProvider: () -> Boolean = { false },
 ) {
+    val dimensions = if (liquidGlassEnabled) DynamicCommentBarSpec.Glass else DynamicCommentBarSpec.Native
     val shape = resolveSharedBottomBarCapsuleShape()
     val textColor = resolveBottomInputBarPlaceholderTextColor(
         inputContainerColor = if (liquidGlassEnabled) {
@@ -80,13 +117,13 @@ internal fun DynamicCommentEntryBar(
             shape = shape,
             // The glass renderer shapes the moving shell. An outer clip would cut off
             // the shell and content when the shared press transform moves them.
-            modifier = modifier.height(44.dp),
+            modifier = modifier.height(dimensions.height),
             backdrop = backdrop,
             reuseEnabled = true,
-            materialEnabled = liquidGlassEnabled,
+            materialEnabled = true,
             elasticFeedbackEnabled = true,
             drawShellLens = true,
-            shellLensIntensity = resolveFloatingDockGeometryScale(44f),
+            shellLensIntensity = resolveFloatingDockGeometryScale(dimensions.height.value),
             isScrollInProgressProvider = isScrollInProgressProvider,
             // 内容只含文字与图标，不需要再录制玻璃外壳。
             captureShellForContent = false,
@@ -96,13 +133,13 @@ internal fun DynamicCommentEntryBar(
                     .fillMaxSize()
                     .background(if (liquidChromeActive) Color.Transparent else containerColor, shape)
                     .appActionClickable(role = Role.Button, onClick = onClick)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = dimensions.horizontalPadding),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 CommentEntryBarContent(
                     textColor = textColor,
-                    iconSize = 20.dp,
-                    iconSpacing = 6.dp,
+                    iconSize = dimensions.iconSize,
+                    iconSpacing = dimensions.iconSpacing,
                     textStyle = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -110,18 +147,18 @@ internal fun DynamicCommentEntryBar(
     } else {
         Box(
             modifier = modifier
-                .height(48.dp)
+                .height(dimensions.height)
                 .appElasticPress()
                 .clip(AppShapes.container(ContainerLevel.Card))
                 .background(containerColor)
                 .appActionClickable(role = Role.Button, onClick = onClick)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = dimensions.horizontalPadding),
             contentAlignment = Alignment.CenterStart,
         ) {
             CommentEntryBarContent(
                 textColor = textColor,
-                iconSize = 18.dp,
-                iconSpacing = 8.dp,
+                iconSize = dimensions.iconSize,
+                iconSpacing = dimensions.iconSpacing,
                 textStyle = MaterialTheme.typography.bodySmall,
             )
         }
@@ -131,7 +168,7 @@ internal fun DynamicCommentEntryBar(
 @Composable
 internal fun DynamicDetailCommentBar(
     liquidGlassEnabled: Boolean,
-    backdrop: MiuixBackdrop?,
+    backdrop: Backdrop?,
     isLiked: Boolean,
     repostEnabled: Boolean,
     likeCount: Long?,
@@ -161,13 +198,14 @@ internal fun DynamicDetailCommentBar(
         AppWindowAction(label = "分享", icon = rememberAppShareIcon(), onClick = onShare),
     )
     val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-    val actionHeight = if (liquidGlassEnabled) 44.dp else 48.dp
-    val actionIconSize = if (liquidGlassEnabled) 19.dp else 22.dp
+    val dimensions = if (liquidGlassEnabled) DynamicCommentBarSpec.Glass else DynamicCommentBarSpec.Native
+    val actionHeight = dimensions.height
+    val actionIconSize = dimensions.actionIconSize
     // 玻璃外壳留出折射边缘，原生操作栏使用自己的内边距。
-    val preferredActionPadding = if (liquidGlassEnabled) 10.dp else 6.dp
-    val minimumActionPadding = 4.dp
-    val actionCountGap = 4.dp
-    val dockGap = 8.dp
+    val preferredActionPadding = dimensions.preferredActionPadding
+    val minimumActionPadding = DynamicCommentBarSpec.MinimumActionPadding
+    val actionCountGap = DynamicCommentBarSpec.ActionCountGap
+    val dockGap = DynamicCommentBarSpec.DockGap
     val countStyle = MaterialTheme.typography.labelSmall
     val commentStyle = if (liquidGlassEnabled) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall
     val textMeasurer = rememberTextMeasurer()
@@ -177,13 +215,12 @@ internal fun DynamicDetailCommentBar(
         maxOf(
             textMeasurer.measure("8888", style = countStyle).size.width,
             textMeasurer.measure("88.8亿", style = countStyle).size.width,
-        ).toDp() + 1.dp
+        ).toDp() + DynamicCommentBarSpec.CountWidthAllowance
     }
     val commentLabelWidth = with(density) {
         textMeasurer.measure("发评论", style = commentStyle).size.width.toDp()
     }
-    val commentChromeWidth = if (liquidGlassEnabled) 58.dp else 50.dp
-    val minimumCommentWidth = commentLabelWidth + commentChromeWidth
+    val minimumCommentWidth = commentLabelWidth + dimensions.commentChromeWidth
     val countedActionWidth = maxOf(actionHeight, actionIconSize + actionCountGap + countWidth)
     val actionSlotsWidth = countedActionWidth * 2 + actionHeight
 
@@ -220,7 +257,11 @@ internal fun DynamicDetailCommentBar(
                         modifier = Modifier.fillMaxSize(),
                         anchorModifier = Modifier.size(actionHeight),
                     ) {
-                        AppIcon(rememberAppMoreIcon(), contentDescription = "动态操作", modifier = Modifier.size(20.dp))
+                        AppIcon(
+                            rememberAppMoreIcon(),
+                            contentDescription = "动态操作",
+                            modifier = Modifier.size(DynamicCommentBarSpec.OverflowIconSize),
+                        )
                     }
                 } else {
                     DynamicDetailCommentActions(
@@ -245,7 +286,7 @@ internal fun DynamicDetailCommentBar(
                     materialEnabled = true,
                     elasticFeedbackEnabled = true,
                     drawShellLens = true,
-                    shellLensIntensity = resolveFloatingDockGeometryScale(44f),
+                    shellLensIntensity = resolveFloatingDockGeometryScale(actionHeight.value),
                     captureShellForContent = false,
                     isScrollInProgressProvider = isScrollInProgressProvider,
                 ) { liquidChromeActive ->

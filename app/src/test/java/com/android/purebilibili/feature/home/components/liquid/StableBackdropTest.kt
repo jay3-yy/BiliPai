@@ -28,10 +28,10 @@ class StableBackdropTest {
         assertEquals(30f, stable.offsetResidualX, 0f)
         assertEquals(40f, stable.offsetResidualY, 0f)
         val scope = mockk<DrawScope>()
-        with(stable) { with(scope) { drawBackdrop(Density(1f), null, null, 4) } }
+        with(stable) { with(scope) { drawBackdrop(Density(1f), null, null, 4f) } }
         assertEquals(0, fallback.drawCount)
         assertEquals(1, shared.drawCount)
-        assertEquals(4, shared.lastDownscale)
+        assertEquals(4f, shared.lastDownscale, 0f)
     }
 
     @Test
@@ -40,7 +40,7 @@ class StableBackdropTest {
         val stable = StableBackdrop(mutableStateOf<Backdrop>(recording))
         val scope = mockk<DrawScope>()
         repeat(3) {
-            with(stable) { with(scope) { drawBackdrop(Density(1f), null, null, 1) } }
+            with(stable) { with(scope) { drawBackdrop(Density(1f), null, null, 1f) } }
         }
         assertEquals(3, recording.drawCount)
     }
@@ -51,13 +51,13 @@ class StableBackdropTest {
         override val offsetResidualY: Float,
     ) : Backdrop {
         var drawCount = 0
-        var lastDownscale = 0
+        var lastDownscale = 0f
 
         override fun DrawScope.drawBackdrop(
             density: Density,
             coordinates: LayoutCoordinates?,
             layerBlock: (GraphicsLayerScope.() -> Unit)?,
-            downscaleFactor: Int,
+            downscaleFactor: Float,
         ) {
             drawCount++
             lastDownscale = downscaleFactor

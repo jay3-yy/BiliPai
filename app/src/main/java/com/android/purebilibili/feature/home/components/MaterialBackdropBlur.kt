@@ -17,7 +17,7 @@ internal fun rememberMaterialBackdropBlur(tuning: LiquidGlassTuning): BackdropEf
                 // 与现有模糊的半径到高斯 sigma 换算一致，不改变用户选择的模糊强度。
                 val sigma = radiusPx * 0.45f
                 padding = maxOf(padding, sigma * 3f)
-                downscaleFactor = 1
+                downscaleFactor = 1f
                 noiseCoefficient = 0f
                 cache.resolve(sigma)?.let { effect(it) }
             } else {

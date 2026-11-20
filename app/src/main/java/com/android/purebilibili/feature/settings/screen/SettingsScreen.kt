@@ -1182,7 +1182,10 @@ private fun MobileSettingsNavLayout(
     )
 
     @Composable
-    fun SettingsRootContent(onAboutHeaderAppearanceClick: () -> Unit) {
+    fun SettingsRootContent(
+        onAboutHeaderAppearanceClick: () -> Unit,
+        onAboutHeroHeightChanged: (Int) -> Unit,
+    ) {
         when (destination) {
             SettingsNavDestination.Home -> {
                 Column {
@@ -1208,6 +1211,7 @@ private fun MobileSettingsNavLayout(
                         actions = rootCategoryActions,
                         state = rootCategoryState,
                         onAboutHeaderAppearanceClick = onAboutHeaderAppearanceClick,
+                        onAboutHeroHeightChanged = onAboutHeroHeightChanged,
                     )
                 }
             }
@@ -1220,6 +1224,7 @@ private fun MobileSettingsNavLayout(
     fun SettingsPage(
         pageBackgroundModifier: Modifier? = null,
         onAboutHeaderAppearanceClick: () -> Unit = {},
+        onAboutHeroHeightChanged: (Int) -> Unit = {},
     ) {
         com.android.purebilibili.feature.settings.ui.SettingsPageScaffold(
             title = screenTitle,
@@ -1243,10 +1248,10 @@ private fun MobileSettingsNavLayout(
         ) {
             if (rootEntranceEnabled) {
                 EntranceGroup(startWhen = rootEntranceStartWhen) {
-                    SettingsRootContent(onAboutHeaderAppearanceClick)
+                    SettingsRootContent(onAboutHeaderAppearanceClick, onAboutHeroHeightChanged)
                 }
             } else {
-                SettingsRootContent(onAboutHeaderAppearanceClick)
+                SettingsRootContent(onAboutHeaderAppearanceClick, onAboutHeroHeightChanged)
             }
         }
     }
@@ -1255,16 +1260,27 @@ private fun MobileSettingsNavLayout(
         destination is SettingsNavDestination.Category &&
         canonicalSettingsRootCategory(destination.category) == SettingsRootCategory.SYSTEM_ABOUT
     if (miuixAbout) {
-        MiuixAboutAppearanceHost { backgroundSettings, onCustomizeBackground ->
+        var aboutHeroHeightPx by remember { mutableIntStateOf(0) }
+        MiuixAboutAppearanceHost { backgroundSettings, editorVisible, onCustomizeBackground ->
             SettingsPage(
                 pageBackgroundModifier = miuixAboutBackground(
                     settings = backgroundSettings,
                     fieldHeight = miuixAboutHeroHeight() + 368.dp,
+                    motionAllowed = !editorVisible,
                     scrollOffset = {
                         aboutListState.firstVisibleItemScrollOffset.toFloat()
                     },
+                    scrollProgress = {
+                        when {
+                            aboutListState.firstVisibleItemIndex > 0 -> 1f
+                            aboutHeroHeightPx == 0 -> 0f
+                            else -> (aboutListState.firstVisibleItemScrollOffset.toFloat() / aboutHeroHeightPx)
+                                .coerceIn(0f, 1f)
+                        }
+                    },
                 ),
                 onAboutHeaderAppearanceClick = onCustomizeBackground,
+                onAboutHeroHeightChanged = { aboutHeroHeightPx = it },
             )
         }
     } else if (

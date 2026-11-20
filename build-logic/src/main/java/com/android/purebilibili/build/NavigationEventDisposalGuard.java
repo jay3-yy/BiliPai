@@ -10,7 +10,7 @@ import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
 /**
- * NavigationEvent 1.1.2 compatibility: parent disposal cascades to child dispatchers before
+ * Parent disposal cascades to child dispatchers before
  * nested/movable Compose content runs its own onDispose or pending enabled-state effect.
  * Make terminal cleanup, enabled-state writes, and deferred Compose BackHandler registration
  * inert once that branch is disposed.

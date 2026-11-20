@@ -120,6 +120,8 @@ internal object SystemVideoCardTransition {
     private val sessions = mutableMapOf<String, Session>()
     private var latestWindowRequestToken: String? = null
 
+    fun hasSession(token: String?): Boolean = token != null && token in sessions
+
     fun canAttempt(enabled: Boolean, source: VideoCardTransitionSession, activity: Activity? = null): Boolean {
         val sourceReady = enabled && source.hasUsableSourceGeometry && source.sourceAnchor != null &&
             source.sourcePixelOwner != null

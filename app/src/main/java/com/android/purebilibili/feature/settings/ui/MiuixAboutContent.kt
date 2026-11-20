@@ -1,5 +1,6 @@
 package com.android.purebilibili.feature.settings
 
+import androidx.compose.animation.core.withInfiniteAnimationFrameNanos
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import com.android.purebilibili.core.ui.components.appCombinedClickable
@@ -22,11 +23,19 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import coil3.compose.AsyncImage
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
@@ -34,15 +43,18 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.Dp
 import com.android.purebilibili.core.store.AboutBackgroundMode
 import com.android.purebilibili.core.store.AboutBackgroundSettings
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onVisibilityChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -53,50 +65,47 @@ import androidx.compose.ui.unit.sp
 import com.android.purebilibili.BuildConfig
 import com.android.purebilibili.R
 import com.android.purebilibili.core.ui.AppContentColors
+import com.android.purebilibili.core.ui.LocalComponentMotionEnabled
+import com.android.purebilibili.core.ui.LocalSystemReduceMotion
 import com.android.purebilibili.core.ui.common.rememberClipboardCopyHandler
 import com.android.purebilibili.core.ui.components.AppPreference
 import com.android.purebilibili.core.ui.components.AppPreferenceSectionTitle
 import com.android.purebilibili.core.ui.components.AppText
+import com.android.purebilibili.core.ui.rememberVisualWorkActive
+import com.android.purebilibili.navigation3.LocalNavigationSharedSurfaceVisible
+import top.yukonga.miuix.kmp.nav.core.LocalNavEntryContentVisible
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 internal fun miuixAboutHeroHeight() =
     (LocalConfiguration.current.screenHeightDp.dp * 0.52f).coerceIn(280.dp, 520.dp)
 
-/** 整页与编辑预览共用同一静态渐变；滚动值仅在绘制阶段读取。 */
+/** 默认渐变在首屏标识滚出时淡出，主题与自定义色继续随内容滚动。 */
 @Composable
 internal fun miuixAboutBackground(
     settings: AboutBackgroundSettings,
     fieldHeight: Dp,
     scrollOffset: () -> Float = { 0f },
+    scrollProgress: () -> Float = { 0f },
+    motionAllowed: Boolean = true,
 ): Modifier {
     val background = MiuixTheme.colorScheme.background
     val dark = background.luminance() < 0.5f
-    val colors = MaterialTheme.colorScheme
-    val defaultPalette = remember(colors.primary, dark) {
-        val hsv = FloatArray(3)
-        android.graphics.Color.colorToHSV(colors.primary.toArgb(), hsv)
-        val hue = hsv[0]
-        // 默认渐变保留主题色相，单独控制饱和度与亮度，避免容器色叠加后整页发灰。
-        if (dark) listOf(
-            Color.hsv(hue, 0.78f, 0.46f),
-            Color.hsv((hue + 10f) % 360f, 0.70f, 0.34f),
-            Color.hsv((hue + 24f) % 360f, 0.72f, 0.62f),
-        ) else listOf(
-            Color.hsv(hue, 0.25f, 0.96f),
-            Color.hsv((hue + 10f) % 360f, 0.16f, 0.99f),
-            Color.hsv((hue + 24f) % 360f, 0.32f, 1f),
-        )
-    }
     val palette = when (settings.mode) {
-        // 默认背景从当前主题推导，动态取色、预设主题与深浅色切换共用同一入口。
-        AboutBackgroundMode.DEFAULT -> defaultPalette
+        AboutBackgroundMode.DEFAULT -> return animatedMiuixAboutGradient(
+            background = background,
+            dark = dark,
+            scrollProgress = scrollProgress,
+            motionAllowed = motionAllowed,
+        )
         AboutBackgroundMode.THEME -> listOf(
             MaterialTheme.colorScheme.primaryContainer,
             MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.secondaryContainer,
         )
-        // 自选颜色先融入页面底色，保持浅色与深色模式下标题的可读性。
         AboutBackgroundMode.CUSTOM -> listOf(settings.topColor, settings.bottomColor, settings.glowColor)
             .map { lerp(background, Color(it), if (dark) 0.28f else 0.40f) }
         AboutBackgroundMode.NONE -> listOf(background, background, background)
@@ -114,14 +123,6 @@ internal fun miuixAboutBackground(
             center = Offset(fieldSize.width * 0.32f, fieldSize.height * 0.48f),
             radius = fieldSize.maxDimension * 0.55f,
         )
-        // 默认渐变以两处柔光形成宽色域，底部仍融入页面；自定义与主题模式保留原有绘制。
-        val defaultHighlight = if (settings.mode == AboutBackgroundMode.DEFAULT) {
-            Brush.radialGradient(
-                colors = listOf(palette[0].copy(alpha = 0.65f), Color.Transparent),
-                center = Offset(fieldSize.width * 0.88f, fieldSize.height * 0.18f),
-                radius = fieldSize.maxDimension * 0.48f,
-            )
-        } else null
         val fade = Brush.verticalGradient(
             0f to Color.Transparent,
             0.62f to Color.Transparent,
@@ -133,9 +134,80 @@ internal fun miuixAboutBackground(
             translate(top = -scrollOffset()) {
                 drawRect(brush = wash, size = fieldSize)
                 drawRect(brush = glow, size = fieldSize)
-                defaultHighlight?.let { drawRect(brush = it, size = fieldSize) }
                 drawRect(brush = fade, size = fieldSize)
             }
+        }
+    }
+}
+
+private const val ABOUT_GRADIENT_CYCLE_NANOS = 7_000_000_000L
+
+@Composable
+private fun animatedMiuixAboutGradient(
+    background: Color,
+    dark: Boolean,
+    scrollProgress: () -> Float,
+    motionAllowed: Boolean,
+): Modifier {
+    var inViewport by remember { mutableStateOf(false) }
+    val phase = remember { mutableFloatStateOf(0f) }
+    val latestScrollProgress = rememberUpdatedState(scrollProgress)
+    val gradientVisible by remember { derivedStateOf { latestScrollProgress.value() < 1f } }
+    val motionEnabled = LocalComponentMotionEnabled.current && !LocalSystemReduceMotion.current
+    val pageActive = rememberVisualWorkActive() && LocalNavEntryContentVisible.current &&
+        LocalNavigationSharedSurfaceVisible.current
+    val animating = motionAllowed && motionEnabled && pageActive && inViewport && gradientVisible
+    LaunchedEffect(animating) {
+        if (!animating) return@LaunchedEffect
+        val initialPhase = phase.floatValue
+        val startNanos = withInfiniteAnimationFrameNanos { it }
+        while (true) {
+            withInfiniteAnimationFrameNanos { frameNanos ->
+                val elapsed = (frameNanos - startNanos) % ABOUT_GRADIENT_CYCLE_NANOS
+                phase.floatValue = (initialPhase + elapsed.toFloat() / ABOUT_GRADIENT_CYCLE_NANOS) % 1f
+            }
+        }
+    }
+
+    return Modifier
+        .onVisibilityChanged(minFractionVisible = 0f) { inViewport = it }
+        .clipToBounds()
+        .drawWithCache {
+            val base = if (dark) Color(0xFF151326) else Color(0xFFF7F4FC)
+            val blue = aboutGlow(if (dark) Color(0xFF0B246F) else Color(0xFFDCE8FF))
+            val purple = aboutGlow(if (dark) Color(0xFF2C2871) else Color(0xFFE6D8FA))
+            val rose = aboutGlow(if (dark) Color(0xFF4E234E) else Color(0xFFF8DDEB))
+            onDrawBehind {
+                val progress = latestScrollProgress.value()
+                if (progress >= 1f) {
+                    drawRect(background)
+                    return@onDrawBehind
+                }
+                val angle = (if (motionEnabled) phase.floatValue else 0f) * (2 * PI).toFloat()
+                val x = cos(angle)
+                val y = sin(angle)
+                drawRect(base)
+                drawAboutGlow(blue, Offset(0.04f + 0.08f * y, 0.57f + 0.08f * x), Size(1.08f, 1.01f))
+                drawAboutGlow(purple, Offset(0.41f + 0.12f * y, -0.04f - 0.09f * x), Size(0.57f, 1.50f))
+                drawAboutGlow(rose, Offset(0.62f - 0.13f * y, 0.03f + 0.05f * x), Size(0.52f, 0.78f))
+                if (progress > 0f) drawRect(background, alpha = progress)
+            }
+        }
+}
+
+private fun aboutGlow(color: Color): Brush = Brush.radialGradient(
+    0f to color,
+    0.45f to color.copy(alpha = 0.72f),
+    1f to color.copy(alpha = 0f),
+    center = Offset.Zero,
+    radius = 1f,
+)
+
+/** 按视口的宽和高分别缩放，宽屏和窄分屏都保留同样的颜色分布。 */
+private fun DrawScope.drawAboutGlow(brush: Brush, center: Offset, radii: Size) {
+    translate(left = size.width * center.x, top = size.height * center.y) {
+        scale(scaleX = size.width * radii.width, scaleY = size.height * radii.height, pivot = Offset.Zero) {
+            drawCircle(brush = brush, radius = 1f, center = Offset.Zero)
         }
     }
 }
@@ -171,6 +243,7 @@ internal fun MiuixAboutOverview(
     versionHint: String?,
     onVersionClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onHeroHeightChanged: (Int) -> Unit = {},
 ) {
     val copyVersion = rememberClipboardCopyHandler()
     Column(modifier = modifier) {
@@ -178,6 +251,7 @@ internal fun MiuixAboutOverview(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = miuixAboutHeroHeight())
+                .onSizeChanged { onHeroHeightChanged(it.height) }
                 .padding(horizontal = 24.dp, vertical = 48.dp),
             contentAlignment = Alignment.Center,
         ) {

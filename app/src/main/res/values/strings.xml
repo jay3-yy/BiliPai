@@ -379,9 +379,9 @@
     <string name="animation_card_removal_dissolve_title">卡片移除粒子消散</string>
     <string name="animation_card_removal_dissolve_summary">适用于首页不感兴趣和稍后再看单条移除。快速档的粒子消散约 0.7 秒，关闭后直接更新列表。</string>
     <string name="animation_card_removal_dissolve_off">关闭</string>
-    <string name="animation_card_transition_source_official">可用时优先使用金标，其他入口有来源时使用安卓共享元素</string>
-    <string name="animation_card_transition_source_fallback">金标当前不可用，有来源时使用安卓共享元素</string>
-    <string name="animation_card_transition_source_shared">有来源时直接使用安卓共享元素</string>
+    <string name="animation_card_transition_source_official">可用时优先使用金标，视频卡片回退到普通页面动画</string>
+    <string name="animation_card_transition_source_fallback">金标当前不可用，视频卡片使用普通页面动画</string>
+    <string name="animation_card_transition_source_shared">可用入口使用安卓共享元素，视频卡片暂用普通页面动画</string>
     <string name="animation_card_transition_source_reduced_motion">系统已开启减少动态效果，当前不使用卡片过渡动画</string>
     <string name="animation_transition_blur_official_supported">控制金标、卡片共享转场和容器形变的背景模糊</string>
     <string name="animation_transition_blur_official_system">控制卡片共享转场和容器形变的背景模糊，金标模糊由系统管理</string>

@@ -76,6 +76,9 @@ open class VideoActivity : FragmentActivity() {
     private var officialCardReturnAtRoot = false
     private var officialReturnToSource = true
 
+    internal val hasOfficialCardSession: Boolean
+        get() = SystemVideoCardTransition.hasSession(intent.getStringExtra(SystemVideoCardTransition.EXTRA_SESSION))
+
     internal val usesOfficialCardReturnAtRoot: Boolean
         get() = officialCardReturnAtRoot && officialReturnMotionEnabled &&
             intent.hasExtra(SystemVideoCardTransition.EXTRA_SESSION)

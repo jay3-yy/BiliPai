@@ -30,7 +30,7 @@ class CombinedBackdrop(
         density: Density,
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?,
-        downscaleFactor: Int,
+        downscaleFactor: Float,
     ) {
         with(firstSampling) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }
         with(secondSampling) { drawBackdrop(density, coordinates, layerBlock, downscaleFactor) }

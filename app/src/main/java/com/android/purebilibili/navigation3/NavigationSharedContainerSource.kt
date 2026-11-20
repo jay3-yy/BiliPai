@@ -25,7 +25,8 @@ internal val LocalNavigationSharedContainerSources =
 internal val LocalNavigationSharedSurfaceVisible = staticCompositionLocalOf { true }
 
 internal fun supportsNavigationSharedContainer(target: BiliPaiNavKey): Boolean = when (target) {
-    is BiliPaiNavKey.VideoDetail -> !target.fullscreen && !target.directPortraitEntry
+    // 视频详情暂时使用普通页面转场，避免共享录制卷入播放器的渲染树。
+    is BiliPaiNavKey.VideoDetail -> false
     // 独立全屏流和 WebView 没有可参与此容器绘制的目标。
     is BiliPaiNavKey.Story, is BiliPaiNavKey.OfflineVideoPlayer, is BiliPaiNavKey.Web -> false
     else -> resolveSystemWindowCardIdentity(target) != null

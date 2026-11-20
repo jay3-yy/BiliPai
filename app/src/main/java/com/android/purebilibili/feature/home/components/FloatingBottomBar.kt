@@ -116,6 +116,7 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.material.drawEdgeStroke
 import com.android.purebilibili.core.ui.blur.rememberChromeBackdropSource
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.material3.LocalContentColor as M3LocalContentColor
@@ -1462,7 +1463,11 @@ fun FloatingBottomBar(
                                             )
                                         }
                                     },
-                                    highlight = { if (parentGlass == null) baseHighlight?.value?.copy(alpha = 0.75f) else null },
+                                    onDrawFront = {
+                                        if (parentGlass == null) baseHighlight?.value?.let {
+                                            drawEdgeStroke(pillShape, it, 0.75f)
+                                        }
+                                    },
                                     layerBlock = {
                                         if (!inheritDeformation) {
                                             val width = size.width.coerceAtLeast(1f)
@@ -1635,7 +1640,7 @@ fun FloatingBottomBar(
                                     // 捕获层与可见子外壳使用相同材质，不能在隐藏捕获中再做一次折射。
                                     if (parentGlass == null) {
                                         // 先声明折射所需边距，避免模糊构建后再扩边导致整条效果重新求值。
-                                        if (top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported() &&
+                                        if (top.yukonga.miuix.kmp.material.isRuntimeShaderSupported() &&
                                             shellRefractionHeightPx > 0f && shellRefractionAmountPx > 0f
                                         ) {
                                             padding = maxOf(padding, shellRefractionAmountPx)
@@ -1737,9 +1742,10 @@ fun FloatingBottomBar(
                                 } else 1f
                             },
                             highlightProvider = {
-                                if (isLiquidGlassMode || indicatorHighlightFromDrag) {
-                                    pillHighlight?.value?.copy(alpha = if (isLiquidGlassMode) dampedDragAnimation.pressProgress else indicatorOpticalProgressProvider())
-                                } else null
+                                if (isLiquidGlassMode || indicatorHighlightFromDrag) pillHighlight?.value else null
+                            },
+                            highlightAlphaProvider = {
+                                if (isLiquidGlassMode) dampedDragAnimation.pressProgress else indicatorOpticalProgressProvider()
                             },
                             idleColor = indicatorIdleSurfaceColorOverride,
                         )

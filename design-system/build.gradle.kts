@@ -8,7 +8,7 @@ android {
     namespace = "com.android.purebilibili.designsystem"
     compileSdk {
         version = release(37) {
-            minorApiLevel = 0
+            minorApiLevel = 2
         }
     }
 
@@ -59,9 +59,10 @@ dependencies {
     api(libs.miuix.ui)
     // Shared liquid value controls render a safe sibling track backdrop.
     implementation(libs.miuix.blur)
+    implementation(libs.miuix.material)
     implementation(libs.miuix.preference)
     // ModalBottomSheet/Dialog 侧边预测返回：与 app 内 NavigationBackHandler 同栈。
-    implementation("androidx.navigationevent:navigationevent-compose:1.1.2")
+    implementation(libs.androidx.navigationevent.compose)
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.2")

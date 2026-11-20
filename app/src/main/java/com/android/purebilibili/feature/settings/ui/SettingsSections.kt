@@ -416,6 +416,7 @@ internal fun SettingsRootCategoryContent(
     actions: SettingsRootCategoryActions,
     state: SettingsRootCategoryState,
     onAboutHeaderAppearanceClick: () -> Unit = {},
+    onAboutHeroHeightChanged: (Int) -> Unit = {},
 ) {
     val nearbyHandoff = com.android.purebilibili.feature.nearby.LocalNearbyHandoff.current
     val resolvedCategory = canonicalSettingsRootCategory(category)
@@ -751,6 +752,7 @@ internal fun SettingsRootCategoryContent(
                     actions = actions,
                     state = state,
                     onHeaderAppearanceClick = onAboutHeaderAppearanceClick,
+                    onHeroHeightChanged = onAboutHeroHeightChanged,
                 )
             }
         }
@@ -762,6 +764,7 @@ private fun SettingsAboutCategoryContent(
     actions: SettingsRootCategoryActions,
     state: SettingsRootCategoryState,
     onHeaderAppearanceClick: () -> Unit,
+    onHeroHeightChanged: (Int) -> Unit,
 ) {
     val performance: @Composable () -> Unit = {
         SettingsRootCategoryEntranceSection {
@@ -841,6 +844,7 @@ private fun SettingsAboutCategoryContent(
             buildFingerprintSubtitle = state.buildFingerprintSubtitle,
             versionClickCount = state.versionClickCount,
             versionClickThreshold = state.versionClickThreshold,
+            onMiuixHeroHeightChanged = onHeroHeightChanged,
             afterOverview = {
                 AboutCommunitySection(
                     onTelegramClick = actions.onTelegramClick,
@@ -1933,6 +1937,7 @@ fun AboutSection(
     buildFingerprintSubtitle: String = "尚未读取安装包 SHA-256",
     versionClickCount: Int = 0,
     versionClickThreshold: Int = EasterEggs.VERSION_EASTER_EGG_THRESHOLD,
+    onMiuixHeroHeightChanged: (Int) -> Unit = {},
     afterOverview: (@Composable () -> Unit)? = null,
 ) {
     val context = LocalContext.current
@@ -2026,6 +2031,7 @@ fun AboutSection(
             versionHint = versionHint,
             onVersionClick = onVersionClick,
             modifier = Modifier.fillMaxWidth(),
+            onHeroHeightChanged = onMiuixHeroHeightChanged,
         )
     } else {
         MaterialAboutOverview(
