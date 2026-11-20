@@ -2199,12 +2199,12 @@ fun AboutSection(
                 )
             },
             selectedValue = appUpdateChannel,
-            icon = checkUpdateVisual.icon,
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_CHANNEL),
             iconTint = updateSiblingTints[4],
             onSelectionChange = onAppUpdateChannelChange
         )
         SettingsAdaptiveDivider()
-        AppUpdateMirrorPreferences(icon = checkUpdateVisual.icon, iconTint = updateSiblingTints[5])
+        AppUpdateMirrorPreferences(iconTint = updateSiblingTints[5])
     }
     Spacer(modifier = Modifier.height(12.dp))
 
@@ -2233,7 +2233,7 @@ fun AboutSection(
 }
 
 @Composable
-private fun AppUpdateMirrorPreferences(icon: ImageVector?, iconTint: Color) {
+private fun AppUpdateMirrorPreferences(iconTint: Color) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val preference = rememberAppUpdateMirrorPreference()
@@ -2244,7 +2244,7 @@ private fun AppUpdateMirrorPreferences(icon: ImageVector?, iconTint: Color) {
             com.android.purebilibili.core.ui.components.AppSegmentOption(value = mirror, label = mirror.label)
         },
         selectedValue = preference.source,
-        icon = icon,
+        icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR),
         iconTint = iconTint,
         onSelectionChange = { mirror ->
             if (mirror == AppUpdateMirror.CUSTOM && preference.customPrefix.isEmpty()) {
@@ -2257,6 +2257,7 @@ private fun AppUpdateMirrorPreferences(icon: ImageVector?, iconTint: Color) {
     if (preference.source == AppUpdateMirror.CUSTOM) {
         SettingsAdaptiveDivider()
         SettingClickableItem(
+            icon = rememberSettingsSemanticIcon(SettingsIconRole.UPDATE_MIRROR_ADDRESS),
             title = "自定义源地址",
             subtitle = preference.customPrefix.takeIf(String::isNotEmpty),
             onClick = { editCustomMirror = true },
