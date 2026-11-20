@@ -1,8 +1,10 @@
 package com.android.purebilibili.feature.download
 
+import com.android.purebilibili.core.store.PlaybackCompletionBehavior
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class OfflineEpisodeQueuePolicyTest {
 
@@ -59,6 +61,24 @@ class OfflineEpisodeQueuePolicyTest {
         )
 
         assertEquals(listOf(first.id, second.id), queue.map { it.id })
+    }
+
+    @Test
+    fun playbackCompletionUsesCachedEpisodesWithoutTreatingDuplicateQualitiesAsNext() {
+        val first = completedTask("page1", "BVsame", 101L, episodeSortIndex = 1)
+        val second = completedTask("page2", "BVsame", 102L, episodeSortIndex = 2)
+        val otherQuality = first.copy(quality = 64, createdAt = first.createdAt + 1)
+        val queue = resolveOfflineEpisodeQueue(listOf(otherQuality, second, first), first)
+
+        assertEquals(listOf(first.id, second.id), queue.map { it.id })
+        assertEquals(
+            second,
+            resolveOfflineEpisodeAfterPlayback(queue, 0, PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC, true),
+        )
+        assertNull(resolveOfflineEpisodeAfterPlayback(queue, 0, PlaybackCompletionBehavior.CONTINUE_CURRENT_LOGIC, false))
+        assertNull(resolveOfflineEpisodeAfterPlayback(queue, 0, PlaybackCompletionBehavior.STOP_AFTER_CURRENT, true))
+        assertNull(resolveOfflineEpisodeAfterPlayback(queue, 1, PlaybackCompletionBehavior.PLAY_IN_ORDER, true))
+        assertEquals(first, resolveOfflineEpisodeAfterPlayback(queue, 1, PlaybackCompletionBehavior.LOOP_PLAYLIST, true))
     }
 
     private fun completedTask(

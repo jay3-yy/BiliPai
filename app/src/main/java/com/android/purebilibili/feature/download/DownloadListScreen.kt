@@ -57,17 +57,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.android.purebilibili.core.store.SettingsManager
 import com.android.purebilibili.core.ui.ImmersiveAppScaffold as AppScaffold
 import com.android.purebilibili.core.ui.AppTopBar
 import com.android.purebilibili.core.ui.rememberAppBackIcon
+import com.android.purebilibili.core.ui.rememberAppMoreIcon
+import com.android.purebilibili.core.ui.components.AppWindowAction
+import com.android.purebilibili.core.ui.components.AppWindowActionMenu
 import com.android.purebilibili.core.ui.AppSurfaceTokens
-import com.android.purebilibili.core.ui.components.AppCard
 import com.android.purebilibili.feature.home.components.cards.HorizontalVideoCardFrame
-import com.android.purebilibili.core.ui.components.AppCardDefaults
-import com.android.purebilibili.core.ui.components.AppCardShape
 import com.android.purebilibili.core.ui.components.AppCircularProgressIndicator
 import com.android.purebilibili.core.ui.components.AppIconButton
 import com.android.purebilibili.core.util.NetworkUtils
@@ -96,10 +95,6 @@ fun DownloadListScreen(
     val downloadHaptic = com.android.purebilibili.core.util.rememberVisibleHapticFeedback(com.android.purebilibili.core.ui.AppHapticScene.REFRESH)
     val listLayout = rememberVideoListLayoutControl(defaultSingleColumn = true)
     val gridState = rememberLazyGridState()
-    val columns = resolveVideoListColumns(
-        listLayout.singleColumn,
-        androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.toFloat(),
-    )
     val tasks by DownloadManager.tasks.collectAsStateWithLifecycle()
     val downloadsInitialized by DownloadManager.isInitialized.collectAsStateWithLifecycle()
     var isNetworkAvailable by remember(context) { mutableStateOf(NetworkUtils.isNetworkAvailable(context)) }
@@ -182,7 +177,10 @@ fun DownloadListScreen(
                             if (!deletingBatch) exitSelection()
                         } else onBack()
                     }) {
-                        AppIcon(rememberAppBackIcon(), contentDescription = "返回")
+                        AppIcon(
+                            imageVector = if (selectionMode) Icons.Outlined.Close else rememberAppBackIcon(),
+                            contentDescription = if (selectionMode) "退出多选" else "返回",
+                        )
                     }
                 },
                 actions = {
@@ -192,36 +190,45 @@ fun DownloadListScreen(
                         AppTextButton(onClick = exitSelection, enabled = !deletingBatch) {
                             AppText("完成")
                         }
-                    } else if (completedTaskIds.isNotEmpty()) {
-                        AppTextButton(onClick = { selectionMode = true }) {
-                            AppText("管理")
-                        }
-                    }
-                    if (!selectionMode && (hasActive || hasResumable)) {
-                        TextButton(onClick = {
-                            actionScope.launch {
-                                if (hasActive) {
-                                    taskList.filter(::shouldPauseAllInclude).forEach {
-                                        DownloadManager.pauseDownload(it.id)
+                    } else {
+                        if (completedTaskIds.isNotEmpty() || hasActive || hasResumable) {
+                            AppWindowActionMenu(
+                                groups = listOf(
+                                    buildList {
+                                        if (completedTaskIds.isNotEmpty()) {
+                                            add(AppWindowAction(label = "管理", onClick = { selectionMode = true }))
+                                        }
+                                        if (hasActive || hasResumable) {
+                                            add(
+                                                AppWindowAction(
+                                                    label = if (hasActive) "暂停全部" else "继续全部",
+                                                    onClick = {
+                                                        actionScope.launch {
+                                                            if (hasActive) {
+                                                                taskList.filter(::shouldPauseAllInclude).forEach {
+                                                                    DownloadManager.pauseDownload(it.id)
+                                                                }
+                                                            } else {
+                                                                taskList.filter(::shouldContinueAllInclude).forEach {
+                                                                    DownloadManager.startDownload(it.id)
+                                                                }
+                                                            }
+                                                        }
+                                                    },
+                                                )
+                                            )
+                                        }
                                     }
-                                } else {
-                                    taskList.filter(::shouldContinueAllInclude).forEach {
-                                        DownloadManager.startDownload(it.id)
-                                    }
-                                }
+                                ),
+                            ) {
+                                AppIcon(rememberAppMoreIcon(), contentDescription = "更多管理")
                             }
-                        }, modifier = Modifier.appElasticPress()) {
-                            AppText(
-                                text = if (hasActive) "暂停全部" else "继续全部",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = AppContentColors.accent()
-                            )
                         }
+                        VideoListLayoutToggle(
+                            singleColumn = listLayout.singleColumn,
+                            onClick = listLayout.toggle,
+                        )
                     }
-                    VideoListLayoutToggle(
-                        singleColumn = listLayout.singleColumn,
-                        onClick = listLayout.toggle,
-                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -255,6 +262,7 @@ fun DownloadListScreen(
                 )
             }
         } else {
+            val columns = resolveVideoListColumns(listLayout.singleColumn, maxWidth.value)
             val alignRows = columns > 1 && !com.android.purebilibili.core.ui.LocalFullVideoCardContentVisible.current
             LazyVerticalGrid(
                 columns = GridCells.Fixed(columns),
@@ -413,7 +421,7 @@ fun DownloadListScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 24.dp),
+                            .padding(vertical = AppSpacingTokens.Medium),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         AppText(
@@ -562,12 +570,18 @@ internal fun DownloadTaskItem(
     modifier: Modifier = Modifier,
 ) {
     val feedbackClick = appActionWithFeedback(onClick)
+    val cardShape = AppShapes.container(ContainerLevel.Card)
+    val cardSurface = if (stacked || !task.isComplete || selected) {
+        AppSurfaceTokens.cardContainer()
+    } else {
+        Color.Transparent
+    }
     val typography = com.android.purebilibili.feature.home.components.cards.horizontalVideoCardTypography()
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(AppShapes.container(ContainerLevel.Card))
-            .background(AppSurfaceTokens.cardContainer())
+            .clip(cardShape)
+            .background(cardSurface)
             .then(
                 if (selectionMode) Modifier.toggleable(
                     value = selected,
@@ -576,10 +590,14 @@ internal fun DownloadTaskItem(
                     onValueChange = { feedbackClick() },
                 ) else Modifier.appActionClickable(onClick = onClick)
             )
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(
+                horizontal = if (task.isComplete && !stacked) 0.dp else AppSpacingTokens.Medium,
+                vertical = if (task.isComplete && !stacked) AppSpacingTokens.ExtraSmall else AppSpacingTokens.Medium,
+            ),
+        verticalArrangement = Arrangement.spacedBy(
+            if (task.isComplete) AppSpacingTokens.ExtraSmall else AppSpacingTokens.Small
+        ),
     ) {
-        // 封面旁只放视频信息；下载明细与操作使用下方通栏，避免挤在半宽信息区。
         HorizontalVideoCardFrame(
             stacked = stacked,
             plainHorizontal = true,
@@ -682,6 +700,72 @@ internal fun DownloadTaskItem(
             },
         )
 
+        if (task.isComplete) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(AppSpacingTokens.Small),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(AppSpacingTokens.ExtraSmall),
+                ) {
+                    val cacheSummary = buildString {
+                        append(if (task.isAudioOnly) "已缓存音频" else "已缓存")
+                        if (task.fileSize > 0L) {
+                            append(" · ")
+                            append(formatDownloadStorageBytes(task.fileSize))
+                        }
+                    }
+                    AppText(
+                        text = cacheSummary,
+                        style = typography.statistic,
+                        color = AppContentColors.secondaryText(),
+                    )
+                    val cacheNotice = when {
+                        !offlinePlayable && !task.exportedFileUri.isNullOrBlank() -> "已导出到自定义目录，当前列表不直接离线播放"
+                        !offlinePlayable -> "本地缓存文件不可用"
+                        task.assetState(DownloadAssetKind.DANMAKU)?.status == DownloadAssetStatus.FAILED -> "弹幕下载失败"
+                        else -> null
+                    }
+                    if (cacheNotice != null) {
+                        AppText(
+                            text = cacheNotice,
+                            style = typography.statistic,
+                            color = AppContentColors.secondaryText(),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (selectionMode) {
+                    AppCheckbox(
+                        checked = selected,
+                        onCheckedChange = null,
+                        enabled = selectionEnabled,
+                        modifier = Modifier.size(48.dp),
+                    )
+                } else {
+                    AppWindowActionMenu(
+                        anchorModifier = Modifier.size(48.dp),
+                        groups = listOf(
+                            listOf(
+                                AppWindowAction(
+                                    label = "删除缓存",
+                                    icon = Icons.Outlined.Delete,
+                                    iconTint = AppContentColors.error(),
+                                    onClick = onDelete,
+                                ),
+                            ),
+                        ),
+                    ) {
+                        AppIcon(rememberAppMoreIcon(), contentDescription = "缓存操作")
+                    }
+                }
+            }
+            return@Column
+        }
+
         val assetSummary = resolveDownloadAssetSummary(task)
         val assetTexts = listOfNotNull(
             assetSummary.videoText,
@@ -701,7 +785,7 @@ internal fun DownloadTaskItem(
                 }
             }
             DownloadStatus.MERGING -> "处理中..."
-            DownloadStatus.COMPLETED -> if (hasAssetSummary) null else "已完成"
+            DownloadStatus.COMPLETED -> null
             DownloadStatus.PAUSED -> "已暂停"
             DownloadStatus.FAILED -> task.errorMessage ?: "下载失败"
         }
@@ -714,11 +798,7 @@ internal fun DownloadTaskItem(
                     text = statusText,
                     modifier = Modifier.fillMaxWidth(),
                     style = typography.statistic,
-                    color = when (task.status) {
-                        DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.secondary
-                        DownloadStatus.FAILED -> AppContentColors.error()
-                        else -> AppContentColors.accent()
-                    },
+                    color = if (task.isFailed) AppContentColors.error() else AppContentColors.accent(),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -733,34 +813,13 @@ internal fun DownloadTaskItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            if (task.isComplete && !offlinePlayable) {
-                AppText(
-                    text = if (!task.exportedFileUri.isNullOrBlank()) {
-                        "已导出到自定义目录，当前列表不直接离线播放"
-                    } else {
-                        "本地缓存文件不可用"
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    style = typography.statistic,
-                    color = AppContentColors.secondaryText(),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (selectionMode) {
-                AppCheckbox(
-                    checked = selected,
-                    onCheckedChange = null,
-                    enabled = selectionEnabled,
-                    modifier = Modifier.size(48.dp),
-                )
-            } else {
+        if (!selectionMode) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 val canPause = task.isDownloading || task.isWaitingForRetry
                 if (canPause || task.canResume) {
                     AppIconButton(onClick = onPauseResume, modifier = Modifier.size(48.dp)) {

@@ -1,39 +1,48 @@
 package com.android.purebilibili.feature.download
 
+import android.content.pm.ActivityInfo
 import androidx.media3.common.Player
+import com.android.purebilibili.core.store.FullscreenMode
 import com.android.purebilibili.core.util.AppDisplayContext
 import com.android.purebilibili.core.util.shouldUsePhonePlayerOrientation
+import com.android.purebilibili.feature.video.screen.resolvePhoneFullscreenEnterOrientation
 
 internal enum class OfflineRequestedOrientationMode {
     Unspecified,
     SensorLandscape,
     Portrait,
+    KeepCurrent,
 }
 
 internal fun resolveOfflineRequestedOrientationMode(
     isFullscreen: Boolean,
     usesInWindowFullscreen: Boolean,
     isPhonePlayerOrientation: Boolean = true,
+    fullscreenMode: FullscreenMode = FullscreenMode.AUTO,
+    isVerticalVideo: Boolean = false,
 ): OfflineRequestedOrientationMode = when {
     usesInWindowFullscreen || !isPhonePlayerOrientation ->
         OfflineRequestedOrientationMode.Unspecified
-    isFullscreen -> OfflineRequestedOrientationMode.SensorLandscape
-    else -> OfflineRequestedOrientationMode.Portrait
+    !isFullscreen -> OfflineRequestedOrientationMode.Portrait
+    else -> when (resolvePhoneFullscreenEnterOrientation(fullscreenMode, isVerticalVideo)) {
+        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT -> OfflineRequestedOrientationMode.Portrait
+        null -> OfflineRequestedOrientationMode.KeepCurrent
+        else -> OfflineRequestedOrientationMode.SensorLandscape
+    }
 }
 
 internal fun resolveOfflineRequestedOrientationMode(
     isFullscreen: Boolean,
     displayContext: AppDisplayContext,
+    fullscreenMode: FullscreenMode,
+    isVerticalVideo: Boolean,
 ): OfflineRequestedOrientationMode = resolveOfflineRequestedOrientationMode(
     isFullscreen = isFullscreen,
     usesInWindowFullscreen = displayContext.usesInWindowFullscreen,
     isPhonePlayerOrientation = shouldUsePhonePlayerOrientation(displayContext),
+    fullscreenMode = fullscreenMode,
+    isVerticalVideo = isVerticalVideo,
 )
-
-internal fun resolveOfflineVideoStartFullscreen(
-    isAudioOnly: Boolean,
-    isVerticalVideo: Boolean
-): Boolean = !isAudioOnly && !isVerticalVideo
 
 internal fun shouldResumePlaybackAfterOfflineSeek(
     playbackState: Int,

@@ -46,7 +46,7 @@ fun BoxScope.TwoFingerSpeedFeedbackOverlay(
     visible: Boolean,
     speed: Float,
     mode: TwoFingerSpeedGestureMode,
-    hazeState: HazeState,
+    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     if (mode == TwoFingerSpeedGestureMode.Off) return
@@ -76,15 +76,21 @@ fun BoxScope.TwoFingerSpeedFeedbackOverlay(
             .align(Alignment.TopCenter)
             .padding(top = 18.dp)
     ) {
+        // 没有背景采样的播放器也需要在亮画面上保持文字对比度。
+        val blurModifier = if (hazeState != null) Modifier.unifiedBlur(hazeState) else Modifier
         AppSurface(
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.06f),
+            color = if (hazeState != null) {
+                MaterialTheme.colorScheme.surface.copy(alpha = 0.06f)
+            } else {
+                Color.Black.copy(alpha = 0.72f)
+            },
             contentColor = Color.White,
             tonalElevation = 0.dp,
             shadowElevation = 0.dp,
             shape = shape,
             modifier = Modifier
                 .clip(shape)
-                .unifiedBlur(hazeState = hazeState)
+                .then(blurModifier)
                 .border(
                     width = 1.dp,
                     color = Color.White.copy(alpha = 0.18f),

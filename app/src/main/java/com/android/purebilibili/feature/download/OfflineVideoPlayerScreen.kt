@@ -18,6 +18,7 @@ import com.android.purebilibili.core.util.layoutHinges
 import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.Uri
+import android.os.SystemClock
 import android.provider.Settings
 import com.android.purebilibili.core.ui.LocalNavigationBackHandler
 import androidx.compose.animation.*
@@ -27,7 +28,12 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -36,13 +42,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -54,6 +62,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
+import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
@@ -68,22 +78,51 @@ import com.android.purebilibili.core.ui.components.AppSurface
 import com.android.purebilibili.core.ui.AppSpacingTokens
 import com.android.purebilibili.core.theme.resolveAdaptivePrimaryAccentColors
 import com.android.purebilibili.core.store.DanmakuSettings
+import com.android.purebilibili.core.store.FullscreenMode
 import com.android.purebilibili.core.store.SettingsManager
-import com.android.purebilibili.core.store.DEFAULT_LONG_PRESS_SPEED
 import com.android.purebilibili.core.store.resolveDanmakuSettingsScope
 import com.android.purebilibili.core.util.FormatUtils
 import com.android.purebilibili.feature.video.player.MiniPlayerManager
 import com.android.purebilibili.feature.video.danmaku.configureAsPassiveDanmakuOverlay
 import com.android.purebilibili.feature.video.danmaku.rememberDanmakuManager
-import com.android.purebilibili.feature.video.ui.gesture.GestureLevelKind
+import com.android.purebilibili.feature.video.ui.components.TwoFingerSpeedFeedbackOverlay
+import com.android.purebilibili.feature.video.ui.components.VideoAspectRatio
+import com.android.purebilibili.feature.video.ui.components.cancelPlayerViewViewportRefresh
+import com.android.purebilibili.feature.video.ui.components.resolveVideoViewportLayout
+import com.android.purebilibili.feature.video.ui.components.schedulePlayerViewViewportRefresh
+import com.android.purebilibili.feature.video.ui.components.toVideoAspectRatio
 import com.android.purebilibili.feature.video.ui.gesture.GestureLevelOverlayContent
-import com.android.purebilibili.feature.video.ui.gesture.resolveGestureLevelIcon
+import com.android.purebilibili.feature.video.ui.gesture.SwipeToFullscreenHint
+import com.android.purebilibili.feature.video.ui.gesture.TwoFingerSpeedGestureMode
 import com.android.purebilibili.feature.video.ui.gesture.rememberGestureLevelOverlayStyle
+import com.android.purebilibili.feature.video.ui.gesture.detectPlayerTapGestures
+import com.android.purebilibili.feature.video.ui.gesture.resolveLockedTwoFingerSpeedAxis
+import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerGesturePlaybackSpeed
+import com.android.purebilibili.feature.video.ui.gesture.resolveTwoFingerSpeedGestureMode
+import com.android.purebilibili.feature.video.ui.overlay.FullscreenDoubleTapAction
+import com.android.purebilibili.feature.video.ui.overlay.nextFullscreenSeekFeedbackEvent
+import com.android.purebilibili.feature.video.ui.overlay.resolveFullscreenDoubleTapAction
+import com.android.purebilibili.feature.video.ui.section.PlayerLongPressSpeedHint
+import com.android.purebilibili.feature.video.ui.section.PlayerSeekFeedback
+import com.android.purebilibili.feature.video.ui.section.PlayerSpeedLockZones
+import com.android.purebilibili.feature.video.ui.section.SwipeToFullscreenDragThresholdDp
+import com.android.purebilibili.feature.video.ui.section.resolveLongPressSpeedLockSensitivityPolicy
+import com.android.purebilibili.feature.video.ui.section.resolveSwipeToFullscreenHintFraction
+import com.android.purebilibili.feature.video.ui.section.resolveVerticalGestureMode
+import com.android.purebilibili.feature.video.ui.section.shouldAutoExitFullscreenOnPlaybackEnded
+import com.android.purebilibili.feature.video.ui.section.shouldLockLongPressSpeedInTargetZone
+import com.android.purebilibili.feature.video.ui.section.shouldTriggerFullscreenBySwipe
+import com.android.purebilibili.feature.video.ui.section.shouldUnlockLockedLongPressSpeedFromRightDownDrag
+import com.android.purebilibili.feature.video.viewmodel.resolvePlaybackCompletionRepeatMode
+import kotlinx.coroutines.flow.first
 import com.android.purebilibili.feature.video.ui.section.VideoGestureMode
 import com.android.purebilibili.feature.video.ui.section.resolveHorizontalSeekDeltaMs
+import com.android.purebilibili.feature.video.ui.section.resolveRelativeSeekTargetPosition
+import com.android.purebilibili.feature.video.ui.section.resolveVideoGestureMotionSpec
+import com.android.purebilibili.feature.video.ui.section.resolveVideoPlayerUiLayoutPolicy
+import com.android.purebilibili.feature.video.usecase.togglePlayerPlaybackFromUserAction
 import com.android.purebilibili.danmaku.engine.DanmakuRenderView
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.FastForward
 import androidx.compose.material.icons.outlined.Fullscreen
 import androidx.compose.material.icons.outlined.FullscreenExit
 import androidx.compose.material.icons.outlined.Pause
@@ -98,6 +137,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -105,11 +145,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.android.purebilibili.feature.video.ui.section.rebindPlayerSurfaceIfNeeded
 import com.android.purebilibili.core.ui.AppShapes
 import com.android.purebilibili.core.ui.ContainerLevel
-
-/**
- * 手势模式枚举
- */
-private enum class GestureMode { None, Brightness, Volume, Seek }
 
 // Persists playback progress independently of the composable lifecycle.
 private val playbackPersistenceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -151,34 +186,60 @@ fun OfflineVideoPlayerScreen(
     val danmakuSettings by SettingsManager
         .getDanmakuSettings(context, danmakuSettingsScope)
         .collectAsStateWithLifecycle(initialValue = DanmakuSettings())
-    val longPressSpeed by SettingsManager
-        .getLongPressSpeed(context)
-        .collectAsStateWithLifecycle(initialValue = DEFAULT_LONG_PRESS_SPEED)
     val playerInteractionSettings by SettingsManager
         .getPlayerInteractionSettings(context)
         .collectAsStateWithLifecycle(
             initialValue = com.android.purebilibili.core.store.PlayerInteractionSettings()
         )
+    val longPressSpeed = playerInteractionSettings.longPressSpeed
+    val twoFingerSpeedMode = resolveTwoFingerSpeedGestureMode(
+        verticalEnabled = playerInteractionSettings.twoFingerVerticalSpeedEnabled,
+        horizontalEnabled = playerInteractionSettings.twoFingerHorizontalSpeedEnabled,
+    )
+    val playbackSpeedOptions by remember(context) { SettingsManager.getPlaybackSpeedOptions(context) }
+        .collectAsStateWithLifecycle(initialValue = emptyList())
+    val fullscreenMode: FullscreenMode? by remember(context) { SettingsManager.getFullscreenMode(context) }
+        .collectAsStateWithLifecycle(initialValue = null)
+    val completionBehavior by remember(context) { SettingsManager.getPlaybackCompletionBehavior(context) }
+        .collectAsStateWithLifecycle(initialValue = SettingsManager.getPlaybackCompletionBehaviorSync(context))
+    val uiLayoutPolicy = resolveVideoPlayerUiLayoutPolicy(
+        widthDp = configuration.screenWidthDp,
+        windowHeightDp = configuration.screenHeightDp,
+    )
+    val gestureMotionSpec = remember { resolveVideoGestureMotionSpec() }
     val task = tasks[currentTaskId]
 
     // === 状态管理 ===
-    var isFullscreen by remember(currentTaskId, task?.isAudioOnly, task?.isVerticalVideo) {
-        mutableStateOf(
-            resolveOfflineVideoStartFullscreen(
-                isAudioOnly = task?.isAudioOnly ?: false,
-                isVerticalVideo = task?.isVerticalVideo ?: false
-            )
-        )
-    }
     var showControls by remember { mutableStateOf(true) }
     var isPlaying by remember { mutableStateOf(true) }
-    var initialOrientationResolved by remember(currentTaskId) { mutableStateOf(false) }
+    var playerVideoSize by remember(currentTaskId) { mutableStateOf(VideoSize.UNKNOWN) }
+    val isVerticalVideo = if (playerVideoSize.width > 0 && playerVideoSize.height > 0) {
+        playerVideoSize.height > playerVideoSize.width
+    } else {
+        task?.isVerticalVideo == true
+    }
+    var fullscreenForNextEpisode by remember(taskId) { mutableStateOf<Boolean?>(null) }
+    var restartEpisodeFromBeginning by remember(taskId) { mutableStateOf(false) }
 
+    var isFullscreen by remember(currentTaskId) {
+        mutableStateOf(fullscreenForNextEpisode == true)
+    }
+    val viewportAspectRatio = if (isFullscreen) {
+        playerInteractionSettings.fixedFullscreenAspectRatio.toVideoAspectRatio()
+    } else {
+        VideoAspectRatio.FIT
+    }
+    var twoFingerSpeedGestureActive by remember(currentTaskId) { mutableStateOf(false) }
+    var twoFingerSpeedFeedbackVisible by remember(currentTaskId, twoFingerSpeedMode) { mutableStateOf(false) }
+    var twoFingerSpeedFeedback by remember(currentTaskId) { mutableFloatStateOf(1f) }
     // 手势状态
-    var gestureMode by remember { mutableStateOf(GestureMode.None) }
-    var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
+    var gestureMode by remember { mutableStateOf(VideoGestureMode.None) }
     var gesturePercent by remember { mutableFloatStateOf(0f) }
     var isGestureVisible by remember { mutableStateOf(false) }
+    var fullscreenSwipeProgress by remember { mutableFloatStateOf(0f) }
+    val showFullscreenSwipeHint by remember {
+        derivedStateOf { gestureMode == VideoGestureMode.SwipeToFullscreen && fullscreenSwipeProgress > 0f }
+    }
 
     // 进度拖动状态
     var seekTargetTime by remember { mutableLongStateOf(0L) }
@@ -189,19 +250,21 @@ fun OfflineVideoPlayerScreen(
     var startBrightness by remember { mutableFloatStateOf(0.5f) }
 
     // 双击跳转反馈
-    var seekFeedbackText by remember { mutableStateOf<String?>(null) }
-    var seekFeedbackVisible by remember { mutableStateOf(false) }
+    var seekFeedbackGeneration by remember(currentTaskId) { mutableLongStateOf(0L) }
+    var seekFeedbackText by remember(currentTaskId) { mutableStateOf<String?>(null) }
+    var seekFeedbackVisible by remember(currentTaskId) { mutableStateOf(false) }
 
     // 长按倍速状态
-    var isLongPressing by remember { mutableStateOf(false) }
+    var isLongPressing by remember(currentTaskId) { mutableStateOf(false) }
+    var longPressSpeedLocked by remember(currentTaskId) { mutableStateOf(false) }
     val playerGestureHaptic = com.android.purebilibili.core.util.rememberHapticFeedback(
         com.android.purebilibili.core.ui.AppHapticScene.PLAYER_GESTURES
     )
     val playerSeekHaptic = com.android.purebilibili.core.util.rememberHapticFeedback(
         com.android.purebilibili.core.ui.AppHapticScene.PLAYER_SEEK
     )
-    var originalSpeed by remember { mutableFloatStateOf(1.0f) }
-    var longPressSpeedVisible by remember { mutableStateOf(false) }
+    var originalPlaybackParameters by remember(currentTaskId) { mutableStateOf(PlaybackParameters.DEFAULT) }
+    var longPressSpeedHintDismissed by remember { mutableStateOf(false) }
     var danmakuEnabled by remember(currentTaskId) { mutableStateOf(true) }
 
     LaunchedEffect(danmakuManager, danmakuSettings) {
@@ -210,10 +273,6 @@ fun OfflineVideoPlayerScreen(
     LaunchedEffect(currentTaskId, danmakuSettings.enabled) {
         danmakuEnabled = danmakuSettings.enabled
     }
-
-    // 双击跳转秒数
-    val seekForwardSeconds = 10
-    val seekBackwardSeconds = 10
 
     if (task == null || task.filePath == null) {
         Box(
@@ -392,30 +451,32 @@ fun OfflineVideoPlayerScreen(
     }
 
     // 双击反馈自动消失
-    LaunchedEffect(seekFeedbackVisible) {
-        if (seekFeedbackVisible) {
+    LaunchedEffect(seekFeedbackGeneration) {
+        if (seekFeedbackGeneration > 0L) {
             delay(800)
             seekFeedbackVisible = false
         }
     }
-
-    // 长按倍速提示自动消失
-    LaunchedEffect(longPressSpeedVisible) {
-        if (longPressSpeedVisible) {
-            delay(1000)
-            longPressSpeedVisible = false
+    LaunchedEffect(currentTaskId, twoFingerSpeedFeedbackVisible, twoFingerSpeedGestureActive, isFullscreen, playbackFailure) {
+        if (!isFullscreen || playbackFailure != null) {
+            twoFingerSpeedFeedbackVisible = false
+        } else if (twoFingerSpeedFeedbackVisible && !twoFingerSpeedGestureActive) {
+            delay(900L)
+            twoFingerSpeedFeedbackVisible = false
         }
     }
 
     // 获取 Activity
     fun getActivity(): Activity? = activity
 
-    fun applyWindowMode(fullscreen: Boolean) {
+    fun applyWindowMode(fullscreen: Boolean, mode: FullscreenMode) {
         val act = getActivity() ?: return
         val requestedOrientation = when (
             resolveOfflineRequestedOrientationMode(
                 isFullscreen = fullscreen,
                 displayContext = displayContext,
+                fullscreenMode = mode,
+                isVerticalVideo = isVerticalVideo,
             )
         ) {
             OfflineRequestedOrientationMode.Unspecified ->
@@ -424,11 +485,14 @@ fun OfflineVideoPlayerScreen(
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             OfflineRequestedOrientationMode.Portrait ->
                 ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            OfflineRequestedOrientationMode.KeepCurrent -> null
         }
-        act.applyPlayerRequestedOrientation(
-            requestedOrientation = requestedOrientation,
-            displayContext = displayContext,
-        )
+        if (requestedOrientation != null) {
+            act.applyPlayerRequestedOrientation(
+                requestedOrientation = requestedOrientation,
+                displayContext = displayContext,
+            )
+        }
         if (fullscreen) {
             val windowInsetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
             windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
@@ -439,8 +503,11 @@ fun OfflineVideoPlayerScreen(
         }
     }
 
+    var hasAutoEnteredFullscreen by remember(currentTaskId) { mutableStateOf(false) }
+
     // 全屏切换函数
     fun toggleFullscreen() {
+        hasAutoEnteredFullscreen = true
         isFullscreen = !isFullscreen
     }
 
@@ -459,12 +526,67 @@ fun OfflineVideoPlayerScreen(
         }
     }
 
-    fun switchEpisode(targetTaskId: String) {
-        if (targetTaskId == task.id) return
+    fun switchEpisode(targetTaskId: String, fromBeginning: Boolean = false) {
+        if (targetTaskId == task.id) {
+            if (fromBeginning) {
+                seekToPosition(0L)
+                player.play()
+            }
+            return
+        }
         persistCurrentPlaybackPosition(task, player)
+        fullscreenForNextEpisode = isFullscreen
+        restartEpisodeFromBeginning = fromBeginning
         currentTaskId = targetTaskId
         showControls = true
     }
+
+    fun finishLongPressSpeedGesture() {
+        if (!isLongPressing) return
+        if (!longPressSpeedLocked) player.playbackParameters = originalPlaybackParameters
+        isLongPressing = false
+    }
+
+    val speedLockEnabled = playerInteractionSettings.longPressSpeedLockEnabled
+    val speedLockSensitivity = remember(isFullscreen) { resolveLongPressSpeedLockSensitivityPolicy(isFullscreen) }
+    LaunchedEffect(player, speedLockEnabled) {
+        if (!speedLockEnabled && longPressSpeedLocked) {
+            longPressSpeedLocked = false
+            player.playbackParameters = originalPlaybackParameters
+        }
+    }
+
+    val onPlaybackEnded: () -> Unit by rememberUpdatedState(newValue = {
+        isPlaying = false
+        val target = resolveOfflineEpisodeAfterPlayback(
+            queue = episodeQueue,
+            currentIndex = currentEpisodeIndex,
+            behavior = completionBehavior,
+            autoPlayEnabled = SettingsManager.getAutoPlaySync(context),
+        )
+        if (shouldAutoExitFullscreenOnPlaybackEnded(
+                mode = playerInteractionSettings.autoExitFullscreenMode,
+                isFullscreen = isFullscreen,
+                playbackState = Player.STATE_ENDED,
+                willContinueToNextItem = target != null,
+            )
+        ) {
+            toggleFullscreen()
+        }
+        if (target != null) {
+            switchEpisode(target.id, fromBeginning = true)
+        } else {
+            showControls = true
+        }
+    })
+    val onPlaybackStarted: () -> Unit by rememberUpdatedState(newValue = {
+        if (!task.isAudioOnly && fullscreenForNextEpisode == null && !hasAutoEnteredFullscreen &&
+            playerInteractionSettings.autoEnterFullscreenEnabled
+        ) {
+            hasAutoEnteredFullscreen = true
+            isFullscreen = true
+        }
+    })
 
     // 返回键处理
     LocalNavigationBackHandler(enabled = isFullscreen) { toggleFullscreen() }
@@ -486,44 +608,68 @@ fun OfflineVideoPlayerScreen(
         }
         previousOfflineDisplayRole = displayContext.foldableDisplayRole
     }
-    LaunchedEffect(activity, displayContext, isFullscreen) {
-        applyWindowMode(isFullscreen)
+    LaunchedEffect(activity, displayContext, isFullscreen, fullscreenMode, isVerticalVideo) {
+        fullscreenMode?.let { applyWindowMode(isFullscreen, it) }
+    }
+    DisposableEffect(activity) {
+        onDispose {
+            activity?.applyPlayerRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+            activity?.let { act ->
+                WindowCompat.getInsetsController(act.window, act.window.decorView)
+                    .show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
     }
 
     DisposableEffect(player) {
+        var hasStartedPlayback = false
         val listener = object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) {
+                    hasStartedPlayback = true
+                    onPlaybackStarted()
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 playbackFailure = resolveOfflinePlaybackFailure(error.errorCode)
                 isPlaying = false
                 showControls = true
                 isGestureVisible = false
                 seekFeedbackVisible = false
-                longPressSpeedVisible = false
-                if (isLongPressing) {
-                    player.setPlaybackSpeed(originalSpeed)
+                if (isLongPressing || longPressSpeedLocked) {
+                    player.playbackParameters = originalPlaybackParameters
                     isLongPressing = false
+                    longPressSpeedLocked = false
                 }
                 player.pause()
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) playbackFailure = null
+                if (playbackState == Player.STATE_ENDED && hasStartedPlayback) onPlaybackEnded()
             }
         }
         player.addListener(listener)
         onDispose { player.removeListener(listener) }
     }
 
-    LaunchedEffect(player, file.absolutePath, task.id, retryVersion) {
-        player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)))
-        player.prepare()
-        val restoredPosition = if (retryVersion > 0) lastKnownPlaybackPosition else task.lastPlaybackPositionMs.coerceAtLeast(0L)
-        if (restoredPosition > 0L) {
-            player.seekTo(restoredPosition)
-        } else {
-            player.seekTo(0L)
+    SideEffect {
+        val repeatMode = resolvePlaybackCompletionRepeatMode(completionBehavior)
+        if (player.repeatMode != repeatMode) player.repeatMode = repeatMode
+    }
+
+    LaunchedEffect(player, retryVersion) {
+        val shouldStart = retryVersion > 0 || fullscreenForNextEpisode != null ||
+            SettingsManager.getClickToPlay(context).first()
+        val restoredPosition = when {
+            retryVersion > 0 -> lastKnownPlaybackPosition
+            restartEpisodeFromBeginning -> 0L
+            else -> task.lastPlaybackPositionMs.coerceAtLeast(0L)
         }
-        player.playWhenReady = true
+        player.setMediaItem(MediaItem.fromUri(Uri.fromFile(file)), restoredPosition)
+        player.playWhenReady = shouldStart
+        player.prepare()
     }
 
     DisposableEffect(player, task.id) {
@@ -536,12 +682,8 @@ fun OfflineVideoPlayerScreen(
             } else {
                 miniPlayerManager.clearExternalPlayerIfMatches(player)
             }
+            isLongPressing = false
             player.release()
-            activity?.applyPlayerRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
-            activity?.let { act ->
-                val windowInsetsController = WindowCompat.getInsetsController(act.window, act.window.decorView)
-                windowInsetsController.show(WindowInsetsCompat.Type.systemBars())
-            }
         }
     }
 
@@ -588,17 +730,8 @@ fun OfflineVideoPlayerScreen(
                 )
             }
 
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (initialOrientationResolved || task.isAudioOnly) return
-                if (task.isVerticalVideo) {
-                    initialOrientationResolved = true
-                    return
-                }
-                val videoSize = player.videoSize
-                if (videoSize.width > 0 && videoSize.height > 0) {
-                    isFullscreen = videoSize.width >= videoSize.height
-                    initialOrientationResolved = true
-                }
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                playerVideoSize = videoSize
             }
         }
         player.addListener(listener)
@@ -632,13 +765,86 @@ fun OfflineVideoPlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .pointerInput(player, playbackFailure, isFullscreen, twoFingerSpeedMode, playbackSpeedOptions) {
+                    if (playbackFailure != null || !isFullscreen || task.isAudioOnly ||
+                        twoFingerSpeedMode == TwoFingerSpeedGestureMode.Off || playbackSpeedOptions.isEmpty()
+                    ) {
+                        return@pointerInput
+                    }
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        var ownsGesture = false
+                        var speedGestureCancelled = false
+                        var startSpeed: Float? = null
+                        var totalPanX = 0f
+                        var totalPanY = 0f
+                        try {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val pressed = event.changes.count { it.pressed }
+                                if (pressed >= 2 && !ownsGesture) {
+                                    ownsGesture = true
+                                    finishLongPressSpeedGesture()
+                                    isGestureVisible = false
+                                    gestureMode = VideoGestureMode.None
+                                }
+                                // 双指接管后，剩余手指抬起前也不能触发单指手势。
+                                if (ownsGesture) event.changes.forEach { it.consume() }
+                                if (pressed == 0) break
+                                if (pressed == 1) {
+                                    if (ownsGesture) {
+                                        speedGestureCancelled = true
+                                        twoFingerSpeedGestureActive = false
+                                    }
+                                    continue
+                                }
+
+                                if (abs(event.calculateZoom() - 1f) > 0.005f) speedGestureCancelled = true
+                                if (speedGestureCancelled) continue
+                                val pan = event.calculatePan()
+                                totalPanX += pan.x
+                                totalPanY += pan.y
+                                if (startSpeed == null) {
+                                    val axis = resolveLockedTwoFingerSpeedAxis(
+                                        mode = twoFingerSpeedMode,
+                                        totalDragX = totalPanX,
+                                        totalDragY = totalPanY,
+                                        thresholdPx = viewConfiguration.touchSlop * 1.5f,
+                                    )
+                                    if (axis == null) continue
+                                    startSpeed = player.playbackParameters.speed
+                                    twoFingerSpeedGestureActive = true
+                                    showControls = false
+                                }
+                                val speed = resolveTwoFingerGesturePlaybackSpeed(
+                                    startSpeed = startSpeed,
+                                    mode = twoFingerSpeedMode,
+                                    totalDragX = totalPanX,
+                                    totalDragY = totalPanY,
+                                    containerWidthPx = size.width.toFloat(),
+                                    containerHeightPx = size.height.toFloat(),
+                                    supportedSpeeds = playbackSpeedOptions,
+                                )
+                                if (abs(player.playbackParameters.speed - speed) > 0.001f) {
+                                    longPressSpeedLocked = false
+                                    player.setPlaybackSpeed(speed)
+                                }
+                                twoFingerSpeedFeedback = speed
+                                twoFingerSpeedFeedbackVisible = true
+                            }
+                        } finally {
+                            twoFingerSpeedGestureActive = false
+                        }
+                    }
+                }
                 // 🎛️ 拖拽手势：亮度/音量/进度
                 .pointerInput(player, playbackFailure, isFullscreen, playerInteractionSettings) {
-                    if (gestureMode == GestureMode.Seek) {
-                        isGestureVisible = false
-                        gestureMode = GestureMode.None
-                    }
+                    isGestureVisible = false
+                    gestureMode = VideoGestureMode.None
                     if (playbackFailure != null) return@pointerInput
+                    var dragStartX = 0f
+                    val fullscreenSwipeThresholdPx = SwipeToFullscreenDragThresholdDp.toPx()
+                    fullscreenSwipeProgress = 0f
                     detectDragGestures(
                         onDragStart = { offset ->
                             // 边缘防误触
@@ -649,10 +855,11 @@ fun OfflineVideoPlayerScreen(
 
                             if (isEdgeGesture) {
                                 isGestureVisible = false
-                                gestureMode = GestureMode.None
+                                gestureMode = VideoGestureMode.None
                             } else {
                                 isGestureVisible = true
-                                gestureMode = GestureMode.None
+                                gestureMode = VideoGestureMode.None
+                                dragStartX = offset.x
                                 totalDragDistanceY = 0f
                                 totalDragDistanceX = 0f
 
@@ -679,36 +886,61 @@ fun OfflineVideoPlayerScreen(
                             }
                         },
                         onDragEnd = {
-                            if (gestureMode == GestureMode.Seek) {
-                                seekToPosition(seekTargetTime)
+                            when (gestureMode) {
+                                VideoGestureMode.Seek -> seekToPosition(seekTargetTime)
+                                VideoGestureMode.SwipeToFullscreen -> {
+                                    if (shouldTriggerFullscreenBySwipe(
+                                            isFullscreen = isFullscreen,
+                                            reverseGesture = playerInteractionSettings.fullscreenGestureReverse,
+                                            totalDragDistanceY = -totalDragDistanceY,
+                                            thresholdPx = fullscreenSwipeThresholdPx,
+                                        )
+                                    ) {
+                                        toggleFullscreen()
+                                    }
+                                }
+                                else -> Unit
                             }
+                            fullscreenSwipeProgress = 0f
                             isGestureVisible = false
-                            gestureMode = GestureMode.None
+                            gestureMode = VideoGestureMode.None
                         },
                         onDragCancel = {
+                            fullscreenSwipeProgress = 0f
                             isGestureVisible = false
-                            gestureMode = GestureMode.None
+                            gestureMode = VideoGestureMode.None
                         },
-                        onDrag = { change, dragAmount ->
-                            if (!isGestureVisible && gestureMode == GestureMode.None) {
-                                // 在 safe zone 中启动被忽略
-                            } else {
+                        onDrag = { _, dragAmount ->
+                            if (isGestureVisible) {
                                 // 确定手势类型
-                                if (gestureMode == GestureMode.None) {
+                                if (gestureMode == VideoGestureMode.None) {
                                     if (abs(dragAmount.x) > abs(dragAmount.y)) {
-                                        gestureMode = GestureMode.Seek
+                                        gestureMode = VideoGestureMode.Seek
                                     } else {
-                                        val screenWidth = size.width
-                                        gestureMode = if (change.position.x < screenWidth / 2) {
-                                            GestureMode.Brightness
-                                        } else {
-                                            GestureMode.Volume
+                                        gestureMode = resolveVerticalGestureMode(
+                                            isFullscreen = isFullscreen,
+                                            isSwipeUp = dragAmount.y < 0,
+                                            startX = dragStartX,
+                                            leftZoneEnd = size.width * 0.3f,
+                                            rightZoneStart = size.width * 0.7f,
+                                            portraitSwipeToFullscreenEnabled = !task.isAudioOnly &&
+                                                !playerInteractionSettings.fullscreenGestureReverse &&
+                                                playerInteractionSettings.portraitSwipeToFullscreenEnabled,
+                                            centerSwipeToFullscreenEnabled = !task.isAudioOnly &&
+                                                playerInteractionSettings.centerSwipeToFullscreenEnabled,
+                                            slideVolumeBrightnessEnabled = playerInteractionSettings.slideVolumeBrightnessEnabled,
+                                        )
+                                        when (gestureMode) {
+                                            VideoGestureMode.None -> isGestureVisible = false
+                                            VideoGestureMode.Brightness -> gesturePercent = startBrightness
+                                            VideoGestureMode.Volume -> gesturePercent = startVolume.toFloat() / maxVolume
+                                            else -> Unit
                                         }
                                     }
                                 }
 
                                 when (gestureMode) {
-                                    GestureMode.Seek -> {
+                                    VideoGestureMode.Seek -> {
                                         totalDragDistanceX += dragAmount.x
                                         val duration = player.duration.coerceAtLeast(0L)
                                         val seekDelta = resolveHorizontalSeekDeltaMs(
@@ -716,123 +948,224 @@ fun OfflineVideoPlayerScreen(
                                             containerWidthPx = size.width.toFloat(),
                                             gestureSensitivity = playerInteractionSettings.gestureSensitivity,
                                             durationMs = duration,
+                                            fixedSeekEnabled = isFullscreen && playerInteractionSettings.fullscreenSwipeSeekEnabled,
+                                            fixedSeekSeconds = playerInteractionSettings.swipeSeekSeconds,
                                         )
                                         if (seekDelta != null) {
                                             seekTargetTime = (startPosition + seekDelta).coerceIn(0L, duration)
                                         }
                                     }
-                                    GestureMode.Brightness -> {
+                                    VideoGestureMode.Brightness -> {
                                         totalDragDistanceY -= dragAmount.y
-                                        val screenHeight = context.resources.displayMetrics.heightPixels
-                                        val deltaPercent = totalDragDistanceY / screenHeight
+                                        val deltaPercent = totalDragDistanceY / size.height *
+                                            playerInteractionSettings.gestureSensitivity
                                         val newBrightness = (startBrightness + deltaPercent).coerceIn(0f, 1f)
 
                                         if (abs(newBrightness - gesturePercent) > 0.02f) {
                                             getActivity()?.window?.attributes = getActivity()?.window?.attributes?.apply {
                                                 screenBrightness = newBrightness
                                             }
+                                            if (playerInteractionSettings.setSystemBrightnessEnabled &&
+                                                Settings.System.canWrite(context)
+                                            ) {
+                                                Settings.System.putInt(
+                                                    context.contentResolver,
+                                                    Settings.System.SCREEN_BRIGHTNESS,
+                                                    (newBrightness * 255f).roundToInt().coerceIn(1, 255),
+                                                )
+                                            }
                                             gesturePercent = newBrightness
                                         }
-                                        gestureIcon = resolveGestureLevelIcon(
-                                            style = gestureLevelOverlayStyle,
-                                            kind = GestureLevelKind.Brightness,
-                                            percent = gesturePercent
-                                        )
                                     }
-                                    GestureMode.Volume -> {
+                                    VideoGestureMode.Volume -> {
                                         totalDragDistanceY -= dragAmount.y
-                                        val screenHeight = context.resources.displayMetrics.heightPixels
-                                        val deltaPercent = totalDragDistanceY / screenHeight
-                                        val newVolPercent = ((startVolume.toFloat() / maxVolume) + deltaPercent).coerceIn(0f, 1f)
+                                        val deltaPercent = totalDragDistanceY / size.height *
+                                            playerInteractionSettings.gestureSensitivity
+                                        val newVolPercent = (startVolume.toFloat() / maxVolume + deltaPercent)
+                                            .coerceIn(0f, 1f)
                                         val targetVol = (newVolPercent * maxVolume).toInt()
                                         audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, targetVol, 0)
                                         gesturePercent = newVolPercent
-
-                                        gestureIcon = resolveGestureLevelIcon(
-                                            style = gestureLevelOverlayStyle,
-                                            kind = GestureLevelKind.Volume,
-                                            percent = gesturePercent
+                                    }
+                                    VideoGestureMode.SwipeToFullscreen -> {
+                                        totalDragDistanceY -= dragAmount.y
+                                        fullscreenSwipeProgress = resolveSwipeToFullscreenHintFraction(
+                                            isFullscreen = isFullscreen,
+                                            reverseGesture = playerInteractionSettings.fullscreenGestureReverse,
+                                            totalDragDistanceY = -totalDragDistanceY,
+                                            thresholdPx = fullscreenSwipeThresholdPx,
                                         )
                                     }
-                                    else -> {}
+                                    VideoGestureMode.None -> Unit
                                 }
                             }
                         }
                     )
                 }
-                // 🖱️ 点击/双击/长按手势
-                .pointerInput(player, playbackFailure, longPressSpeed) {
+                .pointerInput(player, playbackFailure, longPressSpeed, speedLockEnabled, speedLockSensitivity) {
                     if (playbackFailure != null) return@pointerInput
-                    detectTapGestures(
+                    val lockZonePx = speedLockSensitivity.lockZoneHeightDp.dp.toPx()
+                    val minDragPx = speedLockSensitivity.minDragDistanceDp.dp.toPx()
+                    var startX = 0f
+                    var startY = 0f
+                    var accumulatedDragY = 0f
+                    var startedAt = 0L
+                    try {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { offset ->
+                                startX = offset.x
+                                startY = offset.y
+                                accumulatedDragY = 0f
+                                startedAt = SystemClock.elapsedRealtime()
+                                if (!longPressSpeedLocked) {
+                                    originalPlaybackParameters = player.playbackParameters
+                                }
+                                player.setPlaybackSpeed(longPressSpeed)
+                                longPressSpeedHintDismissed = false
+                                isLongPressing = true
+                                playerGestureHaptic(com.android.purebilibili.core.util.HapticType.MEDIUM)
+                            },
+                            onDragEnd = ::finishLongPressSpeedGesture,
+                            onDragCancel = ::finishLongPressSpeedGesture,
+                            onDrag = { change, dragAmount ->
+                                if (speedLockEnabled) {
+                                    accumulatedDragY += dragAmount.y
+                                    if (shouldUnlockLockedLongPressSpeedFromRightDownDrag(
+                                            longPressSpeedLocked = longPressSpeedLocked,
+                                            isLongPressing = isLongPressing,
+                                            startX = startX,
+                                            startY = startY,
+                                            currentY = change.position.y,
+                                            containerWidthPx = size.width.toFloat(),
+                                            holdDurationMs = SystemClock.elapsedRealtime() - startedAt,
+                                            minDownDragPx = minDragPx,
+                                        )
+                                    ) {
+                                        longPressSpeedLocked = false
+                                        finishLongPressSpeedGesture()
+                                        playerGestureHaptic(com.android.purebilibili.core.util.HapticType.MEDIUM)
+                                    } else if (shouldLockLongPressSpeedInTargetZone(
+                                            isLongPressing = isLongPressing,
+                                            alreadyLocked = longPressSpeedLocked,
+                                            currentPointerY = change.position.y,
+                                            containerHeightPx = size.height.toFloat(),
+                                            lockZoneHeightPx = lockZonePx,
+                                            accumulatedDragYPx = accumulatedDragY,
+                                            minDragDistancePx = minDragPx,
+                                        )
+                                    ) {
+                                        longPressSpeedLocked = true
+                                        playerGestureHaptic(com.android.purebilibili.core.util.HapticType.MEDIUM)
+                                    }
+                                }
+                                change.consume()
+                            },
+                        )
+                    } finally {
+                        finishLongPressSpeedGesture()
+                    }
+                }
+                // 点击与双击
+                .pointerInput(
+                    player,
+                    playbackFailure,
+                    playerInteractionSettings.doubleTapSeekEnabled,
+                    playerInteractionSettings.seekForwardSeconds,
+                    playerInteractionSettings.seekBackwardSeconds,
+                ) {
+                    if (playbackFailure != null) return@pointerInput
+                    detectPlayerTapGestures(
+                        doubleTapSlopPx = android.view.ViewConfiguration.get(context).scaledDoubleTapSlop.toFloat(),
                         onTap = { showControls = !showControls },
-                        onLongPress = {
-                            // 长按倍速
-                            originalSpeed = player.playbackParameters.speed
-                            player.setPlaybackSpeed(longPressSpeed)
-                            isLongPressing = true
-                            playerGestureHaptic(com.android.purebilibili.core.util.HapticType.MEDIUM)
-                            longPressSpeedVisible = true
-                        },
                         onDoubleTap = { offset ->
-                            val screenWidth = size.width
-                            when {
-                                // 右侧 1/3：快进
-                                offset.x > screenWidth * 2 / 3 -> {
-                                    playerSeekHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
-                                    val seekMs = seekForwardSeconds * 1000L
-                                    val newPos = (player.currentPosition + seekMs).coerceAtMost(player.duration.coerceAtLeast(0L))
-                                    seekToPosition(newPos)
-                                    seekFeedbackText = "+${seekForwardSeconds}s"
-                                    seekFeedbackVisible = true
-                                }
-                                // 左侧 1/3：后退
-                                offset.x < screenWidth / 3 -> {
-                                    playerSeekHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
-                                    val seekMs = seekBackwardSeconds * 1000L
-                                    val newPos = (player.currentPosition - seekMs).coerceAtLeast(0L)
-                                    seekToPosition(newPos)
-                                    seekFeedbackText = "-${seekBackwardSeconds}s"
-                                    seekFeedbackVisible = true
-                                }
-                                // 中间：暂停/播放
-                                else -> {
-                                    player.playWhenReady = !player.playWhenReady
+                            val action = resolveFullscreenDoubleTapAction(
+                                relativeX = offset.x / size.width,
+                                doubleTapSeekEnabled = playerInteractionSettings.doubleTapSeekEnabled,
+                                playWhenReady = player.playWhenReady,
+                                isPlaying = player.isPlaying,
+                                playbackState = player.playbackState,
+                            )
+                            val deltaSeconds = when (action) {
+                                FullscreenDoubleTapAction.SeekForward -> playerInteractionSettings.seekForwardSeconds
+                                FullscreenDoubleTapAction.SeekBackward -> -playerInteractionSettings.seekBackwardSeconds
+                                FullscreenDoubleTapAction.TogglePlayPause -> {
+                                    togglePlayerPlaybackFromUserAction(player)
                                     playerGestureHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+                                    return@detectPlayerTapGestures
                                 }
                             }
+                            playerSeekHaptic(com.android.purebilibili.core.util.HapticType.LIGHT)
+                            seekToPosition(
+                                resolveRelativeSeekTargetPosition(
+                                    currentPositionMs = player.currentPosition,
+                                    deltaMs = deltaSeconds * 1000L,
+                                    durationMs = player.duration,
+                                )
+                            )
+                            val feedback = nextFullscreenSeekFeedbackEvent(seekFeedbackGeneration, deltaSeconds)
+                            seekFeedbackGeneration = feedback.generation
+                            seekFeedbackText = feedback.text
+                            seekFeedbackVisible = true
                         },
-                        onPress = {
-                            tryAwaitRelease()
-                            // 松开时恢复原速度
-                            if (isLongPressing) {
-                                player.setPlaybackSpeed(originalSpeed)
-                                isLongPressing = false
-                                longPressSpeedVisible = false
-                            }
-                        }
                     )
                 }
         ) {
-            // 1. PlayerView
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        this.player = player
-                        useController = false
-                        keepScreenOn = true
-                        playerView = this
+            // 画面比例只约束视频视口，弹幕、控件和手势继续使用完整播放区域。
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize().clipToBounds(),
+                contentAlignment = Alignment.Center,
+            ) {
+                val density = LocalDensity.current
+                val viewport = remember(maxWidth, maxHeight, density, viewportAspectRatio, playerVideoSize) {
+                    with(density) {
+                        resolveVideoViewportLayout(
+                            containerWidth = maxWidth.roundToPx(),
+                            containerHeight = maxHeight.roundToPx(),
+                            aspectRatio = viewportAspectRatio,
+                            videoWidth = playerVideoSize.width,
+                            videoHeight = playerVideoSize.height,
+                        )
                     }
-                },
-                update = { view ->
-                    view.player = player
-                    view.keepScreenOn = playbackFailure == null && isPlaying
-                },
-                onRelease = { view ->
-                    view.player = null
-                    if (playerView === view) playerView = null
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                }
+                val resizeMode = viewportAspectRatio.playerResizeMode
+                LaunchedEffect(playerView, player, viewport, resizeMode, playerVideoSize) {
+                    playerView?.let { view ->
+                        schedulePlayerViewViewportRefresh(
+                            playerView = view,
+                            resizeMode = resizeMode,
+                            expectedWidth = viewport.width,
+                            expectedHeight = viewport.height,
+                            videoWidth = playerVideoSize.width,
+                            videoHeight = playerVideoSize.height,
+                        )
+                    }
+                }
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            setEnableComposeSurfaceSyncWorkaround(true)
+                            this.player = player
+                            useController = false
+                            this.resizeMode = resizeMode
+                            keepScreenOn = true
+                            playerView = this
+                        }
+                    },
+                    update = { view ->
+                        view.player = player
+                        view.resizeMode = resizeMode
+                        view.keepScreenOn = playbackFailure == null && isPlaying
+                    },
+                    onRelease = { view ->
+                        cancelPlayerViewViewportRefresh(view)
+                        view.player = null
+                        if (playerView === view) playerView = null
+                    },
+                    modifier = with(density) {
+                        Modifier.requiredSize(viewport.width.toDp(), viewport.height.toDp())
+                    },
+                )
+            }
 
             if (danmakuAvailable) {
                 key(danmakuManager) {
@@ -880,7 +1213,7 @@ fun OfflineVideoPlayerScreen(
 
             // 3. 手势指示器（亮度/音量/进度）
             if (isGestureVisible) {
-                if (gestureMode == GestureMode.Seek) {
+                if (gestureMode == VideoGestureMode.Seek) {
                     Box(
                         modifier = Modifier.align(Alignment.Center),
                         contentAlignment = Alignment.Center
@@ -906,12 +1239,12 @@ fun OfflineVideoPlayerScreen(
                         }
                     }
                 } else if (
-                    gestureMode == GestureMode.Brightness ||
-                    gestureMode == GestureMode.Volume
+                    gestureMode == VideoGestureMode.Brightness ||
+                    gestureMode == VideoGestureMode.Volume
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         GestureLevelOverlayContent(
-                            mode = if (gestureMode == GestureMode.Brightness) {
+                            mode = if (gestureMode == VideoGestureMode.Brightness) {
                                 VideoGestureMode.Brightness
                             } else {
                                 VideoGestureMode.Volume
@@ -921,7 +1254,7 @@ fun OfflineVideoPlayerScreen(
                             modifier = Modifier
                                 .align(
                                     if (playerChromeProfile.effects.usesTonalContainerTreatment) {
-                                        if (gestureMode == GestureMode.Volume) {
+                                        if (gestureMode == VideoGestureMode.Volume) {
                                             Alignment.CenterEnd
                                         } else {
                                             Alignment.CenterStart
@@ -942,64 +1275,54 @@ fun OfflineVideoPlayerScreen(
                 }
             }
 
-            // 4. 双击跳转反馈
-            AnimatedVisibility(
+            PlayerSeekFeedback(
                 visible = seekFeedbackVisible,
+                seekFeedbackText = seekFeedbackText,
+                uiLayoutPolicy = uiLayoutPolicy,
                 modifier = Modifier.align(Alignment.Center),
-                enter = scaleIn(initialScale = 0.5f) + fadeIn(),
-                exit = scaleOut(targetScale = 0.8f) + fadeOut()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .background(Color.Black.copy(0.75f), AppShapes.container(ContainerLevel.Floating)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AppText(
-                        text = seekFeedbackText ?: "",
-                        color = com.android.purebilibili.core.ui.MediaContrastPalette.Foreground,
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                }
-            }
+            )
 
-            // 5. 长按倍速提示
-            AnimatedVisibility(
-                visible = longPressSpeedVisible,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 100.dp),
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut()
-            ) {
-                AppSurface(
-                    color = Color.Black.copy(alpha = 0.7f),
-                    shape = AppShapes.container(ContainerLevel.Floating)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        AppIcon(
-                            Icons.Outlined.FastForward,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        AppText(
-                            text = "${longPressSpeed}x 倍速播放中",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
+            TwoFingerSpeedFeedbackOverlay(
+                visible = isFullscreen && playbackFailure == null && twoFingerSpeedFeedbackVisible,
+                speed = twoFingerSpeedFeedback,
+                mode = twoFingerSpeedMode,
+            )
+
+            SwipeToFullscreenHint(
+                visible = isGestureVisible && showFullscreenSwipeHint,
+                progressProvider = { fullscreenSwipeProgress },
+                isFullscreen = isFullscreen,
+            )
+
+            PlayerSpeedLockZones(
+                visible = speedLockEnabled && isLongPressing && !longPressSpeedLocked,
+                longPressSpeedLockSensitivity = speedLockSensitivity,
+                gestureMotionSpec = gestureMotionSpec,
+                modifier = Modifier.matchParentSize(),
+            )
+
+            PlayerLongPressSpeedHint(
+                visible = isLongPressing && !playerInteractionSettings.longPressSpeedHintHidden &&
+                    !longPressSpeedHintDismissed,
+                longPressSpeedLocked = longPressSpeedLocked,
+                effectiveLongPressSpeed = longPressSpeed,
+                longPressSpeedHintScale = playerInteractionSettings.longPressSpeedHintScale,
+                longPressSpeedHintAlpha = playerInteractionSettings.longPressSpeedHintAlpha,
+                longPressSpeedHintCloseEnabled = playerInteractionSettings.longPressSpeedHintCloseEnabled,
+                gestureMotionSpec = gestureMotionSpec,
+                onDismiss = { longPressSpeedHintDismissed = true },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 16.dp),
+            )
 
             // 6. 顶部渐变遮罩
             NextWatchOverlay(
                 player = player,
                 mediaKey = "offline:${task.id}",
                 eligible = !showControls && playbackFailure == null && !task.isAudioOnly &&
-                    gestureMode == GestureMode.None && player.repeatMode != Player.REPEAT_MODE_ONE,
+                    gestureMode == VideoGestureMode.None && !isLongPressing && !twoFingerSpeedGestureActive &&
+                    resolvePlaybackCompletionRepeatMode(completionBehavior) != Player.REPEAT_MODE_ONE,
                 resolve = {
                     episodeQueue.getOrNull(currentEpisodeIndex + 1)?.let { next ->
                         com.android.purebilibili.feature.video.playback.next.NextWatchSuggestion(
@@ -1184,16 +1507,7 @@ fun OfflineVideoPlayerScreen(
                         val activeControlColors = resolveAdaptivePrimaryAccentColors(MaterialTheme.colorScheme)
                         // 播放/暂停按钮
                         AppIconButton(
-                            onClick = {
-                                if (player.playbackState == Player.STATE_ENDED) {
-                                    player.seekTo(0)
-                                    player.play()
-                                } else if (player.isPlaying) {
-                                    player.pause()
-                                } else {
-                                    player.play()
-                                }
-                            },
+                            onClick = { togglePlayerPlaybackFromUserAction(player) },
                             modifier = Modifier.size(36.dp)
                         ) {
                             AppIcon(
@@ -1269,7 +1583,10 @@ fun OfflineVideoPlayerScreen(
                 exit = scaleOut() + fadeOut()
             ) {
                 AppSurface(
-                    onClick = { player.play() },
+                    onClick = {
+                        if (player.playbackState == Player.STATE_ENDED) player.seekTo(0L)
+                        player.play()
+                    },
                     color = Color.Black.copy(alpha = 0.5f),
                     shape = CircleShape,
                     modifier = Modifier.size(72.dp)
